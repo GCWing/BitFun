@@ -17,6 +17,14 @@ import {
   ConnectionState
 } from './AppRootRuntimeComposition';
 
+/**
+ * How stale an account device presence answer may be before returning to the
+ * foreground, or opening the sidebar, refetches it. Short enough that a
+ * desktop coming online is noticed in the same sitting, long enough that the
+ * two events firing together on a cold start cost one request, not three.
+ */
+const DEVICE_PRESENCE_MAX_AGE_MS: number = 15000;
+
 export class AppRootRuntime extends AppRootRuntimeComposition {
   constructor(host: AppRootHostPort) {
     super(host);
@@ -63,6 +71,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     this.remoteActivityViewModel.resume();
     // Idempotent: covers the pairing that happened after the last cold start.
     void this.startWatchProvisioning();
+    void this.settingsController.refreshAccountDevicesIfStale(DEVICE_PRESENCE_MAX_AGE_MS);
   }
 
   onPageHide(): void {
@@ -221,6 +230,9 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     this.host.animate(230, () => {
       this.appShellState.setSidebarVisible(true);
     });
+    // The device rows are only on screen from here, and a desktop that came
+    // online since the last look would otherwise stay grey.
+    void this.settingsController.refreshAccountDevicesIfStale(DEVICE_PRESENCE_MAX_AGE_MS);
   }
 
   closeAppSidebar(): void {
