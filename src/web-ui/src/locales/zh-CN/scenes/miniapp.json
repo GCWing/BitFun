@@ -3,9 +3,18 @@
   "subtitle": "即时生成的小应用，打开就能用，也能继续迭代。",
   "searchPlaceholder": "搜索小应用...",
   "importFromFolder": "从文件夹导入",
+  "importAction": "导入小应用",
+  "importMenuLabel": "选择导入方式",
+  "creationMode": {
+    "action": "使用创造模式创建",
+    "unavailableTitle": "创造模式暂未开放",
+    "unavailableMessage": "创造模式仍在开发中，目前还不能用它创建小应用。",
+    "acknowledge": "知道了"
+  },
   "running": "已启动",
   "allApps": "全部应用",
   "noRunningApps": "暂无运行中的应用",
+  "stopFailed": "无法停止“{{name}}”，其后台进程可能仍在运行：{{error}}",
   "all": "全部",
   "count": "{{count}} 个",
   "empty": {
@@ -19,6 +28,67 @@
     "delete": "删除"
   },
   "detail": {
+    "source": {
+      "builtin": "内置应用",
+      "market": "市场应用",
+      "installed": "已安装应用"
+    },
+    "highlights": "功能亮点",
+    "activity": {
+      "running": "应用正在运行"
+    },
+    "status": {
+      "installed": "应用已安装，打开即可使用",
+      "running": "应用正在运行，可直接返回继续使用",
+      "customizing": "正在定制；当前版本仍可正常使用"
+    },
+    "capabilities": {
+      "ai": {
+        "title": "AI 协作",
+        "description": "可按需调用 AI 或 Agent 完成任务"
+      },
+      "workspace": {
+        "title": "工作区协同",
+        "description": "可在授权范围内读取或修改工作区"
+      },
+      "export": {
+        "title": "文稿渲染",
+        "description": "支持由桌面端渲染演示内容"
+      },
+      "shell": {
+        "title": "命令能力",
+        "description": "可运行已授权命令：{{commands}}"
+      },
+      "network": {
+        "title": "受控联网",
+        "description": "可访问 {{count}} 个已授权域名"
+      },
+      "worker": {
+        "title": "后台任务",
+        "description": "可运行应用自己的后台逻辑"
+      },
+      "storage": {
+        "title": "本地保存",
+        "description": "数据保存在应用专属空间"
+      },
+      "desktop": {
+        "title": "桌面协作",
+        "description": "可使用 {{count}} 项已授权桌面能力"
+      },
+      "surface": {
+        "title": "专属界面",
+        "description": "在独立界面中完成这项工作"
+      },
+      "controlled": {
+        "title": "权限受控",
+        "description": "仅使用清单中声明的宿主能力"
+      },
+      "instant": {
+        "title": "打开即用",
+        "description": "无需额外配置即可启动"
+      }
+    },
+    "start": "启动",
     "stop": "停止",
     "delete": "删除",
     "open": "打开"

@@ -77,6 +77,18 @@
     }
   }
 
+  &-inverse {
+    border: 1px solid var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-appearance-token-color-bg-primary);
+
+    &:active:not(:disabled) {
+      border-color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-appearance-token-color-bg-primary);
+    }
+  }
+
   &-secondary {
     background: var(--bf-appearance-token-element-bg-base);
     color: var(--bf-appearance-token-color-text-secondary);
@@ -210,6 +222,12 @@
 
     &-primary:hover:not(:disabled) {
       @include btn-primary.btn-primary-surface-hover;
+    }
+
+    &-inverse:hover:not(:disabled) {
+      border-color: var(--bf-appearance-token-color-text-secondary);
+      background: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-appearance-token-color-bg-primary);
     }
 
     &-ghost:hover:not(:disabled) {

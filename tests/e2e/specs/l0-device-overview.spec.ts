@@ -8,6 +8,7 @@
 
 import { $, $$, browser, expect } from '@wdio/globals';
 import { openWorkspace } from '../helpers/workspace-helper';
+import { expectPopupCloseContract } from '../helpers/popup-close-contract';
 import { saveElementScreenshot, saveStepScreenshot } from '../helpers/screenshot-utils';
 
 async function ensureLightAppearance(): Promise<void> {
@@ -154,6 +155,9 @@ describe('L0 Device Overview', () => {
       timeout: 10_000,
       timeoutMsg: 'The full Remote Connect dialog did not open',
     });
+    await expectPopupCloseContract(
+      '[data-bf-component="remote-connect-dialog"][data-bf-part="root"]',
+    );
     expect(await $('[data-testid="nav-device-status-popover"]').isExisting()).toBe(false);
 
     const groupTabs = await $$('[data-bf-component="remote-connect-dialog"][data-bf-part="groupTab"]');

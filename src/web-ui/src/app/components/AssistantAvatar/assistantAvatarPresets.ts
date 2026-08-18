@@ -1,12 +1,14 @@
 export const ASSISTANT_AVATAR_PRESETS = [
-  { id: 'signal-pulse', family: 'signal', variant: 1, palette: 'accent' },
-  { id: 'signal-wave', family: 'signal', variant: 2, palette: 'violet' },
-  { id: 'orbit-nova', family: 'orbit', variant: 1, palette: 'violet' },
-  { id: 'orbit-loop', family: 'orbit', variant: 2, palette: 'accent' },
-  { id: 'mosaic-grid', family: 'mosaic', variant: 1, palette: 'accent' },
-  { id: 'mosaic-stack', family: 'mosaic', variant: 2, palette: 'violet' },
-  { id: 'companion-spark', family: 'companion', variant: 1, palette: 'violet' },
-  { id: 'companion-calm', family: 'companion', variant: 2, palette: 'accent' },
+  {
+    id: 'claw',
+    family: 'claw',
+    imageSrc: '/assets/assistant/claw-avatar.webp',
+  },
+  {
+    id: 'claw-orbit',
+    family: 'clawOrbit',
+    imageSrc: '/assets/assistant/claw-avatar-alt.webp',
+  },
 ] as const;
 
 export type AssistantAvatarPreset = typeof ASSISTANT_AVATAR_PRESETS[number];
@@ -16,6 +18,19 @@ export type AssistantAvatarFamily = AssistantAvatarPreset['family'];
 const PRESETS_BY_ID = new Map<string, AssistantAvatarPreset>(
   ASSISTANT_AVATAR_PRESETS.map((preset) => [preset.id, preset]),
 );
+
+// Persisted identity documents may still contain one of the retired SVG preset
+// ids. Keep reading them, but resolve every legacy id to the new Claw artwork.
+const LEGACY_PRESET_ALIASES = new Map<string, AssistantAvatarPresetId>([
+  ['signal-pulse', 'claw'],
+  ['signal-wave', 'claw-orbit'],
+  ['orbit-nova', 'claw-orbit'],
+  ['orbit-loop', 'claw'],
+  ['mosaic-grid', 'claw'],
+  ['mosaic-stack', 'claw-orbit'],
+  ['companion-spark', 'claw-orbit'],
+  ['companion-calm', 'claw'],
+]);
 
 function stableHash(value: string): number {
   let hash = 2166136261;
@@ -28,7 +43,10 @@ function stableHash(value: string): number {
 
 export function getAssistantAvatarPreset(value?: string | null): AssistantAvatarPreset | null {
   const normalized = value?.trim();
-  return normalized ? PRESETS_BY_ID.get(normalized) ?? null : null;
+  if (!normalized) return null;
+
+  const canonicalId = LEGACY_PRESET_ALIASES.get(normalized) ?? normalized;
+  return PRESETS_BY_ID.get(canonicalId) ?? null;
 }
 
 export function resolveAssistantAvatarPreset(
@@ -38,6 +56,8 @@ export function resolveAssistantAvatarPreset(
   const explicitPreset = getAssistantAvatarPreset(value);
   if (explicitPreset) return explicitPreset;
 
-  const normalizedKey = stableKey?.trim() || 'bitfun-primary-assistant';
+  const normalizedKey = stableKey?.trim();
+  if (!normalizedKey) return ASSISTANT_AVATAR_PRESETS[0];
+
   return ASSISTANT_AVATAR_PRESETS[stableHash(normalizedKey) % ASSISTANT_AVATAR_PRESETS.length];
 }

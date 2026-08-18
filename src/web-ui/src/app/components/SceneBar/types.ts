@@ -4,7 +4,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 
-/** Scene tab identifier — concurrent open count is capped by MAX_OPEN_SCENES (see scene registry) */
+/** Scene tab identifier — visible tab count is capped by MAX_OPEN_SCENES (see scene registry). */
 export type SceneTabId =
   | 'welcome'
   | 'session'
@@ -38,13 +38,18 @@ export interface SceneTabDef {
   fixed?: boolean;
   /** If false, user cannot close the tab. Default true for non-fixed scenes. */
   closable?: boolean;
+  /**
+   * Keep the scene mounted in the background when the visible tab capacity
+   * automatically evicts it. Explicit close still unmounts it.
+   */
+  retainOnAutoEvict?: boolean;
   /** Only one instance allowed */
   singleton: boolean;
   /** Open on app start */
   defaultOpen: boolean;
 }
 
-/** Runtime instance of an open scene tab */
+/** Runtime instance of a visible or retained scene. */
 export interface SceneTab {
   id: SceneTabId;
   /** First-open timestamp for FIFO eviction (oldest replaceable tab is evicted). */

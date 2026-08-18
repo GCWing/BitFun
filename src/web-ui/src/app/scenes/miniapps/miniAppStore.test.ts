@@ -9,7 +9,6 @@ describe('miniAppStore customization state', () => {
     useMiniAppStore.setState({
       apps: [],
       loading: false,
-      openedAppIds: [],
       runningWorkerIds: [],
       customizingAppIds: [],
       composerClaims: {},
@@ -28,10 +27,9 @@ describe('miniAppStore customization state', () => {
     expect(useMiniAppStore.getState().customizingAppIds).toEqual([]);
   });
 
-  it('removes stale customization ids when the app catalog changes', () => {
+  it('removes stale runtime-derived ids when the app catalog changes', () => {
     useMiniAppStore.setState({
       customizingAppIds: ['gomoku', 'removed-app'],
-      openedAppIds: ['gomoku', 'removed-app'],
       runningWorkerIds: ['gomoku', 'removed-app'],
     });
 
@@ -51,7 +49,6 @@ describe('miniAppStore customization state', () => {
     ]);
 
     expect(useMiniAppStore.getState().customizingAppIds).toEqual(['gomoku']);
-    expect(useMiniAppStore.getState().openedAppIds).toEqual(['gomoku']);
     expect(useMiniAppStore.getState().runningWorkerIds).toEqual(['gomoku']);
   });
 

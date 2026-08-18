@@ -1,28 +1,33 @@
 @use '../../../component-library/styles/tokens.scss' as *;
 
-// Below this width the two tiers stack instead of sitting side by side.
-$todos-stack-breakpoint: 1080px;
+$todos-stack-breakpoint: 1040px;
+$todos-compact-breakpoint: 720px;
 
 .bf-todos {
-  display: flex;
-  flex-direction: column;
-  gap: $size-gap-3;
+  display: grid;
+  // Row 2 is reserved for the editor boundary even when the modal portals or
+  // renders nothing. Keeping the board explicitly on row 3 prevents an
+  // implicit auto row from opening a gap below the header.
+  grid-template-rows: auto auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-height: 0;
-  padding: $size-gap-4;
   box-sizing: border-box;
   overflow: hidden;
 
   // ── Header ────────────────────────────────────────────────────────────────
 
   &__head {
+    grid-row: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-3;
-    flex: 0 0 auto;
+    gap: $size-gap-4;
     min-width: 0;
+    min-height: 72px;
+    padding: $size-gap-3 $size-gap-5;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__head-main {
@@ -36,98 +41,217 @@ $todos-stack-breakpoint: 1080px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
     flex: 0 0 auto;
-    border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__head-text {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
     min-width: 0;
   }
 
   &__title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-appearance-token-font-size-lg);
     font-weight: $font-weight-semibold;
+    line-height: $line-height-tight;
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__subtitle {
     margin: 0;
     font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: $line-height-base;
     color: var(--bf-appearance-token-color-text-muted);
   }
 
-  &__head-actions {
+  &__head-actions,
+  &__month-navigation,
+  &__month-label {
     display: flex;
     align-items: center;
+  }
+
+  &__head-actions {
+    justify-content: flex-end;
     gap: $size-gap-2;
     flex: 0 0 auto;
   }
 
-  &__spin {
-    animation: bf-todos-spin 0.8s linear infinite;
+  &__month-navigation {
+    gap: $size-gap-1;
   }
 
-  // ── Two tiers ─────────────────────────────────────────────────────────────
+  &__month-label {
+    justify-content: center;
+    gap: $size-gap-1;
+    min-width: 112px;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-medium;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__today-button {
+    min-width: 64px;
+    background: var(--bf-appearance-token-element-bg-soft);
+  }
+
+  &__new-button {
+    white-space: nowrap;
+  }
+
+  // ── Main board ────────────────────────────────────────────────────────────
 
   &__panes {
+    grid-row: 3;
     display: grid;
-    grid-template-columns: minmax(320px, 4fr) minmax(420px, 6fr);
-    gap: $size-gap-4;
-    flex: 1 1 auto;
+    grid-template-columns: minmax(352px, 34%) minmax(0, 1fr);
+    align-self: stretch;
+    align-items: stretch;
+    height: 100%;
     min-height: 0;
   }
 
   &__pane {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
     min-width: 0;
     min-height: 0;
-    overflow-y: auto;
-    padding-right: 2px;
+    box-sizing: border-box;
+
+    &--list {
+      gap: $size-gap-4;
+      padding: $size-gap-4;
+      height: 100%;
+      overflow-y: auto;
+      border-right: 1px solid var(--bf-appearance-token-border-subtle);
+    }
+
+    &--calendar {
+      gap: $size-gap-3;
+      padding: $size-gap-4 $size-gap-5 $size-gap-5;
+      overflow: hidden;
+      overscroll-behavior-y: contain;
+      scroll-padding-block: $size-gap-4;
+    }
   }
 
   &__pane-head {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
     flex: 0 0 auto;
   }
 
-  &__pane-title {
+  &__pane-title,
+  &__list-title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-2xs);
     font-weight: $font-weight-semibold;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__pane-title {
+    font-size: var(--bf-appearance-token-font-size-base);
+  }
+
+  &__list-title {
+    font-size: var(--bf-appearance-token-font-size-base);
   }
 
   &__pane-hint {
-    margin: 0;
+    margin: 2px 0 0;
     font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: $line-height-base;
     color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__empty {
     margin: 0;
-    padding: $size-gap-6 $size-gap-4;
+    padding: $size-gap-4 $size-gap-3;
     text-align: center;
     font-size: var(--bf-appearance-token-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
     border: 1px dashed var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-lg;
+    border-radius: $size-radius-base;
   }
 
-  // ── Rows ──────────────────────────────────────────────────────────────────
+  // ── Overview ──────────────────────────────────────────────────────────────
+
+  &__overview {
+    flex: 0 0 auto;
+    padding: $size-gap-3;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-element-bg-subtle);
+  }
+
+  &__overview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding-bottom: $size-gap-3;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__overview-title {
+    margin: 0;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-semibold;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__overview-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-top: $size-gap-3;
+  }
+
+  &__overview-metric {
+    min-width: 0;
+    padding-inline: $size-gap-2;
+
+    &:first-child {
+      padding-left: $size-gap-1;
+    }
+
+    & + & {
+      border-left: 1px solid var(--bf-appearance-token-border-subtle);
+    }
+  }
+
+  &__overview-value,
+  &__overview-label {
+    margin: 0;
+  }
+
+  &__overview-value {
+    display: flex;
+    align-items: baseline;
+    gap: $size-gap-1;
+    color: var(--bf-appearance-token-color-text-primary);
+
+    strong {
+      font-size: var(--bf-appearance-token-font-size-xl);
+      font-weight: $font-weight-medium;
+      line-height: $line-height-tight;
+      font-variant-numeric: tabular-nums;
+    }
+
+    span {
+      font-size: var(--bf-appearance-token-font-size-xs);
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+  }
+
+  &__overview-label {
+    margin-top: $size-gap-1;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  // ── Task cards ────────────────────────────────────────────────────────────
 
   &__rows {
     display: flex;
@@ -136,19 +260,25 @@ $todos-stack-breakpoint: 1080px;
   }
 
   &__row {
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: stretch;
     gap: $size-gap-3;
-    padding: $size-gap-2 $size-gap-3;
-    border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-element-bg-base);
+    min-height: 76px;
+    padding: $size-gap-3;
+    box-sizing: border-box;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-element-bg-subtle);
     cursor: pointer;
     transition:
       background $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
       box-shadow $motion-fast $easing-standard;
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-soft);
+      border-color: var(--bf-appearance-token-border-medium);
       box-shadow: var(--bf-appearance-token-shadow-xs);
     }
 
@@ -158,51 +288,49 @@ $todos-stack-breakpoint: 1080px;
     }
 
     &--selected {
+      border-color: var(--bf-appearance-token-color-accent-500);
       background: var(--bf-appearance-token-element-bg-soft);
-      box-shadow: inset 2px 0 0 var(--bf-appearance-token-color-accent-500);
     }
 
     &--overdue {
-      box-shadow: inset 2px 0 0 var(--bf-appearance-token-color-warning);
+      border-color: color-mix(
+        in srgb,
+        var(--bf-appearance-token-color-warning) 55%,
+        var(--bf-appearance-token-border-subtle)
+      );
     }
 
     &--running {
-      box-shadow: inset 2px 0 0 var(--bf-appearance-token-color-accent-500);
+      border-color: color-mix(
+        in srgb,
+        var(--bf-appearance-token-color-success) 55%,
+        var(--bf-appearance-token-border-subtle)
+      );
     }
 
     &--disabled {
-      opacity: 0.62;
+      opacity: $opacity-disabled;
     }
   }
 
-  &__row-time {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
+  &__row-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
     flex: 0 0 auto;
-    min-width: 62px;
-  }
-
-  &__row-clock {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
-    font-variant-numeric: tabular-nums;
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &__row-relative {
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    color: var(--bf-appearance-token-color-text-muted);
-    white-space: nowrap;
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__row-body {
-    flex: 1 1 auto;
+    align-self: center;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: $size-gap-1;
   }
 
   &__row-title-line {
@@ -215,7 +343,7 @@ $todos-stack-breakpoint: 1080px;
   &__row-name {
     min-width: 0;
     font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-weight: $font-weight-semibold;
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -269,9 +397,17 @@ $todos-stack-breakpoint: 1080px;
 
   &__row-actions {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
     gap: $size-gap-2;
     flex: 0 0 auto;
+  }
+
+  &__row-action-buttons {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
   }
 
   // ── Inactive group ────────────────────────────────────────────────────────
@@ -281,15 +417,13 @@ $todos-stack-breakpoint: 1080px;
     flex-direction: column;
     gap: $size-gap-2;
     padding-top: $size-gap-3;
-    border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 70%, transparent);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__inactive-title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-semibold;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-medium;
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -297,9 +431,14 @@ $todos-stack-breakpoint: 1080px;
 
   &__calendar {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: $size-gap-3;
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-padding-block: $size-gap-3;
   }
 
   &__calendar-head {
@@ -307,69 +446,57 @@ $todos-stack-breakpoint: 1080px;
     align-items: flex-start;
     justify-content: space-between;
     gap: $size-gap-3;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
   }
 
   &__calendar-heading {
     display: flex;
     flex-direction: column;
-    gap: 1px;
     min-width: 0;
-  }
-
-  &__calendar-nav {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-1;
-    flex: 0 0 auto;
-  }
-
-  &__calendar-month {
-    min-width: 108px;
-    text-align: center;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
-    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__calendar-weekdays {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: $size-gap-1;
+    gap: $size-gap-2;
   }
 
   &__calendar-weekday {
     padding: 2px 0;
     text-align: center;
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-semibold;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: $font-weight-normal;
     color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    grid-auto-rows: minmax(74px, auto);
-    gap: $size-gap-1;
+    grid-template-rows: repeat(6, auto);
+    gap: $size-gap-2;
+    flex: 0 0 auto;
+    min-height: 0;
   }
 
   &__calendar-cell {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 3px;
-    padding: 4px;
+    gap: $size-gap-1;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: 1.06 / 1;
+    padding: $size-gap-2;
     border: 1px solid transparent;
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-base);
+    background: var(--bf-appearance-token-element-bg-subtle);
     text-align: left;
     cursor: pointer;
     overflow: hidden;
     transition:
       background $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard;
+      border-color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-soft);
@@ -385,7 +512,8 @@ $todos-stack-breakpoint: 1080px;
     }
 
     &--today {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, transparent);
+      border-color: var(--bf-appearance-token-border-strong);
+      box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-subtle);
     }
 
     &--selected {
@@ -395,7 +523,7 @@ $todos-stack-breakpoint: 1080px;
   }
 
   &__calendar-daynum {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
     font-variant-numeric: tabular-nums;
     color: var(--bf-appearance-token-color-text-secondary);
@@ -413,9 +541,9 @@ $todos-stack-breakpoint: 1080px;
     align-items: baseline;
     gap: 4px;
     min-width: 0;
-    padding: 1px 4px;
+    padding: 2px 5px;
     border-radius: $size-radius-sm;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
     font-size: var(--bf-appearance-token-font-size-2xs);
     line-height: 1.45;
   }
@@ -443,13 +571,14 @@ $todos-stack-breakpoint: 1080px;
   // ── Selected day detail ───────────────────────────────────────────────────
 
   &__day-detail-presence {
-    display: grid;
-    grid-template-rows: 1fr;
-    min-height: 0;
-    overflow: hidden;
+    display: block;
+    flex: 0 0 auto;
+    min-height: max-content;
+    max-height: 42%;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     transform-origin: top center;
     transition:
-      grid-template-rows 160ms cubic-bezier(0.23, 1, 0.32, 1),
       opacity 120ms ease,
       transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
 
@@ -461,7 +590,6 @@ $todos-stack-breakpoint: 1080px;
     }
 
     &[data-open='false'] {
-      grid-template-rows: 0fr;
       opacity: 0;
       transform: translateY(-4px);
       pointer-events: none;
@@ -471,11 +599,11 @@ $todos-stack-breakpoint: 1080px;
   &__day-detail {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: $size-gap-3;
     min-height: 0;
-    overflow: hidden;
-    padding-top: $size-gap-3;
-    border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 70%, transparent);
+    overflow: visible;
+    padding-top: $size-gap-4;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__day-detail-head {
@@ -492,98 +620,172 @@ $todos-stack-breakpoint: 1080px;
     color: var(--bf-appearance-token-color-text-primary);
   }
 
-  // ── Editor ────────────────────────────────────────────────────────────────
+  // ── Task editor dialog ────────────────────────────────────────────────────
 
   &__editor {
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-3;
-    flex: 0 0 auto;
-    padding: $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-xl;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    max-height: 46vh;
-    overflow-y: auto;
-  }
-
-  &__editor-presence {
     display: grid;
-    grid-template-rows: 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: 100%;
+    height: auto;
+    max-height: 100%;
     min-height: 0;
-    overflow: hidden;
-    transform-origin: top center;
-    transition:
-      grid-template-rows 160ms cubic-bezier(0.23, 1, 0.32, 1),
-      opacity 120ms ease,
-      transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &[data-open='true'] {
-      @starting-style {
-        opacity: 0;
-        transform: translateY(-4px);
-      }
-    }
-
-    &[data-open='false'] {
-      grid-template-rows: 0fr;
-      opacity: 0;
-      transform: translateY(-4px);
-      pointer-events: none;
-    }
+    flex: 1 1 auto;
+    container: todo-editor / inline-size;
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
-  &__editor-head {
+  &__editor-intro {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-2;
+    gap: $size-gap-4;
+    min-width: 0;
+    padding: $size-gap-4 $size-gap-6;
+    padding-right: $size-gap-12;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__editor-intro-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
+    border-radius: $size-radius-lg;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__editor-intro-copy {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+    min-width: 0;
   }
 
   &__editor-title {
     margin: 0;
+    font-size: var(--bf-appearance-token-font-size-xl);
+    font-weight: $font-weight-semibold;
+    line-height: $line-height-tight;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__editor-description {
+    margin: 0;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: $line-height-base;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__editor-body {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-4;
+    min-height: 0;
+    padding: $size-gap-4 $size-gap-6;
+    overflow-y: auto;
+  }
+
+  &__editor-section {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    min-width: 0;
+  }
+
+  &__editor-section-title {
+    margin: 0;
+    padding-left: $size-gap-2;
+    border-left: 3px solid var(--bf-appearance-token-color-text-primary);
     font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
+    line-height: $line-height-tight;
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__editor-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: $size-gap-3;
+    grid-template-columns: 1.25fr 1.1fr 1fr 1fr 1.15fr;
+    gap: $size-gap-2;
   }
 
-  &__field {
+  &__field-card {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: $size-gap-1;
     min-width: 0;
+    min-height: 88px;
+    padding: $size-gap-3;
+    box-sizing: border-box;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-lg;
+    background: transparent;
+    transition:
+      border-color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
-    &--toggle {
-      justify-content: flex-start;
+    &:focus-within {
+      border-color: var(--bf-appearance-token-color-accent-500);
+      box-shadow: 0 0 0 3px color-mix(
+        in srgb,
+        var(--bf-appearance-token-color-accent-500) 10%,
+        transparent
+      );
     }
 
-    &--prompt {
-      grid-column: 1 / -1;
+    .bf-todos__field-control.bitfun-input-wrapper
+      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container'],
+    .bf-todos__field-control.select
+      > .select__trigger[data-bf-component='select'][data-bf-part='trigger'] {
+      min-height: 36px;
+      padding: 0;
+      border: 0;
+      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .bf-todos__field-control.bitfun-input-wrapper
+      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container']:hover,
+    .bf-todos__field-control.bitfun-input-wrapper
+      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container']:focus-within,
+    .bf-todos__field-control.select
+      > .select__trigger[data-bf-component='select'][data-bf-part='trigger']:hover,
+    .bf-todos__field-control.select
+      > .select__trigger[data-bf-component='select'][data-bf-part='trigger']:focus-visible {
+      background: transparent;
+      box-shadow: none;
     }
   }
 
   &__field-label {
-    font-size: 11px;
-    font-weight: $font-weight-semibold;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: $font-weight-medium;
     color: var(--bf-appearance-token-color-text-secondary);
+
+    svg {
+      flex: 0 0 auto;
+      color: var(--bf-appearance-token-color-text-muted);
+    }
   }
 
   &__field-note {
     font-size: var(--bf-appearance-token-font-size-2xs);
-    color: var(--bf-appearance-token-color-text-muted);
     line-height: 1.4;
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__field-static {
-    padding: 5px 0;
+    display: flex;
+    align-items: center;
+    min-height: 36px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     font-size: var(--bf-appearance-token-font-size-sm);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
@@ -591,9 +793,22 @@ $todos-stack-breakpoint: 1080px;
     white-space: nowrap;
   }
 
+  &__field-control--datetime {
+    min-height: 36px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+
+    .bf-datetime-field__input
+      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container'] {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+
   &__interval {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(84px, auto);
+    grid-template-columns: minmax(0, 1fr) minmax(76px, 0.7fr);
     gap: $size-gap-2;
     align-items: center;
   }
@@ -618,9 +833,140 @@ $todos-stack-breakpoint: 1080px;
     white-space: nowrap;
   }
 
+  &__editor-runtime {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1.35fr);
+    align-items: center;
+    gap: $size-gap-4;
+    min-height: 68px;
+    padding: $size-gap-3 $size-gap-4;
+    box-sizing: border-box;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-lg;
+    background: var(--bf-appearance-token-element-bg-subtle);
+  }
+
+  &__editor-enable {
+    min-width: 0;
+  }
+
+  &__editor-runtime-divider {
+    width: 1px;
+    height: 36px;
+    background: var(--bf-appearance-token-border-subtle);
+  }
+
+  &__editor-smart {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+
+  &__editor-smart-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    border-radius: $size-radius-full;
+    background: var(--bf-appearance-token-element-bg-base);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__editor-smart-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    strong {
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: $font-weight-medium;
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
+    span {
+      font-size: var(--bf-appearance-token-font-size-xs);
+      line-height: $line-height-base;
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+  }
+
+  &__editor-prompt {
+    .bitfun-textarea__field {
+      min-height: 112px;
+      resize: vertical;
+    }
+  }
+
+  &__editor-advanced {
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-lg;
+    background: transparent;
+    overflow: hidden;
+  }
+
+  &__editor-advanced-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 $size-gap-4;
+    border: 0;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font: inherit;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-medium;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-subtle);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: -2px;
+    }
+
+    svg {
+      flex: 0 0 auto;
+      transition: transform $motion-fast $easing-standard;
+    }
+
+    &[aria-expanded='true'] svg {
+      transform: rotate(180deg);
+    }
+  }
+
+  &__editor-advanced-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $size-gap-3;
+    padding: 0 $size-gap-4 $size-gap-4;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+
+    > * {
+      margin-top: $size-gap-4;
+    }
+  }
+
+  &__editor-advanced-note {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: $line-height-base;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
   &__warning {
     margin: 0;
-    padding: $size-gap-2 $size-gap-3;
+    padding: $size-gap-3 $size-gap-4;
     border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
     border-radius: $size-radius-base;
     background: color-mix(in srgb, var(--bf-appearance-token-color-error) 6%, transparent);
@@ -631,25 +977,193 @@ $todos-stack-breakpoint: 1080px;
   &__editor-actions {
     display: flex;
     justify-content: flex-end;
-    gap: $size-gap-2;
+    gap: $size-gap-3;
+    padding: $size-gap-4 $size-gap-6;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    background: transparent;
+
+    > .btn {
+      min-width: 104px;
+    }
+
+    > .btn-inverse {
+      min-width: 120px;
+    }
   }
+}
+
+.bf-todos-editor-modal {
+  padding: $size-gap-6;
+
+  .modal__header-shell--close-only {
+    position: absolute;
+    top: $size-gap-3;
+    right: $size-gap-3;
+    min-height: 0;
+    z-index: $z-content;
+  }
+
+  .modal__close {
+    margin-inline-start: 0;
+  }
+
+  &__content {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+// Keep the shared xxlarge dialog's 960px design-system ceiling, while leaving
+// more surrounding context visible than a near-fullscreen sheet. The concrete
+// Modal selector keeps this proportional width above runtime Appearance rules.
+.modal-overlay.bf-todos-editor-modal[data-bf-component='modal'][data-bf-part='overlay']
+  > .modal.modal--xxlarge[data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xxlarge'] {
+  width: min(960px, 84vw);
+  max-width: min(960px, 84vw);
+  max-height: min(760px, calc(100vh - 48px));
+}
+
+.modal-overlay.bf-todos-editor-modal[data-bf-component='modal'][data-bf-part='overlay']
+  .bf-todos-editor-modal__content.modal__content[data-bf-component='modal'][data-bf-part='content'] {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: $todos-stack-breakpoint) {
   .bf-todos {
     overflow-y: auto;
 
+    &__head {
+      align-items: flex-start;
+    }
+
+    &__head-actions {
+      flex-wrap: wrap;
+    }
+
     &__panes {
       grid-template-columns: minmax(0, 1fr);
+      height: auto;
     }
 
     &__pane {
       overflow-y: visible;
+
+      &--list {
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+      }
     }
 
     &__calendar-grid {
-      grid-auto-rows: minmax(60px, auto);
+      min-height: 0;
     }
+
+  }
+}
+
+@media (max-width: $todos-compact-breakpoint) {
+  .bf-todos {
+    &__head {
+      flex-direction: column;
+      padding: $size-gap-4;
+    }
+
+    &__head-actions {
+      justify-content: flex-start;
+      width: 100%;
+    }
+
+    &__month-label {
+      min-width: 110px;
+    }
+
+    &__new-button {
+      margin-left: auto;
+    }
+
+    &__pane {
+      &--list,
+      &--calendar {
+        padding: $size-gap-4;
+      }
+    }
+
+    &__overview-metric {
+      padding-inline: $size-gap-2;
+    }
+
+    &__row {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    &__row-actions {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      align-items: center;
+    }
+
+    &__calendar {
+      min-height: 0;
+    }
+
+    &__calendar-grid {
+      grid-template-rows: repeat(6, auto);
+      min-height: 0;
+      gap: $size-gap-1;
+    }
+
+    &__calendar-cell {
+      padding: $size-gap-2;
+    }
+
+    &__calendar-chip-name {
+      display: none;
+    }
+
+  }
+
+  .bf-todos-editor-modal {
+    padding: $size-gap-3;
+
+    .modal__header-shell--close-only {
+      top: $size-gap-3;
+      right: $size-gap-3;
+    }
+  }
+
+}
+
+@container todo-editor (max-width: 840px) {
+  .bf-todos__editor-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container todo-editor (max-width: 620px) {
+  .bf-todos__editor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bf-todos__editor-runtime {
+    grid-template-columns: minmax(0, 1fr);
+    gap: $size-gap-3;
+  }
+
+  .bf-todos__editor-runtime-divider {
+    width: 100%;
+    height: 1px;
+  }
+}
+
+@container todo-editor (max-width: 420px) {
+  .bf-todos__editor-grid,
+  .bf-todos__editor-advanced-panel,
+  .bf-todos__editor-runtime {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -657,17 +1171,8 @@ $todos-stack-breakpoint: 1080px;
   .bf-todos__row,
   .bf-todos__calendar-cell,
   .bf-todos__day-detail-presence,
-  .bf-todos__editor-presence {
+  .bf-todos__editor-advanced-trigger svg {
     transition: none;
     animation: none;
   }
-
-  .bf-todos__spin {
-    animation: none;
-  }
-}
-
-@keyframes bf-todos-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
 }

@@ -7,6 +7,7 @@
 
 import { forwardRef, useEffect, useRef, useImperativeHandle, useCallback } from 'react';
 import { ContentCanvas, useCanvasStore } from '../../components/panels/content-canvas';
+import { GlobalSearchContent } from '../../global-search/GlobalSearchRoot';
 import {
   switchAgentCanvasWorkspace,
   removeAgentCanvasSnapshot,
@@ -138,6 +139,7 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
           onInteraction={handleInteraction}
           onBeforeClose={handleBeforeClose}
           terminalResizeSuspended={terminalResizeSuspended}
+          emptyState={<GlobalSearchContent active={isSceneActive} variant="embedded" />}
         />
       </div>
     );

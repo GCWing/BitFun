@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal } from '@/component-library';
+import { Button, Modal, PopupCloseButton } from '@/component-library';
 import type {
   ReviewStrategyLevel,
   ReviewTeamRunManifest,
@@ -196,16 +196,13 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
               {t('deepReviewConsent.body')}
             </p>
           </div>
-          <button
-            type="button"
+          <PopupCloseButton
             data-bf-component="deep-review-consent-dialog"
             data-bf-part="close"
             className="deep-review-consent__close"
             aria-label={t('deepReviewConsent.cancel')}
             onClick={() => void settleConsent(false)}
-          >
-            <X size={16} />
-          </button>
+          />
         </div>
 
         {pendingConsent.launchContext?.sessionConcurrencyGuard?.highActivity && (

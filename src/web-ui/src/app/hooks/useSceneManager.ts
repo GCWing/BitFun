@@ -14,6 +14,7 @@ import { useI18n } from '@/infrastructure/i18n';
 
 export interface UseSceneManagerReturn {
   openTabs: ReturnType<typeof useSceneStore.getState>['openTabs'];
+  retainedScenes: ReturnType<typeof useSceneStore.getState>['retainedScenes'];
   activeTabId: ReturnType<typeof useSceneStore.getState>['activeTabId'];
   navigationMotion: ReturnType<typeof useSceneStore.getState>['navigationMotion'];
   navigationSequence: ReturnType<typeof useSceneStore.getState>['navigationSequence'];
@@ -26,6 +27,7 @@ export interface UseSceneManagerReturn {
 export function useSceneManager(): UseSceneManagerReturn {
   const {
     openTabs,
+    retainedScenes,
     activeTabId,
     navigationMotion,
     navigationSequence,
@@ -47,6 +49,7 @@ export function useSceneManager(): UseSceneManagerReturn {
 
   return {
     openTabs,
+    retainedScenes,
     activeTabId,
     navigationMotion,
     navigationSequence,

@@ -41,35 +41,9 @@
   // ─── Close button ──────────────────────────────────────────────────────────
   &__close {
     position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 0;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: 50%;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
     z-index: 1;
-    transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard,
-      color $motion-base $easing-standard,
-      opacity $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
-
-    svg { flex-shrink: 0; }
-
-    @media (hover: hover) and (pointer: fine) {
-      &:hover {
-        background: var(--bf-appearance-token-color-bg-tertiary);
-        color: var(--bf-appearance-token-color-text-primary);
-      }
-    }
   }
 
   // ─── Page viewport ─────────────────────────────────────────────────────────

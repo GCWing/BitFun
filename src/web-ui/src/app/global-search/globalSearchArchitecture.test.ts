@@ -11,6 +11,17 @@ describe('global search ownership', () => {
     expect(source('src/app/components/NavPanel/MainNav.tsx')).not.toContain('NavSearchDialog');
   });
 
+  it('reuses the shared search content in the session right-panel empty state', () => {
+    const globalSearch = source('src/app/global-search/GlobalSearchRoot.tsx');
+    const auxPane = source('src/app/scenes/session/AuxPane.tsx');
+    const contentCanvas = source('src/app/components/panels/content-canvas/ContentCanvas.tsx');
+
+    expect(globalSearch).toContain('export const GlobalSearchContent');
+    expect(globalSearch).toContain('variant="modal"');
+    expect(auxPane).toContain('emptyState={<GlobalSearchContent active={isSceneActive} variant="embedded" />}');
+    expect(contentCanvas).toContain('<EmptyState onClose={disablePopOut ? undefined : collapsePanel}>');
+  });
+
   it('keeps browser and terminal capabilities on the shared product activator without footer shortcuts', () => {
     const footer = source('src/app/components/NavPanel/components/PersistentFooterActions.tsx');
     const activator = source('src/app/global-search/productActionActivator.ts');

@@ -6,6 +6,7 @@ import React, { useEffect, useState, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { PopupCloseButton } from '../PopupCloseButton';
 import './Modal.scss';
 
 // Keep in sync with modal-overlay-exit/modal-dialog-exit in Modal.scss.
@@ -43,7 +44,7 @@ export interface ModalProps {
   title?: string;
   titleExtra?: React.ReactNode;
   children: React.ReactNode;
-  size?: 'small' | 'medium' | 'large' | 'xlarge';
+  size?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   contentInset?: boolean;
   /** Extra class on `.modal__content` (e.g. flex layout for scroll regions inside children) */
   contentClassName?: string;
@@ -410,6 +411,7 @@ export const Modal: React.FC<ModalProps> = ({
             className={[
               'modal__header-shell',
               !title && showCloseButton && !draggable ? 'modal__header-shell--close-only' : '',
+              title || draggable ? 'modal__header-shell--with-header' : '',
             ]
               .filter(Boolean)
               .join(' ')}
@@ -439,20 +441,14 @@ export const Modal: React.FC<ModalProps> = ({
               </div>
             )}
             {showCloseButton && (
-              <button
+              <PopupCloseButton
                 className="modal__close"
                 onClick={onClose}
                 aria-label={t('modal.close')}
-                type="button"
                 data-testid={closeButtonTestId}
                 data-bf-component="modal"
                 data-bf-part="close"
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <line x1="3" y1="3" x2="11" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="11" y1="3" x2="3" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </button>
+              />
             )}
           </div>
         )}

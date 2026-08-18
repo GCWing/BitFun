@@ -48,21 +48,50 @@ const log = createLogger('SkillsScene');
 
 type SkillTab = 'installed' | 'discover';
 
-const INSTALLED_PAGE_SIZE = 12;
-
 interface CategoryInfo {
   id: InstalledFilter;
   icon: React.ReactNode;
   labelKey: string;
+  titleKey: string;
   descKey: string;
 }
 
 const CATEGORIES: CategoryInfo[] = [
-  { id: 'all', icon: <Layers size={15} strokeWidth={1.6} />, labelKey: 'filters.all', descKey: 'categories.all' },
-  { id: 'builtin', icon: <ShieldCheck size={15} strokeWidth={1.6} />, labelKey: 'filters.builtin', descKey: 'categories.builtin' },
-  { id: 'user', icon: <User size={15} strokeWidth={1.6} />, labelKey: 'filters.user', descKey: 'categories.user' },
-  { id: 'project', icon: <FolderOpen size={15} strokeWidth={1.6} />, labelKey: 'filters.project', descKey: 'categories.project' },
-  { id: 'suite', icon: <Zap size={15} strokeWidth={1.6} />, labelKey: 'filters.suite', descKey: 'categories.suite' },
+  {
+    id: 'all',
+    icon: <Layers size={15} strokeWidth={1.6} />,
+    labelKey: 'filters.all',
+    titleKey: 'installed.titleListAll',
+    descKey: 'categories.all',
+  },
+  {
+    id: 'builtin',
+    icon: <ShieldCheck size={15} strokeWidth={1.6} />,
+    labelKey: 'filters.builtin',
+    titleKey: 'installed.titleBuiltin',
+    descKey: 'categories.builtin',
+  },
+  {
+    id: 'user',
+    icon: <User size={15} strokeWidth={1.6} />,
+    labelKey: 'filters.user',
+    titleKey: 'installed.titleUser',
+    descKey: 'categories.user',
+  },
+  {
+    id: 'project',
+    icon: <FolderOpen size={15} strokeWidth={1.6} />,
+    labelKey: 'filters.project',
+    titleKey: 'installed.titleProject',
+    descKey: 'categories.project',
+  },
+  {
+    id: 'suite',
+    icon: <Zap size={15} strokeWidth={1.6} />,
+    labelKey: 'filters.suite',
+    titleKey: 'suite.title',
+    descKey: 'categories.suite',
+  },
 ];
 
 const SkillsScene: React.FC = () => {
@@ -87,7 +116,6 @@ const SkillsScene: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<SkillTab>('installed');
   const [deleteTarget, setDeleteTarget] = useState<SkillInfo | null>(null);
-  const [installedListPage, setInstalledListPage] = useState(0);
   const [installedSearch, setInstalledSearch] = useState('');
   const [selectedDetail, setSelectedDetail] = useState<
     | { type: 'installed'; skillKey: string }
@@ -210,23 +238,8 @@ const SkillsScene: React.FC = () => {
     return list;
   }, [hideDuplicates, installed.filteredSkills]);
 
-  const installedTotalPages = Math.max(
-    1,
-    Math.ceil(installedFiltered.length / INSTALLED_PAGE_SIZE),
-  );
-  const currentInstalledPage = Math.min(installedListPage, installedTotalPages - 1);
-  const pagedInstalledSkills = installedFiltered.slice(
-    currentInstalledPage * INSTALLED_PAGE_SIZE,
-    (currentInstalledPage + 1) * INSTALLED_PAGE_SIZE,
-  );
-
-  useEffect(() => {
-    setInstalledListPage(0);
-  }, [installedFilter, installedSearch, hideDuplicates]);
-
-  useEffect(() => {
-    setInstalledListPage((p) => Math.min(p, Math.max(0, installedTotalPages - 1)));
-  }, [installedTotalPages]);
+  const activeInstalledCategory = CATEGORIES.find((category) => category.id === installedFilter)
+    ?? CATEGORIES[0];
 
   return (
     <div className="bitfun-skills-scene" data-testid="agent-skill-panel" data-bf-scene="skills" data-bf-part="root" data-bf-tab={activeTab}>
@@ -338,49 +351,85 @@ const SkillsScene: React.FC = () => {
                     </button>
                   </div>
 
-                  {installed.loading && (
-                    <div className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
-                      {Array.from({ length: 8 }).map((_, i) => (
-                        <div
-                          key={`ins-sk-${i}`}
-                          className="skills-card-skeleton"
-                          style={{ '--surface-stagger-index': i } as React.CSSProperties}
+                  <div className="skills-main__list-shell">
+                    <div
+                      className="skills-main__list-header"
+                      data-bf-scene="skills"
+                      data-bf-part="installedListHeader"
+                    >
+                      <div className="skills-main__list-heading">
+                        <span data-bf-scene="skills" data-bf-part="installedListTitle">
+                          {t(activeInstalledCategory.titleKey)}
+                        </span>
+                        <span
+                          className="skills-main__list-count"
                           data-bf-scene="skills"
-                          data-bf-part="skeleton"
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {!installed.loading && installed.error && (
-                    <div className="skills-main__empty skills-main__empty--error" data-bf-scene="skills" data-bf-part="error">
-                      <Package size={28} strokeWidth={1.2} />
-                      <span>{t('list.loadFailed')}</span>
-                      <Button
-                        variant="ghost"
-                        size="small"
-                        onClick={() => void installed.loadSkills(true)}
-                      >
-                        {t('list.retry')}
-                      </Button>
-                    </div>
-                  )}
-
-                  {!installed.loading && !installed.error && installedFiltered.length === 0 && (
-                    <div className="skills-main__empty" data-testid="skill-list-empty" data-bf-scene="skills" data-bf-part="empty">
-                      <Package size={28} strokeWidth={1.2} />
-                      <span>
-                        {installed.skills.length === 0
-                          ? t('list.empty.noSkills')
-                          : t('list.empty.noMatch')}
+                          data-bf-part="installedListCount"
+                        >
+                          {installedFiltered.length}
+                        </span>
+                      </div>
+                      <span className="skills-main__column-label skills-main__column-label--source">
+                        {t('list.columns.source')}
+                      </span>
+                      <span className="skills-main__column-label skills-main__column-label--level">
+                        {t('list.columns.level')}
+                      </span>
+                      <span className="skills-main__column-label skills-main__column-label--status">
+                        {t('list.columns.status')}
+                      </span>
+                      <span className="skills-main__column-label skills-main__column-label--actions">
+                        {t('list.columns.actions')}
                       </span>
                     </div>
-                  )}
 
-                  {!installed.loading && !installed.error && (
-                    <>
-                      <div className="skills-main__grid" data-testid="skill-list" data-bf-scene="skills" data-bf-part="list">
-                        {pagedInstalledSkills.map((skill, index) => (
+                    {installed.loading && (
+                      <div className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
+                        {Array.from({ length: 8 }).map((_, i) => (
+                          <div
+                            key={`ins-sk-${i}`}
+                            className="skills-card-skeleton"
+                            style={{ '--surface-stagger-index': i } as React.CSSProperties}
+                            data-bf-scene="skills"
+                            data-bf-part="skeleton"
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {!installed.loading && installed.error && (
+                      <div className="skills-main__empty skills-main__empty--error" data-bf-scene="skills" data-bf-part="error">
+                        <Package size={28} strokeWidth={1.2} />
+                        <span>{t('list.loadFailed')}</span>
+                        <Button
+                          variant="ghost"
+                          size="small"
+                          onClick={() => void installed.loadSkills(true)}
+                        >
+                          {t('list.retry')}
+                        </Button>
+                      </div>
+                    )}
+
+                    {!installed.loading && !installed.error && installedFiltered.length === 0 && (
+                      <div className="skills-main__empty" data-testid="skill-list-empty" data-bf-scene="skills" data-bf-part="empty">
+                        <Package size={28} strokeWidth={1.2} />
+                        <span>
+                          {installed.skills.length === 0
+                            ? t('list.empty.noSkills')
+                            : t('list.empty.noMatch')}
+                        </span>
+                      </div>
+                    )}
+
+                    {!installed.loading && !installed.error && installedFiltered.length > 0 && (
+                      <div
+                        className="skills-main__grid"
+                        data-testid="skill-list"
+                        data-bf-scene="skills"
+                        data-bf-part="list"
+                      >
+                        {installedFiltered.map((skill, index) => (
                           <div
                             key={skill.key}
                             className={[
@@ -417,7 +466,7 @@ const SkillsScene: React.FC = () => {
                           >
                             <div className="skills-card__top" data-bf-scene="skills" data-bf-part="installedCardTop">
                               <div className="skills-card__icon" data-bf-scene="skills" data-bf-part="installedCardIcon">
-                                <Puzzle size={18} strokeWidth={1.6} />
+                                <Puzzle size={17} strokeWidth={1.6} />
                               </div>
                               <div className="skills-card__info" data-bf-scene="skills" data-bf-part="installedCardInfo">
                                 <span className="skills-card__name" data-testid="skill-list-item-title" data-bf-scene="skills" data-bf-part="installedCardName">{skill.name}</span>
@@ -428,7 +477,7 @@ const SkillsScene: React.FC = () => {
                               <div className="skills-card__status-badges">
                                 {skill.isBuiltin && (
                                   <Badge variant="accent">
-                                    <ShieldCheck size={11} />
+                                    <ShieldCheck size={10} />
                                     {t('list.item.builtin')}
                                   </Badge>
                                 )}
@@ -438,19 +487,45 @@ const SkillsScene: React.FC = () => {
                                     {t('list.item.globalDisabled')}
                                   </Badge>
                                 )}
+                                {skill.isShadowed && (
+                                  <span title={t('list.item.shadowedTooltip', {
+                                    source: coverageSourceBySkillKey.get(skill.key)
+                                      ?? t('list.item.unknownSource'),
+                                  })}>
+                                    <Badge variant="warning">
+                                      <ShieldAlert size={10} />
+                                      {t('list.item.shadowed')}
+                                    </Badge>
+                                  </span>
+                                )}
                               </div>
                             </div>
 
-                            <div className="skills-card__meta" data-bf-scene="skills" data-bf-part="installedCardMeta">
-                              <Badge variant="neutral">
-                                {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
-                              </Badge>
-                              <Badge
-                                variant={skill.level === 'user' ? 'info' : 'purple'}
+                            <div
+                              className="skills-card__meta"
+                              data-bf-scene="skills"
+                              data-bf-part="installedCardMeta"
+                            >
+                              <span
+                                className="skills-card__source"
+                                data-bf-scene="skills"
+                                data-bf-part="installedCardSource"
                               >
-                                {skill.level === 'user'
-                                  ? <User size={11} />
-                                  : <FolderOpen size={11} />}
+                                <Badge variant="neutral">
+                                  {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
+                                </Badge>
+                              </span>
+                            </div>
+
+                            <div
+                              className="skills-card__level"
+                              data-bf-scene="skills"
+                              data-bf-part="installedCardLevel"
+                            >
+                              {skill.level === 'user'
+                                ? <User size={12} strokeWidth={1.6} />
+                                : <FolderOpen size={12} strokeWidth={1.6} />}
+                              <span>
                                 {market.isRemoteWorkspace
                                   ? skill.level === 'user'
                                     ? t('list.item.localUser')
@@ -458,17 +533,29 @@ const SkillsScene: React.FC = () => {
                                   : skill.level === 'user'
                                     ? t('list.item.user')
                                     : t('list.item.project')}
-                              </Badge>
-                              {skill.isShadowed && (
-                                <span title={t('list.item.shadowedTooltip', {
-                                  source: coverageSourceBySkillKey.get(skill.key)
-                                    ?? t('list.item.unknownSource'),
-                                })}>
-                                  <Badge variant="warning">
-                                    <ShieldAlert size={11} />
-                                    {t('list.item.shadowed')}
-                                  </Badge>
-                                </span>
+                              </span>
+                            </div>
+
+                            <div
+                              className="skills-card__global-toggle"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                              data-bf-scene="skills"
+                              data-bf-part="installedCardStatus"
+                            >
+                              {skill.level === 'user' ? (
+                                <Switch
+                                  size="small"
+                                  checked={!installed.globallyDisabledSkillKeys.has(skill.key)}
+                                  loading={installed.savingGlobalSkillKey === skill.key}
+                                  disabled={installed.savingGlobalSkillKey !== null}
+                                  aria-label={t('list.item.globalToggleLabel', { name: skill.name })}
+                                  onChange={(event) => {
+                                    void installed.handleGlobalSkillToggle(skill, event.target.checked);
+                                  }}
+                                />
+                              ) : (
+                                <span className="skills-card__status-unavailable" aria-hidden="true">—</span>
                               )}
                             </div>
 
@@ -479,28 +566,17 @@ const SkillsScene: React.FC = () => {
                               data-bf-scene="skills"
                               data-bf-part="installedCardActions"
                             >
-                              {skill.level === 'user' && (
-                                <div className="skills-card__global-toggle">
-                                  <Switch
-                                    size="small"
-                                    checked={!installed.globallyDisabledSkillKeys.has(skill.key)}
-                                    loading={installed.savingGlobalSkillKey === skill.key}
-                                    disabled={installed.savingGlobalSkillKey !== null}
-                                    aria-label={t('list.item.globalToggleLabel', { name: skill.name })}
-                                    onChange={(event) => {
-                                      void installed.handleGlobalSkillToggle(skill, event.target.checked);
-                                    }}
-                                  />
-                                </div>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="small"
+                              <button
+                                type="button"
+                                className="skills-card__details"
                                 onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
+                                aria-label={t('list.item.detail')}
+                                title={t('list.item.detail')}
+                                data-bf-scene="skills"
+                                data-bf-part="installedCardDetails"
                               >
-                                <span>{t('list.item.detail')}</span>
-                                <ArrowRight size={12} />
-                              </Button>
+                                <ArrowRight size={14} strokeWidth={1.7} />
+                              </button>
                               {canDeleteSkill(skill) && (
                                 <button
                                   type="button"
@@ -518,41 +594,9 @@ const SkillsScene: React.FC = () => {
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
 
-                      {installedFiltered.length > 0 && installedTotalPages > 1 && (
-                        <div className="skills-installed__pagination" data-bf-scene="skills" data-bf-part="pagination">
-                          <button
-                            type="button"
-                            className="skills-installed__page-btn"
-                            onClick={() => setInstalledListPage((p) => Math.max(0, p - 1))}
-                            disabled={currentInstalledPage === 0}
-                            aria-label={t('market.pagination.prev')}
-                            data-bf-scene="skills"
-                            data-bf-part="pageButton"
-                          >
-                            <ChevronLeft size={14} />
-                          </button>
-                          <span className="skills-installed__page-info" data-bf-scene="skills" data-bf-part="pageInfo">
-                            {t('market.pagination.info', {
-                              current: currentInstalledPage + 1,
-                              total: installedTotalPages,
-                            })}
-                          </span>
-                          <button
-                            type="button"
-                            className="skills-installed__page-btn"
-                            onClick={() => setInstalledListPage((p) => Math.min(installedTotalPages - 1, p + 1))}
-                            disabled={currentInstalledPage >= installedTotalPages - 1}
-                            aria-label={t('market.pagination.next')}
-                            data-bf-scene="skills"
-                            data-bf-part="pageButton"
-                          >
-                            <ChevronRight size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  )}
                 </>
               )}
             </div>

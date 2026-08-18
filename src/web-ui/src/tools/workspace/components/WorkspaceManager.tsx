@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { FolderOpen, Clock, FileText, Code, Folder, Bot } from 'lucide-react';
+import { FolderOpen, Clock, FileText, Code, Folder } from 'lucide-react';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
 import { WorkspaceInfo, WorkspaceKind, WorkspaceType } from '../../../shared/types';
+import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import { Modal } from '@/component-library';
 import { i18nService, useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
@@ -40,6 +41,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
   const [scanning, setScanning] = useState(false);
 
   const getWorkspaceDisplayName = (workspace: WorkspaceInfo) => {
+    if (workspace.workspaceKind === WorkspaceKind.Assistant) return workspace.name;
     const emoji = workspace.identity?.emoji?.trim();
     return emoji ? `${emoji} ${workspace.name}` : workspace.name;
   };
@@ -136,7 +138,15 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
 
   const getWorkspaceIcon = (workspace: WorkspaceInfo) => {
     if (workspace.workspaceKind === WorkspaceKind.Assistant) {
-      return <Bot size={16} />;
+      return (
+        <AssistantAvatar
+          presetId={workspace.identity?.avatar}
+          emoji={workspace.identity?.emoji}
+          stableKey={workspace.assistantId || workspace.id}
+          name={workspace.identity?.name || workspace.name}
+          size={40}
+        />
+      );
     }
 
     const type = workspace.workspaceType;
@@ -189,7 +199,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
           {currentWorkspace ? (
             <div className="workspace-card current" data-bf-component="workspace-tool" data-bf-part="currentCard">
               <div className="workspace-header">
-                <div className="workspace-icon">
+                <div className={`workspace-icon${currentWorkspace.workspaceKind === WorkspaceKind.Assistant ? ' is-assistant' : ''}`}>
                   {getWorkspaceIcon(currentWorkspace)}
                 </div>
                 <div className="workspace-info">
@@ -270,7 +280,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                   onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
                  data-bf-component="workspace-tool" data-bf-part="recentCard">
                   <div className="workspace-header">
-                    <div className="workspace-icon">
+                    <div className={`workspace-icon${workspace.workspaceKind === WorkspaceKind.Assistant ? ' is-assistant' : ''}`}>
                       {getWorkspaceIcon(workspace)}
                     </div>
                     <div className="workspace-info">
@@ -326,8 +336,8 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                   onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
                  data-bf-component="workspace-tool" data-bf-part="assistantCard">
                   <div className="workspace-header">
-                    <div className="workspace-icon">
-                      <Bot size={16} />
+                    <div className="workspace-icon is-assistant">
+                      {getWorkspaceIcon(workspace)}
                     </div>
                     <div className="workspace-info">
                       <div className="workspace-name">{getWorkspaceDisplayName(workspace)}</div>

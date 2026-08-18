@@ -384,9 +384,9 @@
           height: 30px !important;
           min-width: 30px !important;
           padding: 0 !important;
-          border: 1px solid var(--bf-appearance-token-border-subtle) !important;
+          border: 1px solid transparent !important;
           border-radius: 50% !important;
-          background: transparent !important;
+          background: var(--bf-appearance-token-element-bg-subtle) !important;
           color: var(--bf-appearance-token-color-text-primary);
           display: flex !important;
           align-items: center !important;
@@ -400,7 +400,6 @@
           &:hover,
           &:focus-visible,
           .bitfun-chat-input__box:focus-within & {
-            border-color: var(--bf-appearance-token-border-medium) !important;
             background: var(--bf-appearance-token-element-bg-soft) !important;
           }
         }
@@ -506,7 +505,10 @@
           border-radius: 15px;
           background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
 
-          &:hover,
+          &:hover {
+            background: var(--bf-appearance-token-element-bg-soft);
+          }
+
           &[data-bf-state='open'] {
             background: var(--bf-appearance-token-element-bg-soft);
           }
@@ -514,9 +516,9 @@
 
         // The pill owns the interaction boundary and background; the trigger
         // inside it is a plain segment so the pair does not read as two stacked
-        // controls. Its resting boundary stays transparent. The label takes the
-        // input's control size so every line of text in the capsule speaks at
-        // one size.
+        // controls. Its resting, hover, and open boundaries stay transparent.
+        // The label takes the input's control size so every line of text in the
+        // capsule speaks at one size.
         .bitfun-model-selector__trigger {
           height: 28px;
           padding: 0 6px 0 11px;

@@ -71,6 +71,15 @@ describe('SessionsSection layout styles', () => {
     expect(actionButtonBlock).toContain('height: 20px;');
   });
 
+  it('centers empty and session expansion helper content', () => {
+    const stylesheet = readSessionsSectionStylesheet();
+    const emptyBlock = extractBlock(stylesheet, '&__inline-empty');
+    const toggleBlock = extractBlock(stylesheet, '&__inline-toggle');
+
+    expect(emptyBlock).toContain('text-align: center;');
+    expect(toggleBlock).toContain('justify-content: center;');
+  });
+
   it('keeps child-session badges visible while long titles are ellipsized', () => {
     const stylesheet = readSessionsSectionStylesheet();
     const labelBlock = extractInlineItemBlock(stylesheet, 'label');

@@ -18,7 +18,7 @@ export const modalAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     {
       id: 'size',
       attribute: 'data-bf-size',
-      values: ['small', 'medium', 'large', 'xlarge'],
+      values: ['small', 'medium', 'large', 'xlarge', 'xxlarge'],
     },
     {
       id: 'placement',

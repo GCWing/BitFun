@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { PopupCloseButton } from '@/component-library';
 import { useAnnouncementStore } from '../store/announcementStore';
 import FeatureModalPage from './FeatureModalPage';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
@@ -133,16 +133,13 @@ const FeatureModal: React.FC = () => {
       <div className={`feature-modal ${sizeClass}${exiting ? ' feature-modal--exiting' : ''}`} data-bf-component="announcement" data-bf-part="modal">
         {/* Close button */}
         {modal.closable && (
-          <button
-            type="button"
+          <PopupCloseButton
             className="feature-modal__close"
             data-bf-component="announcement"
             data-bf-part="modalClose"
             onClick={() => triggerClose()}
             aria-label={t('announcements.common.close')}
-          >
-            <X size={14} strokeWidth={2} />
-          </button>
+          />
         )}
 
         {/* Page viewport */}

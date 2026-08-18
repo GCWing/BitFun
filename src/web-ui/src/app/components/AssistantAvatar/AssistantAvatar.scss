@@ -10,38 +10,12 @@
   height: var(--assistant-avatar-size);
   place-items: center;
   overflow: visible;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 38%, var(--bf-appearance-token-border-subtle));
+  border: 1px solid var(--bf-appearance-token-color-overlay-black-12);
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 24%, transparent), transparent 44%),
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 13%, var(--bf-appearance-token-element-bg-base));
-  color: var(--bf-appearance-token-color-accent-500);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 30%, transparent);
+  background: var(--bf-appearance-token-color-static-white);
+  color: var(--bf-appearance-token-color-text-secondary);
+  box-shadow: 0 2px 8px var(--bf-appearance-token-color-overlay-black-08);
   isolation: isolate;
-
-  &[data-bf-palette='violet'] {
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 38%, var(--bf-appearance-token-border-subtle));
-    background:
-      radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent), transparent 44%),
-      color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 13%, var(--bf-appearance-token-element-bg-base));
-    color: var(--bf-appearance-token-color-purple-500);
-  }
-
-  &__secondary-fill {
-    fill: var(--bf-appearance-token-color-purple-500);
-  }
-
-  &__secondary-stroke {
-    stroke: var(--bf-appearance-token-color-purple-500);
-  }
-
-  &[data-bf-palette='violet'] &__secondary-fill {
-    fill: var(--bf-appearance-token-color-accent-500);
-  }
-
-  &[data-bf-palette='violet'] &__secondary-stroke {
-    stroke: var(--bf-appearance-token-color-accent-500);
-  }
 
   &__art {
     display: grid;
@@ -50,12 +24,16 @@
     place-items: center;
     overflow: hidden;
     border-radius: inherit;
+  }
 
-    svg {
-      display: block;
-      width: 78%;
-      height: 78%;
-    }
+  &__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
   }
 
   &__emoji {
@@ -68,6 +46,10 @@
   &.is-emoji {
     background: var(--bf-appearance-token-element-bg-medium);
     color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &.is-image {
+    border-color: var(--bf-appearance-token-color-overlay-black-12);
   }
 
   &.is-active {

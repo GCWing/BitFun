@@ -17,6 +17,7 @@ const sceneHarness = vi.hoisted(() => {
   return {
     state: {
       openTabs: [{ id: 'session', openedAt: 0, lastUsed: 0 }],
+      retainedScenes: [],
       activeTabId: 'session',
       navigationMotion: 'instant',
       navigationSequence: 0,
@@ -64,6 +65,12 @@ vi.mock('./agents/AgentsScene', () => ({
   },
 }));
 
+vi.mock('./miniapps/MiniAppScene', () => ({
+  default: ({ appId }: { appId: string }) => (
+    <div data-testid="miniapp-scene-content" data-miniapp-id={appId} />
+  ),
+}));
+
 import SceneViewport from './SceneViewport';
 
 describe('SceneViewport transitions', () => {
@@ -102,6 +109,7 @@ describe('SceneViewport transitions', () => {
         { id: 'session', openedAt: 0, lastUsed: 0 },
         { id: 'agents', openedAt: 1, lastUsed: 1 },
       ],
+      retainedScenes: [],
       activeTabId: 'agents',
       navigationMotion: 'pointer',
       navigationSequence: 1,
@@ -149,5 +157,25 @@ describe('SceneViewport transitions', () => {
 
     expect(visibleScenes().map(scene => scene.getAttribute('data-scene-id'))).toEqual(['session']);
     expect(container.querySelector('[data-scene-id="agents"]')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('keeps an auto-evicted MiniApp scene mounted and hidden', async () => {
+    sceneHarness.state = {
+      openTabs: [{ id: 'session', openedAt: 0, lastUsed: 0 }],
+      retainedScenes: [{ id: 'miniapp:gomoku', openedAt: 1, lastUsed: 1 }],
+      activeTabId: 'session',
+      navigationMotion: 'instant',
+      navigationSequence: 0,
+    };
+
+    await act(async () => {
+      root.render(<SceneViewport />);
+      await Promise.resolve();
+    });
+
+    const retained = container.querySelector('[data-scene-id="miniapp:gomoku"]');
+    expect(retained).not.toBeNull();
+    expect(retained?.hasAttribute('hidden')).toBe(true);
+    expect(retained?.getAttribute('aria-hidden')).toBe('true');
   });
 });

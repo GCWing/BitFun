@@ -18,6 +18,7 @@ export const notificationAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'loadingItem' },
     { id: 'centerRoot' },
     { id: 'centerHeader' },
+    { id: 'centerClose' },
     { id: 'centerList' },
     { id: 'centerItem' },
   ],

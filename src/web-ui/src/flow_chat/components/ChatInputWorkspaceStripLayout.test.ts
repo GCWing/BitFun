@@ -179,7 +179,11 @@ describe('status track layout', () => {
     expect(component).toContain('data-testid="chat-input-permission-trigger"');
     // The ring is the whole reading. A number beside it only said the same
     // thing twice, in the rail with the least room to say anything.
-    expect(component).not.toContain('{usagePercentage}%');
+    const usageButton = component.match(
+      /className="bitfun-chat-input-workspace-strip__usage-btn"[\s\S]*?<\/button>/,
+    )?.[0];
+    expect(usageButton).toBeDefined();
+    expect(usageButton).not.toContain('{usagePercentage}%');
     expect(component).toContain('bitfun-chat-input-workspace-strip__usage-ring');
     expect(component).toContain('data-testid="dispatch-sync-trigger"');
   });
@@ -237,11 +241,28 @@ describe('status track layout', () => {
     expect(stylesheet).toContain('bottom: 6px;');
   });
 
-  it('keeps the model pair borderless at rest and reveals its boundary on interaction', () => {
+  it('keeps the model pair borderless at rest, on hover, and while open', () => {
     const stylesheet = readChatInputStylesheet();
 
     expect(stylesheet).toMatch(
-      /\.bitfun-model-selector \{[\s\S]*?border: 1px solid transparent;[\s\S]*?&:hover,[\s\S]*?border-color: var\(--bf-appearance-token-border-medium\);/,
+      /\.bitfun-model-selector \{[\s\S]*?border: 1px solid transparent;[\s\S]*?&:hover \{\s*background: var\(--bf-appearance-token-element-bg-soft\);\s*\}/,
+    );
+    expect(stylesheet).toMatch(
+      /&\[data-bf-state='open'\] \{\s*background: var\(--bf-appearance-token-element-bg-soft\);\s*\}/,
+    );
+    expect(stylesheet).not.toMatch(
+      /\.bitfun-model-selector \{[\s\S]{0,900}?border-color:/,
+    );
+  });
+
+  it('gives the add icon a background without adding a border', () => {
+    const stylesheet = readChatInputStylesheet();
+
+    expect(stylesheet).toMatch(
+      /\.bitfun-chat-input__agent-boost-add \{[\s\S]*?border: 1px solid transparent !important;[\s\S]*?background: var\(--bf-appearance-token-element-bg-subtle\) !important;[\s\S]*?&:hover,[\s\S]*?\.bitfun-chat-input__box:focus-within & \{\s*background: var\(--bf-appearance-token-element-bg-soft\) !important;/,
+    );
+    expect(stylesheet).not.toMatch(
+      /\.bitfun-chat-input__agent-boost-add \{[\s\S]{0,900}?border-color:/,
     );
   });
 

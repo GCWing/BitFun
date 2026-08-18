@@ -6,6 +6,7 @@ import { Button, IconButton, Input } from '@/component-library';
 import {
   AssistantAvatar,
   ASSISTANT_AVATAR_PRESETS,
+  getAssistantAvatarPreset,
 } from '@/app/components/AssistantAvatar';
 import type { IdentitySaveStatus } from '@/app/scenes/my-agent/useAgentIdentityDocument';
 import { ASSISTANT_EMOJI_PRESETS, firstAvatarGrapheme } from './assistantAvatar';
@@ -41,6 +42,7 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
   const popoverRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const displayedValue = useMemo(() => firstAvatarGrapheme(value), [value]);
+  const selectedPresetId = getAssistantAvatarPreset(presetValue)?.id ?? '';
   const [customValue, setCustomValue] = useState(displayedValue);
   const popoverLayout = useAnchoredPopoverPosition({
     open: isOpen,
@@ -166,11 +168,11 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
               <button
                 key={preset.id}
                 type="button"
-                className={`acp-avatar-picker__option is-official${presetValue === preset.id ? ' is-selected' : ''}`}
+                className={`acp-avatar-picker__option is-official${selectedPresetId === preset.id ? ' is-selected' : ''}`}
                 aria-label={t('identity.avatarUseOfficialPreset', {
                   name: t(`identity.avatarFamilies.${preset.family}`),
                 })}
-                aria-pressed={presetValue === preset.id}
+                aria-pressed={selectedPresetId === preset.id}
                 onClick={() => choosePresetAvatar(preset.id)}
               >
                 <AssistantAvatar presetId={preset.id} size={30} />

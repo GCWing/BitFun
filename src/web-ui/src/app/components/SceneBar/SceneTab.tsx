@@ -81,6 +81,7 @@ const SceneTab: React.FC<SceneTabProps> = ({
   return (
     <div
       role="tab"
+      data-scene-id={tab.id}
       aria-selected={isActive}
       tabIndex={isActive ? 0 : -1}
       className={[

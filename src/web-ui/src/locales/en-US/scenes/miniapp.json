@@ -3,9 +3,18 @@
   "subtitle": "Instantly generated mini apps, ready to use right away. You can also continue to iterate on them.",
   "searchPlaceholder": "Search mini apps...",
   "importFromFolder": "Import from folder",
+  "importAction": "Import mini app",
+  "importMenuLabel": "Choose an import source",
+  "creationMode": {
+    "action": "Create with Creation Mode",
+    "unavailableTitle": "Creation Mode is not available yet",
+    "unavailableMessage": "Creation Mode is still being built, so it cannot create a mini app yet.",
+    "acknowledge": "Got it"
+  },
   "running": "Running",
   "allApps": "All Apps",
   "noRunningApps": "No running apps",
+  "stopFailed": "Could not stop {{name}}. Its background process may still be running: {{error}}",
   "all": "All",
   "count": "{{count}}",
   "empty": {
@@ -19,6 +28,67 @@
     "delete": "Delete"
   },
   "detail": {
+    "source": {
+      "builtin": "Built-in app",
+      "market": "Marketplace app",
+      "installed": "Installed app"
+    },
+    "highlights": "Highlights",
+    "activity": {
+      "running": "App is running"
+    },
+    "status": {
+      "installed": "Installed and ready to open",
+      "running": "Running now — return to continue",
+      "customizing": "Customization in progress; the current version remains available"
+    },
+    "capabilities": {
+      "ai": {
+        "title": "AI collaboration",
+        "description": "Can call AI or an Agent when the task needs it"
+      },
+      "workspace": {
+        "title": "Workspace access",
+        "description": "Can read or update the workspace within its approval"
+      },
+      "export": {
+        "title": "Deck rendering",
+        "description": "Can render presentation content through the desktop host"
+      },
+      "shell": {
+        "title": "Command access",
+        "description": "Can run approved commands: {{commands}}"
+      },
+      "network": {
+        "title": "Controlled network",
+        "description": "Can reach {{count}} approved domains"
+      },
+      "worker": {
+        "title": "Background tasks",
+        "description": "Can run its own background logic"
+      },
+      "storage": {
+        "title": "Local saves",
+        "description": "Keeps data in its app-specific storage"
+      },
+      "desktop": {
+        "title": "Desktop actions",
+        "description": "Can use {{count}} approved desktop capabilities"
+      },
+      "surface": {
+        "title": "Dedicated interface",
+        "description": "Complete this work in its own focused surface"
+      },
+      "controlled": {
+        "title": "Controlled permissions",
+        "description": "Uses only host capabilities declared in its manifest"
+      },
+      "instant": {
+        "title": "Ready to use",
+        "description": "Starts without additional setup"
+      }
+    },
+    "start": "Start",
     "stop": "Stop",
     "delete": "Delete",
     "open": "Open"

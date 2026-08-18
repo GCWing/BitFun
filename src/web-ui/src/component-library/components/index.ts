@@ -5,6 +5,7 @@
 
 export * from './Button';
 export * from './IconButton';
+export * from './PopupCloseButton';
 export * from './WindowControls';
 
 export * from './Modal';

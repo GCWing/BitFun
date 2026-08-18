@@ -1,53 +1,82 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
+  CheckCircle2,
   ChevronDown,
-  Cpu,
+  ChevronRight,
+  CircleAlert,
   Info,
   Plug2,
   RefreshCw,
+  RotateCcw,
+  Search,
+  Sparkles,
   Wrench,
   X,
 } from 'lucide-react';
-import { GalleryZone } from '@/app/components';
-import '@/app/components/GalleryLayout/GalleryLayout.scss';
 import { Switch } from '@/component-library';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
+import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import type { AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import {
   buildSkillCoverageSourceMap,
   formatSkillOrigin,
   getModeSkillRuntimeStatus,
 } from '@/infrastructure/config/skillSourcePresentation';
-import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
+import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
-import type { DynamicToolInfo } from '@/shared/types/agent-api';
+import type { ToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { useNurseryStore } from '../nurseryStore';
+import {
+  differsFromProductDefault,
+  isMcpServerAvailable,
+  matchesAssistantDefaultsFilter,
+  summarizeAssistantDefaults,
+  type AssistantDefaultsFilterableItem,
+  type AssistantDefaultsStatusFilter,
+} from './assistantDefaultsPresentation';
 import './NurseryView.scss';
+import './AssistantDefaultsPage.scss';
 
 const log = createLogger('AssistantDefaultsPage');
 const ASSISTANT_MODE_ID = 'Claw';
 
-interface ToolInfo {
-  name: string;
-  description: string;
-  is_readonly: boolean;
-  dynamic_info?: DynamicToolInfo;
-}
+type AssistantDefaultsTab = 'skills' | 'builtin' | 'mcp';
+type SaveState = 'saved' | 'saving' | 'error';
 
 type TemplateDetail =
   | { type: 'tool'; tool: ToolInfo; isMcp: boolean }
   | { type: 'mcpServer'; serverId: string }
   | { type: 'skill'; skill: ModeSkillInfo };
 
+interface CapabilityRow extends AssistantDefaultsFilterableItem {
+  id: string;
+  kind: 'skill' | 'builtin' | 'mcp';
+  detail: TemplateDetail;
+  statusNote: string | null;
+  accessLabel: string;
+  accessHint: string;
+  switchDisabled: boolean;
+}
+
+interface McpGroup {
+  id: string;
+  server: MCPServerInfo | undefined;
+  rows: CapabilityRow[];
+}
+
+interface VisibleMcpGroup extends McpGroup {
+  allRows: CapabilityRow[];
+}
+
 function isMcpTool(tool: ToolInfo): boolean {
   return tool.dynamic_info?.providerKind === 'mcp' && Boolean(tool.dynamic_info.mcp);
 }
 
-function getMcpServerName(tool: ToolInfo): string {
+function getMcpServerId(tool: ToolInfo): string {
   return tool.dynamic_info?.mcp?.serverId ?? tool.name;
 }
 
@@ -57,9 +86,7 @@ function getMcpShortName(tool: ToolInfo): string {
 
 function buildDuplicateSkillNameSet(skills: ModeSkillInfo[]): Set<string> {
   const counts = new Map<string, number>();
-  for (const skill of skills) {
-    counts.set(skill.name, (counts.get(skill.name) ?? 0) + 1);
-  }
+  for (const skill of skills) counts.set(skill.name, (counts.get(skill.name) ?? 0) + 1);
   return new Set(
     [...counts.entries()]
       .filter(([, count]) => count > 1)
@@ -72,14 +99,20 @@ function formatSkillDisplayName(
   duplicateNames: Set<string>,
   origin: string,
 ): string {
-  if (!duplicateNames.has(skill.name)) {
-    return skill.name;
-  }
+  if (!duplicateNames.has(skill.name)) return skill.name;
   return `${skill.name} [${origin}]`;
 }
 
+function isSameDetail(left: TemplateDetail | null, right: TemplateDetail): boolean {
+  if (!left || left.type !== right.type) return false;
+  if (left.type === 'tool' && right.type === 'tool') return left.tool.name === right.tool.name;
+  if (left.type === 'skill' && right.type === 'skill') return left.skill.key === right.skill.key;
+  if (left.type === 'mcpServer' && right.type === 'mcpServer') return left.serverId === right.serverId;
+  return false;
+}
+
 const AssistantDefaultsPage: React.FC = () => {
-  const { t } = useTranslation('scenes/profile');
+  const { t } = useI18n('scenes/profile');
   const { openGallery } = useNurseryStore();
 
   const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);
@@ -89,18 +122,65 @@ const AssistantDefaultsPage: React.FC = () => {
   const [toolsLoading, setToolsLoading] = useState<Record<string, boolean>>({});
   const [skillsLoading, setSkillsLoading] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [loadWarning, setLoadWarning] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [activeTab, setActiveTab] = useState<AssistantDefaultsTab>('skills');
+  const [statusFilter, setStatusFilter] = useState<AssistantDefaultsStatusFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
 
-  const skillsEnabled = useMemo(
-    () => modeSkills.filter((skill) => skill.effectiveEnabled),
-    [modeSkills],
-  );
+  const loadDefaults = useCallback(async () => {
+    setLoading(true);
+    setLoadWarning(false);
+    try {
+      const [modeConf, tools, skillList, servers] = await Promise.all([
+        configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch((error) => {
+          log.error('Failed to load assistant profile config', error);
+          return null;
+        }),
+        toolAPI.getAllToolsInfo().catch((error) => {
+          log.error('Failed to load assistant tools', error);
+          return [];
+        }),
+        configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch((error) => {
+          log.error('Failed to load assistant skills', error);
+          return [];
+        }),
+        MCPAPI.getServers().catch((error) => {
+          log.error('Failed to load MCP servers', error);
+          return [];
+        }),
+      ]);
+      setAssistantModeConfig(modeConf);
+      setAvailableTools(tools);
+      setModeSkills(skillList ?? []);
+      setMcpServers(servers ?? []);
+      setLoadWarning(modeConf === null);
+      setSaveState(modeConf === null ? 'error' : 'saved');
+    } catch (error) {
+      log.error('Failed to load assistant defaults', error);
+      setLoadWarning(true);
+      setSaveState('error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const skillsDisabled = useMemo(
-    () => modeSkills.filter((skill) => !skill.effectiveEnabled),
-    [modeSkills],
-  );
+  useEffect(() => {
+    void loadDefaults();
+  }, [loadDefaults]);
+
+  useEffect(() => {
+    if (!detail) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDetail(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [detail]);
+
   const duplicateSkillNames = useMemo(
     () => buildDuplicateSkillNameSet(modeSkills),
     [modeSkills],
@@ -128,111 +208,252 @@ const AssistantDefaultsPage: React.FC = () => {
       t('nursery.template.unknownSkillSource'),
     );
     switch (status.kind) {
-      case 'selected':
-        return t('nursery.template.skillRuntimeSelected');
-      case 'covered':
-        return t('nursery.template.skillRuntimeCovered', { source: status.sourceLabel });
-      case 'enabled':
-        return t('nursery.template.skillRuntimeEnabled');
-      case 'disabled':
-        return null;
+      case 'selected': return t('nursery.template.skillRuntimeSelected');
+      case 'covered': return t('nursery.template.skillRuntimeCovered', { source: status.sourceLabel });
+      case 'enabled': return t('nursery.template.skillRuntimeEnabled');
+      case 'disabled': return null;
     }
   }, [coverageSourceBySkillKey, t]);
+
+  const getMcpStatusLabel = useCallback((status?: string): string => {
+    switch (status?.toLowerCase()) {
+      case 'uninitialized': return t('nursery.template.mcpStatus.uninitialized');
+      case 'starting': return t('nursery.template.mcpStatus.starting');
+      case 'connected': return t('nursery.template.mcpStatus.connected');
+      case 'healthy': return t('nursery.template.mcpStatus.healthy');
+      case 'needsauth': return t('nursery.template.mcpStatus.needsAuth');
+      case 'reconnecting': return t('nursery.template.mcpStatus.reconnecting');
+      case 'failed': return t('nursery.template.mcpStatus.failed');
+      case 'stopping': return t('nursery.template.mcpStatus.stopping');
+      case 'stopped': return t('nursery.template.mcpStatus.stopped');
+      default: return t('nursery.template.mcpStatus.unknown');
+    }
+  }, [t]);
 
   const userSelectableTools = useMemo(
     () => availableTools.filter((tool) => isUserSelectableToolName(tool.name)),
     [availableTools],
   );
-
-  // Split tools into built-in vs MCP
   const builtinTools = useMemo(
     () => userSelectableTools.filter((tool) => !isMcpTool(tool)),
     [userSelectableTools],
   );
-
-  const builtinToolsEnabled = useMemo(
-    () => builtinTools.filter((tool) => assistantModeConfig?.enabled_tools?.includes(tool.name)),
-    [builtinTools, assistantModeConfig],
+  const mcpTools = useMemo(
+    () => userSelectableTools.filter(isMcpTool),
+    [userSelectableTools],
   );
 
-  const builtinToolsDisabled = useMemo(
-    () => builtinTools.filter((tool) => !assistantModeConfig?.enabled_tools?.includes(tool.name)),
-    [builtinTools, assistantModeConfig],
-  );
-
-  // MCP tools grouped by server id
-  const mcpToolsByServer = useMemo(() => {
-    const map = new Map<string, ToolInfo[]>();
-    for (const tool of userSelectableTools) {
-      if (!isMcpTool(tool)) continue;
-      const server = getMcpServerName(tool);
-      if (!map.has(server)) map.set(server, []);
-      map.get(server)!.push(tool);
-    }
-    return map;
-  }, [userSelectableTools]);
-
-  // All known MCP server ids — union of detected tool servers + registered servers
-  const mcpServerIds = useMemo(() => {
-    const fromTools = new Set(mcpToolsByServer.keys());
-    const fromRegistry = new Set(mcpServers.map((s) => s.id));
-    return new Set([...fromTools, ...fromRegistry]);
-  }, [mcpToolsByServer, mcpServers]);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const [modeConf, tools, skillList, servers] = await Promise.all([
-          configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
-          invoke<ToolInfo[]>('get_all_tools_info').catch(() => [] as ToolInfo[]),
-          configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
-          MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
-        ]);
-        setAssistantModeConfig(modeConf);
-        setAvailableTools(tools);
-        setModeSkills(skillList ?? []);
-        setMcpServers(servers ?? []);
-      } catch (e) {
-        log.error('Failed to load assistant defaults config', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (!detail) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDetail(null);
+  const skillRows = useMemo<CapabilityRow[]>(() => modeSkills.map((skill) => {
+    const origin = getLocalizedSkillOrigin(skill);
+    return {
+      id: skill.key,
+      kind: 'skill',
+      name: formatSkillDisplayName(skill, duplicateSkillNames, origin),
+      description: skill.description?.trim() || t('nursery.template.noDescription'),
+      source: origin,
+      originalId: skill.key,
+      enabled: skill.effectiveEnabled,
+      defaultEnabled: skill.defaultEnabled,
+      available: skill.globallyEnabled,
+      detail: { type: 'skill', skill },
+      statusNote: getSkillRuntimeStatusLabel(skill),
+      accessLabel: t('nursery.template.permissionInherited'),
+      accessHint: t('nursery.template.permissionInheritedHint'),
+      switchDisabled: !skill.globallyEnabled,
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [detail]);
+  }), [
+    duplicateSkillNames,
+    getLocalizedSkillOrigin,
+    getSkillRuntimeStatusLabel,
+    modeSkills,
+    t,
+  ]);
+
+  const buildToolRow = useCallback((tool: ToolInfo, mcp: boolean): CapabilityRow => {
+    const serverId = mcp ? getMcpServerId(tool) : null;
+    const server = serverId ? mcpServers.find((candidate) => candidate.id === serverId) : undefined;
+    const enabled = assistantModeConfig?.enabled_tools?.includes(tool.name) ?? false;
+    const defaultEnabled = assistantModeConfig?.default_tools?.includes(tool.name) ?? enabled;
+    const available = mcp ? isMcpServerAvailable(server) : true;
+    return {
+      id: tool.name,
+      kind: mcp ? 'mcp' : 'builtin',
+      name: mcp ? getMcpShortName(tool) : tool.name,
+      description: tool.description?.trim() || t('nursery.template.noDescription'),
+      source: mcp
+        ? (server?.name ?? tool.dynamic_info?.mcp?.serverName ?? serverId ?? t('nursery.template.unknownSkillSource'))
+        : t('nursery.template.officialSource'),
+      originalId: tool.name,
+      enabled,
+      defaultEnabled,
+      available,
+      detail: { type: 'tool', tool, isMcp: mcp },
+      statusNote: mcp ? getMcpStatusLabel(server?.status) : null,
+      accessLabel: tool.is_readonly
+        ? t('nursery.template.readonlyTool')
+        : t('nursery.template.executableTool'),
+      accessHint: tool.is_readonly
+        ? t('nursery.template.readonlyToolHint')
+        : t('nursery.template.executableToolHint'),
+      switchDisabled: assistantModeConfig === null,
+    };
+  }, [assistantModeConfig, getMcpStatusLabel, mcpServers, t]);
+
+  const builtinRows = useMemo(
+    () => builtinTools.map((tool) => buildToolRow(tool, false)),
+    [buildToolRow, builtinTools],
+  );
+  const mcpRows = useMemo(
+    () => mcpTools.map((tool) => buildToolRow(tool, true)),
+    [buildToolRow, mcpTools],
+  );
+  const allCapabilityRows = useMemo(
+    () => [...skillRows, ...builtinRows, ...mcpRows],
+    [builtinRows, mcpRows, skillRows],
+  );
+  const summary = useMemo(
+    () => summarizeAssistantDefaults(allCapabilityRows),
+    [allCapabilityRows],
+  );
+
+  const mcpGroups = useMemo<McpGroup[]>(() => {
+    const ids = new Set([
+      ...mcpRows.map((row) => {
+        const rowDetail = row.detail;
+        return rowDetail.type === 'tool' ? getMcpServerId(rowDetail.tool) : row.id;
+      }),
+      ...mcpServers.map((server) => server.id),
+    ]);
+    return [...ids].map((id) => ({
+      id,
+      server: mcpServers.find((server) => server.id === id),
+      rows: mcpRows.filter((row) => {
+        const rowDetail = row.detail;
+        return rowDetail.type === 'tool' && getMcpServerId(rowDetail.tool) === id;
+      }),
+    }));
+  }, [mcpRows, mcpServers]);
+
+  const visibleFlatRows = useMemo(() => {
+    const rows = activeTab === 'skills' ? skillRows : builtinRows;
+    if (activeTab === 'mcp') return [];
+    return rows.filter((row) => matchesAssistantDefaultsFilter(row, statusFilter, searchQuery));
+  }, [activeTab, builtinRows, searchQuery, skillRows, statusFilter]);
+
+  const visibleMcpGroups = useMemo<VisibleMcpGroup[]>(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return mcpGroups.flatMap((group) => {
+      const serverName = group.server?.name ?? group.id;
+      const serverMatches = normalizedQuery.length > 0 && [
+        serverName,
+        group.id,
+        group.server?.transport ?? '',
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+      const rows = group.rows.filter((row) => matchesAssistantDefaultsFilter(
+        row,
+        statusFilter,
+        serverMatches ? '' : searchQuery,
+      ));
+      const shouldKeepEmptyServer = group.rows.length === 0
+        && statusFilter === 'all'
+        && (normalizedQuery.length === 0 || serverMatches);
+      return rows.length > 0 || shouldKeepEmptyServer
+        ? [{ ...group, allRows: group.rows, rows }]
+        : [];
+    });
+  }, [mcpGroups, searchQuery, statusFilter]);
+
+  const visibleCount = activeTab === 'mcp'
+    ? visibleMcpGroups.reduce((count, group) => count + group.rows.length, 0)
+    : visibleFlatRows.length;
 
   const handleToolToggle = useCallback(async (toolName: string) => {
     if (!assistantModeConfig || !isUserSelectableToolName(toolName)) return;
-    setToolsLoading((prev) => ({ ...prev, [toolName]: true }));
+    setToolsLoading((previous) => ({ ...previous, [toolName]: true }));
+    setSaveState('saving');
     const current = assistantModeConfig.enabled_tools ?? [];
-    const isEnabled = current.includes(toolName);
-    const newTools = isEnabled ? current.filter((n) => n !== toolName) : [...current, toolName];
-    const newConfig = { ...assistantModeConfig, enabled_tools: newTools };
-    setAssistantModeConfig(newConfig);
+    const enabled = current.includes(toolName);
+    const nextTools = enabled
+      ? current.filter((name) => name !== toolName)
+      : [...current, toolName];
+    const nextConfig = { ...assistantModeConfig, enabled_tools: nextTools };
+    setAssistantModeConfig(nextConfig);
     try {
-      await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, newConfig);
+      await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, nextConfig);
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
-    } catch (e) {
-      log.error('Failed to toggle tool', e);
+      setSaveState('saved');
+    } catch (error) {
+      log.error('Failed to toggle tool', error);
       notificationService.error(t('notifications.toggleFailed'));
       setAssistantModeConfig(assistantModeConfig);
+      setSaveState('error');
     } finally {
-      setToolsLoading((prev) => ({ ...prev, [toolName]: false }));
+      setToolsLoading((previous) => ({ ...previous, [toolName]: false }));
     }
   }, [assistantModeConfig, t]);
 
-  const handleResetTools = useCallback(async () => {
+  const handleGroupToggleAll = useCallback(async (toolNames: string[]) => {
+    if (!assistantModeConfig) return;
+    const selectableNames = toolNames.filter(isUserSelectableToolName);
+    if (selectableNames.length === 0) return;
+    setToolsLoading((previous) => ({
+      ...previous,
+      ...Object.fromEntries(selectableNames.map((name) => [name, true])),
+    }));
+    setSaveState('saving');
+    const current = assistantModeConfig.enabled_tools ?? [];
+    const allEnabled = selectableNames.every((name) => current.includes(name));
+    const nextTools = allEnabled
+      ? current.filter((name) => !selectableNames.includes(name))
+      : [...new Set([...current, ...selectableNames])];
+    const nextConfig = { ...assistantModeConfig, enabled_tools: nextTools };
+    setAssistantModeConfig(nextConfig);
+    try {
+      await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, nextConfig);
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+      setSaveState('saved');
+    } catch (error) {
+      log.error('Failed to toggle tool group', error);
+      notificationService.error(t('notifications.toggleFailed'));
+      setAssistantModeConfig(assistantModeConfig);
+      setSaveState('error');
+    } finally {
+      setToolsLoading((previous) => ({
+        ...previous,
+        ...Object.fromEntries(selectableNames.map((name) => [name, false])),
+      }));
+    }
+  }, [assistantModeConfig, t]);
+
+  const handleSkillToggle = useCallback(async (skill: ModeSkillInfo) => {
+    if (!skill.globallyEnabled) return;
+    setSkillsLoading((previous) => ({ ...previous, [skill.key]: true }));
+    setSaveState('saving');
+    try {
+      await configAPI.setModeSkillDisabled({
+        modeId: ASSISTANT_MODE_ID,
+        skillKey: skill.key,
+        disabled: skill.effectiveEnabled,
+      });
+      const updatedSkills = await configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID });
+      setModeSkills(updatedSkills);
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+      setSaveState('saved');
+    } catch (error) {
+      log.error('Failed to toggle skill', error);
+      notificationService.error(t('notifications.toggleFailed'));
+      setSaveState('error');
+    } finally {
+      setSkillsLoading((previous) => ({ ...previous, [skill.key]: false }));
+    }
+  }, [t]);
+
+  const handleResetDefaults = useCallback(async () => {
+    setResetting(true);
+    setSaveState('saving');
     try {
       await configAPI.resetAgentProfileConfig(ASSISTANT_MODE_ID);
       const [modeConf, skills] = await Promise.all([
@@ -244,526 +465,560 @@ const AssistantDefaultsPage: React.FC = () => {
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
       notificationService.success(t('notifications.resetSuccess'));
-    } catch (e) {
-      log.error('Failed to reset tools', e);
+      setSaveState('saved');
+    } catch (error) {
+      log.error('Failed to reset assistant defaults', error);
       notificationService.error(t('notifications.resetFailed'));
-    }
-  }, [t]);
-
-  const handleGroupToggleAll = useCallback(async (toolNames: string[]) => {
-    if (!assistantModeConfig) return;
-    const selectableToolNames = toolNames.filter(isUserSelectableToolName);
-    if (selectableToolNames.length === 0) return;
-    const current = assistantModeConfig.enabled_tools ?? [];
-    const allEnabled = selectableToolNames.every((n) => current.includes(n));
-    const newTools = allEnabled
-      ? current.filter((n) => !selectableToolNames.includes(n))
-      : [...new Set([...current, ...selectableToolNames])];
-    const newConfig = { ...assistantModeConfig, enabled_tools: newTools };
-    setAssistantModeConfig(newConfig);
-    try {
-      await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, newConfig);
-      const { globalEventBus } = await import('@/infrastructure/event-bus');
-      globalEventBus.emit('mode:config:updated');
-    } catch (e) {
-      log.error('Failed to toggle group', e);
-      notificationService.error(t('notifications.toggleFailed'));
-      setAssistantModeConfig(assistantModeConfig);
-    }
-  }, [assistantModeConfig, t]);
-
-  const handleSkillToggle = useCallback(async (skill: ModeSkillInfo) => {
-    const loadingKey = skill.key;
-    setSkillsLoading((prev) => ({ ...prev, [loadingKey]: true }));
-    const nextDisabled = skill.effectiveEnabled;
-    try {
-      await configAPI.setModeSkillDisabled({
-        modeId: ASSISTANT_MODE_ID,
-        skillKey: skill.key,
-        disabled: nextDisabled,
-      });
-      const updatedSkills = await configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID });
-      setModeSkills(updatedSkills);
-      const { globalEventBus } = await import('@/infrastructure/event-bus');
-      globalEventBus.emit('mode:config:updated');
-    } catch (e) {
-      log.error('Failed to toggle skill', e);
-      notificationService.error(t('notifications.toggleFailed'));
+      setSaveState('error');
     } finally {
-      setSkillsLoading((prev) => ({ ...prev, [loadingKey]: false }));
+      setResetting(false);
     }
   }, [t]);
+
+  const handleTabChange = useCallback((tab: AssistantDefaultsTab) => {
+    setActiveTab(tab);
+    setDetail(null);
+  }, []);
 
   const toggleCollapse = useCallback((id: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+    setCollapsedGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
 
-  const openToolDetail = useCallback((tool: ToolInfo, isMcp: boolean) => {
-    setDetail((prev) => (
-      prev?.type === 'tool' && prev.tool.name === tool.name
-        ? null
-        : { type: 'tool', tool, isMcp }
-    ));
+  const openDetail = useCallback((nextDetail: TemplateDetail) => {
+    setDetail((previous) => (isSameDetail(previous, nextDetail) ? null : nextDetail));
   }, []);
 
-  const openSkillDetail = useCallback((skill: ModeSkillInfo) => {
-    setDetail((prev) => (
-      prev?.type === 'skill' && prev.skill.key === skill.key
-        ? null
-        : { type: 'skill', skill }
-    ));
-  }, []);
+  const toggleCapability = useCallback((row: CapabilityRow) => {
+    if (row.detail.type === 'skill') {
+      void handleSkillToggle(row.detail.skill);
+      return;
+    }
+    if (row.detail.type === 'tool') void handleToolToggle(row.detail.tool.name);
+  }, [handleSkillToggle, handleToolToggle]);
 
-  // ── Render helpers ───────────────────────────────────────────────────────
+  const statusFilters = useMemo<Array<{ id: AssistantDefaultsStatusFilter; label: string }>>(() => [
+    { id: 'all', label: t('nursery.template.filters.all') },
+    { id: 'enabled', label: t('nursery.template.filters.enabled') },
+    { id: 'disabled', label: t('nursery.template.filters.disabled') },
+    { id: 'changed', label: t('nursery.template.filters.changed') },
+    { id: 'unavailable', label: t('nursery.template.filters.unavailable') },
+  ], [t]);
 
-  const renderToolList = (tools: ToolInfo[], isMcp: boolean) => (
-    <div className="tc-tool-list" data-bf-component="assistant-defaults-page" data-bf-part="toolList">
-      {tools.map((tool) => {
-        const enabled = assistantModeConfig?.enabled_tools?.includes(tool.name) ?? false;
-        const displayName = isMcp ? getMcpShortName(tool) : tool.name;
-        const selected = detail?.type === 'tool' && detail.tool.name === tool.name;
-        return (
-          <div data-bf-component="assistant-defaults-page" data-bf-part="tool"
-            key={tool.name}
-            className={`tc-tool-row${!enabled ? ' tc-tool-row--off' : ''}${selected ? ' tc-tool-row--selected' : ''}`}
-            data-bf-state={[!enabled && 'disabled', selected && 'selected'].filter(Boolean).join(' ') || undefined}
-          >
-            <button
-              type="button"
-              className="tc-tool-row__hit"
-              onClick={() => openToolDetail(tool, isMcp)}
-            >
-              <span className={`tc-tool-row__icon${isMcp ? ' tc-tool-row__icon--mcp' : ''}`}>
-                {isMcp ? <Plug2 size={12} /> : <Wrench size={12} />}
-              </span>
-              <span className="tc-tool-row__name" title={tool.name}>{displayName}</span>
-            </button>
-            <Switch
-              size="small"
-              checked={enabled}
-              loading={toolsLoading[tool.name]}
-              onChange={() => handleToolToggle(tool.name)}
-              aria-label={tool.name}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderToolEnabledDisabledSplit = (
-    enabledList: ToolInfo[],
-    disabledList: ToolInfo[],
-    isMcp: boolean,
-  ) => (
-    <div className="tc-enabled-disabled-split" data-bf-component="assistant-defaults-page" data-bf-part="split">
-      <div className="tc-enabled-disabled-split__col">
-        <p className="tc-enabled-disabled-split__title">{t('nursery.template.colEnabled')}</p>
-        {enabledList.length > 0 ? (
-          renderToolList(enabledList, isMcp)
-        ) : (
-          <p className="tc-enabled-disabled-split__empty">{t('nursery.template.colEmpty')}</p>
-        )}
-      </div>
-      <div className="tc-enabled-disabled-split__col">
-        <p className="tc-enabled-disabled-split__title">{t('nursery.template.colDisabled')}</p>
-        {disabledList.length > 0 ? (
-          renderToolList(disabledList, isMcp)
-        ) : (
-          <p className="tc-enabled-disabled-split__empty">{t('nursery.template.colEmpty')}</p>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderSkillList = (list: ModeSkillInfo[]) => (
-    <div className="tc-skill-list" data-bf-component="assistant-defaults-page" data-bf-part="skillList">
-      {list.map((skill) => {
-        const on = skill.effectiveEnabled;
-        const selected = detail?.type === 'skill' && detail.skill.key === skill.key;
-        const origin = getLocalizedSkillOrigin(skill);
-        const displayName = formatSkillDisplayName(skill, duplicateSkillNames, origin);
-        const runtimeStatus = getModeSkillRuntimeStatus(
-          skill,
-          coverageSourceBySkillKey,
-          t('nursery.template.unknownSkillSource'),
-        );
-        const runtimeStatusLabel = getSkillRuntimeStatusLabel(skill);
-        return (
-          <div data-bf-component="assistant-defaults-page" data-bf-part="skill"
-            key={skill.key}
-            className={`tc-skill-row${!on ? ' tc-skill-row--off' : ''}${runtimeStatus.kind === 'covered' ? ' tc-skill-row--covered' : ''}${selected ? ' tc-skill-row--selected' : ''}`}
-            data-bf-state={[
-              !on && 'disabled',
-              runtimeStatus.kind === 'covered' && 'covered',
-              selected && 'selected',
-            ].filter(Boolean).join(' ') || undefined}
-          >
-            <button
-              type="button"
-              className="tc-skill-row__hit"
-              onClick={() => openSkillDetail(skill)}
-            >
-              <span className="tc-skill-row__name">{displayName}</span>
-              <span className="tc-skill-row__level">{origin}</span>
-              {runtimeStatusLabel ? (
-                <span className="tc-skill-row__state" title={runtimeStatusLabel}>{runtimeStatusLabel}</span>
-              ) : null}
-            </button>
-            <Switch
-              checked={on}
-              onChange={() => handleSkillToggle(skill)}
-              disabled={skillsLoading[skill.key]}
-              size="small"
-              aria-label={displayName}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderSkillEnabledDisabledSplit = () => (
-    <div className="tc-enabled-disabled-split" data-bf-component="assistant-defaults-page" data-bf-part="split">
-      <div className="tc-enabled-disabled-split__col">
-        <p className="tc-enabled-disabled-split__title">{t('nursery.template.skillEnabledCandidates')}</p>
-        {skillsEnabled.length > 0 ? (
-          renderSkillList(skillsEnabled)
-        ) : (
-          <p className="tc-enabled-disabled-split__empty">{t('nursery.template.colEmpty')}</p>
-        )}
-      </div>
-      <div className="tc-enabled-disabled-split__col">
-        <p className="tc-enabled-disabled-split__title">{t('nursery.template.colDisabled')}</p>
-        {skillsDisabled.length > 0 ? (
-          renderSkillList(skillsDisabled)
-        ) : (
-          <p className="tc-enabled-disabled-split__empty">{t('nursery.template.colEmpty')}</p>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderGroupHeader = (
-    id: string,
-    label: string,
-    toolNames: string[],
-    isMcp: boolean,
-    serverStatus?: string,
-    mcpServerId?: string,
-  ) => {
-      const groupEnabled = toolNames.filter(
-      (n) => assistantModeConfig?.enabled_tools?.includes(n),
-    ).length;
-    const isCollapsed = collapsedGroups.has(id);
-    const allOn = toolNames.length > 0 && groupEnabled === toolNames.length;
-
-    return (
-      <div data-bf-component="assistant-defaults-page" data-bf-part="groupHeader" data-bf-state={isCollapsed ? 'collapsed' : undefined} className="tc-group-header">
-        {toolNames.length > 0 && (
-          <button
-            type="button"
-            className="tc-group-header__toggle"
-            onClick={() => toggleCollapse(id)}
-          >
-            <ChevronDown
-              size={13}
-              className={`tc-group-header__chevron ${isCollapsed ? 'tc-group-header__chevron--collapsed' : ''}`}
-            />
-          </button>
-        )}
-        {isMcp
-          ? <Plug2 size={13} className="tc-group-header__icon tc-group-header__icon--mcp" />
-          : <Cpu size={13} className="tc-group-header__icon" />
-        }
-        <span className="tc-group-header__name">{label}</span>
-        {serverStatus && (
-          <span className={`tc-group-header__status tc-group-header__status--${serverStatus.toLowerCase()}`}>
-            {serverStatus}
+  const renderCapabilityRow = (row: CapabilityRow) => {
+    const selected = isSameDetail(detail, row.detail);
+    const changed = differsFromProductDefault(row);
+    const loadingRow = row.detail.type === 'skill'
+      ? skillsLoading[row.detail.skill.key]
+      : row.detail.type === 'tool' && toolsLoading[row.detail.tool.name];
+    const icon = row.kind === 'skill'
+      ? <Sparkles size={15} />
+      : row.kind === 'mcp'
+        ? <Plug2 size={15} />
+        : <Wrench size={15} />;
+    const rowClassName = `assistant-defaults-row${selected ? ' assistant-defaults-row--selected' : ''}${!row.available ? ' assistant-defaults-row--unavailable' : ''}`;
+    const rowState = [
+      selected && 'selected',
+      !row.enabled && 'disabled',
+      !row.available && 'unavailable',
+      changed && 'changed',
+    ].filter(Boolean).join(' ') || undefined;
+    const rowContent = (
+      <>
+        <button
+          type="button"
+          role="cell"
+          className="assistant-defaults-row__identity"
+          onClick={() => openDetail(row.detail)}
+          aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
+        >
+          <span className={`assistant-defaults-row__icon assistant-defaults-row__icon--${row.kind}`}>{icon}</span>
+          <span className="assistant-defaults-row__copy">
+            <strong title={row.name}>{row.name}</strong>
+            <span title={row.description}>{row.description}</span>
+            {row.statusNote ? <small title={row.statusNote}>{row.statusNote}</small> : null}
           </span>
-        )}
-        <span className="tc-group-header__count">
-          {toolNames.length > 0 ? `${groupEnabled}/${toolNames.length}` : t('nursery.template.groupCountEmpty')}
-        </span>
-        {isMcp && mcpServerId && (
-          <button
-            type="button"
-            className="tc-group-header__detail-btn"
-            title={t('nursery.template.openServerDetail')}
-            aria-label={t('nursery.template.openServerDetail')}
-            onClick={(e) => {
-              e.stopPropagation();
-              setDetail((prev) => (
-                prev?.type === 'mcpServer' && prev.serverId === mcpServerId
-                  ? null
-                  : { type: 'mcpServer', serverId: mcpServerId }
-              ));
-            }}
-          >
-            <Info size={14} />
-          </button>
-        )}
-        {toolNames.length > 0 && (
+        </button>
+        <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__source" title={row.source}>{row.source}</div>
+        <div role="cell" className="assistant-defaults-row__cell">
+          <span className={`assistant-defaults-state assistant-defaults-state--${row.available ? 'available' : 'unavailable'}`}>
+            <span className="assistant-defaults-state__dot" aria-hidden />
+            {row.available
+              ? t('nursery.template.availability.available')
+              : t('nursery.template.availability.unavailable')}
+          </span>
+        </div>
+        <div role="cell" className="assistant-defaults-row__cell">
+          <span className={`assistant-defaults-badge${row.enabled ? '' : ' assistant-defaults-badge--muted'}`}>
+            {row.enabled ? t('nursery.template.state.enabled') : t('nursery.template.state.disabled')}
+          </span>
+        </div>
+        <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__difference">
+          {changed ? t('nursery.template.valueYes') : t('nursery.template.valueNo')}
+        </div>
+        <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__access" title={row.accessHint}>{row.accessLabel}</div>
+        <div role="cell" className="assistant-defaults-row__actions">
           <Switch
             size="small"
-            checked={allOn}
-            onChange={() => handleGroupToggleAll(toolNames)}
-            aria-label={`Toggle all in ${label}`}
+            checked={row.enabled}
+            loading={Boolean(loadingRow)}
+            disabled={row.switchDisabled}
+            onChange={() => toggleCapability(row)}
+            aria-label={t('nursery.template.toggleCapability', { name: row.name })}
           />
-        )}
+          <button
+            type="button"
+            className="assistant-defaults-row__detail"
+            onClick={() => openDetail(row.detail)}
+            aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
+          >
+            <ChevronRight size={17} />
+          </button>
+        </div>
+      </>
+    );
+
+    if (row.kind === 'skill') {
+      return (
+        <div
+          key={row.id}
+          role="row"
+          className={rowClassName}
+          data-bf-component="assistant-defaults-page"
+          data-bf-part="skill"
+          data-bf-state={rowState}
+        >
+          {rowContent}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={row.id}
+        role="row"
+        className={rowClassName}
+        data-bf-component="assistant-defaults-page"
+        data-bf-part="tool"
+        data-bf-state={rowState}
+      >
+        {rowContent}
       </div>
     );
   };
 
-  const renderDetailPanel = () => {
-    if (!detail) return null;
+  const renderListHeader = () => (
+    <div role="row" className="assistant-defaults-list__header" data-bf-component="assistant-defaults-page" data-bf-part="listHeader">
+      <div role="columnheader">{t('nursery.template.columns.name')}</div>
+      <div role="columnheader">{t('nursery.template.columns.source')}</div>
+      <div role="columnheader">{t('nursery.template.columns.availability')}</div>
+      <div role="columnheader">{t('nursery.template.columns.state')}</div>
+      <div role="columnheader">{t('nursery.template.columns.changed')}</div>
+      <div role="columnheader">{t('nursery.template.columns.access')}</div>
+      <div role="columnheader" aria-label={t('nursery.template.columns.actions')} />
+    </div>
+  );
 
-    if (detail.type === 'tool') {
-      const { tool, isMcp } = detail;
-      const displayName = isMcp ? getMcpShortName(tool) : tool.name;
-      const enabled = assistantModeConfig?.enabled_tools?.includes(tool.name) ?? false;
-      return (
-        <aside data-bf-component="assistant-defaults-page" data-bf-part="detail" className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
-          <div className="tc-template-detail__head tc-template-detail__head--center-line" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
-            <span className="tc-template-detail__head-spacer" aria-hidden />
-            <div className="tc-template-detail__head-text">
-              <div className="tc-template-detail__head-line">
-                <span className="tc-template-detail__kind">
-                  {isMcp ? t('nursery.template.toolTypeMcp') : t('nursery.template.toolTypeBuiltin')}
-                </span>
-                <h3 className="tc-template-detail__title">{displayName}</h3>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="tc-template-detail__close"
-              onClick={() => setDetail(null)}
-              aria-label={t('nursery.template.closeDetail')}
+  const renderEmptyState = (message: string) => (
+    <div className="assistant-defaults-empty" data-bf-component="assistant-defaults-page" data-bf-part="empty">
+      <Search size={22} />
+      <p>{message}</p>
+      {(searchQuery || statusFilter !== 'all') ? (
+        <button
+          type="button"
+          onClick={() => {
+            setSearchQuery('');
+            setStatusFilter('all');
+          }}
+        >
+          {t('nursery.template.clearFilters')}
+        </button>
+      ) : null}
+    </div>
+  );
+
+  const renderMcpGroups = () => {
+    if (mcpGroups.length === 0) return renderEmptyState(t('nursery.template.mcpEmptyHint'));
+    if (visibleMcpGroups.length === 0) return renderEmptyState(t('nursery.template.noFilterResults'));
+
+    return (
+      <div className="assistant-defaults-groups">
+        {visibleMcpGroups.map((group) => {
+          const collapsed = collapsedGroups.has(group.id);
+          const serverName = group.server?.name ?? group.id;
+          const allNames = group.allRows.map((row) => row.originalId);
+          const enabledCount = group.allRows.filter((row) => row.enabled).length;
+          const allEnabled = allNames.length > 0 && enabledCount === allNames.length;
+          const available = isMcpServerAvailable(group.server);
+          return (
+            <section
+              key={group.id}
+              className="assistant-defaults-group"
+              data-bf-component="assistant-defaults-page"
+              data-bf-part="group"
+              data-bf-state={collapsed ? 'collapsed' : undefined}
             >
-              <X size={14} strokeWidth={2} />
-            </button>
-          </div>
-          <div className="tc-template-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
-            {tool.is_readonly && (
-              <span className="tc-template-detail__badge">{t('nursery.template.readonlyTool')}</span>
-            )}
-            <p className="tc-template-detail__desc">
-              {tool.description?.trim() ? tool.description : '—'}
-            </p>
-            <div className="tc-template-detail__actions">
-              <Switch
-                size="small"
-                checked={enabled}
-                loading={toolsLoading[tool.name]}
-                onChange={() => handleToolToggle(tool.name)}
-                aria-label={tool.name}
-              />
-            </div>
+              <div className="assistant-defaults-group__header" data-bf-component="assistant-defaults-page" data-bf-part="groupHeader">
+                <button
+                  type="button"
+                  className="assistant-defaults-group__collapse"
+                  onClick={() => toggleCollapse(group.id)}
+                  aria-expanded={!collapsed}
+                  aria-label={t('nursery.template.toggleServerGroup', { name: serverName })}
+                >
+                  <ChevronDown size={16} />
+                </button>
+                <span className="assistant-defaults-group__icon"><Plug2 size={14} /></span>
+                <div className="assistant-defaults-group__identity">
+                  <strong>{serverName}</strong>
+                  <span>{getMcpStatusLabel(group.server?.status)}</span>
+                </div>
+                <span className={`assistant-defaults-state assistant-defaults-state--${available ? 'available' : 'unavailable'}`}>
+                  <span className="assistant-defaults-state__dot" aria-hidden />
+                  {available
+                    ? t('nursery.template.availability.available')
+                    : t('nursery.template.availability.unavailable')}
+                </span>
+                <span className="assistant-defaults-group__count">
+                  {t('nursery.template.enabledCount', { enabled: enabledCount, total: group.allRows.length })}
+                </span>
+                <button
+                  type="button"
+                  className="assistant-defaults-group__detail"
+                  onClick={() => openDetail({ type: 'mcpServer', serverId: group.id })}
+                  aria-label={t('nursery.template.openServerDetail')}
+                >
+                  <Info size={16} />
+                </button>
+                {allNames.length > 0 ? (
+                  <Switch
+                    size="small"
+                    checked={allEnabled}
+                    disabled={assistantModeConfig === null}
+                    loading={allNames.some((name) => toolsLoading[name])}
+                    onChange={() => void handleGroupToggleAll(allNames)}
+                    aria-label={t('nursery.template.toggleServerTools', { name: serverName })}
+                  />
+                ) : null}
+              </div>
+              {!collapsed ? (
+                group.rows.length > 0
+                  ? <div role="rowgroup">{group.rows.map(renderCapabilityRow)}</div>
+                  : <p className="assistant-defaults-group__empty">{t('nursery.template.mcpServerNoTools')}</p>
+              ) : null}
+            </section>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderDetailField = (label: string, value: React.ReactNode) => (
+    <div className="assistant-defaults-detail__field">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+
+  const renderDetailPanel = () => {
+    if (!detail) {
+      return (
+        <aside
+          className="assistant-defaults-detail assistant-defaults-detail--empty"
+          data-bf-component="assistant-defaults-page"
+          data-bf-part="detail"
+          aria-label={t('nursery.template.detailPanel')}
+        >
+          <div className="assistant-defaults-detail__empty">
+            <Info size={20} />
+            <strong>{t('nursery.template.detailEmptyTitle')}</strong>
+            <span>{t('nursery.template.detailEmptyHint')}</span>
           </div>
         </aside>
       );
     }
 
     if (detail.type === 'mcpServer') {
-      const { serverId } = detail;
-      const serverInfo = mcpServers.find((s) => s.id === serverId);
-      const serverTools = mcpToolsByServer.get(serverId) ?? [];
-      const status = serverInfo?.status ?? (serverTools.length > 0 ? 'Connected' : 'Unknown');
+      const server = mcpServers.find((candidate) => candidate.id === detail.serverId);
+      const rows = mcpRows.filter((row) => {
+        const rowDetail = row.detail;
+        return rowDetail.type === 'tool' && getMcpServerId(rowDetail.tool) === detail.serverId;
+      });
+      const allNames = rows.map((row) => row.originalId);
+      const allEnabled = allNames.length > 0 && rows.every((row) => row.enabled);
+      const available = isMcpServerAvailable(server);
+      const title = server?.name ?? detail.serverId;
       return (
-        <aside data-bf-component="assistant-defaults-page" data-bf-part="detail" className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
-          <div className="tc-template-detail__head tc-template-detail__head--center-line" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
-            <span className="tc-template-detail__head-spacer" aria-hidden />
-            <div className="tc-template-detail__head-text">
-              <div className="tc-template-detail__head-line">
-                <span className="tc-template-detail__kind">MCP</span>
-                <h3 className="tc-template-detail__title">{serverInfo?.name ?? serverId}</h3>
-              </div>
+        <aside className="assistant-defaults-detail" data-bf-component="assistant-defaults-page" data-bf-part="detail" aria-label={t('nursery.template.detailPanel')}>
+          <div className="assistant-defaults-detail__header" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
+            <div>
+              <span className="assistant-defaults-detail__eyebrow">MCP</span>
+              <h3>{title}</h3>
             </div>
-            <button
-              type="button"
-              className="tc-template-detail__close"
-              onClick={() => setDetail(null)}
-              aria-label={t('nursery.template.closeDetail')}
-            >
-              <X size={14} strokeWidth={2} />
-            </button>
+            <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></button>
           </div>
-          <div className="tc-template-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
-            <span className={`tc-template-detail__status tc-group-header__status tc-group-header__status--${status.toLowerCase()}`}>
-              {status}
-            </span>
-            <p className="tc-template-detail__subhead">{t('nursery.template.serverToolsHeading')}</p>
-            {serverTools.length === 0 ? (
-              <p className="nursery-empty">{t('nursery.template.mcpServerNoTools')}</p>
-            ) : (
-              <ul className="tc-template-detail__tool-names">
-                {serverTools.map((tool) => (
-                  <li key={tool.name}>{getMcpShortName(tool)}</li>
+          <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
+            {server?.statusMessage ? <p className="assistant-defaults-detail__description">{server.statusMessage}</p> : null}
+            <section>
+              <h4>{t('nursery.template.detailSections.basic')}</h4>
+              <dl>
+                {renderDetailField(t('nursery.template.detailFields.fullName'), title)}
+                {renderDetailField(t('nursery.template.detailFields.originalId'), detail.serverId)}
+                {renderDetailField(t('nursery.template.detailFields.source'), 'MCP')}
+                {renderDetailField(t('nursery.template.detailFields.scope'), t('nursery.template.scopeLabel'))}
+                {renderDetailField(t('nursery.template.detailFields.transport'), server?.transport || '—')}
+              </dl>
+            </section>
+            <section>
+              <h4>{t('nursery.template.detailSections.status')}</h4>
+              <dl>
+                {renderDetailField(t('nursery.template.detailFields.currentState'), getMcpStatusLabel(server?.status))}
+                {renderDetailField(t('nursery.template.detailFields.availability'), (
+                  <span className={`assistant-defaults-state assistant-defaults-state--${available ? 'available' : 'unavailable'}`}>
+                    <span className="assistant-defaults-state__dot" aria-hidden />
+                    {available
+                      ? t('nursery.template.availability.available')
+                      : t('nursery.template.availability.unavailable')}
+                  </span>
                 ))}
-              </ul>
-            )}
+                {renderDetailField(t('nursery.template.detailFields.autoStart'), server?.autoStart ? t('nursery.template.valueYes') : t('nursery.template.valueNo'))}
+                {renderDetailField(t('nursery.template.detailFields.toolCount'), rows.length)}
+              </dl>
+            </section>
+            <section>
+              <h4>{t('nursery.template.detailSections.management')}</h4>
+              {allNames.length > 0 ? (
+                <div className="assistant-defaults-detail__management-row">
+                  <div>
+                    <strong>{t('nursery.template.enableAllServerTools')}</strong>
+                    <span>{t('nursery.template.enableAllServerToolsHint')}</span>
+                  </div>
+                  <Switch
+                    size="small"
+                    checked={allEnabled}
+                    disabled={assistantModeConfig === null}
+                    loading={allNames.some((name) => toolsLoading[name])}
+                    onChange={() => void handleGroupToggleAll(allNames)}
+                    aria-label={t('nursery.template.toggleServerTools', { name: title })}
+                  />
+                </div>
+              ) : <p className="assistant-defaults-detail__note">{t('nursery.template.mcpServerNoTools')}</p>}
+            </section>
           </div>
         </aside>
       );
     }
 
-    const { skill } = detail;
-    const on = skill.effectiveEnabled;
-    const origin = getLocalizedSkillOrigin(skill);
-    const runtimeStatusLabel = getSkillRuntimeStatusLabel(skill);
+    const row = allCapabilityRows.find((candidate) => isSameDetail(candidate.detail, detail));
+    if (!row) return null;
+    const changed = differsFromProductDefault(row);
+    const kindLabel = row.kind === 'skill'
+      ? t('cards.skills')
+      : row.kind === 'mcp'
+        ? t('nursery.template.toolTypeMcp')
+        : t('nursery.template.toolTypeBuiltin');
+
     return (
-      <aside data-bf-component="assistant-defaults-page" data-bf-part="detail" className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
-        <div className="tc-template-detail__head tc-template-detail__head--center-line" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
-          <span className="tc-template-detail__head-spacer" aria-hidden />
-          <div className="tc-template-detail__head-text">
-            <div className="tc-template-detail__head-line">
-              <span className="tc-template-detail__kind">{t('cards.skills')}</span>
-              <h3 className="tc-template-detail__title">{formatSkillDisplayName(skill, duplicateSkillNames, origin)}</h3>
-            </div>
+      <aside className="assistant-defaults-detail" data-bf-component="assistant-defaults-page" data-bf-part="detail" aria-label={t('nursery.template.detailPanel')}>
+        <div className="assistant-defaults-detail__header" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
+          <div>
+            <span className="assistant-defaults-detail__eyebrow">{kindLabel}</span>
+            <h3>{row.name}</h3>
           </div>
-          <button
-            type="button"
-            className="tc-template-detail__close"
-            onClick={() => setDetail(null)}
-            aria-label={t('nursery.template.closeDetail')}
-          >
-            <X size={14} strokeWidth={2} />
-          </button>
+          <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></button>
         </div>
-        <div className="tc-template-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
-          <p className="tc-template-detail__meta">{t('nursery.template.skillOrigin', { origin })}</p>
-          {runtimeStatusLabel ? (
-            <p className="tc-template-detail__meta">{runtimeStatusLabel}</p>
-          ) : null}
-          <p className="tc-template-detail__desc">
-            {skill.description?.trim() ? skill.description : '—'}
-          </p>
-          <div className="tc-template-detail__actions">
-            <Switch
-              checked={on}
-              onChange={() => handleSkillToggle(skill)}
-              disabled={skillsLoading[skill.key]}
-              size="small"
-              aria-label={skill.name}
-            />
-          </div>
+        <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
+          <p className="assistant-defaults-detail__description">{row.description}</p>
+          <section>
+            <h4>{t('nursery.template.detailSections.basic')}</h4>
+            <dl>
+              {renderDetailField(t('nursery.template.detailFields.fullName'), row.name)}
+              {renderDetailField(t('nursery.template.detailFields.originalId'), row.originalId)}
+              {renderDetailField(t('nursery.template.detailFields.source'), row.source)}
+              {renderDetailField(t('nursery.template.detailFields.scope'), t('nursery.template.scopeLabel'))}
+              {renderDetailField(t('nursery.template.detailFields.productDefault'), row.defaultEnabled
+                ? t('nursery.template.state.enabled')
+                : t('nursery.template.state.disabled'))}
+            </dl>
+          </section>
+          <section>
+            <h4>{t('nursery.template.detailSections.status')}</h4>
+            <dl>
+              {renderDetailField(t('nursery.template.detailFields.currentState'), row.enabled
+                ? t('nursery.template.state.enabled')
+                : t('nursery.template.state.disabled'))}
+              {renderDetailField(t('nursery.template.detailFields.changed'), changed
+                ? t('nursery.template.valueYes')
+                : t('nursery.template.valueNo'))}
+              {renderDetailField(t('nursery.template.detailFields.availability'), (
+                <span className={`assistant-defaults-state assistant-defaults-state--${row.available ? 'available' : 'unavailable'}`}>
+                  <span className="assistant-defaults-state__dot" aria-hidden />
+                  {row.available
+                    ? t('nursery.template.availability.available')
+                    : t('nursery.template.availability.unavailable')}
+                </span>
+              ))}
+              {row.statusNote ? renderDetailField(t('nursery.template.detailFields.runtimeState'), row.statusNote) : null}
+            </dl>
+          </section>
+          <section>
+            <h4>{t('nursery.template.detailSections.permissions')}</h4>
+            <div className="assistant-defaults-detail__permission">
+              <strong>{row.accessLabel}</strong>
+              <p>{row.accessHint}</p>
+            </div>
+          </section>
+          <section>
+            <h4>{t('nursery.template.detailSections.management')}</h4>
+            <div className="assistant-defaults-detail__management-row">
+              <div>
+                <strong>{t('nursery.template.useByDefault')}</strong>
+                <span>{t('nursery.template.useByDefaultHint')}</span>
+              </div>
+              <Switch
+                size="small"
+                checked={row.enabled}
+                disabled={row.switchDisabled}
+                loading={detail.type === 'skill' ? skillsLoading[detail.skill.key] : toolsLoading[detail.tool.name]}
+                onChange={() => toggleCapability(row)}
+                aria-label={t('nursery.template.toggleCapability', { name: row.name })}
+              />
+            </div>
+          </section>
         </div>
       </aside>
     );
   };
 
-  return (
-    <div data-bf-component="assistant-defaults-page" data-bf-part="root" className="nursery-page">
-      <div className="nursery-page__bar" data-bf-component="assistant-defaults-page" data-bf-part="toolbar">
-        <button
-          type="button"
-          className="nursery-page__back"
-          onClick={openGallery}
-          aria-label={t('nursery.backToGallery')}
-        >
-          <ArrowLeft size={13} />
-        </button>
-      </div>
+  const tabs: Array<{ id: AssistantDefaultsTab; label: string; count: number }> = [
+    { id: 'skills', label: t('cards.skills'), count: skillRows.length },
+    { id: 'builtin', label: t('nursery.template.builtinToolsSection'), count: builtinRows.length },
+    { id: 'mcp', label: t('nursery.template.mcpToolsSection'), count: mcpRows.length },
+  ];
+  const saveLabel = saveState === 'saving'
+    ? t('nursery.template.saveState.saving')
+    : saveState === 'error'
+      ? t('nursery.template.saveState.error')
+      : t('nursery.template.saveState.saved');
 
-      <div className="nursery-page__content" data-bf-component="assistant-defaults-page" data-bf-part="content">
+  return (
+    <div data-bf-component="assistant-defaults-page" data-bf-part="root" className="nursery-page nursery-page--assistant-defaults">
+      <div className="assistant-defaults" data-bf-component="assistant-defaults-page" data-bf-part="content">
+        <header className="assistant-defaults__header" data-bf-component="assistant-defaults-page" data-bf-part="header">
+          <div className="assistant-defaults__title-row" data-bf-component="assistant-defaults-page" data-bf-part="toolbar">
+            <button type="button" className="assistant-defaults__back" onClick={openGallery} aria-label={t('nursery.backToGallery')}>
+              <ArrowLeft size={18} />
+            </button>
+            <h2>{t('nursery.template.title')}</h2>
+            <span className="assistant-defaults__scope">{t('nursery.template.scopeLabel')}</span>
+            <div className="assistant-defaults__header-actions">
+              <span className={`assistant-defaults__save assistant-defaults__save--${saveState}`} role="status" aria-live="polite">
+                {saveState === 'saving'
+                  ? <RefreshCw size={15} className="nursery-spinning" />
+                  : saveState === 'error'
+                    ? <CircleAlert size={15} />
+                    : <CheckCircle2 size={15} />}
+                {saveLabel}
+              </span>
+              <button
+                type="button"
+                className="assistant-defaults__reset"
+                onClick={() => void handleResetDefaults()}
+                disabled={resetting || assistantModeConfig === null}
+              >
+                <RotateCcw size={15} className={resetting ? 'nursery-spinning' : undefined} />
+                {t('nursery.template.restoreProductDefaults')}
+              </button>
+            </div>
+          </div>
+          <p>{t('nursery.template.pageDescription')}</p>
+        </header>
+
         {loading ? (
-          <div className="nursery-page__loading" data-bf-component="assistant-defaults-page" data-bf-part="loading">
-            <RefreshCw size={16} className="nursery-spinning" />
+          <div className="assistant-defaults__loading" data-bf-component="assistant-defaults-page" data-bf-part="loading">
+            <RefreshCw size={20} className="nursery-spinning" />
+            <span>{t('nursery.template.loading')}</span>
           </div>
         ) : (
-          <div className={`tc-template-shell${detail ? ' tc-template-shell--has-detail' : ''}`} data-bf-component="assistant-defaults-page" data-bf-part="shell">
-            <div className="tc-template-shell__main" data-bf-component="assistant-defaults-page" data-bf-part="main">
-            <div className="tc-template-main-column">
-            <div className="gallery-page-header tc-template-page-header" data-bf-component="assistant-defaults-page" data-bf-part="header">
-              <div className="gallery-page-header__identity">
-                <h2 className="gallery-page-header__title">{t('nursery.template.title')}</h2>
-                <div className="gallery-page-header__subtitle">{t('nursery.template.subtitle')}</div>
+          <div className="assistant-defaults__workspace" data-bf-component="assistant-defaults-page" data-bf-part="shell">
+            <main className="assistant-defaults__main" data-bf-component="assistant-defaults-page" data-bf-part="main">
+              {loadWarning ? (
+                <div className="assistant-defaults__warning" role="status">
+                  <CircleAlert size={17} />
+                  <span>{t('nursery.template.configurationUnavailable')}</span>
+                  <button type="button" onClick={() => void loadDefaults()}>{t('nursery.template.retry')}</button>
+                </div>
+              ) : null}
+
+              <section className="assistant-defaults-summary" aria-label={t('nursery.template.summaryLabel')} data-bf-component="assistant-defaults-page" data-bf-part="summary">
+                <div><span>{t('nursery.template.summary.enabled')}</span><strong>{summary.enabled}</strong></div>
+                <div><span>{t('nursery.template.summary.changed')}</span><strong>{summary.changed}</strong></div>
+                <div><span>{t('nursery.template.summary.unavailable')}</span><strong>{summary.unavailable}</strong></div>
+              </section>
+
+              <div className="assistant-defaults-tabs" role="tablist" aria-label={t('nursery.template.categoryLabel')} data-bf-component="assistant-defaults-page" data-bf-part="tabs">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    className={activeTab === tab.id ? 'is-active' : undefined}
+                    onClick={() => handleTabChange(tab.id)}
+                  >
+                    <span>{tab.label}</span><small>{tab.count}</small>
+                  </button>
+                ))}
               </div>
-            </div>
 
-            <div className="gallery-zones tc-template-shell__zones" data-bf-component="assistant-defaults-page" data-bf-part="zones">
-            <GalleryZone
-              title={t('cards.skills')}
-            >
-              {modeSkills.length === 0 ? (
-                <p className="nursery-empty" data-bf-component="assistant-defaults-page" data-bf-part="empty">{t('empty.skills')}</p>
-              ) : (
-                renderSkillEnabledDisabledSplit()
-              )}
-            </GalleryZone>
-
-            <GalleryZone
-              title={t('nursery.template.builtinToolsSection')}
-              tools={(
-                <button
-                  type="button"
-                  className="gallery-plain-icon-btn"
-                  onClick={handleResetTools}
-                  title={t('actions.reset')}
-                  aria-label={t('actions.reset')}
-                >
-                  <RefreshCw size={14} />
-                </button>
-              )}
-            >
-              {builtinTools.length === 0 ? (
-                <p className="nursery-empty">{t('empty.tools')}</p>
-              ) : (
-                renderToolEnabledDisabledSplit(builtinToolsEnabled, builtinToolsDisabled, false)
-              )}
-            </GalleryZone>
-
-            <GalleryZone
-              title={t('nursery.template.mcpToolsSection')}
-            >
-              {mcpServerIds.size === 0 ? (
-                <div className="tc-mcp-empty">
-                  <Plug2 size={20} className="tc-mcp-empty__icon" />
-                  <span className="tc-mcp-empty__text">{t('nursery.template.mcpEmptyTitle')}</span>
-                  <span className="tc-mcp-empty__hint">{t('nursery.template.mcpEmptyHint')}</span>
+              <section className="assistant-defaults-controls" aria-label={t('nursery.template.filterLabel')} data-bf-component="assistant-defaults-page" data-bf-part="filters">
+                <label className="assistant-defaults-search">
+                  <Search size={17} />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={t('nursery.template.searchPlaceholder')}
+                  />
+                  {searchQuery ? (
+                    <button type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><X size={15} /></button>
+                  ) : null}
+                </label>
+                <div className="assistant-defaults-filters" role="group" aria-label={t('nursery.template.filterLabel')}>
+                  {statusFilters.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      className={statusFilter === filter.id ? 'is-active' : undefined}
+                      aria-pressed={statusFilter === filter.id}
+                      onClick={() => setStatusFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="tc-tool-groups">
-                  {[...mcpServerIds].map((serverId) => {
-                    const serverTools = mcpToolsByServer.get(serverId) ?? [];
-                    const serverInfo = mcpServers.find((s) => s.id === serverId);
-                    const status = serverInfo?.status ?? (serverTools.length > 0 ? 'Connected' : 'Unknown');
-                    const groupId = `mcp_${serverId}`;
-                    const mcpEnabled = serverTools.filter((tool) => assistantModeConfig?.enabled_tools?.includes(tool.name));
-                    const mcpDisabled = serverTools.filter((tool) => !assistantModeConfig?.enabled_tools?.includes(tool.name));
+              </section>
 
-                    return (
-                      <div data-bf-component="assistant-defaults-page" data-bf-part="group" key={serverId} className="tc-tool-block">
-                        {renderGroupHeader(
-                          groupId,
-                          serverInfo?.name ?? serverId,
-                          serverTools.map((tool) => tool.name),
-                          true,
-                          status,
-                          serverId,
-                        )}
-                        {!collapsedGroups.has(groupId) && serverTools.length > 0
-                          && renderToolEnabledDisabledSplit(mcpEnabled, mcpDisabled, true)}
-                        {!collapsedGroups.has(groupId) && serverTools.length === 0 && (
-                          <p className="tc-tool-block__empty">{t('nursery.template.mcpServerNoTools')}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </GalleryZone>
-            </div>
-            </div>
-            </div>
+              <section className="assistant-defaults-list" role="table" aria-label={tabs.find((tab) => tab.id === activeTab)?.label} data-bf-component="assistant-defaults-page" data-bf-part="list">
+                {renderListHeader()}
+                {activeTab === 'mcp' ? renderMcpGroups() : visibleFlatRows.length > 0 ? (
+                  activeTab === 'skills' ? (
+                    <div role="rowgroup" data-bf-component="assistant-defaults-page" data-bf-part="skillList">
+                      {visibleFlatRows.map(renderCapabilityRow)}
+                    </div>
+                  ) : (
+                    <div role="rowgroup" data-bf-component="assistant-defaults-page" data-bf-part="toolList">
+                      {visibleFlatRows.map(renderCapabilityRow)}
+                    </div>
+                  )
+                ) : renderEmptyState(t('nursery.template.noFilterResults'))}
+              </section>
+              <footer className="assistant-defaults__footer">{t('nursery.template.resultCount', { count: visibleCount })}</footer>
+            </main>
             {renderDetailPanel()}
           </div>
         )}

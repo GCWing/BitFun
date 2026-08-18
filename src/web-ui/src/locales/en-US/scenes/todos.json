@@ -1,6 +1,7 @@
 {
   "title": "Task Board",
   "header": {
+    "subtitle": "Plan, manage, and run your scheduled work",
     "summary": "{{total}} scheduled · {{dueSoon}} due within 24 hours"
   },
   "actions": {
@@ -11,9 +12,16 @@
     "toggleEnabled": "Toggle enabled state"
   },
   "list": {
-    "title": "Next 24 hours",
+    "title": "Scheduled tasks",
+    "countTitle": "Scheduled tasks ({{total}})",
     "hint": "Runs due within a day, soonest first.",
-    "empty": "Nothing is due in the next 24 hours."
+    "empty": "No scheduled tasks yet."
+  },
+  "overview": {
+    "title": "Plan overview",
+    "unit": "items",
+    "total": "Scheduled tasks",
+    "dueSoon": "Due within 24 hours"
   },
   "calendar": {
     "title": "Later",
@@ -69,9 +77,27 @@
     "title": "No upcoming run ({{total}})"
   },
   "editor": {
-    "createTitle": "New Todo",
+    "createTitle": "Create Todo",
     "editTitle": "Edit Todo",
+    "createDescription": "Create a task and BitFun will run it automatically at the scheduled time.",
+    "editDescription": "Update the task details and how BitFun should run it.",
     "noWorkspace": "Open a workspace before creating a Todo — a scheduled run needs somewhere to execute.",
+    "sections": {
+      "information": "Task details",
+      "prompt": "Prompt"
+    },
+    "enabled": {
+      "title": "Enable task",
+      "description": "When enabled, the task runs automatically on its schedule."
+    },
+    "smartExecution": {
+      "title": "Context-aware execution",
+      "description": "BitFun runs the prompt at the scheduled time with the selected Agent and workspace context."
+    },
+    "advanced": {
+      "title": "Advanced settings (optional)",
+      "empty": "A one-time task does not need any additional settings."
+    },
     "fields": {
       "name": "Name",
       "agentType": "Agent type",

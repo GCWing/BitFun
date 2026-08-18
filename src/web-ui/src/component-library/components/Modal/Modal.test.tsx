@@ -86,4 +86,24 @@ describe('Modal motion presence', () => {
     expect(document.body.querySelector('.modal')).not.toBeNull();
     expect(document.body.querySelector('.modal--exiting')).toBeNull();
   });
+
+  it('uses the canonical popup close control without losing Modal ownership', () => {
+    const onClose = vi.fn();
+    act(() => {
+      root.render(
+        <Modal isOpen onClose={onClose} title="Close contract">
+          Content
+        </Modal>,
+      );
+    });
+
+    const closeButton = document.body.querySelector<HTMLButtonElement>('[data-bf-role="popup-close"]');
+    expect(closeButton).not.toBeNull();
+    expect(closeButton?.getAttribute('data-bf-component')).toBe('modal');
+    expect(closeButton?.getAttribute('data-bf-part')).toBe('close');
+    expect(closeButton?.getAttribute('aria-label')).toBe('modal.close');
+
+    act(() => closeButton?.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

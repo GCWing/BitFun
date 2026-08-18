@@ -7,12 +7,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
-import { Button } from '@/component-library';
+import { Button, PopupCloseButton } from '@/component-library';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
 import {
-  X,
   RefreshCw,
   Folder,
   File,
@@ -397,9 +396,13 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           <h2 className="remote-file-browser__header-title">
             {t('ssh.remote.selectWorkspace')}
           </h2>
-          <button className="remote-file-browser__close-btn" onClick={onCancel}>
-            <X size={18} />
-          </button>
+          <PopupCloseButton
+            className="remote-file-browser__close-btn"
+            onClick={onCancel}
+            aria-label={t('actions.close')}
+            data-bf-component="ssh-remote"
+            data-bf-part="browserClose"
+          />
         </div>
 
         {/* Path Breadcrumb / Input */}

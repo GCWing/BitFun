@@ -35,4 +35,72 @@ describe('sceneStore transition snapshots', () => {
     useSceneStore.getState().openScene('session');
     expect(useSceneStore.getState().navigationMotion).toBe('instant');
   });
+
+  it('retains an auto-evicted MiniApp Runner while keeping the visible tab cap', () => {
+    useSceneStore.getState().openScene('miniapps');
+    useSceneStore.getState().openScene('miniapp:first');
+    useSceneStore.getState().openScene('miniapp:second');
+
+    expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
+      'session',
+      'miniapp:first',
+      'miniapp:second',
+    ]);
+    expect(useSceneStore.getState().retainedScenes).toEqual([]);
+
+    useSceneStore.getState().openScene('miniapps');
+
+    expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
+      'session',
+      'miniapp:second',
+      'miniapps',
+    ]);
+    expect(useSceneStore.getState().retainedScenes.map(scene => scene.id)).toEqual([
+      'miniapp:first',
+    ]);
+  });
+
+  it('restores a retained MiniApp without remounting it twice', () => {
+    useSceneStore.getState().openScene('miniapps');
+    useSceneStore.getState().openScene('miniapp:first');
+    useSceneStore.getState().openScene('miniapp:second');
+    useSceneStore.getState().openScene('miniapps');
+
+    useSceneStore.getState().openScene('miniapp:first');
+
+    const state = useSceneStore.getState();
+    expect(state.openTabs.map(tab => tab.id)).toEqual([
+      'session',
+      'miniapps',
+      'miniapp:first',
+    ]);
+    expect(state.retainedScenes.map(scene => scene.id)).toEqual(['miniapp:second']);
+    expect([
+      ...state.openTabs,
+      ...state.retainedScenes,
+    ].filter(scene => scene.id === 'miniapp:first')).toHaveLength(1);
+  });
+
+  it('explicitly closes a retained MiniApp Runner', () => {
+    useSceneStore.getState().openScene('miniapps');
+    useSceneStore.getState().openScene('miniapp:first');
+    useSceneStore.getState().openScene('miniapp:second');
+    useSceneStore.getState().openScene('miniapps');
+
+    useSceneStore.getState().closeScene('miniapp:first');
+
+    expect(useSceneStore.getState().retainedScenes).toEqual([]);
+  });
+
+  it('clears retained MiniApp Runners when switching the peer host', () => {
+    useSceneStore.getState().openScene('miniapps');
+    useSceneStore.getState().openScene('miniapp:first');
+    useSceneStore.getState().openScene('miniapp:second');
+    useSceneStore.getState().openScene('miniapps');
+    expect(useSceneStore.getState().retainedScenes).toHaveLength(1);
+
+    useSceneStore.getState().resetForPeerSwitch();
+
+    expect(useSceneStore.getState().retainedScenes).toEqual([]);
+  });
 });

@@ -8,6 +8,7 @@
 
 import { $, browser, expect } from '@wdio/globals';
 import { openWorkspace } from '../helpers/workspace-helper';
+import { expectPopupCloseContract } from '../helpers/popup-close-contract';
 import { saveElementScreenshot, saveStepScreenshot } from '../helpers/screenshot-utils';
 
 interface PopupChrome {
@@ -29,6 +30,29 @@ interface PopupChrome {
   borderTopStyle: string;
   borderTopWidth: string;
   boxShadow: string;
+}
+
+interface AboutLayoutEvidence {
+  brandRight: number;
+  branchHorizontalOverflow: number;
+  dotCount: number;
+  dotMatrixHeight: number;
+  dotMatrixWidth: number;
+  headerCloseCenterOffset: number;
+  headerHeight: number;
+  headerLogoCount: number;
+  headerTitle: string;
+  horizontalOverflow: number;
+  metadataLeft: number;
+  modalHeight: number;
+  modalRight: number;
+  modalWidth: number;
+  starBackgroundColor: string;
+  starBorderRadius: string;
+  starColor: string;
+  starRight: number;
+  titleColor: string;
+  viewportWidth: number;
 }
 
 async function ensureLightAppearance(): Promise<void> {
@@ -111,6 +135,61 @@ async function readBackgroundAlpha(selector: string): Promise<number> {
   return alpha as number;
 }
 
+async function readAboutLayoutEvidence(): Promise<AboutLayoutEvidence> {
+  const evidence = await browser.execute(() => {
+    const modal = document.querySelector<HTMLElement>('[data-testid="about-dialog-modal"]');
+    const root = document.querySelector<HTMLElement>(
+      '[data-bf-component="about-dialog"][data-bf-part="root"]',
+    );
+    const brand = document.querySelector<HTMLElement>('.bitfun-about-dialog__brand');
+    const metadata = document.querySelector<HTMLElement>('.bitfun-about-dialog__metadata');
+    const header = modal?.querySelector<HTMLElement>('.modal__header-shell');
+    const headerTitle = modal?.querySelector<HTMLElement>('.modal__title');
+    const closeButton = modal?.querySelector<HTMLElement>('[data-bf-role="popup-close"]');
+    const title = document.querySelector<HTMLElement>('.bitfun-about-dialog__title');
+    const branch = document.querySelector<HTMLElement>('[data-testid="about-branch-value"]');
+    const dotMatrix = document.querySelector<HTMLElement>('[data-testid="about-dot-matrix"]');
+    const starButton = document.querySelector<HTMLElement>('[data-testid="about-github-star"]');
+    if (!modal || !root || !brand || !metadata || !header || !headerTitle || !closeButton || !title || !branch || !dotMatrix || !starButton) return null;
+
+    const modalRect = modal.getBoundingClientRect();
+    const brandRect = brand.getBoundingClientRect();
+    const metadataRect = metadata.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    const closeRect = closeButton.getBoundingClientRect();
+    const dotMatrixRect = dotMatrix.getBoundingClientRect();
+    const starRect = starButton.getBoundingClientRect();
+    const starStyle = window.getComputedStyle(starButton);
+    return {
+      brandRight: brandRect.right,
+      branchHorizontalOverflow: branch.scrollWidth - branch.clientWidth,
+      dotCount: dotMatrix.children.length,
+      dotMatrixHeight: dotMatrixRect.height,
+      dotMatrixWidth: dotMatrixRect.width,
+      headerCloseCenterOffset: Math.abs(
+        (headerRect.top + headerRect.height / 2) - (closeRect.top + closeRect.height / 2),
+      ),
+      headerHeight: headerRect.height,
+      headerLogoCount: modal.querySelectorAll('[data-testid="about-header-logo"]').length,
+      headerTitle: headerTitle.textContent?.trim() ?? '',
+      horizontalOverflow: root.scrollWidth - root.clientWidth,
+      metadataLeft: metadataRect.left,
+      modalHeight: modalRect.height,
+      modalRight: modalRect.right,
+      modalWidth: modalRect.width,
+      starBackgroundColor: starStyle.backgroundColor,
+      starBorderRadius: starStyle.borderRadius,
+      starColor: starStyle.color,
+      starRight: starRect.right,
+      titleColor: window.getComputedStyle(title).color,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  expect(evidence).not.toBeNull();
+  return evidence as AboutLayoutEvidence;
+}
+
 describe('L0 Popup Surface Consistency', () => {
   it('keeps the shared frame and makes the About dialog opaque', async () => {
     expect(await openWorkspace(undefined, { requireWorkspaceLabel: false })).toBe(true);
@@ -147,6 +226,7 @@ describe('L0 Popup Surface Consistency', () => {
 
     const aboutDialog = await $('[data-testid="about-dialog-modal"]');
     await aboutDialog.waitForDisplayed({ timeout: 10_000 });
+    await expectPopupCloseContract('[data-testid="about-dialog-modal"]');
     const dialogChrome = await readPopupChrome('[data-testid="about-dialog-modal"]');
     const { backgroundColor: deviceBackground, ...deviceFrame } = deviceChrome;
     const { backgroundColor: dialogBackground, ...dialogFrame } = dialogChrome;
@@ -161,6 +241,31 @@ describe('L0 Popup Surface Consistency', () => {
     expect(contentChrome.borderTopWidth).toBe('0px');
     expect(contentChrome.borderTopLeftRadius).toBe('0px');
     expect(contentChrome.boxShadow).toBe('none');
+
+    const aboutLayout = await readAboutLayoutEvidence();
+    expect(aboutLayout.headerLogoCount).toBe(0);
+    expect(aboutLayout.headerTitle).toContain('BitFun');
+    expect(aboutLayout.headerHeight).toBeGreaterThanOrEqual(44);
+    expect(aboutLayout.headerHeight).toBeLessThanOrEqual(49);
+    expect(aboutLayout.headerCloseCenterOffset).toBeLessThanOrEqual(1);
+    expect(aboutLayout.horizontalOverflow).toBeLessThanOrEqual(1);
+    expect(aboutLayout.branchHorizontalOverflow).toBeLessThanOrEqual(1);
+    expect(aboutLayout.dotCount).toBe(91);
+    expect(aboutLayout.dotMatrixWidth).toBeGreaterThanOrEqual(190);
+    expect(aboutLayout.dotMatrixWidth).toBeLessThanOrEqual(220);
+    expect(aboutLayout.dotMatrixHeight).toBeGreaterThanOrEqual(90);
+    expect(aboutLayout.dotMatrixHeight).toBeLessThanOrEqual(110);
+    expect(Math.abs(aboutLayout.brandRight - aboutLayout.metadataLeft)).toBeLessThanOrEqual(1);
+    expect(aboutLayout.starBackgroundColor).toBe(aboutLayout.titleColor);
+    expect(aboutLayout.starColor).not.toBe(aboutLayout.starBackgroundColor);
+    expect(Number.parseFloat(aboutLayout.starBorderRadius)).toBeGreaterThanOrEqual(20);
+    expect(aboutLayout.starRight).toBeLessThanOrEqual(aboutLayout.modalRight + 1);
+    if (aboutLayout.viewportWidth >= 1040) {
+      expect(aboutLayout.modalWidth).toBeGreaterThanOrEqual(900);
+      expect(aboutLayout.modalWidth).toBeLessThanOrEqual(980);
+      expect(aboutLayout.modalHeight).toBeLessThanOrEqual(700);
+      expect(aboutLayout.modalWidth / aboutLayout.modalHeight).toBeGreaterThan(1.35);
+    }
 
     await saveElementScreenshot(
       '[data-testid="about-dialog-modal"]',

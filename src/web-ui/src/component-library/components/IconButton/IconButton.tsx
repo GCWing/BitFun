@@ -45,13 +45,13 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>((
       ref={ref}
       className={classNames}
       disabled={disabled || isLoading}
-      {...props}
       data-bf-component="icon-button"
       data-bf-part="root"
       data-bf-variant={variant}
       data-bf-size={size}
       data-bf-shape={shape}
       data-bf-state={isLoading ? 'loading' : undefined}
+      {...props}
     >
       {children}
     </button>

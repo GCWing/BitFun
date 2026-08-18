@@ -143,6 +143,16 @@
     inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 25%, transparent);
 }
 
+.workspace-icon.is-assistant {
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workspace-icon.is-assistant:hover {
+  box-shadow: none;
+}
+
 .workspace-info {
   flex: 1;
   min-width: 0;

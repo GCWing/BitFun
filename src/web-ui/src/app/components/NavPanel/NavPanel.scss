@@ -886,6 +886,8 @@ $_section-header-height: 24px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    gap: $size-gap-1;
+    flex: 0 0 auto;
     margin-left: auto;
     min-width: 0;
   }
@@ -908,10 +910,6 @@ $_section-header-height: 24px;
                 filter $motion-fast $easing-standard,
                 opacity $motion-fast $easing-standard;
 
-    & + & {
-      margin-left: -8px;
-    }
-
     &:not(.is-active):not(.bitfun-nav-panel__miniapp-bubble--more) {
       filter: saturate(0.72);
       opacity: 0.9;
@@ -927,8 +925,7 @@ $_section-header-height: 24px;
     &.is-active {
       filter: saturate(1);
       opacity: 1;
-      box-shadow: 0 8px 18px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.22),
-                  0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
+      box-shadow: none;
     }
 
     &.is-customizing {
@@ -937,9 +934,7 @@ $_section-header-height: 24px;
     }
 
     &.is-active.is-customizing {
-      box-shadow: 0 8px 18px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.22),
-                  0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent),
-                  0 0 0 5px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 42%, transparent);
     }
 
     &-customize-dot {
@@ -3313,7 +3308,7 @@ $_section-header-height: 24px;
       filter 120ms ease;
 
     &:hover {
-      transform: none;
+      transform: scale(1.05);
       box-shadow: none;
     }
 

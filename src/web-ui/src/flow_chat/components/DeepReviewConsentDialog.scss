@@ -7,6 +7,7 @@
   --deep-review-accent-strong: var(--bf-appearance-token-color-accent-600);
   --deep-review-warm: var(--bf-appearance-token-color-warning);
   display: flex;
+  position: relative;
   flex-direction: column;
   gap: 16px;
   padding: 24px;
@@ -18,9 +19,9 @@
 
 .deep-review-consent__header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: flex-start;
+  padding-inline-end: 40px;
 }
 
 .deep-review-consent__fact-icon {
@@ -69,31 +70,9 @@
 }
 
 .deep-review-consent__close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
-  cursor: pointer;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
-
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-hover);
-    border-color: var(--bf-appearance-token-border-subtle);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &:active {
-    transform: scale(0.96);
-  }
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
 }
 
 .deep-review-consent__capacity-note {

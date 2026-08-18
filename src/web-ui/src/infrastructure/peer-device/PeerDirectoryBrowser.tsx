@@ -12,9 +12,8 @@ import {
   Home,
   Loader2,
   RefreshCw,
-  X,
 } from 'lucide-react';
-import { Button } from '@/component-library';
+import { Button, PopupCloseButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { globalAPI } from '@/infrastructure/api/service-api/GlobalAPI';
@@ -210,16 +209,13 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-component="peer-device"
             data-bf-part="title"
           >{title}</h2>
-          <button
-            type="button"
+          <PopupCloseButton
             className="peer-directory-browser__close-btn"
             aria-label={t('peerDirectoryPicker.cancel')}
             onClick={onCancel}
             data-bf-component="peer-device"
             data-bf-part="closeButton"
-          >
-            <X size={16} />
-          </button>
+          />
         </div>
 
         <div

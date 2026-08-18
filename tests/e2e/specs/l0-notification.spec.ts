@@ -5,6 +5,7 @@
 
 import { browser, expect, $ } from '@wdio/globals';
 import { openWorkspace } from '../helpers/workspace-helper';
+import { expectPopupCloseContract } from '../helpers/popup-close-contract';
 
 async function openNotificationMenuItem() {
   const settingsButton = await $('[data-testid="nav-footer-settings-item"]');
@@ -80,6 +81,7 @@ describe('L0 Notification', () => {
 
       console.log('[L0] Notification center opened:', centerVisible);
       expect(centerVisible).toBe(true);
+      await expectPopupCloseContract('[data-testid="notification-center"]');
 
       const closeButton = await $('[data-testid="notification-center-close-btn"]');
       await closeButton.click();

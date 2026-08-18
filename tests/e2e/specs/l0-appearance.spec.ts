@@ -3,7 +3,71 @@
  */
 
 import { browser, expect, $ } from '@wdio/globals';
-import { saveStepScreenshot } from '../helpers/screenshot-utils';
+import { saveElementScreenshot, saveStepScreenshot } from '../helpers/screenshot-utils';
+
+interface WindowRect {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+}
+
+function getWebDriverSessionId(): string {
+  const sessionId = (browser as unknown as { sessionId?: string }).sessionId;
+  if (!sessionId) throw new Error('WebDriver session id is unavailable');
+  return sessionId;
+}
+
+function webDriverEndpoint(pathname: string): string {
+  const port = Number(process.env.BITFUN_E2E_WEBDRIVER_PORT || 4445);
+  return `http://127.0.0.1:${port}${pathname}`;
+}
+
+async function readWebDriverWindowRect(): Promise<WindowRect> {
+  const response = await fetch(webDriverEndpoint(`/session/${getWebDriverSessionId()}/window/rect`));
+  if (!response.ok) {
+    throw new Error(`Failed to read WebDriver window rect: ${response.status} ${await response.text()}`);
+  }
+  const payload = await response.json() as { value?: Partial<WindowRect> };
+  const rect = payload.value;
+  if (!rect || typeof rect.width !== 'number' || typeof rect.height !== 'number') {
+    throw new Error(`WebDriver window rect response is invalid: ${JSON.stringify(payload)}`);
+  }
+  return {
+    x: typeof rect.x === 'number' ? rect.x : undefined,
+    y: typeof rect.y === 'number' ? rect.y : undefined,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+async function setWebDriverWindowRect(rect: Partial<WindowRect>): Promise<void> {
+  const response = await fetch(webDriverEndpoint(`/session/${getWebDriverSessionId()}/window/rect`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(rect),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to set WebDriver window rect: ${response.status} ${await response.text()}`);
+  }
+}
+
+async function performWebDriverWheel(x: number, y: number, deltaY: number): Promise<void> {
+  const response = await fetch(webDriverEndpoint(`/session/${getWebDriverSessionId()}/actions`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      actions: [{
+        type: 'wheel',
+        id: 'miniapp-gallery-wheel',
+        actions: [{ type: 'scroll', x, y, deltaX: 0, deltaY }],
+      }],
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to perform WebDriver wheel action: ${response.status} ${await response.text()}`);
+  }
+}
 
 async function waitForDisplayed(selector: string, timeout = 15000) {
   const element = await $(selector);
@@ -272,10 +336,39 @@ describe('L0 Appearance', () => {
       const selectedTab = document.querySelector<HTMLElement>(
         '.miniapp-gallery-scene__tabs .bitfun-tabs__tab--active',
       );
+      const tabsNav = document.querySelector<HTMLElement>(
+        '.miniapp-gallery-scene__tabs > .bitfun-tabs__nav',
+      );
+      const tabsNavList = tabsNav?.querySelector<HTMLElement>('.bitfun-tabs__nav-list') ?? null;
+      const tabButtons = Array.from(
+        tabsNavList?.querySelectorAll<HTMLElement>('.bitfun-tabs__tab-button') ?? [],
+      );
+      const tabsContent = document.querySelector<HTMLElement>(
+        '.miniapp-gallery-scene__tabs > .bitfun-tabs__content',
+      );
+      const tabsContentView = tabsContent?.querySelector<HTMLElement>(
+        ':scope > .bitfun-tabs__content-view',
+      ) ?? null;
+      const galleryScroller = document.querySelector<HTMLElement>(
+        '.miniapp-gallery .gallery-layout__body',
+      );
       const scene = document.querySelector<HTMLElement>('[data-bf-scene="miniapp-gallery"]');
+      const pageHeader = document.querySelector<HTMLElement>('.miniapp-gallery .gallery-page-header');
+      const pageHeaderTitle = pageHeader?.querySelector<HTMLElement>('.gallery-page-header__title') ?? null;
+      const pageHeaderActions = pageHeader?.querySelector<HTMLElement>('.gallery-page-header__actions') ?? null;
       const card = document.querySelector<HTMLElement>('[data-bf-component="mini-app-card"]');
       const cardFooter = card?.querySelector<HTMLElement>('.miniapp-card__footer') ?? null;
+      const cardIcon = card?.querySelector<HTMLElement>('.miniapp-card__icon-area') ?? null;
+      const cardDescription = card?.querySelector<HTMLElement>('.miniapp-card__desc') ?? null;
+      const cardTags = card?.querySelector<HTMLElement>('.miniapp-card__tags') ?? null;
+      const cardActions = card?.querySelector<HTMLElement>('.miniapp-card__actions') ?? null;
+      const cardTagItems = Array.from(card?.querySelectorAll<HTMLElement>('.miniapp-card__tag') ?? []);
+      const cardTagOverflowItems = Array.from(
+        card?.querySelectorAll<HTMLElement>('.miniapp-card__tag-overflow') ?? [],
+      );
       const cardPrimaryAction = card?.querySelector<HTMLElement>('.miniapp-card__action-btn--primary') ?? null;
+      const importAction = document.querySelector<HTMLElement>('[data-testid="miniapp-import-action"]');
+      const createAction = document.querySelector<HTMLElement>('[data-testid="miniapp-create-action"]');
       const emptyRunningZone = document.querySelector<HTMLElement>(
         '.miniapp-gallery__running-zone.is-empty',
       );
@@ -290,39 +383,356 @@ describe('L0 Appearance', () => {
         selectedTabBackground: selectedTab
           ? window.getComputedStyle(selectedTab).backgroundColor
           : null,
+        selectedTabColor: selectedTab ? window.getComputedStyle(selectedTab).color : null,
         sceneBackground: scene ? window.getComputedStyle(scene).backgroundColor : null,
-        emptyRunningZoneHeight: emptyRunningZone?.getBoundingClientRect().height ?? null,
-        card: card
+        scrollLayout: tabsContent && tabsContentView && galleryScroller
           ? {
-              background: window.getComputedStyle(card).backgroundColor,
-              borderStyle: window.getComputedStyle(card).borderStyle,
-              footerBackground: cardFooter ? window.getComputedStyle(cardFooter).backgroundColor : null,
-              primaryActionBackground: cardPrimaryAction
-                ? window.getComputedStyle(cardPrimaryAction).backgroundColor
-                : null,
+              contentHeight: tabsContent.getBoundingClientRect().height,
+              contentViewHeight: tabsContentView.getBoundingClientRect().height,
+              scrollerHeight: galleryScroller.getBoundingClientRect().height,
+              scrollerClientHeight: galleryScroller.clientHeight,
+              scrollerScrollHeight: galleryScroller.scrollHeight,
+              scrollerOverflowY: window.getComputedStyle(galleryScroller).overflowY,
             }
+          : null,
+        upperLayout: tabsNav && tabsNavList && pageHeader && pageHeaderTitle && pageHeaderActions && emptyRunningZone
+          ? (() => {
+              const tabsNavRect = tabsNav.getBoundingClientRect();
+              const tabsNavListRect = tabsNavList.getBoundingClientRect();
+              const headerRect = pageHeader.getBoundingClientRect();
+              const headerTitleRect = pageHeaderTitle.getBoundingClientRect();
+              const headerActionsRect = pageHeaderActions.getBoundingClientRect();
+              const runningRect = emptyRunningZone.getBoundingClientRect();
+              const actionRects = Array.from(pageHeaderActions.children).map(child => (
+                (child as HTMLElement).getBoundingClientRect()
+              ));
+              return {
+                navHeight: tabsNavRect.height,
+                tabGroupWidth: tabsNavListRect.width,
+                tabGroupHeight: tabsNavListRect.height,
+                tabButtonHeights: tabButtons.map(button => button.getBoundingClientRect().height),
+                headerHeight: headerRect.height,
+                headerRunningLeftDelta: Math.abs(headerTitleRect.left - runningRect.left),
+                headerRunningRightDelta: Math.abs(headerActionsRect.right - runningRect.right),
+                titleActionsTopDelta: Math.abs(headerTitleRect.top - headerActionsRect.top),
+                actionHeights: actionRects.map(rect => rect.height),
+                runningHeight: runningRect.height,
+                navToRunningBottom: runningRect.bottom - tabsNavRect.bottom,
+              };
+            })()
+          : null,
+        headerActions: importAction && createAction
+          ? {
+              importBackground: window.getComputedStyle(importAction).backgroundColor,
+              importColor: window.getComputedStyle(importAction).color,
+              importLabel: importAction.getAttribute('aria-label'),
+              createBackground: window.getComputedStyle(createAction).backgroundColor,
+              createColor: window.getComputedStyle(createAction).color,
+              createLabel: createAction.getAttribute('aria-label'),
+            }
+          : null,
+        card: card
+          ? (() => {
+              const cardRect = card.getBoundingClientRect();
+              const iconRect = cardIcon?.getBoundingClientRect() ?? null;
+              const descriptionRect = cardDescription?.getBoundingClientRect() ?? null;
+              const tagsRect = cardTags?.getBoundingClientRect() ?? null;
+              const actionsRect = cardActions?.getBoundingClientRect() ?? null;
+              const visibleTagItems = [...cardTagItems, ...cardTagOverflowItems].filter(tag => (
+                window.getComputedStyle(tag).display !== 'none'
+              ));
+              const tagRects = visibleTagItems.map(tag => tag.getBoundingClientRect());
+              return {
+                background: window.getComputedStyle(card).backgroundColor,
+                borderStyle: window.getComputedStyle(card).borderStyle,
+                footerBackground: cardFooter ? window.getComputedStyle(cardFooter).backgroundColor : null,
+                primaryActionBackground: cardPrimaryAction
+                  ? window.getComputedStyle(cardPrimaryAction).backgroundColor
+                  : null,
+                neutralActionBackground: window.getComputedStyle(card)
+                  .getPropertyValue('--bf-appearance-token-element-bg-base')
+                  .trim(),
+                primaryActionLabel: cardPrimaryAction?.textContent?.trim() ?? '',
+                width: cardRect.width,
+                height: cardRect.height,
+                iconWidth: iconRect?.width ?? null,
+                iconHeight: iconRect?.height ?? null,
+                descriptionActionGap: descriptionRect && actionsRect
+                  ? actionsRect.top - descriptionRect.bottom
+                  : null,
+                tagsActionsCenterDelta: tagsRect && actionsRect
+                  ? Math.abs(
+                    tagsRect.top + tagsRect.height / 2 - (actionsRect.top + actionsRect.height / 2),
+                  )
+                  : null,
+                tagCount: cardTagItems.length,
+                visibleTagCount: tagRects.length,
+                tagLineCount: new Set(tagRects.map(rect => Math.round(rect.top))).size,
+                tagsVisible: tagsRect
+                  ? cardTags!.scrollWidth <= cardTags!.clientWidth + 1
+                    && tagRects.every(rect => (
+                      rect.top >= tagsRect.top - 1
+                      && rect.right <= tagsRect.right + 1
+                      && rect.bottom <= tagsRect.bottom + 1
+                      && rect.left >= tagsRect.left - 1
+                    ))
+                  : null,
+                tagsOverlapActions: actionsRect
+                  ? tagRects.some(rect => (
+                    rect.left < actionsRect.right
+                    && rect.right > actionsRect.left
+                    && rect.top < actionsRect.bottom
+                    && rect.bottom > actionsRect.top
+                  ))
+                  : null,
+                actionsRightGap: actionsRect ? cardRect.right - actionsRect.right : null,
+                actionsBottomGap: actionsRect ? cardRect.bottom - actionsRect.bottom : null,
+              };
+            })()
           : null,
       };
     });
 
-    expect(miniAppPresentation.selectedNavigation).toEqual({
-      background: 'rgb(243, 243, 245)',
-      border: 'rgba(0, 0, 0, 0)',
-    });
-    expect(miniAppPresentation.selectedTabBackground).toBe('rgb(243, 243, 245)');
+    expect([
+      'rgb(243, 243, 245)',
+      'rgba(243, 243, 245, 1)',
+    ]).toContain(miniAppPresentation.selectedNavigation?.background);
+    expect(miniAppPresentation.selectedNavigation?.border).toBe('rgba(0, 0, 0, 0)');
+    expect(miniAppPresentation.selectedTabBackground).toBe('rgb(16, 26, 39)');
+    expect(miniAppPresentation.selectedTabColor).toBe('rgb(255, 255, 255)');
     expect(miniAppPresentation.sceneBackground).toBe('rgb(255, 255, 255)');
-    expect(miniAppPresentation.emptyRunningZoneHeight).not.toBeNull();
-    expect(miniAppPresentation.emptyRunningZoneHeight!).toBeLessThanOrEqual(40);
-    expect(miniAppPresentation.card).toEqual({
-      background: 'rgb(243, 243, 245)',
-      borderStyle: 'none',
-      footerBackground: 'rgba(0, 0, 0, 0)',
-      primaryActionBackground: 'rgb(16, 26, 39)',
+    expect(miniAppPresentation.scrollLayout).not.toBeNull();
+    expect(miniAppPresentation.scrollLayout!.scrollerOverflowY).toBe('auto');
+    expect(miniAppPresentation.scrollLayout!.contentViewHeight).toBeLessThanOrEqual(
+      miniAppPresentation.scrollLayout!.contentHeight + 0.5,
+    );
+    expect(miniAppPresentation.scrollLayout!.scrollerHeight).toBeLessThanOrEqual(
+      miniAppPresentation.scrollLayout!.contentHeight + 0.5,
+    );
+    expect(Math.abs(
+      miniAppPresentation.scrollLayout!.contentViewHeight
+      - miniAppPresentation.scrollLayout!.contentHeight,
+    )).toBeLessThanOrEqual(0.5);
+    expect(miniAppPresentation.upperLayout).not.toBeNull();
+    expect(miniAppPresentation.upperLayout!.navHeight).toBeGreaterThanOrEqual(60);
+    expect(miniAppPresentation.upperLayout!.navHeight).toBeLessThanOrEqual(80);
+    expect(miniAppPresentation.upperLayout!.tabGroupWidth).toBeGreaterThanOrEqual(220);
+    expect(miniAppPresentation.upperLayout!.tabGroupWidth).toBeLessThanOrEqual(300);
+    expect(miniAppPresentation.upperLayout!.tabGroupHeight).toBeGreaterThanOrEqual(35);
+    expect(miniAppPresentation.upperLayout!.tabGroupHeight).toBeLessThanOrEqual(37);
+    expect(miniAppPresentation.upperLayout!.tabButtonHeights).toHaveLength(3);
+    expect(miniAppPresentation.upperLayout!.tabButtonHeights.every(height => height === 30)).toBe(true);
+    expect(miniAppPresentation.upperLayout!.headerHeight).toBeGreaterThanOrEqual(88);
+    expect(miniAppPresentation.upperLayout!.headerHeight).toBeLessThanOrEqual(120);
+    expect(miniAppPresentation.upperLayout!.headerRunningLeftDelta).toBeLessThanOrEqual(0.5);
+    expect(miniAppPresentation.upperLayout!.headerRunningRightDelta).toBeLessThanOrEqual(0.5);
+    expect(miniAppPresentation.upperLayout!.titleActionsTopDelta).toBeLessThanOrEqual(8);
+    expect(miniAppPresentation.upperLayout!.actionHeights.every(height => (
+      height >= 29.5 && height <= 34
+    ))).toBe(true);
+    expect(miniAppPresentation.upperLayout!.runningHeight).toBeGreaterThanOrEqual(57.5);
+    expect(miniAppPresentation.upperLayout!.runningHeight).toBeLessThanOrEqual(60);
+    expect(miniAppPresentation.upperLayout!.navToRunningBottom).toBeGreaterThanOrEqual(150);
+    expect(miniAppPresentation.upperLayout!.navToRunningBottom).toBeLessThanOrEqual(190);
+    expect(miniAppPresentation.headerActions).toMatchObject({
+      importBackground: 'rgb(243, 243, 245)',
+      createBackground: 'rgb(16, 26, 39)',
+      createColor: 'rgb(255, 255, 255)',
     });
+    expect(miniAppPresentation.headerActions?.importLabel?.length).toBeGreaterThan(0);
+    expect(miniAppPresentation.headerActions?.createLabel?.length).toBeGreaterThan(0);
+    expect(miniAppPresentation.headerActions?.importBackground).not.toBe(
+      miniAppPresentation.headerActions?.createBackground,
+    );
+    expect(miniAppPresentation.card).not.toBeNull();
+    expect(miniAppPresentation.card).toMatchObject({
+      background: 'rgb(255, 255, 255)',
+      borderStyle: 'solid',
+      footerBackground: 'rgba(0, 0, 0, 0)',
+    });
+    expect(miniAppPresentation.card!.primaryActionBackground).toBe(
+      miniAppPresentation.card!.neutralActionBackground,
+    );
+    expect(miniAppPresentation.card!.primaryActionBackground).not.toBe('rgb(16, 26, 39)');
+    expect(miniAppPresentation.card!.height).toBeGreaterThanOrEqual(159.5);
+    expect(Math.abs(
+      miniAppPresentation.card!.width / miniAppPresentation.card!.height - 2.4,
+    )).toBeLessThanOrEqual(0.03);
+    expect(miniAppPresentation.card!.iconWidth).toBeGreaterThanOrEqual(70);
+    expect(Math.abs(
+      miniAppPresentation.card!.iconHeight! - miniAppPresentation.card!.iconWidth!,
+    )).toBeLessThanOrEqual(0.1);
+    expect(miniAppPresentation.card!.primaryActionLabel.length).toBeGreaterThan(0);
+    expect(miniAppPresentation.card!.descriptionActionGap).toBeGreaterThanOrEqual(8);
+    expect(miniAppPresentation.card!.descriptionActionGap).toBeLessThanOrEqual(24);
+    expect(miniAppPresentation.card!.tagCount).toBeGreaterThan(0);
+    expect(miniAppPresentation.card!.visibleTagCount).toBeGreaterThan(0);
+    expect(miniAppPresentation.card!.tagLineCount).toBe(1);
+    expect(miniAppPresentation.card!.tagsVisible).toBe(true);
+    expect(miniAppPresentation.card!.tagsOverlapActions).toBe(false);
+    expect(miniAppPresentation.card!.actionsRightGap).toBeGreaterThanOrEqual(12);
+    expect(miniAppPresentation.card!.actionsBottomGap).toBeGreaterThanOrEqual(20);
+
+    await saveElementScreenshot(
+      '[data-bf-component="mini-app-card"]',
+      'l0-appearance-light-miniapp-card',
+    );
+    await saveElementScreenshot(
+      '[data-bf-scene="miniapp-gallery"]',
+      'l0-appearance-light-miniapp-upper-layout',
+    );
+    await saveStepScreenshot('l0-appearance-light-miniapps');
+
+    const originalWindowRect = await readWebDriverWindowRect();
+    try {
+      await setWebDriverWindowRect({ width: 900, height: 640 });
+      await browser.waitUntil(async () => browser.execute(() => {
+        const scroller = document.querySelector<HTMLElement>(
+          '.miniapp-gallery .gallery-layout__body',
+        );
+        return Boolean(scroller && scroller.scrollHeight > scroller.clientHeight);
+      }), {
+        timeout: 5000,
+        interval: 100,
+        timeoutMsg: 'Mini App gallery did not become scrollable after the native window was reduced',
+      });
+
+      const miniAppScrollTarget = await browser.execute(() => {
+        const scroller = document.querySelector<HTMLElement>(
+          '.miniapp-gallery .gallery-layout__body',
+        );
+        if (!scroller) return null;
+        const rect = scroller.getBoundingClientRect();
+        return {
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + Math.min(rect.height / 2, 240)),
+          before: scroller.scrollTop,
+          maxScrollTop: scroller.scrollHeight - scroller.clientHeight,
+        };
+      });
+      expect(miniAppScrollTarget).not.toBeNull();
+      expect(miniAppScrollTarget!.maxScrollTop).toBeGreaterThan(0);
+
+      await performWebDriverWheel(miniAppScrollTarget!.x, miniAppScrollTarget!.y, 360);
+      await browser.waitUntil(async () => browser.execute((before: number) => {
+        const scroller = document.querySelector<HTMLElement>(
+          '.miniapp-gallery .gallery-layout__body',
+        );
+        return Boolean(scroller && scroller.scrollTop > before);
+      }, miniAppScrollTarget!.before), {
+        timeout: 3000,
+        interval: 50,
+        timeoutMsg: 'Native wheel input did not move the Mini App gallery scroll container',
+      });
+
+      const miniAppScrollTop = await browser.execute(() => {
+        const scroller = document.querySelector<HTMLElement>(
+          '.miniapp-gallery .gallery-layout__body',
+        );
+        const scrollTop = scroller?.scrollTop ?? 0;
+        if (scroller) scroller.scrollTop = 0;
+        return scrollTop;
+      });
+      expect(miniAppScrollTop).toBeGreaterThan(miniAppScrollTarget!.before);
+    } finally {
+      await setWebDriverWindowRect(originalWindowRect);
+    }
+
+    const miniAppHoverContract = await browser.execute(() => {
+      const styleRules: CSSStyleRule[] = [];
+      const collectStyleRules = (rules: CSSRuleList): void => {
+        for (const rule of Array.from(rules)) {
+          if (rule instanceof CSSStyleRule) styleRules.push(rule);
+          if ('cssRules' in rule) collectStyleRules((rule as CSSGroupingRule).cssRules);
+        }
+      };
+
+      for (const styleSheet of Array.from(document.styleSheets)) {
+        try {
+          collectStyleRules(styleSheet.cssRules);
+        } catch {
+          // Ignore stylesheets that the native WebView does not expose through CSSOM.
+        }
+      }
+
+      const hasSelector = (rule: CSSStyleRule, selector: string): boolean => (
+        rule.selectorText.split(',').some(candidate => candidate.trim() === selector)
+      );
+      const cardHoverRule = styleRules.find(rule => hasSelector(rule, '.miniapp-card:hover'));
+      const actionHoverRule = styleRules.find(rule => hasSelector(
+        rule,
+        '.miniapp-card__action-btn--primary:hover',
+      ));
+      const deleteHoverRule = styleRules.find(rule => hasSelector(
+        rule,
+        '.miniapp-card__action-btn--danger:hover',
+      ));
+      const lightInverseRule = styleRules.find(rule => (
+        rule.selectorText.includes('data-bf-appearance')
+        && rule.selectorText.includes('bitfun-light')
+        && rule.selectorText.includes('.miniapp-card')
+      ));
+
+      return {
+        cardBackground: cardHoverRule?.style.backgroundColor ?? null,
+        cardBorder: cardHoverRule?.style.borderColor ?? null,
+        cardShadow: cardHoverRule?.style.boxShadow ?? null,
+        cardTransform: cardHoverRule?.style.transform ?? null,
+        primaryBackground: actionHoverRule?.style.background ?? null,
+        primaryColor: actionHoverRule?.style.color ?? null,
+        deleteBackground: deleteHoverRule?.style.background ?? null,
+        deleteColor: deleteHoverRule?.style.color ?? null,
+        lightInverseBackground: lightInverseRule?.style.getPropertyValue('--miniapp-card-inverse-bg') ?? null,
+        lightInverseColor: lightInverseRule?.style.getPropertyValue('--miniapp-card-inverse-color') ?? null,
+      };
+    });
+    expect(miniAppHoverContract).toEqual({
+      cardBackground: 'var(--bf-appearance-token-element-bg-subtle)',
+      cardBorder: 'var(--bf-appearance-token-border-base)',
+      cardShadow: 'var(--bf-appearance-token-shadow-sm)',
+      cardTransform: 'translateY(-3px)',
+      primaryBackground: 'var(--miniapp-card-inverse-bg)',
+      primaryColor: 'var(--miniapp-card-inverse-color)',
+      deleteBackground: 'var(--miniapp-card-inverse-bg)',
+      deleteColor: 'var(--miniapp-card-inverse-color)',
+      lightInverseBackground: 'var(--bf-appearance-token-color-static-black)',
+      lightInverseColor: 'var(--bf-appearance-token-color-static-white)',
+    });
+
+    const importAction = await $('[data-testid="miniapp-import-action"]');
+    await importAction.click();
+    const importMenu = await waitForDisplayed('[data-testid="miniapp-import-menu"]');
+    expect(await importMenu.getAttribute('role')).toBe('menu');
+    expect((await importMenu.$$('.miniapp-gallery__import-menu-item')).length).toBe(2);
+    expect(await $('[data-testid="miniapp-import-folder-action"]').isDisplayed()).toBe(true);
+    expect(await $('[data-testid="miniapp-import-package-action"]').isDisplayed()).toBe(true);
+    await saveStepScreenshot('l0-appearance-light-miniapp-import-menu');
+    await importAction.click();
+    await importMenu.waitForDisplayed({ reverse: true });
+
+    await $('[data-testid="miniapp-create-action"]').click();
+    const creationModeDialog = await waitForDisplayed(
+      '[data-bf-component="confirm-dialog"][data-bf-type="info"]',
+    );
+    expect((await creationModeDialog.$('.confirm-dialog__title').getText()).length).toBeGreaterThan(0);
+    expect((await creationModeDialog.$('.confirm-dialog__message').getText()).length).toBeGreaterThan(0);
+    const creationModeDialogActions = await creationModeDialog.$$('.confirm-dialog__actions button');
+    expect(creationModeDialogActions.length).toBe(1);
+    await saveElementScreenshot(
+      '[data-bf-component="confirm-dialog"][data-bf-type="info"]',
+      'l0-appearance-light-miniapp-creation-mode-notice',
+    );
+    await creationModeDialogActions[0].click();
+    await creationModeDialog.waitForDisplayed({ reverse: true });
   });
 
   it('should render monochrome structural chrome against a white workspace', async () => {
     await selectAppearance('bitfun-monochrome');
+    await browser.execute(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    });
     await waitForDisplayed('[data-testid="nav-panel"]');
     await waitForDisplayed('[data-testid="settings-nav"]');
     await waitForDisplayed('.bitfun-scene-bar');

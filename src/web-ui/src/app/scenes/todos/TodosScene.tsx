@@ -19,8 +19,14 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { CalendarClock, Plus, RefreshCw } from 'lucide-react';
-import { Button, IconButton, PresenceBoundary, confirmDanger } from '@/component-library';
+import {
+  CalendarClock,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+} from 'lucide-react';
+import { Button, IconButton, Modal, PresenceBoundary, confirmDanger } from '@/component-library';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -52,6 +58,7 @@ import {
   groupOccurrencesByDay,
   monthRangeMs,
   type InactiveReason,
+  type TodoOccurrence,
 } from './todoOccurrences';
 import { buildWorkspaceOptions, formatDateTime } from './todoPresentation';
 import './TodosScene.scss';
@@ -73,7 +80,6 @@ const TodosScene: React.FC = () => {
   const { openedWorkspacesList, currentWorkspace, primaryAssistantWorkspaceId } = useWorkspaceContext();
 
   const [jobs, setJobs] = useState<CronJob[]>([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [monthAnchorMs, setMonthAnchorMs] = useState(() => startOfCurrentMonthMs(Date.now()));
@@ -145,7 +151,6 @@ const TodosScene: React.FC = () => {
   }, []);
 
   const loadJobs = useCallback(async () => {
-    setLoading(true);
     try {
       // No filters: the Todos panel is the cross-workspace view.
       const result = await cronAPI.listJobs({});
@@ -157,8 +162,6 @@ const TodosScene: React.FC = () => {
           error: error instanceof Error ? error.message : String(error),
         }),
       );
-    } finally {
-      setLoading(false);
     }
   }, [t]);
 
@@ -201,6 +204,11 @@ const TodosScene: React.FC = () => {
     setValidationErrors(EMPTY_VALIDATION_ERRORS);
     setDraft(createEmptyDraft());
   }, []);
+
+  const handleCloseEditor = useCallback(() => {
+    if (saving) return;
+    resetEditor();
+  }, [resetEditor, saving]);
 
   const handleCreateNew = useCallback(() => {
     const workspace = workspaceOptions.find((option) => option.value === defaultWorkspaceId);
@@ -347,10 +355,53 @@ const TodosScene: React.FC = () => {
     }
   }, [t]);
 
-  const summaryLabel = t('header.summary', {
-    total: jobs.length,
-    dueSoon: buckets.upcoming.length,
-  });
+  const visibleTodos = useMemo(() => {
+    const nextOccurrenceByJob = new Map<string, TodoOccurrence>();
+
+    for (const occurrence of buckets.calendar) {
+      const current = nextOccurrenceByJob.get(occurrence.job.id);
+      if (!current || (!current.isNextRun && occurrence.isNextRun)) {
+        nextOccurrenceByJob.set(occurrence.job.id, occurrence);
+      }
+    }
+
+    return [...nextOccurrenceByJob.values()].sort((left, right) => (
+      left.atMs - right.atMs || left.job.name.localeCompare(right.job.name)
+    ));
+  }, [buckets.calendar]);
+
+  const dueSoonTodoCount = useMemo(
+    () => new Set(buckets.upcoming.map((occurrence) => occurrence.job.id)).size,
+    [buckets.upcoming],
+  );
+
+  const monthLabel = useMemo(() => (
+    formatDate(new Date(monthAnchorMs), { year: 'numeric', month: 'long' })
+  ), [formatDate, monthAnchorMs]);
+
+  const clearSelectedDay = useCallback(() => {
+    setSelectedDayKey(null);
+  }, []);
+
+  const handleSelectDay = useCallback((dayKey: string | null) => {
+    if (dayKey) {
+      setSelectedDayKey(dayKey);
+      return;
+    }
+    clearSelectedDay();
+  }, [clearSelectedDay]);
+
+  const shiftMonth = useCallback((delta: number) => {
+    const anchor = new Date(monthAnchorMs);
+    setMonthAnchorMs(new Date(anchor.getFullYear(), anchor.getMonth() + delta, 1).getTime());
+    clearSelectedDay();
+  }, [clearSelectedDay, monthAnchorMs]);
+
+  const showCurrentMonth = useCallback(() => {
+    const today = new Date(nowMs);
+    setMonthAnchorMs(new Date(today.getFullYear(), today.getMonth(), 1).getTime());
+    clearSelectedDay();
+  }, [clearSelectedDay, nowMs]);
 
   return (
     <div
@@ -361,67 +412,97 @@ const TodosScene: React.FC = () => {
     >
       <header className="bf-todos__head" data-bf-scene="todos" data-bf-part="header">
         <div className="bf-todos__head-main">
-          <span className="bf-todos__head-icon" aria-hidden="true"><CalendarClock size={16} /></span>
+          <span className="bf-todos__head-icon" aria-hidden="true"><CalendarClock size={24} /></span>
           <div className="bf-todos__head-text">
             <h2 className="bf-todos__title">{t('title')}</h2>
-            <p className="bf-todos__subtitle">{summaryLabel}</p>
+            <p className="bf-todos__subtitle">{t('header.subtitle')}</p>
           </div>
         </div>
         <div className="bf-todos__head-actions" data-bf-scene="todos" data-bf-part="headerActions">
-          <IconButton
-            type="button"
-            size="xs"
-            aria-label={t('actions.refresh')}
-            tooltip={t('actions.refresh')}
-            onClick={() => { void loadJobs(); }}
-            data-testid="todos-refresh"
+          <div
+            className="bf-todos__month-navigation"
+            data-bf-scene="todos"
+            data-bf-part="monthNavigation"
           >
-            <RefreshCw size={14} className={loading ? 'bf-todos__spin' : undefined} />
-          </IconButton>
+            <IconButton
+              type="button"
+              size="xs"
+              aria-label={t('calendar.previousMonth')}
+              tooltip={t('calendar.previousMonth')}
+              onClick={() => shiftMonth(-1)}
+              data-testid="todos-calendar-prev"
+            >
+              <ChevronLeft size={16} />
+            </IconButton>
+            <span className="bf-todos__month-label" data-testid="todos-calendar-month">
+              <CalendarDays size={14} aria-hidden="true" />
+              <span>{monthLabel}</span>
+            </span>
+            <IconButton
+              type="button"
+              size="xs"
+              aria-label={t('calendar.nextMonth')}
+              tooltip={t('calendar.nextMonth')}
+              onClick={() => shiftMonth(1)}
+              data-testid="todos-calendar-next"
+            >
+              <ChevronRight size={16} />
+            </IconButton>
+          </div>
           <Button
             size="small"
-            variant="primary"
+            variant="secondary"
+            className="bf-todos__today-button"
+            onClick={showCurrentMonth}
+          >
+            {t('calendar.today')}
+          </Button>
+          <Button
+            size="small"
+            variant="inverse"
+            className="bf-todos__new-button"
             onClick={handleCreateNew}
             disabled={workspaceOptions.length === 0}
             data-testid="todos-new"
           >
-            <Plus size={13} />
+            <Plus size={14} />
             <span>{t('actions.newTodo')}</span>
           </Button>
         </div>
       </header>
 
-      <PresenceBoundary
-        active={editorOpen}
-        exitDurationMs={160}
-        minimumExitDurationMs={160}
+      <Modal
+        isOpen={editorOpen}
+        onClose={handleCloseEditor}
+        size="xxlarge"
+        showCloseButton={!renderedEditor.saving}
+        closeOnOverlayClick={!renderedEditor.saving}
+        overlayClassName="bf-todos-editor-modal"
+        contentClassName="bf-todos-editor-modal__content"
+        ariaLabel={
+          renderedEditor.editingJob ? t('editor.editTitle') : t('editor.createTitle')
+        }
+        testId="todos-editor-modal"
       >
-        <div
-          className="bf-todos__editor-presence"
-          data-open={editorOpen ? 'true' : 'false'}
-          aria-hidden={!editorOpen}
-          {...(!editorOpen ? { inert: '' } : {})}
-        >
-          <TodoEditor
-            draft={renderedEditor.draft}
-            onDraftChange={setDraft}
-            validationErrors={renderedEditor.validationErrors}
-            onValidationErrorsChange={setValidationErrors}
-            workspaceOptions={renderedEditor.workspaceOptions}
-            selectedWorkspaceId={renderedEditor.selectedWorkspaceId}
-            onSelectedWorkspaceIdChange={setSelectedWorkspaceId}
-            isEditing={Boolean(renderedEditor.editingJob)}
-            boundSessionId={
-              renderedEditor.editingJob?.target.kind === 'session'
-                ? renderedEditor.editingJob.target.sessionId
-                : null
-            }
-            saving={renderedEditor.saving}
-            onSave={() => { void handleSave(); }}
-            onCancel={resetEditor}
-          />
-        </div>
-      </PresenceBoundary>
+        <TodoEditor
+          draft={renderedEditor.draft}
+          onDraftChange={setDraft}
+          validationErrors={renderedEditor.validationErrors}
+          onValidationErrorsChange={setValidationErrors}
+          workspaceOptions={renderedEditor.workspaceOptions}
+          selectedWorkspaceId={renderedEditor.selectedWorkspaceId}
+          onSelectedWorkspaceIdChange={setSelectedWorkspaceId}
+          isEditing={Boolean(renderedEditor.editingJob)}
+          boundSessionId={
+            renderedEditor.editingJob?.target.kind === 'session'
+              ? renderedEditor.editingJob.target.sessionId
+              : null
+          }
+          saving={renderedEditor.saving}
+          onSave={() => { void handleSave(); }}
+          onCancel={handleCloseEditor}
+        />
+      </Modal>
 
       <div className="bf-todos__panes" data-bf-scene="todos" data-bf-part="panes">
         {/* ── Tier 1: due within 24 hours ───────────────────── */}
@@ -432,20 +513,50 @@ const TodosScene: React.FC = () => {
           data-bf-part="listPane"
           data-testid="todos-list-pane"
         >
+          <section
+            className="bf-todos__overview"
+            aria-label={t('overview.title')}
+            data-bf-scene="todos"
+            data-bf-part="overview"
+            data-testid="todos-overview"
+          >
+            <header className="bf-todos__overview-head">
+              <h3 className="bf-todos__overview-title">{t('overview.title')}</h3>
+              <CalendarDays size={14} aria-hidden="true" />
+            </header>
+            <div className="bf-todos__overview-metrics">
+              <div className="bf-todos__overview-metric">
+                <p className="bf-todos__overview-value">
+                  <strong>{visibleTodos.length}</strong>
+                  <span>{t('overview.unit')}</span>
+                </p>
+                <p className="bf-todos__overview-label">{t('overview.total')}</p>
+              </div>
+              <div className="bf-todos__overview-metric">
+                <p className="bf-todos__overview-value">
+                  <strong>{dueSoonTodoCount}</strong>
+                  <span>{t('overview.unit')}</span>
+                </p>
+                <p className="bf-todos__overview-label">{t('overview.dueSoon')}</p>
+              </div>
+            </div>
+          </section>
+
           <header className="bf-todos__pane-head">
-            <h3 className="bf-todos__pane-title">{t('list.title')}</h3>
-            <p className="bf-todos__pane-hint">{t('list.hint')}</p>
+            <h3 className="bf-todos__list-title">
+              {t('list.countTitle', { total: visibleTodos.length })}
+            </h3>
           </header>
 
-          {buckets.upcoming.length === 0 ? (
+          {visibleTodos.length === 0 ? (
             <p className="bf-todos__empty" data-bf-scene="todos" data-bf-part="empty">
               {t('list.empty')}
             </p>
           ) : (
             <div className="bf-todos__rows" data-bf-scene="todos" data-bf-part="rows">
-              {buckets.upcoming.map((occurrence) => (
+              {visibleTodos.map((occurrence) => (
                 <TodoItemRow
-                  key={`${occurrence.job.id}-${occurrence.atMs}`}
+                  key={occurrence.job.id}
                   job={occurrence.job}
                   atMs={occurrence.atMs}
                   isOverdue={occurrence.isOverdue}
@@ -492,17 +603,15 @@ const TodosScene: React.FC = () => {
           className="bf-todos__pane bf-todos__pane--calendar"
           data-bf-scene="todos"
           data-bf-part="calendarPane"
+          data-has-selection={selectedDayKey ? 'true' : 'false'}
+          data-testid="todos-calendar-pane"
         >
           <TodoCalendar
             occurrences={buckets.calendar}
             monthAnchorMs={monthAnchorMs}
             selectedDayKey={selectedDayKey}
             nowMs={nowMs}
-            onMonthChange={(nextMonthMs) => {
-              setMonthAnchorMs(nextMonthMs);
-              setSelectedDayKey(null);
-            }}
-            onSelectDay={setSelectedDayKey}
+            onSelectDay={handleSelectDay}
           />
 
           <PresenceBoundary
@@ -529,12 +638,19 @@ const TodosScene: React.FC = () => {
                       ? formatDateTime(renderedSelectedDayOccurrences[0].atMs, formatDate)
                       : t('calendar.dayDetailTitle')}
                   </h4>
-                  <Button size="small" variant="ghost" onClick={() => setSelectedDayKey(null)}>
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    onClick={clearSelectedDay}
+                    data-testid="todos-day-clear"
+                  >
                     {t('calendar.clearDay')}
                   </Button>
                 </header>
                 {renderedSelectedDayOccurrences.length === 0 ? (
-                  <p className="bf-todos__empty">{t('calendar.dayEmpty')}</p>
+                  <p className="bf-todos__empty" data-testid="todos-day-empty">
+                    {t('calendar.dayEmpty')}
+                  </p>
                 ) : (
                   <div className="bf-todos__rows">
                     {renderedSelectedDayOccurrences.map((occurrence) => (
