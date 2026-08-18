@@ -39,6 +39,25 @@ pub async fn set_managed_plugin_trust(
         .await
 }
 
+/// Resolve the `(user, project)` managed plugin install target directories.
+///
+/// Used by CLI-local installers to place a fetched package into the right
+/// plugin root. Dir resolution stays in core (it owns path management); the
+/// host-specific fetch/extract work lives in the app layer.
+pub fn managed_plugin_install_dirs(
+    workspace: &Path,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), ManagedPluginSourceError> {
+    let path_manager = crate::infrastructure::try_get_path_manager_arc().map_err(|error| {
+        ManagedPluginSourceError::TrustStore(format!(
+            "managed plugin product paths are unavailable: {error}"
+        ))
+    })?;
+    Ok((
+        path_manager.user_plugins_dir(),
+        path_manager.project_plugins_dir(workspace),
+    ))
+}
+
 pub(crate) fn managed_plugin_source_service(
     workspace: &Path,
 ) -> Result<ManagedPluginSourceService, ManagedPluginSourceError> {

@@ -21,11 +21,12 @@ use super::mcp_selector::{McpAction, McpItem, McpSelectorState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction};
 use super::model_selector::{ModelItem, ModelSelectorState};
 use super::permission::render_permission_overlay;
+use super::plugin_browser::{PluginBrowserAction, PluginBrowserState};
 use super::prompt_stash_selector::PromptStashSelectorState;
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
 use super::question::render_question_overlay;
-use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
 use super::session_lineage_selector::{SessionLineageAction, SessionLineageSelectorState};
+use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
 use super::skill_selector::{SkillItem, SkillSelectorAction, SkillSelectorState};
 use super::subagent_selector::{SubagentItem, SubagentSelectorAction, SubagentSelectorState};
 use super::text_input::TextInput;
@@ -37,6 +38,7 @@ use super::workspace_diff::WorkspaceDiffViewState;
 use super::workspace_reference::{WorkspaceReferencePopupState, WorkspaceReferenceQuery};
 use crate::actions::{ActionState, ResolvedKeymap};
 use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
+use crate::plugin_ops::PluginItem;
 
 #[derive(Debug)]
 struct SubmittedDraftRecord {
@@ -86,6 +88,7 @@ pub(crate) enum PopupType {
     SubagentSelector,
     McpSelector,
     McpAddDialog,
+    PluginBrowser,
     ProviderSelector,
     ModelConfigForm,
     LoginForm,
@@ -259,6 +262,8 @@ pub(crate) struct ChatView {
     mcp_selector: McpSelectorState,
     /// MCP add dialog state
     mcp_add_dialog: McpAddDialogState,
+    /// Plugin browser popup state
+    plugin_browser: PluginBrowserState,
     /// Provider selector popup state (step 1 of add model)
     provider_selector: ProviderSelectorState,
     /// Model config form state (step 2 of add model)
@@ -387,6 +392,7 @@ impl ChatView {
             subagent_selector: SubagentSelectorState::new(),
             mcp_selector: McpSelectorState::new(),
             mcp_add_dialog: McpAddDialogState::new(),
+            plugin_browser: PluginBrowserState::new(),
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
             login_form: LoginFormState::new(),
@@ -458,11 +464,7 @@ impl ChatView {
     /// block, identified by the owning message id and the block's index
     /// within that message. Mirrors the id scheme used by `render_message`.
     #[cfg(test)]
-    pub(crate) fn toggle_thinking_block_for_test(
-        &mut self,
-        message_id: &str,
-        block_index: usize,
-    ) {
+    pub(crate) fn toggle_thinking_block_for_test(&mut self, message_id: &str, block_index: usize) {
         let id = format!("{}::thinking:{}", message_id, block_index);
         self.thinking_disclosures.toggle(&id);
         self.invalidate_render_cache();

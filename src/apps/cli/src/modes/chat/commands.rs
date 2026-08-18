@@ -1110,6 +1110,9 @@ impl ChatMode {
             ActionHandler::McpServers => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);
             }
+            ActionHandler::Plugins => {
+                self.show_plugin_browser(chat_view, chat_state, rt_handle);
+            }
             ActionHandler::Tools => {
                 self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
             }
