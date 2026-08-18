@@ -2,7 +2,7 @@
  * Tool card for TodoWrite.
  */
 
-import React, { useState, useMemo, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { ListTodo, CheckCircle2, Circle, XCircle } from 'lucide-react';
 import { TaskRunningIndicator } from '../../component-library';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +23,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   const { t } = useTranslation('flow-chat');
   const { status, toolResult, partialParams, isParamsStreaming } = toolItem;
 
-  const [expandedState, setExpandedState] = useState<boolean | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const toolId = toolItem.id;
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId,
@@ -73,32 +73,6 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
         ? { status: 'completed' as const, defaultIcon: 'status' as const }
         : { status, defaultIcon: 'tool' as const };
 
-  const desiredAutomaticExpanded = useMemo(() => {
-    return inProgressTasks.length === 0 && todosToDisplay.length > 0 && !isAllCompleted;
-  }, [inProgressTasks.length, todosToDisplay.length, isAllCompleted]);
-  const [automaticExpanded, setAutomaticExpanded] = useState(desiredAutomaticExpanded);
-
-  // Keep the currently rendered automatic state for one layout commit. This
-  // lets the shared height contract publish the collapse intent before the
-  // second synchronous commit removes the expanded body.
-  useLayoutEffect(() => {
-    if (expandedState !== null || automaticExpanded === desiredAutomaticExpanded) {
-      return;
-    }
-    applyExpandedState(
-      automaticExpanded,
-      desiredAutomaticExpanded,
-      setAutomaticExpanded,
-    );
-  }, [
-    applyExpandedState,
-    automaticExpanded,
-    desiredAutomaticExpanded,
-    expandedState,
-  ]);
-
-  const isExpanded = expandedState ?? automaticExpanded;
-
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
 
   const displayMode = config?.displayMode || 'compact';
@@ -110,9 +84,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
 
   const handleToggleExpanded = useCallback(() => {
     if (todosToDisplay.length === 0) return;
-    applyExpandedState(isExpanded, !isExpanded, (nextExpanded) => {
-      setExpandedState(nextExpanded);
-    });
+    applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
   }, [applyExpandedState, isExpanded, todosToDisplay.length]);
 
   const renderTodoItem = (todo: TodoLike, key: string) => (
@@ -246,6 +218,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
         isExpanded={isExpanded && hasTodos}
         onClick={hasTodos ? handleToggleExpanded : undefined}
         clickable={hasTodos}
+        toggleTestId="todo-write-toggle"
         className="todo-write-card"
         header={
           <CompactToolCardHeader
