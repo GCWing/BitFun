@@ -463,7 +463,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     };
   }, [dropdownOpen]);
 
-  // Calculate portal dropdown position relative to the trigger container.
+  // Calculate the portalled dropdown position relative to the trigger button.
   useEffect(() => {
     if (!dropdownOpen || !dropdownRef.current) return;
 
@@ -474,10 +474,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       const anchor = triggerRef.current ?? dropdownRef.current;
       if (!anchor || !portalDropdownRef.current) return;
       const anchorRect = anchor.getBoundingClientRect();
-      const dropdownRect = portalDropdownRef.current.getBoundingClientRect();
+      const dropdown = portalDropdownRef.current;
+      const dropdownRect = dropdown.getBoundingClientRect();
+      // max-height can make the rendered box shorter than its contents. Keep
+      // measuring the intrinsic height so a later resize can still choose the
+      // correct side and then size the scrollable surface to that side.
+      const intrinsicDropdownWidth = Math.max(dropdownRect.width, dropdown.offsetWidth);
+      const intrinsicDropdownHeight = Math.max(
+        dropdownRect.height,
+        dropdown.scrollHeight + Math.max(0, dropdown.offsetHeight - dropdown.clientHeight),
+      );
       const layout = getModelSelectorDropdownLayout(
         anchorRect,
-        dropdownRect,
+        { width: intrinsicDropdownWidth, height: intrinsicDropdownHeight },
         dropdownPlacement,
         { width: window.innerWidth, height: window.innerHeight },
         // The trigger lives near the composer's right side, so a start-aligned
