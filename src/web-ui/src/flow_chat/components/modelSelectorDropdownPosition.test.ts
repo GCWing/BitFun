@@ -58,6 +58,22 @@ describe('getModelSelectorDropdownStyle', () => {
     expect(style.top).toBe('194px');
   });
 
+  it('shrinks a tall menu to the space above instead of overlapping the trigger', () => {
+    const layout = getModelSelectorDropdownLayout(
+      { left: 700, right: 820, top: 380, bottom: 410 },
+      { width: 268, height: 392 },
+      'top',
+      { width: 900, height: 500 },
+      'end',
+    );
+
+    // The viewport has 366 px between its 8 px inset and the trigger's 6 px gap.
+    expect(layout.style.left).toBe('552px');
+    expect(layout.style.top).toBe('8px');
+    expect(layout.style.maxHeight).toBe('366px');
+    expect(layout.placement).toBe('top');
+  });
+
   it('flips below the trigger when the preferred top placement does not fit', () => {
     const layout = getModelSelectorDropdownLayout(
       { left: 24, top: 20, bottom: 44 },
