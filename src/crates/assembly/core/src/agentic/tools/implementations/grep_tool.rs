@@ -20,6 +20,28 @@ use tool_runtime::search::grep_search::{
 
 const DEFAULT_HEAD_LIMIT: usize = 250;
 
+/// Prefixed to workspace-search output when the daemon's worktree view is behind.
+///
+/// No search path waits for the daemon to reconcile the worktree: on a large repository that wait is
+/// seconds, and it would land on whichever query happened to come first. The staleness is stated
+/// instead. That keeps the failure mode legible — a caller that just edited a file can reconcile the
+/// difference itself, but only if it is told the view may predate the edit.
+pub(crate) const WORKSPACE_PROBE_PENDING_NOTE: &str = "Note: the workspace index is still folding in recent worktree changes, so these results describe the repository as of a moment ago. Very recent edits may be missing; re-run the search if a match you expect is absent.";
+
+/// Prepends [`WORKSPACE_PROBE_PENDING_NOTE`] to `body` when the daemon reported a pending probe.
+pub(crate) fn annotate_workspace_probe_pending(
+    body: String,
+    workspace_probe_pending: bool,
+) -> String {
+    if !workspace_probe_pending {
+        return body;
+    }
+    if body.is_empty() {
+        return WORKSPACE_PROBE_PENDING_NOTE.to_string();
+    }
+    format!("{WORKSPACE_PROBE_PENDING_NOTE}\n\n{body}")
+}
+
 pub struct GrepTool;
 
 impl Default for GrepTool {
@@ -262,6 +284,18 @@ impl GrepTool {
         Ok(options)
     }
 
+    /// Whether the caller asked for surrounding context lines (`-A` / `-B` / `-C` / `context`).
+    ///
+    /// The flashgrep daemon protocol has no context-line concept, so these requests must be
+    /// served by the ripgrep path instead of workspace search.
+    fn context_lines_requested(input: &Value) -> bool {
+        ["-A", "-B", "-C", "context"]
+            .iter()
+            .filter_map(|key| input.get(*key))
+            .filter_map(|value| value.as_u64())
+            .any(|lines| lines > 0)
+    }
+
     fn build_workspace_search_request(
         &self,
         input: &Value,
@@ -292,13 +326,6 @@ impl GrepTool {
         let offset = Self::resolve_offset(input);
         let head_limit = Self::resolve_head_limit(input);
         let max_results = Self::backend_max_results(input, offset, head_limit);
-        let before_context = input.get("-B").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let after_context = input.get("-A").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let shared_context = input
-            .get("context")
-            .or_else(|| input.get("-C"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
         let globs = Self::parse_glob_patterns(input.get("glob").and_then(|v| v.as_str()));
         let file_types = input
             .get("type")
@@ -322,16 +349,6 @@ impl GrepTool {
                 .get("multiline")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
-            before_context: if shared_context > 0 {
-                shared_context
-            } else {
-                before_context
-            },
-            after_context: if shared_context > 0 {
-                shared_context
-            } else {
-                after_context
-            },
             max_results,
             globs,
             file_types,
@@ -410,24 +427,46 @@ impl GrepTool {
     }
 }
 
+/// Renders one line per content match.
+///
+/// Matches hydrated from disk carry their text. Transports that cannot read the
+/// matched files (remote SSH) surface positions only, because the flashgrep
+/// daemon never sends line text on the wire; those render as a bare
+/// `path:line:` locator rather than being dropped, so the caller still learns
+/// where the matches are. A match with neither text nor a line number carries no
+/// usable information and is skipped.
 fn render_workspace_search_result_lines(
     results: &[crate::infrastructure::FileSearchResult],
     show_line_numbers: bool,
 ) -> Vec<String> {
-    results
-        .iter()
-        .filter_map(|result| {
-            let content = result.matched_content.as_deref()?.trim_end();
-            if show_line_numbers {
-                result
-                    .line_number
-                    .map(|line| format!("{}:{}:{}", result.path, line, content))
-                    .or_else(|| Some(format!("{}:{}", result.path, content)))
-            } else {
-                Some(format!("{}:{}", result.path, content))
+    let mut lines: Vec<String> = Vec::with_capacity(results.len());
+
+    for result in results {
+        let content = result
+            .matched_content
+            .as_deref()
+            .map(str::trim_end)
+            .filter(|content| !content.is_empty());
+
+        let rendered = match (content, result.line_number) {
+            (Some(content), Some(line)) if show_line_numbers => {
+                format!("{}:{}:{}", result.path, line, content)
             }
-        })
-        .collect()
+            (Some(content), _) => format!("{}:{}", result.path, content),
+            (None, Some(line)) if show_line_numbers => format!("{}:{}:", result.path, line),
+            // Without line numbers a text-less match collapses to its path, so
+            // avoid repeating the same path once per match in the same file.
+            (None, Some(_)) => result.path.clone(),
+            (None, None) => continue,
+        };
+
+        if lines.last().is_some_and(|last| last == &rendered) {
+            continue;
+        }
+        lines.push(rendered);
+    }
+
+    lines
 }
 
 fn render_workspace_search_content_lines(
@@ -587,8 +626,12 @@ Usage:
         let focused_excluded_paths =
             crate::agentic::deep_review::scope::focused_review_excluded_changed_paths(context)?;
 
+        // The flashgrep daemon has no context-line support, so `-A`/`-B`/`-C` must go
+        // through the ripgrep path to produce surrounding lines.
+        let context_lines_requested = Self::context_lines_requested(input);
+
         if resolved.uses_remote_workspace_backend() {
-            if workspace_search_feature_enabled().await {
+            if !context_lines_requested && workspace_search_feature_enabled().await {
                 let remote_workspace_search_result = async {
                     let (request, output_mode, show_line_numbers, offset, head_limit) =
                         self.build_workspace_search_request(input, context)?;
@@ -626,7 +669,7 @@ Usage:
                     let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
 
                     log::info!(
-                        "Grep tool remote workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
+                        "Grep tool remote workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, base_advance_in_progress={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
                         pattern,
                         path,
                         output_mode,
@@ -634,7 +677,7 @@ Usage:
                         total_matches,
                         search_result.backend,
                         search_result.repo_status.phase,
-                        search_result.repo_status.rebuild_recommended,
+                        search_result.repo_status.base_advance_in_progress,
                         search_result.repo_status.dirty_files.modified,
                         search_result.repo_status.dirty_files.deleted,
                         search_result.repo_status.dirty_files.new,
@@ -653,12 +696,16 @@ Usage:
                             "total_matches": total_matches,
                             "backend": search_result.backend,
                             "repo_phase": search_result.repo_status.phase,
-                            "rebuild_recommended": search_result.repo_status.rebuild_recommended,
+                            "base_advance_in_progress": search_result.repo_status.base_advance_in_progress,
+                            "workspace_probe_pending": search_result.repo_status.workspace_probe_pending,
                             "applied_limit": head_limit,
                             "applied_offset": if offset > 0 { Some(offset) } else { None::<usize> },
                             "result": result_text,
                         }),
-                        result_for_assistant: Some(result_text),
+                        result_for_assistant: Some(annotate_workspace_probe_pending(
+                            result_text,
+                            search_result.repo_status.workspace_probe_pending,
+                        )),
                         image_attachments: None,
                     }])
                 }
@@ -677,7 +724,10 @@ Usage:
             return self.call_remote(input, context).await;
         }
 
-        if focused_excluded_paths.is_none() && workspace_search_runtime_available().await {
+        if focused_excluded_paths.is_none()
+            && !context_lines_requested
+            && workspace_search_runtime_available().await
+        {
             if let Some(search_service) = get_global_workspace_search_service() {
                 let (request, output_mode, show_line_numbers, offset, head_limit) =
                     self.build_workspace_search_request(input, context)?;
@@ -688,54 +738,68 @@ Usage:
                     .map(|path| path.to_string_lossy().to_string())
                     .unwrap_or_else(|| request.repo_root.to_string_lossy().to_string());
                 let search_started_at = Instant::now();
-                let search_result = search_service.search_content(request).await?;
-                let display_base = Self::display_base(context);
-                let (result_text, file_count, total_matches) = self.format_workspace_search_output(
-                    &output_mode,
-                    show_line_numbers,
-                    offset,
-                    head_limit,
-                    &search_result,
-                    display_base.as_deref(),
-                );
-                let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
+                match search_service.search_content(request).await {
+                    Ok(search_result) => {
+                        let display_base = Self::display_base(context);
+                        let (result_text, file_count, total_matches) = self
+                            .format_workspace_search_output(
+                                &output_mode,
+                                show_line_numbers,
+                                offset,
+                                head_limit,
+                                &search_result,
+                                display_base.as_deref(),
+                            );
+                        let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
 
-                log::info!(
-                    "Grep tool workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
-                    pattern,
-                    path,
-                    output_mode,
-                    file_count,
-                    total_matches,
-                    search_result.backend,
-                    search_result.repo_status.phase,
-                    search_result.repo_status.rebuild_recommended,
-                    search_result.repo_status.dirty_files.modified,
-                    search_result.repo_status.dirty_files.deleted,
-                    search_result.repo_status.dirty_files.new,
-                    search_result.candidate_docs,
-                    search_result.matched_lines,
-                    search_result.matched_occurrences,
-                    workspace_search_elapsed_ms,
-                );
+                        log::info!(
+                            "Grep tool workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, base_advance_in_progress={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
+                            pattern,
+                            path,
+                            output_mode,
+                            file_count,
+                            total_matches,
+                            search_result.backend,
+                            search_result.repo_status.phase,
+                            search_result.repo_status.base_advance_in_progress,
+                            search_result.repo_status.dirty_files.modified,
+                            search_result.repo_status.dirty_files.deleted,
+                            search_result.repo_status.dirty_files.new,
+                            search_result.candidate_docs,
+                            search_result.matched_lines,
+                            search_result.matched_occurrences,
+                            workspace_search_elapsed_ms,
+                        );
 
-                return Ok(vec![ToolResult::Result {
-                    data: json!({
-                        "pattern": pattern,
-                        "path": path,
-                        "output_mode": output_mode,
-                        "file_count": file_count,
-                        "total_matches": total_matches,
-                        "backend": search_result.backend,
-                        "repo_phase": search_result.repo_status.phase,
-                        "rebuild_recommended": search_result.repo_status.rebuild_recommended,
-                        "applied_limit": head_limit,
-                        "applied_offset": if offset > 0 { Some(offset) } else { None::<usize> },
-                        "result": result_text,
-                    }),
-                    result_for_assistant: Some(result_text),
-                    image_attachments: None,
-                }]);
+                        return Ok(vec![ToolResult::Result {
+                            data: json!({
+                                "pattern": pattern,
+                                "path": path,
+                                "output_mode": output_mode,
+                                "file_count": file_count,
+                                "total_matches": total_matches,
+                                "backend": search_result.backend,
+                                "repo_phase": search_result.repo_status.phase,
+                                "base_advance_in_progress": search_result.repo_status.base_advance_in_progress,
+                                "workspace_probe_pending": search_result.repo_status.workspace_probe_pending,
+                                "applied_limit": head_limit,
+                                "applied_offset": if offset > 0 { Some(offset) } else { None::<usize> },
+                                "result": result_text,
+                            }),
+                            result_for_assistant: Some(annotate_workspace_probe_pending(
+                                result_text,
+                                search_result.repo_status.workspace_probe_pending,
+                            )),
+                            image_attachments: None,
+                        }]);
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "Grep tool workspace-search failed; falling back to local rg: {}",
+                            error
+                        );
+                    }
+                }
             }
         }
 
@@ -802,6 +866,9 @@ Usage:
             result_text,
             applied_limit,
             applied_offset,
+            // Always false here: this call site supplies no cancellation token, so the search has
+            // no way to stop early.
+            cancelled: _,
         } = match search_result {
             Ok(Ok(result)) => result,
             Ok(Err(e)) => return Err(BitFunError::tool(e)),
@@ -828,8 +895,9 @@ Usage:
 #[cfg(test)]
 mod tests {
     use super::{
-        render_workspace_search_content_lines, render_workspace_search_result_lines, GrepTool,
-        DEFAULT_HEAD_LIMIT,
+        annotate_workspace_probe_pending, render_workspace_search_content_lines,
+        render_workspace_search_result_lines, GrepTool, DEFAULT_HEAD_LIMIT,
+        WORKSPACE_PROBE_PENDING_NOTE,
     };
     use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
     use crate::service::search::{
@@ -854,6 +922,21 @@ mod tests {
             GrepTool::resolve_head_limit(&json!({ "head_limit": 0 })),
             None
         );
+    }
+
+    #[test]
+    fn context_lines_requested_detects_every_context_flag() {
+        assert!(!GrepTool::context_lines_requested(&json!({})));
+        assert!(!GrepTool::context_lines_requested(
+            &json!({ "pattern": "foo", "-A": 0, "-B": 0, "-C": 0 })
+        ));
+
+        for key in ["-A", "-B", "-C", "context"] {
+            assert!(
+                GrepTool::context_lines_requested(&json!({ "pattern": "foo", key: 2 })),
+                "expected {key} to route the request to ripgrep"
+            );
+        }
     }
 
     #[test]
@@ -999,6 +1082,12 @@ mod tests {
                     .to_string(),
                 phase: WorkspaceSearchRepoPhase::Ready,
                 snapshot_key: None,
+                base_head_commit: None,
+                workspace_head_commit: None,
+                base_advance_in_progress: false,
+                base_advance_target_head: None,
+                base_delta_depth: 0,
+                base_compaction_recommended: false,
                 last_probe_unix_secs: None,
                 last_rebuild_unix_secs: None,
                 dirty_files: crate::service::search::WorkspaceSearchDirtyFiles {
@@ -1006,10 +1095,11 @@ mod tests {
                     deleted: 0,
                     new: 0,
                 },
-                rebuild_recommended: false,
                 active_task_id: None,
                 probe_healthy: true,
+                workspace_probe_pending: false,
                 last_error: None,
+                last_maintenance_error: None,
                 overlay: None,
             },
             candidate_docs: 1,
@@ -1072,6 +1162,12 @@ mod tests {
                     .to_string(),
                 phase: WorkspaceSearchRepoPhase::Ready,
                 snapshot_key: None,
+                base_head_commit: None,
+                workspace_head_commit: None,
+                base_advance_in_progress: false,
+                base_advance_target_head: None,
+                base_delta_depth: 0,
+                base_compaction_recommended: false,
                 last_probe_unix_secs: None,
                 last_rebuild_unix_secs: None,
                 dirty_files: crate::service::search::WorkspaceSearchDirtyFiles {
@@ -1079,10 +1175,11 @@ mod tests {
                     deleted: 0,
                     new: 0,
                 },
-                rebuild_recommended: false,
                 active_task_id: None,
                 probe_healthy: true,
+                workspace_probe_pending: false,
                 last_error: None,
+                last_maintenance_error: None,
                 overlay: None,
             },
             candidate_docs: 2,
@@ -1119,5 +1216,79 @@ mod tests {
         );
 
         assert_eq!(lines, vec!["/repo/src/main.rs:panic!(\"x\")"]);
+    }
+
+    #[test]
+    fn renders_locators_for_matches_without_line_text() {
+        let positions_only = |line: usize| FileSearchResult {
+            path: "/repo/src/main.rs".to_string(),
+            name: "main.rs".to_string(),
+            is_directory: false,
+            match_type: SearchMatchType::Content,
+            line_number: Some(line),
+            matched_content: None,
+            preview_before: None,
+            preview_inside: None,
+            preview_after: None,
+        };
+
+        let lines =
+            render_workspace_search_result_lines(&[positions_only(12), positions_only(73)], true);
+        assert_eq!(
+            lines,
+            vec!["/repo/src/main.rs:12:", "/repo/src/main.rs:73:"]
+        );
+
+        // Without line numbers there is nothing left but the path, so repeated
+        // matches in one file collapse to a single line.
+        let lines =
+            render_workspace_search_result_lines(&[positions_only(12), positions_only(73)], false);
+        assert_eq!(lines, vec!["/repo/src/main.rs"]);
+    }
+
+    #[test]
+    fn skips_matches_without_text_or_line_number() {
+        let lines = render_workspace_search_result_lines(
+            &[FileSearchResult {
+                path: "/repo/src/main.rs".to_string(),
+                name: "main.rs".to_string(),
+                is_directory: false,
+                match_type: SearchMatchType::Content,
+                line_number: None,
+                matched_content: None,
+                preview_before: None,
+                preview_inside: None,
+                preview_after: None,
+            }],
+            true,
+        );
+
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn stale_workspace_view_is_stated_in_the_output_the_model_reads() {
+        // No search path waits for the daemon to reconcile, so the only thing that keeps a stale
+        // result from silently misleading the caller is saying so in the text it reads.
+        let annotated = annotate_workspace_probe_pending("src/lib.rs:1:hit".to_string(), true);
+        assert!(annotated.starts_with(WORKSPACE_PROBE_PENDING_NOTE));
+        assert!(annotated.ends_with("src/lib.rs:1:hit"));
+    }
+
+    #[test]
+    fn a_current_workspace_view_adds_nothing_to_the_output() {
+        // The pending case is the exception; the common case must stay byte-identical so the note
+        // never becomes background noise the model learns to skip.
+        let body = "src/lib.rs:1:hit".to_string();
+        assert_eq!(annotate_workspace_probe_pending(body.clone(), false), body);
+    }
+
+    #[test]
+    fn a_stale_empty_result_still_says_why_it_may_be_empty() {
+        // "No matches" plus a stale index is exactly the case where the caller needs the note most.
+        assert_eq!(
+            annotate_workspace_probe_pending(String::new(), true),
+            WORKSPACE_PROBE_PENDING_NOTE
+        );
     }
 }

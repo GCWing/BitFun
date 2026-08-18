@@ -2,11 +2,12 @@
 //!
 //! Provides file tree building, directory scanning, and file search
 
+use super::content_preview::{build_content_match_preview, compile_content_search_regex};
 use super::error::{FileSystemError, FileSystemResult};
 use log::warn;
 
 use ignore::WalkBuilder;
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -1311,80 +1312,8 @@ impl FileTreeService {
         use_regex: bool,
         whole_word: bool,
     ) -> FileSystemResult<Regex> {
-        let search_pattern = if use_regex {
-            pattern.to_string()
-        } else if whole_word {
-            format!(r"\b{}\b", regex::escape(pattern))
-        } else {
-            regex::escape(pattern)
-        };
-
-        RegexBuilder::new(&search_pattern)
-            .case_insensitive(!case_sensitive)
-            .build()
+        compile_content_search_regex(pattern, case_sensitive, use_regex, whole_word)
             .map_err(|error| FileSystemError::service(format!("Invalid regex pattern: {}", error)))
-    }
-
-    fn take_first_chars(text: &str, max_chars: usize) -> String {
-        if max_chars == 0 {
-            return String::new();
-        }
-
-        let mut end_index = text.len();
-        for (char_count, (byte_index, _)) in text.char_indices().enumerate() {
-            if char_count == max_chars {
-                end_index = byte_index;
-                break;
-            }
-        }
-
-        text[..end_index].to_string()
-    }
-
-    fn left_truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
-        let total_chars = text.chars().count();
-        if total_chars <= max_chars {
-            return text.to_string();
-        }
-
-        if max_chars <= 1 {
-            return "\u{2026}".to_string();
-        }
-
-        let keep_chars = max_chars - 1;
-        let start_index = text
-            .char_indices()
-            .nth(total_chars.saturating_sub(keep_chars))
-            .map(|(index, _)| index)
-            .unwrap_or(0);
-
-        format!("\u{2026}{}", &text[start_index..])
-    }
-
-    fn build_content_match_preview(
-        line: &str,
-        matcher: &Regex,
-    ) -> (Option<String>, Option<String>, Option<String>) {
-        const MAX_PREVIEW_CHARS: usize = 250;
-        const MAX_PREVIEW_BEFORE_CHARS: usize = 26;
-
-        let Some(found_match) = matcher.find(line) else {
-            return (None, None, None);
-        };
-
-        let full_before = &line[..found_match.start()];
-        let before = Self::left_truncate_with_ellipsis(full_before, MAX_PREVIEW_BEFORE_CHARS);
-
-        let mut chars_remaining = MAX_PREVIEW_CHARS.saturating_sub(before.chars().count());
-        let mut inside = Self::take_first_chars(found_match.as_str(), chars_remaining);
-        chars_remaining = chars_remaining.saturating_sub(inside.chars().count());
-        let after = Self::take_first_chars(&line[found_match.end()..], chars_remaining);
-
-        if inside.is_empty() {
-            inside = found_match.as_str().to_string();
-        }
-
-        (Some(before), Some(inside), Some(after))
     }
 
     fn build_search_result_group(results: Vec<FileSearchResult>) -> Option<FileSearchResultGroup> {
@@ -1501,7 +1430,7 @@ impl FileTreeService {
             }
 
             let (preview_before, preview_inside, preview_after) =
-                Self::build_content_match_preview(line, matcher);
+                build_content_match_preview(line, matcher);
             let line = line.to_string();
 
             matched_results.push(FileSearchResult {

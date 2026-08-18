@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use globset::{GlobBuilder, GlobMatcher};
-use grep_regex::RegexMatcherBuilder;
+use grep_regex::{RegexMatcher, RegexMatcherBuilder};
 use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkMatch};
 use ignore::types::TypesBuilder;
-use ignore::WalkBuilder;
+use ignore::{DirEntry, WalkBuilder, WalkState};
 
 const MAX_DISPLAY_COLUMNS: usize = 500;
 const VCS_DIRECTORIES_TO_EXCLUDE: &[&str] = &[".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
@@ -244,6 +244,37 @@ impl Sink for GrepSink {
 /// Progress report callback type
 pub type ProgressCallback = Arc<dyn Fn(usize, usize, usize) + Send + Sync>;
 
+/// Cooperative cancellation for an in-flight [`grep_search`].
+///
+/// Cheap to clone and share: the walker threads, the per-worker searchers and the reducer all hold
+/// the same flag. Cancelling is one-way — a cancelled search never becomes runnable again, so a
+/// caller that wants to retry builds a fresh token.
+///
+/// The contract is *cooperative*, not preemptive: a cancel is observed between filesystem entries,
+/// so a single very large file still finishes being searched. What it bounds is the walk, which is
+/// where the wall-clock actually goes on a large repository.
+#[derive(Debug, Clone, Default)]
+pub struct SearchCancellation {
+    flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl SearchCancellation {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Ask the search to stop. Idempotent, and safe to call from any thread.
+    pub fn cancel(&self) {
+        // Relaxed is enough: the flag guards no other data, and every reader is a plain poll whose
+        // only requirement is that the store eventually becomes visible.
+        self.flag.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.flag.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
 /// grep search options
 #[derive(Debug, Clone)]
 pub struct GrepOptions {
@@ -279,6 +310,8 @@ pub struct GrepOptions {
     pub excluded_paths: Vec<String>,
     /// Reject linked file entries when the caller requires workspace identity.
     pub reject_linked_files: bool,
+    /// Cooperative cancellation. `None` means the search cannot be cancelled.
+    pub cancellation: Option<SearchCancellation>,
 }
 
 impl Default for GrepOptions {
@@ -300,6 +333,7 @@ impl Default for GrepOptions {
             display_base: None,
             excluded_paths: Vec::new(),
             reject_linked_files: false,
+            cancellation: None,
         }
     }
 }
@@ -450,6 +484,12 @@ impl GrepOptions {
         self
     }
 
+    /// Attach a cancellation token so the caller can stop this search early.
+    pub fn cancellation(mut self, value: SearchCancellation) -> Self {
+        self.cancellation = Some(value);
+        self
+    }
+
     /// Set whether to enable multiline mode
     pub fn multiline(mut self, value: bool) -> Self {
         self.multiline = value;
@@ -552,6 +592,111 @@ pub struct GrepSearchResult {
     pub result_text: String,
     pub applied_limit: Option<usize>,
     pub applied_offset: Option<usize>,
+    /// The search stopped early because its [`SearchCancellation`] fired. Everything already
+    /// aggregated is still returned — it is a correct result over the subset of the tree that was
+    /// walked, not over the whole tree — so callers that care about completeness must check this.
+    pub cancelled: bool,
+}
+
+#[derive(Clone)]
+struct GrepWorkerConfig {
+    output_mode: OutputMode,
+    show_line_numbers: bool,
+    before_context: usize,
+    after_context: usize,
+    display_base: Option<String>,
+    globs: Vec<GlobMatcher>,
+    excluded_paths: Vec<String>,
+    reject_linked_files: bool,
+}
+
+struct GrepFileResult {
+    path: PathBuf,
+    file_matches: usize,
+    output_lines: Vec<String>,
+    modified_time: SystemTime,
+}
+
+enum GrepWorkerEvent {
+    Processed(Option<GrepFileResult>),
+    Error(String),
+}
+
+fn build_grep_searcher(before_context: usize, after_context: usize, multiline: bool) -> Searcher {
+    let mut builder = SearcherBuilder::new();
+    builder
+        .line_number(true)
+        .before_context(before_context)
+        .after_context(after_context);
+    if multiline {
+        builder.multi_line(true);
+    }
+    builder.build()
+}
+
+fn search_entry(
+    entry: Result<DirEntry, ignore::Error>,
+    searcher: &mut Searcher,
+    matcher: &RegexMatcher,
+    config: &GrepWorkerConfig,
+) -> GrepWorkerEvent {
+    let entry = match entry {
+        Ok(entry) => entry,
+        Err(error) => return GrepWorkerEvent::Error(format!("Error walking files: {error}")),
+    };
+    let path = entry.path();
+
+    let entry_file_type = entry.file_type();
+    let is_file = entry_file_type
+        .is_some_and(|file_type| file_type.is_file() || (file_type.is_symlink() && path.is_file()));
+    if !is_file {
+        return GrepWorkerEvent::Processed(None);
+    }
+
+    let path_is_symlink = entry_file_type.is_some_and(|file_type| file_type.is_symlink());
+    let path_has_multiple_hard_links =
+        config.reject_linked_files && crate::fs::path_has_multiple_hard_links(path).unwrap_or(true);
+    if config.reject_linked_files && (path_is_symlink || path_has_multiple_hard_links) {
+        return GrepWorkerEvent::Processed(None);
+    }
+    if config
+        .excluded_paths
+        .iter()
+        .any(|excluded| paths_equal_for_exclusion(path, excluded))
+        || is_vcs_path(path)
+        || (!config.globs.is_empty() && !config.globs.iter().any(|glob| glob.is_match(path)))
+    {
+        return GrepWorkerEvent::Processed(None);
+    }
+
+    let sink = GrepSink::new(
+        config.output_mode,
+        config.show_line_numbers,
+        config.before_context,
+        config.after_context,
+        None,
+        path.to_path_buf(),
+        config.display_base.clone(),
+    );
+    if let Err(error) = searcher.search_path(matcher, path, sink.clone()) {
+        return GrepWorkerEvent::Error(format!("Error searching file {}: {error}", path.display()));
+    }
+
+    let file_matches = sink.get_match_count();
+    if file_matches == 0 {
+        return GrepWorkerEvent::Processed(None);
+    }
+    let output_lines = if config.output_mode == OutputMode::Content {
+        sink.take_output_lines()
+    } else {
+        Vec::new()
+    };
+    GrepWorkerEvent::Processed(Some(GrepFileResult {
+        path: path.to_path_buf(),
+        file_matches,
+        output_lines,
+        modified_time: modified_time(path),
+    }))
 }
 
 fn is_vcs_path(path: &Path) -> bool {
@@ -634,6 +779,23 @@ pub fn grep_search(
         return Err(format!("Search path '{}' does not exist", search_path));
     }
 
+    let cancellation = options.cancellation.clone();
+    let is_cancelled = move || {
+        cancellation
+            .as_ref()
+            .is_some_and(SearchCancellation::is_cancelled)
+    };
+    if is_cancelled() {
+        return Ok(GrepSearchResult {
+            file_count: 0,
+            total_matches: 0,
+            result_text: String::new(),
+            applied_limit: None,
+            applied_offset: None,
+            cancelled: true,
+        });
+    }
+
     let before_context = options
         .before_context
         .unwrap_or(options.context.unwrap_or(0));
@@ -657,19 +819,6 @@ pub fn grep_search(
         .dot_matches_new_line(multiline)
         .build(pattern)
         .map_err(|e| format!("Invalid regex pattern: {}", e))?;
-
-    // Build searcher
-    let mut searcher_builder = SearcherBuilder::new();
-    searcher_builder
-        .line_number(true)
-        .before_context(before_context)
-        .after_context(after_context);
-
-    if multiline {
-        searcher_builder.multi_line(true);
-    }
-
-    let mut searcher = searcher_builder.build();
 
     // Build walker
     let mut walk_builder = WalkBuilder::new(search_path);
@@ -725,8 +874,6 @@ pub fn grep_search(
         }
     }
 
-    let walker = walk_builder.build();
-
     // Pre-build glob matcher
     let glob_matchers = options
         .globs
@@ -739,137 +886,134 @@ pub fn grep_search(
         })
         .collect::<Result<Vec<GlobMatcher>, String>>()?;
 
+    let worker_config = GrepWorkerConfig {
+        output_mode,
+        show_line_numbers,
+        before_context,
+        after_context,
+        display_base,
+        globs: glob_matchers,
+        excluded_paths: options.excluded_paths.clone(),
+        reject_linked_files: options.reject_linked_files,
+    };
+    let worker_count =
+        std::thread::available_parallelism().map_or(1, |parallelism| parallelism.get().min(8));
+    walk_builder.threads(worker_count);
+    let walker = walk_builder.build_parallel();
+
     // Collect all results
-    let mut content_lines: Vec<String> =
-        Vec::with_capacity(head_limit.map_or(256, |limit| limit.min(4096)));
     let mut total_matches = 0;
     let mut file_count = 0;
-    let mut file_match_counts: Vec<(String, usize)> = Vec::new();
-    let mut matched_files_with_mtime: Vec<(String, SystemTime)> = Vec::new();
+    let (event_sender, event_receiver) = std::sync::mpsc::sync_channel(worker_count * 4);
+    let worker_matcher = matcher.clone();
+    let reducer_config = worker_config.clone();
+    let walker_cancellation = options.cancellation.clone();
+    let walker_thread = std::thread::spawn(move || {
+        let sender = event_sender;
+        walker.run(move || {
+            let sender = sender.clone();
+            let matcher = worker_matcher.clone();
+            let config = worker_config.clone();
+            let cancellation = walker_cancellation.clone();
+            let mut searcher =
+                build_grep_searcher(config.before_context, config.after_context, multiline);
+            Box::new(move |entry| {
+                // Checked before the search, not after: the point of cancelling is to stop paying
+                // for work, and the per-entry search is the expensive half.
+                if cancellation
+                    .as_ref()
+                    .is_some_and(SearchCancellation::is_cancelled)
+                {
+                    return WalkState::Quit;
+                }
+                let event = search_entry(entry, &mut searcher, &matcher, &config);
+                if sender.send(event).is_err() {
+                    WalkState::Quit
+                } else {
+                    WalkState::Continue
+                }
+            })
+        });
+    });
 
     // Progress tracking
     let mut files_processed = 0;
     let mut last_progress_time = std::time::Instant::now();
     let progress_interval_millis = progress_interval_millis.unwrap_or(500);
+    let mut file_results = Vec::new();
 
-    // Traverse files and search
-    for result in walker {
-        match result {
-            Ok(entry) => {
-                let path = entry.path();
-
+    let mut cancelled = false;
+    for event in event_receiver {
+        if is_cancelled() {
+            // Stop consuming and let the receiver drop. Every worker's next `send` then fails,
+            // which is what unwinds the walk without needing a second signalling path.
+            cancelled = true;
+            break;
+        }
+        match event {
+            GrepWorkerEvent::Processed(result) => {
                 files_processed += 1;
-
-                if last_progress_time.elapsed().as_millis() >= progress_interval_millis {
-                    info!(
-                        "Search progress: processed {} files, found {} matching files, total {} matches",
-                        files_processed, file_count, total_matches
-                    );
-
-                    if let Some(ref callback) = progress_callback {
-                        callback(files_processed, file_count, total_matches);
-                    }
-
-                    last_progress_time = std::time::Instant::now();
-                }
-
-                // Check if it's a file. Use the walker-provided file type
-                // (free) and only fall back to a stat for symlinks.
-                let entry_file_type = entry.file_type();
-                let is_file = entry_file_type.is_some_and(|file_type| {
-                    file_type.is_file() || (file_type.is_symlink() && path.is_file())
-                });
-                if !is_file {
-                    continue;
-                }
-
-                // Focused Review supplies exclusions. In that mode, linked
-                // file entries are never valid unchanged dependencies because
-                // their target identity can escape or alias the assigned scope.
-                let path_is_symlink = entry
-                    .file_type()
-                    .is_some_and(|file_type| file_type.is_symlink());
-                let path_has_multiple_hard_links = options.reject_linked_files
-                    && crate::fs::path_has_multiple_hard_links(path).unwrap_or(true);
-                if options.reject_linked_files && (path_is_symlink || path_has_multiple_hard_links)
-                {
-                    continue;
-                }
-
-                if options
-                    .excluded_paths
-                    .iter()
-                    .any(|excluded| paths_equal_for_exclusion(path, excluded))
-                {
-                    continue;
-                }
-
-                if is_vcs_path(path) {
-                    continue;
-                }
-
-                if !glob_matchers.is_empty()
-                    && !glob_matchers.iter().any(|matcher| matcher.is_match(path))
-                {
-                    continue;
-                }
-
-                let sink = GrepSink::new(
-                    output_mode,
-                    show_line_numbers,
-                    before_context,
-                    after_context,
-                    None,
-                    path.to_path_buf(),
-                    display_base.clone(),
-                );
-
-                // Execute search
-                if let Err(e) = searcher.search_path(&matcher, path, sink.clone()) {
-                    warn!("Error searching file {}: {}", path.display(), e);
-                    continue;
-                }
-
-                let file_matches = sink.get_match_count();
-                if file_matches > 0 {
+                if let Some(result) = result {
                     file_count += 1;
-                    total_matches += file_matches;
-                    match output_mode {
-                        OutputMode::Content => {
-                            for line in sink.take_output_lines() {
-                                // In multi-line mode a single sink write can
-                                // span several physical lines; keep one entry
-                                // per physical line so head_limit/offset still
-                                // paginate by line.
-                                if line.contains('\n') {
-                                    content_lines.extend(
-                                        line.lines()
-                                            .filter(|part| !part.is_empty())
-                                            .map(str::to_string),
-                                    );
-                                } else if !line.is_empty() {
-                                    content_lines.push(line);
-                                }
-                            }
-                        }
-                        OutputMode::FilesWithMatches => {
-                            matched_files_with_mtime.push((
-                                relativize_display_path(path, display_base.as_deref()),
-                                modified_time(path),
-                            ));
-                        }
-                        OutputMode::Count => {
-                            file_match_counts.push((
-                                relativize_display_path(path, display_base.as_deref()),
-                                file_matches,
-                            ));
-                        }
+                    total_matches += result.file_matches;
+                    file_results.push(result);
+                }
+            }
+            GrepWorkerEvent::Error(error) => warn!("{}", error),
+        }
+
+        if last_progress_time.elapsed().as_millis() >= progress_interval_millis {
+            info!(
+                "Search progress: processed {} files, found {} matching files, total {} matches",
+                files_processed, file_count, total_matches
+            );
+
+            if let Some(ref callback) = progress_callback {
+                callback(files_processed, file_count, total_matches);
+            }
+
+            last_progress_time = std::time::Instant::now();
+        }
+    }
+    // The receiver was moved into the `for` loop above and is dropped as that loop exits, break
+    // included — so by the time we join, the workers' sends are already failing.
+    if walker_thread.join().is_err() {
+        warn!("Parallel search walker thread panicked");
+    }
+    // The walk can also observe the cancel first and quit on its own, which closes the channel and
+    // ends the loop above without setting the flag there.
+    let cancelled = cancelled || is_cancelled();
+
+    // Worker completion order is nondeterministic. Stable path order keeps Content and Count
+    // output reproducible; FilesWithMatches applies its existing mtime ordering below.
+    file_results.sort_by(|left, right| left.path.cmp(&right.path));
+    let mut content_lines: Vec<String> =
+        Vec::with_capacity(head_limit.map_or(256, |limit| limit.min(4096)));
+    let mut file_match_counts: Vec<(String, usize)> = Vec::new();
+    let mut matched_files_with_mtime: Vec<(String, SystemTime)> = Vec::new();
+    for result in file_results {
+        let display_path =
+            relativize_display_path(&result.path, reducer_config.display_base.as_deref());
+        match output_mode {
+            OutputMode::Content => {
+                for line in result.output_lines {
+                    // In multi-line mode a single sink write can span several physical lines;
+                    // keep one entry per physical line so head_limit/offset paginate by line.
+                    if line.contains('\n') {
+                        content_lines.extend(
+                            line.lines()
+                                .filter(|part| !part.is_empty())
+                                .map(str::to_string),
+                        );
+                    } else if !line.is_empty() {
+                        content_lines.push(line);
                     }
                 }
             }
-            Err(e) => {
-                warn!("Error walking files: {}", e);
+            OutputMode::FilesWithMatches => {
+                matched_files_with_mtime.push((display_path, result.modified_time));
             }
+            OutputMode::Count => file_match_counts.push((display_path, result.file_matches)),
         }
     }
 
@@ -888,6 +1032,7 @@ pub fn grep_search(
                     result_text: lines.join("\n"),
                     applied_limit,
                     applied_offset,
+                    cancelled,
                 });
             }
         }
@@ -910,6 +1055,7 @@ pub fn grep_search(
                     result_text: matches.join("\n").trim_end_matches('\n').to_string(),
                     applied_limit,
                     applied_offset,
+                    cancelled,
                 });
             }
         }
@@ -938,6 +1084,7 @@ pub fn grep_search(
                     .to_string(),
                     applied_limit,
                     applied_offset,
+                    cancelled,
                 });
             }
         }
@@ -949,6 +1096,7 @@ pub fn grep_search(
         result_text: result_text.trim_end_matches('\n').to_string(),
         applied_limit: None,
         applied_offset: if offset > 0 { Some(offset) } else { None },
+        cancelled,
     })
 }
 
@@ -973,7 +1121,9 @@ fn paths_equal_for_exclusion(path: &Path, excluded: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{grep_search, paths_equal_for_exclusion, GrepOptions, OutputMode};
+    use super::{
+        grep_search, paths_equal_for_exclusion, GrepOptions, OutputMode, SearchCancellation,
+    };
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -997,6 +1147,95 @@ mod tests {
     #[cfg(windows)]
     fn create_file_symlink(target: &std::path::Path, alias: &std::path::Path) -> bool {
         std::os::windows::fs::symlink_file(target, alias).is_ok()
+    }
+
+    #[test]
+    fn a_search_that_was_never_cancelled_reports_so() {
+        let root = make_temp_dir("cancel-none");
+        fs::write(root.join("a.txt"), "needle\n").unwrap();
+
+        let result = grep_search(
+            GrepOptions::new("needle", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::Content),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.cancelled);
+        assert_eq!(result.file_count, 1);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cancelling_before_the_walk_starts_returns_an_empty_cancelled_result() {
+        let root = make_temp_dir("cancel-upfront");
+        fs::write(root.join("a.txt"), "needle\n").unwrap();
+
+        let cancellation = SearchCancellation::new();
+        cancellation.cancel();
+
+        let result = grep_search(
+            GrepOptions::new("needle", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::Content)
+                .cancellation(cancellation),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(result.cancelled);
+        assert_eq!(result.file_count, 0);
+        assert_eq!(result.total_matches, 0);
+        assert!(result.result_text.is_empty());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cancelling_mid_walk_keeps_what_was_already_found() {
+        // Every file matches, so an uncancelled run would report all 200. The progress interval is
+        // zeroed so the callback fires on every event; we cancel once five matches are in, which
+        // puts the cancel mid-walk deterministically instead of racing a timer, and leaves a known
+        // non-empty partial result to assert on.
+        let root = make_temp_dir("cancel-midwalk");
+        for index in 0..200 {
+            fs::write(root.join(format!("file-{index:03}.txt")), "needle\n").unwrap();
+        }
+
+        let cancellation = SearchCancellation::new();
+        let from_callback = cancellation.clone();
+        let callback: super::ProgressCallback =
+            std::sync::Arc::new(move |_files_processed, file_count, _total_matches| {
+                if file_count >= 5 {
+                    from_callback.cancel();
+                }
+            });
+
+        let result = grep_search(
+            GrepOptions::new("needle", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::Content)
+                .cancellation(cancellation),
+            Some(callback),
+            Some(0),
+        )
+        .unwrap();
+
+        assert!(result.cancelled);
+        // Partial, not empty and not complete: the point of the contract is that a cancelled search
+        // still hands back the work it had already paid for.
+        assert!(
+            result.file_count < 200,
+            "expected the walk to stop early, saw {} files",
+            result.file_count
+        );
+        // The cancel is raised from inside the callback once five matches are counted, so a
+        // correct implementation never comes back with fewer than that.
+        assert!(result.file_count >= 5, "saw {} files", result.file_count);
+        assert_eq!(result.result_text.lines().count(), result.file_count);
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -1160,5 +1399,138 @@ mod tests {
         assert!(!result.result_text.contains("outside-alias.txt"));
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_dir_all(outside);
+    }
+
+    #[test]
+    fn parallel_output_modes_keep_stable_order_and_counts() {
+        let root = make_temp_dir("parallel-output");
+        fs::write(root.join("z-last.txt"), "parallel-token\n").unwrap();
+        fs::write(root.join("a-first.txt"), "parallel-token\n").unwrap();
+        let display_base = root.to_string_lossy().to_string();
+
+        let content = grep_search(
+            GrepOptions::new("parallel-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::Content)
+                .display_base(display_base.clone()),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            content.result_text,
+            "a-first.txt:1:parallel-token\nz-last.txt:1:parallel-token"
+        );
+
+        let count = grep_search(
+            GrepOptions::new("parallel-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::Count)
+                .display_base(display_base),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(count.file_count, 2);
+        assert_eq!(count.total_matches, 2);
+        assert_eq!(
+            count.result_text,
+            "Total 2 matches in 2 files:\na-first.txt:1\nz-last.txt:1"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn parallel_content_order_is_stable_across_repeated_runs() {
+        // Two files can agree by luck; sixty spread over eight workers cannot. Names are written in
+        // an order unrelated to their sort order so a reducer that just preserved arrival order
+        // would produce something different from the sorted answer.
+        let root = make_temp_dir("parallel-stable-order");
+        for index in (0..60).rev() {
+            fs::write(
+                root.join(format!("file-{index:02}.txt")),
+                "parallel-token\n",
+            )
+            .unwrap();
+        }
+        let display_base = root.to_string_lossy().to_string();
+
+        let run = || {
+            grep_search(
+                GrepOptions::new("parallel-token", root.to_string_lossy().to_string())
+                    .output_mode(OutputMode::Content)
+                    .display_base(display_base.clone()),
+                None,
+                None,
+            )
+            .unwrap()
+            .result_text
+        };
+
+        let expected: Vec<String> = (0..60)
+            .map(|index| format!("file-{index:02}.txt:1:parallel-token"))
+            .collect();
+        for _ in 0..5 {
+            assert_eq!(run(), expected.join("\n"));
+        }
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn pagination_slices_the_stable_parallel_order() {
+        // Pagination is only meaningful if the underlying order is fixed: windows taken with
+        // different offsets have to tile the full result exactly, with no gaps and no repeats.
+        let root = make_temp_dir("parallel-pagination");
+        for index in 0..60 {
+            fs::write(
+                root.join(format!("file-{index:02}.txt")),
+                "parallel-token\n",
+            )
+            .unwrap();
+        }
+        let display_base = root.to_string_lossy().to_string();
+
+        let page = |offset: usize, limit: usize| {
+            grep_search(
+                GrepOptions::new("parallel-token", root.to_string_lossy().to_string())
+                    .output_mode(OutputMode::Content)
+                    .display_base(display_base.clone())
+                    .offset(offset)
+                    .head_limit(limit),
+                None,
+                None,
+            )
+            .unwrap()
+        };
+
+        let full = page(0, 60);
+        let full_lines: Vec<&str> = full.result_text.lines().collect();
+        assert_eq!(full_lines.len(), 60);
+
+        let mut tiled = Vec::new();
+        for offset in (0..60).step_by(7) {
+            let window = page(offset, 7);
+            assert_eq!(window.applied_offset, Some(offset).filter(|it| *it > 0));
+            tiled.extend(
+                window
+                    .result_text
+                    .lines()
+                    .map(str::to_string)
+                    .collect::<Vec<_>>(),
+            );
+        }
+        assert_eq!(tiled, full_lines);
+
+        // Past the end is an empty page, not an error and not a wrapped-around one. Note that the
+        // rendered text is the same "No matches found" string an genuinely empty search produces —
+        // callers that need to tell the two apart have to look at `total_matches`, which still
+        // reports the full unpaginated count.
+        let past_end = page(60, 7);
+        assert_eq!(
+            past_end.result_text,
+            "No matches found for pattern 'parallel-token'"
+        );
+        assert_eq!(past_end.total_matches, 60);
+
+        let _ = fs::remove_dir_all(root);
     }
 }

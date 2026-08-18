@@ -119,7 +119,8 @@ pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, Run
 pub use search::{
     get_global_workspace_search_service, set_global_workspace_search_service, ContentSearchRequest,
     ContentSearchResult, GlobSearchRequest, GlobSearchResult, IndexTaskHandle,
-    WorkspaceIndexStatus, WorkspaceSearchBackend, WorkspaceSearchContextLine,
+    WorkspaceIndexStatus, WorkspaceSearchAutoIndexDecision, WorkspaceSearchAutoIndexPriority,
+    WorkspaceSearchAutoIndexStatus, WorkspaceSearchBackend, WorkspaceSearchContextLine,
     WorkspaceSearchDirtyFiles, WorkspaceSearchFileCount, WorkspaceSearchHit, WorkspaceSearchLine,
     WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchOverlayStatus,
     WorkspaceSearchRepoPhase, WorkspaceSearchRepoStatus, WorkspaceSearchService,

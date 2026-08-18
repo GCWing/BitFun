@@ -23,27 +23,37 @@
         "running": "索引中..."
       },
       "badges": {
-        "rebuildRecommended": "建议重建"
+        "baseAdvancing": "索引追赶中",
+        "probePending": "上次观测视图"
       },
       "phase": {
         "preparing": "准备中",
         "needs_index": "未建索引",
+        "no_index_needed": "无需索引",
         "building": "建立中",
         "ready": "索引可用",
         "tracking_changes": "跟踪变更中",
         "refreshing": "刷新中",
         "limited": "受限",
-        "unknown": "未知"
+        "unknown": "未知",
+        "non_git": "非 Git 仓库"
       },
       "summary": {
         "preparing": "正在准备托管搜索工作区。",
-        "needs_index": "当前搜索仍可通过 fallback 使用，建立索引后内容搜索会更快。",
+        "needs_index": "自动索引策略正在评估当前工作区，或已选择继续使用回退搜索，无需手动操作。",
         "building": "正在为当前工作区建立索引。",
         "ready": "索引已就绪，内容搜索可优先走索引后端。",
-        "tracking_changes": "索引当前可用，工作区变更正在被跟踪。只有出现建议重建时，才需要关注重建。",
+        "tracking_changes": "索引当前可用，工作区变更正在被跟踪。切换分支后索引会自动追赶到最新提交。",
         "refreshing": "正在根据最新文件变更刷新索引。",
-        "limited": "索引能力受限。搜索仍可 fallback，但建议重建。",
-        "unavailable": "当前无法获取索引状态。"
+        "limited": "索引能力受限。搜索仍可 fallback，可尝试重建索引恢复。",
+        "unavailable": "当前无法获取索引状态。",
+        "non_git": "当前工作区不是 Git 仓库，索引搜索不适用；内容搜索会走回退实现。"
+      },
+      "autoIndex": {
+        "pending": "正在评估是否需要建索引。",
+        "eligible": "已达建索引门槛，索引任务即将开始。",
+        "belowThreshold": "工作区仅 {{files}} 个文件，未达 {{threshold}} 门槛，直接搜索更快。",
+        "unsupported": "无法建立索引：{{reason}}。"
       },
       "indicator": {
         "label": "工作区索引状态",
@@ -51,13 +61,14 @@
         "tones": {
           "green": "索引正常",
           "yellow": "索引需关注",
-          "gray": "尚未建索引",
-          "red": "需要重建索引"
+          "gray": "回退搜索可用",
+          "red": "索引异常"
         },
         "progressKnown": "{{processed}} / {{total}}",
         "progressUnknown": "已处理 {{processed}} 项",
         "dirtyFiles": "待同步变更：修改 {{modified}}，删除 {{deleted}}，新增 {{new}}",
-        "rebuildRecommended": "当前建议执行重建。",
+        "baseAdvancing": "正在把索引推进到最新提交。",
+        "probePending": "正在核对工作区改动，当前脏文件数是上次观测结果。",
         "probeDegraded": "工作区探测状态异常，工作区索引视图可能不再持续跟进变更。",
         "hoverTooltip": "Flashgrep 索引：{{status}}"
       },

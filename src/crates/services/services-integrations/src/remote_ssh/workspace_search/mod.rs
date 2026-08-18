@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 #[cfg(not(feature = "remote-ssh-concrete"))]
 pub mod disabled;
+mod remote_line_hydration;
 mod service;
 
 pub use service::{
@@ -450,7 +451,6 @@ mod tests {
         with_line_matches.line_matches.push(LineMatch {
             path: "/repo/src/lib.rs".to_string(),
             line_number: 42,
-            line_text: Some("needle".to_string()),
         });
         assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
             SearchBackend::ScanFallback,

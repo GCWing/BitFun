@@ -27,8 +27,8 @@ use super::{
     repo_session::FlashgrepRepoSession,
     rpc_client::{read_content_length_message, ProtocolClient},
     types::{
-        GlobOutcome, GlobRequest, OpenRepoParams, RepoStatus, SearchOutcome, SearchRequest,
-        TaskStatus,
+        GlobOutcome, GlobRequest, GroupedLineMatchOutcome, OpenRepoParams, RepoStatus,
+        SearchOutcome, SearchRequest, TaskStatus,
     },
     FLASHGREP_LOG_TARGET,
 };
@@ -273,7 +273,6 @@ impl RepoSession {
                     repo_id: self.repo_id.clone(),
                     query: request.query,
                     scope: request.scope,
-                    allow_scan_fallback: request.allow_scan_fallback,
                 },
             },
             |response| match response {
@@ -288,6 +287,44 @@ impl RepoSession {
                     results,
                 }),
                 other => unexpected_response("search", other),
+            },
+            None,
+        )
+        .await
+    }
+
+    /// Runs a line-match search that returns matches grouped per file.
+    ///
+    /// Preferred over `search` for content output: the caller has to open every
+    /// matched file to hydrate line text, and grouping guarantees one open per
+    /// file. The response still carries `backend` and `status`, unlike
+    /// `search/line_matches_compact`, so callers can keep reporting which
+    /// backend served the query.
+    pub(crate) async fn search_grouped_line_matches(
+        &self,
+        request: SearchRequest,
+    ) -> Result<GroupedLineMatchOutcome> {
+        self.send_repo_request(
+            "search/grouped_line_matches",
+            Request::SearchGroupedLineMatches {
+                params: SearchParams {
+                    repo_id: self.repo_id.clone(),
+                    query: request.query,
+                    scope: request.scope,
+                },
+            },
+            |response| match response {
+                Response::SearchGroupedLineMatchesCompleted {
+                    backend,
+                    status,
+                    results,
+                    ..
+                } => Ok(GroupedLineMatchOutcome {
+                    backend,
+                    status,
+                    results,
+                }),
+                other => unexpected_response("search/grouped_line_matches", other),
             },
             None,
         )

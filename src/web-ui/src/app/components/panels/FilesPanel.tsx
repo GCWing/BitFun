@@ -1162,9 +1162,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                         defaultValue: contentSearchMetadata.repoPhase,
                       })}
                     </Badge>
-                    {contentSearchMetadata.rebuildRecommended ? (
+                    {contentSearchMetadata.baseAdvanceInProgress ? (
                       <Badge variant="warning">
-                        {t('search.index.badges.rebuildRecommended')}
+                        {t('search.index.badges.baseAdvancing')}
+                      </Badge>
+                    ) : null}
+                    {contentSearchMetadata.workspaceProbePending ? (
+                      // Neutral, not warning: the reconcile clears itself and the results are still
+                      // usable — they just describe the worktree from a moment ago.
+                      <Badge variant="neutral">
+                        {t('search.index.badges.probePending')}
                       </Badge>
                     ) : null}
                   </div>
