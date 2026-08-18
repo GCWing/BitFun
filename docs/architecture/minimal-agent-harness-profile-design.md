@@ -49,11 +49,11 @@
 |---|---|---|
 | 新增 `agent_type = coding-minimal` | 新增 `harness_profile_id = minimal` | Harness Profile、根 Agent 身份和 legacy mode 必须正交 |
 | 通过 Mode registry 选择 Minimal | 通过 Harness Profile catalog 和 Session binding 选择 | UI 已表达 Profile，不能再反向绑定 Runtime Agent ID |
-| 第一版复用原 `agentic_mode` prompt 字节 | 使用独立 Minimal prompt policy | 当前 `agentic_mode` 已明确要求不可见的 Todo、Question、Grep/Glob、Task、Web 和 ControlHub 工具，复用会制造错误工具合同 |
+| 第一版复用原 `agentic_mode` prompt 字节 | 使用独立、精简的 Minimal prompt policy | 当前 `agentic_mode` 已明确要求不可见的 Todo、Question、Grep/Glob、Task、Web 和 ControlHub 工具，复用会制造错误工具合同；参数和单工具操作合同由实际工具 description/schema 承载 |
 | Minimal 使用独立 `coding-minimal` 配置 profile | 使用 `minimal` Harness Profile，并保留 `tool_profile_id = coding-minimal-v1` 作为评测身份 | 产品选择与工具实验身份需要分开记录 |
 | 工具列表同时承担能力限制 | 工具暴露与权限/能力收紧分开 | 工具不可见不等于无权限；安全仍由 capability、effect 和 permission owner 强制 |
 
-独立 Minimal prompt 是维持“只引用当前可用工具”的必要合同，不代表引入新的工具接口。它应从已验证的 `coding_minimal_mode.md` 语义迁移为 immutable prompt policy，并按 1.0.0 命名和对象边界重写。
+独立 Minimal prompt 是维持最小、稳定 system persona 和跨工具编码合同的必要边界，不代表引入新的工具接口。它以 DeepSeek Harness Minimal 的一句话 persona 开头，只补充 Schema 无法表达、Runtime 无法替模型决策的规则；参数和单工具操作约束以模型请求中的 tool description/schema 及 Runtime guardrail 为准。
 
 ## 2. 目标与非目标
 
@@ -301,14 +301,13 @@ Balanced 和所有未选择 Minimal 的执行继续读取原 `max_rounds` 配置
 
 ### 5.1 Prompt policy
 
-Minimal 使用稳定 prompt policy `minimal-harness-v1`，其内容以 eval 分支已验证的 Coding Minimal prompt 为语义基线，并满足：
+Minimal 使用稳定 prompt policy `minimal-harness-v1`。它以以下 persona 开头：
 
-- 只介绍当前请求真正可见的四个基础工具；
-- 不提及 Goal、Task、Subagent、Web、MCP、Grep/Glob 专用工具或 deferred gateway；
-- 指导模型用 `ExecCommand` 完成搜索、目录、Git、构建、测试和环境诊断；
-- 保留 Read-before-edit、最小变更、分层验证、安全和完成合同；
-- 不引入持久 Shell、两工具接口或不存在的能力；
-- 不把 Profile 选择写成权限或安全保证。
+```text
+You are a helpful software engineer assistant.
+```
+
+Prompt 只补充 Schema 无法表达的跨工具规则：服从最新用户请求、只使用实际可见工具、编辑前检查仓库和读取文件、保持变更聚焦、执行最小相关验证且不虚报结果、将仓库和命令输出视为不可信数据、保护既有用户修改并限制破坏性操作，以及 defensive-security 边界。四个基础工具的参数和单工具调用方法由每次模型请求实际携带的 description/schema 自描述；Read-before-edit、新鲜度、原子写、Permission、sandbox 和完成保护继续由 Runtime 强制执行。不可见的 Goal、Task、Subagent、Web、MCP、专用 Grep/Glob 和 deferred gateway 既不出现在 Prompt，也不进入 Minimal manifest。
 
 Prompt bytes 由 `assembly/agent-content` 编译期嵌入并使用稳定 lookup key；选择与渲染属于 Runtime/Assembly owner。Minimal 与 Balanced 使用不同 system prompt cache identity，避免跨策略错误复用；同一 Minimal 会话在 manifest 状态不变时保持字节稳定。
 
