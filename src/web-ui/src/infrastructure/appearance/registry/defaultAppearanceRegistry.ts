@@ -40,6 +40,7 @@ import { modelRoundItemAppearanceDescriptor } from '@/flow_chat/components/moder
 import { deepReviewActionBarAppearanceDescriptor } from '@/flow_chat/deep-review/action-bar/appearance';
 import { modelSelectorAppearanceDescriptor } from '@/flow_chat/components/ModelSelector.appearance';
 import { reasoningPresetSelectorAppearanceDescriptor } from '@/flow_chat/components/ReasoningPresetSelector.appearance';
+import { acpModeSelectorAppearanceDescriptor } from '@/flow_chat/components/AcpModeSelector.appearance';
 import { flowChatHeaderAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatHeader.appearance';
 import { flowChatTurnRailAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatTurnRail.appearance';
 import { sessionFilesBadgeAppearanceDescriptor } from '@/flow_chat/components/modern/SessionFilesBadge.appearance';
@@ -333,6 +334,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(deepReviewActionBarAppearanceDescriptor)
     .registerComponent(modelSelectorAppearanceDescriptor)
     .registerComponent(reasoningPresetSelectorAppearanceDescriptor)
+    .registerComponent(acpModeSelectorAppearanceDescriptor)
     .registerComponent(flowChatHeaderAppearanceDescriptor)
     .registerComponent(flowChatTurnRailAppearanceDescriptor)
     .registerComponent(sessionFilesBadgeAppearanceDescriptor)
