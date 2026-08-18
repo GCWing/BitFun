@@ -2,6 +2,7 @@
  * TabOverflowMenu component styles.
  * Combines mission control entry and overflow menu.
  */
+@use '@/component-library/styles/overlay-surfaces' as surfaces;
 
 // Button wrapper
 .canvas-tab-panorama-wrapper {
@@ -81,10 +82,8 @@
 
 // Overflow menu
 .canvas-tab-overflow-menu {
-  background: var(--bf-appearance-token-color-bg-elevated);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--bf-appearance-token-color-overlay-black-50);
+  @include surfaces.floating-surface;
+
   min-width: 200px;
   max-width: 280px;
   max-height: 360px;

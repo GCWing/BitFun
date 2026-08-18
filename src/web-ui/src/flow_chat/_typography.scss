@@ -1,0 +1,19 @@
+/**
+ * Semantic typography roles for FlowChat.
+ *
+ * The user preference service owns the underlying size ladder. Components
+ * choose a role from that ladder so interactive labels do not drift down to
+ * metadata sizes while timestamps and compact badges can remain dense.
+ *
+ * Default scale: body 14px, control 13px, support 12px, meta 11px, micro 10px.
+ */
+
+$body-size: var(--bf-appearance-token-flowchat-font-size-base);
+$control-size: var(--bf-appearance-token-flowchat-font-size-sm);
+$support-size: var(--bf-appearance-token-flowchat-font-size-xs);
+$meta-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+$micro-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+
+$body-line-height: var(--bf-appearance-token-flowchat-text-line-height);
+$support-line-height: var(--bf-appearance-token-flowchat-support-line-height);
+$compact-line-height: var(--bf-appearance-token-flowchat-compact-line-height);

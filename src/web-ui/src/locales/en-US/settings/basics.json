@@ -22,7 +22,11 @@
       },
       "bitfun-light": {
         "name": "Light",
-        "description": "Light appearance - Elegant and refined, soft blue-gray tones"
+        "description": "Light appearance - Crisp white surfaces, soft neutral grays, and deep navy actions"
+      },
+      "bitfun-monochrome": {
+        "name": "Black & White",
+        "description": "Black-and-white contrast appearance - Deep black chrome, bright white workspace, and soft neutral blocks"
       },
       "bitfun-midnight": {
         "name": "Midnight",

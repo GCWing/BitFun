@@ -70,6 +70,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
         role="button"
         tabIndex={0}
         aria-label={t('scenes.miniApps')}
+        data-testid="nav-miniapps-entry"
       >
         <span className="bitfun-nav-panel__miniapp-entry-main">
           <span className="bitfun-nav-panel__miniapp-entry-icon" aria-hidden="true">

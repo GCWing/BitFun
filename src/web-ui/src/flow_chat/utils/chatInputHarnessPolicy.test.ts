@@ -30,6 +30,21 @@ describe('chatInputHarnessPolicy', () => {
     expect(resolvePendingHarnessProfileForCreation(policy, 'minimal')).toBeNull();
   });
 
+  it('hides Harness configuration for a Claw Assistant session when workspace state is stale', () => {
+    const policy = resolveChatInputHarnessProfilePolicy({
+      isAssistantWorkspace: false,
+      sessionMode: ' claw ',
+      isAcpTargetSession: false,
+      isSubagentInputTarget: false,
+    });
+
+    expect(policy).toEqual({
+      owner: 'assistant-runtime-default',
+      userConfigurable: false,
+    });
+    expect(resolvePendingHarnessProfileForCreation(policy, 'balanced')).toBeNull();
+  });
+
   it.each([
     {
       label: 'ACP target',

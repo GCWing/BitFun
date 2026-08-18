@@ -19,7 +19,10 @@
 @mixin nav-panel-text-heading {
   color: var(--bf-appearance-token-color-text-primary);
 
-  :root[data-bf-appearance-mode='light'] & {
+  // A light content appearance may still place navigation inside inverse
+  // structural chrome. Only force the crisp light-mode treatment when the
+  // consumer is not inside the navigation chrome scope.
+  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
       var(--bf-appearance-token-color-static-black) 92%,
@@ -35,7 +38,7 @@
     var(--bf-appearance-token-color-text-secondary)
   );
 
-  :root[data-bf-appearance-mode='light'] & {
+  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
       var(--bf-appearance-token-color-static-black) 86%,
@@ -47,7 +50,7 @@
 @mixin nav-panel-text-meta {
   color: var(--bf-appearance-token-color-text-muted);
 
-  :root[data-bf-appearance-mode='light'] & {
+  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
       var(--bf-appearance-token-color-static-black) 48%,
@@ -63,7 +66,7 @@
     var(--bf-appearance-token-color-text-muted)
   );
 
-  :root[data-bf-appearance-mode='light'] & {
+  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
       var(--bf-appearance-token-color-static-black) 70%,

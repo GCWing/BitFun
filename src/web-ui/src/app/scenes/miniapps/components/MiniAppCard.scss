@@ -2,13 +2,15 @@
 @use '../../../styles/surface-stagger';
 
 .miniapp-card {
-  --miniapp-card-action-bg: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 30%, transparent);
-  --miniapp-card-action-hover-bg: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 60%, transparent);
+  --miniapp-card-action-bg: var(--bf-appearance-token-color-bg-elevated);
+  --miniapp-card-action-hover-bg: var(--bf-appearance-token-element-bg-base);
 
   width: 100%;
   min-width: 0;
-  min-height: 200px;
-  border-radius: 15px;
+  min-height: 188px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: $size-radius-lg;
   background: var(--bf-appearance-token-element-bg-soft);
   display: flex;
   flex-direction: column;
@@ -18,31 +20,12 @@
   animation: miniapp-card-in 0.22s $easing-decelerate both;
   @include surface-stagger.animation-delay(35ms);
   transition:
-    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.35s ease;
-
-  // Top gradient overlay - shows on hover, covers entire card except footer
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 40px;
-    background: var(--miniapp-card-gradient);
-    opacity: 0;
-    transition: opacity 0.35s ease;
-    pointer-events: none;
-    z-index: 0;
-  }
+    transform $motion-fast $easing-standard,
+    box-shadow $motion-fast $easing-standard;
 
   &:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px var(--bf-appearance-token-color-overlay-black-20);
-
-    &::before {
-      opacity: 0.4;
-    }
+    transform: translateY(-2px);
+    box-shadow: var(--bf-appearance-token-shadow-sm);
   }
 
   &:active {
@@ -68,8 +51,7 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    padding: $size-gap-3;
-    padding-bottom: 0;
+    padding: $size-gap-3 $size-gap-3 0;
     position: relative;
     z-index: 1;
   }
@@ -87,11 +69,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: var(--bf-appearance-token-color-overlay-white-12);
-    backdrop-filter: blur(8px);
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-color-bg-elevated);
   }
 
   &__icon {
@@ -141,8 +123,8 @@
   }
 
   &__name {
-    font-size: 1.2em;
-    font-weight: 900;
+    font-size: 1.05em;
+    font-weight: $font-weight-semibold;
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -167,9 +149,9 @@
   }
 
   &__desc-inner {
-    font-size: 0.85em;
-    font-weight: 300;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 85%, transparent);
+    font-size: 0.875em;
+    font-weight: $font-weight-normal;
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: $line-height-relaxed;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -194,8 +176,8 @@
     border-radius: $size-radius-full;
     font-size: 10px;
     color: var(--bf-appearance-token-color-text-secondary);
-    background: var(--bf-appearance-token-color-overlay-white-08);
-    border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     white-space: nowrap;
   }
 
@@ -204,28 +186,12 @@
     display: flex;
     align-items: center;
     width: 100%;
-    border-radius: 0 0 15px 15px;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 0 0 $size-radius-lg $size-radius-lg;
     overflow: hidden;
     position: relative;
     z-index: 1;
-
-    // Bottom gradient blur background - visible by default as divider
-    &::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: var(--miniapp-card-gradient);
-      opacity: 0.5;
-      transition: opacity 0.35s ease;
-      pointer-events: none;
-    }
-  }
-
-  &:hover &__footer::after {
-    opacity: 1;
+    background: transparent;
   }
 
   &__actions {
@@ -244,7 +210,7 @@
     width: 30px;
     height: 30px;
     border-radius: $size-radius-sm;
-    border: none;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     background: var(--miniapp-card-action-bg);
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
@@ -256,9 +222,16 @@
       margin-right: 4px;
     }
 
-    &--primary:hover {
-      background: var(--miniapp-card-action-hover-bg);
-      color: var(--bf-appearance-token-color-accent-400);
+    &--primary {
+      border-color: var(--bf-appearance-token-btn-primary-bg);
+      background: var(--bf-appearance-token-btn-primary-bg);
+      color: var(--bf-appearance-token-btn-primary-color);
+
+      &:hover {
+        border-color: var(--bf-appearance-token-btn-primary-hover-bg);
+        background: var(--bf-appearance-token-btn-primary-hover-bg);
+        color: var(--bf-appearance-token-btn-primary-hover-color);
+      }
     }
 
     &--danger:hover {

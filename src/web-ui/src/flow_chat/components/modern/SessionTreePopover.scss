@@ -1,9 +1,59 @@
 @use '../../../component-library/styles/tokens' as *;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .session-tree-popover {
   position: relative;
   display: flex;
   align-items: center;
+
+  &--embedded {
+    position: static;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    display: block;
+    align-self: stretch;
+    overflow: visible;
+  }
+
+  &--embedded &__body {
+    height: auto;
+    max-height: none;
+    padding: 0 $size-gap-1;
+    overflow-y: visible;
+    scrollbar-gutter: auto;
+  }
+
+  &--embedded &__node {
+    min-height: 30px;
+  }
+
+  &--embedded &__node--subagent {
+    min-height: 30px;
+  }
+
+  &--embedded &__node-main {
+    min-height: 30px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  &--embedded &__node-copy {
+    flex-direction: row;
+    align-items: baseline;
+    gap: $size-gap-2;
+    white-space: nowrap;
+  }
+
+  &--embedded &__node-title {
+    max-width: 40%;
+    flex: 0 0 auto;
+  }
+
+  &--embedded &__node-meta {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
 
   &__trigger {
     flex: 0 0 auto;
@@ -43,6 +93,8 @@
   }
 
   &__panel {
+    @include surfaces.floating-surface;
+
     --session-tree-popover-offset: -4px;
 
     position: fixed;
@@ -51,12 +103,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-lg;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, transparent);
-    box-shadow: var(--bf-appearance-token-shadow-lg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     z-index: $z-popover;
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
@@ -201,6 +247,8 @@
   }
 
   &__action-menu {
+    @include surfaces.floating-surface;
+
     position: fixed;
     top: auto;
     right: auto;
@@ -211,10 +259,6 @@
     flex-direction: column;
     gap: 2px;
     padding: 4px;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 98%, transparent);
-    box-shadow: var(--bf-appearance-token-shadow-base);
     z-index: 10000;
   }
 

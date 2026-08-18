@@ -1,4 +1,5 @@
 @use '../../../component-library/styles/tokens' as *;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 // ─── Overlay backdrop ─────────────────────────────────────────────────────────
 .feature-modal-backdrop {
@@ -19,11 +20,9 @@
 
 // ─── Modal shell ──────────────────────────────────────────────────────────────
 .feature-modal {
+  @include surfaces.dialog-surface;
+
   position: relative;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border-radius: $size-radius-lg;
-  border: 1px solid var(--bf-appearance-token-border-base);
-  box-shadow: 0 24px 64px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.28);
   display: flex;
   flex-direction: column;
   overflow: hidden;

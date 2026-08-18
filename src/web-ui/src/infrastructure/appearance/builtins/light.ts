@@ -16,31 +16,35 @@ import {
   STATIC_WHITE,
 } from './paletteHelpers';
 
-const LIGHT_INK = '#0f172a';
-const LIGHT_TEXT_PRIMARY = '#1e293b';
-const LIGHT_TEXT_STRONG = '#334155';
-const LIGHT_ACCENT = '#64748b';
-const LIGHT_ACCENT_HOVER = '#475569';
+const LIGHT_NAVY = '#101a27';
+const LIGHT_TEXT_PRIMARY = '#1c1c1f';
+const LIGHT_TEXT_SECONDARY = '#555555';
+const LIGHT_TEXT_MUTED = '#6a6a6a';
+const LIGHT_TEXT_DISABLED = '#9a9a9a';
+const LIGHT_NAVY_HOVER = LIGHT_TEXT_PRIMARY;
 const LIGHT_PURPLE = '#7c6b99';
 const LIGHT_PURPLE_HOVER = '#655680';
-const LIGHT_SUCCESS = '#5b9a6f';
-const LIGHT_WARNING = '#c08c42';
-const LIGHT_ERROR = '#c26565';
-const LIGHT_BACKGROUND_PRIMARY = '#fafafa';
-const LIGHT_EDITOR_LINE_HIGHLIGHT = '#f3f3f5';
+const LIGHT_SUCCESS = '#247344';
+const LIGHT_SUCCESS_BG = '#e1fbe9';
+const LIGHT_WARNING = '#9a651f';
+const LIGHT_ERROR = '#a74352';
+const LIGHT_ERROR_BG = rgbaFromHex(LIGHT_ERROR, 0.12);
+const LIGHT_BACKGROUND_PRIMARY = '#fdfdfd';
+const LIGHT_SURFACE_SUBTLE = rgbaFromHex(LIGHT_NAVY, 0.03);
+const LIGHT_SURFACE_SOFT = '#f3f3f5';
+const LIGHT_BORDER_BASE = rgbaFromHex(LIGHT_NAVY, 0.15);
 
-const lightInk = (alpha: number | string) => rgbaFromHex(LIGHT_INK, alpha);
-const lightAccent = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT, alpha);
-const lightAccentHover = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT_HOVER, alpha);
+const lightNavy = (alpha: number | string) => rgbaFromHex(LIGHT_NAVY, alpha);
+const lightNavyHover = (alpha: number | string) => rgbaFromHex(LIGHT_NAVY_HOVER, alpha);
 
 export const bitfunLightPalette: AppearancePalette = {
 
   id: 'bitfun-light',
   name: 'Light',
   type: 'light',
-  description: 'Light appearance - Neutral gray surfaces, black primary actions',
+  description: 'Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions',
   author: 'BitFun Team',
-  version: '2.3.1',
+  version: '2.4.0',
 
   layout: {
     sceneViewportBorder: false,
@@ -51,30 +55,30 @@ export const bitfunLightPalette: AppearancePalette = {
     background: {
       primary: LIGHT_BACKGROUND_PRIMARY,
       secondary: STATIC_WHITE,
-      tertiary: '#e8e8e8',
+      tertiary: LIGHT_SURFACE_SOFT,
       elevated: STATIC_WHITE,
-      workbench: '#e8e8e8',
+      workbench: LIGHT_SURFACE_SOFT,
       scene: STATIC_WHITE,
     },
 
     text: {
       primary: LIGHT_TEXT_PRIMARY,
-      secondary: '#3d4f66',
-      muted: LIGHT_ACCENT,
-      disabled: '#94a3b8',
+      secondary: LIGHT_TEXT_SECONDARY,
+      muted: LIGHT_TEXT_MUTED,
+      disabled: LIGHT_TEXT_DISABLED,
     },
 
 
     accent: createAccentScale({
-      base: LIGHT_ACCENT,
-      hover: LIGHT_ACCENT_HOVER,
-      alpha: { 700: 0.88 },
+      base: LIGHT_NAVY,
+      hover: LIGHT_NAVY_HOVER,
       stops: {
-        50: lightInk(0.04),
-        100: lightInk(0.07),
-        200: lightInk(0.1),
-        300: lightInk(0.16),
-        400: lightInk(0.26),
+        50: LIGHT_SURFACE_SUBTLE,
+        100: LIGHT_SURFACE_SOFT,
+        200: lightNavy(0.12),
+        300: lightNavy(0.18),
+        400: lightNavy(0.3),
+        700: STATIC_BLACK,
       },
     }),
 
@@ -93,37 +97,41 @@ export const bitfunLightPalette: AppearancePalette = {
       success: LIGHT_SUCCESS,
       warning: LIGHT_WARNING,
       error: LIGHT_ERROR,
-      info: LIGHT_ACCENT,
+      info: LIGHT_TEXT_SECONDARY,
       bgAlpha: 0.08,
       borderAlpha: 0.25,
       overrides: {
-        infoBg: lightAccent(0.1),
-        infoBorder: lightAccent(0.28),
+        successBg: LIGHT_SUCCESS_BG,
+        successBorder: LIGHT_SUCCESS,
+        errorBg: LIGHT_ERROR_BG,
+        errorBorder: rgbaFromHex(LIGHT_ERROR, 0.36),
+        infoBg: LIGHT_SURFACE_SOFT,
+        infoBorder: LIGHT_BORDER_BASE,
       },
     }),
 
 
     border: {
-      subtle: lightAccent(0.15),
-      base: lightAccent(0.22),
-      medium: lightAccent(0.32),
-      strong: lightAccent(0.42),
-      prominent: lightAccent(0.52),
+      subtle: lightNavy(0.08),
+      base: LIGHT_BORDER_BASE,
+      medium: lightNavy(0.24),
+      strong: lightNavy(0.34),
+      prominent: lightNavy(0.48),
     },
 
 
     element: {
-      subtle: lightInk(0.045),
-      soft: lightInk(0.065),
-      base: lightInk(0.09),
-      medium: lightInk(0.12),
-      strong: lightInk(0.16),
+      subtle: LIGHT_SURFACE_SUBTLE,
+      soft: LIGHT_SURFACE_SOFT,
+      base: lightNavy(0.09),
+      medium: lightNavy(0.13),
+      strong: lightNavy(0.18),
     },
 
 
     git: createGitColors({
-      branch: rgbFromHex(LIGHT_ACCENT_HOVER),
-      branchBg: lightAccentHover(0.1),
+      branch: rgbFromHex(LIGHT_NAVY_HOVER),
+      branchBg: lightNavyHover(0.1),
       changes: rgbFromHex(LIGHT_WARNING),
       added: rgbFromHex(LIGHT_SUCCESS),
       deleted: rgbFromHex(LIGHT_ERROR),
@@ -134,11 +142,11 @@ export const bitfunLightPalette: AppearancePalette = {
   effects: {
     shadow: {
 
-      xs: `0 1px 2px ${lightAccentHover(0.06)}`,
-      sm: `0 2px 4px ${lightAccentHover(0.08)}`,
-      base: `0 4px 8px ${lightAccentHover(0.1)}`,
-      lg: `0 8px 16px ${lightAccentHover(0.12)}`,
-      xl: `0 12px 24px ${lightAccentHover(0.14)}`,
+      xs: `0 1px 2px ${lightNavy(0.04)}`,
+      sm: `0 2px 4px ${lightNavy(0.055)}`,
+      base: `0 4px 8px ${lightNavy(0.07)}`,
+      lg: `0 8px 16px ${lightNavy(0.09)}`,
+      xl: `0 12px 24px ${lightNavy(0.11)}`,
     },
 
 
@@ -181,20 +189,20 @@ export const bitfunLightPalette: AppearancePalette = {
 
       primary: {
         default: {
-          background: STATIC_BLACK,
+          background: LIGHT_NAVY,
           color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
-          background: '#262626',
+          background: LIGHT_NAVY_HOVER,
           color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
-          background: '#1c1c1f',
+          background: STATIC_BLACK,
           color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
@@ -205,11 +213,11 @@ export const bitfunLightPalette: AppearancePalette = {
 
       ghost: {
         default: {
-          color: LIGHT_ACCENT_HOVER,
+          color: LIGHT_TEXT_SECONDARY,
         },
         hover: {
-          background: lightInk(0.08),
-          color: LIGHT_TEXT_STRONG,
+          background: LIGHT_SURFACE_SOFT,
+          color: LIGHT_TEXT_PRIMARY,
           border: 'transparent',
         },
       },
@@ -221,36 +229,36 @@ export const bitfunLightPalette: AppearancePalette = {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'comment', foreground: '94a3b8', fontStyle: 'italic' },
+      { token: 'comment', foreground: '9a9a9a', fontStyle: 'italic' },
       { token: 'keyword', foreground: '6b5a89' },
-      { token: 'string', foreground: '5b9a6f' },
-      { token: 'number', foreground: 'b8863a' },
-      { token: 'type', foreground: '475569' },
-      { token: 'class', foreground: '475569' },
+      { token: 'string', foreground: '247344' },
+      { token: 'number', foreground: '9a651f' },
+      { token: 'type', foreground: '555555' },
+      { token: 'class', foreground: '555555' },
       { token: 'function', foreground: '7c6b99' },
-      { token: 'variable', foreground: '475569' },
-      { token: 'constant', foreground: 'c08c42' },
+      { token: 'variable', foreground: '555555' },
+      { token: 'constant', foreground: '9a651f' },
       { token: 'operator', foreground: '6b5a89' },
-      { token: 'tag', foreground: '475569' },
+      { token: 'tag', foreground: '555555' },
       { token: 'attribute.name', foreground: '7c6b99' },
-      { token: 'attribute.value', foreground: '5b9a6f' },
+      { token: 'attribute.value', foreground: '247344' },
     ],
     colors: {
-      background: LIGHT_BACKGROUND_PRIMARY,
+      background: STATIC_WHITE,
       foreground: LIGHT_TEXT_PRIMARY,
-      lineHighlight: LIGHT_EDITOR_LINE_HIGHLIGHT,
-      selection: lightInk(0.14),
+      lineHighlight: LIGHT_SURFACE_SUBTLE,
+      selection: lightNavy(0.14),
       cursor: LIGHT_TEXT_PRIMARY,
 
-      'editor.selectionBackground': lightInk(0.14),
+      'editor.selectionBackground': lightNavy(0.14),
       'editor.selectionForeground': LIGHT_TEXT_PRIMARY,
-      'editor.inactiveSelectionBackground': lightInk(0.09),
-      'editor.selectionHighlightBackground': lightInk(0.1),
-      'editor.selectionHighlightBorder': lightInk(0.22),
+      'editor.inactiveSelectionBackground': lightNavy(0.09),
+      'editor.selectionHighlightBackground': lightNavy(0.1),
+      'editor.selectionHighlightBorder': lightNavy(0.22),
       'editorCursor.foreground': LIGHT_TEXT_PRIMARY,
 
-      'editor.wordHighlightBackground': lightInk(0.07),
-      'editor.wordHighlightStrongBackground': lightInk(0.11),
+      'editor.wordHighlightBackground': lightNavy(0.07),
+      'editor.wordHighlightStrongBackground': lightNavy(0.11),
     },
   },
 };

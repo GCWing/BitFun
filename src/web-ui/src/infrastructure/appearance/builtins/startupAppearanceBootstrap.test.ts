@@ -37,15 +37,26 @@ describe('startup appearance bootstrap manifest', () => {
 
     const light = manifest.appearances.find(entry => entry.id === DEFAULT_LIGHT_APPEARANCE_ID);
     const palette = builtinAppearancePalettes.find(entry => entry.id === DEFAULT_LIGHT_APPEARANCE_ID);
+    const chrome = palette?.colors.chrome;
     expect(light).toEqual({
       id: palette?.id,
-      bgPrimary: palette?.colors.background.primary,
-      bgSecondary: palette?.colors.background.secondary,
+      bgPrimary: chrome?.background.primary ?? palette?.colors.background.primary,
+      bgSecondary: chrome?.background.secondary ?? palette?.colors.background.secondary,
       bgScene: palette?.colors.background.scene,
       isLight: true,
-      textPrimary: palette?.colors.text.primary,
-      textMuted: palette?.colors.text.muted,
-      accentColor: palette?.colors.accent[500],
+      textPrimary: chrome?.text.primary ?? palette?.colors.text.primary,
+      textMuted: chrome?.text.muted ?? palette?.colors.text.muted,
+      accentColor: chrome?.accent[500] ?? palette?.colors.accent[500],
+    });
+
+    const monochrome = manifest.appearances.find(entry => entry.id === 'bitfun-monochrome');
+    expect(monochrome).toMatchObject({
+      bgPrimary: '#1c1c1f',
+      bgSecondary: '#262626',
+      bgScene: '#ffffff',
+      isLight: true,
+      textPrimary: '#f3f3f5',
+      accentColor: '#f3f3f5',
     });
   });
 

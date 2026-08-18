@@ -2,6 +2,7 @@
  * Modal component styles
  */
 @use '../../styles/tokens.scss' as tokens;
+@use '../../styles/overlay-surfaces' as surfaces;
 
 $modal-edge-gutter: 8px;
 $modal-edge-gutter-sm: 10px;
@@ -57,13 +58,11 @@ $modal-edge-gutter-sm: 10px;
 
 
 .modal {
+  @include surfaces.dialog-surface;
+
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 8px;
-  box-shadow: 0 16px 40px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45);
   max-height: calc(100vh - 48px);
   overflow: hidden;
   transform-origin: center;
@@ -95,15 +94,9 @@ $modal-edge-gutter-sm: 10px;
 
   &--draggable {
     cursor: default;
-    transition: box-shadow 0.2s ease;
-
-    &:hover {
-      box-shadow: 0 20px 44px var(--bf-appearance-token-color-overlay-black-50);
-    }
   }
 
   &--dragging {
-    box-shadow: 0 20px 48px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.55);
     z-index: tokens.$z-modal-active;
   }
 

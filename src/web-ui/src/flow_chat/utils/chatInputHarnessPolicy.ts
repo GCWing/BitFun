@@ -22,6 +22,7 @@ export type ChatInputHarnessProfilePolicy =
  */
 export function resolveChatInputHarnessProfilePolicy(params: {
   isAssistantWorkspace: boolean;
+  sessionMode?: string | null;
   isAcpTargetSession: boolean;
   isSubagentInputTarget: boolean;
 }): ChatInputHarnessProfilePolicy {
@@ -33,7 +34,8 @@ export function resolveChatInputHarnessProfilePolicy(params: {
     return { owner: 'parent-session', userConfigurable: false };
   }
 
-  if (params.isAssistantWorkspace) {
+  const isAssistantSession = params.sessionMode?.trim().toLowerCase() === 'claw';
+  if (params.isAssistantWorkspace || isAssistantSession) {
     return { owner: 'assistant-runtime-default', userConfigurable: false };
   }
 

@@ -1,4 +1,5 @@
 @use '../../component-library/styles/tokens' as tokens;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .tool-timeout-indicator {
   display: inline-flex;
@@ -133,6 +134,8 @@
 }
 
 .timeout-extend-popover {
+  @include surfaces.floating-surface;
+
   position: fixed;
   z-index: tokens.$z-popover;
   box-sizing: border-box;
@@ -141,10 +144,6 @@
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
-  border-radius: 6px;
-  background: var(--bf-appearance-token-color-bg-elevated);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-15);
   font-family: var(--bf-appearance-token-font-family-sans);
 }
 

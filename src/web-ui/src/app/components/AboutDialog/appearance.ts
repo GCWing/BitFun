@@ -3,7 +3,8 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const aboutDialogAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'about-dialog',
   parts: [
-    { id: 'root', visualRole: 'dialog', continuityGroup: 'about-dialog' },
+    // Modal owns the dialog shell; this root is content inside that shell.
+    { id: 'root', visualRole: 'content', continuityGroup: 'about-dialog' },
     { id: 'hero', visualRole: 'content', continuityGroup: 'about-dialog' },
     { id: 'title', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'version', propertyProfile: 'paint', visualRole: 'content' },

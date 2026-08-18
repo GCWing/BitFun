@@ -4,8 +4,11 @@
  */
 
 @use '../../../component-library/styles/tokens.scss' as *;
+@use '../../styles/chrome-token-scope' as chrome;
 
 .bitfun-nav-bar {
+  @include chrome.apply;
+
   display: flex;
   align-items: center;
   height: 38px;

@@ -1,6 +1,7 @@
 /**
  * Remote File Browser Styles
  */
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .remote-file-browser-overlay {
   position: fixed;
@@ -28,15 +29,13 @@
 }
 
 .remote-file-browser {
+  @include surfaces.dialog-surface;
+
   display: flex;
   flex-direction: column;
   height: 80vh;
   width: 90vw;
   max-width: 1000px;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 12px;
-  box-shadow: 0 24px 48px var(--bf-appearance-token-color-overlay-black-50), 0 0 0 1px var(--bf-appearance-token-color-overlay-white-04);
   overflow: hidden;
   animation: remote-file-browser-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -419,12 +418,10 @@
 
   // Context menu
   &__context-menu {
+    @include surfaces.floating-surface;
+
     position: fixed;
     min-width: 160px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px var(--bf-appearance-token-color-overlay-black-40);
     padding: 4px;
     z-index: 100;
   }
@@ -496,12 +493,10 @@
   }
 
   &__dialog {
+    @include surfaces.dialog-surface;
+
     width: 100%;
     max-width: 380px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: 10px;
-    box-shadow: 0 16px 48px var(--bf-appearance-token-color-overlay-black-50);
     padding: 20px;
   }
 

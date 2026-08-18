@@ -22,7 +22,11 @@
       },
       "bitfun-light": {
         "name": "亮色",
-        "description": "亮色外觀 - 素雅高級，淡藍灰調"
+        "description": "亮色外觀 - 純白界面、柔和中性灰與深海軍藍操作色"
+      },
+      "bitfun-monochrome": {
+        "name": "黑白撞色",
+        "description": "黑白撞色外觀 - 深黑結構層、明亮白色工作區與柔和中性灰塊面"
       },
       "bitfun-midnight": {
         "name": "午夜",

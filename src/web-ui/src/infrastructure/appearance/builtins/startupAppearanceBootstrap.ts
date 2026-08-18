@@ -24,15 +24,16 @@ export interface StartupAppearanceBootstrapManifest {
 export function createStartupAppearanceBootstrapEntry(
   palette: AppearancePalette,
 ): StartupAppearanceBootstrapEntry {
+  const chrome = palette.colors.chrome;
   return {
     id: palette.id,
-    bgPrimary: palette.colors.background.primary,
-    bgSecondary: palette.colors.background.secondary,
+    bgPrimary: chrome?.background.primary ?? palette.colors.background.primary,
+    bgSecondary: chrome?.background.secondary ?? palette.colors.background.secondary,
     bgScene: palette.colors.background.scene,
     isLight: palette.type === 'light',
-    textPrimary: palette.colors.text.primary,
-    textMuted: palette.colors.text.muted,
-    accentColor: palette.colors.accent[500],
+    textPrimary: chrome?.text.primary ?? palette.colors.text.primary,
+    textMuted: chrome?.text.muted ?? palette.colors.text.muted,
+    accentColor: chrome?.accent[500] ?? palette.colors.accent[500],
   };
 }
 

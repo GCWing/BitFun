@@ -6,6 +6,7 @@
  */
 
 @use '../../component-library/styles/tokens.scss' as *;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 // ==================== CSS reset ====================
 // Note: keep box-sizing !important for global consistency.
@@ -151,6 +152,8 @@ html, body {
 }
 
 .bitfun-window-mode-hint {
+  @include surfaces.floating-surface;
+
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + #{$size-gap-2});
   left: 50%;
@@ -161,14 +164,9 @@ html, body {
   max-width: min(560px, calc(100vw - 32px));
   min-height: 34px;
   padding: $size-gap-1 $size-gap-3;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: $size-radius-base;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 90%, transparent);
-  box-shadow: 0 12px 28px var(--bf-appearance-token-color-overlay-black-30);
   color: var(--bf-appearance-token-color-text-primary);
   pointer-events: none;
   transform: translateX(-50%);
-  backdrop-filter: blur(12px);
 
   &__title {
     flex: 0 0 auto;

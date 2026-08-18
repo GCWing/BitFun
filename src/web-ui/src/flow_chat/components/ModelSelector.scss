@@ -10,6 +10,8 @@
  */
 
 @use '../../component-library/styles/tokens' as *;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '../typography' as flow-type;
 
 .bitfun-model-selector {
   position: relative;
@@ -28,7 +30,7 @@
     border: none;
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$control-size;
     font-weight: 400;
     cursor: pointer;
     transition:
@@ -95,14 +97,14 @@
     border-radius: 3px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$meta-size;
     font-weight: 600;
     letter-spacing: 0.5px;
     line-height: 1;
   }
 
   &__ctx-usage {
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$meta-size;
     font-weight: 400;
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.55;
@@ -167,6 +169,8 @@
   // ==================== Dropdown menu ====================
   
   &__dropdown {
+    @include surfaces.floating-surface;
+
     --bitfun-model-dropdown-offset: -4px;
 
     position: fixed;
@@ -174,17 +178,8 @@
     max-width: clamp(0px, 280px, calc(100vw - 16px));
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-    border-radius: 6px;
+    font-size: flow-type.$control-size;
     overflow: hidden;
-    backdrop-filter: blur(20px) saturate(1.2);
-    -webkit-backdrop-filter: blur(20px) saturate(1.2);
-    box-shadow: 
-      0 8px 32px var(--bf-appearance-token-color-overlay-black-50),
-      0 0 1px var(--bf-appearance-token-color-overlay-white-12),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
     z-index: $z-popover;
     transform-origin: center top;
     transition:
@@ -220,7 +215,7 @@
     justify-content: space-between;
     padding: 8px 12px;
     border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$support-size;
     font-weight: 500;
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
@@ -228,7 +223,7 @@
   }
   
   &__dropdown-hint {
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$meta-size;
     color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
     text-transform: none;
@@ -258,13 +253,13 @@
 
   &__config-name {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$control-size;
     font-weight: 500;
   }
 
   &__config-description {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     line-height: 1.35;
   }
   
@@ -353,7 +348,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$control-size;
     font-weight: 500;
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
@@ -362,7 +357,7 @@
   }
   
   &__option-desc {
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -381,7 +376,7 @@
   }
 
   &__option-subdesc {
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;

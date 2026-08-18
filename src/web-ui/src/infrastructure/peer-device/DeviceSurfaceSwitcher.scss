@@ -4,6 +4,7 @@
  */
 
 @use '../../component-library/styles/tokens.scss' as *;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .bitfun-device-switcher {
   display: flex;
@@ -86,16 +87,14 @@
   }
 
   &__menu {
+    @include surfaces.floating-surface;
+
     position: fixed;
     min-width: 216px;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
     overflow-y: auto;
     padding: $size-gap-1;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
     z-index: 9999;
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);

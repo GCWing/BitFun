@@ -23,10 +23,10 @@
     {
       "root": "src/web-ui/src",
       "domain": "themePreset",
-      "key": "#fafafa <-> #ffffff",
+      "key": "#fdfdfd <-> #ffffff",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "The default Light primary background intentionally uses the requested off-white surface while secondary, elevated, and scene surfaces remain pure white. These adjacent roles need a restrained but visible hierarchy.",
+      "reason": "The default Light navigation and app background intentionally uses the sampled near-white surface while secondary, elevated, editor, and scene surfaces remain pure white. These adjacent roles preserve the reference hierarchy without introducing a tinted canvas.",
       "reevaluateWhen": "Only after a focused Light-theme surface review proves primary and elevated surfaces no longer need separate values."
     },
     {
@@ -44,7 +44,7 @@
       "key": "#f3f3f5 <-> #faf8f0",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is the default Light editor line highlight and a button state stop. This is cross-theme and renderer identity, not a duplicate role.",
+      "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is the default Light soft surface and a dark-theme primary button text stop. This is cross-theme and component identity, not a duplicate role.",
       "reevaluateWhen": "Only after China Style paper identity is intentionally neutralized."
     },
     {

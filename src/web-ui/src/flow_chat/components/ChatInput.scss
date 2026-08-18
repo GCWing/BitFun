@@ -4,6 +4,8 @@
 
 @use '../../component-library/styles/tokens' as *;
 @use '../../component-library/styles/_extended-mixins' as mixins;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '../typography' as flow-type;
 
 .bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
   position: absolute;
@@ -122,7 +124,7 @@
 .bitfun-chat-input__voice-pill-time {
   min-width: 36px;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 12px;
+  font-size: flow-type.$support-size;
   font-weight: 550;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -414,7 +416,7 @@
           max-height: 20px !important;
           overflow: hidden;
           line-height: var(--bf-appearance-token-flowchat-support-line-height);
-          font-size: var(--bf-appearance-token-flowchat-font-size-base);
+          font-size: flow-type.$body-size;
           padding: 0 !important;
           width: 100%;
           // Allow clicks to reach the contenteditable in capsule mode
@@ -472,7 +474,7 @@
           gap: 2px;
           height: 30px;
           padding: 0 5px 0 0;
-          border: 1px solid var(--bf-appearance-token-border-subtle);
+          border: 1px solid transparent;
           border-radius: 15px;
           background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
 
@@ -483,15 +485,16 @@
           }
         }
 
-        // The pill owns the border and background; the trigger inside it is a
-        // plain segment so the pair does not read as two stacked controls.
+        // The pill owns the interaction boundary and background; the trigger
+        // inside it is a plain segment so the pair does not read as two stacked
+        // controls. Its resting boundary stays transparent.
         .bitfun-model-selector__trigger {
           height: 28px;
           padding: 0 6px 0 11px;
           border: 0;
           border-radius: 14px;
           background: transparent;
-          font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+          font-size: flow-type.$control-size;
           opacity: 1;
         }
 
@@ -543,7 +546,7 @@
     right: 0;
     pointer-events: none;
     color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 52%, transparent);
-    font-size: var(--bf-appearance-token-flowchat-font-size-base);
+    font-size: flow-type.$body-size;
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
     white-space: nowrap;
     overflow: hidden;
@@ -578,7 +581,7 @@
     display: inline-block;
     padding: 0 4px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$support-size;
     font-weight: 500;
     letter-spacing: 0.01em;
     background: transparent;
@@ -591,7 +594,7 @@
     align-items: center;
     flex-shrink: 0;
     gap: var(--bf-appearance-token-flowchat-inline-gap);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: flow-type.$control-size;
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.72;
@@ -812,7 +815,7 @@
   }
 
   &__target-switcher-label {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
     padding: 0.12rem var(--bf-appearance-token-flowchat-card-expanded-pad-y) 0.12rem 0;
@@ -830,7 +833,7 @@
     border: none;
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$control-size;
     font-weight: 400;
     border-radius: 5px;
     cursor: pointer;
@@ -864,7 +867,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$support-size;
     font-weight: 400;
     opacity: 0.65;
 
@@ -1035,7 +1038,7 @@
     padding: 0.12rem 0.25rem 0.12rem var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     border-radius: 999px;
     border: none;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$control-size;
     font-weight: 500;
     letter-spacing: 0.02em;
     color: var(--bf-appearance-token-color-text-secondary);
@@ -1090,7 +1093,7 @@
 
   &__agent-boost-empty {
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-muted);
     text-align: center;
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
@@ -1119,7 +1122,7 @@
     margin: 0;
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     background: transparent;
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$control-size;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     user-select: none;
@@ -1174,7 +1177,7 @@
     margin: 0;
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     background: transparent;
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$control-size;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     user-select: none;
@@ -1231,21 +1234,13 @@
   }
 
   &__boost-submenu-panel {
+    @include surfaces.floating-surface;
+
     min-width: 220px;
     max-width: 300px;
     max-height: 280px;
     display: flex;
     flex-direction: column;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: 8px;
-    box-shadow:
-      0 8px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35),
-      0 4px 16px var(--bf-appearance-token-color-overlay-black-20),
-      0 0 1px var(--bf-appearance-token-color-accent-300),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
-    backdrop-filter: blur(20px) saturate(1.2);
-    -webkit-backdrop-filter: blur(20px) saturate(1.2);
     overflow: hidden;
     transform-origin: left top;
     animation: bitfun-chat-input-boost-menu-enter 180ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -1271,7 +1266,7 @@
     justify-content: center;
     gap: var(--bf-appearance-token-flowchat-control-gap);
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -1305,7 +1300,7 @@
     padding: 0.32rem var(--bf-appearance-token-flowchat-card-expanded-pad-y);
     border-radius: 4px;
     background: transparent;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$control-size;
     color: var(--bf-appearance-token-color-text-primary);
     cursor: pointer;
     user-select: none;
@@ -1347,7 +1342,7 @@
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
     background: transparent;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$control-size;
     font-weight: 500;
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, var(--bf-appearance-token-color-text-primary));
     cursor: pointer;
@@ -1377,7 +1372,7 @@
   }
 
   &__mode-pending-indicator {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$micro-size;
     color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, transparent);
     margin-left: 4px;
     display: inline-flex;
@@ -1388,24 +1383,17 @@
   }
 
   &__mode-dropdown {
+    @include surfaces.floating-surface;
+
     position: fixed;
     min-width: 200px;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-    border-radius: 6px;
     overflow: hidden;
-    backdrop-filter: blur(20px) saturate(1.2);
-    -webkit-backdrop-filter: blur(20px) saturate(1.2);
-    box-shadow:
-      0 8px 32px var(--bf-appearance-token-color-overlay-black-50),
-      0 0 1px var(--bf-appearance-token-color-overlay-white-12),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
     z-index: $z-dropdown;
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: flow-type.$control-size;
     transform-origin: left bottom;
     animation: mode-dropdown-fade-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
 
@@ -1419,7 +1407,7 @@
 
   &__mode-option {
     padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$control-size;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -1464,7 +1452,7 @@
 
         &::after {
           content: ' (Pending)';
-          font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+          font-size: flow-type.$meta-size;
           opacity: 0.8;
         }
       }
@@ -1501,7 +1489,7 @@
 
   &__mode-divider-text {
     padding: 0 8px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$meta-size;
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     font-weight: 500;
@@ -1514,7 +1502,7 @@
 
   &__mode-submenu-trigger {
     padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$control-size;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -1550,7 +1538,7 @@
   }
 
   &__mode-submenu-active-name {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$support-size;
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
     font-weight: 500;
     margin-left: auto;
@@ -1562,7 +1550,7 @@
   }
 
   &__mode-submenu-dots {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$micro-size;
     color: var(--bf-appearance-token-color-text-muted);
     margin-left: auto;
     letter-spacing: 1px;
@@ -1573,7 +1561,7 @@
 
     .bitfun-chat-input__mode-option {
       padding-left: 24px;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+      font-size: flow-type.$control-size;
 
       &:hover:not(&--disabled) {
         background: var(--bf-appearance-token-color-overlay-white-04);
@@ -1647,7 +1635,7 @@
     border-radius: 3px;
     background: var(--bf-appearance-token-color-warning-bg);
     color: var(--bf-appearance-token-color-warning);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$micro-size;
     font-weight: 600;
     letter-spacing: 0.5px;
     margin-left: 6px;
@@ -1670,23 +1658,16 @@
   }
 
   &__slash-command-picker {
+    @include surfaces.floating-surface;
+
     position: fixed;
     width: min(260px, calc(100vw - 16px));
     max-height: min(280px, calc(100vh - 16px));
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: 6px;
     overflow: hidden;
-    backdrop-filter: blur(20px) saturate(1.2);
-    -webkit-backdrop-filter: blur(20px) saturate(1.2);
-    box-shadow:
-      0 8px 32px var(--bf-appearance-token-color-overlay-black-50),
-      0 0 1px var(--bf-appearance-token-color-overlay-white-12),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
     z-index: $z-dropdown;
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: flow-type.$control-size;
     // Slash commands are opened by typing, so their keyboard path is instant.
     animation: none;
   }
@@ -1697,7 +1678,7 @@
     justify-content: space-between;
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$support-size;
     font-weight: 500;
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
@@ -1705,7 +1686,7 @@
   }
 
   &__slash-command-hint {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$meta-size;
     color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
     text-transform: none;
@@ -1751,7 +1732,7 @@
 
   &__slash-command-section-title {
     flex: 0 0 auto;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$support-size;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -1787,7 +1768,7 @@
   }
 
   &__slash-command-name {
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$control-size;
     font-weight: 500;
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
     font-family: var(--bf-appearance-token-font-family-mono);
@@ -1799,7 +1780,7 @@
   }
 
   &__slash-command-label {
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-secondary);
     flex: 1;
     min-width: 0;
@@ -1818,7 +1799,7 @@
   }
 
   &__slash-command-current {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$meta-size;
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
@@ -1833,7 +1814,7 @@
    * hints the TUI command menu appends to its descriptions.
    */
   &__slash-command-status {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$meta-size;
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
     font-weight: 500;
@@ -1854,7 +1835,7 @@
   &__slash-command-empty {
     padding: var(--bf-appearance-token-size-gap-4) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     text-align: center;
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -1862,18 +1843,6 @@
   :root[data-bf-appearance-mode="light"] &,
   :root[data-bf-appearance-mode="light"] &,
   .light & {
-    &__slash-command-picker,
-    &__mode-dropdown {
-      background: var(--bf-appearance-token-color-bg-elevated);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-      box-shadow:
-        0 4px 18px var(--bf-appearance-token-color-overlay-slate-04),
-        0 1px 3px var(--bf-appearance-token-color-overlay-slate-04),
-        inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-95);
-    }
-
     &__mode-option:not(.bitfun-chat-input__mode-option--disabled):hover {
       background: var(--bf-appearance-token-element-bg-soft);
     }
@@ -2224,7 +2193,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: flow-type.$micro-size;
     font-weight: 700;
     line-height: 1;
     box-shadow: 0 0 0 1px rgba(var(--private-chat-input-queued-badge-ring-rgb), 0.85);

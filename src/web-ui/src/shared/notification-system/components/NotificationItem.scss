@@ -1,16 +1,15 @@
  
 
 @use '../../../component-library/styles/tokens' as *;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .notification-item {
+  @include surfaces.floating-surface;
+
   display: flex;
   align-items: flex-start;
   gap: $size-gap-2;
   padding: $size-gap-3;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border-radius: $size-radius-base;
-  box-shadow: 0 2px 6px var(--bf-appearance-token-color-overlay-black-08);
-  border: 1px solid var(--bf-appearance-token-border-base);
   min-width: 280px;
   max-width: 320px;
   animation: bitfun-notification-enter 180ms cubic-bezier(0.23, 1, 0.32, 1) both;

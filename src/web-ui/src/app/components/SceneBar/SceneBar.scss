@@ -5,8 +5,11 @@
  */
 
 @use '../../../component-library/styles/tokens.scss' as *;
+@use '../../styles/chrome-token-scope' as chrome;
 
 .bitfun-scene-bar {
+  @include chrome.apply;
+
   display: flex;
   align-items: stretch;
   height: 38px;

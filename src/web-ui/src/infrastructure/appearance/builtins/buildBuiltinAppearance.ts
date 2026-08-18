@@ -14,6 +14,8 @@ import {
   type WidgetAppearanceVariableName,
 } from '../adapters/widgetAppearanceVariables';
 
+const OVERLAY_WHITE_04 = 'rgba(255, 255, 255, 0.04)';
+
 const ref = (path: string): AppearanceReference => ({ kind: 'ref', path });
 const colorRef = (id: string): AppearanceReference => ref(`globals.colors.${id}`);
 const lengthRef = (id: string): AppearanceReference => ref(`globals.lengths.${id}`);
@@ -97,6 +99,20 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     500: colors.accent[500],
     600: colors.accent[600],
   };
+  const scrollbar = colors.scrollbar ?? {
+    thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)',
+    thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)',
+  };
+  const chrome = colors.chrome ?? {
+    background: colors.background,
+    text: colors.text,
+    accent: colors.accent,
+    border: colors.border,
+    element: colors.element,
+    scrollbar,
+  };
+  const chromeScrollbar = chrome.scrollbar ?? scrollbar;
+  const configPage = palette.components?.configPage;
   const tokens: Record<string, string> = {
     '--bf-appearance-token-color-bg-primary': colors.background.primary,
     '--bf-appearance-token-color-bg-secondary': colors.background.secondary,
@@ -104,6 +120,40 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-color-bg-elevated': colors.background.elevated,
     '--bf-appearance-token-color-bg-workbench': colors.background.workbench,
     '--bf-appearance-token-color-bg-scene': colors.background.scene,
+    '--bf-appearance-token-chrome-bg-primary': chrome.background.primary,
+    '--bf-appearance-token-chrome-bg-secondary': chrome.background.secondary,
+    '--bf-appearance-token-chrome-bg-tertiary': chrome.background.tertiary,
+    '--bf-appearance-token-chrome-bg-elevated': chrome.background.elevated,
+    '--bf-appearance-token-chrome-bg-workbench': chrome.background.workbench,
+    '--bf-appearance-token-chrome-bg-scene': chrome.background.scene,
+    '--bf-appearance-token-chrome-text-primary': chrome.text.primary,
+    '--bf-appearance-token-chrome-text-secondary': chrome.text.secondary,
+    '--bf-appearance-token-chrome-text-muted': chrome.text.muted,
+    '--bf-appearance-token-chrome-text-disabled': chrome.text.disabled,
+    '--bf-appearance-token-chrome-accent-50': chrome.accent[50],
+    '--bf-appearance-token-chrome-accent-100': chrome.accent[100],
+    '--bf-appearance-token-chrome-accent-200': chrome.accent[200],
+    '--bf-appearance-token-chrome-accent-300': chrome.accent[300],
+    '--bf-appearance-token-chrome-accent-400': chrome.accent[400],
+    '--bf-appearance-token-chrome-accent-500': chrome.accent[500],
+    '--bf-appearance-token-chrome-accent-600': chrome.accent[600],
+    '--bf-appearance-token-chrome-accent-700': chrome.accent[700],
+    '--bf-appearance-token-chrome-border-subtle': chrome.border.subtle,
+    '--bf-appearance-token-chrome-border-base': chrome.border.base,
+    '--bf-appearance-token-chrome-border-medium': chrome.border.medium,
+    '--bf-appearance-token-chrome-border-strong': chrome.border.strong,
+    '--bf-appearance-token-chrome-border-prominent': chrome.border.prominent,
+    '--bf-appearance-token-chrome-border-accent-soft': `color-mix(in srgb, ${chrome.accent[600]} 30%, transparent)`,
+    '--bf-appearance-token-chrome-border-accent-subtle': `color-mix(in srgb, ${chrome.accent[600]} 15%, transparent)`,
+    '--bf-appearance-token-chrome-border-accent': `color-mix(in srgb, ${chrome.accent[600]} 40%, transparent)`,
+    '--bf-appearance-token-chrome-border-accent-strong': `color-mix(in srgb, ${chrome.accent[600]} 60%, transparent)`,
+    '--bf-appearance-token-chrome-element-bg-subtle': chrome.element.subtle,
+    '--bf-appearance-token-chrome-element-bg-soft': chrome.element.soft,
+    '--bf-appearance-token-chrome-element-bg-base': chrome.element.base,
+    '--bf-appearance-token-chrome-element-bg-medium': chrome.element.medium,
+    '--bf-appearance-token-chrome-element-bg-strong': chrome.element.strong,
+    '--bf-appearance-token-chrome-scrollbar-thumb': chromeScrollbar.thumb,
+    '--bf-appearance-token-chrome-scrollbar-thumb-hover': chromeScrollbar.thumbHover,
     '--bf-appearance-token-color-static-white': '#ffffff',
     '--bf-appearance-token-color-static-black': '#000000',
     '--bf-appearance-token-color-static-white-rgb': '255, 255, 255',
@@ -156,6 +206,13 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-element-bg-medium': colors.element.medium,
     '--bf-appearance-token-element-bg-strong': colors.element.strong,
     '--bf-appearance-token-element-bg-hover': colors.element.medium,
+    '--bf-appearance-token-config-page-section-bg': configPage?.section.background ?? colors.element.subtle,
+    '--bf-appearance-token-config-page-section-border': configPage?.section.border ?? colors.border.subtle,
+    '--bf-appearance-token-config-page-section-border-width': configPage?.section.borderWidth ?? '1px',
+    '--bf-appearance-token-config-page-section-shadow': configPage?.section.shadow
+      ?? `inset 0 1px 0 ${OVERLAY_WHITE_04}`,
+    '--bf-appearance-token-config-page-divider': configPage?.divider ?? colors.border.subtle,
+    '--bf-appearance-token-config-page-row-hover-bg': configPage?.rowHover ?? OVERLAY_WHITE_04,
     '--bf-appearance-token-git-color-branch': colors.git.branch,
     '--bf-appearance-token-git-color-branch-bg': colors.git.branchBg,
     '--bf-appearance-token-git-color-branch-bg-hover': colors.element.medium,
@@ -163,8 +220,8 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-git-color-added': colors.git.added,
     '--bf-appearance-token-git-color-deleted': colors.git.deleted,
     '--bf-appearance-token-git-color-staged': colors.git.staged,
-    '--bf-appearance-token-scrollbar-thumb': colors.scrollbar?.thumb ?? (palette.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)'),
-    '--bf-appearance-token-scrollbar-thumb-hover': colors.scrollbar?.thumbHover ?? (palette.type === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)'),
+    '--bf-appearance-token-scrollbar-thumb': scrollbar.thumb,
+    '--bf-appearance-token-scrollbar-thumb-hover': scrollbar.thumbHover,
     '--bf-appearance-token-opacity-disabled': String(effects.opacity.disabled),
     '--bf-appearance-token-opacity-hover': String(effects.opacity.hover),
     '--bf-appearance-token-badge-padding-y': '2px',
@@ -313,7 +370,7 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
   };
 
   const overlays = {
-    '--bf-appearance-token-color-overlay-white-04': 'rgba(255, 255, 255, 0.04)',
+    '--bf-appearance-token-color-overlay-white-04': OVERLAY_WHITE_04,
     '--bf-appearance-token-color-overlay-white-08': 'rgba(255, 255, 255, 0.08)',
     '--bf-appearance-token-color-overlay-white-12': 'rgba(255, 255, 255, 0.12)',
     '--bf-appearance-token-color-overlay-white-15': 'rgba(255, 255, 255, 0.15)',
@@ -672,7 +729,9 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
         parts: {
           overlay: { base: { backgroundColor: { kind: 'rgb', r: 0, g: 0, b: 0, a: 0.55 }, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: { kind: 'px', value: 24 } } },
           dialog: {
-            base: { backgroundColor: colorRef('bg-primary'), borderColor: colorRef('border-subtle'), borderStyle: 'solid', borderWidth: lengthRef('border-one'), borderRadius: { kind: 'px', value: 8 }, maxHeight: { kind: 'percent', value: 100 } },
+            // Outer popup-card chrome is owned exclusively by dialog-surface.
+            // Appearance keeps only layout so it cannot fork border/radius/shadow.
+            base: { maxHeight: { kind: 'percent', value: 100 } },
             facets: {
               size: {
                 small: { width: { kind: 'percent', value: 100 }, maxWidth: { kind: 'px', value: 420 } },
@@ -695,7 +754,7 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
         version: 1,
         settings: {
           tokens: cssTokens,
-          background: palette.colors.background.primary,
+          background: palette.colors.chrome?.background.primary ?? palette.colors.background.primary,
         },
       },
       monaco: {

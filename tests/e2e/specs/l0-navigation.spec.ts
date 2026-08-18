@@ -84,6 +84,22 @@ describe('L0 Navigation Panel', () => {
       console.log('[L0] Navigation sections found:', sectionsExist);
       expect(sectionsExist).toBe(true);
     });
+
+    it('should not mark the primary assistant in the navigation', async function () {
+      if (!hasWorkspace) {
+        hasWorkspace = await openWorkspace(undefined, { requireWorkspaceLabel: false });
+      }
+      expect(hasWorkspace).toBe(true);
+
+      const assistantGroups = await browser.$$('.bitfun-nav-panel__assistant-item');
+      expect(assistantGroups.length).toBeGreaterThan(0);
+
+      for (const assistantGroup of assistantGroups) {
+        expect(await assistantGroup.$('.bitfun-nav-panel__assistant-item-badge').isExisting()).toBe(false);
+      }
+
+      await saveStepScreenshot('l0-navigation-assistants-without-primary-badge');
+    });
   });
 
   describe('Navigation interactivity', () => {
@@ -178,6 +194,65 @@ describe('L0 Navigation Panel', () => {
       );
     });
 
+    it('should give peer session groups more breathing room than their nested rows', async function () {
+      if (!hasWorkspace) {
+        hasWorkspace = await openWorkspace(undefined, { requireWorkspaceLabel: false });
+      }
+      expect(hasWorkspace).toBe(true);
+
+      const viewToggle = await $('[data-testid="nav-workspace-session-view-toggle"]');
+      await viewToggle.waitForDisplayed({ timeout: 10000 });
+      if (await viewToggle.getAttribute('data-view-mode') === 'all') {
+        await viewToggle.click();
+      }
+      await browser.waitUntil(
+        async () => await viewToggle.getAttribute('data-view-mode') === 'grouped',
+        { timeout: 5000, timeoutMsg: 'Session view did not enter grouped mode' },
+      );
+
+      const spacing = await browser.execute(() => {
+        const list = document.querySelector<HTMLElement>(
+          '[data-testid="nav-workspace-list"][data-workspace-list="all"]',
+        );
+        if (!list) return null;
+
+        const groups = Array.from(list.querySelectorAll<HTMLElement>(
+          ':scope > [data-testid="nav-workspace-drop-target"]',
+        )).filter(group => group.getBoundingClientRect().height > 0);
+        const groupWithSession = groups.find(group => group.querySelector(
+          '[data-testid="nav-session-item"][data-session-level="0"]',
+        ));
+        const parentCard = groupWithSession?.querySelector<HTMLElement>(
+          ':scope > [data-testid="nav-workspace-item"] > [data-testid="nav-workspace-card"]',
+        );
+        const firstSession = groupWithSession?.querySelector<HTMLElement>(
+          '[data-testid="nav-session-item"][data-session-level="0"]',
+        );
+
+        if (groups.length < 2 || !parentCard || !firstSession) return null;
+
+        const firstGroupRect = groups[0].getBoundingClientRect();
+        const secondGroupRect = groups[1].getBoundingClientRect();
+        const parentRect = parentCard.getBoundingClientRect();
+        const sessionRect = firstSession.getBoundingClientRect();
+
+        return {
+          configuredGroupGap: Number.parseFloat(window.getComputedStyle(list).rowGap),
+          measuredGroupGap: secondGroupRect.top - firstGroupRect.bottom,
+          parentChildGap: sessionRect.top - parentRect.bottom,
+        };
+      });
+
+      expect(spacing).not.toBeNull();
+      if (!spacing) return;
+
+      console.log('[L0] Grouped session spacing:', spacing);
+      expect(spacing.configuredGroupGap).toBe(8);
+      expect(spacing.measuredGroupGap).toBeGreaterThanOrEqual(7.5);
+      expect(spacing.measuredGroupGap).toBeGreaterThan(spacing.parentChildGap);
+      await saveStepScreenshot('l0-navigation-group-spacing');
+    });
+
     it('should align nested session titles with the active workspace or assistant label', async function () {
       expect(hasWorkspace).toBe(true);
 
@@ -194,6 +269,81 @@ describe('L0 Navigation Panel', () => {
       console.log('[L0] Grouped session alignment:', { groupLabelX, sessionLabelX });
       expect(Math.abs(sessionLabelX - groupLabelX)).toBeLessThanOrEqual(1);
       await saveStepScreenshot('l0-navigation-grouped-session-alignment');
+    });
+
+    it('should give the selected child session the full row without filling its parent', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const activeGroup = await $('[data-testid="nav-workspace-item"][data-workspace-active="true"]');
+      const activeSession = await activeGroup.$(
+        '[data-testid="nav-session-item"][data-session-level="0"]',
+      );
+      await activeGroup.waitForDisplayed({ timeout: 10000 });
+      await activeSession.waitForDisplayed({ timeout: 10000 });
+      if (await activeSession.getAttribute('data-session-active') !== 'true') {
+        await activeSession.click();
+      }
+      await browser.waitUntil(
+        async () => await activeSession.getAttribute('data-session-active') === 'true',
+        { timeout: 10000, timeoutMsg: 'Nested session did not become active' },
+      );
+      await browser.pause(200);
+
+      const hierarchy = await browser.execute(() => {
+        const group = document.querySelector<HTMLElement>(
+          '[data-testid="nav-workspace-item"][data-workspace-active="true"]',
+        );
+        const card = group?.querySelector<HTMLElement>(
+          ':scope > [data-testid="nav-workspace-card"]',
+        );
+        const session = group?.querySelector<HTMLElement>(
+          '[data-testid="nav-session-item"][data-session-active="true"]',
+        );
+        const groupLabel = card?.querySelector<HTMLElement>('[data-bf-part="label"]');
+        const sessionLabel = session?.querySelector<HTMLElement>(
+          '.bitfun-nav-panel__inline-item-label',
+        );
+
+        if (!card || !session || !groupLabel || !sessionLabel) {
+          return null;
+        }
+
+        const cardRect = card.getBoundingClientRect();
+        const sessionRect = session.getBoundingClientRect();
+        const selectedBackgroundProbe = document.createElement('span');
+        selectedBackgroundProbe.style.backgroundColor = 'var(--bf-appearance-token-element-bg-soft)';
+        session.append(selectedBackgroundProbe);
+        const selectedBackground = window.getComputedStyle(selectedBackgroundProbe).backgroundColor;
+        selectedBackgroundProbe.remove();
+
+        return {
+          cardBackground: window.getComputedStyle(card).backgroundColor,
+          cardLabelWeight: window.getComputedStyle(groupLabel).fontWeight,
+          sessionBackground: window.getComputedStyle(session).backgroundColor,
+          sessionLabelWeight: window.getComputedStyle(sessionLabel).fontWeight,
+          selectedBackground,
+          cardLeft: cardRect.left,
+          cardRight: cardRect.right,
+          cardHeight: cardRect.height,
+          sessionLeft: sessionRect.left,
+          sessionRight: sessionRect.right,
+          sessionHeight: sessionRect.height,
+        };
+      });
+
+      expect(hierarchy).not.toBeNull();
+      if (!hierarchy) {
+        return;
+      }
+
+      expect(Math.abs(hierarchy.sessionLeft - hierarchy.cardLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(hierarchy.sessionRight - hierarchy.cardRight)).toBeLessThanOrEqual(1);
+      expect(hierarchy.sessionHeight).toBeLessThanOrEqual(hierarchy.cardHeight);
+      expect(hierarchy.sessionBackground).toBe(hierarchy.selectedBackground);
+      expect(hierarchy.sessionLabelWeight).toBe('600');
+      expect(hierarchy.cardBackground).toBe('rgba(0, 0, 0, 0)');
+      expect(hierarchy.cardLabelWeight).toBe('500');
+      await saveStepScreenshot('l0-navigation-selected-child-full-width');
     });
 
     it('should align extension child icons with the parent label', async function () {
@@ -321,7 +471,10 @@ describe('L0 Navigation Panel', () => {
       await backdrop.waitForExist({ reverse: true, timeout: 2000 });
     });
 
-    it('should keep the session divider full-width and remove the footer divider', async function () {
+    it('should keep the session and footer dividers full-width', async function () {
+      if (!hasWorkspace) {
+        hasWorkspace = await openWorkspace(undefined, { requireWorkspaceLabel: false });
+      }
       expect(hasWorkspace).toBe(true);
 
       const dividerLayout = await browser.execute(() => {
@@ -337,6 +490,7 @@ describe('L0 Navigation Panel', () => {
         const panelRect = panel.getBoundingClientRect();
         const sectionsRect = sections.getBoundingClientRect();
         const topActionsRect = topActions.getBoundingClientRect();
+        const footerRect = footer.getBoundingClientRect();
         const dividerStyle = window.getComputedStyle(topActions, '::after');
         const stickyDividerStyle = window.getComputedStyle(stickyHeader, '::after');
         const footerStyle = window.getComputedStyle(footer);
@@ -356,6 +510,8 @@ describe('L0 Navigation Panel', () => {
           stickyDividerBorderWidth: stickyDividerStyle.borderBottomWidth,
           footerBorderStyle: footerStyle.borderTopStyle,
           footerBorderWidth: footerStyle.borderTopWidth,
+          footerLeft: footerRect.left,
+          footerRight: footerRect.right,
         };
       });
 
@@ -371,9 +527,12 @@ describe('L0 Navigation Panel', () => {
       expect(dividerLayout.dividerRight).toBeGreaterThanOrEqual(dividerLayout.sectionsRight - 1);
       expect(dividerLayout.stickyDividerBorderStyle).toBe('dashed');
       expect(dividerLayout.stickyDividerBorderWidth).toBe('1px');
-      expect(dividerLayout.footerBorderStyle).toBe('none');
-      expect(dividerLayout.footerBorderWidth).toBe('0px');
+      expect(dividerLayout.footerBorderStyle).toBe('dashed');
+      expect(dividerLayout.footerBorderWidth).toBe('1px');
+      expect(Math.abs(dividerLayout.footerLeft - dividerLayout.panelLeft)).toBeLessThanOrEqual(1);
+      expect(dividerLayout.footerRight).toBeGreaterThanOrEqual(dividerLayout.panelRight - 1);
       console.log('[L0] Navigation divider layout:', dividerLayout);
+      await saveStepScreenshot('l0-navigation-footer-divider');
     });
 
     it('should align navigation scroll and resize controls with the scene border', async function () {

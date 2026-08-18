@@ -7,6 +7,18 @@ import { FlowChatHeader, type FlowChatHeaderProps } from './FlowChatHeader';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+const {
+  createReviewPlatformPullRequestDetailTabMock,
+  createReviewPlatformTabMock,
+  getWorkspaceSnapshotMock,
+  isGitRepositoryMock,
+} = vi.hoisted(() => ({
+  createReviewPlatformPullRequestDetailTabMock: vi.fn(),
+  createReviewPlatformTabMock: vi.fn(),
+  getWorkspaceSnapshotMock: vi.fn(),
+  isGitRepositoryMock: vi.fn(),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) => {
@@ -53,8 +65,18 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   }),
 }));
 
+vi.mock('@/infrastructure/api', () => ({
+  gitAPI: {
+    isGitRepository: isGitRepositoryMock,
+  },
+  reviewPlatformAPI: {
+    getWorkspaceSnapshot: getWorkspaceSnapshotMock,
+  },
+}));
+
 vi.mock('@/shared/utils/tabUtils', () => ({
-  createReviewPlatformTab: vi.fn(),
+  createReviewPlatformPullRequestDetailTab: createReviewPlatformPullRequestDetailTabMock,
+  createReviewPlatformTab: createReviewPlatformTabMock,
 }));
 
 vi.mock('./SessionFilesBadge', () => ({
@@ -62,11 +84,9 @@ vi.mock('./SessionFilesBadge', () => ({
 }));
 
 vi.mock('./SessionTreePopover', () => ({
-  SessionTreePopover: () => (
-    <div className="session-tree-popover">
-      <button type="button" data-testid="flowchat-header-session-tree" />
-    </div>
-  ),
+  SessionTreePopover: ({ embedded }: { embedded?: boolean }) => embedded
+    ? <div data-testid="flowchat-header-session-tree-content" />
+    : null,
 }));
 
 function createProps(overrides: Partial<FlowChatHeaderProps> = {}): FlowChatHeaderProps {
@@ -84,6 +104,13 @@ describe('FlowChatHeader', () => {
   let root: Root;
 
   beforeEach(() => {
+    isGitRepositoryMock.mockReset();
+    isGitRepositoryMock.mockResolvedValue(true);
+    getWorkspaceSnapshotMock.mockReset();
+    getWorkspaceSnapshotMock.mockResolvedValue({
+      pullRequests: [],
+      pagination: { total: 0 },
+    });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -145,40 +172,154 @@ describe('FlowChatHeader', () => {
     expect(container.querySelector('[data-testid="flowchat-header-turn-next"]')).toBeNull();
   });
 
-  it('places the Agent tree entry immediately before background commands', () => {
+  it('toggles the host-owned right panel from the session header', () => {
+    const onToggleRightPanel = vi.fn();
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps({ onToggleRightPanel })} />);
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-right-panel"]',
+    );
+    expect(trigger?.getAttribute('aria-label')).toBe('common:header.expandRightPanel');
+    expect(trigger?.getAttribute('aria-pressed')).toBe('false');
+    expect(trigger?.getAttribute('data-bf-state')).toBe('collapsed');
+    expect(trigger?.querySelector('.lucide-panel-right-open')).not.toBeNull();
+    const rightActions = container.querySelectorAll('.flowchat-header__actions')[1];
+    const actionTestIds = () => [...(rightActions?.children ?? [])].map((action) => (
+      action.getAttribute('data-testid')
+      ?? action.querySelector('[data-testid]')?.getAttribute('data-testid')
+    ));
+    expect(actionTestIds()).toEqual([
+      'flowchat-header-search',
+      'flowchat-header-session-overview',
+      'flowchat-header-right-panel',
+    ]);
+    expect(rightActions?.lastElementChild).toBe(trigger);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-search"]')?.click();
+    });
+    expect(actionTestIds()).toEqual([
+      'flowchat-header-search-bar',
+      'flowchat-header-session-overview',
+      'flowchat-header-right-panel',
+    ]);
+    expect(rightActions?.lastElementChild).toBe(
+      container.querySelector('[data-testid="flowchat-header-right-panel"]'),
+    );
+
+    act(() => {
+      trigger?.click();
+    });
+    expect(onToggleRightPanel).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root.render(
+        <FlowChatHeader
+          {...createProps({
+            isRightPanelOpen: true,
+            onToggleRightPanel,
+          })}
+        />,
+      );
+    });
+
+    const openTrigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-right-panel"]',
+    );
+    expect(openTrigger?.getAttribute('aria-label')).toBe('common:header.collapseRightPanel');
+    expect(openTrigger?.getAttribute('aria-pressed')).toBe('true');
+    expect(openTrigger?.getAttribute('data-bf-state')).toBe('open');
+    expect(openTrigger?.classList.contains('flowchat-header__right-panel-trigger--active')).toBe(true);
+    expect(openTrigger?.querySelector('.lucide-panel-right-close')).not.toBeNull();
+  });
+
+  it('shows Agents, background terminals, and pull requests as one default list', async () => {
     act(() => {
       root.render(<FlowChatHeader {...createProps({ sessionId: 'session-1' })} />);
     });
 
-    const treeButton = container.querySelector('[data-testid="flowchat-header-session-tree"]');
-    const commandButton = container.querySelector('[data-testid="flowchat-header-background-commands"]');
-    const treeContainer = treeButton?.closest('.session-tree-popover');
-    const commandContainer = commandButton?.closest('.flowchat-header__background-command-nav');
+    expect(container.querySelector('[data-testid="flowchat-header-session-tree"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-background-commands"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-pull-requests"]')).toBeNull();
 
-    expect(treeContainer?.nextElementSibling).toBe(commandContainer);
+    const overviewButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-session-overview"]',
+    );
+    expect(overviewButton?.querySelector('.lucide-sliders-horizontal')).not.toBeNull();
+    expect(overviewButton?.querySelector('.lucide-activity')).toBeNull();
+    await act(async () => {
+      overviewButton?.click();
+      await Promise.resolve();
+    });
+
+    const panel = document.querySelector('[data-testid="flowchat-header-session-overview-panel"]');
+    const items = [...(panel?.querySelector(
+      '.flowchat-header__session-overview-list',
+    )?.children ?? [])] as HTMLElement[];
+    expect(items.map(item => item.dataset.testid)).toEqual([
+      'flowchat-header-session-tree-section',
+      'flowchat-header-background-commands',
+      'flowchat-header-pull-requests',
+    ]);
+    const sectionHeaders = panel?.querySelectorAll(
+      '.flowchat-header__session-overview-section-header',
+    ) ?? [];
+    expect([...sectionHeaders].every(header => header.querySelector('svg') === null)).toBe(true);
+    expect(panel?.querySelector('.flowchat-header__session-overview-item-meta')).toBeNull();
+    expect(items[2]?.querySelector('svg')).toBeNull();
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')).not.toBeNull();
+    expect(panel?.querySelector('[data-testid="flowchat-header-background-empty"]')?.textContent)
+      .toBe('flowChatHeader.backgroundTerminalEmpty');
+    expect(panel?.querySelector('[data-testid="flowchat-header-pull-requests-empty"]')?.textContent)
+      .toBe('flowChatHeader.pullRequestEmpty');
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-overview-back"]')).toBeNull();
   });
 
-  it('opens the background command panel when no commands exist', () => {
+  it('shows the empty background terminal state without navigating', async () => {
     act(() => {
       root.render(<FlowChatHeader {...createProps()} />);
     });
 
-    const commandButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="flowchat-header-background-commands"]',
-    );
-    expect(commandButton?.disabled).toBe(false);
-
-    act(() => {
-      commandButton?.click();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="flowchat-header-session-overview"]',
+      )?.click();
+      await Promise.resolve();
     });
 
-    const panel = document.querySelector<HTMLElement>('.flowchat-header__background-command-panel');
-    expect(panel?.textContent).toContain('flowChatHeader.backgroundCommandEmpty');
+    const commandSection = document.querySelector<HTMLElement>(
+      '[data-testid="flowchat-header-background-commands"]',
+    );
+
+    const panel = document.querySelector<HTMLElement>('.flowchat-header__session-overview-panel');
+    expect(commandSection?.textContent).toContain('flowChatHeader.backgroundTerminalEmpty');
     expect(panel?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
     expect(panel?.style.visibility).toBe('visible');
+    expect(panel?.hasAttribute('data-bf-view')).toBe(false);
   });
 
-  it('renders background command menus in a portal outside the scrollable panel', () => {
+  it('renders the Agent tree immediately without a back-navigation state', async () => {
+    act(() => {
+      root.render(<FlowChatHeader {...createProps({ sessionId: 'session-1' })} />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="flowchat-header-session-overview"]',
+      )?.click();
+      await Promise.resolve();
+    });
+
+    const panel = document.querySelector<HTMLElement>(
+      '[data-testid="flowchat-header-session-overview-panel"]',
+    );
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')).not.toBeNull();
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-overview-back"]')).toBeNull();
+  });
+
+  it('renders background command menus in a portal outside the scrollable panel', async () => {
     const onStopBackgroundCommand = vi.fn();
     const onStopAllBackgroundCommands = vi.fn();
 
@@ -200,19 +341,19 @@ describe('FlowChatHeader', () => {
       );
     });
 
-    const commandButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="flowchat-header-background-commands"]',
-    );
-    act(() => {
-      commandButton?.click();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="flowchat-header-session-overview"]',
+      )?.click();
+      await Promise.resolve();
     });
 
-    const panel = document.querySelector('.flowchat-header__background-command-panel');
+    const panel = document.querySelector('.flowchat-header__session-overview-panel');
     const menuButton = panel?.querySelector<HTMLButtonElement>(
-      '.flowchat-header__background-command-panel-header-actions [aria-label="flowChatHeader.backgroundCommandActions"]',
+      '.flowchat-header__session-overview-section-actions [aria-label="flowChatHeader.backgroundCommandActions"]',
     );
     expect(panel?.querySelector('.flowchat-header__background-section-title')).toBeNull();
-    expect(menuButton?.closest('.flowchat-header__background-command-panel-header')).not.toBeNull();
+    expect(menuButton?.closest('.flowchat-header__session-overview-section-header')).not.toBeNull();
     act(() => {
       menuButton?.click();
     });
@@ -225,7 +366,7 @@ describe('FlowChatHeader', () => {
     act(() => {
       menu?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
-    expect(document.querySelector('.flowchat-header__background-command-panel')).not.toBeNull();
+    expect(document.querySelector('.flowchat-header__session-overview-panel')).not.toBeNull();
 
     const stopButton = menu?.querySelector<HTMLButtonElement>('[role="menuitem"]');
     act(() => {
@@ -233,5 +374,119 @@ describe('FlowChatHeader', () => {
     });
 
     expect(onStopAllBackgroundCommands).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the overview activity dot only for work that is still running', () => {
+    const finishedCommand: FlowChatHeaderProps['backgroundCommands'] = [{
+      execSessionKey: 'command-1',
+      execSessionId: 1,
+      title: 'Finished command',
+      command: 'pnpm test',
+      status: 'exited',
+    }];
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps({ backgroundCommands: finishedCommand })} />);
+    });
+    expect(container.querySelector('.flowchat-header__session-overview-status-dot')).toBeNull();
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps({
+        backgroundCommands: [{ ...finishedCommand[0], status: 'running' }],
+      })} />);
+    });
+    expect(container.querySelector('.flowchat-header__session-overview-status-dot')).not.toBeNull();
+  });
+
+  it('opens pull requests from the overview list and closes the popover', async () => {
+    act(() => {
+      root.render(<FlowChatHeader {...createProps()} />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="flowchat-header-session-overview"]',
+      )?.click();
+      await Promise.resolve();
+    });
+    act(() => {
+      document.querySelector<HTMLButtonElement>(
+        '[data-testid="flowchat-header-pull-requests"] .flowchat-header__session-overview-section-header--action',
+      )?.click();
+    });
+
+    expect(createReviewPlatformTabMock).toHaveBeenCalledWith('/workspace');
+    expect(document.querySelector('[data-testid="flowchat-header-session-overview-panel"]')).toBeNull();
+  });
+
+  it('shows compact pull request rows and opens the selected request', async () => {
+    getWorkspaceSnapshotMock.mockResolvedValueOnce({
+      pullRequests: [{
+        id: '42',
+        providerId: 'origin:github:bitfun',
+        number: 42,
+        title: 'Keep status lists compact',
+        webUrl: 'https://example.test/pull/42',
+      }],
+      pagination: { total: 1 },
+    });
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps()} />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="flowchat-header-session-overview"]',
+      )?.click();
+      await Promise.resolve();
+    });
+
+    const pullRequestItem = document.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-pull-request-item"]',
+    );
+    expect(pullRequestItem?.textContent).toBe('#42 Keep status lists compact');
+    expect(pullRequestItem?.querySelector('.lucide-chevron-right')).not.toBeNull();
+
+    act(() => {
+      pullRequestItem?.click();
+    });
+
+    expect(getWorkspaceSnapshotMock).toHaveBeenCalledWith('/workspace', null, 1, 3);
+    expect(createReviewPlatformPullRequestDetailTabMock).toHaveBeenCalledWith({
+      workspacePath: '/workspace',
+      remoteId: 'origin:github:bitfun',
+      pullRequestId: '42',
+      pullRequestUrl: 'https://example.test/pull/42',
+      title: '#42 Keep status lists compact',
+    });
+    expect(document.querySelector('[data-testid="flowchat-header-session-overview-panel"]')).toBeNull();
+  });
+
+  it('shows a distinct unavailable state for non-Git workspaces without loading pull requests', async () => {
+    isGitRepositoryMock.mockResolvedValueOnce(false);
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps()} />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="flowchat-header-session-overview"]',
+      )?.click();
+      await Promise.resolve();
+    });
+
+    const section = document.querySelector<HTMLElement>(
+      '[data-testid="flowchat-header-pull-requests"]',
+    );
+    const unavailable = section?.querySelector<HTMLElement>(
+      '[data-testid="flowchat-header-pull-requests-unavailable"]',
+    );
+    const headerButton = section?.querySelector<HTMLButtonElement>(
+      '.flowchat-header__session-overview-section-header--action',
+    );
+
+    expect(section?.dataset.bfState).toBe('unavailable');
+    expect(unavailable?.textContent).toBe('flowChatHeader.pullRequestNotGitRepository');
+    expect(headerButton?.disabled).toBe(true);
+    expect(getWorkspaceSnapshotMock).not.toHaveBeenCalled();
   });
 });

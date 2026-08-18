@@ -840,16 +840,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               data-workspace-id={workspace.id}
             >
               <span className="bitfun-nav-panel__assistant-item-label" data-bf-component="workspace-item" data-bf-part="label">{workspaceDisplayName}</span>
-              {isDefaultAssistantWorkspace ? (
-                <span
-                  data-bf-component="workspace-item"
-                  data-bf-part="badge"
-                  className="bitfun-nav-panel__assistant-item-badge"
-                  title={t('nav.workspaces.primaryAssistant')}
-                >
-                  {t('nav.workspaces.primaryAssistant')}
-                </span>
-              ) : null}
             </button>
           </Tooltip>
 

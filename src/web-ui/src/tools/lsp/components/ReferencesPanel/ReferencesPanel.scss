@@ -3,6 +3,7 @@
  */
 
 @use '@/component-library/styles/tokens.scss' as *;
+@use '@/component-library/styles/overlay-surfaces' as surfaces;
 
 .references-panel-container {
   position: fixed;
@@ -15,6 +16,8 @@
 }
 
 .references-panel {
+  @include surfaces.floating-surface;
+
   --references-panel-file-icon-rgb: 127, 219, 202;
   --references-panel-accent-shadow-rgb: 59, 130, 246;
   --references-panel-mark-rgb: 255, 215, 0;
@@ -23,18 +26,6 @@
   width: 500px;
   max-width: 90vw;
   min-width: 300px;
-  
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-prominent);
-  border-radius: $size-radius-base;
-  
-  box-shadow: 
-    var(--bf-appearance-token-shadow-xl),
-    0 0 0 1px var(--bf-appearance-token-color-overlay-black-80),
-    $inner-glow-top;
-  
-  backdrop-filter: $blur-medium;
-  -webkit-backdrop-filter: $blur-medium;
   
   overflow: hidden;
   pointer-events: all;

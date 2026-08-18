@@ -137,7 +137,6 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
         >
           {orderedAssistants.map(workspace => {
             const assistantName = getAssistantDisplayName(workspace);
-            const isPrimary = workspace.id === primaryAssistant?.id;
             return (
               <button
                 key={workspace.id}
@@ -153,11 +152,6 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
               >
                 <Plus size={13} aria-hidden="true" />
                 <span className="bitfun-nav-panel__assistant-session-menu-name">{assistantName}</span>
-                {isPrimary ? (
-                  <span className="bitfun-nav-panel__assistant-session-menu-badge">
-                    {t('nav.workspaces.primaryAssistant')}
-                  </span>
-                ) : null}
               </button>
             );
           })}

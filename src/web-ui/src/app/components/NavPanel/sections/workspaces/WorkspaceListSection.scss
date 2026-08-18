@@ -1,4 +1,5 @@
 @use '../../../../../component-library/styles/tokens.scss' as *;
+@use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
 
 .bitfun-nav-panel {
@@ -8,7 +9,8 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    gap: 0;
+    // Separate peer session groups more clearly than a parent row and its children.
+    gap: $size-gap-2;
     min-width: 0;
     max-width: 100%;
     padding: 2px 0 0;
@@ -949,6 +951,7 @@
 
   &__workspace-item-menu-popover {
     @include nav-font.nav-panel-font-token-scope;
+    @include surfaces.floating-surface;
 
     position: fixed;
     width: max-content;
@@ -958,10 +961,6 @@
     overflow-x: hidden;
     overflow-y: auto;
     padding: $size-gap-1 0;
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
     z-index: 10000;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -1048,12 +1047,21 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      // Align the nested session title with the workspace label after its 26px icon slot.
-      margin-left: 22px;
+      // Let the row own the full selection surface; indent only its content below.
+      margin-left: 0;
       margin-right: 0;
       padding-top: 0;
-      padding-left: 2px;
+      padding-left: 0;
       padding-right: 0;
+    }
+
+    .bitfun-nav-panel__inline-item {
+      height: 28px;
+      padding-left: 30px;
+
+      &.is-child {
+        padding-left: 44px;
+      }
     }
 
     .bitfun-nav-panel__inline-empty {
@@ -1329,21 +1337,6 @@
     color: var(--bf-appearance-token-color-text-primary);
   }
 
-  &__assistant-item-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-200) 88%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 700;
-    line-height: 1.4;
-    white-space: nowrap;
-  }
-
   &__assistant-item-menu {
     position: absolute;
     top: 50%;
@@ -1394,12 +1387,21 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      // Keep assistant-owned session rows on the same text rail as the assistant label.
-      margin-left: 22px;
+      // Let the row own the full selection surface; indent only its content below.
+      margin-left: 0;
       margin-right: 0;
       padding-top: 0;
-      padding-left: 2px;
+      padding-left: 0;
       padding-right: 0;
+    }
+
+    .bitfun-nav-panel__inline-item {
+      height: 28px;
+      padding-left: 30px;
+
+      &.is-child {
+        padding-left: 44px;
+      }
     }
 
     .bitfun-nav-panel__inline-empty {
@@ -1470,8 +1472,15 @@
 
   &__workspace-item.is-active &__workspace-item-card,
   &__assistant-item.is-active &__assistant-item-card {
-    background: transparent;
+    background: var(--bf-appearance-token-element-bg-soft);
     box-shadow: none;
+  }
+
+  // Workspace activity selects the group and its current session together. When
+  // the nested row is visible as the selection owner, avoid a competing parent fill.
+  &__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active) &__workspace-item-card,
+  &__assistant-item.is-active:has(&__assistant-item-sessions &__inline-item.is-active) &__assistant-item-card {
+    background: transparent;
   }
 
   &__workspace-item-card:active,
@@ -1520,9 +1529,6 @@
 
   &__workspace-item-menu-popover {
     padding: $size-gap-1;
-    border-color: var(--bf-appearance-token-border-medium);
-    border-radius: $size-radius-lg;
-    box-shadow: 0 14px 42px -12px var(--bf-appearance-token-color-overlay-black-30);
     transform-origin: top left;
     animation: bitfun-workspace-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
@@ -1556,6 +1562,11 @@
 
   .bitfun-nav-panel__workspace-item.is-active .bitfun-nav-panel__workspace-item-card:hover,
   .bitfun-nav-panel__assistant-item.is-active .bitfun-nav-panel__assistant-item-card:hover {
+    background: var(--bf-appearance-token-element-bg-soft);
+  }
+
+  .bitfun-nav-panel__workspace-item.is-active:has(.bitfun-nav-panel__workspace-item-sessions .bitfun-nav-panel__inline-item.is-active) .bitfun-nav-panel__workspace-item-card:hover,
+  .bitfun-nav-panel__assistant-item.is-active:has(.bitfun-nav-panel__assistant-item-sessions .bitfun-nav-panel__inline-item.is-active) .bitfun-nav-panel__assistant-item-card:hover {
     background: transparent;
   }
 }
@@ -1619,10 +1630,20 @@
     font-weight: 600;
   }
 
+  &__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active) &__workspace-item-label,
+  &__assistant-item.is-active:has(&__assistant-item-sessions &__inline-item.is-active) &__assistant-item-label {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-weight: 500;
+  }
+
+  &__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active) &__workspace-item-icon,
+  &__assistant-item.is-active:has(&__assistant-item-sessions &__inline-item.is-active) &__assistant-item-avatar {
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
   &__workspace-item-subtitle,
   &__workspace-item-remote,
-  &__workspace-item-badge,
-  &__assistant-item-badge {
+  &__workspace-item-badge {
     @include nav-font.nav-panel-text-meta;
 
     font-size: var(--bf-appearance-token-font-size-2xs);

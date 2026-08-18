@@ -5,13 +5,18 @@
  */
 
 @use '../../../component-library/styles/tokens.scss' as *;
+@use '../../styles/nav-panel-font-scope.scss' as nav-font;
 
 .bitfun-settings-nav {
+  @include nav-font.nav-panel-font-token-scope;
+  @include nav-font.nav-panel-text-body;
+
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
   overflow: hidden;
+  line-height: 1.35;
 
   // ── Header: title (back/forward lives in NavBar) ──────
 
@@ -24,9 +29,11 @@
   }
 
   &__title {
+    @include nav-font.nav-panel-text-heading;
+
     font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: 600;
-    color: var(--bf-appearance-token-color-text-primary);
+    line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -68,7 +75,11 @@
     }
 
     &.search .search__input {
+      @include nav-font.nav-panel-text-body;
+
       font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: 400;
+      line-height: 1.25;
 
       &::placeholder {
         color: var(--bf-appearance-token-color-text-disabled);
@@ -83,44 +94,50 @@
   &__search-results {
     display: flex;
     flex-direction: column;
-    padding: 2px $size-gap-2;
+    padding: 2px 6px;
     gap: 2px;
   }
 
   &__search-result-item {
+    @include nav-font.nav-panel-text-body;
+
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
     min-height: auto;
-    padding: $size-gap-2 $size-gap-2 $size-gap-2 $size-gap-3;
+    padding: $size-gap-2;
     border: none;
-    border-radius: $size-radius-base;
+    border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     text-align: left;
+    font-family: inherit;
     font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: 400;
+    line-height: 1.25;
     width: 100%;
     position: relative;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard;
 
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
+      @include nav-font.nav-panel-text-heading;
+
       background: var(--bf-appearance-token-element-bg-soft);
     }
 
     &.is-highlighted {
-      color: var(--bf-appearance-token-color-text-primary);
+      @include nav-font.nav-panel-text-heading;
+
       background: var(--bf-appearance-token-element-bg-soft);
     }
 
     &.is-active {
-      color: var(--bf-appearance-token-color-text-primary);
+      @include nav-font.nav-panel-text-heading;
+
       background: var(--bf-appearance-token-element-bg-soft);
-      font-weight: 500;
+      font-weight: 600;
     }
 
     &:focus-visible {
@@ -136,17 +153,19 @@
   }
 
   &__search-result-desc {
+    @include nav-font.nav-panel-text-meta;
+
     width: 100%;
     font-size: var(--bf-appearance-token-font-size-2xs);
     line-height: 1.35;
-    color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
   }
 
   &__search-empty {
+    @include nav-font.nav-panel-text-meta;
+
     padding: $size-gap-3 $size-gap-3;
     font-size: var(--bf-appearance-token-font-size-sm);
-    color: var(--bf-appearance-token-color-text-muted);
     text-align: center;
   }
 
@@ -178,23 +197,26 @@
   // ── Category group ─────────────────────────────────────
 
   &__category:not(:last-child) {
-    margin-bottom: $size-gap-5;
+    margin-bottom: $size-gap-3;
   }
 
   &__category-header {
     display: flex;
     align-items: center;
-    width: 100%;
-    height: 24px;
-    padding: 0 $size-gap-3;
+    width: auto;
+    height: 28px;
+    margin: 0 6px;
+    padding: 0 $size-gap-2;
   }
 
   &__category-label {
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    @include nav-font.nav-panel-text-meta;
+
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: 500;
+    letter-spacing: 0.015em;
+    line-height: 1.25;
     text-transform: uppercase;
-    color: var(--bf-appearance-token-color-text-muted);
     transition: color $motion-fast $easing-standard;
   }
 
@@ -203,7 +225,7 @@
   &__items {
     display: flex;
     flex-direction: column;
-    padding: 2px $size-gap-2;
+    padding: 2px 6px;
     gap: 2px;
   }
 
@@ -237,42 +259,63 @@
   }
 
   &__item {
+    @include nav-font.nav-panel-text-body;
+
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-2;
     height: 32px;
-    padding: 0 $size-gap-2 0 $size-gap-3;
+    padding: 0 $size-gap-2;
     border: none;
-    border-radius: $size-radius-base;
+    border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     text-align: left;
+    font-family: inherit;
     font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: 400;
+    line-height: 1.25;
     width: 100%;
     position: relative;
     transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+                background $motion-fast $easing-standard,
+                transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
+      @include nav-font.nav-panel-text-heading;
+
       background: var(--bf-appearance-token-element-bg-soft);
     }
 
     &:active {
+      transform: scale(0.985);
       background: var(--bf-appearance-token-element-bg-medium);
     }
 
     &.is-active {
-      color: var(--bf-appearance-token-color-text-primary);
+      @include nav-font.nav-panel-text-heading;
+
       background: var(--bf-appearance-token-element-bg-soft);
-      font-weight: 500;
+      font-weight: 600;
       box-shadow: none;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 3px;
+        top: 50%;
+        width: 2px;
+        height: 14px;
+        border-radius: $size-radius-full;
+        background: var(--bf-appearance-token-btn-primary-bg);
+        transform: translateY(-50%);
+      }
     }
 
     &:focus-visible {
+      @include nav-font.nav-panel-text-heading;
+
       outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: -1px;
     }

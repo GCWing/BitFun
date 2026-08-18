@@ -1,3 +1,5 @@
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+
 .bitfun-agent-companion-window-root,
 .bitfun-agent-companion-window-body {
   width: 100%;
@@ -81,6 +83,8 @@
   }
 
   &__overlay {
+    @include surfaces.floating-surface($backdrop-blur: false);
+
     box-sizing: border-box;
     width: max-content;
     max-width: min(240px, 100vw);
@@ -88,13 +92,10 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    border: 1px solid var(--bf-appearance-token-color-overlay-slate-12);
-    border-radius: 10px;
     /* Intentionally no backdrop-filter: adding a blurred layer on right-click
-       re-composites the other blurred surfaces and flashes the whole window. */
-    background: var(--bf-appearance-token-color-overlay-white-95);
+       re-composites the other blurred surfaces and flashes the whole window.
+       All remaining chrome still comes from FloatingSurface. */
     color: var(--bitfun-agent-companion-bubble-fg);
-    box-shadow: 0 6px 18px rgba(var(--bf-appearance-token-color-overlay-slate-rgb), 0.18);
     pointer-events: auto;
 
     /* Context menus are placed at the cursor. */

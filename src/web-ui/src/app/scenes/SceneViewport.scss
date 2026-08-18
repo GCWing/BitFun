@@ -19,9 +19,15 @@
     0 1px 2px var(--bf-appearance-token-color-overlay-slate-04),
     0 8px 24px -6px var(--bf-appearance-token-color-overlay-slate-08);
 
-  // Subtle token reads too faint on white scene surface — use stronger edge on light themes
+  // Keep the tab bar in the shell and lift only the scene content below it.
   :root[data-bf-appearance-mode='light'] & {
-    border-color: var(--bf-appearance-token-border-medium);
+    border-width: 1px;
+    border-color: var(--bf-appearance-token-border-base);
+    border-radius: $size-radius-lg;
+    box-shadow:
+      0 1px 2px var(--bf-appearance-token-color-overlay-slate-04),
+      0 10px 30px -10px var(--bf-appearance-token-color-overlay-slate-08),
+      0 24px 48px -24px var(--bf-appearance-token-color-overlay-slate-08);
   }
 
   :root[data-bf-appearance-mode='dark'] & {

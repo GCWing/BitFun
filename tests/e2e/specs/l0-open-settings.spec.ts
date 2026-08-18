@@ -45,6 +45,49 @@ describe('L0 Settings Panel', () => {
       expect(settingsButtonVisible).toBe(true);
       await saveStepScreenshot('l0-settings-footer-entry');
     });
+
+    it('should align upper and lower main navigation item typography', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const comparison = await browser.execute(() => {
+        const upperItem = document.querySelector<HTMLElement>(
+          '[data-testid="nav-assistant-manager"]',
+        );
+        const lowerItem = document.querySelector<HTMLElement>(
+          '[data-testid="nav-session-item"]:not([data-session-active="true"]) .bitfun-nav-panel__inline-item-label',
+        );
+
+        if (!upperItem || !lowerItem) {
+          return null;
+        }
+
+        const typeStyle = (element: HTMLElement) => {
+          const style = window.getComputedStyle(element);
+          return {
+            fontFamily: style.fontFamily,
+            fontSize: style.fontSize,
+            fontStyle: style.fontStyle,
+            fontWeight: style.fontWeight,
+            letterSpacing: style.letterSpacing,
+            lineHeight: style.lineHeight,
+            textTransform: style.textTransform,
+          };
+        };
+
+        return {
+          upper: typeStyle(upperItem),
+          lower: typeStyle(lowerItem),
+        };
+      });
+
+      expect(comparison).not.toBeNull();
+      if (!comparison) {
+        return;
+      }
+
+      expect(comparison.upper).toEqual(comparison.lower);
+      await saveStepScreenshot('l0-main-navigation-typography-aligned');
+    });
   });
 
   describe('Settings panel interaction', () => {
@@ -71,6 +114,80 @@ describe('L0 Settings Panel', () => {
       if (sceneExists) {
         await saveStepScreenshot('l0-settings-panel-opened');
       }
+    });
+
+    it('should match the main navigation typography and row rhythm', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const comparison = await browser.execute(() => {
+        const mainItem = document.querySelector<HTMLElement>(
+          '[data-testid="nav-assistant-manager"]',
+        );
+        const settingsItem = document.querySelector<HTMLElement>(
+          '.bitfun-settings-nav__item:not(.is-active)',
+        );
+        const lowerItem = document.querySelector<HTMLElement>(
+          '[data-testid="nav-session-item"]:not([data-session-active="true"]) .bitfun-nav-panel__inline-item-label',
+        );
+        const activeSettingsItem = document.querySelector<HTMLElement>(
+          '.bitfun-settings-nav__item.is-active',
+        );
+        const mainCategory = document.querySelector<HTMLElement>(
+          '.bitfun-nav-panel__section-label',
+        );
+        const settingsCategory = document.querySelector<HTMLElement>(
+          '.bitfun-settings-nav__category-label',
+        );
+
+        if (!mainItem || !settingsItem || !lowerItem || !activeSettingsItem || !mainCategory || !settingsCategory) {
+          return null;
+        }
+
+        const typeStyle = (element: HTMLElement) => {
+          const style = window.getComputedStyle(element);
+          return {
+            fontFamily: style.fontFamily,
+            fontSize: style.fontSize,
+            fontStyle: style.fontStyle,
+            fontWeight: style.fontWeight,
+            letterSpacing: style.letterSpacing,
+            lineHeight: style.lineHeight,
+            textTransform: style.textTransform,
+          };
+        };
+        const rowStyle = (element: HTMLElement) => {
+          const style = window.getComputedStyle(element);
+          return {
+            borderRadius: style.borderRadius,
+            height: element.getBoundingClientRect().height,
+            paddingLeft: style.paddingLeft,
+            paddingRight: style.paddingRight,
+          };
+        };
+
+        return {
+          mainItemType: typeStyle(mainItem),
+          settingsItemType: typeStyle(settingsItem),
+          lowerItemType: typeStyle(lowerItem),
+          activeSettingsWeight: window.getComputedStyle(activeSettingsItem).fontWeight,
+          mainCategoryType: typeStyle(mainCategory),
+          settingsCategoryType: typeStyle(settingsCategory),
+          mainRow: rowStyle(mainItem),
+          settingsRow: rowStyle(settingsItem),
+        };
+      });
+
+      expect(comparison).not.toBeNull();
+      if (!comparison) {
+        return;
+      }
+
+      expect(comparison.mainItemType).toEqual(comparison.lowerItemType);
+      expect(comparison.settingsItemType).toEqual(comparison.lowerItemType);
+      expect(comparison.settingsCategoryType).toEqual(comparison.mainCategoryType);
+      expect(comparison.activeSettingsWeight).toBe('600');
+      expect(comparison.settingsRow).toEqual(comparison.mainRow);
+      await saveStepScreenshot('l0-settings-navigation-aligned');
     });
   });
 

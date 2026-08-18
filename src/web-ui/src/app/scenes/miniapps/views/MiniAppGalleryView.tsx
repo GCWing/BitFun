@@ -342,6 +342,7 @@ const MiniAppGalleryView: React.FC = () => {
       <div data-bf-component="miniapp-gallery-view" data-bf-part="content" className="gallery-zones">
         <GalleryZone
           title={t('running')}
+          className={runningApps.length === 0 ? 'miniapp-gallery__running-zone is-empty' : 'miniapp-gallery__running-zone'}
           tools={runningApps.length > 0 ? <span className="gallery-zone-badge">{runningApps.length}</span> : null}
         >
           {runningApps.length > 0 ? (

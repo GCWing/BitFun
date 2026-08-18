@@ -122,6 +122,10 @@ interface ModernFlowChatContainerProps {
   className?: string;
   config?: Partial<FlowChatConfig>;
   isViewportActive?: boolean;
+  /** Whether the host-owned session right panel is open. */
+  isRightPanelOpen?: boolean;
+  /** Toggle the host-owned session right panel. */
+  onToggleRightPanel?: () => void;
   /** Host-owned replacement for the ordinary new-session WelcomePanel. */
   emptyState?: React.ReactNode;
 
@@ -279,6 +283,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   className = '',
   config,
   isViewportActive = true,
+  isRightPanelOpen = false,
+  onToggleRightPanel,
   emptyState,
   onFileViewRequest,
   onTabOpen,
@@ -2435,6 +2441,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           currentUserMessage={currentHeaderMessage}
           visible={virtualItems.length > 0}
           sessionId={activeSession?.sessionId}
+          isRightPanelOpen={isRightPanelOpen}
+          onToggleRightPanel={onToggleRightPanel}
           onJumpToCurrentTurn={() => {
             const turnId = effectiveVisibleTurnInfo?.turnId;
             if (turnId) navigateToTurn(turnId);

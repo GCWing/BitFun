@@ -1,6 +1,7 @@
 /**
  * Peer directory browser styles (controller-side in-app picker).
  */
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .peer-directory-browser-overlay {
   position: fixed;
@@ -22,15 +23,13 @@
 }
 
 .peer-directory-browser {
+  @include surfaces.dialog-surface;
+
   display: flex;
   flex-direction: column;
   height: 72vh;
   width: 90vw;
   max-width: 840px;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 12px;
-  box-shadow: 0 24px 48px var(--bf-appearance-token-color-overlay-black-50);
   overflow: hidden;
   opacity: 1;
   transform: translateY(0) scale(1);

@@ -20,12 +20,6 @@
     max-width: 720px;
     height: min(520px, calc(100vh - 24px));
     max-height: calc(100vh - 24px);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-border-base) 70%, transparent);
-    border-radius: 16px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    box-shadow:
-      0 18px 48px var(--bf-appearance-token-color-overlay-black-20),
-      0 2px 10px var(--bf-appearance-token-color-overlay-black-08);
   }
 
   > .modal.modal--xlarge > .modal__header-shell > .modal__header {
@@ -77,7 +71,6 @@
     > .modal.modal--xlarge {
       height: calc(100vh - 20px);
       max-height: calc(100vh - 20px);
-      border-radius: 14px;
     }
 
     > .modal.modal--xlarge > .modal__header-shell > .modal__header {
@@ -102,7 +95,6 @@
     > .modal.modal--xlarge {
       height: calc(100vh - 16px);
       max-height: calc(100vh - 16px);
-      border-radius: 12px;
     }
 
     > .modal.modal--xlarge > .modal__header-shell > .modal__header {

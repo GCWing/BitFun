@@ -2,6 +2,7 @@
  * FlowTextBlock styles
  */
 @use '../../component-library/styles/markdown-layout' as markdown;
+@use '../typography' as flow-type;
 
 .flow-text-block {
   width: 100%;
@@ -69,6 +70,7 @@
     background: transparent;
     border: none;
     padding: 0.1em 0.2em;
+    font-size: flow-type.$control-size;
   }
 
   .markdown-renderer .inline-code:hover {

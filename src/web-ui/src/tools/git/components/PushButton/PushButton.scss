@@ -1,4 +1,5 @@
 @use '../../../../component-library/styles/tokens' as *;
+@use '../../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .bitfun-push-button {
   --private-git-push-menu-text-rgb: 229, 229, 229;
@@ -62,11 +63,9 @@
   }
 
   &__menu {
+    @include surfaces.floating-surface;
+
     min-width: 120px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
-    box-shadow: 0 8px 20px var(--bf-appearance-token-color-overlay-black-80);
     z-index: $z-dropdown;
     padding: 6px;
     animation: bitfun-push-button-menu-slide-in 0.15s ease-out;

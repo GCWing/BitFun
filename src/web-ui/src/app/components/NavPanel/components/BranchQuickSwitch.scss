@@ -4,14 +4,13 @@
  */
 
 @use '../../../../component-library/styles/tokens' as *;
+@use '../../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .branch-quick-switch {
+  @include surfaces.floating-surface;
+
   position: fixed;
   z-index: $z-popover;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-30);
   overflow: hidden;
 }
 

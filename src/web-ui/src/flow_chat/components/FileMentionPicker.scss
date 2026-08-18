@@ -4,32 +4,21 @@
 
 @use '../../component-library/styles/tokens' as *;
 @use '../../component-library/styles/_extended-mixins' as mixins;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .file-mention-picker {
+  @include surfaces.floating-surface;
+
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
   min-width: 260px;
   max-width: 400px;
   max-height: 320px;
-  background: linear-gradient(
-    135deg,
-    var(--bf-appearance-token-color-bg-elevated) 0%,
-    var(--bf-appearance-token-color-bg-tertiary) 100%
-  );
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 8px;
-  box-shadow:
-    0 8px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35),
-    0 4px 16px var(--bf-appearance-token-color-overlay-black-20),
-    0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
   overflow: hidden;
   z-index: 1100;
   display: flex;
   flex-direction: column;
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
 
   &--overlay {
     position: fixed;

@@ -88,12 +88,12 @@ describe('AssistantSessionCreateMenu', () => {
     expect(onCreateAssistant).not.toHaveBeenCalled();
   });
 
-  it('lists the primary assistant first and creates a session for the selected assistant', () => {
+  it('lists the primary assistant first without a badge and creates a session for the selected assistant', () => {
     const { onCreateAssistant } = renderMenu();
 
     click('nav-assistant-session-menu-toggle');
     const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
-    expect(items.map(item => item.textContent)).toEqual(['MiraPrimary', 'Sage']);
+    expect(items.map(item => item.textContent)).toEqual(['Mira', 'Sage']);
 
     click('nav-assistant-session-menu-item-secondary');
     expect(onCreateAssistant).toHaveBeenCalledWith(secondaryAssistant);

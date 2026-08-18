@@ -1,17 +1,16 @@
 /**
  * QuickLook component styles.
  */
+@use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .canvas-quick-look {
+  @include surfaces.floating-surface;
+
   position: fixed;
   z-index: 1100;
   width: 500px;
   max-width: calc(100vw - 32px);
   max-height: 400px;
-  background: var(--bf-appearance-token-color-bg-elevated);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-50);
   display: flex;
   flex-direction: column;
   overflow: hidden;

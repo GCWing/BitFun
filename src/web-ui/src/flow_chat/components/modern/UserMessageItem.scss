@@ -3,6 +3,7 @@
  */
 
 @use '../../../component-library/styles/tokens.scss' as tokens;
+@use '../../typography' as flow-type;
 
 .user-message-item {
   box-sizing: border-box;
@@ -22,7 +23,7 @@
    */
   width: auto;
   padding: 0.46rem 0.68rem;
-  background: color-mix(in srgb, var(--bf-appearance-token-element-bg-medium) 90%, var(--bf-appearance-token-color-bg-scene));
+  background: var(--bf-appearance-token-element-bg-soft);
   border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
   border-radius: calc(var(--bf-appearance-token-flowchat-card-radius) + 2px);
   margin:
@@ -42,7 +43,7 @@
   position: relative;
   
   &:hover {
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-medium) 92%, var(--bf-appearance-token-color-bg-scene));
+    background: var(--bf-appearance-token-element-bg-soft);
     border-color: color-mix(in srgb, var(--bf-appearance-token-border-subtle) 56%, transparent);
 
     .user-message-item__copy-btn {
@@ -76,7 +77,7 @@
 }
 
 .user-message-item__timestamp {
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-size: flow-type.$meta-size;
   color: var(--bf-appearance-token-color-text-muted);
   font-weight: 400;
   margin-bottom: 0.12rem;
@@ -101,7 +102,7 @@
   width: fit-content;
   padding: 0.12rem 0.44rem;
   border-radius: 999px;
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-size: flow-type.$micro-size;
   font-weight: 600;
   line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   letter-spacing: 0;
@@ -139,9 +140,9 @@
 
 .user-message-item__content {
   flex: 1;
-  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  font-size: flow-type.$body-size;
   font-weight: 500;
-  line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  line-height: flow-type.$body-line-height;
   color: var(--bf-appearance-token-color-text-primary);
   white-space: pre-wrap;
   display: -webkit-box;
@@ -169,7 +170,7 @@
   border-radius: var(--bf-appearance-token-size-radius-sm);
   background: var(--bf-appearance-token-element-bg-hover);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: calc(var(--bf-appearance-token-flowchat-font-size-base) * 0.9);
+  font-size: flow-type.$control-size;
   font-weight: 500;
   line-height: 1.35;
   white-space: nowrap;
@@ -198,7 +199,7 @@
 // Failed state: no bubble. Icons/actions align to the first text line (not flex baseline:
 // `-webkit-box` line-clamp does not expose a reliable baseline for `align-items: baseline`).
 .user-message-item--failed {
-  --user-message-failed-font-size: calc(var(--bf-appearance-token-flowchat-font-size-base) * 0.86);
+  --user-message-failed-font-size: #{flow-type.$control-size};
   --user-message-failed-line-height: 1.55;
   --user-message-failed-line-box: calc(
     var(--user-message-failed-font-size) * var(--user-message-failed-line-height)
@@ -369,7 +370,7 @@
   .bitfun-textarea__field {
     min-height: 5.5rem;
     max-height: 45vh;
-    font-size: var(--bf-appearance-token-flowchat-font-size-base);
+    font-size: flow-type.$body-size;
     line-height: var(--bf-appearance-token-flowchat-text-line-height);
     resize: vertical;
   }
@@ -391,7 +392,7 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    font-size: var(--bf-appearance-token-flowchat-font-size-base);
+    font-size: flow-type.$body-size;
     line-height: var(--bf-appearance-token-flowchat-text-line-height);
   }
 

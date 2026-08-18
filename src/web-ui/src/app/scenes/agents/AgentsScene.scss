@@ -142,21 +142,11 @@
     &.select--open .select__dropdown {
       position: static;
       max-height: min(240px, 40vh);
-      border: 1px solid var(--bf-appearance-token-border-medium);
-      border-top: none;
-      border-radius: 0 0 var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm);
-      box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-40);
 
       &::before {
         top: 0;
         bottom: auto;
       }
-    }
-
-    &.select--open.select--placement-top .select__trigger {
-      border-top-color: var(--bf-appearance-token-border-medium);
-      border-bottom-color: transparent;
-      border-radius: var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm) 0 0;
     }
   }
 }

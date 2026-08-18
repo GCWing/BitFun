@@ -4,6 +4,7 @@
  */
 
 @use '../../../component-library/styles/tokens.scss' as *;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 $transition-duration: 0.25s;
 $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
@@ -246,6 +247,8 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-toolbar-mode__session-dropdown {
+  @include surfaces.floating-surface;
+
   position: absolute;
   top: 100%;
   left: 0;
@@ -256,10 +259,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-medium);
-  border-radius: var(--bf-appearance-token-size-radius-base);
-  box-shadow: var(--bf-appearance-token-shadow-xl);
   z-index: 100;
   animation: dropdown-appear 0.2s $transition-timing;
   transform-origin: top left;
@@ -372,16 +371,14 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-toolbar-mode__overflow-menu {
+  @include surfaces.floating-surface;
+
   position: fixed;
   min-width: 180px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   padding: 4px;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-medium);
-  border-radius: var(--bf-appearance-token-size-radius-base);
-  box-shadow: var(--bf-appearance-token-shadow-xl);
   z-index: $z-popover;
   color: var(--bf-appearance-token-color-text-primary);
   font-family: var(--bf-appearance-token-font-family-sans);
