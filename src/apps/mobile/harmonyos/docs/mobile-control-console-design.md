@@ -140,6 +140,10 @@ flowchart LR
 - 离线设备默认只画一个带真名的灰行，永不发 RPC。`deviceRpc` 的读超时是 130 秒
   （`CloudAccountClient.ets:291`），一台离线机器就足以让整个分区看起来是坏的。
 - **活动设备**默认展开，数据来自 `RemotePageState`，零额外 RPC。
+- 在线状态本身也要刷新。relay 的 presence 由内存连接注册表持有，问它就是当前值；但设备列表
+  过去只在冷启动拉一次，于是启动之后才上线的桌面会一直灰着，直到 app 被杀掉重启。回到前台
+  与打开侧栏各触发一次 `refreshAccountDevicesIfStale`，15 秒内的答案视为仍然新鲜——够短，
+  让一台刚上线的桌面在同一次使用里就变亮；够长，让冷启动时同时发生的两个事件只花一次请求。
 - 其他在线设备默认折叠。首次展开触发 `list_recent_workspaces` + `list_assistants`，再对该
   设备的工作区路径批量 `list_sessions`。磁盘回填是 `cached`：先画出来，展开后仍要被 RPC
   覆盖，不能把缓存当成已经加载完。

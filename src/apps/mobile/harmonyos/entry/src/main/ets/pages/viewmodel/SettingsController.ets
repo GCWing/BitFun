@@ -70,6 +70,7 @@ export class SettingsController {
   private cloudSession?: CloudAccountSession;
   private cloudRelayUrl: string = '';
   private accountDevices: CloudAccountDevice[] = [];
+  private lastAccountDevicesAt: number = 0;
 
   constructor(
     store: GeneralChatConfigStore,
@@ -306,6 +307,33 @@ export class SettingsController {
     return binding;
   }
 
+  /**
+   * Refetches account device presence when the last answer is older than
+   * [maxAgeMs].
+   *
+   * The relay owns presence in a live socket registry, so its answer is only
+   * as current as the last time we asked — and the only ask used to be at
+   * cold start. A desktop that came online afterwards stayed grey in the
+   * sidebar until the app was killed and relaunched.
+   *
+   * Failure is swallowed on purpose: this runs off returning to the
+   * foreground, where the user asked for nothing and a thrown error would
+   * surface as an alert about a request they never made.
+   */
+  async refreshAccountDevicesIfStale(maxAgeMs: number): Promise<void> {
+    if (!this.hasCloudAccountSession()) {
+      return;
+    }
+    if (Date.now() - this.lastAccountDevicesAt < maxAgeMs) {
+      return;
+    }
+    try {
+      await this.listCloudAccountDevices();
+    } catch (err) {
+      RemoteLogger.warn(`account device presence refresh failed: ${String(err)}`);
+    }
+  }
+
   async listCloudAccountDevices(): Promise<CloudAccountDevice[]> {
     const cloud = this.requireCloud();
     const session = this.cloudSession;
@@ -315,6 +343,7 @@ export class SettingsController {
     try {
       const devices = await cloud.client.listDevices(this.cloudRelayUrl, session, cloud.hooks.deviceId());
       this.accountDevices = devices;
+      this.lastAccountDevicesAt = Date.now();
       cloud.hooks.onAccountDevices(devices);
       return devices;
     } catch (err) {
