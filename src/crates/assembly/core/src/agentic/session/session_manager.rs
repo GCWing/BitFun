@@ -7445,12 +7445,6 @@ impl SessionManager {
             return Ok(());
         }
 
-        // Serialize Runtime completion against projected UI checkpoints. If a
-        // checkpoint wins first, the generation journal below repairs it; if
-        // completion wins first, the projected-save guard sees the terminal
-        // authoritative record and cannot replace it with an older prefix.
-        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
-
         let workspace_path = self
             .effective_session_storage_path(session_id)
             .await
@@ -7465,6 +7459,28 @@ impl SessionManager {
             .get(session_id)
             .and_then(|session| session.dialog_turn_ids.iter().position(|id| id == turn_id))
             .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+
+        // The context snapshot is a session-level artifact built from the
+        // in-memory context store; it does not participate in the projected
+        // checkpoint race below. Persist it before taking the mutation lock so
+        // slow storage (for example a remote SSH workspace) cannot extend the
+        // critical section and stall the next turn's start behind completion.
+        self.persist_context_snapshot_for_turn_best_effort(
+            session_id,
+            turn_index,
+            "turn_completed",
+        )
+        .await;
+
+        // Serialize Runtime completion against projected UI checkpoints. If a
+        // checkpoint wins first, the generation journal below repairs it; if
+        // completion wins first, the projected-save guard sees the terminal
+        // authoritative record and cannot replace it with an older prefix.
+        // Keep this critical section to the turn-record load, merge, and save
+        // only: the same keyed lock also serializes dialog-turn starts, so any
+        // extra work held here directly delays the next user message.
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+
         let mut turn = self
             .persistence_manager
             .load_dialog_turn(&workspace_path, session_id, turn_index)
@@ -7562,13 +7578,6 @@ impl SessionManager {
         turn.recovery = None;
         turn.duration_ms = Some(stats.duration_ms);
         turn.end_time = Some(completion_timestamp);
-
-        self.persist_context_snapshot_for_turn_best_effort(
-            session_id,
-            turn.turn_index,
-            "turn_completed",
-        )
-        .await;
 
         // Persist
         if self.should_persist_session_id(session_id) {

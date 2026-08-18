@@ -2924,6 +2924,25 @@ impl RemoteSessionStateTracker {
         self.bump_version();
     }
 
+    /// Handle the per-Turn durable fence. Unlike a full history invalidation,
+    /// this must not drop the live projection: the fence can land after the
+    /// next Turn already started (queued sends, slow persistence), and wiping
+    /// that Turn's stream would blank remote controllers until the next
+    /// direct event. Only the settled Turn's persisted repair is requested.
+    fn require_settled_history_snapshot(&self, settled_turn_id: &str) {
+        let mut state = self.state.write().unwrap();
+        if state.turn_id.as_deref() == Some(settled_turn_id) {
+            // The tracker missed this Turn's terminal event (fences exist
+            // because terminal chunks can be lost); settle it from the fence.
+            state.turn_status = "completed".to_string();
+            state.session_state = "idle".to_string();
+        }
+        state.persistence_dirty = true;
+        state.history_snapshot_required = true;
+        drop(state);
+        self.bump_version();
+    }
+
     fn find_mergeable_item(
         items: &[ChatMessageItem],
         target_type: &str,
@@ -3362,9 +3381,12 @@ impl RemoteSessionStateTracker {
                 drop(state);
                 self.bump_version();
             }
-            AE::SessionHistoryChanged { .. } if is_direct => {
-                self.invalidate_history_projection();
-            }
+            AE::SessionHistoryChanged {
+                settled_turn_id, ..
+            } if is_direct => match settled_turn_id {
+                Some(turn_id) => self.require_settled_history_snapshot(turn_id),
+                None => self.invalidate_history_projection(),
+            },
             AE::SessionTitleGenerated { title, .. } if is_direct => {
                 let mut state = self.state.write().unwrap();
                 state.title = title.clone();
@@ -4106,6 +4128,7 @@ mod tests {
 
         tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
             session_id: "session-a".to_string(),
+            settled_turn_id: None,
         });
 
         assert_eq!(tracker.version(), previous_version + 1);
@@ -4152,6 +4175,55 @@ mod tests {
         );
         assert!(!tracker.is_persistence_dirty());
         assert!(!tracker.is_history_snapshot_required());
+    }
+
+    #[tokio::test]
+    async fn per_turn_durable_fence_requests_a_snapshot_without_dropping_a_newer_live_turn() {
+        let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-next".to_string(),
+            turn_index: 2,
+            user_input: "queued follow-up".to_string(),
+            original_user_input: None,
+            user_message_metadata: None,
+        });
+        tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-next".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "live".to_string(),
+        });
+        tracker.mark_persistence_clean();
+        let previous_version = tracker.version();
+
+        // The previous turn's durable fence lands after the next turn already
+        // started streaming: the live projection must survive.
+        tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session-a".to_string(),
+            settled_turn_id: Some("turn-previous".to_string()),
+        });
+
+        assert_eq!(tracker.version(), previous_version + 1);
+        assert!(tracker.is_persistence_dirty());
+        assert!(tracker.is_history_snapshot_required());
+        assert_eq!(tracker.session_state(), "running");
+        let live_turn = tracker
+            .snapshot_active_turn()
+            .expect("live turn projection must survive the previous turn's fence");
+        assert_eq!(live_turn.turn_id, "turn-next");
+
+        // A fence for the tracked turn itself means the terminal event was
+        // lost; the fence settles the projection instead of leaving a phantom
+        // running turn.
+        tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session-a".to_string(),
+            settled_turn_id: Some("turn-next".to_string()),
+        });
+        assert_eq!(tracker.session_state(), "idle");
+        assert!(tracker.is_history_snapshot_required());
     }
 
     #[derive(Default)]

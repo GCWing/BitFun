@@ -1176,9 +1176,19 @@ function finalizeTurnCompletionState(
       log.warn('Failed to save dialog turn (non-critical)', { sessionId, turnId, error });
     });
   }
-  if (shouldReconcileRuntimeTurn) {
+  // Reconcile from the host tail only once the durable history fence for this
+  // session has been observed. Reading before the fence races the Runtime's
+  // persistence commit and can only return a pre-terminal record; when the
+  // fence arrives after this finalizer, `handleSessionHistoryChanged` performs
+  // the (single) reconcile instead.
+  if (shouldReconcileRuntimeTurn && context.pendingHistoryFenceSessions.delete(sessionId)) {
     void context.flowChatStore
       .reconcileSettledDialogTurn(sessionId, turnId)
+      .then(applied => {
+        if (applied) {
+          reconcileBackgroundSubagentSession(sessionId);
+        }
+      })
       .catch(error => {
         log.warn('Failed to reconcile settled dialog turn', { sessionId, turnId, error });
       });
@@ -1427,6 +1437,7 @@ function handleSessionDeleted(context: FlowChatContext, event: any): void {
   removedSessionIds.forEach(id => {
     clearPendingTurnCompletion(context, id);
     pendingImageAnalysisTurns.delete(id);
+    context.pendingHistoryFenceSessions.delete(id);
     stateMachineManager.delete(id);
     context.processingManager.clearSessionStatus(id);
     cleanupSaveState(context, id);
@@ -1498,6 +1509,13 @@ export function handleSessionStateChanged(context: FlowChatContext, event: any):
  * durable. DialogTurnCompleted is intentionally lower latency than the final
  * persistence write, so relying on that event alone can preserve a painted
  * prefix when the last TextChunk was missed.
+ *
+ * The fence usually lands while the local Turn is still inside its completion
+ * quiet window. Reading the host tail at that moment wastes a restore round
+ * trip on a record the finalizer will re-read anyway, so the fence is parked
+ * and consumed by `finalizeTurnCompletionState`. Each settled Turn therefore
+ * performs exactly one reconcile, and only after the terminal record is
+ * durable.
  */
 export function handleSessionHistoryChanged(context: FlowChatContext, event: any): void {
   const sessionId = event?.sessionId ?? event?.session_id;
@@ -1510,6 +1528,14 @@ export function handleSessionHistoryChanged(context: FlowChatContext, event: any
     return;
   }
 
+  const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+  if (latestTurn && !['completed', 'cancelled', 'error'].includes(latestTurn.status)) {
+    // The local projection has not settled yet (completion quiet window, or
+    // the next Turn already started). Defer to the completion finalizer.
+    context.pendingHistoryFenceSessions.add(sessionId);
+    return;
+  }
+
   const settledTurn = [...session.dialogTurns]
     .reverse()
     .find(turn => ['completed', 'cancelled', 'error'].includes(turn.status));
@@ -1517,8 +1543,17 @@ export function handleSessionHistoryChanged(context: FlowChatContext, event: any
     return;
   }
 
+  context.pendingHistoryFenceSessions.delete(sessionId);
+  reconcileDurableSessionHistory(context, sessionId, settledTurn.id);
+}
+
+function reconcileDurableSessionHistory(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string,
+): void {
   void context.flowChatStore
-    .reconcileSettledDialogTurn(sessionId, settledTurn.id)
+    .reconcileSettledDialogTurn(sessionId, turnId)
     .then(applied => {
       if (applied) {
         reconcileBackgroundSubagentSession(sessionId);
@@ -1527,7 +1562,7 @@ export function handleSessionHistoryChanged(context: FlowChatContext, event: any
     .catch(error => {
       log.warn('Failed to reconcile durable session history', {
         sessionId,
-        turnId: settledTurn.id,
+        turnId,
         error,
       });
     });
