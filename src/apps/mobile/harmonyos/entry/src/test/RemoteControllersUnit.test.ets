@@ -1298,13 +1298,43 @@ export default function remoteControllersUnitTest() {
           openedSessions.push(session);
         });
 
-      expect(client.createRequests[0]).assertEqual('code::');
+      expect(client.createRequests[0]).assertEqual('code:::');
       expect(created?.sessionId || '').assertEqual('created-session');
       expect(activeSessions.length).assertEqual(2);
       expect(activeSessions[0].sessionId).assertEqual('created-session');
       expect(activeSessions[1].sessionId).assertEqual('opened-session');
       expect(activeSessions[1].workspacePath).assertEqual('/workspace');
       expect(openedSessions.length).assertEqual(2);
+    });
+
+    it('forwards an explicit workspace path without switching the host workspace', 0, async () => {
+      const client = new FakeRemoteSessionClient();
+      client.createdSession = {
+        sessionId: 'created-in-other',
+        title: 'Created Session',
+        workspacePath: '/other',
+        agentType: 'code'
+      };
+      const controller = new RemoteSessionController(client, 8, {
+        onSessions: (_sessions: RemoteSession[], _hasMore: boolean) => {},
+        onActiveSession: (_session: SessionSummary) => {},
+        onStatusText: (_statusText: string) => {},
+        onBusy: (_isBusy: boolean) => {},
+        onLoading: (_isLoading: boolean) => {},
+        onSessionError: (_errorText: string) => {},
+        onReconnecting: () => {},
+        onConnected: () => {},
+        onConnectionFailed: (_err: Object) => {},
+        onStartHeartbeat: () => {}
+      });
+
+      const created = await controller.create(
+        'code', false, true, async (_session: SessionSummary): Promise<void> => {},
+        '', '', '/other'
+      );
+
+      expect(client.createRequests[0]).assertEqual('code:::/other');
+      expect(created?.workspacePath || '').assertEqual('/other');
     });
 
     it('returns no created session when the remote create command fails', 0, async () => {
