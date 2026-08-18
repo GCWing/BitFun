@@ -1,11 +1,13 @@
 import {
   computeFixedPopoverPositionInViewport,
+  type FixedPopoverAlignment,
   type FixedPopoverPlacement,
   type FixedPopoverViewport,
 } from '@/shared/utils/fixedPopoverViewport';
 
 interface ModelSelectorDropdownAnchorRect {
   left: number;
+  right?: number;
   top: number;
   bottom: number;
 }
@@ -33,13 +35,14 @@ export function getModelSelectorDropdownLayout(
   dropdownSize: ModelSelectorDropdownSize,
   preferredPlacement: FixedPopoverPlacement,
   viewport: FixedPopoverViewport,
+  alignment: FixedPopoverAlignment = 'start',
 ): ModelSelectorDropdownLayout {
   const position = computeFixedPopoverPositionInViewport(
     anchorRect,
     dropdownSize.width,
     dropdownSize.height,
     viewport,
-    { preferredPlacement },
+    { preferredPlacement, alignment },
   );
   const placement = position.top + dropdownSize.height <= anchorRect.top
     ? 'top'
@@ -64,11 +67,13 @@ export function getModelSelectorDropdownStyle(
   dropdownSize: ModelSelectorDropdownSize,
   preferredPlacement: FixedPopoverPlacement,
   viewport: FixedPopoverViewport,
+  alignment: FixedPopoverAlignment = 'start',
 ): ModelSelectorDropdownStyle {
   return getModelSelectorDropdownLayout(
     anchorRect,
     dropdownSize,
     preferredPlacement,
     viewport,
+    alignment,
   ).style;
 }
