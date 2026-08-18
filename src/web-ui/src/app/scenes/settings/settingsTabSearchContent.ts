@@ -125,14 +125,6 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/agentic-tools', key: 'config.confirmTimeoutDesc' },
     { ns: 'settings/agentic-tools', key: 'config.executionTimeout' },
     { ns: 'settings/agentic-tools', key: 'config.executionTimeoutDesc' },
-    { ns: 'settings/debug', key: 'sections.combined' },
-    { ns: 'settings/debug', key: 'sections.combinedDescription' },
-    { ns: 'settings/debug', key: 'settings.logPath.label' },
-    { ns: 'settings/debug', key: 'settings.logPath.description' },
-    { ns: 'settings/debug', key: 'settings.ingestPort.label' },
-    { ns: 'settings/debug', key: 'settings.ingestPort.description' },
-    { ns: 'settings/debug', key: 'sections.templates' },
-    { ns: 'settings/debug', key: 'templates.description' },
   ],
 
   review: [

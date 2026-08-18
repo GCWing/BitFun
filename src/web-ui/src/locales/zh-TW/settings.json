@@ -294,11 +294,6 @@
       "title": "實驗性功能",
       "description": "這些功能可能不穩定"
     },
-    "debug": {
-      "title": "調試",
-      "logging": "啟用日誌",
-      "developerTools": "開發者工具"
-    },
     "data": {
       "title": "資料",
       "export": "導出設置",
@@ -535,13 +530,6 @@
     "installedServers": "已安裝的語言伺服器",
     "noServers": "暫無語言伺服器",
     "noServersHint": "語言伺服器提供代碼智能功能"
-  },
-  "debugConfig": {
-    "title": "調試",
-    "subtitle": "設定調試選項",
-    "enableLogging": "啟用日誌",
-    "logLevel": "日誌級別",
-    "developerTools": "開發者工具"
   },
   "terminalConfig": {
     "title": "終端",

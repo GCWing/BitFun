@@ -60,9 +60,6 @@ slices that are outside pure product logic but still platform-neutral.
 - Web tool network providers own concrete HTTP/Exa requests behind `web-tools`;
   product validation, readable extraction, and tool result types stay in
   higher layers.
-- Debug log file append, redaction, default path/env config, and optional HTTP
-  dispatch live behind `debug-log`; core only keeps ingest-server and product
-  workspace path adaptation.
 - Review-platform provider detection, repository discovery, token persistence,
   provider DTO mapping, pagination policy, HTTP transport, and Git provider
   integration live behind `review-platform`; core may only inject product data

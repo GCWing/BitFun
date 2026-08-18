@@ -341,36 +341,6 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/infrastructure/debug_log/mod.rs',
-    patterns: [
-      {
-        regex: /\breqwest::/,
-        message:
-          'core debug log facade must not own HTTP ingest posting; use bitfun-services-integrations debug log network provider',
-      },
-      {
-        regex: /\bOpenOptions\b/,
-        message:
-          'core debug log facade must not own debug log file append; use bitfun-services-integrations debug log owner',
-      },
-      {
-        regex: /\bUuid::new_v4\b/,
-        message:
-          'core debug log facade must not own debug log id generation; use bitfun-services-integrations debug log owner',
-      },
-      {
-        regex: /\bfn redact_value\b/,
-        message:
-          'core debug log facade must not own redaction policy; use bitfun-services-integrations debug log owner',
-      },
-      {
-        regex: /\bfn build_log_line\b/,
-        message:
-          'core debug log facade must not build debug log lines; use bitfun-services-integrations debug log owner',
-      },
-    ],
-  },
-  {
     path: 'src/crates/assembly/core/src/infrastructure/storage/persistence.rs',
     patterns: [
       {

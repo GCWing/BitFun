@@ -27,8 +27,8 @@ export const SETTINGS_TAB_I18N_NAMESPACES: Record<ConfigTab, readonly I18nNamesp
   'archived-sessions': ['common'],
   worktrees: ['worktrees'],
   // Both session panels live in the same module and share its sub-sections.
-  'session-personalization': ['settings/session-config', 'settings/agentic-tools', 'settings/debug'],
-  'session-permissions': ['settings/session-config', 'settings/agentic-tools', 'settings/debug'],
+  'session-personalization': ['settings/session-config', 'settings/agentic-tools'],
+  'session-permissions': ['settings/session-config', 'settings/agentic-tools'],
   'quick-actions': ['settings/quick-actions'],
   'voice-input': ['settings/voice-input'],
   review: ['settings/review'],

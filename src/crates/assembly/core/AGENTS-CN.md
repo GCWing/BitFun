@@ -53,7 +53,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - `agent-runtime` 只负责 Core Agent 生命周期基线、原生 Hook runtime、基础文件/进程工具和
   Agent-control 工具。`mcp-runtime`、`remote-connect`、`workspace-search` 等具体网络或产品能力
   保持独立 owner；`external-sources` 增加第三方发现/导入 adapter，`plugin-runtime` 增加可执行
-  plugin client wiring，`debug-log` 单独控制调试日志服务。不得把这些能力藏回 `agent-runtime`，
+  plugin client wiring。不得把这些能力藏回 `agent-runtime`，
   它们也都不得启用 `product-full`。
 - CLI/ACP 的闭包检查遵循 Cargo resolver-v2，保持 normal 与 host（build/proc-macro）feature context 相互隔离；
   但同一 context 内的所有 target-specific 声明都属于同一个已评审架构边界。平台确实需要不同 owner 时，应拆分清晰的
@@ -68,7 +68,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Core 的默认 feature 集合为空。`product-full` 是由真实产品入口显式选择的兼容组装，不能再作为
   library 的隐式默认值。能力内部使用的工具依赖必须保持 optional 并由 owner feature 激活；
   `base64`、`futures`、`regex`、`tokio-util` 与 `bitfun-agent-tools` 分别归实际使用它们的
-  Agent Runtime、local-storage、dispatch-store 或 debug-log 闭包。Core 的 feature-free 直接 Tokio
+  Agent Runtime、local-storage 或 dispatch-store 闭包。Core 的 feature-free 直接 Tokio
   依赖只保留 config 与 app-path 状态所需的文件系统和同步能力；被显式选择的 Services Core
   `json-io` owner 另外持有受限原子 JSON 写入所需的 runtime/time capability。
 - 后端 Fluent bundle 与可变翻译状态归 `i18n-runtime`；locale id、别名、fallback、metadata 与

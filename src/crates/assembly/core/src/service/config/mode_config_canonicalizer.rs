@@ -762,7 +762,7 @@ mod tests {
             AgentSubagentOverrideState::Disabled,
         );
         let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
-            agent_id: "debug",
+            agent_id: "agentic",
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
             disabled_user_skills: Vec::new(),
@@ -856,7 +856,6 @@ mod tests {
             vec![
                 "agentic".to_string(),
                 "Plan".to_string(),
-                "debug".to_string(),
                 "Multitask".to_string()
             ]
         );

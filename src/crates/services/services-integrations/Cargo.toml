@@ -121,7 +121,6 @@ canvas-runtime = [
     "urlencoding",
     "uuid",
 ]
-debug-log = ["anyhow", "chrono", "reqwest", "reqwest/json", "reqwest/rustls", "tokio/rt", "uuid"]
 deep-research = [
     "anyhow",
     "async-trait",
@@ -408,7 +407,6 @@ product-full = [
     "models-dev",
     "browser-control",
     "canvas-runtime",
-    "debug-log",
     "deep-research",
     "file-watch",
     "function-agents",
@@ -430,11 +428,6 @@ ssh_config = ["dep:ssh_config"]
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "test-util"] }
-
-[[test]]
-name = "debug_log_owner_contracts"
-path = "tests/debug_log_owner_contracts.rs"
-required-features = ["debug-log"]
 
 [[test]]
 name = "script_tool_runtime"

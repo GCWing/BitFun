@@ -34,14 +34,6 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/agents/cowork_mode.md"),
     ),
     (
-        "debug_mode_first_entry_reminder",
-        include_bytes!("../prompts/agents/debug_mode_first_entry_reminder.md"),
-    ),
-    (
-        "debug_mode_ongoing_reminder",
-        include_bytes!("../prompts/agents/debug_mode_ongoing_reminder.md"),
-    ),
-    (
         "deep_research_agent",
         include_bytes!("../prompts/agents/deep_research_agent.md"),
     ),

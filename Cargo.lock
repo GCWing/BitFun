@@ -1104,7 +1104,6 @@ dependencies = [
  "tokio-tungstenite",
  "tokio-util",
  "tool-runtime",
- "tower-http",
  "ts-rs",
  "unic-langid",
  "uuid",

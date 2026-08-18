@@ -42,7 +42,6 @@ use bitfun_core::service::search::get_global_workspace_search_service;
 use bitfun_core::service::session_projection_store::{
     runtime_event_log_dir, FileSessionProjectionStore,
 };
-use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_events::AgenticEvent;
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
@@ -2499,7 +2498,6 @@ fn start_event_loop_with_transport(
 fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilter) {
     use bitfun_core::{infrastructure, service};
 
-    spawn_ingest_server_with_config_listener();
     spawn_runtime_log_level_listener(default_log_level);
     spawn_workspace_search_feature_listener(app_handle.clone());
 
@@ -2683,123 +2681,6 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                     log::warn!("Workspace search feature listener lagged by {} messages", n);
-                }
-            }
-        }
-    });
-}
-
-fn spawn_ingest_server_with_config_listener() {
-    use bitfun_core::infrastructure::debug_log::IngestServerManager;
-    use bitfun_core::service::config::{
-        get_global_config_service, subscribe_config_updates, ConfigUpdateEvent,
-    };
-
-    tokio::spawn(async move {
-        let initial_config = if let Ok(config_service) = get_global_config_service().await {
-            if let Ok(config) = config_service
-                .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                .await
-            {
-                let debug_config = &config.ai.debug_mode_config;
-                let workspace_path = get_global_workspace_service()
-                    .and_then(|service| service.try_get_current_workspace_path())
-                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-
-                Some(bitfun_core::infrastructure::debug_log::IngestServerConfig::from_debug_mode_config(
-                    debug_config.ingest_port,
-                    workspace_path.join(&debug_config.log_path),
-                ))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let configured_port = if let Ok(config_service) = get_global_config_service().await {
-            if let Ok(config) = config_service
-                .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                .await
-            {
-                Some(config.ai.debug_mode_config.ingest_port)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let manager = IngestServerManager::global();
-        if let Err(e) = manager.start(initial_config).await {
-            log::error!("Failed to start Debug Log Ingest Server: {}", e);
-        }
-
-        let actual_port = manager.get_actual_port().await;
-        if let Some(cfg_port) = configured_port {
-            if actual_port != cfg_port {
-                if let Ok(config_service) = get_global_config_service().await {
-                    if let Err(e) = config_service
-                        .set_config("ai.debug_mode_config.ingest_port", actual_port)
-                        .await
-                    {
-                        log::error!("Failed to sync actual port to config: {}", e);
-                    } else {
-                        log::info!(
-                            "Ingest Server port synced: actual_port={}, config_port={}",
-                            actual_port,
-                            cfg_port
-                        );
-                    }
-                }
-            }
-        }
-
-        if let Some(mut receiver) = subscribe_config_updates() {
-            loop {
-                match receiver.recv().await {
-                    Ok(ConfigUpdateEvent::DebugModeConfigUpdated {
-                        new_port,
-                        new_log_path,
-                    }) => {
-                        let workspace_path = get_global_workspace_service()
-                            .and_then(|service| service.try_get_current_workspace_path())
-                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                        let full_log_path = workspace_path.join(&new_log_path);
-
-                        if let Err(e) = manager.update_port(new_port, full_log_path).await {
-                            log::error!("Failed to update Ingest Server config: port={}, log_path={}, error={}", new_port, new_log_path, e);
-                        }
-                    }
-                    Ok(ConfigUpdateEvent::ConfigReloaded) => {
-                        if let Ok(config_service) = get_global_config_service().await {
-                            if let Ok(config) = config_service
-                                .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                                .await
-                            {
-                                let debug_config = &config.ai.debug_mode_config;
-                                let workspace_path = get_global_workspace_service()
-                                    .and_then(|service| service.try_get_current_workspace_path())
-                                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                                let full_log_path = workspace_path.join(&debug_config.log_path);
-
-                                if let Err(e) = manager
-                                    .update_port(debug_config.ingest_port, full_log_path)
-                                    .await
-                                {
-                                    log::error!("Failed to update Ingest Server after config reload: port={}, error={}", debug_config.ingest_port, e);
-                                }
-                            }
-                        }
-                    }
-                    Ok(_) => {}
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                        log::warn!("Config update channel closed, stopping listener");
-                        break;
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        log::warn!("Config update listener lagged by {} messages", n);
-                    }
                 }
             }
         }

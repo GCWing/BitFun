@@ -1903,8 +1903,6 @@ fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
     assert_eq!(resolve_remote_agent_type(Some("Cowork")), "Cowork");
     assert_eq!(resolve_remote_agent_type(Some("plan")), "Plan");
     assert_eq!(resolve_remote_agent_type(Some("Plan")), "Plan");
-    assert_eq!(resolve_remote_agent_type(Some("debug")), "debug");
-    assert_eq!(resolve_remote_agent_type(Some("Debug")), "debug");
     assert_eq!(resolve_remote_agent_type(Some("unknown")), "agentic");
     assert_eq!(resolve_remote_agent_type(None), "agentic");
 }

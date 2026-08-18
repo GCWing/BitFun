@@ -13,7 +13,7 @@ import {
 export { CAPABILITY_CATEGORIES };
 export type { CapabilityCategory };
 
-/** 'mode' = primary agent mode (e.g. Agentic/Plan/Debug); 'subagent' = sub-agent */
+/** 'mode' = primary agent mode (e.g. Agentic/Plan/Multitask); 'subagent' = sub-agent */
 export type AgentKind = 'mode' | 'subagent';
 
 export interface AgentCapability {

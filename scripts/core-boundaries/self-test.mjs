@@ -374,7 +374,6 @@ export function runManifestParserSelfTest({
     'diff',
     'announcement',
     'canvas-runtime',
-    'debug-log',
     'dispatch-store',
     'file-watch',
     'filesystem',
@@ -4478,8 +4477,6 @@ export function runManifestParserSelfTest({
         'feature = "ai-adapter-runtime"',
         'pub mod ai',
         'pub mod subscription_auth',
-        'feature = "debug-log"',
-        'pub mod debug_log',
       ],
     },
     {

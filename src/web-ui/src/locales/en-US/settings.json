@@ -266,11 +266,6 @@
       "title": "Experimental Features",
       "description": "These features may be unstable"
     },
-    "debug": {
-      "title": "Debug",
-      "logging": "Enable Logging",
-      "developerTools": "Developer Tools"
-    },
     "data": {
       "title": "Data",
       "export": "Export Settings",
@@ -507,13 +502,6 @@
     "installedServers": "Installed Language Servers",
     "noServers": "No language servers",
     "noServersHint": "Language servers provide code intelligence features"
-  },
-  "debugConfig": {
-    "title": "Debug",
-    "subtitle": "Configure debug options",
-    "enableLogging": "Enable Logging",
-    "logLevel": "Log Level",
-    "developerTools": "Developer Tools"
   },
   "terminalConfig": {
     "title": "Terminal",

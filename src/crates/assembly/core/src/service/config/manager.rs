@@ -841,7 +841,6 @@ impl ConfigManager {
         old_config: &GlobalConfig,
     ) -> BitFunResult<()> {
         self.check_and_broadcast_app_change(path).await;
-        self.check_and_broadcast_debug_mode_change(old_config).await;
         self.check_and_broadcast_log_level_change(old_config).await;
         self.check_and_broadcast_sensitive_diagnostics_change(old_config)
             .await;
@@ -856,31 +855,6 @@ impl ConfigManager {
         if path == "app" || path.starts_with("app.") {
             use super::global::{ConfigUpdateEvent, GlobalConfigManager};
             GlobalConfigManager::broadcast_update(ConfigUpdateEvent::AppUpdated).await;
-        }
-    }
-
-    /// Detects and broadcasts debug-mode configuration changes.
-    async fn check_and_broadcast_debug_mode_change(&self, old_config: &GlobalConfig) {
-        let old_debug = &old_config.ai.debug_mode_config;
-        let new_debug = &self.config.ai.debug_mode_config;
-
-        if old_debug.ingest_port != new_debug.ingest_port
-            || old_debug.log_path != new_debug.log_path
-        {
-            debug!(
-                "Debug Mode config change detected: port {} -> {}, log_path {} -> {}",
-                old_debug.ingest_port,
-                new_debug.ingest_port,
-                old_debug.log_path,
-                new_debug.log_path
-            );
-
-            use super::global::{ConfigUpdateEvent, GlobalConfigManager};
-            GlobalConfigManager::broadcast_update(ConfigUpdateEvent::DebugModeConfigUpdated {
-                new_port: new_debug.ingest_port,
-                new_log_path: new_debug.log_path.clone(),
-            })
-            .await;
         }
     }
 

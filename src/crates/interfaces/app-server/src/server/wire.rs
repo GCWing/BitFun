@@ -245,13 +245,6 @@ pub(super) fn config_update(
         ConfigUpdateEvent::AppUpdated => ConfigUpdate::AppUpdated,
         ConfigUpdateEvent::ConfigReloaded => ConfigUpdate::ConfigReloaded,
         ConfigUpdateEvent::ReasoningCatalogUpdated => ConfigUpdate::ReasoningCatalogUpdated,
-        ConfigUpdateEvent::DebugModeConfigUpdated {
-            new_port,
-            new_log_path,
-        } => ConfigUpdate::DebugModeConfigUpdated {
-            new_port,
-            new_log_path,
-        },
         ConfigUpdateEvent::LogLevelUpdated { new_level } => {
             ConfigUpdate::LogLevelUpdated { new_level }
         }

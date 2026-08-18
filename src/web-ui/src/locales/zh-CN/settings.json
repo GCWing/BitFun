@@ -294,11 +294,6 @@
       "title": "实验性功能",
       "description": "这些功能可能不稳定"
     },
-    "debug": {
-      "title": "调试",
-      "logging": "启用日志",
-      "developerTools": "开发者工具"
-    },
     "data": {
       "title": "数据",
       "export": "导出设置",
@@ -535,13 +530,6 @@
     "installedServers": "已安装的语言服务器",
     "noServers": "暂无语言服务器",
     "noServersHint": "语言服务器提供代码智能功能"
-  },
-  "debugConfig": {
-    "title": "调试",
-    "subtitle": "配置调试选项",
-    "enableLogging": "启用日志",
-    "logLevel": "日志级别",
-    "developerTools": "开发者工具"
   },
   "terminalConfig": {
     "title": "终端",

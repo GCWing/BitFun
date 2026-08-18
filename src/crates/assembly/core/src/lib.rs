@@ -57,10 +57,6 @@ pub mod service; // Workspace, Config, FileSystem, Terminal, Git
 pub(crate) mod service_agent_runtime;
 pub mod util; // General types, errors, helper functions
 
-// Re-export debug_log from infrastructure for backward compatibility.
-#[cfg(feature = "debug-log")]
-pub use infrastructure::debug_log as debug;
-
 #[cfg(feature = "remote-connect")]
 pub use bitfun_services_integrations::remote_connect::RemoteModelCatalog as AIModelCatalog;
 

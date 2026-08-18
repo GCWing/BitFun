@@ -3,7 +3,6 @@
 export const servicesReqwestOwnerFeatures = [
   'announcement',
   'browser-control',
-  'debug-log',
   'mcp',
   'miniapp-market',
   'miniapp-runtime',
@@ -141,7 +140,7 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
     dependencies: [
-      { depName: 'axum', ownerFeatures: ['debug-log', 'mcp-runtime'] },
+      { depName: 'axum', ownerFeatures: ['mcp-runtime'] },
       { depName: 'base64', ownerFeatures: ['agent-runtime', 'dispatch-store'] },
       {
         depName: 'bitfun-ai-adapters',
@@ -178,7 +177,6 @@ export const optionalDependencyFeatureOwnerRules = [
           'canvas-runtime',
           'browser-control',
           'deep-research',
-          'debug-log',
           'external-sources',
           'file-watch',
           'function-agents',
@@ -233,8 +231,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'terminal-core', ownerFeatures: ['terminal'] },
       { depName: 'notify', ownerFeatures: ['lsp', 'workspace-watch'] },
       { depName: 'tokio-tungstenite', ownerFeatures: ['browser-control'] },
-      { depName: 'tokio-util', ownerFeatures: ['agent-runtime', 'debug-log'] },
-      { depName: 'tower-http', ownerFeatures: ['debug-log'] },
+      { depName: 'tokio-util', ownerFeatures: ['agent-runtime'] },
       { depName: 'unic-langid', ownerFeatures: ['i18n-runtime'] },
       {
         depName: 'tool-runtime',
@@ -249,7 +246,7 @@ export const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'aes', ownerFeatures: ['remote-connect'] },
       { depName: 'aes-gcm', ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'deep-research', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
+      { depName: 'anyhow', ownerFeatures: ['browser-control', 'deep-research', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
         ownerFeatures: ['deep-research', 'git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
@@ -267,7 +264,7 @@ export const optionalDependencyFeatureOwnerRules = [
         ownerFeatures: ['browser-control', 'git', 'hook-import', 'mcp', 'miniapp-runtime', 'process-tree', 'remote-connect', 'remote-ssh', 'review-platform', 'workspace-search'],
       },
       { depName: 'bzip2', ownerFeatures: ['speech'] },
-      { depName: 'chrono', ownerFeatures: ['debug-log', 'git', 'miniapp-market', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech'] },
+      { depName: 'chrono', ownerFeatures: ['git', 'miniapp-market', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech'] },
       { depName: 'dirs', ownerFeatures: ['browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
       { depName: 'dunce', ownerFeatures: ['plugin-source', 'workspace-search'] },
       { depName: 'fs2', ownerFeatures: ['plugin-source'] },
@@ -307,7 +304,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'tokio-tungstenite', ownerFeatures: ['remote-connect'] },
       { depName: 'tokio-util', ownerFeatures: ['remote-ssh', 'speech'] },
       { depName: 'urlencoding', ownerFeatures: ['canvas-runtime', 'miniapp-market', 'remote-connect', 'review-platform'] },
-      { depName: 'uuid', ownerFeatures: ['canvas-runtime', 'debug-log', 'hook-import', 'miniapp-runtime', 'plugin-source', 'remote-connect', 'remote-ssh-concrete', 'speech'] },
+      { depName: 'uuid', ownerFeatures: ['canvas-runtime', 'hook-import', 'miniapp-runtime', 'plugin-source', 'remote-connect', 'remote-ssh-concrete', 'speech'] },
       { depName: 'which', ownerFeatures: ['miniapp-runtime', 'remote-connect', 'script-tool-runtime', 'workspace-search'] },
       { depName: 'windows', ownerFeatures: ['models-dev', 'plugin-source', 'review-platform'] },
       { depName: 'x25519-dalek', ownerFeatures: ['remote-connect'] },
@@ -666,7 +663,6 @@ export const coreProductFullFeatureAssemblyRule = {
     'workspace-search',
     'announcement',
     'canvas-runtime',
-    'debug-log',
     'dispatch-store',
     'file-watch',
     'filesystem',
@@ -1274,22 +1270,6 @@ export const coreClosedFeatureProfileRules = [
       'bitfun-core canvas-runtime must extend only the product domain surface with Canvas runtime IO',
   },
   {
-    manifestPath: 'src/crates/assembly/core/Cargo.toml',
-    featureName: 'debug-log',
-    requiredFeatureRefs: [
-      'dep:axum',
-      'dep:tokio-util',
-      'dep:tower-http',
-      'bitfun-services-integrations/debug-log',
-      'tokio/macros',
-      'tokio/net',
-      'tokio/rt',
-      'tokio/time',
-    ],
-    exact: true,
-    reason: 'bitfun-core debug-log must own only the debug ingest HTTP capability',
-  },
-  {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
     featureName: 'default',
     requiredFeatureRefs: [],
@@ -1645,7 +1625,6 @@ export const ownerCrateFeatureAssemblyRules = [
       'announcement',
       'browser-control',
       'canvas-runtime',
-      'debug-log',
       'deep-research',
       'file-watch',
       'function-agents',

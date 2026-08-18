@@ -5,8 +5,6 @@
 #[cfg(feature = "ai-adapter-runtime")]
 pub mod ai;
 pub mod app_paths;
-#[cfg(feature = "debug-log")]
-pub mod debug_log;
 pub mod events;
 #[cfg(feature = "filesystem")]
 pub mod filesystem;

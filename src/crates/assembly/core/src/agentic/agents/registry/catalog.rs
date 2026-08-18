@@ -1,11 +1,10 @@
 use super::types::AgentCategory;
 use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
-    Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode,
-    DeepResearchMode, DeepReviewAgent, ExploreAgent, GeneralPurposeAgent, GenerateDocAgent,
-    MultitaskMode, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent,
-    ReviewWorkerAgent, SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent, TeamMode,
-    UltraMode,
+    Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, DeepResearchMode,
+    DeepReviewAgent, ExploreAgent, GeneralPurposeAgent, GenerateDocAgent, MultitaskMode, PlanMode,
+    ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent,
+    SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent, TeamMode, UltraMode,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
 use bitfun_agent_runtime::agents as runtime_agents;
@@ -33,7 +32,6 @@ fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
     match id {
         "agentic" => || Arc::new(AgenticMode::new()),
         "Cowork" => || Arc::new(CoworkMode::new()),
-        "debug" => || Arc::new(DebugMode::new()),
         "Multitask" => || Arc::new(MultitaskMode::new()),
         "Plan" => || Arc::new(PlanMode::new()),
         "Claw" => || Arc::new(ClawMode::new()),

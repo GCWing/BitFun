@@ -28,8 +28,8 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
-    TeamMode, UltraMode,
+    AgenticMode, ClawMode, CoworkMode, DeepResearchMode, MultitaskMode, PlanMode, TeamMode,
+    UltraMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
@@ -309,8 +309,8 @@ mod tests {
     use super::{
         get_embedded_prompt, minimal_harness_tool_policy,
         shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
-        shared_coding_mode_user_context_policy, Agent, AgenticMode, DebugMode, MultitaskMode,
-        PlanMode, ToolExposure, EMBEDDED_PROMPTS, MINIMAL_HARNESS_ALLOWED_TOOLS,
+        shared_coding_mode_user_context_policy, Agent, AgenticMode, MultitaskMode, PlanMode,
+        ToolExposure, EMBEDDED_PROMPTS, MINIMAL_HARNESS_ALLOWED_TOOLS,
     };
 
     #[test]
@@ -334,7 +334,6 @@ mod tests {
         let agentic = AgenticMode::new();
         let multitask = MultitaskMode::new();
         let plan = PlanMode::new();
-        let debug = DebugMode::new();
 
         assert_eq!(
             agentic.system_prompt_cache_identity(None),
@@ -346,7 +345,7 @@ mod tests {
         );
         assert_eq!(
             agentic.system_prompt_cache_identity(None),
-            debug.system_prompt_cache_identity(None)
+            plan.system_prompt_cache_identity(None)
         );
         assert_eq!(
             agentic.user_context_cache_identity(),
@@ -358,12 +357,12 @@ mod tests {
         );
         assert_eq!(
             agentic.user_context_cache_identity(),
-            debug.user_context_cache_identity()
+            plan.user_context_cache_identity()
         );
     }
 
     #[test]
-    fn shared_coding_mode_tools_include_plan_and_debug_specific_tools() {
+    fn shared_coding_mode_tools_include_plan_and_goal_tools() {
         let tools = shared_coding_mode_tools();
 
         assert!(tools.contains(&"ListModels".to_string()));
@@ -396,7 +395,6 @@ mod tests {
         assert_eq!(AgenticMode::new().default_tools(), shared_tools);
         assert_eq!(MultitaskMode::new().default_tools(), shared_tools);
         assert_eq!(PlanMode::new().default_tools(), shared_tools);
-        assert_eq!(DebugMode::new().default_tools(), shared_tools);
     }
 
     #[test]
@@ -406,7 +404,6 @@ mod tests {
         assert_eq!(AgenticMode::new().user_context_policy(), shared_policy);
         assert_eq!(MultitaskMode::new().user_context_policy(), shared_policy);
         assert_eq!(PlanMode::new().user_context_policy(), shared_policy);
-        assert_eq!(DebugMode::new().user_context_policy(), shared_policy);
     }
 
     #[test]
@@ -415,12 +412,10 @@ mod tests {
         let agentic = AgenticMode::new();
         let multitask = MultitaskMode::new();
         let plan = PlanMode::new();
-        let debug = DebugMode::new();
 
         assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
-        assert_eq!(debug.tool_exposure_overrides(), &shared_overrides);
     }
 
     #[test]

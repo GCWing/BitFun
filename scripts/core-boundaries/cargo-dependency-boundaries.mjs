@@ -132,7 +132,6 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['models-dev', ['fs', 'sync', 'time']],
   ['browser-control', ['time']],
   ['canvas-runtime', ['fs']],
-  ['debug-log', ['rt']],
   ['deep-research', []],
   ['git', ['fs', 'io-util', 'macros', 'rt', 'time']],
   ['file-watch', ['rt', 'sync']],
@@ -171,7 +170,6 @@ const CORE_TOKIO_FEATURES = new Map([
   ['agent-runtime', ['io-util', 'macros', 'rt', 'time']],
   ['mcp-runtime', ['io-util', 'macros', 'rt', 'rt-multi-thread', 'time']],
   ['browser-control', ['net', 'rt', 'time']],
-  ['debug-log', ['macros', 'net', 'rt', 'time']],
   ['lsp', ['macros']],
 ]);
 const CORE_TOKIO_AGGREGATES = new Set([
@@ -578,7 +576,6 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
   const ownerFeatureReferences = new Map([
     ['announcement', ['reqwest/json']],
     ['browser-control', ['reqwest/json']],
-    ['debug-log', ['reqwest/json']],
     ['mcp', ['reqwest/json', 'reqwest/stream']],
     ['miniapp-market', ['reqwest/json', 'reqwest/query', 'reqwest/stream']],
     ['miniapp-runtime', ['reqwest/stream']],
@@ -1012,7 +1009,6 @@ export function findProductEntrypointCoreFeatureViolations(
     ['bitfun-sdk-host-app', new Map([
       ['bitfun-services-integrations', [
         'announcement',
-        'debug-log',
         'function-agents',
         'product-full',
         'remote-connect',
@@ -1217,7 +1213,6 @@ export function findProductEntrypointCoreFeatureViolations(
     const forbiddenCoreFeatures = [
       'product-full',
       'announcement',
-      'debug-log',
       'dispatch-store',
     ];
     const reportedUnexpectedFeatures = new Set();

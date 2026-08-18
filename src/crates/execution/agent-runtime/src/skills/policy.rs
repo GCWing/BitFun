@@ -156,7 +156,6 @@ mod tests {
         for mode_id in [
             "agentic",
             "Plan",
-            "debug",
             "Multitask",
             "coding_shared",
             "Claw",

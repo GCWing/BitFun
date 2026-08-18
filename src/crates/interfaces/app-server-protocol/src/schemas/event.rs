@@ -128,10 +128,6 @@ pub enum ConfigUpdate {
     AppUpdated,
     ConfigReloaded,
     ReasoningCatalogUpdated,
-    DebugModeConfigUpdated {
-        new_port: u16,
-        new_log_path: String,
-    },
     LogLevelUpdated {
         new_level: String,
     },

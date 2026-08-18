@@ -50,13 +50,6 @@ pub enum ConfigUpdateEvent {
     /// The models.dev reasoning catalog snapshot changed. Session owners use
     /// this to reconcile persisted reasoning preset selections.
     ReasoningCatalogUpdated,
-    /// Debug-mode configuration updated.
-    DebugModeConfigUpdated {
-        /// The new ingest port.
-        new_port: u16,
-        /// The new log path.
-        new_log_path: String,
-    },
     /// Runtime log level updated.
     LogLevelUpdated {
         /// New runtime log level.

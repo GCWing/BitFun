@@ -41,10 +41,7 @@ indexmap = { workspace = true, optional = true }
 
 reqwest = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
-
-# Debug Log HTTP Server
 axum = { workspace = true, optional = true }
-tower-http = { workspace = true, optional = true }
 
 notify = { workspace = true, optional = true }
 dirs = { workspace = true }
@@ -172,7 +169,6 @@ product-full = [
     "canvas-runtime",
     "external-sources",
     "plugin-runtime",
-    "debug-log",
     "announcement",
     "file-watch",
     "workspace-watch",
@@ -375,16 +371,6 @@ plugin-runtime = [
     "external-sources",
     "dep:bitfun-plugin-runtime-client",
     "bitfun-runtime-ports/plugin-runtime",
-]
-debug-log = [
-    "dep:axum",
-    "dep:tokio-util",
-    "dep:tower-http",
-    "bitfun-services-integrations/debug-log",
-    "tokio/macros",
-    "tokio/net",
-    "tokio/rt",
-    "tokio/time",
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",

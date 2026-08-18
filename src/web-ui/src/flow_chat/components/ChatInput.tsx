@@ -6525,7 +6525,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 ) : null}
                 {(canSwitchModes || isAcpTargetSession) && modeState.current !== 'agentic' && (
                   <div
-                    className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current === 'debug' ? 'debug' : modeState.current}`}
+                    className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current}`}
                     data-bf-component="chat-input"
                     data-bf-part="modeChip"
                     data-testid="chat-input-agent-mode-chip"

@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
+import { RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
 import {
   Switch,
   NumberInput,
   Button,
-  Input,
-  Textarea,
-  Card,
-  CardBody,
   IconButton,
   ConfigPageLoading,
   Modal,
@@ -36,23 +32,14 @@ import {
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import type {
-  DebugModeConfig,
-  LanguageDebugTemplate,
   PermissionRule,
   ToolPermissionConfig,
-} from '../types';
-import {
-  LANGUAGE_TEMPLATE_LABELS,
-  DEFAULT_DEBUG_MODE_CONFIG,
-  ALL_LANGUAGES,
-  DEFAULT_LANGUAGE_TEMPLATES,
 } from '../types';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
 import { ChatInputPixelPet } from '@/flow_chat/components/ChatInputPixelPet';
 import { ask, open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './AIFeaturesConfig.scss';
-import './DebugConfig.scss';
 
 const log = createLogger('SessionSettingsPanels');
 
@@ -109,7 +96,6 @@ interface SessionSettingsPanelsProps {
 const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }) => {
   const { t } = useTranslation('settings/session-config');
   const { t: tTools } = useTranslation('settings/agentic-tools');
-  const { t: tDebug } = useTranslation('settings/debug');
   const notification = useNotification();
 
   // ── Session config state ─────────────────────────────────────────────────
@@ -155,13 +141,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [browserStatusLoading, setBrowserStatusLoading] = useState(false);
   const [platform, setPlatform] = useState<string>('');
   const [browserRestartPrompt, setBrowserRestartPrompt] = useState<BrowserControlLaunchResponse | null>(null);
-
-  // ── Debug mode config state ──────────────────────────────────────────────
-  const [debugConfig, setDebugConfig] = useState<DebugModeConfig>(DEFAULT_DEBUG_MODE_CONFIG);
-  const [debugHasChanges, setDebugHasChanges] = useState(false);
-  const [debugSaving, setDebugSaving] = useState(false);
-  const [expandedTemplates, setExpandedTemplates] = useState<Set<string>>(new Set());
-  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
 
   const refreshComputerUseStatus = useCallback(async (): Promise<boolean> => {
     if (!IS_TAURI_DESKTOP) return false;
@@ -241,7 +220,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         loadedSubagentMaxConcurrency,
         execTimeout,
         loadedSubagentBatchExecutionPolicy,
-        debugConfigData,
         computerUseCfg,
         browserControlPreferredBrowser,
         browserControlAutoConnect,
@@ -254,7 +232,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<SubagentBatchExecutionPolicy>('ai.subagent_batch_execution_policy'),
-        configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
         configManager.getConfig<boolean>('ai.browser_control_auto_connect_on_startup'),
@@ -271,7 +248,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         : DEFAULT_SUBAGENT_MAX_CONCURRENCY);
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
-      if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
       setBrowserAutoConnectOnStartup(browserControlAutoConnect === true);
       setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
@@ -765,135 +741,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     }
   };
 
-  // ── Debug config handlers ────────────────────────────────────────────────
-
-  const updateDebugConfig = useCallback((updates: Partial<DebugModeConfig>) => {
-    setDebugConfig(prev => ({ ...prev, ...updates }));
-    setDebugHasChanges(true);
-  }, []);
-
-  const saveDebugConfig = async () => {
-    try {
-      setDebugSaving(true);
-      await configManager.setConfig('ai.debug_mode_config', debugConfig);
-      setDebugHasChanges(false);
-      notificationService.success(tDebug('messages.saveSuccess'), { duration: 2000 });
-    } catch (error) {
-      log.error('Failed to save debug config', error);
-      notificationService.error(tDebug('messages.saveFailed'));
-    } finally {
-      setDebugSaving(false);
-    }
-  };
-
-  const cancelDebugChanges = async () => {
-    const data = await configManager.getConfig<DebugModeConfig>('ai.debug_mode_config');
-    setDebugConfig(data ?? DEFAULT_DEBUG_MODE_CONFIG);
-    setDebugHasChanges(false);
-  };
-
-  const handleModalSave = async () => {
-    await saveDebugConfig();
-    setIsTemplatesModalOpen(false);
-  };
-
-  const handleModalCancel = async () => {
-    await cancelDebugChanges();
-    setIsTemplatesModalOpen(false);
-  };
-
-  const resetDebugTemplates = async () => {
-    try {
-      await configManager.resetConfig('ai.debug_mode_config');
-      const data = await configManager.getConfig<DebugModeConfig>('ai.debug_mode_config');
-      setDebugConfig(data ?? DEFAULT_DEBUG_MODE_CONFIG);
-      setDebugHasChanges(false);
-      notificationService.success(tDebug('messages.resetSuccess'), { duration: 2000 });
-    } catch (error) {
-      log.error('Failed to reset debug config', error);
-      notificationService.error(tDebug('messages.resetFailed'));
-    }
-  };
-
-  const updateTemplate = useCallback((language: string, updates: Partial<LanguageDebugTemplate>) => {
-    setDebugConfig(prev => ({
-      ...prev,
-      language_templates: {
-        ...prev.language_templates,
-        [language]: { ...prev.language_templates[language], ...updates },
-      },
-    }));
-    setDebugHasChanges(true);
-  }, []);
-
-  const toggleTemplateEnabled = useCallback(async (language: string, currentEnabled: boolean) => {
-    const newEnabled = !currentEnabled;
-    const newConfig = {
-      ...debugConfig,
-      language_templates: {
-        ...debugConfig.language_templates,
-        [language]: { ...debugConfig.language_templates[language], enabled: newEnabled },
-      },
-    };
-    setDebugConfig(newConfig);
-    try {
-      await configManager.setConfig('ai.debug_mode_config', newConfig);
-      const templateName = debugConfig.language_templates[language]?.display_name || language;
-      notificationService.success(
-        newEnabled
-          ? tDebug('messages.templateEnabled', { name: templateName })
-          : tDebug('messages.templateDisabled', { name: templateName }),
-        { duration: 2000 }
-      );
-    } catch (error) {
-      log.error('Failed to save template toggle', { language, error });
-      setDebugConfig(debugConfig);
-      notificationService.error(tDebug('messages.saveFailed'));
-    }
-  }, [debugConfig, tDebug]);
-
-  const toggleTemplateExpand = useCallback((language: string) => {
-    setExpandedTemplates(prev => {
-      const next = new Set(prev);
-      if (next.has(language)) {
-        next.delete(language);
-      } else {
-        next.add(language);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleSelectLogPath = async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        directory: false,
-        filters: [{ name: tDebug('fileDialog.logFile'), extensions: ['log', 'txt', 'ndjson'] }],
-      });
-      if (selected) {
-        updateDebugConfig({ log_path: selected });
-        notificationService.success(tDebug('messages.logPathUpdated'), { duration: 2000 });
-      }
-    } catch (error) {
-      notificationService.error(
-        `${tDebug('messages.selectFileFailed')}: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  };
-
-  const getTemplateEntries = useCallback((): [string, LanguageDebugTemplate][] => {
-    const entries: [string, LanguageDebugTemplate][] = [];
-    for (const lang of ALL_LANGUAGES) {
-      const template = debugConfig.language_templates?.[lang] ?? DEFAULT_LANGUAGE_TEMPLATES[lang];
-      if (template) entries.push([lang, template]);
-    }
-    return entries;
-  }, [debugConfig.language_templates]);
-
   // ── Derived values ───────────────────────────────────────────────────────
 
-  const templateEntries = getTemplateEntries();
   const computerUseAccessLabel = computerUseStatusLoading
     ? t('loading.text')
     : computerUseAccess ? t('computerUse.granted') : t('computerUse.notGranted');
@@ -1603,225 +1452,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </>
           ) : null}
         </ConfigPageSection>
-
-        {/* ── Debug mode settings ───────────────────────────────── */}
-        <ConfigPageSection
-          title={tDebug('sections.combined')}
-          description={tDebug('sections.combinedDescription')}
-        >
-          {/* Basic settings: log path + ingest port */}
-          <ConfigPageRow
-            label={tDebug('settings.logPath.label')}
-            description={tDebug('settings.logPath.description')}
-          >
-            <div className="bitfun-debug-config__input-group" data-bf-component="session-config" data-bf-part="debugInputs">
-              <Input
-                value={debugConfig.log_path}
-                onChange={(e) => updateDebugConfig({ log_path: e.target.value })}
-                placeholder={tDebug('settings.logPath.placeholder')}
-                variant="outlined"
-                inputSize="small"
-              />
-              <IconButton
-                variant="default"
-                size="small"
-                onClick={handleSelectLogPath}
-                tooltip={tDebug('settings.logPath.browse')}
-              >
-                <FolderOpen size={16} />
-              </IconButton>
-            </div>
-          </ConfigPageRow>
-
-          <ConfigPageRow
-            label={tDebug('settings.ingestPort.label')}
-            description={tDebug('settings.ingestPort.description')}
-            align="center"
-          >
-            <NumberInput
-              value={debugConfig.ingest_port}
-              onChange={(v) => updateDebugConfig({ ingest_port: v })}
-              min={1024}
-              max={65535}
-              step={1}
-              size="small"
-            />
-          </ConfigPageRow>
-
-          {/* Save / cancel for basic settings changes (not shown while modal is open) */}
-          {debugHasChanges && !isTemplatesModalOpen && (
-            <ConfigPageRow label={tDebug('actions.save')} align="center">
-              <div className="bitfun-debug-config__settings-actions" data-bf-component="session-config" data-bf-part="debugActions">
-                <Button
-                  variant="primary"
-                  size="small"
-                  onClick={saveDebugConfig}
-                  disabled={debugSaving}
-                >
-                  {debugSaving ? tDebug('actions.saving') : tDebug('actions.save')}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="small"
-                  onClick={cancelDebugChanges}
-                  disabled={debugSaving}
-                >
-                  {tDebug('actions.cancel')}
-                </Button>
-              </div>
-            </ConfigPageRow>
-          )}
-
-          {/* Language templates entry row */}
-          <ConfigPageRow
-            label={tDebug('sections.templates')}
-            description={tDebug('templates.description')}
-            align="center"
-          >
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={() => setIsTemplatesModalOpen(true)}
-            >
-              {tDebug('templates.configure')}
-            </Button>
-          </ConfigPageRow>
-        </ConfigPageSection>
-
-        {/* ── Language templates modal ───────────────────────────── */}
-        <Modal
-          isOpen={isTemplatesModalOpen}
-          onClose={() => setIsTemplatesModalOpen(false)}
-          title={tDebug('sections.templates')}
-          titleExtra={(
-            <IconButton
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="bitfun-debug-config__modal-reset-icon"
-              onClick={resetDebugTemplates}
-              tooltip={tDebug('templates.reset')}
-              aria-label={tDebug('templates.reset')}
-            >
-              <RefreshCw size={12} strokeWidth={2} />
-            </IconButton>
-          )}
-          size="large"
-        >
-          <div className="bitfun-debug-config__modal-body" data-bf-component="session-config" data-bf-part="templateModal">
-            {templateEntries.map(([language, template]) => {
-              const isExpanded = expandedTemplates.has(language);
-              return (
-                <Card
-                  key={language}
-                  variant="default"
-                  padding="none"
-                  interactive
-                  className={`bitfun-debug-config__template-card${isExpanded ? ' is-expanded' : ''}`}
-                  data-bf-component="session-config"
-                  data-bf-part="templateCard"
-                  data-bf-state={isExpanded ? 'expanded' : ''}
-                >
-                  <div
-                    className="bitfun-debug-config__template-header"
-                    data-bf-component="session-config"
-                    data-bf-part="templateHeader"
-                    onClick={() => toggleTemplateExpand(language)}
-                  >
-                    <div className="bitfun-debug-config__template-info" data-bf-component="session-config" data-bf-part="templateInfo">
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <Switch
-                          checked={template.enabled}
-                          onChange={() => toggleTemplateEnabled(language, template.enabled)}
-                          size="small"
-                        />
-                      </div>
-                      <span className="bitfun-debug-config__template-name">
-                        {template.display_name || LANGUAGE_TEMPLATE_LABELS[language] || language}
-                      </span>
-                    </div>
-                    <ChevronDown
-                      size={16}
-                      className={`bitfun-debug-config__template-arrow${isExpanded ? ' is-expanded' : ''}`}
-                    />
-                  </div>
-
-                  {isExpanded && (
-                    <CardBody className="bitfun-debug-config__template-content" data-bf-component="session-config" data-bf-part="templateContent">
-                      <div className="bitfun-debug-config__template-field" data-bf-component="session-config" data-bf-part="templateField">
-                        <Textarea
-                          label={tDebug('templates.instrumentation.label')}
-                          value={template.instrumentation_template}
-                          onChange={(e) => updateTemplate(language, { instrumentation_template: e.target.value })}
-                          placeholder={tDebug('templates.instrumentation.placeholder')}
-                          hint={`${tDebug('templates.instrumentation.placeholders')}: {LOCATION}, {MESSAGE}, {DATA}, {PORT}, {SESSION_ID}, {HYPOTHESIS_ID}, {RUN_ID}, {LOG_PATH}`}
-                          variant="outlined"
-                          autoResize
-                        />
-                      </div>
-                      <div className="bitfun-debug-config__template-field" data-bf-component="session-config" data-bf-part="templateField">
-                        <label className="bitfun-debug-config__template-label">
-                          {tDebug('templates.region.label')}
-                        </label>
-                        <div className="bitfun-debug-config__region-inputs">
-                          <Input
-                            value={template.region_start}
-                            onChange={(e) => updateTemplate(language, { region_start: e.target.value })}
-                            placeholder={tDebug('templates.region.startPlaceholder')}
-                            variant="outlined"
-                            inputSize="small"
-                          />
-                          <Input
-                            value={template.region_end}
-                            onChange={(e) => updateTemplate(language, { region_end: e.target.value })}
-                            placeholder={tDebug('templates.region.endPlaceholder')}
-                            variant="outlined"
-                            inputSize="small"
-                          />
-                        </div>
-                      </div>
-                      {template.notes && template.notes.length > 0 && (
-                        <div className="bitfun-debug-config__template-field" data-bf-component="session-config" data-bf-part="templateField">
-                          <label className="bitfun-debug-config__template-label">
-                            {tDebug('templates.notes')}
-                          </label>
-                          <div className="bitfun-debug-config__template-notes" data-bf-component="session-config" data-bf-part="templateNotes">
-                            {template.notes.map((note, idx) => (
-                              <span key={idx} className="bitfun-debug-config__template-note">
-                                {note}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </CardBody>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-
-          {debugHasChanges && (
-            <div className="bitfun-debug-config__modal-footer" data-bf-component="session-config" data-bf-part="modalFooter">
-              <Button
-                variant="primary"
-                size="small"
-                onClick={handleModalSave}
-                disabled={debugSaving}
-              >
-                {debugSaving ? tDebug('actions.saving') : tDebug('actions.save')}
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={handleModalCancel}
-                disabled={debugSaving}
-              >
-                {tDebug('actions.cancel')}
-              </Button>
-            </div>
-          )}
-        </Modal>
 
         <Modal
           isOpen={browserRestartPrompt !== null}

@@ -349,7 +349,7 @@ test('Core feature-free dependencies stay attached to their exact runtime owners
   assert.deepEqual(ownersByDependency.get('unic-langid'), new Set(['i18n-runtime']));
   assert.deepEqual(
     ownersByDependency.get('tokio-util'),
-    new Set(['agent-runtime', 'debug-log']),
+    new Set(['agent-runtime']),
   );
 });
 
@@ -1504,7 +1504,6 @@ test('SDK Host closure rejects unreviewed capability owners below Core', () => {
     ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'remote-ssh-concrete'],
     ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'function-agents'],
     ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'announcement'],
-    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'debug-log'],
     ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'product-full'],
     ['bitfun-product-domains', 'src/crates/contracts/product-domains/Cargo.toml', 'function-agents'],
     ['bitfun-product-domains', 'src/crates/contracts/product-domains/Cargo.toml', 'product-full'],
@@ -2373,9 +2372,8 @@ test('CLI dependency closure includes build dependencies and excluded capabiliti
   const core = {
     ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
     features: {
-      'cli-everything': ['announcement', 'debug-log'],
+      'cli-everything': ['announcement'],
       announcement: [],
-      'debug-log': [],
     },
   };
   const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
@@ -3503,7 +3501,6 @@ test('Core Tokio capabilities cannot hide behind an unreviewed owner feature', (
       'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
       'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
       'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
-      'debug-log': ['tokio/macros', 'tokio/net', 'tokio/rt', 'tokio/time'],
       lsp: ['tokio/macros'],
       sneaky: ['agent-runtime', 'browser-control'],
     },
@@ -3526,7 +3523,6 @@ test('reviewed Tokio aggregates cannot declare runtime capabilities directly', (
       'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
       'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
       'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
-      'debug-log': ['tokio/macros', 'tokio/net', 'tokio/rt', 'tokio/time'],
       lsp: ['tokio/macros'],
       'product-full': ['agent-runtime', 'tokio/net'],
     },

@@ -15,9 +15,6 @@ pub mod browser_control;
 #[cfg(feature = "canvas-runtime")]
 pub mod canvas;
 
-#[cfg(feature = "debug-log")]
-pub mod debug_log;
-
 #[cfg(feature = "deep-research")]
 pub mod deep_research;
 

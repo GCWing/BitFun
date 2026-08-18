@@ -40,7 +40,7 @@ fn prompt_cache_lookup_preserves_identity_and_expiry_semantics() {
     assert!(matches!(
         store.lookup_system_prompt(
             "session-1",
-            &SystemPromptCacheIdentity::new("template:debug_mode"),
+            &SystemPromptCacheIdentity::new("template:plan_mode"),
             None
         ),
         PromptCacheLookup::Miss

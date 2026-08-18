@@ -104,8 +104,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   capability from Cargo's feature union. The Agent Runtime baseline plan is
   exactly `Basic` plus `AgentControl`, not a hidden delivery profile.
   `external-sources` adds third-party discovery/import adapters,
-  `plugin-runtime` adds executable plugin-client wiring, and `debug-log` keeps
-  the debug ingest server separate. None may enable `product-full`.
+  `plugin-runtime` adds executable plugin-client wiring. None may enable
+  `product-full`.
 - CLI/ACP closure checks keep Cargo resolver-v2 normal and host
   (build/proc-macro) feature contexts separate, while treating all
   target-specific declarations within each context as one reviewed architecture
@@ -129,7 +129,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   library's implicit default. Capability-local utility dependencies remain
   optional and are activated by their owner features; in particular,
   `base64`, `futures`, `regex`, `tokio-util`, and `bitfun-agent-tools` belong to
-  the Agent Runtime, local-storage, dispatch-store, or debug-log closures that
+  the Agent Runtime, local-storage, or dispatch-store closures that
   use them. Core's direct feature-free Tokio edge keeps only filesystem and
   synchronization support required by config and app-path state; the selected
   Services Core `json-io` owner separately carries the runtime/time capabilities

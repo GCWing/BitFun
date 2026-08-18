@@ -237,7 +237,6 @@ fn top_level_modes_default_to_auto() {
         "Multitask",
         "Cowork",
         "Plan",
-        "debug",
         "Claw",
         "DeepResearch",
         "Team",

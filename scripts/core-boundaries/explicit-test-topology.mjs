@@ -46,7 +46,6 @@ export const servicesCoreIntegrationTestTargets = [
 ];
 
 export const servicesIntegrationsIntegrationTestTargets = [
-  { name: 'debug_log_owner_contracts', path: 'tests/debug_log_owner_contracts.rs' },
   { name: 'script_tool_runtime', path: 'tests/script_tool_runtime.rs' },
   { name: 'announcement_contracts', path: 'tests/announcement_contracts.rs' },
   { name: 'file_watch_contracts', path: 'tests/file_watch_contracts.rs' },

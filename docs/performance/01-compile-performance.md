@@ -225,7 +225,7 @@ Installer 自己生成的 `BitFun-Installer/src-tauri/Cargo.lock` 不提交。
 | OpenCode Adapter | 141 → 140 | 140 → 139 | 140 → 139 | 既有 Markdown/Tokio owner 保留，仅未消费的 Similar 退出 |
 
 Core 的直接 Tokio capability 从 `fs/io-util/macros/net/rt/sync/time` 收敛为 `fs/sync`；异步宏、
-网络以及产品 runtime 能力由现有 `agent-runtime`、`browser-control`、`debug-log`、`lsp` owner
+网络以及产品 runtime 能力由现有 `agent-runtime`、`browser-control`、`lsp` owner
 显式选择。feature-free Core 仍通过 `bitfun-services-core/json-io` 获得其原子 JSON 写入所需的
 `rt/time`，测试使用的多线程运行时只留在 dev-dependency。`runtime-ports/permission` 没有被机械移出：`GlobalConfig` 与项目权限文件公开 DTO
 确实在 feature-free facade 中使用它，继续保留比制造条件 API 更符合契约稳定性。

@@ -234,33 +234,6 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/services/services-integrations/src/debug_log.rs',
-    reason:
-      'services-integrations must own debug log file append, redaction, default config, and HTTP dispatch behind the debug-log feature',
-    patterns: [
-      {
-        regex: /\bpub struct DebugLogConfig\b/,
-        message: 'missing debug log config owner',
-      },
-      {
-        regex: /\bpub struct DebugLogEntry\b/,
-        message: 'missing debug log entry owner',
-      },
-      {
-        regex: /\bpub async fn append_log_async\b/,
-        message: 'missing debug log append owner',
-      },
-      {
-        regex: /\bfn redact_value\b/,
-        message: 'missing debug log redaction owner',
-      },
-      {
-        regex: /\bpub async fn post_debug_log\b/,
-        message: 'missing debug log HTTP dispatch owner',
-      },
-    ],
-  },
-  {
     path: 'src/crates/services/services-core/tests/storage_owner_contracts/storage_owner_contracts.rs',
     reason:
       'services-core local storage owner must keep persistence, cleanup, and token usage behavior contracts',
@@ -302,37 +275,6 @@ export const requiredContentRules = [
       {
         regex: /\bfront_matter_markdown_preserves_metadata_and_trimmed_body_contract\b/,
         message: 'missing front-matter owner behavior regression',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/services/services-integrations/tests/debug_log_owner_contracts.rs',
-    reason:
-      'services-integrations debug log migration must keep file append, redaction, and optional HTTP behavior contracts',
-    patterns: [
-      {
-        regex:
-          /\bdebug_log_owner_appends_legacy_partially_redacted_ndjson_and_skips_http_when_disabled\b/,
-        message: 'missing debug log file append and legacy partial redaction behavior regression',
-      },
-      {
-        regex: /\bdebug_log_owner_dispatches_the_same_redacted_payload_when_http_is_enabled\b/,
-        message: 'missing debug log HTTP dispatch behavior regression',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/infrastructure/debug_log/mod.rs',
-    reason:
-      'core debug log module must stay a compatibility facade over services-integrations for log append and redaction behavior',
-    patterns: [
-      {
-        regex: /\bpub use bitfun_services_integrations::debug_log::\{/,
-        message: 'missing debug log owner re-export',
-      },
-      {
-        regex: /\bappend_log_async\b/,
-        message: 'missing append_log_async compatibility export',
       },
     ],
   },
@@ -4106,10 +4048,6 @@ export const requiredContentRules = [
       {
         regex: /#\[cfg\(all\(feature = "ai-adapter-runtime", feature = "subscription-auth"\)\)\]\s*pub mod subscription_auth\b/s,
         message: 'AI subscription auth runtime must require both the adapter and credential owners',
-      },
-      {
-        regex: /#\[cfg\(feature = "debug-log"\)\]\s*pub mod debug_log\b/s,
-        message: 'debug ingest HTTP server must stay behind debug-log',
       },
     ],
   },

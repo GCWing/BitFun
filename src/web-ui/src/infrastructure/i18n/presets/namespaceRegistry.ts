@@ -28,7 +28,6 @@ export const ALL_NAMESPACES = [
   'settings/ai-model',
   'settings/appearance',
   'settings/basics',
-  'settings/debug',
   'settings/default-model',
   'settings/editor',
   'settings/external-sources',
