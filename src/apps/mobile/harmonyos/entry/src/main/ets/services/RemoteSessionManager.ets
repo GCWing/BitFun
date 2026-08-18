@@ -1,7 +1,8 @@
 import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { PairIdentity, PeerDeviceProvisionOutcome, RelayHttpClient } from './RelayHttpClient';
-import { CloudAccountClient, CloudAccountSession } from './CloudAccountClient';
+import { CloudAccountClient, CloudAccountRequestError, CloudAccountSession } from './CloudAccountClient';
+import { RemoteI18n } from '../i18n/RemoteI18n';
 import { AccountDeviceCommandTransport, RemoteCommandTransport, RoomRemoteCommandTransport } from './RemoteCommandTransport';
 import { RemoteCommandFactory } from './RemoteCommandFactory';
 import { RemoteCrypto } from './RemoteCrypto';
@@ -27,6 +28,19 @@ export interface ProvisionedPeerDevice {
   masterKeyBase64: string;
   deviceId: string;
 }
+
+/**
+ * How long the first command of an account-device connect may take.
+ *
+ * A desktop that is actually running answers `get_workspace_info` from memory,
+ * so anything past a few seconds means it is not there. The relay waits 130 s
+ * before giving up on it, and the phone tears the previous connection down
+ * before dialling — so without a deadline of our own, tapping a session on a
+ * desktop that has gone away costs two minutes of a blank screen. Only the
+ * handshake is bounded this tightly; once the desktop has answered once, the
+ * longer transport default applies to everything after it.
+ */
+const ACCOUNT_HANDSHAKE_TIMEOUT_MS: number = 15000;
 
 export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
   private readonly roomClient: RelayHttpClient = new RelayHttpClient();
@@ -121,7 +135,15 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     this.transportGeneration += 1;
     this.transport?.reset();
     this.transport = new AccountDeviceCommandTransport(accountClient, relayUrl, session, targetDeviceId);
-    const workspaceResponse = await this.send<WorkspaceInfoResponse>(RemoteCommandFactory.getWorkspaceInfo());
+    let workspaceResponse: WorkspaceInfoResponse;
+    try {
+      workspaceResponse = await this.send<WorkspaceInfoResponse>(
+        RemoteCommandFactory.getWorkspaceInfo(),
+        ACCOUNT_HANDSHAKE_TIMEOUT_MS
+      );
+    } catch (err) {
+      throw RemoteSessionManager.handshakeFailure(err);
+    }
     this.workspace = RemoteResponseMapper.workspaceFromResponse(workspaceResponse);
     const sessions = await this.listSessions(50, 0, '', '');
     return {
@@ -422,7 +444,12 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     return true;
   }
 
-  private async send<T extends CommandStatusResponse>(command: RemoteCommand, readTimeoutMs: number = 30000): Promise<T> {
+  /**
+   * [readTimeoutMs] is left undefined so each transport applies its own
+   * default: a room command and an account command do not travel the same
+   * number of hops and never shared a sensible number.
+   */
+  private async send<T extends CommandStatusResponse>(command: RemoteCommand, readTimeoutMs?: number): Promise<T> {
     command._request_id = `req_${Date.now()}_${Encoding.randomId('harmony').slice(0, 20)}`;
     if (!this.transport) {
       throw new Error('Remote transport is not connected.');
@@ -434,6 +461,22 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       throw new Error('Remote target changed while the request was in flight.');
     }
     return response;
+  }
+
+  /**
+   * Keeps a handshake failure readable.
+   *
+   * Everything but a relay status here is the SDK's own errno text for "nobody
+   * answered", which is both English and meaningless to the person holding the
+   * phone. A status still carries something the caller acts on — 401 expires
+   * the account session — so those pass through untouched.
+   */
+  private static handshakeFailure(err: Object): Error {
+    if (err instanceof CloudAccountRequestError) {
+      return err;
+    }
+    RemoteLogger.warn(`account device handshake failed: ${String(err)}`);
+    return new Error(RemoteI18n.t('remote.settings.deviceUnavailable'));
   }
 
   private static normalizedSessionFilter(agentType: string): string {

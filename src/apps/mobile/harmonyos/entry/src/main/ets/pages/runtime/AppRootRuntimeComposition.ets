@@ -442,6 +442,9 @@ export abstract class AppRootRuntimeComposition {
         },
         onConnected: () => {
           this.remotePageState.setConnectionState(ConnectionState.Connected);
+          // A live link outranks the relay's presence answer, and that override
+          // is applied where the list is published, not where it is read.
+          this.settingsController.resyncAccountDevicePresence();
         },
         onConnectionFailed: (err: Object) => {
           this.failRemoteConnection(err);
@@ -717,7 +720,9 @@ export abstract class AppRootRuntimeComposition {
         credentials: () => this.settingsController.activeCloudAccount(),
         activeDeviceId: (): string => {
           return this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
-        }
+        },
+        activeDeviceConnected: (): boolean =>
+          (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected
       },
       this.remoteSessionListStore
     );

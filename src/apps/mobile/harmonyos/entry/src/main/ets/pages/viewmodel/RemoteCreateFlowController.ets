@@ -286,6 +286,13 @@ export class RemoteCreateFlowController {
       if (!device) {
         throw new Error(RemoteI18n.t('remote.settings.deviceUnavailable'));
       }
+      // The only visible sign that anything is happening. This switch is
+      // implicit — the user tapped a session, not a device — and it runs behind
+      // whatever surface the sidebar just closed over, which has no place to
+      // show a connection state. `isLoadingHome` looks like the answer and is
+      // not: the only thing that reads it is the RemoteHome route, and this
+      // path never routes there.
+      runtime.hooks.showToast(RemoteI18n.f('remote.settings.deviceSwitching', device.deviceName || target));
       await runtime.settings.selectCloudAccountDevice(device, false);
     } catch (err) {
       this.remote.setLoadingHome(false);

@@ -247,6 +247,7 @@ const ZH_CN_MESSAGES: [string, string][] = [
   ['remote.settings.deviceOffline', '离线'],
   ['remote.settings.deviceConnecting', '正在连接'],
   ['remote.settings.deviceControlling', '当前控制'],
+  ['remote.settings.deviceSwitching', '正在切换到 {0}…'],
   ['remote.settings.deviceSwitchFailed', '切换控制设备失败，请稍后重试。'],
   ['remote.settings.deviceLoadFailed', '设备列表加载失败，请稍后重试。'],
   ['remote.settings.accountExpired', '云账号已失效，请重新登录。'],

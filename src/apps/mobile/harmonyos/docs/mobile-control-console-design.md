@@ -8,9 +8,35 @@ Scope: `src/apps/mobile/harmonyos`。不改 relay、桌面端、CLI 和
 ## 实施状态
 
 截至 2026-08-18：五阶段代码已接到侧栏两个宿主与冷启动回填；`harmony:architecture`、
-`assembleHap`、LocalTest 通过，并已装到真机 `5ZU0226202001116` 拉起。两台桌面的手工
-六项（单设备也有真名设备头、展开第二台、离线灰行、跨设备打开、新建不搬工作区、杀进程回填）
-仍待账号下第二台在线桌面当场确认，确认前本节不标已实现。
+`assembleHap`、LocalTest、`theme:color-audit:all`（浅色深色）全部通过，并已装到真机
+`5ZU0226202001116`。「验证要求」里的六项真机手测在两台在线桌面上全部走过并通过。
+
+第 4 项（跨设备打开会话）第一次跑是失败的，成因和修法记在这里，因为它牵出的是一处传输层
+缺陷而不是 UI 疏漏：目标桌面不应答时，`AccountDeviceCommandTransport.send` 把调用方给的
+timeout 整个丢掉，一律吃 `deviceRpc` 写死的 130 秒，于是一次失败的设备切换要挂满两分钟，
+其间既没有等待态、失败后也没有把控制目标退回原设备。三处修完：timeout 从
+`AccountDeviceCommandTransport` 一路传到 `deviceRpc`；`connectAccountDevice` 的握手单独用
+`ACCOUNT_HANDSHAKE_TIMEOUT_MS = 15000`（握手的沉默意味着桌面没了，不是桌面忙）；
+`RemoteCreateFlowController.ensureRemoteControlTarget` 在切换点弹一次
+`remote.settings.deviceSwitching` 吐司，`SettingsController` 在切换失败后调
+`restoreControlTarget()` 回到切换前那台（`restorableControlTarget()` 必须在 teardown
+清空状态**之前**取快照）。复验用 `kill -STOP` 冻住 Mac 桌面制造「relay 仍报在线、桌面不
+应答」这一模一样的条件：T+4 s 屏上是「正在恢复连接 · 正在连接」，T+16 s 头部退回原设备。
+日志的三行时间戳对得上——`device rpc cmd=get_workspace_info` 15:33:32.534、
+`account device handshake failed … Operation timeout` 15:33:47.547（15.0 秒，不是 130）、
+`control target restored device=3fa42461…` 15:33:48.576。
+
+第 5 项（在第二台新建会话不搬动那台桌面的工作区）在真机上验了，通过，四条证据互相独立：
+桌面日志只有 `Session created`，没有任何 `open_workspace`；`workspace_data.json` 虽在同一秒
+被改写，但 `current_workspace_id` 内容没变（**看内容不看 mtime**，只看 mtime 会误判成失败）；
+新会话落在被点的那个工作区目录下，说明测试不是空转；手机侧 `get_workspace_info` →
+`create_session` 全程 0.5 秒，中间没有 `set_workspace`。
+
+同一轮真机验证暴露并已修的是在线判定，共三处：relay 的 presence 会谎报离线、宽屏根本不刷新
+presence（见「4. 拉取策略」后两条），以及 `ForEach` 键撞车导致活动设备那一行永远渲染摊平占位
+对象（见「3. 每台设备一个组件实例」末段）。第三处才是「明明连着却灰着」的直接原因——前两处修完，
+模型里 `online` 已经是 `true`，画面照旧是灰的。冷启动复验：活动桌面亮起并默认展开，列出自己的
+工作区与会话。
 
 ## 背景
 
@@ -131,6 +157,15 @@ flowchart LR
 `projectionCache`，天然做到一设备一缓存。`WorkspaceGroup` / `SessionRow` / `MoreSessionsRow`
 三个 `@Builder` 从 `SidebarWorkspaceSection` 原样平移进来，逻辑不变，只多一级缩进。
 
+**`ForEach` 的键必须区分摊平占位行**。`ForEach` 把子组件绑定在它**首次创建时**的那个 item 上，
+只有键变了才会重新读 item。摊平用的 `unpairedEntry` 带的正是控制目标自己的 deviceId，所以不加
+前缀就会和该桌面的真实设备行撞键：冷启动先走摊平（设备列表还没回来），账号设备列表落地后
+`ForEach` 认为键没变、复用旧子组件，那台桌面于是一直渲染那个**没人再更新**的占位对象——灰着、
+标着「离线」，连自己的展开都点不动（点击把真实条目的 `expanded` 翻了，画面纹丝不动）。真机上
+表现为「另一台是亮的，正在对话的这台反而是灰的」。修法是 `deviceKey()`：摊平期的键加
+`unpaired:` 前缀，真实列表一到键全变，子组件整体重建。注意这类失效只发生在 **`ForEach` 里
+实例化的子组件**上；`@Builder` 渲染的行随父组件重建，不受影响。
+
 `SidebarWorkspaceSection` 退化为"设备列表 + 分区头"。账号下的桌面无论几台都画设备头，
 否则断连后工作区名会被写成「未连接」，摊平后用户看不到这是哪台机器。没有账号设备列表
 的二维码配对仍摊平。
@@ -140,10 +175,24 @@ flowchart LR
 - 离线设备默认只画一个带真名的灰行，永不发 RPC。`deviceRpc` 的读超时是 130 秒
   （`CloudAccountClient.ets:291`），一台离线机器就足以让整个分区看起来是坏的。
 - **活动设备**默认展开，数据来自 `RemotePageState`，零额外 RPC。
-- 在线状态本身也要刷新。relay 的 presence 由内存连接注册表持有，问它就是当前值；但设备列表
-  过去只在冷启动拉一次，于是启动之后才上线的桌面会一直灰着，直到 app 被杀掉重启。回到前台
-  与打开侧栏各触发一次 `refreshAccountDevicesIfStale`，15 秒内的答案视为仍然新鲜——够短，
-  让一台刚上线的桌面在同一次使用里就变亮；够长，让冷启动时同时发生的两个事件只花一次请求。
+- 在线状态本身也要刷新，而且**不能只靠事件驱动**。设备列表过去只在冷启动拉一次，于是启动
+  之后才上线的桌面会一直灰着，直到 app 被杀掉重启。回到前台与打开侧栏各触发一次
+  `refreshAccountDevicesIfStale`（15 秒内的答案视为仍然新鲜——够短，让一台刚上线的桌面在同一
+  次使用里就变亮；够长，让冷启动时同时发生的两个事件只花一次请求）。但「打开侧栏」这个事件
+  只存在于窄屏：宽屏把 `AppSidebar` 常驻在 `WideConversationHost` 的主栏里，`openAppSidebar`
+  永远不会触发，于是最需要它的那块屏反而一次都不刷新。relay 也没有推送 presence 的通道。
+  因此另加一个前台轮询 `SettingsController.startPresencePolling()`（`PRESENCE_POLL_INTERVAL_MS`
+  = 20 秒一拍，复用 `RemoteHeartbeatController` 的丢重叠语义），由 `AppRootRuntime` 的
+  `onPageShow` 起、`onPageHide` / `aboutToDisappear` 停——页面不在屏上就没有东西会过期。
+  轮询器放在 `SettingsController` 而不是 `AppRootRuntime`：presence 的其余部分本来就归它，
+  而 `AppRootRuntime` 只剩 5 行预算（上限 500），把定时器塞进去会顶破架构检查。
+- **有活链路时不听 relay 的**。relay 的 `online` 是内存连接注册表的投影
+  （`relay-service/src/db.rs:251`），会滞后、也会丢条目：真机上出现过 `/api/devices` 报
+  `online=false`，而同一台桌面每 15 秒的 `cmd=ping` 都返回 200。手机对「我正连着的那台」有
+  第一手证据，所以 `syncDevices` 里活链路压过 relay 的答案。这条规则求值于**列表被发布的那
+  一刻**，因此链路刚变活时必须重新发布一次（`SettingsController.resyncAccountDevicePresence()`，
+  不发请求，只是把缓存的同一份列表再读一遍）——冷启动的设备列表往往先于重连落地，那一次拉回
+  来的答案正是「离线」。发布点唯一，视图层不复制这条规则，否则两处会各自腐烂。
 - 其他在线设备默认折叠。首次展开触发 `list_recent_workspaces` + `list_assistants`，再对该
   设备的工作区路径批量 `list_sessions`。磁盘回填是 `cached`：先画出来，展开后仍要被 RPC
   覆盖，不能把缓存当成已经加载完。
@@ -162,6 +211,22 @@ flowchart LR
 
 这条边界要在文案上说清楚：**看是多设备的，聊是单设备的**。点开另一台机器上的会话会把手机
 的对话通道移过去，这是真实发生的事，不能假装没有。
+
+切换要有始有终，两头都要有交代。**开头**：`ensureRemoteControlTarget` 是唯一的切换缝
+（打开会话与工作区内新建都走它），在那里弹一次 `remote.settings.deviceSwitching`，否则
+用户面对的是一段没有任何解释的静止界面。**结尾**：切换失败必须回到切换前那台，而不是把
+手机留在一个既没连上新设备、也不再轮询旧设备的悬空态。快照要在 teardown 清状态之前取
+（`restorableControlTarget()`），恢复本身带一个 `restoringControlTarget` 重入位——要恢复
+的那台也死了时不能来回互拨；恢复也不关用户自己打开的面板，只有用户主动选设备的那条路径
+才走 `navigateHome`。
+
+**握手的超时必须自己给**。`AccountDeviceCommandTransport` 过去把调用方的 timeout 丢了，
+一律用 `deviceRpc` 的 130 秒；那是给「桌面在唤醒冷进程」留的耐心，不该套在握手上——握手
+沉默说明桌面不在了。所以 `connectAccountDevice` 的第一条 `get_workspace_info` 用
+`ACCOUNT_HANDSHAKE_TIMEOUT_MS = 15000`，失败经 `handshakeFailure()` 归一成
+`remote.settings.deviceUnavailable`，原始报文只进日志。这条尤其容易复发：relay 的
+`online` 在桌面进程被冻住时仍然报 `true`（socket 没断），所以「设备在线」永远不能当成
+「设备会应答」的保证。
 
 `AppRootRuntimeComposition` 中按 `item.id` 去重的两处要改成按 `deviceId + id` 去重——不同机器
 上的会话 id 理论上可以撞，撞上时静默丢一条是最难查的那类 bug。

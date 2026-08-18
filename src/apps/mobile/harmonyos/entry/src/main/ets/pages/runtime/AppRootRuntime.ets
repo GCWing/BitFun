@@ -72,10 +72,12 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     // Idempotent: covers the pairing that happened after the last cold start.
     void this.startWatchProvisioning();
     void this.settingsController.refreshAccountDevicesIfStale(DEVICE_PRESENCE_MAX_AGE_MS);
+    this.settingsController.startPresencePolling(DEVICE_PRESENCE_MAX_AGE_MS);
   }
 
   onPageHide(): void {
     RemoteLogger.info(`page hide state=${(this.remotePageState.connectionState as ConnectionState)} route=${this.appShellViewModel.currentRoute()}`);
+    this.settingsController.stopPresencePolling();
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
     this.remotePageState.setBusy(false);
@@ -83,6 +85,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   aboutToDisappear(): void {
+    this.settingsController.stopPresencePolling();
     this.watchProvisionController.stop();
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
