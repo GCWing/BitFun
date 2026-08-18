@@ -876,6 +876,7 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
             title: None,
             new_messages: None,
             total_msg_count: None,
+            message_snapshot: None,
             active_turn: None,
             model_catalog: Box::new(None),
         }
@@ -2122,6 +2123,7 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
         title: Some("session title".to_string()),
         new_messages: None,
         total_msg_count: None,
+        message_snapshot: None,
         active_turn: Some(active_turn),
         model_catalog: Box::new(Some(sample_remote_model_catalog(11))),
     })
@@ -2732,6 +2734,7 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         Vec::new(),
         0,
         None,
+        None,
     ))
     .expect("serialize completed poll without assistant message");
     assert!(waiting_for_persistence.get("new_messages").is_none());
@@ -2757,6 +2760,7 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         tracker.version(),
         vec![assistant_message],
         2,
+        None,
         None,
     ))
     .expect("serialize completed poll with assistant message");

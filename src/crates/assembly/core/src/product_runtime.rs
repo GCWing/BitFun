@@ -94,6 +94,52 @@ fn projected_turn_save_would_overwrite_runtime_state(
     persisted: &DialogTurnData,
     projected: &DialogTurnData,
 ) -> bool {
+    let projected_drops_persisted_content =
+        || {
+            if projected.model_rounds.len() < persisted.model_rounds.len() {
+                return true;
+            }
+            persisted.model_rounds.iter().any(|persisted_round| {
+                let Some(projected_round) = projected
+                    .model_rounds
+                    .iter()
+                    .find(|round| round.id == persisted_round.id)
+                else {
+                    return true;
+                };
+
+                let text_was_shortened =
+                    persisted_round
+                        .text_items
+                        .iter()
+                        .enumerate()
+                        .any(|(index, persisted_item)| {
+                            projected_round.text_items.get(index).is_none_or(|item| {
+                                !item.content.starts_with(&persisted_item.content)
+                            })
+                        });
+                let thinking_was_shortened = persisted_round.thinking_items.iter().enumerate().any(
+                    |(index, persisted_item)| {
+                        projected_round
+                            .thinking_items
+                            .get(index)
+                            .is_none_or(|item| !item.content.starts_with(&persisted_item.content))
+                    },
+                );
+                let tool_was_dropped = persisted_round.tool_items.iter().any(|persisted_tool| {
+                    projected_round
+                        .tool_items
+                        .iter()
+                        .find(|tool| tool.id == persisted_tool.id)
+                        .is_none_or(|tool| {
+                            persisted_tool.tool_result.is_some() && tool.tool_result.is_none()
+                        })
+                });
+
+                text_was_shortened || thinking_was_shortened || tool_was_dropped
+            })
+        };
+
     persisted.recovery.is_some()
         || persisted.recovery_epoch.is_some()
         || projected.recovery.is_some()
@@ -101,7 +147,8 @@ fn projected_turn_save_would_overwrite_runtime_state(
         || (matches!(
             persisted.status,
             TurnStatus::Completed | TurnStatus::Cancelled | TurnStatus::Error
-        ) && projected.status == TurnStatus::InProgress)
+        ) && (projected.status == TurnStatus::InProgress
+            || projected_drops_persisted_content()))
 }
 
 fn merge_runtime_owned_turn_facts(
@@ -2368,6 +2415,39 @@ mod tests {
         ));
         assert!(!projected_turn_save_would_overwrite_runtime_state(
             &projected, &projected
+        ));
+
+        // Exercise content-loss protection independently from the recovery
+        // ownership guard above.
+        completed.recovery_epoch = None;
+        completed.model_rounds = serde_json::from_value(serde_json::json!([{
+            "id": "round-1",
+            "turnId": "turn-1",
+            "roundIndex": 0,
+            "timestamp": 2,
+            "textItems": [{
+                "id": "runtime-text",
+                "content": "complete authoritative response",
+                "isStreaming": false,
+                "timestamp": 2
+            }],
+            "startTime": 2,
+            "status": "completed"
+        }]))
+        .expect("runtime round");
+        let mut terminal_prefix = completed.clone();
+        terminal_prefix.model_rounds[0].text_items[0].content =
+            "complete authoritative".to_string();
+        assert!(projected_turn_save_would_overwrite_runtime_state(
+            &completed,
+            &terminal_prefix,
+        ));
+
+        terminal_prefix.model_rounds[0].text_items[0].content =
+            "complete authoritative response with UI metadata".to_string();
+        assert!(!projected_turn_save_would_overwrite_runtime_state(
+            &completed,
+            &terminal_prefix,
         ));
     }
 

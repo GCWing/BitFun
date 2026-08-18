@@ -1502,6 +1502,12 @@ where
         Ok(messages) => messages,
         Err(message) => return RemoteResponse::Error { message },
     };
+    // A history invalidation has no active projection to append against. Send
+    // a replacement snapshot so an equal-count message whose content grew at
+    // completion is repaired on remote controllers.
+    let message_snapshot = tracker
+        .is_history_snapshot_required()
+        .then(|| all_chat_messages.clone());
     let total_msg_count = all_chat_messages.len();
     let new_messages = all_chat_messages
         .into_iter()
@@ -1513,6 +1519,7 @@ where
         current_version,
         new_messages,
         total_msg_count,
+        message_snapshot,
         model_catalog_delta.catalog,
     )
 }
@@ -2426,6 +2433,8 @@ pub enum RemoteResponse {
         #[serde(skip_serializing_if = "Option::is_none")]
         total_msg_count: Option<usize>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        message_snapshot: Option<Vec<ChatMessage>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         active_turn: Option<ActiveTurnSnapshot>,
         #[serde(skip_serializing_if = "Option::is_none")]
         model_catalog: Box<Option<RemoteModelCatalog>>,
@@ -2688,6 +2697,7 @@ struct TrackerState {
     round_index: usize,
     active_items: Vec<ChatMessageItem>,
     persistence_dirty: bool,
+    history_snapshot_required: bool,
     linked_subagent_sessions: HashMap<String, String>,
 }
 
@@ -2745,6 +2755,7 @@ impl RemoteSessionStateTracker {
                 round_index: 0,
                 active_items: Vec::new(),
                 persistence_dirty: true,
+                history_snapshot_required: false,
                 linked_subagent_sessions: HashMap::new(),
             }),
             event_tx,
@@ -2881,7 +2892,23 @@ impl RemoteSessionStateTracker {
     }
 
     pub fn mark_persistence_clean(&self) {
-        self.state.write().unwrap().persistence_dirty = false;
+        let mut state = self.state.write().unwrap();
+        state.persistence_dirty = false;
+        state.history_snapshot_required = false;
+    }
+
+    fn mark_persistence_clean_if_version(&self, observed_version: u64) -> bool {
+        let mut state = self.state.write().unwrap();
+        if self.version() != observed_version {
+            return false;
+        }
+        state.persistence_dirty = false;
+        state.history_snapshot_required = false;
+        true
+    }
+
+    pub fn is_history_snapshot_required(&self) -> bool {
+        self.state.read().unwrap().history_snapshot_required
     }
 
     fn invalidate_history_projection(&self) {
@@ -2894,7 +2921,7 @@ impl RemoteSessionStateTracker {
         state.active_items.clear();
         state.session_state = "idle".to_string();
         state.persistence_dirty = true;
-        drop(state);
+        state.history_snapshot_required = true;
         self.bump_version();
     }
 
@@ -3291,7 +3318,6 @@ impl RemoteSessionStateTracker {
                 state.round_index = 0;
                 state.session_state = "running".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
             }
             AE::DialogTurnCompleted { turn_id, .. } if is_direct => {
@@ -3299,7 +3325,6 @@ impl RemoteSessionStateTracker {
                 state.turn_status = "completed".to_string();
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
                 let _ = self.event_tx.send(TrackerEvent::TurnCompleted {
                     turn_id: turn_id.clone(),
@@ -3310,7 +3335,6 @@ impl RemoteSessionStateTracker {
                 state.turn_status = "failed".to_string();
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
                 let _ = self.event_tx.send(TrackerEvent::TurnFailed {
                     turn_id: turn_id.clone(),
@@ -3322,7 +3346,6 @@ impl RemoteSessionStateTracker {
                 state.turn_status = "cancelled".to_string();
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
                 let _ = self.event_tx.send(TrackerEvent::TurnCancelled {
                     turn_id: turn_id.clone(),
@@ -3450,6 +3473,7 @@ pub fn remote_no_change_poll_response(version: u64) -> RemoteResponse {
         title: None,
         new_messages: None,
         total_msg_count: None,
+        message_snapshot: None,
         active_turn: None,
         model_catalog: Box::new(None),
     }
@@ -3470,6 +3494,7 @@ pub fn remote_snapshot_poll_response(
         title: non_empty_title(title),
         new_messages: None,
         total_msg_count: None,
+        message_snapshot: None,
         active_turn,
         model_catalog: Box::new(model_catalog),
     }
@@ -3480,6 +3505,7 @@ pub fn remote_persisted_poll_response(
     version: u64,
     new_messages: Vec<ChatMessage>,
     total_msg_count: usize,
+    message_snapshot: Option<Vec<ChatMessage>>,
     model_catalog: Option<RemoteModelCatalog>,
 ) -> RemoteResponse {
     let turn_finished = tracker.is_turn_finished();
@@ -3496,20 +3522,25 @@ pub fn remote_persisted_poll_response(
             tracker.snapshot_active_turn()
         } else {
             tracker.finalize_completed_turn();
-            tracker.mark_persistence_clean();
+            tracker.mark_persistence_clean_if_version(version);
             None
         }
     } else {
         tracker.snapshot_active_turn()
     };
 
-    let (send_messages, send_total) = if turn_finished && !has_assistant_msg {
-        (None, None)
+    let (send_messages, send_total, send_snapshot) = if let Some(snapshot) = message_snapshot {
+        tracker.mark_persistence_clean_if_version(version);
+        // Keep the additive delta for older clients that do not know the
+        // optional replacement field yet.
+        (Some(new_messages), Some(total_msg_count), Some(snapshot))
+    } else if turn_finished && !has_assistant_msg {
+        (None, None, None)
     } else {
         if !new_messages.is_empty() || active_turn.is_none() {
-            tracker.mark_persistence_clean();
+            tracker.mark_persistence_clean_if_version(version);
         }
-        (Some(new_messages), Some(total_msg_count))
+        (Some(new_messages), Some(total_msg_count), None)
     };
 
     let session_state = tracker.session_state();
@@ -3521,6 +3552,7 @@ pub fn remote_persisted_poll_response(
         title: non_empty_title(title),
         new_messages: send_messages,
         total_msg_count: send_total,
+        message_snapshot: send_snapshot,
         active_turn,
         model_catalog: Box::new(model_catalog),
     }
@@ -3996,6 +4028,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn initial_remote_poll_remains_an_additive_delta() {
+        let message = ChatMessage {
+            id: "message-visible".to_string(),
+            role: "user".to_string(),
+            content: "visible".to_string(),
+            timestamp: "1".to_string(),
+            metadata: None,
+            tools: None,
+            thinking: None,
+            items: None,
+            images: None,
+        };
+        let host = FakePollHost {
+            tracker: Arc::new(RemoteSessionStateTracker::new("session-a".to_string())),
+            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            messages: vec![message.clone()],
+            history_read_count: Arc::new(AtomicUsize::new(0)),
+        };
+
+        let response = handle_remote_poll_command(
+            &host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: 0,
+                known_msg_count: 0,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::SessionPoll {
+                version: 0,
+                changed: true,
+                session_state: Some("idle".to_string()),
+                title: None,
+                new_messages: Some(vec![message]),
+                total_msg_count: Some(1),
+                message_snapshot: None,
+                active_turn: None,
+                model_catalog: Box::new(None),
+            }
+        );
+    }
+
+    #[tokio::test]
     async fn history_change_invalidates_clean_poll_cache_and_reports_a_shorter_projection() {
         let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
         tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
@@ -4032,6 +4111,9 @@ mod tests {
 
         assert_eq!(tracker.version(), previous_version + 1);
         assert!(tracker.is_persistence_dirty());
+        assert!(tracker.is_history_snapshot_required());
+        assert!(!tracker.mark_persistence_clean_if_version(previous_version));
+        assert!(tracker.is_persistence_dirty());
         assert!(tracker.snapshot_active_turn().is_none());
         let response = handle_remote_poll_command(
             &host,
@@ -4054,11 +4136,23 @@ mod tests {
                 title: None,
                 new_messages: Some(Vec::new()),
                 total_msg_count: Some(1),
+                message_snapshot: Some(vec![ChatMessage {
+                    id: "message-visible".to_string(),
+                    role: "user".to_string(),
+                    content: "visible".to_string(),
+                    timestamp: "1".to_string(),
+                    metadata: None,
+                    tools: None,
+                    thinking: None,
+                    items: None,
+                    images: None,
+                }]),
                 active_turn: None,
                 model_catalog: Box::new(None),
             }
         );
         assert!(!tracker.is_persistence_dirty());
+        assert!(!tracker.is_history_snapshot_required());
     }
 
     #[derive(Default)]

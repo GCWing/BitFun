@@ -638,6 +638,7 @@ mod tests {
             title: Some("session title".to_string()),
             new_messages: None,
             total_msg_count: None,
+            message_snapshot: None,
             active_turn: Some(active_turn),
             model_catalog: Box::new(None),
         })

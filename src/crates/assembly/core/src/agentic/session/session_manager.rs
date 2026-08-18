@@ -7509,6 +7509,12 @@ impl SessionManager {
             return Ok(());
         }
 
+        // Serialize Runtime completion against projected UI checkpoints. If a
+        // checkpoint wins first, the generation journal below repairs it; if
+        // completion wins first, the projected-save guard sees the terminal
+        // authoritative record and cannot replace it with an older prefix.
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+
         let workspace_path = self
             .effective_session_storage_path(session_id)
             .await
@@ -7534,25 +7540,47 @@ impl SessionManager {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        let has_assistant_text = turn.model_rounds.iter().any(|round| {
-            round
-                .text_items
-                .iter()
-                .any(|item| !item.content.trim().is_empty())
-        });
-        if !has_assistant_text {
-            // Hosts that do not persist model rounds themselves (e.g. CLI)
-            // still need rich turn data on disk so other surfaces (e.g.
-            // Desktop) can render the conversation history. Build model
-            // rounds from the execution's new_messages.
-            let built_rounds = Self::build_model_rounds_from_messages(
-                new_messages,
-                &turn.turn_id,
-                completion_timestamp,
-            );
-            if !built_rounds.is_empty() {
-                turn.model_rounds = built_rounds;
-            } else if !final_response.trim().is_empty() {
+        // The Runtime generation journal is authoritative at completion. A
+        // frontend checkpoint may already contain assistant text, but that
+        // text can be only a prefix when the final stream chunks were dropped.
+        // Merge by stable round identity instead of treating any non-empty
+        // projected text as proof that the Turn is complete.
+        let turn_identity = turn.turn_id.clone();
+        let generated_count = Self::append_generation_rounds(
+            &mut turn,
+            &turn_identity,
+            new_messages,
+            completion_timestamp,
+        );
+        if generated_count == 0 && !final_response.trim().is_empty() {
+            let mut reconciled_existing_text = false;
+            for round in turn.model_rounds.iter_mut().rev() {
+                let Some(item) = round
+                    .text_items
+                    .iter_mut()
+                    .rev()
+                    .find(|item| !item.content.trim().is_empty())
+                else {
+                    continue;
+                };
+                if final_response == item.content || final_response.starts_with(&item.content) {
+                    item.content = final_response.clone();
+                    item.is_streaming = false;
+                    item.status = Some("completed".to_string());
+                    round.status = "completed".to_string();
+                    round.end_time = Some(completion_timestamp);
+                    reconciled_existing_text = true;
+                }
+                break;
+            }
+
+            let has_assistant_text = turn.model_rounds.iter().any(|round| {
+                round
+                    .text_items
+                    .iter()
+                    .any(|item| !item.content.trim().is_empty())
+            });
+            if !reconciled_existing_text && !has_assistant_text {
                 // Fallback: append a single text-only round
                 let round_index = turn.model_rounds.len();
                 turn.model_rounds.push(ModelRoundData {
@@ -7706,6 +7734,24 @@ impl SessionManager {
                         tool_item.interruption_reason = previous.interruption_reason.clone();
                     }
                 }
+                // Client-derived display cards are not part of the model's
+                // generation journal. Preserve the recognized additive card
+                // while replacing Runtime text/tool content authoritatively.
+                let generated_tool_ids = round
+                    .tool_items
+                    .iter()
+                    .map(|item| item.id.clone())
+                    .collect::<std::collections::HashSet<_>>();
+                let derived_tool_items = existing
+                    .tool_items
+                    .iter()
+                    .filter(|item| {
+                        item.id.starts_with("plan-display-")
+                            && !generated_tool_ids.contains(&item.id)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                round.tool_items.extend(derived_tool_items);
                 round.round_index = existing.round_index;
                 round.round_group_id = existing.round_group_id.clone();
                 round.timestamp = existing.timestamp;
@@ -9588,6 +9634,103 @@ mod tests {
                 prompt_cache_policy: PromptCachePolicy::default(),
             },
         )
+    }
+
+    #[tokio::test]
+    async fn completion_replaces_a_projected_text_prefix_with_runtime_generation_content() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Completion merge".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish the response".to_string(),
+                Some("turn-completion-prefix".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("turn should start");
+
+        let projected_prefix = Message::assistant("Saved prefix: 1.".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-final".to_string());
+        let mut persisted_turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        persisted_turn.model_rounds =
+            SessionManager::build_model_rounds_from_messages(&[projected_prefix], &turn_id, 1);
+        persisted_turn.model_rounds[0].tool_items.push(
+            serde_json::from_value(serde_json::json!({
+                "id": "plan-display-test",
+                "toolName": "CreatePlan",
+                "toolCall": { "id": "", "input": {} },
+                "toolResult": {
+                    "result": { "plan_file_path": "/tmp/plan.md" },
+                    "success": true
+                },
+                "startTime": 1,
+                "status": "completed"
+            }))
+            .expect("derived plan display tool"),
+        );
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &persisted_turn)
+            .await
+            .expect("projected prefix should persist");
+
+        let complete_response = "Saved prefix: 1. first item\n2. second item";
+        manager
+            .complete_dialog_turn(
+                &session.session_id,
+                &turn_id,
+                complete_response.to_string(),
+                &[Message::assistant(complete_response.to_string())
+                    .with_turn_id(turn_id.clone())
+                    .with_round_id("round-final".to_string())],
+                TurnStats {
+                    total_rounds: 1,
+                    total_tools: 0,
+                    total_tokens: 0,
+                    duration_ms: 1,
+                },
+            )
+            .await
+            .expect("completion should persist");
+
+        let completed = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert_eq!(completed.status, TurnStatus::Completed);
+        assert_eq!(completed.model_rounds.len(), 1);
+        assert_eq!(completed.model_rounds[0].id, "round-final");
+        assert_eq!(
+            completed.model_rounds[0].text_items[0].content,
+            complete_response,
+        );
+        assert_eq!(completed.model_rounds[0].tool_items.len(), 1);
+        assert_eq!(
+            completed.model_rounds[0].tool_items[0].id,
+            "plan-display-test",
+        );
     }
 
     async fn reopen_interrupted_turn_for_test(

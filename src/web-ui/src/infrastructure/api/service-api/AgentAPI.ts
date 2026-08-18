@@ -1396,6 +1396,10 @@ export class AgentAPI {
     return api.listen<AgenticEvent>('agentic://session-state-changed', callback);
   }
 
+  onSessionHistoryChanged(callback: (event: AgenticEvent) => void): () => void {
+    return api.listen<AgenticEvent>('agentic://session-history-changed', callback);
+  }
+
   onSessionModelAutoMigrated(
     callback: (event: SessionModelAutoMigratedEvent) => void
   ): () => void {

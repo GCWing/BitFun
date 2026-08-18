@@ -182,6 +182,8 @@ export interface PollResponse {
   title?: string;
   new_messages?: ChatMessage[];
   total_msg_count?: number;
+  /** Authoritative replacement after persisted history changes in place. */
+  message_snapshot?: ChatMessage[];
   active_turn?: ActiveTurnSnapshot | null;
   model_catalog?: RemoteModelCatalog;
 }
@@ -721,7 +723,10 @@ export class SessionPoller {
         }
         
         // Clear the grace period once new messages arrive.
-        if (resp.new_messages && resp.new_messages.length > 0) {
+        if (
+          (resp.new_messages && resp.new_messages.length > 0)
+          || resp.message_snapshot
+        ) {
           this.turnJustEndedAt = null;
         }
         
