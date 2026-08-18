@@ -468,14 +468,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (!dropdownOpen || !dropdownRef.current) return;
 
     const updatePosition = () => {
-      if (!dropdownRef.current || !portalDropdownRef.current) return;
-      const anchorRect = dropdownRef.current.getBoundingClientRect();
+      // Anchor on the trigger button, not the container: when a reasoning
+      // preset selector sits beside it the container's right edge is not the
+      // button's, and the menu is asked to right-align with the button.
+      const anchor = triggerRef.current ?? dropdownRef.current;
+      if (!anchor || !portalDropdownRef.current) return;
+      const anchorRect = anchor.getBoundingClientRect();
       const dropdownRect = portalDropdownRef.current.getBoundingClientRect();
       const layout = getModelSelectorDropdownLayout(
         anchorRect,
         dropdownRect,
         dropdownPlacement,
         { width: window.innerWidth, height: window.innerHeight },
+        // The trigger lives near the composer's right side, so a start-aligned
+        // wide menu overflows the window; right edges align instead.
+        'end',
       );
       setDropdownStyle(layout.style);
       setResolvedDropdownPlacement(layout.placement);

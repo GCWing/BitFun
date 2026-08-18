@@ -7,6 +7,11 @@ export const DEFAULT_POPOVER_VIEWPORT_PADDING = 8;
 
 export type FixedPopoverPlacement = 'top' | 'bottom';
 
+// 'start' aligns the menu's left edge with the anchor's left edge; 'end'
+// aligns the right edges instead, for anchors that sit near the window's
+// right side where a start-aligned wide menu would overflow.
+export type FixedPopoverAlignment = 'start' | 'end';
+
 export interface FixedPopoverViewport {
   width: number;
   height: number;
@@ -16,10 +21,12 @@ export interface FixedPopoverPositionOptions {
   gap?: number;
   padding?: number;
   preferredPlacement?: FixedPopoverPlacement;
+  alignment?: FixedPopoverAlignment;
 }
 
 interface FixedPopoverAnchorRect {
   left: number;
+  right?: number;
   top: number;
   bottom: number;
 }
@@ -81,7 +88,14 @@ export function computeFixedPopoverPositionInViewport(
     gap = 6,
     padding = DEFAULT_POPOVER_VIEWPORT_PADDING,
     preferredPlacement = 'bottom',
+    alignment = 'start',
   } = options;
+
+  // Without a measured right edge an end-aligned menu has nothing to align
+  // to, so it degrades to the start edge rather than to a wrong position.
+  const preferredLeft = alignment === 'end' && typeof anchorRect.right === 'number'
+    ? anchorRect.right - menuWidth
+    : anchorRect.left;
 
   return {
     top: clampFixedPopoverTopInViewport(
@@ -93,7 +107,7 @@ export function computeFixedPopoverPositionInViewport(
       padding,
     ),
     left: clampFixedPopoverLeftInViewport(
-      anchorRect.left,
+      preferredLeft,
       menuWidth,
       viewport.width,
       padding,
