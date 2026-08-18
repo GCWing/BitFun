@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  *
  * The composer's mode picker for ACP sessions. An agent publishes its modes as
- * a `mode`-category config option, and dsh-acp publishes ONLY that — no models —
- * so this covers the case where the mode is the whole picker, and the case where
- * the agent has fixed it and left exactly one choice.
+ * a `mode`-category config option, and it gets a trigger of its own beside the
+ * model picker — the two are unrelated choices and used to share one dropdown.
+ * This covers the agent that publishes only a mode, the agent that publishes
+ * both, and the agent that has fixed the mode and left exactly one choice.
  */
 
 import { act } from 'react';
@@ -136,9 +137,13 @@ describe('ModelSelector ACP mode picker', () => {
   });
 
   /** Render the selector against one set of ACP session options. */
-  const renderWithOptions = async (configOptions: unknown[]) => {
+  const renderWithOptions = async (
+    configOptions: unknown[],
+    session: { availableModels?: unknown[]; currentModelId?: string } = {},
+  ) => {
     vi.mocked(ACPClientAPI.getSessionOptions).mockResolvedValue({
-      availableModels: [],
+      availableModels: session.availableModels ?? [],
+      ...(session.currentModelId ? { currentModelId: session.currentModelId } : {}),
       configOptions,
     } as never);
     await act(async () => {
@@ -151,16 +156,44 @@ describe('ModelSelector ACP mode picker', () => {
   it('renders the mode as the whole picker when the agent offers no models', async () => {
     await renderWithOptions([MODE_OPTION]);
 
-    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]');
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-acp-mode-selector-btn"]');
     // Without this the ACP branch used to return null on an empty model list,
     // leaving a dsh session with no picker at all.
     expect(trigger, 'the mode picker must render without models').not.toBeNull();
     expect(trigger?.textContent).toContain('Standard');
+    // Nothing left for the model picker to show, so it stays away entirely.
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')).toBeNull();
 
     await act(async () => { trigger?.click(); });
     const options = document.body.querySelectorAll('[data-testid="chat-acp-mode-option"]');
     expect([...options].map(option => option.getAttribute('data-mode-value')))
       .toEqual(['standard', 'minimal']);
+  });
+
+  it('keeps the mode out of the model dropdown when the agent offers both', async () => {
+    await renderWithOptions([MODE_OPTION], {
+      availableModels: [
+        { id: 'deepseek-official/deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
+        { id: 'deepseek-official/deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
+      ],
+      currentModelId: 'deepseek-official/deepseek-v4-flash',
+    });
+
+    const modelTrigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]');
+    const modeTrigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-acp-mode-selector-btn"]');
+    expect(modelTrigger, 'the model picker keeps its own trigger').not.toBeNull();
+    expect(modeTrigger?.textContent).toContain('Standard');
+
+    // The whole point of the split: one button, one kind of choice.
+    await act(async () => { modelTrigger?.click(); });
+    const modelMenu = document.body.querySelector('[data-testid="chat-model-selector-menu"]');
+    expect(modelMenu?.querySelectorAll('[data-testid="chat-model-selector-option"]')).toHaveLength(2);
+    expect(modelMenu?.querySelectorAll('[data-testid="chat-acp-mode-option"]')).toHaveLength(0);
+
+    await act(async () => { modeTrigger?.click(); });
+    expect(
+      document.body.querySelectorAll('[data-testid="chat-acp-mode-selector-menu"] [data-testid="chat-acp-mode-option"]'),
+    ).toHaveLength(2);
   });
 
   it('sends the chosen mode to the agent', async () => {
@@ -171,7 +204,7 @@ describe('ModelSelector ACP mode picker', () => {
     } as never);
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="chat-acp-mode-selector-btn"]')?.click();
     });
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>(
@@ -187,7 +220,7 @@ describe('ModelSelector ACP mode picker', () => {
       value: { type: 'select', value: 'minimal' },
     }));
     expect(
-      container.querySelector('[data-testid="chat-model-selector-btn"]')?.textContent,
+      container.querySelector('[data-testid="chat-acp-mode-selector-btn"]')?.textContent,
     ).toContain('Minimal');
   });
 
@@ -201,7 +234,7 @@ describe('ModelSelector ACP mode picker', () => {
     }]);
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="chat-acp-mode-selector-btn"]')?.click();
     });
     const options = document.body.querySelectorAll<HTMLButtonElement>(
       '[data-testid="chat-acp-mode-option"]',
