@@ -33,6 +33,7 @@ import ReasoningConfigPanel from './ReasoningConfigPanel';
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import { i18nService } from '@/infrastructure/i18n';
+import { LONG_CONTEXT_WARNING_THRESHOLD_TOKENS } from '@/shared/constants/modelContext';
 import {
   settleSubscriptionLoginStart,
   SubscriptionLoginCoordinator,
@@ -2332,7 +2333,19 @@ const AIModelConfig: React.FC = () => {
                       />
                     </div>
                     <div className="bitfun-ai-model-config__selected-model-field">
-                      <span>{t('form.contextWindow')}</span>
+                      <span className="bitfun-ai-model-config__inline-header-main">
+                        <span>{t('form.contextWindow')}</span>
+                        <Tooltip content={t('form.contextWindowHint')} placement="top">
+                          <span
+                            className="bitfun-ai-model-config__inline-header-info"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={t('form.contextWindowHint')}
+                          >
+                            <Info size={14} aria-hidden="true" />
+                          </span>
+                        </Tooltip>
+                      </span>
                       <NumberInput
                         value={draft.contextWindow}
                         onChange={(value) => updateModelDraft(draft.modelName, { contextWindow: value })}
@@ -2343,6 +2356,12 @@ const AIModelConfig: React.FC = () => {
                         disableWheel
                       />
                     </div>
+                    {draft.contextWindow > LONG_CONTEXT_WARNING_THRESHOLD_TOKENS && (
+                      <div className="bitfun-ai-model-config__warning-inline bitfun-ai-model-config__context-window-warning">
+                        <AlertTriangle size={14} />
+                        <span>{t('form.contextWindowLongWarning')}</span>
+                      </div>
+                    )}
                     <button
                       type="button"
                       className="bitfun-ai-model-config__reasoning-summary"

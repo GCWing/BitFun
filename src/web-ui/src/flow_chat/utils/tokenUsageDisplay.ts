@@ -1,4 +1,5 @@
 import type { DialogTurn, Session, TokenUsage } from '../types/flow-chat';
+import { LONG_CONTEXT_WARNING_THRESHOLD_TOKENS } from '@/shared/constants/modelContext';
 
 export const DEFAULT_MAX_CONTEXT_TOKENS = 128128;
 
@@ -20,6 +21,20 @@ export interface ModelRoundUsageMetaItem {
   value: string;
 }
 
+export interface ModelSelectorTooltipRow {
+  key: 'configName' | 'contextWindow' | 'compressionTrigger' | 'contextUsage';
+  label: string;
+  value: string;
+}
+
+export interface ModelSelectorTooltipDetails {
+  rows: ModelSelectorTooltipRow[];
+  warning?: string;
+}
+
+const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS = [8_000, 16_000, 24_000, 32_000, 64_000] as const;
+const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS = 10_000;
+
 export function formatCompactTokenCount(value: number): string {
   const safeValue = Math.max(0, Math.round(value));
   if (safeValue >= 1_000_000) {
@@ -29,6 +44,95 @@ export function formatCompactTokenCount(value: number): string {
     return `${formatCompactNumber(safeValue / 1_000)}K`;
   }
   return String(safeValue);
+}
+
+function automaticMaxOutputTokens(contextWindow: number): number {
+  const quarterContext = Math.floor(contextWindow / 4);
+  return [...AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS]
+    .reverse()
+    .find(tier => tier <= quarterContext) ?? quarterContext;
+}
+
+/** Mirrors the runtime compression budget in execution_engine.rs. */
+export function getCompressionTriggerTokens(
+  contextWindow: number,
+  configuredMaxOutputTokens?: number,
+): number {
+  const safeContextWindow = Math.max(0, Math.floor(contextWindow));
+  const outputReserve = configuredMaxOutputTokens && configuredMaxOutputTokens > 0
+    ? Math.floor(configuredMaxOutputTokens)
+    : automaticMaxOutputTokens(safeContextWindow);
+  return Math.max(
+    0,
+    safeContextWindow - outputReserve - AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS,
+  );
+}
+
+export function formatContextUsageValue(usage: ContextUsageDisplay): string | null {
+  if (usage.current <= 0 || usage.max <= 0) {
+    return null;
+  }
+
+  const percentage = Math.min(100, Math.round((usage.current / usage.max) * 100));
+  return `${formatCompactTokenCount(usage.current)}/${formatCompactTokenCount(usage.max)} (${percentage}%)`;
+}
+
+export function buildModelSelectorTooltipDetails(params: {
+  configName: string;
+  contextWindow?: number;
+  configuredMaxOutputTokens?: number;
+  usage: ContextUsageDisplay;
+  t: TranslationFn;
+}): ModelSelectorTooltipDetails {
+  const {
+    configName,
+    contextWindow,
+    configuredMaxOutputTokens,
+    usage,
+    t,
+  } = params;
+  const rows: ModelSelectorTooltipRow[] = [];
+
+  if (configName) {
+    rows.push({
+      key: 'configName',
+      label: t('modelSelector.tooltip.configName'),
+      value: configName,
+    });
+  }
+
+  if (contextWindow && contextWindow > 0) {
+    rows.push({
+      key: 'contextWindow',
+      label: t('modelSelector.tooltip.contextWindow'),
+      value: formatCompactTokenCount(contextWindow),
+    });
+    rows.push({
+      key: 'compressionTrigger',
+      label: t('modelSelector.tooltip.compressionTrigger'),
+      value: formatCompactTokenCount(
+        getCompressionTriggerTokens(contextWindow, configuredMaxOutputTokens),
+      ),
+    });
+  }
+
+  const contextUsageValue = formatContextUsageValue(usage);
+  if (contextUsageValue) {
+    rows.push({
+      key: 'contextUsage',
+      label: usage.source === 'acp_context'
+        ? t('modelSelector.contextUsage.acpContextLabel')
+        : t('modelSelector.contextUsage.agentPromptLabel'),
+      value: contextUsageValue,
+    });
+  }
+
+  return {
+    rows,
+    warning: contextWindow && contextWindow > LONG_CONTEXT_WARNING_THRESHOLD_TOKENS
+      ? t('modelSelector.tooltip.longContextWarning')
+      : undefined,
+  };
 }
 
 function formatCompactNumber(value: number): string {
@@ -115,17 +219,12 @@ export function buildContextUsageTooltip(params: {
     return baseTooltip;
   }
 
-  const percentage = Math.min(100, Math.round((usage.current / usage.max) * 100));
-  const usageText = `${formatCompactTokenCount(usage.current)}/${formatCompactTokenCount(usage.max)} (${percentage}%)`;
+  const usageText = formatContextUsageValue(usage);
   const usageLabel = usage.source === 'acp_context'
     ? t('modelSelector.contextUsage.acpContext', { usage: usageText })
     : t('modelSelector.contextUsage.agentPrompt', { usage: usageText });
 
-  return [
-    baseTooltip,
-    usageLabel,
-    t('modelSelector.contextUsage.toolNote'),
-  ].filter(Boolean).join(' · ');
+  return [baseTooltip, usageLabel].filter(Boolean).join(' · ');
 }
 
 export function formatElapsedDuration(durationMs: number): string {

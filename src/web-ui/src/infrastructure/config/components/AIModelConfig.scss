@@ -351,6 +351,13 @@
     }
   }
 
+  &__context-window-warning {
+    grid-column: 1 / -1;
+    width: 100%;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.35;
+  }
+
   &__json-status {
     font-size: var(--bf-appearance-token-font-size-xs);
 

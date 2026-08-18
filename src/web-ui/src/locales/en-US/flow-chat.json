@@ -2493,10 +2493,17 @@
     "acpModeFailed": "Failed to switch mode",
     "switchFailed": "Failed to switch model",
     "modelNotConfigured": "Not Configured",
+    "tooltip": {
+      "configName": "Configuration",
+      "contextWindow": "Context window",
+      "compressionTrigger": "Compression trigger",
+      "longContextWarning": "This model's configured context window exceeds 400K. Very long context can reduce model quality; consider setting it to around 300K."
+    },
     "contextUsage": {
       "agentPrompt": "Last request prompt: {{usage}}",
+      "agentPromptLabel": "Last request prompt",
       "acpContext": "ACP reported context: {{usage}}",
-      "toolNote": "Tool outputs may be summarized or truncated before later requests."
+      "acpContextLabel": "ACP reported context"
     }
   },
   "reasoningEffort": {

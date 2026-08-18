@@ -40,7 +40,9 @@ import {
 import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import {
   buildContextUsageTooltip,
+  buildModelSelectorTooltipDetails,
   type ContextUsageSource,
+  type ModelSelectorTooltipDetails,
 } from '../utils/tokenUsageDisplay';
 import { createLogger } from '@/shared/utils/logger';
 import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
@@ -113,12 +115,29 @@ interface ModelInfo {
   id: string;
   /** User-defined configuration name (AIModelConfig.name). */
   configName: string;
+  /** Optional label used by symbolic selectors such as Primary and Fast. */
+  displayName?: string;
   /** Actual model identifier (AIModelConfig.model_name). */
   modelName: string;
   providerName: string;
   provider: string;
   contextWindow?: number;
+  maxOutputTokens?: number;
 }
+
+const ModelSelectorTooltipContent: React.FC<{ details: ModelSelectorTooltipDetails }> = ({ details }) => (
+  <div className="bitfun-model-selector__tooltip">
+    {details.rows.map(row => (
+      <div key={row.key} className="bitfun-model-selector__tooltip-row">
+        <span className="bitfun-model-selector__tooltip-label">{row.label}</span>
+        <span className="bitfun-model-selector__tooltip-value">{row.value}</span>
+      </div>
+    ))}
+    {details.warning ? (
+      <div className="bitfun-model-selector__tooltip-warning">{details.warning}</div>
+    ) : null}
+  </div>
+);
 
 // Helper: identify special model IDs.
 const isSpecialModel = (value: string): value is 'auto' | 'primary' | 'fast' => {
@@ -172,8 +191,7 @@ const buildResolvedModelTooltipText = (
 
 const getModelDisplayLabel = (model: ModelInfo | null, fallback: string): string => {
   if (!model) return fallback;
-  if (isSpecialModel(model.id)) return model.configName;
-  return model.modelName || model.configName || fallback;
+  return model.displayName || model.modelName || model.configName || fallback;
 };
 
 const getModelTooltipText = (model: ModelInfo | null, fallback: string): string => {
@@ -526,6 +544,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               providerName: getProviderDisplayName(localModel),
               provider: localModel.provider,
               contextWindow: localModel.context_window,
+              maxOutputTokens: localModel.max_tokens,
             }
           : {
               id: modelId,
@@ -649,11 +668,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
       return {
         id: modelId,
-        configName: modelId === 'primary' ? t('modelSelector.primaryModel') : t('modelSelector.fastModel'),
+        configName: model.name,
+        displayName: modelId === 'primary' ? t('modelSelector.primaryModel') : t('modelSelector.fastModel'),
         modelName: model.model_name,
         providerName: getProviderDisplayName(model),
         provider: model.provider,
         contextWindow: model.context_window,
+        maxOutputTokens: model.max_tokens,
       };
     }
 
@@ -667,6 +688,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       providerName: getProviderDisplayName(model),
       provider: model.provider,
       contextWindow: model.context_window,
+      maxOutputTokens: model.max_tokens,
     };
   }, [getCurrentModelId, allModels, defaultModels, t]);
   
@@ -685,6 +707,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         providerName: getProviderDisplayName(m),
         provider: m.provider,
         contextWindow: m.context_window,
+        maxOutputTokens: m.max_tokens,
       }));
   }, [allModels]);
 
@@ -1448,9 +1471,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const currentModelId = currentNativeModelId;
 
   const fallbackTooltip = t('modelSelector.autoModelDesc');
-  const baseTooltip = getModelTooltipText(currentModel, fallbackTooltip);
-  const tooltipContent = buildContextUsageTooltip({
-    baseTooltip,
+  const tooltipDetails = buildModelSelectorTooltipDetails({
+    configName: currentModel?.configName ?? fallbackTooltip,
+    contextWindow: currentModel?.contextWindow,
+    configuredMaxOutputTokens: currentModel?.maxOutputTokens,
     usage: {
       current: currentTokens,
       max: maxTokens,
@@ -1458,6 +1482,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     },
     t,
   });
+  const tooltipContent = <ModelSelectorTooltipContent details={tooltipDetails} />;
 
   return (
     <div data-bf-component="model-selector" data-bf-part="root" data-bf-state={dropdownOpen ? 'open' : undefined}

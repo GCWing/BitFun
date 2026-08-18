@@ -2493,10 +2493,17 @@
     "acpModeFailed": "切换模式失败",
     "switchFailed": "切换模型失败",
     "modelNotConfigured": "未配置",
+    "tooltip": {
+      "configName": "配置名",
+      "contextWindow": "上下文窗口",
+      "compressionTrigger": "压缩触发线",
+      "longContextWarning": "当前模型配置的上下文窗口超过 400K。超长上下文可能降低模型效果，建议将其调整到 300K 左右。"
+    },
     "contextUsage": {
       "agentPrompt": "上次请求输入上下文: {{usage}}",
+      "agentPromptLabel": "上次请求输入上下文",
       "acpContext": "ACP 上报上下文: {{usage}}",
-      "toolNote": "工具输出在后续请求中可能会被摘要或截断。"
+      "acpContextLabel": "ACP 上报上下文"
     }
   },
   "reasoningEffort": {
