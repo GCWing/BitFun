@@ -6678,6 +6678,85 @@ describe('FlowChatStore reconcile snapshot content safety', () => {
     ).toBe('round-0');
   });
 
+  it('refuses an equal-item-count checkpoint that shortens rendered text', async () => {
+    await hydrateSessionWithContent();
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{
+        ...createPersistedTurn(0),
+        modelRounds: [{
+          ...HYDRATED_ROUND,
+          textItems: [{ id: 'text-0', content: 'BitFun is', timestamp: 2 }],
+        }],
+      }],
+      contextRestoreState: 'ready',
+    });
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/repo/BitFun',
+      { requireActiveSession: true },
+    );
+
+    expect(result.applied).toBe(false);
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items[0],
+    ).toMatchObject({ content: 'BitFun is an agentic IDE…' });
+  });
+
+  it('repairs a settled local or Peer projection from the host tail', async () => {
+    await hydrateSessionWithContent();
+    const completeContent = 'BitFun is an agentic IDE… with a complete persisted response.';
+    flowChatStore.addModelRoundItem('history-1', 'turn-0', {
+      id: 'plan-display-test',
+      type: 'tool',
+      toolName: 'CreatePlan',
+      toolCall: { id: '', input: {} },
+      toolResult: {
+        result: { plan_file_path: '/tmp/plan.md' },
+        success: true,
+      },
+      timestamp: 2,
+      status: 'completed',
+    }, 'round-0');
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{
+        ...createPersistedTurn(0),
+        modelRounds: [{
+          ...HYDRATED_ROUND,
+          textItems: [{ id: 'text-0', content: completeContent, timestamp: 2 }],
+        }],
+        endTime: 3,
+      }],
+      contextRestoreState: 'ready',
+    });
+
+    await expect(
+      flowChatStore.reconcileSettledDialogTurn('history-1', 'turn-0'),
+    ).resolves.toBe(true);
+    expect(apiMocks.restoreSessionView).toHaveBeenLastCalledWith(
+      'history-1',
+      '/repo/BitFun',
+      undefined,
+      undefined,
+      'settled-turn-turn-0',
+      false,
+      1,
+    );
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items[0],
+    ).toMatchObject({ content: completeContent });
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items,
+    ).toContainEqual(expect.objectContaining({ id: 'plan-display-test' }));
+  });
+
   it('still adopts the host copy when the snapshot carries the projected work', async () => {
     // The guard must not disable wholesale replacement, which is how a settled
     // turn picks up the host's authoritative copy.

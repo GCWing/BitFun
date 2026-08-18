@@ -89,6 +89,7 @@ import {
   sessionPendingTurnAdoptionKey,
   stripOptimisticTurnAdoption,
 } from '../../utils/optimisticTurnAdoption';
+import { isAcpFlowSession } from '../../utils/acpSession';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -807,6 +808,9 @@ export async function initializeEventListeners(
     onSessionStateChanged: (event) => {
       handleSessionStateChanged(context, event);
     },
+    onSessionHistoryChanged: (event) => {
+      handleSessionHistoryChanged(context, event);
+    },
     onImageAnalysisStarted: (event) => {
       handleImageAnalysisStarted(context, event as ImageAnalysisEvent);
     },
@@ -1118,6 +1122,7 @@ function finalizeTurnCompletionState(
   const runtimeOwnsTurnPersistence = Boolean(
     session.dialogTurns.find(turn => turn.id === turnId)?.recovery,
   );
+  const shouldReconcileRuntimeTurn = !isAcpFlowSession(session);
 
   completeActiveTextItems(context, sessionId, turnId);
   clearRuntimeStatus(context, sessionId, turnId);
@@ -1170,6 +1175,13 @@ function finalizeTurnCompletionState(
     saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
       log.warn('Failed to save dialog turn (non-critical)', { sessionId, turnId, error });
     });
+  }
+  if (shouldReconcileRuntimeTurn) {
+    void context.flowChatStore
+      .reconcileSettledDialogTurn(sessionId, turnId)
+      .catch(error => {
+        log.warn('Failed to reconcile settled dialog turn', { sessionId, turnId, error });
+      });
   }
 
   context.userCancelledSessionIds.delete(sessionId);
@@ -1479,6 +1491,46 @@ export function handleSessionStateChanged(context: FlowChatContext, event: any):
       rawBackendState: newState
     });
   }
+}
+
+/**
+ * Re-read the terminal tail only after the Runtime announces that its Turn is
+ * durable. DialogTurnCompleted is intentionally lower latency than the final
+ * persistence write, so relying on that event alone can preserve a painted
+ * prefix when the last TextChunk was missed.
+ */
+export function handleSessionHistoryChanged(context: FlowChatContext, event: any): void {
+  const sessionId = event?.sessionId ?? event?.session_id;
+  if (!sessionId) {
+    return;
+  }
+
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!session || isAcpFlowSession(session)) {
+    return;
+  }
+
+  const settledTurn = [...session.dialogTurns]
+    .reverse()
+    .find(turn => ['completed', 'cancelled', 'error'].includes(turn.status));
+  if (!settledTurn) {
+    return;
+  }
+
+  void context.flowChatStore
+    .reconcileSettledDialogTurn(sessionId, settledTurn.id)
+    .then(applied => {
+      if (applied) {
+        reconcileBackgroundSubagentSession(sessionId);
+      }
+    })
+    .catch(error => {
+      log.warn('Failed to reconcile durable session history', {
+        sessionId,
+        turnId: settledTurn.id,
+        error,
+      });
+    });
 }
 
 /**

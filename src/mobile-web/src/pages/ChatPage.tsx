@@ -2716,7 +2716,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
 
       const poller = new SessionPoller(sessionMgr, sessionId, (resp: PollResponse) => {
         if (!isInitCurrent()) return;
-        if (resp.new_messages && resp.new_messages.length > 0) {
+        if (resp.message_snapshot) {
+          // Completion can grow the content of an already-counted assistant
+          // message. Replace from the host's durable transcript; message count
+          // alone cannot detect that repair.
+          setMessages(sessionId, resp.message_snapshot);
+        } else if (resp.new_messages && resp.new_messages.length > 0) {
           appendNewMessages(sessionId, resp.new_messages);
         }
 
@@ -2767,6 +2772,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     sessionId,
     sessionMgr,
     setActiveTurn,
+    setMessages,
     updateSessionName,
   ]);
 
