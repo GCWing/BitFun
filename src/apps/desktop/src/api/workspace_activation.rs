@@ -1,5 +1,7 @@
 use crate::api::app_state::AppState;
-use bitfun_core::service::search::workspace_search_runtime_available;
+use bitfun_core::service::search::{
+    workspace_search_runtime_available, WorkspaceSearchAutoIndexPriority,
+};
 use bitfun_core::service::workspace::{WorkspaceInfo, WorkspaceKind};
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
@@ -20,6 +22,62 @@ pub fn spawn_workspace_background_warmup(state: &AppState, workspace_info: Works
             workspace_info,
         )
         .await;
+    });
+}
+
+pub fn spawn_restored_workspace_auto_index(
+    state: &AppState,
+    workspaces: Vec<WorkspaceInfo>,
+    budget_roots: Vec<PathBuf>,
+) {
+    let workspace_path = state.workspace_path.clone();
+    let workspace_search_service = state.workspace_search_service.clone();
+    tokio::spawn(async move {
+        if !workspace_search_runtime_available().await {
+            return;
+        }
+
+        let focused_path = workspace_path.read().await.clone();
+        let protected_roots = focused_path
+            .as_ref()
+            .filter(|path| {
+                workspaces.iter().any(|workspace| {
+                    workspace.workspace_kind != WorkspaceKind::Remote
+                        && workspace.root_path == **path
+                })
+            })
+            .cloned()
+            .into_iter()
+            .collect();
+        workspace_search_service
+            .enforce_index_disk_budget(budget_roots, protected_roots)
+            .await;
+
+        if let Some(focused) = workspaces.iter().find(|workspace| {
+            workspace.workspace_kind != WorkspaceKind::Remote
+                && focused_path.as_ref() == Some(&workspace.root_path)
+        }) {
+            workspace_search_service
+                .schedule_auto_index(
+                    &focused.root_path,
+                    WorkspaceSearchAutoIndexPriority::Focused,
+                )
+                .await;
+        }
+
+        for workspace in workspaces {
+            if workspace.workspace_kind == WorkspaceKind::Remote
+                || focused_path.as_ref() == Some(&workspace.root_path)
+            {
+                continue;
+            }
+            workspace_search_service
+                .schedule_auto_index(
+                    workspace.root_path,
+                    WorkspaceSearchAutoIndexPriority::Background,
+                )
+                .await;
+        }
     });
 }
 
@@ -50,6 +108,16 @@ async fn warm_workspace_background_services(
         match workspace_search_service.open_repo(&target_path).await {
             Ok(_) => {
                 let still_active = is_workspace_active(&workspace_path, &target_path).await;
+                workspace_search_service
+                    .schedule_auto_index(
+                        target_path.clone(),
+                        if still_active {
+                            WorkspaceSearchAutoIndexPriority::Focused
+                        } else {
+                            WorkspaceSearchAutoIndexPriority::Background
+                        },
+                    )
+                    .await;
                 if !still_active {
                     workspace_search_service.schedule_repo_release(target_path.clone());
                     debug!(

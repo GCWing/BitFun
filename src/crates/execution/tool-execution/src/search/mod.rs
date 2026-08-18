@@ -9,5 +9,5 @@ pub use glob_search::{
 pub use grep_search::{
     apply_offset_and_limit, build_remote_grep_command, count_remote_grep_matches, grep_search,
     relativize_result_text, render_remote_grep_result_text, GrepOptions, OutputMode,
-    ProgressCallback, RemoteGrepCommandRequest,
+    ProgressCallback, RemoteGrepCommandRequest, SearchCancellation,
 };

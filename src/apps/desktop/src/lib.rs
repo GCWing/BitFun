@@ -2645,6 +2645,10 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
                         {
                             match workspace_search_service.open_repo(&current_workspace).await {
                                 Ok(_) => {
+                                    workspace_search_service.schedule_auto_index(
+                                        &current_workspace,
+                                        bitfun_core::service::search::WorkspaceSearchAutoIndexPriority::Focused,
+                                    ).await;
                                     log::info!(
                                         "Workspace search feature enabled; warmed current workspace: path={}",
                                         current_workspace.display()

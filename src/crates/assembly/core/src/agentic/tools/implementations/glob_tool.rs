@@ -1,4 +1,5 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::implementations::grep_tool::annotate_workspace_probe_pending;
 use crate::service::search::{
     get_global_workspace_search_service, remote_workspace_search_service_for_path,
     workspace_search_feature_enabled, workspace_search_runtime_available, GlobSearchRequest,
@@ -305,9 +306,13 @@ impl Tool for GlobTool {
                             "total_matches": total_matches,
                             "truncated": truncated,
                             "repo_phase": glob_result.repo_status.phase,
-                            "rebuild_recommended": glob_result.repo_status.rebuild_recommended
+                            "base_advance_in_progress": glob_result.repo_status.base_advance_in_progress,
+                            "workspace_probe_pending": glob_result.repo_status.workspace_probe_pending
                         }),
-                        result_for_assistant: Some(result_text),
+                        result_for_assistant: Some(annotate_workspace_probe_pending(
+                            result_text,
+                            glob_result.repo_status.workspace_probe_pending,
+                        )),
                         image_attachments: None,
                     }])
                 }
@@ -453,9 +458,13 @@ impl Tool for GlobTool {
                                     "total_matches": total_matches,
                                     "truncated": truncated,
                                     "repo_phase": glob_result.repo_status.phase,
-                                    "rebuild_recommended": glob_result.repo_status.rebuild_recommended
+                                    "base_advance_in_progress": glob_result.repo_status.base_advance_in_progress,
+                                    "workspace_probe_pending": glob_result.repo_status.workspace_probe_pending
                                 }),
-                                result_for_assistant: Some(result_text),
+                                result_for_assistant: Some(annotate_workspace_probe_pending(
+                                    result_text,
+                                    glob_result.repo_status.workspace_probe_pending,
+                                )),
                                 image_attachments: None,
                             }]);
                         }
