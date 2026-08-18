@@ -152,6 +152,8 @@ export interface PermissionRequest {
   saveResources?: string[];
   source: PermissionRequestSource;
   delegation?: PermissionDelegationContext;
+  /** The permission mode that produced this request, when known. */
+  permissionMode?: SessionPermissionMode;
   displayMetadata?: Record<string, unknown>;
 }
 
@@ -225,7 +227,12 @@ export type SessionEventBackfill =
 
 export type PermissionRequestEvent =
   | { event: 'asked'; request: PermissionRequest }
-  | { event: 'replied'; requestId: string; reply: { reply: PermissionReplyKind }; source: string }
+  | {
+      event: 'replied';
+      requestId: string;
+      reply: { reply: PermissionReplyKind; feedback?: string };
+      source: string;
+    }
   | { event: 'cancelled'; requestId: string; reason: string };
 
 export interface CompactSessionRequest {
@@ -444,8 +451,8 @@ export interface UpdateSessionModelRequest {
   includeInternal?: boolean;
 }
 
-/** `ask` | `auto_approve` | `full_access`; `null` clears the session override. */
-export type SessionPermissionMode = 'ask' | 'auto_approve' | 'full_access';
+/** `ask` | `auto_approve` | `ai_auto` | `full_access`; `null` clears the session override. */
+export type SessionPermissionMode = 'ask' | 'auto_approve' | 'ai_auto' | 'full_access';
 
 export interface SessionPermissionModeRequest {
   sessionId: string;

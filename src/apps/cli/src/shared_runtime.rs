@@ -1662,6 +1662,7 @@ mod tests {
                 subagent_type: "general".to_string(),
             }),
             display_metadata: serde_json::Map::new(),
+            permission_mode: None,
         }
     }
 
@@ -1865,7 +1866,7 @@ mod tests {
             },
             PermissionRequestEvent::Replied {
                 request_id: request.request_id,
-                reply: bitfun_agent_runtime::sdk::PermissionReply::Once,
+                reply: bitfun_agent_runtime::sdk::PermissionReply::Once { feedback: None },
                 source: PermissionReplySource::User,
             },
         ];

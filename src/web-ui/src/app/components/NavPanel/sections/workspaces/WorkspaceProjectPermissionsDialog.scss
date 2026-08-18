@@ -147,6 +147,50 @@
     line-height: 1.5;
     text-align: center;
   }
+
+  // Sensitive resources: a padded body keeps the copy, inputs, and footer
+  // inside the card instead of bleeding against its border, matching the
+  // rhythm of the other sections.
+  &__sensitive-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  &__sensitive-description {
+    margin: 0;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.6;
+  }
+
+  &__sensitive-resources {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__sensitive-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+
+    .input,
+    > div {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+  }
+
+  &__sensitive-section &__footer {
+    border-top: 0;
+    padding: 0;
+    background: transparent;
+  }
 }
 
 .workspace-project-permissions-dialog-overlay {

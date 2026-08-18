@@ -327,6 +327,12 @@ export struct RemoteControlSettingsSheet {
       )
       Divider().strokeWidth(1).color(LINE).margin({ left: 18, right: 18 })
       this.PermissionModeRow(
+        'ai_auto',
+        RemoteI18n.t('remote.permissions.aiAuto'),
+        RemoteI18n.t('remote.permissions.aiAutoDescription')
+      )
+      Divider().strokeWidth(1).color(LINE).margin({ left: 18, right: 18 })
+      this.PermissionModeRow(
         'full_access',
         RemoteI18n.t('remote.permissions.fullAccess'),
         RemoteI18n.t('remote.permissions.fullAccessDescription')

@@ -2,8 +2,8 @@
   "permission": {
     "title": "Permission required",
     "subagentOwner": "{{subagent}} subagent",
-    "feedbackLabel": "Rejection feedback",
-    "feedbackPlaceholder": "Optional guidance when rejecting",
+    "feedbackLabel": "Approval note",
+    "feedbackPlaceholder": "Optional, e.g. approve all log-viewing commands",
     "responseFailed": "The permission response could not be delivered. Try again.",
     "allowOnce": "Allow once",
     "allowAlways": "Always allow",
@@ -702,6 +702,16 @@
       "auto": {
         "label": "Auto approve",
         "description": "Automatically approve requests that require confirmation."
+      },
+      "aiAuto": {
+        "label": "AI auto approve",
+        "description": "A fast model judges requests: safe ones auto-approve, critical-risk ones are rejected, and the rest ask."
+      },
+      "aiAutoMode": {
+        "label": "Unattended mode",
+        "standard": "Standard",
+        "aggressive": "Aggressive",
+        "passive": "Passive"
       },
       "fullAccess": {
         "label": "Full access",

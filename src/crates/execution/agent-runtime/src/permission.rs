@@ -34,6 +34,13 @@ pub const AUTO_APPROVE_ASK_CONTEXT_KEY: &str = "auto_approve_ask";
 /// layers with partial context.
 pub const PERMISSION_MODE_CONTEXT_KEY: &str = "permission_mode";
 
+/// Per-submission override for the fast-model permission judge policy.
+///
+/// When set, `ask` requests are judged by the fast model: safe requests
+/// auto-approve, critical-risk requests are rejected, and the rest escalate to
+/// the user. Takes precedence over the persisted interaction preference.
+pub const AI_AUTO_APPROVE_ASK_CONTEXT_KEY: &str = "ai_auto_approve_ask";
+
 /// Provider-neutral result of applying resolved policy and remembered grants.
 ///
 /// Product orchestration remains responsible for scope derivation, native hooks,
@@ -328,6 +335,16 @@ impl PermissionRequestManager {
 
     pub fn subscribe(&self) -> PermissionRequestEventReceiver {
         self.events.subscribe()
+    }
+
+    /// Exposes the audit store for read-only rule extraction.
+    pub fn audit_store_ref(&self) -> &Arc<dyn PermissionAuditStorePort> {
+        &self.audit_store
+    }
+
+    /// Exposes the grant store for read-only rule extraction, when configured.
+    pub fn grant_store_ref(&self) -> Option<&Arc<dyn PermissionGrantStorePort>> {
+        self.grant_store.as_ref()
     }
 
     pub async fn register(
@@ -650,6 +667,29 @@ impl PermissionRequestManager {
         })
     }
 
+    /// Promotes a non-interactive pending request to an interactive one so the
+    /// user can confirm it, emitting the `Asked` event.
+    ///
+    /// Used by the AI-judge permission path when a request is escalated: the
+    /// request was registered non-interactively while the fast model was
+    /// consulted, and only escalated requests are surfaced to the user.
+    pub async fn promote_to_interactive(
+        &self,
+        request_id: &str,
+    ) -> Result<bool, PermissionRequestManagerError> {
+        let _operation = self.operations.lock().await;
+        let Some(mut pending) = self.pending.get_mut(request_id) else {
+            return Ok(false);
+        };
+        if pending.interactive {
+            return Ok(true);
+        }
+        pending.interactive = true;
+        let request = pending.request.clone();
+        let _ = self.events.send(PermissionRequestEvent::Asked { request });
+        Ok(true)
+    }
+
     pub async fn cancel_request(
         &self,
         request_id: &str,
@@ -736,7 +776,7 @@ fn grants_for_reply(
     reply: &PermissionReply,
     created_at_ms: i64,
 ) -> Vec<PermissionGrant> {
-    if !matches!(reply, PermissionReply::Always) {
+    if !matches!(reply, PermissionReply::Always { .. }) {
         return Vec::new();
     }
 
@@ -846,6 +886,7 @@ mod tests {
                 identity: "write_file".to_string(),
             },
             delegation: None,
+            permission_mode: None,
             display_metadata: Map::new(),
         }
     }
@@ -869,7 +910,7 @@ mod tests {
         manager
             .reply(
                 "request-1",
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
                 PermissionReplySource::User,
             )
             .await
@@ -878,13 +919,13 @@ mod tests {
             events.recv().await.expect("replied event"),
             PermissionRequestEvent::Replied {
                 request_id: "request-1".to_string(),
-                reply: PermissionReply::Once,
+                reply: PermissionReply::Once { feedback: None },
                 source: PermissionReplySource::User,
             }
         );
         assert_eq!(
             pending.wait().await,
-            PermissionWaitOutcome::Replied(PermissionReply::Once)
+            PermissionWaitOutcome::Replied(PermissionReply::Once { feedback: None })
         );
         assert!(manager.pending_requests().is_empty());
         let replied_snapshot = manager.interactive_pending_snapshot();
@@ -938,7 +979,7 @@ mod tests {
         manager
             .reply(
                 "request-1",
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
                 PermissionReplySource::AutoApprove,
             )
             .await
@@ -946,7 +987,7 @@ mod tests {
 
         assert_eq!(
             pending.wait().await,
-            PermissionWaitOutcome::Replied(PermissionReply::Once)
+            PermissionWaitOutcome::Replied(PermissionReply::Once { feedback: None })
         );
         assert!(manager.pending_requests().is_empty());
         assert!(matches!(
@@ -954,5 +995,73 @@ mod tests {
             Err(broadcast::error::TryRecvError::Empty)
         ));
         assert_eq!(store.audit.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn promote_to_interactive_surfaces_a_non_interactive_request() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager =
+            PermissionRequestManager::new(store.clone(), store.clone(), Arc::new(FixedClock));
+        let mut events = manager.subscribe();
+
+        let pending = manager
+            .register_non_interactive(request())
+            .await
+            .expect("register non-interactive request");
+        assert!(manager.interactive_pending_requests().is_empty());
+
+        assert!(manager
+            .promote_to_interactive("request-1")
+            .await
+            .expect("promote request"));
+        assert_eq!(
+            events.recv().await.expect("asked event after promotion"),
+            PermissionRequestEvent::Asked { request: request() }
+        );
+        assert_eq!(manager.interactive_pending_requests(), vec![request()]);
+
+        // Promoting twice is idempotent and does not emit a second event.
+        assert!(manager
+            .promote_to_interactive("request-1")
+            .await
+            .expect("promote again"));
+        assert!(matches!(
+            events.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+
+        manager
+            .reply(
+                "request-1",
+                PermissionReply::Once { feedback: None },
+                PermissionReplySource::AiAutoApprove,
+            )
+            .await
+            .expect("reply after promotion");
+        assert_eq!(
+            pending.wait().await,
+            PermissionWaitOutcome::Replied(PermissionReply::Once { feedback: None })
+        );
+        // Interactive replies project a Replied event after promotion.
+        assert_eq!(
+            events.recv().await.expect("replied event"),
+            PermissionRequestEvent::Replied {
+                request_id: "request-1".to_string(),
+                reply: PermissionReply::Once { feedback: None },
+                source: PermissionReplySource::AiAutoApprove,
+            }
+        );
+        assert!(manager.pending_requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn promote_to_interactive_is_false_for_unknown_requests() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager =
+            PermissionRequestManager::new(store.clone(), store.clone(), Arc::new(FixedClock));
+        assert!(!manager
+            .promote_to_interactive("missing-request")
+            .await
+            .expect("unknown request returns false"));
     }
 }

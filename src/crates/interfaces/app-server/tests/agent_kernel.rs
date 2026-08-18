@@ -1350,7 +1350,7 @@ async fn respond_permission_routes_to_the_permission_surface() {
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
                     let result = recv(cx.send_request(RespondPermissionMessage {
                         request_id: "perm-1".to_string(),
-                        reply: bitfun_agent_runtime::sdk::PermissionReply::Once,
+                        reply: bitfun_agent_runtime::sdk::PermissionReply::Once { feedback: None },
                     }))
                     .await;
                     assert!(

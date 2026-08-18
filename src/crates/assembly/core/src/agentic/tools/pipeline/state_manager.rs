@@ -103,6 +103,17 @@ impl ToolStateManager {
         }
     }
 
+    /// Records the note the user attached to this tool call's approval so the
+    /// AI judge history can carry it for the rest of the turn.
+    pub fn update_approved_user_feedback(&self, tool_id: &str, feedback: Option<String>) -> bool {
+        if let Some(mut task) = self.tasks.get_mut(tool_id) {
+            task.approved_user_feedback = feedback;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Get all tasks of a session
     pub fn get_session_tasks(&self, session_id: &str) -> Vec<ToolTask> {
         self.tasks
@@ -326,6 +337,7 @@ mod tests {
                 workspace: None,
                 primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
                 context_vars: HashMap::new(),
+                current_user_message: None,
                 subagent_parent_info: None,
                 permission_delegation: None,
                 delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),

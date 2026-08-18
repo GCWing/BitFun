@@ -38,7 +38,8 @@ pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapa
 pub use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 pub use crate::permission::{
     PermissionReplyResolution, PermissionRequestEventReceiver, PermissionRequestManager,
-    PermissionRequestManagerError, PermissionRequestSnapshot, AUTO_APPROVE_ASK_CONTEXT_KEY,
+    PermissionRequestManagerError, PermissionRequestSnapshot, AI_AUTO_APPROVE_ASK_CONTEXT_KEY,
+    AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
 pub use crate::post_call_hooks::{
     RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry,

@@ -119,8 +119,9 @@ pub(crate) fn restrict_recovered_permission_mode(
     const fn rank(mode: PermissionMode) -> u8 {
         match mode {
             PermissionMode::Ask => 0,
-            PermissionMode::AutoApprove => 1,
-            PermissionMode::FullAccess => 2,
+            PermissionMode::AiAutoApprove => 1,
+            PermissionMode::AutoApprove => 2,
+            PermissionMode::FullAccess => 3,
         }
     }
 
@@ -1864,6 +1865,22 @@ impl ExecutionEngine {
         )
     }
 
+    /// Text of the last user-authored message in the history, used as the
+    /// stable session-context task summary for permission judging. System
+    /// reminders and tool results are ignored.
+    fn last_user_message_text(messages: &[Message]) -> Option<String> {
+        messages.iter().rev().find_map(|msg| {
+            if msg.role != MessageRole::User {
+                return None;
+            }
+            match &msg.content {
+                MessageContent::Text(text) => Some(text.clone()),
+                MessageContent::Multimodal { text, .. } => Some(text.clone()),
+                _ => None,
+            }
+        })
+    }
+
     fn is_stale_interrupted_continue(msg: &Message, current_turn_id: &str) -> bool {
         msg.internal_reminder_kind() == Some(InternalReminderKind::InterruptedContinue)
             && msg.metadata.turn_id.as_deref() != Some(current_turn_id)
@@ -1959,6 +1976,7 @@ impl ExecutionEngine {
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             context_vars: round_context_vars,
+            current_user_message: Self::last_user_message_text(input.messages),
             permission_constraints: input.permission_constraints,
             permission_runtime_ceiling: input.context.permission_runtime_ceiling.clone(),
             delegation_policy: input.context.delegation_policy,
@@ -4057,6 +4075,7 @@ impl ExecutionEngine {
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                current_user_message: Self::last_user_message_text(&messages),
                 permission_constraints: tool_policy.permission_constraints.clone(),
                 permission_runtime_ceiling: context.permission_runtime_ceiling.clone(),
                 delegation_policy: context.delegation_policy,

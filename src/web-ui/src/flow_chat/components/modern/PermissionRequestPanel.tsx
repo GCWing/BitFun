@@ -103,8 +103,8 @@ export function PermissionRequestPanel({
   const request = requests[0];
   const risk = permissionRisk(request, t);
   const pendingCount = Math.max(totalPendingCount ?? requests.length, requests.length);
-  const hasRejectFeedback = feedback.trim().length > 0;
-  const allowActionsDisabledForFeedback = hasRejectFeedback && !responding;
+  const trimmedFeedback = feedback.trim();
+  const hasFeedback = trimmedFeedback.length > 0;
 
   useLayoutEffect(() => {
     if (pendingFocusTargetRef.current === 'collapsed' && isCollapsed) {
@@ -134,7 +134,7 @@ export function PermissionRequestPanel({
     setResponding(true);
     setError(false);
     try {
-      await onRespond(request.requestId, reply, reply === 'reject' ? feedback : undefined);
+      await onRespond(request.requestId, reply, hasFeedback ? trimmedFeedback : undefined);
     } catch {
       setError(true);
     } finally {
@@ -146,7 +146,7 @@ export function PermissionRequestPanel({
     setResponding(true);
     setError(false);
     try {
-      await onRespondBatch(request.requestId, reply, reply === 'reject' ? feedback : undefined);
+      await onRespondBatch(request.requestId, reply, hasFeedback ? trimmedFeedback : undefined);
     } catch {
       setError(true);
     } finally {
@@ -288,18 +288,16 @@ export function PermissionRequestPanel({
               <button
                 type="button"
                 onClick={() => void respond('once')}
-                disabled={responding || hasRejectFeedback}
-                className={allowActionsDisabledForFeedback ? 'permission-request-panel__feedback-disabled' : undefined}
+                disabled={responding}
               >
                 <Check size={15} aria-hidden="true" /> {t('permission.allowOnce')}
               </button>
-              {!!request.saveResources?.length && (
+              {!!request.saveResources?.length && request.permissionMode !== 'ai_auto' && (
                 <Tooltip content={alwaysAllowTooltip} placement="top">
                   <button
                     type="button"
                     onClick={() => void respond('always')}
-                    disabled={responding || hasRejectFeedback}
-                    className={allowActionsDisabledForFeedback ? 'permission-request-panel__feedback-disabled' : undefined}
+                    disabled={responding}
                   >
                     <Check size={15} aria-hidden="true" /> {t('permission.allowAlways')}
                   </button>
@@ -318,8 +316,7 @@ export function PermissionRequestPanel({
               <button
                 type="button"
                 onClick={() => void respondBatch('once')}
-                disabled={responding || hasRejectFeedback}
-                className={allowActionsDisabledForFeedback ? 'permission-request-panel__feedback-disabled' : undefined}
+                disabled={responding}
               >
                 <Check size={15} aria-hidden="true" /> {t('permission.allowCurrentAndFollowing')}
               </button>

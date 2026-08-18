@@ -37,7 +37,9 @@ use bitfun_agent_runtime::checkpoint::GitStatusCheckpointFacts;
 use bitfun_agent_runtime::checkpoint::{
     build_light_checkpoint as build_runtime_light_checkpoint, LightCheckpointWorkspaceFacts,
 };
-use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+use bitfun_agent_runtime::permission::{
+    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+};
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_runtime::user_questions::{
     USER_INPUT_AVAILABLE_CONTEXT_KEY, USER_INPUT_MODEL_ROUND_CONTEXT_KEY,
@@ -349,6 +351,7 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
     for key in [
         USER_INPUT_AVAILABLE_CONTEXT_KEY,
         AUTO_APPROVE_ASK_CONTEXT_KEY,
+        AI_AUTO_APPROVE_ASK_CONTEXT_KEY,
     ] {
         let value = match context.context_vars.get(key).map(String::as_str) {
             Some("true") => Some(true),
@@ -358,6 +361,15 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
         if let Some(value) = value {
             extension_custom_data.insert(key.to_string(), Value::Bool(value));
         }
+    }
+    // The resolved permission mode rides the tool context so delegated
+    // subagents inherit the same mode (e.g. `ai_auto`) instead of falling back
+    // to the user-level default, which could be a wider mode.
+    if let Some(mode) = context.context_vars.get(PERMISSION_MODE_CONTEXT_KEY) {
+        extension_custom_data.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            Value::String(mode.clone()),
+        );
     }
     build_tool_runtime_custom_data(ToolRuntimeCustomDataInput {
         context_vars: &context.context_vars,
@@ -1459,7 +1471,9 @@ mod task_context_tests {
         SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolTask,
     };
     use crate::agentic::tools::ToolRuntimeRestrictions;
-    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_agent_runtime::permission::{
+        AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+    };
     use bitfun_agent_runtime::user_questions::{
         USER_INPUT_AVAILABLE_CONTEXT_KEY, USER_INPUT_MODEL_ROUND_CONTEXT_KEY,
     };
@@ -1488,6 +1502,10 @@ mod task_context_tests {
         context_vars.insert(
             AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
             "false".to_string(),
+        );
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            "ai_auto".to_string(),
         );
         context_vars.insert(
             "deep_review_run_manifest".to_string(),
@@ -1528,6 +1546,7 @@ mod task_context_tests {
                     true,
                 ),
                 context_vars,
+                current_user_message: None,
                 subagent_parent_info: Some(SubagentParentInfo {
                     tool_call_id: "parent_tool".to_string(),
                     session_id: "parent_session".to_string(),
@@ -1592,6 +1611,12 @@ mod task_context_tests {
         assert_eq!(
             context.custom_data[AUTO_APPROVE_ASK_CONTEXT_KEY],
             json!(false)
+        );
+        // The resolved permission mode rides the tool context so delegated
+        // subagents inherit the exact mode instead of the user-level default.
+        assert_eq!(
+            context.custom_data[PERMISSION_MODE_CONTEXT_KEY],
+            json!("ai_auto")
         );
         assert_eq!(
             context.custom_data["deep_review_run_manifest"],

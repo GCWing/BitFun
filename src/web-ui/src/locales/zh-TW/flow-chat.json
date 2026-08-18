@@ -2,8 +2,8 @@
   "permission": {
     "title": "需要授權",
     "subagentOwner": "{{subagent}} 子 Agent",
-    "feedbackLabel": "拒絕回饋",
-    "feedbackPlaceholder": "拒絕時可選填後續建議",
+    "feedbackLabel": "審批意見",
+    "feedbackPlaceholder": "可選，例如：批准所有查看日誌的命令",
     "responseFailed": "權限回覆未能送達，請重試。",
     "allowOnce": "允許一次",
     "allowAlways": "始終允許",
@@ -702,6 +702,16 @@
       "auto": {
         "label": "自動批准",
         "description": "自動批准需要確認的請求。"
+      },
+      "aiAuto": {
+        "label": "AI 自動批准",
+        "description": "快速模型判斷請求是否安全：安全自動放行，極高危險拒絕，其餘詢問。"
+      },
+      "aiAutoMode": {
+        "label": "無人值守檔位",
+        "standard": "標準",
+        "aggressive": "激進",
+        "passive": "保守"
       },
       "fullAccess": {
         "label": "完全存取",

@@ -259,6 +259,8 @@ const ZH_CN_MESSAGES: [string, string][] = [
   ['remote.permissions.askDescription', '高风险操作会等待你确认。'],
   ['remote.permissions.auto', '自动批准'],
   ['remote.permissions.autoDescription', '自动通过原本需要确认的操作。'],
+  ['remote.permissions.aiAuto', 'AI 自动批准'],
+  ['remote.permissions.aiAutoDescription', '由快速模型判断安全性：安全操作自动通过，极高风险直接拒绝，其余等待你确认。'],
   ['remote.permissions.fullAccess', '完全访问'],
   ['remote.permissions.fullAccessDescription', '允许所有工具操作，不再请求确认。'],
   ['remote.permissions.loading', '正在读取桌面权限设置…'],

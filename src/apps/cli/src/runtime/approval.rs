@@ -1,5 +1,7 @@
-use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
-use bitfun_agent_runtime::sdk::{PermissionRequest, AUTO_APPROVE_ASK_CONTEXT_KEY};
+use bitfun_agent_runtime::permission::{
+    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+};
+use bitfun_agent_runtime::sdk::PermissionRequest;
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_runtime_ports::PermissionMode;
 use serde_json::{Map, Value};
@@ -12,6 +14,9 @@ pub(crate) enum CliApprovalPolicy {
     DisableAuto,
     Reject,
     Auto,
+    /// Let the fast-model permission judge decide: safe requests auto-approve,
+    /// critical-risk requests are rejected, the rest escalate to the user.
+    AiAuto,
 }
 
 /// Build invocation-scoped approval metadata consumed by the shared Runtime.
@@ -30,7 +35,7 @@ pub(crate) fn approval_metadata(approval_policy: CliApprovalPolicy) -> Map<Strin
         );
     }
     let auto_approve_ask = match approval_policy {
-        CliApprovalPolicy::Ask => None,
+        CliApprovalPolicy::Ask | CliApprovalPolicy::AiAuto => None,
         CliApprovalPolicy::DisableAuto | CliApprovalPolicy::Reject => Some(false),
         CliApprovalPolicy::Auto => Some(true),
     };
@@ -55,6 +60,18 @@ pub(crate) fn approval_metadata(approval_policy: CliApprovalPolicy) -> Map<Strin
             ),
         );
     }
+    if matches!(approval_policy, CliApprovalPolicy::AiAuto) {
+        // The AI mode resolves through the same single value as every other
+        // surface. The legacy flag is kept so older runtimes still honor it.
+        metadata.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            Value::String(PermissionMode::AiAutoApprove.as_str().to_string()),
+        );
+        metadata.insert(
+            AI_AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            Value::Bool(true),
+        );
+    }
     metadata
 }
 
@@ -75,7 +92,7 @@ mod tests {
     use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
-        PermissionRequestSourceKind, AUTO_APPROVE_ASK_CONTEXT_KEY,
+        PermissionRequestSourceKind, AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY,
     };
     use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
     use serde_json::Map;
@@ -104,6 +121,7 @@ mod tests {
                 subagent_type: "Explore".to_string(),
             }),
             display_metadata: Map::new(),
+            permission_mode: None,
         }
     }
 
@@ -152,6 +170,15 @@ mod tests {
             approval_metadata(CliApprovalPolicy::DisableAuto).get(AUTO_APPROVE_ASK_CONTEXT_KEY),
             Some(&serde_json::Value::Bool(false))
         );
+
+        let ai_auto = approval_metadata(CliApprovalPolicy::AiAuto);
+        assert_eq!(
+            ai_auto.get(AI_AUTO_APPROVE_ASK_CONTEXT_KEY),
+            Some(&serde_json::Value::Bool(true))
+        );
+        // AI judging keeps interactive escalation possible.
+        assert!(ai_auto.get(USER_INPUT_AVAILABLE_CONTEXT_KEY).is_none());
+        assert!(ai_auto.get(AUTO_APPROVE_ASK_CONTEXT_KEY).is_none());
     }
 
     #[test]

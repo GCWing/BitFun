@@ -382,7 +382,7 @@ async fn handle_permission_request(
         RequestPermissionOutcome::Selected(selected)
             if selected.option_id.to_string() == PERMISSION_ALLOW_ONCE =>
         {
-            PermissionReply::Once
+            PermissionReply::Once { feedback: None }
         }
         RequestPermissionOutcome::Selected(selected)
             if selected.option_id.to_string() == PERMISSION_REJECT_ONCE =>
@@ -463,6 +463,7 @@ mod tests {
                 parent_tool_call_id: "parent-task".to_string(),
                 subagent_type: "Explore".to_string(),
             }),
+            permission_mode: None,
             display_metadata: serde_json::Map::new(),
         }
     }

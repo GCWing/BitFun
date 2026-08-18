@@ -26,7 +26,7 @@ describe('PermissionConfigService', () => {
 
     await expect(permissionConfigService.getConfig()).resolves.toEqual({
       policy: { preset: 'ask', rules: [] },
-      interaction: { auto_approve_ask: false },
+      interaction: { auto_approve_ask: false, ai_auto_approve_ask: false, ai_auto_approve_mode: 'standard' },
     });
   });
 
@@ -46,11 +46,11 @@ describe('PermissionConfigService', () => {
         preset: 'full_access',
         rules: [{ action: 'file.read', resource: '*', effect: 'allow' }],
       },
-      interaction: { auto_approve_ask: true },
+      interaction: { auto_approve_ask: true, ai_auto_approve_ask: false, ai_auto_approve_mode: 'standard' },
     });
     expect(emitMock).toHaveBeenCalledWith('permission:config:updated', expect.objectContaining({
       policy: { preset: 'full_access', rules: expect.any(Array) },
-      interaction: { auto_approve_ask: true },
+      interaction: { auto_approve_ask: true, ai_auto_approve_ask: false, ai_auto_approve_mode: 'standard' },
     }));
   });
 
@@ -72,7 +72,40 @@ describe('PermissionConfigService', () => {
         preset: 'ask',
         rules: [{ action: 'file.read', resource: '*', effect: 'ask' }],
       },
-      interaction: { auto_approve_ask: false },
+      interaction: { auto_approve_ask: false, ai_auto_approve_ask: false, ai_auto_approve_mode: 'standard' },
+    });
+  });
+
+  it('normalizes the ai auto approve flag and writes narrow nested changes', async () => {
+    configManagerMock.getConfig.mockResolvedValue({
+      policy: { preset: 'ask', rules: [] },
+      interaction: { auto_approve_ask: false, ai_auto_approve_ask: true, ai_auto_approve_mode: 'standard' },
+    });
+    const { permissionConfigService } = await import('./PermissionConfigService');
+
+    await expect(permissionConfigService.getConfig()).resolves.toEqual({
+      policy: { preset: 'ask', rules: [] },
+      interaction: { auto_approve_ask: false, ai_auto_approve_ask: true, ai_auto_approve_mode: 'standard' },
+    });
+
+    await permissionConfigService.setAiAutoApproveAsk(false);
+    expect(configManagerMock.setConfig).toHaveBeenCalledWith(
+      'tool_permissions.interaction.ai_auto_approve_ask',
+      false,
+    );
+    expect(emitMock).toHaveBeenCalledWith('permission:config:updated');
+  });
+
+  it('treats ai auto approve and auto approve as mutually exclusive', async () => {
+    configManagerMock.getConfig.mockResolvedValue({
+      policy: { preset: 'ask', rules: [] },
+      interaction: { auto_approve_ask: true, ai_auto_approve_ask: true },
+    });
+    const { permissionConfigService } = await import('./PermissionConfigService');
+
+    await expect(permissionConfigService.getConfig()).resolves.toEqual({
+      policy: { preset: 'ask', rules: [] },
+      interaction: { auto_approve_ask: false, ai_auto_approve_ask: true, ai_auto_approve_mode: 'standard' },
     });
   });
 

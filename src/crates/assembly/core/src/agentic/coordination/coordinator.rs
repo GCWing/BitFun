@@ -92,7 +92,9 @@ use bitfun_agent_runtime::deep_review::FocusedReviewAssignment;
 use bitfun_agent_runtime::output_surface::{
     supports_inline_markdown_images_for_source, TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY,
 };
-use bitfun_agent_runtime::permission::{AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY};
+use bitfun_agent_runtime::permission::{
+    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+};
 use bitfun_agent_runtime::remote_file_delivery::{
     needs_computer_links_for_source, remote_file_delivery_reminder,
     TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
@@ -4143,6 +4145,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             for key in [
                 USER_INPUT_AVAILABLE_CONTEXT_KEY,
                 AUTO_APPROVE_ASK_CONTEXT_KEY,
+                AI_AUTO_APPROVE_ASK_CONTEXT_KEY,
             ] {
                 if let Some(value) = metadata_bool(Some(&user_message_metadata), key) {
                     child_context.insert(key.to_string(), value.to_string());
@@ -6360,6 +6363,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             context_vars.insert(
                 AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
                 auto_approve_ask.to_string(),
+            );
+        }
+        // Resolve the permission mode once per submission. Downstream rounds and
+        // delegated subagents read this value instead of re-resolving the layers
+        // with partial context, so a mid-turn configuration or session change
+        // cannot split one turn across two modes.
+        let submission_permission_mode = resolve_submission_permission_mode(
+            permission_mode_from_metadata(user_message_metadata.as_ref()),
+            session.config.permission_mode,
+            default_permission_mode_from_global_config().await,
+        );
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            submission_permission_mode.mode.as_str().to_string(),
+        );
+        if let Some(ai_auto_approve_ask) = metadata_bool(
+            user_message_metadata.as_ref(),
+            AI_AUTO_APPROVE_ASK_CONTEXT_KEY,
+        ) {
+            context_vars.insert(
+                AI_AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+                ai_auto_approve_ask.to_string(),
             );
         }
         if needs_computer_links_for_source(submission_policy.trigger_source) {
@@ -13285,6 +13310,7 @@ impl ConversationCoordinator {
             workspace,
             primary_model_facts: PrimaryModelFacts::default(),
             context_vars: HashMap::new(),
+            current_user_message: Some(command.clone()),
             subagent_parent_info: None,
             permission_delegation: None,
             delegation_policy: DelegationPolicy::top_level(),
@@ -14512,6 +14538,7 @@ mod tests {
                     workspace: None,
                     primary_model_facts: Default::default(),
                     context_vars: HashMap::new(),
+                    current_user_message: None,
                     subagent_parent_info: None,
                     permission_delegation: None,
                     delegation_policy: DelegationPolicy::top_level(),
@@ -15042,6 +15069,20 @@ mod tests {
                 PermissionMode::AutoApprove,
             ),
             PermissionMode::AutoApprove
+        );
+        assert_eq!(
+            restrict_recovered_permission_mode(
+                PermissionMode::AutoApprove,
+                PermissionMode::AiAutoApprove,
+            ),
+            PermissionMode::AiAutoApprove
+        );
+        assert_eq!(
+            restrict_recovered_permission_mode(
+                PermissionMode::AiAutoApprove,
+                PermissionMode::AutoApprove,
+            ),
+            PermissionMode::AiAutoApprove
         );
     }
 

@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
+  BrainCircuit,
   Check,
   EyeOff,
   GitBranch,
@@ -81,6 +82,12 @@ export interface ChatInputWorkspaceStripProps {
     onChangeForNextTurn?: (
       mode: Exclude<ChatInputPermissionMode, 'acp'>,
     ) => void | Promise<void>;
+    /** Unattended sub-mode of `ai_auto`, shown as a submenu when `mode` is `ai_auto`. */
+    aiAutoApproveMode?: {
+      mode: AiAutoApproveMode;
+      saving?: boolean;
+      onChange?: (mode: AiAutoApproveMode) => void | Promise<void>;
+    };
     onHide?: () => void | Promise<void>;
   };
   /** Keep the strip on cached Git state while historical content is still restoring. */
@@ -115,11 +122,14 @@ export interface ChatInputWorkspaceStripProps {
   };
 }
 
-export type ChatInputPermissionMode = 'ask' | 'auto' | 'full_access' | 'reject' | 'acp';
+export type ChatInputPermissionMode = 'ask' | 'auto' | 'full_access' | 'ai_auto' | 'reject' | 'acp';
+
+export type AiAutoApproveMode = 'standard' | 'aggressive' | 'passive';
 
 const NATIVE_PERMISSION_MODES: Array<Exclude<ChatInputPermissionMode, 'acp' | 'reject'>> = [
   'ask',
   'auto',
+  'ai_auto',
   'full_access',
 ];
 
@@ -130,6 +140,7 @@ const NATIVE_PERMISSION_MODES: Array<Exclude<ChatInputPermissionMode, 'acp' | 'r
 const PERMISSION_MODE_ICONS: Record<ChatInputPermissionMode, typeof Shield> = {
   ask: Shield,
   auto: ShieldCheck,
+  ai_auto: BrainCircuit,
   full_access: ShieldAlert,
   reject: Shield,
   acp: Shield,
@@ -215,6 +226,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     auto: {
       label: t('chatInput.permissionMode.auto.label'),
       description: t('chatInput.permissionMode.auto.description'),
+    },
+    ai_auto: {
+      label: t('chatInput.permissionMode.aiAuto.label'),
+      description: t('chatInput.permissionMode.aiAuto.description'),
     },
     full_access: {
       label: t('chatInput.permissionMode.fullAccess.label'),
@@ -316,7 +331,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   // The trigger reports what the active turn (or the next submission while
   // idle) runs with, so a one-off outranks the session mode there.
   const permissionDisplayMode = permissionNextTurnMode ?? permissionMode;
-  const permissionModeLabel = permissionCopy[permissionDisplayMode].label;
+  // A backend value this build does not know must not take the strip down:
+  // fall back to the `ask` copy and icon so the trigger still renders.
+  const permissionCopyForMode = permissionCopy[permissionDisplayMode] ?? permissionCopy.ask;
+  const permissionModeLabel = permissionCopyForMode.label;
   const permissionTooltip = permissionMode === 'acp'
     ? t('chatInput.permissionMode.acp.tooltip')
     : permissionNextTurnArmed
@@ -329,7 +347,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       : permissionOverridden
         ? t('chatInput.permissionMode.currentSessionOverride', { mode: permissionModeLabel })
         : t('chatInput.permissionMode.current', { mode: permissionModeLabel });
-  const PermissionIcon = PERMISSION_MODE_ICONS[permissionDisplayMode];
+  const PermissionIcon = PERMISSION_MODE_ICONS[permissionDisplayMode] ?? Shield;
   const showPermissionLabel = permissionMode !== 'acp';
 
   const handleWorktreeToggle = () => {
@@ -652,6 +670,59 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                       );
                     })}
                   </div>
+                  {permissionMode === 'ai_auto' && permissionControl.aiAutoApproveMode ? (
+                    <>
+                      <div className="bitfun-chat-input-workspace-strip__permission-menu-divider" role="separator" />
+                      <div
+                        data-bf-component="chat-input-workspace-strip"
+                        data-bf-part="permissionAiAutoModes"
+                        className="bitfun-chat-input-workspace-strip__permission-ai-auto-modes"
+                      >
+                        <span className="bitfun-chat-input-workspace-strip__permission-ai-auto-modes-label">
+                          {t('chatInput.permissionMode.aiAutoMode.label')}
+                        </span>
+                        <div
+                          role="radiogroup"
+                          aria-label={t('chatInput.permissionMode.aiAutoMode.label')}
+                          className="bitfun-chat-input-workspace-strip__permission-ai-auto-mode-group"
+                        >
+                          {([
+                            ['standard', t('chatInput.permissionMode.aiAutoMode.standard')],
+                            ['aggressive', t('chatInput.permissionMode.aiAutoMode.aggressive')],
+                            ['passive', t('chatInput.permissionMode.aiAutoMode.passive')],
+                          ] as const).map(([value, label]) => {
+                            const selected = permissionControl.aiAutoApproveMode!.mode === value;
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                role="radio"
+                                aria-checked={selected}
+                                data-bf-component="chat-input-workspace-strip"
+                                data-bf-part="permissionAiAutoMode"
+                                data-bf-state={selected ? 'selected' : undefined}
+                                className={[
+                                  'bitfun-chat-input-workspace-strip__permission-ai-auto-mode',
+                                  selected && 'bitfun-chat-input-workspace-strip__permission-ai-auto-mode--selected',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                                disabled={permissionControl.saving || permissionControl.aiAutoApproveMode!.saving}
+                                data-testid={`chat-input-permission-ai-auto-mode-${value}`}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  setPermissionMenuOpen(false);
+                                  void permissionControl.aiAutoApproveMode!.onChange?.(value);
+                                }}
+                              >
+                                <span>{label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
                   {permissionOverridden && permissionControl.onResetToDefault ? (
                     <>
                       <div className="bitfun-chat-input-workspace-strip__permission-menu-divider" role="separator" />

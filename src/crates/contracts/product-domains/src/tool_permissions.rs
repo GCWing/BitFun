@@ -233,6 +233,58 @@ pub struct PermissionPolicyConfig {
 #[serde(default)]
 pub struct PermissionInteractionConfig {
     pub auto_approve_ask: bool,
+    /// Ask a fast model to judge whether an `ask` request is safe before
+    /// auto-replying. Safe requests are allowed, critical-risk requests are
+    /// rejected, and everything else is escalated to the user.
+    pub ai_auto_approve_ask: bool,
+    /// Unattended sub-mode of `ai_auto_approve_ask`: decides what happens to
+    /// requests the judge escalated (everything the judge already allowed or
+    /// denied is unaffected by this knob).
+    pub ai_auto_approve_mode: AiAutoApproveMode,
+}
+
+/// How the AI auto-approve mode treats requests the judge escalates.
+///
+/// This only changes the escalate path: requests the judge allowed stay
+/// allowed and requests the judge denied (critical risk) stay denied no
+/// matter which mode is selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum AiAutoApproveMode {
+    /// Judge-escalated requests raise an interactive prompt (current behavior).
+    #[default]
+    Standard,
+    /// Unattended: judge-escalated requests are auto-approved with the fixed
+    /// note "aggressive mode, auto-approve all escalated tool calls".
+    Aggressive,
+    /// Unattended: judge-escalated requests are auto-rejected with the fixed
+    /// note "passive mode, reject all escalated tool calls".
+    Passive,
+}
+
+impl AiAutoApproveMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Aggressive => "aggressive",
+            Self::Passive => "passive",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "standard" => Some(Self::Standard),
+            "aggressive" => Some(Self::Aggressive),
+            "passive" => Some(Self::Passive),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for AiAutoApproveMode {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
 }
 
 /// The interaction mode a dialog turn runs with.
@@ -247,6 +299,7 @@ pub struct PermissionInteractionConfig {
 /// agent, enforced, and constraint layers are evaluated after the baseline, so a
 /// `FullAccess` turn is still bounded by every deny those layers own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionMode {
     /// Every `ask` decision is raised to the user.
@@ -254,6 +307,15 @@ pub enum PermissionMode {
     Ask,
     /// Static policy is unchanged; interactive `ask` is answered automatically.
     AutoApprove,
+    /// A fast model judges each `ask` request: safe requests auto-approve,
+    /// critical-risk requests are rejected, and the rest escalate to the user.
+    ///
+    /// The wire value matches `as_str()` ("ai_auto"), which is the value every
+    /// surface and the web UI contract use. The `alias` keeps older persisted
+    /// records (written as "ai_auto_approve" by `rename_all = "snake_case"`)
+    /// readable instead of silently dropping the selection.
+    #[serde(rename = "ai_auto", alias = "ai_auto_approve")]
+    AiAutoApprove,
     /// The policy baseline allows everything the later layers do not deny.
     FullAccess,
 }
@@ -261,7 +323,7 @@ pub enum PermissionMode {
 impl PermissionMode {
     pub const fn preset(self) -> PermissionPolicyPreset {
         match self {
-            Self::Ask | Self::AutoApprove => PermissionPolicyPreset::Ask,
+            Self::Ask | Self::AutoApprove | Self::AiAutoApprove => PermissionPolicyPreset::Ask,
             Self::FullAccess => PermissionPolicyPreset::FullAccess,
         }
     }
@@ -270,10 +332,17 @@ impl PermissionMode {
         matches!(self, Self::AutoApprove)
     }
 
+    /// Whether `ask` requests are routed through the fast-model permission
+    /// judge instead of the interactive prompt.
+    pub const fn ai_auto_approve_ask(self) -> bool {
+        matches!(self, Self::AiAutoApprove)
+    }
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Ask => "ask",
             Self::AutoApprove => "auto_approve",
+            Self::AiAutoApprove => "ai_auto",
             Self::FullAccess => "full_access",
         }
     }
@@ -284,6 +353,7 @@ impl PermissionMode {
         match value.trim().to_ascii_lowercase().as_str() {
             "ask" => Some(Self::Ask),
             "auto" | "auto_approve" | "autoapprove" => Some(Self::AutoApprove),
+            "ai_auto" | "ai_auto_approve" | "ai_autoapprove" => Some(Self::AiAutoApprove),
             "full_access" | "fullaccess" | "full" => Some(Self::FullAccess),
             _ => None,
         }
@@ -291,11 +361,14 @@ impl PermissionMode {
 
     /// Derives the mode a stored configuration represents.
     ///
-    /// `full_access` wins over the auto-approve preference: the preset already
+    /// `full_access` wins over the auto-approve preferences: the preset already
     /// resolves every `ask` to `allow`, so auto-answering is not observable.
     pub const fn from_config(config: &ToolPermissionConfig) -> Self {
         match config.policy.preset {
             PermissionPolicyPreset::FullAccess => Self::FullAccess,
+            PermissionPolicyPreset::Ask if config.interaction.ai_auto_approve_ask => {
+                Self::AiAutoApprove
+            }
             PermissionPolicyPreset::Ask if config.interaction.auto_approve_ask => Self::AutoApprove,
             PermissionPolicyPreset::Ask => Self::Ask,
         }
@@ -535,6 +608,34 @@ pub struct PermissionDelegationContext {
     pub subagent_type: String,
 }
 
+/// Built-in sensitive-resource markers used by the read-only fast path.
+///
+/// These are used ONLY to decide whether a read-only tool call may skip the
+/// model judge. They are never rendered into the judge prompt, so the model
+/// never learns the project's sensitive path list. Projects may extend this
+/// list via `tool_permissions.json` (`sensitive_resources`).
+pub const DEFAULT_SENSITIVE_RESOURCE_MARKERS: &[&str] = &[
+    ".env",
+    "credentials",
+    "credential",
+    "secret",
+    "secrets",
+    "id_rsa",
+    "id_ed25519",
+    ".pem",
+    ".key",
+    "password",
+    "passwd",
+    "token",
+    "wallet",
+    ".ssh",
+    ".git-credentials",
+    ".netrc",
+    "cookie",
+    "login data",
+    "keychain",
+];
+
 /// A process-local permission request projected to an interactive surface.
 ///
 /// Resource and display values stored here must already be safe for user
@@ -581,6 +682,11 @@ pub struct PermissionRequest {
     pub source: PermissionRequestSource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegation: Option<PermissionDelegationContext>,
+    /// The permission mode that produced this request, when the requesting
+    /// surface knows it. Used by surfaces to adjust offered actions (e.g.
+    /// hiding "always allow" in AI auto-approve mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<PermissionMode>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub display_metadata: Map<String, Value>,
 }
@@ -589,8 +695,16 @@ pub struct PermissionRequest {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(tag = "reply", rename_all = "snake_case")]
 pub enum PermissionReply {
-    Once,
-    Always,
+    Once {
+        /// Optional user-provided note attached to this approval.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        feedback: Option<String>,
+    },
+    Always {
+        /// Optional user-provided note attached to this approval.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        feedback: Option<String>,
+    },
     Reject {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         feedback: Option<String>,
@@ -603,6 +717,9 @@ pub enum PermissionReply {
 pub enum PermissionReplySource {
     User,
     AutoApprove,
+    /// The reply was produced by the fast-model permission judge in
+    /// `ai_auto_approve` mode.
+    AiAutoApprove,
     System,
 }
 

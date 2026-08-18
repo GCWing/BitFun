@@ -155,6 +155,36 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(document.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
   });
 
+  it('exposes the ai_auto mode in the native permission menu and switches from its menu', async () => {
+    const onChange = vi.fn();
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath=""
+          workspaceLabel=""
+          permissionControl={{ mode: 'ask', onChange }}
+        />
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-trigger"]');
+    expect(trigger?.dataset.permissionMode).toBe('ask');
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const aiOption = document.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-permission-option-ai_auto"]',
+    );
+    expect(aiOption).not.toBeNull();
+    expect(aiOption?.textContent).toContain('chatInput.permissionMode.aiAuto.label');
+
+    await act(async () => {
+      aiOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith('ai_auto');
+  });
+
   it('chooses the scope per click instead of through a separate toggle', async () => {
     const onChange = vi.fn();
     const onChangeForNextTurn = vi.fn();

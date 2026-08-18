@@ -86,7 +86,7 @@ export interface CreateSessionOptions {
   modelId?: string;
 }
 
-export type RemotePermissionMode = 'ask' | 'auto' | 'full_access';
+export type RemotePermissionMode = 'ask' | 'auto' | 'ai_auto' | 'full_access';
 
 export interface PairRequest {
   public_key: string;

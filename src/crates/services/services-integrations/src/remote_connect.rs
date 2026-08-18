@@ -2135,7 +2135,15 @@ pub struct RemoteToolStatus {
 pub enum RemotePermissionMode {
     Ask,
     Auto,
+    /// Ask mode gated by a fast-model risk judge: safe requests auto-approve,
+    /// critical-risk requests are rejected, the rest escalate to the user.
+    AiAuto,
     FullAccess,
+    /// A mode value sent by a newer or older peer that this build does not
+    /// recognize. It is treated as the safest fallback (`Ask`) and is never
+    /// emitted by this build.
+    #[serde(other, skip_serializing)]
+    Unknown,
 }
 
 /// Commands that remote clients can send to the desktop runtime.

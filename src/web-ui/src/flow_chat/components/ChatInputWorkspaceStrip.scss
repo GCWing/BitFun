@@ -438,6 +438,79 @@
     background: var(--bf-appearance-token-border-subtle);
   }
 
+  // Unattended sub-mode of AI auto approve: a compact segmented control that
+  // follows the menu's own visual language (soft surfaces, rounded corners,
+  // no hard borders) instead of native button chrome.
+  &__permission-ai-auto-modes {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 4px 8px 2px;
+  }
+
+  &__permission-ai-auto-modes-label {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0;
+  }
+
+  &__permission-ai-auto-mode-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 6px;
+    background: var(--bf-appearance-token-element-bg-subtle);
+  }
+
+  &__permission-ai-auto-mode {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 24px;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0;
+    white-space: nowrap;
+    cursor: pointer;
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-medium);
+      outline: none;
+    }
+
+    &:disabled {
+      cursor: wait;
+      opacity: 0.6;
+    }
+
+    &--selected,
+    &--selected:hover:not(:disabled) {
+      color: var(--bf-appearance-token-color-text-primary);
+      font-weight: 600;
+      background: var(--bf-appearance-token-element-bg-medium);
+    }
+  }
+
   &__permission-option {
     display: flex;
     flex: 1 1 auto;

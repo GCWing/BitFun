@@ -7,6 +7,7 @@ export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescr
     { id: 'permissionOptions' }, { id: 'permissionOptionRow' },
     { id: 'permissionOption' }, { id: 'permissionOptionTrailing' },
     { id: 'permissionOptionNextTurn' }, { id: 'usageAction' },
+    { id: 'permissionAiAutoModes' }, { id: 'permissionAiAutoMode' },
   ],
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },

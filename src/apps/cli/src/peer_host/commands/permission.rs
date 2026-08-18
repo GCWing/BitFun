@@ -11,8 +11,18 @@ use crate::peer_host::state::PeerHostState;
 
 fn permission_reply(request: &Value) -> Result<PermissionReply, String> {
     match get_string(request, "reply")?.as_str() {
-        "once" => Ok(PermissionReply::Once),
-        "always" => Ok(PermissionReply::Always),
+        "once" => Ok(PermissionReply::Once {
+            feedback: request
+                .get("feedback")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        }),
+        "always" => Ok(PermissionReply::Always {
+            feedback: request
+                .get("feedback")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        }),
         "reject" => Ok(PermissionReply::Reject {
             feedback: request
                 .get("feedback")

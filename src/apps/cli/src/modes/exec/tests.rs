@@ -44,6 +44,7 @@ fn delegated_permission_request() -> PermissionRequest {
             subagent_type: "Explore".to_string(),
         }),
         display_metadata: serde_json::Map::new(),
+        permission_mode: None,
     }
 }
 

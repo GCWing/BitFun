@@ -1,7 +1,9 @@
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
 use crate::util::errors::BitFunResult;
-use bitfun_agent_runtime::permission::{AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY};
+use bitfun_agent_runtime::permission::{
+    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+};
 use bitfun_runtime_ports::{
     resolve_child_permission_policy, resolve_permission_policy, ChildPermissionPolicyLayers,
     PermissionConstraintLayer, PermissionEffect, PermissionMode, PermissionPolicyLayers,
@@ -12,7 +14,7 @@ use bitfun_runtime_ports::{
 ///
 /// The owning surface resolves the layered selection once and writes it to the
 /// execution context, so this is a lookup and not a second resolution. The
-/// legacy auto-approve flag is still honored for submissions and product
+/// legacy auto-approve flags are still honored for submissions and product
 /// surfaces that predate the mode key.
 pub(crate) fn permission_mode_from_context(
     global: &GlobalConfig,
@@ -27,6 +29,21 @@ pub(crate) fn permission_mode_from_context(
     }
 
     let default_mode = PermissionMode::from_config(&global.tool_permissions);
+    // The AI-judge flag speaks for the AI-approval half and outranks the plain
+    // auto-approve flag for the same turn.
+    if let Some(ai_auto_approve_ask) = context_vars
+        .get(AI_AUTO_APPROVE_ASK_CONTEXT_KEY)
+        .and_then(|value| value.parse::<bool>().ok())
+    {
+        match (ai_auto_approve_ask, default_mode) {
+            // A legacy flag must not downgrade a full-access selection that the
+            // same turn resolved.
+            (true, PermissionMode::FullAccess) => return PermissionMode::FullAccess,
+            (true, _) => return PermissionMode::AiAutoApprove,
+            (false, PermissionMode::AiAutoApprove) => return PermissionMode::Ask,
+            (false, _) => {}
+        }
+    }
     match context_vars
         .get(AUTO_APPROVE_ASK_CONTEXT_KEY)
         .and_then(|value| value.parse::<bool>().ok())

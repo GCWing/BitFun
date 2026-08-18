@@ -249,9 +249,8 @@ pub fn core_permission_request_manager() -> Result<Arc<PermissionRequestManager>
 
     let path_manager = crate::infrastructure::PathManager::new()
         .map_err(|error| format!("Failed to initialize permission path manager: {error}"))?;
-    let store = Arc::new(ProjectPermissionSqliteStore::new(
-        path_manager.user_data_dir().join("permissions"),
-    ));
+    let permission_base = path_manager.user_data_dir().join("permissions");
+    let store = Arc::new(ProjectPermissionSqliteStore::new(permission_base));
     let audit_store: Arc<dyn bitfun_runtime_ports::PermissionAuditStorePort> = store.clone();
     let reply_store: Arc<dyn bitfun_runtime_ports::PermissionReplyStorePort> = store.clone();
     let grant_store: Arc<dyn bitfun_runtime_ports::PermissionGrantStorePort> = store;

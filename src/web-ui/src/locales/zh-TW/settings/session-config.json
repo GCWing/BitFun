@@ -59,6 +59,13 @@
     "cancel": "取消",
     "autoApprove": "自動批准",
     "autoApproveDescription": "自動允許原本需要確認的操作。",
+    "aiAutoApprove": "AI 自動批准",
+    "aiAutoApproveDescription": "使用快速模型判斷請求是否安全：安全則自動放行，極高危險直接拒絕，其餘交給使用者確認。",
+    "aiAutoApproveMode": "無人值守檔位",
+    "aiAutoApproveModeDescription": "僅影響模型判定為「需要確認」的請求：激進自動放行，保守自動拒絕，標準交給使用者。",
+    "aiAutoApproveModeStandard": "標準",
+    "aiAutoApproveModeAggressive": "激進",
+    "aiAutoApproveModePassive": "保守",
     "showInChatInput": "顯示權限模式選擇器",
     "showInChatInputDescription": "在輸入框下方顯示權限模式，可隨時為目前工作階段切換。",
     "globalRules": "全域規則",
@@ -115,7 +122,13 @@
     "rulesSaveFailed": "儲存靜態專案規則失敗",
     "rulesConflict": "規則檔案已在外部變更，請重新開啟專案權限後再儲存。",
     "cancel": "取消",
-    "effects": { "allow": "允許", "ask": "詢問", "deny": "拒絕" }
+    "effects": { "allow": "允許", "ask": "詢問", "deny": "拒絕" },
+    "sensitiveResourcesTitle": "敏感資源",
+    "sensitiveResourcesDescription": "命中以下標記（目錄路徑或檔名片段，不區分大小寫）的唯讀工具呼叫不會被自動放行，而是交給 AI 判斷或您確認。該清單不會展示給 AI。",
+    "sensitiveResourcesEmpty": "尚未設定敏感資源，將使用內建預設敏感標記。",
+    "addSensitiveResource": "新增",
+    "sensitiveResourcePlaceholder": "例如 secrets/ 或 .cursorrules",
+    "removeSensitiveResource": "刪除"
   },
   "deferredToolLoading": {
     "sectionTitle": "按需載入工具",

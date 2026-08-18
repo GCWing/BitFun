@@ -1073,6 +1073,11 @@ pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
 mod tests {
     use std::collections::HashSet;
 
+    use bitfun_agent_runtime::sdk::{
+        PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
+        PermissionRequestSourceKind,
+    };
+
     use super::{aggregate_cancellation_results, PeerTurnKey, PeerTurnTracker};
 
     fn register_background_child(
@@ -1087,6 +1092,34 @@ mod tests {
         assert!(tracker
             .register_linked_child(parent, child, &tool_call_id)
             .expect("register background child"));
+    }
+
+    fn permission_request(session_id: &str, parent_session_id: Option<&str>) -> PermissionRequest {
+        PermissionRequest {
+            request_id: format!("request-{session_id}"),
+            round_id: format!("synthetic:request-{session_id}"),
+            order: 0,
+            tool_call_id: Some("tool-call".to_string()),
+            project_path: None,
+            project_id: "project".to_string(),
+            session_id: session_id.to_string(),
+            agent_id: "Explore".to_string(),
+            action: "read".to_string(),
+            resources: vec!["README.md".to_string()],
+            save_resources: Vec::new(),
+            source: PermissionRequestSource {
+                kind: PermissionRequestSourceKind::ToolCall,
+                identity: "Read".to_string(),
+            },
+            delegation: parent_session_id.map(|parent_session_id| PermissionDelegationContext {
+                parent_session_id: parent_session_id.to_string(),
+                parent_dialog_turn_id: Some("parent-turn".to_string()),
+                parent_tool_call_id: "parent-task".to_string(),
+                subagent_type: "Explore".to_string(),
+            }),
+            display_metadata: serde_json::Map::new(),
+            permission_mode: None,
+        }
     }
 
     #[test]

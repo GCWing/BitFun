@@ -1,11 +1,12 @@
 use bitfun_product_domains::tool_permissions::{
     merge_permission_rule_layers, resolve_child_permission_policy, resolve_permission_policy,
-    wildcard_matches, ChildPermissionPolicyLayers, PermissionConstraintLayer,
-    PermissionDelegationContext, PermissionEffect, PermissionEvaluator, PermissionPolicyConfig,
-    PermissionPolicyLayers, PermissionPolicyPreset, PermissionReply, PermissionReplySource,
-    PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
-    PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
-    PermissionRuntimeCeiling, ResolvedPermissionPolicy, ToolPermissionConfig,
+    wildcard_matches, AiAutoApproveMode, ChildPermissionPolicyLayers, PermissionConstraintLayer,
+    PermissionDelegationContext, PermissionEffect, PermissionEvaluator,
+    PermissionInteractionConfig, PermissionPolicyConfig, PermissionPolicyLayers,
+    PermissionPolicyPreset, PermissionReply, PermissionReplySource, PermissionRequest,
+    PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind,
+    PermissionResourceCaseSensitivity, PermissionRule, PermissionRuntimeCeiling,
+    ResolvedPermissionPolicy, ToolPermissionConfig,
 };
 use bitfun_product_domains::tool_permissions::{
     resolve_permission_mode, PermissionMode, PermissionModeLayers, PermissionModeSource,
@@ -60,6 +61,7 @@ fn tool_permission_config_defaults_to_ask_with_auto_approve_disabled() {
     assert_eq!(config.policy.preset, PermissionPolicyPreset::Ask);
     assert!(config.policy.rules.is_empty());
     assert!(!config.interaction.auto_approve_ask);
+    assert!(!config.interaction.ai_auto_approve_ask);
     assert_eq!(
         serde_json::to_value(config).expect("serialize tool permission config"),
         json!({
@@ -69,8 +71,62 @@ fn tool_permission_config_defaults_to_ask_with_auto_approve_disabled() {
             },
             "interaction": {
                 "auto_approve_ask": false,
+                "ai_auto_approve_ask": false,
+                "ai_auto_approve_mode": "standard",
             },
         })
+    );
+}
+
+#[test]
+fn ai_auto_approve_config_round_trips() {
+    let config = ToolPermissionConfig {
+        policy: PermissionPolicyConfig::default(),
+        interaction: PermissionInteractionConfig {
+            auto_approve_ask: false,
+            ai_auto_approve_ask: true,
+            ai_auto_approve_mode: AiAutoApproveMode::Standard,
+        },
+    };
+    let serialized = serde_json::to_value(&config).expect("serialize");
+    assert_eq!(
+        serialized["interaction"]["ai_auto_approve_ask"],
+        json!(true)
+    );
+
+    let deserialized: ToolPermissionConfig =
+        serde_json::from_value(serialized).expect("deserialize");
+    assert!(deserialized.interaction.ai_auto_approve_ask);
+    assert!(!deserialized.interaction.auto_approve_ask);
+
+    // Legacy configs without the new field still load with it disabled.
+    let legacy = serde_json::from_value::<ToolPermissionConfig>(json!({
+        "policy": { "preset": "ask", "rules": [] },
+        "interaction": { "auto_approve_ask": true },
+    }))
+    .expect("legacy config deserializes");
+    assert!(legacy.interaction.auto_approve_ask);
+    assert!(!legacy.interaction.ai_auto_approve_ask);
+}
+
+#[test]
+fn permission_mode_ai_auto_serializes_as_ai_auto_on_the_wire() {
+    // The wire value must match `PermissionMode::as_str()` and the web UI
+    // contract. The snake_case rename would otherwise emit "ai_auto_approve",
+    // which the frontend does not recognize.
+    assert_eq!(
+        serde_json::to_string(&PermissionMode::AiAutoApprove).expect("serialize"),
+        "\"ai_auto\""
+    );
+    assert_eq!(
+        serde_json::from_str::<PermissionMode>("\"ai_auto\"").expect("parse"),
+        PermissionMode::AiAutoApprove
+    );
+    // Older persisted session records used the snake_case spelling; keep them
+    // readable so the selection is not silently dropped on upgrade.
+    assert_eq!(
+        serde_json::from_str::<PermissionMode>("\"ai_auto_approve\"").expect("parse legacy"),
+        PermissionMode::AiAutoApprove
     );
 }
 
@@ -430,11 +486,13 @@ fn permission_rule_uses_stable_wire_values() {
 #[test]
 fn permission_reply_uses_stable_tagged_wire_values() {
     assert_eq!(
-        serde_json::to_value(PermissionReply::Once).expect("serialize once reply"),
+        serde_json::to_value(PermissionReply::Once { feedback: None })
+            .expect("serialize once reply"),
         json!({ "reply": "once" })
     );
     assert_eq!(
-        serde_json::to_value(PermissionReply::Always).expect("serialize always reply"),
+        serde_json::to_value(PermissionReply::Always { feedback: None })
+            .expect("serialize always reply"),
         json!({ "reply": "always" })
     );
     assert_eq!(
@@ -447,6 +505,40 @@ fn permission_reply_uses_stable_tagged_wire_values() {
             "feedback": "Use a read-only path",
         })
     );
+}
+
+#[test]
+fn permission_reply_approval_notes_are_optional_and_wire_stable() {
+    let with_note = PermissionReply::Once {
+        feedback: Some("Approve all log-viewing commands".to_string()),
+    };
+    let value = serde_json::to_value(&with_note).expect("serialize once with note");
+    assert_eq!(
+        value,
+        json!({
+            "reply": "once",
+            "feedback": "Approve all log-viewing commands",
+        })
+    );
+
+    let always_with_note = PermissionReply::Always {
+        feedback: Some("Keep approving edits under src".to_string()),
+    };
+    assert_eq!(
+        serde_json::to_value(&always_with_note).expect("serialize always with note"),
+        json!({
+            "reply": "always",
+            "feedback": "Keep approving edits under src",
+        })
+    );
+
+    // Old wire shapes without a feedback field still deserialize.
+    let legacy: PermissionReply =
+        serde_json::from_value(json!({ "reply": "once" })).expect("legacy once wire");
+    assert_eq!(legacy, PermissionReply::Once { feedback: None });
+    let legacy_always: PermissionReply =
+        serde_json::from_value(json!({ "reply": "always" })).expect("legacy always wire");
+    assert_eq!(legacy_always, PermissionReply::Always { feedback: None });
 }
 
 #[test]
@@ -473,6 +565,7 @@ fn permission_request_correlation_fields_use_stable_wire_shape() {
             parent_tool_call_id: "parent-task-call-1".to_string(),
             subagent_type: "Explore".to_string(),
         }),
+        permission_mode: None,
         display_metadata: Map::new(),
     };
     let value = serde_json::to_value(&request).expect("serialize permission request");
@@ -521,7 +614,7 @@ fn permission_request_events_use_camel_case_fields() {
     assert_eq!(
         serde_json::to_value(PermissionRequestEvent::Replied {
             request_id: "request-1".to_string(),
-            reply: PermissionReply::Once,
+            reply: PermissionReply::Once { feedback: None },
             source: PermissionReplySource::AutoApprove,
         })
         .expect("serialize replied permission event"),

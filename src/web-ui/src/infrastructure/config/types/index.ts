@@ -28,7 +28,17 @@ export interface PermissionPolicyConfig {
 
 export interface PermissionInteractionConfig {
   auto_approve_ask: boolean;
+  /** Ask the fast-model permission judge before replying to `ask` requests. */
+  ai_auto_approve_ask: boolean;
+  /**
+   * Unattended sub-mode of AI auto-approve: what happens to requests the
+   * judge escalated (aggressive auto-approves, passive auto-rejects,
+   * standard asks the user).
+   */
+  ai_auto_approve_mode: AiAutoApproveMode;
 }
+
+export type AiAutoApproveMode = 'standard' | 'aggressive' | 'passive';
 
 export interface ToolPermissionConfig {
   policy: PermissionPolicyConfig;

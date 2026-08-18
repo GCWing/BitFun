@@ -505,7 +505,10 @@ impl ExecMode {
     ) -> Self {
         let approval_mode = match runtime.approval_policy() {
             crate::runtime::approval::CliApprovalPolicy::Auto => ExecApprovalMode::Auto,
-            crate::runtime::approval::CliApprovalPolicy::Ask
+            // Non-interactive execution cannot confirm AI-judge escalations,
+            // so requests that reach the user prompt are rejected.
+            crate::runtime::approval::CliApprovalPolicy::AiAuto
+            | crate::runtime::approval::CliApprovalPolicy::Ask
             | crate::runtime::approval::CliApprovalPolicy::DisableAuto
             | crate::runtime::approval::CliApprovalPolicy::Reject => ExecApprovalMode::Reject,
         };

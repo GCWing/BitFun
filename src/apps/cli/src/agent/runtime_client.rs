@@ -2693,6 +2693,7 @@ mod tests {
                     subagent_type: "general".to_string(),
                 }),
                 display_metadata: serde_json::Map::new(),
+                permission_mode: None,
             },
         };
         project_routed_permission_event(&mut permission, "root");
@@ -3320,6 +3321,7 @@ mod dual_backend_behavior_tests {
             },
             delegation: None,
             display_metadata: serde_json::Map::new(),
+            permission_mode: None,
         }
     }
 
@@ -3418,7 +3420,10 @@ mod dual_backend_behavior_tests {
         .await;
         let permission_seen = true;
         client
-            .respond_permission(&request.request_id, PermissionReply::Once)
+            .respond_permission(
+                &request.request_id,
+                PermissionReply::Once { feedback: None },
+            )
             .await
             .expect("respond permission");
         wait_until(|| {

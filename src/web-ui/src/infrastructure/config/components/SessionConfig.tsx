@@ -36,6 +36,7 @@ import {
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import type {
+  AiAutoApproveMode,
   DebugModeConfig,
   LanguageDebugTemplate,
   PermissionRule,
@@ -80,7 +81,7 @@ type BrowserControlBrowserOption = {
 };
 
 type SubagentBatchExecutionPolicy = 'safe_only' | 'force_parallel' | 'serial';
-type ToolPermissionMode = 'ask' | 'auto' | 'full_access';
+type ToolPermissionMode = 'ask' | 'auto' | 'full_access' | 'ai_auto';
 
 const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'force_parallel';
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY = 5;
@@ -94,6 +95,7 @@ function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExe
 
 function resolveToolPermissionMode(config: ToolPermissionConfig): ToolPermissionMode {
   if (config.policy.preset === 'full_access') return 'full_access';
+  if (config.interaction.ai_auto_approve_ask) return 'ai_auto';
   return config.interaction.auto_approve_ask ? 'auto' : 'ask';
 }
 
@@ -312,7 +314,9 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       ? 'full_access'
       : nextModeValue === 'auto'
         ? 'auto'
-        : 'ask';
+        : nextModeValue === 'ai_auto'
+          ? 'ai_auto'
+          : 'ask';
     const previousConfig = toolPermissionConfig;
     const currentMode = resolveToolPermissionMode(previousConfig);
     if (nextMode === currentMode) return;
@@ -338,6 +342,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         interaction: {
           ...previousConfig.interaction,
           auto_approve_ask: nextMode === 'auto',
+          ai_auto_approve_ask: nextMode === 'ai_auto',
         },
       },
       previousConfig,
@@ -350,6 +355,29 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       { ...previousConfig, policy: { ...previousConfig.policy, rules } },
       previousConfig,
     );
+  };
+
+  const handleAiAutoApproveModeChange = async (value: string | number | (string | number)[]) => {
+    const raw = String(Array.isArray(value) ? value[0] : value);
+    const nextMode: AiAutoApproveMode = raw === 'aggressive' || raw === 'passive' ? raw : 'standard';
+    const previousConfig = toolPermissionConfig;
+    if (previousConfig.interaction.ai_auto_approve_mode === nextMode) return;
+    setToolPermissionConfig({
+      ...previousConfig,
+      interaction: { ...previousConfig.interaction, ai_auto_approve_mode: nextMode },
+    });
+    setPermissionConfigSaving(true);
+    try {
+      const saved = await permissionConfigService.setAiAutoApproveMode(nextMode);
+      setToolPermissionConfig(saved);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save AI auto-approve mode', error);
+      setToolPermissionConfig(previousConfig);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setPermissionConfigSaving(false);
+    }
   };
 
   const handlePermissionModeControlVisibilityChange = async (visible: boolean) => {
@@ -1179,7 +1207,9 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               ? t('permissionPolicy.fullAccessDescription')
               : resolveToolPermissionMode(toolPermissionConfig) === 'auto'
                 ? t('permissionPolicy.autoApproveDescription')
-                : t('permissionPolicy.askDescription')} ${t('permissionPolicy.modeDescription')}`}
+                : resolveToolPermissionMode(toolPermissionConfig) === 'ai_auto'
+                  ? t('permissionPolicy.aiAutoApproveDescription')
+                  : t('permissionPolicy.askDescription')} ${t('permissionPolicy.modeDescription')}`}
             align="center"
           >
             <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
@@ -1189,6 +1219,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 options={[
                   { value: 'ask', label: t('permissionPolicy.ask') },
                   { value: 'auto', label: t('permissionPolicy.autoApprove') },
+                  { value: 'ai_auto', label: t('permissionPolicy.aiAutoApprove') },
                   { value: 'full_access', label: t('permissionPolicy.fullAccess') },
                 ]}
                 disabled={permissionConfigSaving}
@@ -1196,6 +1227,27 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               />
             </div>
           </ConfigPageRow>
+          {resolveToolPermissionMode(toolPermissionConfig) === 'ai_auto' ? (
+            <ConfigPageRow
+              label={t('permissionPolicy.aiAutoApproveMode')}
+              description={t('permissionPolicy.aiAutoApproveModeDescription')}
+              align="center"
+            >
+              <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
+                <Select
+                  size="small"
+                  value={toolPermissionConfig.interaction.ai_auto_approve_mode}
+                  options={[
+                    { value: 'standard', label: t('permissionPolicy.aiAutoApproveModeStandard') },
+                    { value: 'aggressive', label: t('permissionPolicy.aiAutoApproveModeAggressive') },
+                    { value: 'passive', label: t('permissionPolicy.aiAutoApproveModePassive') },
+                  ]}
+                  disabled={permissionConfigSaving}
+                  onChange={handleAiAutoApproveModeChange}
+                />
+              </div>
+            </ConfigPageRow>
+          ) : null}
           <ConfigPageRow
             label={t('permissionPolicy.showInChatInput')}
             description={t('permissionPolicy.showInChatInputDescription')}

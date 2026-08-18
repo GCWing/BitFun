@@ -443,9 +443,16 @@ fn recovered_write_has_potentially_truncated_marked_path(
 }
 
 enum PermissionAuthorization {
-    Allowed,
-    UserRejected { feedback: Option<String> },
-    PolicyDenied { reason: String },
+    Allowed {
+        /// Optional note the user attached to the approval.
+        user_feedback: Option<String>,
+    },
+    UserRejected {
+        feedback: Option<String>,
+    },
+    PolicyDenied {
+        reason: String,
+    },
 }
 
 fn user_rejection_audit_reason(tool_name: &str, feedback: Option<&str>) -> String {
@@ -567,6 +574,98 @@ fn permission_resource_case_sensitivity(
 
 const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
 
+/// True for Deep Review / review agent types, which are read-only by
+/// construction and run unattended (they can never answer an interactive
+/// permission prompt, so the sensitive-resource branch must not stall them).
+///
+/// INVARIANT: review agents are only ever allowed to invoke read-only tools.
+/// This function is not a security boundary; it is an optimization that relies
+/// on the agent's tool whitelist and repository ignore rules keeping sensitive
+/// files out of read requests. If a review agent ever gains write tools, this
+/// exemption must be removed or scoped to read-only actions only.
+fn is_review_agent_type(agent_type: &str) -> bool {
+    use bitfun_agent_runtime::deep_review::{
+        CODE_REVIEW_AGENT_TYPE, DEEP_REVIEW_AGENT_TYPE, LEGACY_REVIEW_WORKER_AGENT_TYPES,
+        REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE, REVIEW_WORKER_AGENT_TYPE,
+    };
+    agent_type == CODE_REVIEW_AGENT_TYPE
+        || agent_type == DEEP_REVIEW_AGENT_TYPE
+        || agent_type == REVIEW_JUDGE_AGENT_TYPE
+        || agent_type == REVIEW_FIXER_AGENT_TYPE
+        || agent_type == REVIEW_WORKER_AGENT_TYPE
+        || LEGACY_REVIEW_WORKER_AGENT_TYPES.contains(&agent_type)
+}
+
+/// Builds the monotonically growing tool history passed to the AI permission
+/// judge. Only tools that already reached a terminal state are included;
+/// queued/running tools of the current batch are excluded.
+fn judge_tool_history(
+    tasks: &[ToolTask],
+    current_batch_tool_ids: &HashSet<String>,
+) -> Vec<crate::agentic::execution::permission_ai_judge::ToolHistoryEntry> {
+    use crate::agentic::execution::permission_ai_judge::{ToolHistoryEntry, ToolHistoryOutcome};
+
+    tasks
+        .iter()
+        .filter(|task| !current_batch_tool_ids.contains(&task.tool_call.tool_id))
+        .filter_map(|task| {
+            let outcome = match &task.state {
+                ToolExecutionState::Completed { result, .. } => {
+                    if result
+                        .content()
+                        .get("is_error")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false)
+                    {
+                        ToolHistoryOutcome::Failed
+                    } else {
+                        ToolHistoryOutcome::Succeeded
+                    }
+                }
+                ToolExecutionState::Failed { .. } => ToolHistoryOutcome::Failed,
+                ToolExecutionState::Rejected { .. } => ToolHistoryOutcome::Rejected,
+                _ => return None,
+            };
+            Some(ToolHistoryEntry {
+                tool_name: task.invocation.effective_tool_name.clone(),
+                action: task.tool_call.tool_name.clone(),
+                resources: compact_argument_resources(&task.invocation.effective_arguments),
+                outcome,
+                user_note: task.approved_user_feedback.clone(),
+            })
+        })
+        .collect()
+}
+
+/// Compacts tool arguments into a short resource list for the judge history,
+/// e.g. the command of a Bash call or the path of an Edit call.
+fn compact_argument_resources(arguments: &serde_json::Value) -> Vec<String> {
+    let mut resources = Vec::new();
+    if let Some(object) = arguments.as_object() {
+        for key in ["command", "cmd", "path", "file_path", "target", "url"] {
+            if let Some(value) = object.get(key) {
+                if let Some(text) = value.as_str() {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        let compact: String = trimmed.chars().take(200).collect();
+                        resources.push(compact);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    if resources.is_empty() {
+        if let Some(text) = arguments.as_str() {
+            let compact: String = text.trim().chars().take(200).collect();
+            if !compact.is_empty() {
+                resources.push(compact);
+            }
+        }
+    }
+    resources
+}
+
 /// Native hook session facts derived from one tool task.
 fn native_hook_session_facts<'a>(
     context: &'a ToolExecutionContext,
@@ -600,6 +699,25 @@ pub struct ToolPipeline {
     /// Tool task ids a PreToolUse hook approved. The approval waives the
     /// interactive permission prompt only; policy denials still apply.
     hook_preapprovals: Arc<TokioMutex<HashSet<String>>>,
+    /// Optional override for the AI permission judge model. Used in tests to
+    /// avoid calling a real fast model provider.
+    ai_judge_model: Option<Arc<dyn crate::agentic::execution::permission_ai_judge::AiJudgeModel>>,
+    /// Byte-stable user-rules cache for the current dialog turn. Rebuilt only
+    /// when the turn (or session/project) changes so the judge prefix stays
+    /// stable inside one turn.
+    user_rules_cache: Arc<TokioMutex<Option<UserRulesCacheEntry>>>,
+    /// Project sensitive-resource markers, cached per workspace so the config
+    /// file is read once per project (not once per tool call). The markers are
+    /// used ONLY by the read-only fast path and are never shown to the model.
+    /// Each entry carries an Instant so stale values can expire without waiting
+    /// for the pipeline to restart.
+    sensitive_markers_cache: Arc<TokioMutex<HashMap<String, (Instant, Vec<String>)>>>,
+}
+
+/// One cached rule set, keyed by the turn it was built for.
+struct UserRulesCacheEntry {
+    key: (String, String, String),
+    rules: Vec<crate::agentic::execution::permission_ai_judge::UserRule>,
 }
 
 impl ToolPipeline {
@@ -616,14 +734,31 @@ impl ToolPipeline {
             permission_request_manager: None,
             permission_plans: Arc::new(TokioMutex::new(HashMap::new())),
             hook_preapprovals: Arc::new(TokioMutex::new(HashSet::new())),
+            ai_judge_model: None,
+            user_rules_cache: Arc::new(TokioMutex::new(None)),
+            sensitive_markers_cache: Arc::new(TokioMutex::new(HashMap::new())),
         }
     }
+
+    /// TTL for cached project sensitive-resource markers. Short enough that
+    /// editing tool_permissions.json and re-running a tool picks up the change
+    /// quickly, long enough to avoid re-reading the file on every tool call.
+    const SENSITIVE_MARKERS_CACHE_TTL: Duration = Duration::from_secs(30);
 
     pub fn with_permission_request_manager(
         mut self,
         permission_request_manager: Arc<PermissionRequestManager>,
     ) -> Self {
         self.permission_request_manager = Some(permission_request_manager);
+        self
+    }
+
+    #[cfg(test)]
+    fn with_ai_judge_model(
+        mut self,
+        model: Arc<dyn crate::agentic::execution::permission_ai_judge::AiJudgeModel>,
+    ) -> Self {
+        self.ai_judge_model = Some(model);
         self
     }
 
@@ -663,20 +798,53 @@ impl ToolPipeline {
                 .map_err(|error| BitFunError::service(error.to_string()))?,
             None => Vec::new(),
         };
-        let asks =
-            match plan_permission_intents(intents, &permission_policy, &grants, case_sensitivity) {
-                PermissionIntentPlan::Allowed => return Ok(PermissionPlanDraft::Allowed),
-                PermissionIntentPlan::Denied(intent) => {
-                    return Ok(PermissionPlanDraft::Rejected {
-                        reason: format!(
-                            "Permission policy denied '{}' for {}",
-                            intent.action,
-                            intent.resources.join(", ")
-                        ),
-                    });
-                }
-                PermissionIntentPlan::RequiresApproval(intents) => intents,
-            };
+        // A read-only tool call whose resources hit a sensitive marker must
+        // not be auto-allowed by the static policy: the marker exists exactly
+        // to keep such content from being read without the judge or the user.
+        // The policy layer cannot know about project markers, so when the
+        // policy would statically allow a sensitive read, we force it through
+        // the permission pipeline instead (the judge fast path then blocks it
+        // via the same markers, escalating to the user in `ai_auto` mode).
+        //
+        // Review agents (Deep Review, /review, and their worker/judge
+        // subagents) are read-only by construction and run unattended: an
+        // interactive prompt would stall the whole review, and sensitive
+        // files should already be excluded by the repository's ignore rules.
+        // For them the sensitive branch is skipped and reads proceed.
+        let sensitive_read_forced = if is_review_agent_type(&agent_type) {
+            false
+        } else {
+            let markers = self.load_sensitive_markers_for_task(Some(&task)).await;
+            intents.iter().any(|intent| {
+                crate::agentic::execution::permission_ai_judge::is_read_only_permission_request(
+                    &intent.action,
+                    &tool_name,
+                ) && intent.resources.iter().any(|resource| {
+                    crate::agentic::execution::permission_ai_judge::resource_is_sensitive(
+                        resource, &markers,
+                    )
+                })
+            })
+        };
+        let asks = match plan_permission_intents(
+            intents.clone(),
+            &permission_policy,
+            &grants,
+            case_sensitivity,
+        ) {
+            PermissionIntentPlan::Allowed if sensitive_read_forced => intents,
+            PermissionIntentPlan::Allowed => return Ok(PermissionPlanDraft::Allowed),
+            PermissionIntentPlan::Denied(intent) => {
+                return Ok(PermissionPlanDraft::Rejected {
+                    reason: format!(
+                        "Permission policy denied '{}' for {}",
+                        intent.action,
+                        intent.resources.join(", ")
+                    ),
+                });
+            }
+            PermissionIntentPlan::RequiresApproval(intents) => intents,
+        };
 
         // A PreToolUse hook already approved this call. The approval reaches
         // here — after policy evaluation — precisely so that it waives only
@@ -718,6 +886,12 @@ impl ToolPipeline {
             ));
         }
 
+        let permission_mode = task
+            .context
+            .context_vars
+            .get(bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY)
+            .and_then(|value| bitfun_runtime_ports::PermissionMode::parse(value));
+
         let requests = asks
             .into_iter()
             .map(|intent| PermissionRequest {
@@ -736,6 +910,7 @@ impl ToolPipeline {
                     kind: PermissionRequestSourceKind::ToolCall,
                     identity: tool_name.clone(),
                 },
+                permission_mode,
                 delegation: permission_delegation.clone(),
                 display_metadata: intent.display_metadata,
             })
@@ -744,11 +919,162 @@ impl ToolPipeline {
         Ok(PermissionPlanDraft::Requests(requests))
     }
 
+    /// Loads (or reuses) the user rules for one batch of permission requests.
+    ///
+    /// `first_request` provides the project/session scope and the optional
+    /// parent session for subagent requests. The rules are keyed by (project,
+    /// session, dialog turn): building them once per turn keeps the judge
+    /// prefix byte-stable and KV-cache friendly inside the turn.
+    async fn load_user_rules_for_batch(
+        &self,
+        first_request: &PermissionRequest,
+        dialog_turn_id: &str,
+    ) -> Vec<crate::agentic::execution::permission_ai_judge::UserRule> {
+        use crate::agentic::execution::permission_ai_judge::{load_session_rules, UserRule};
+
+        let Some(manager) = self.permission_request_manager.as_ref() else {
+            return Vec::new();
+        };
+        let project_id = first_request.project_id.clone();
+        let session_id = first_request.session_id.clone();
+        let parent_session_id = first_request
+            .delegation
+            .as_ref()
+            .map(|delegation| delegation.parent_session_id.clone());
+        let key = (
+            project_id.clone(),
+            session_id.clone(),
+            dialog_turn_id.to_string(),
+        );
+
+        let mut cache = self.user_rules_cache.lock().await;
+        if let Some(entry) = cache.as_ref() {
+            if entry.key == key {
+                info!(
+                    "AI judge user rules cache hit: session_id={}, project_id={}, dialog_turn_id={}, rules={}",
+                    session_id,
+                    project_id,
+                    dialog_turn_id,
+                    entry.rules.len()
+                );
+                return entry.rules.clone();
+            }
+        }
+
+        // A new dialog turn starts here: rules are rebuilt from the audit in
+        // recency order (newest approval first), deduplicated, and cached for
+        // the rest of the turn.
+        let mut session_ids = vec![session_id.clone()];
+        if let Some(parent) = parent_session_id {
+            session_ids.push(parent);
+        }
+        let grant_store = manager.grant_store_ref().map(|store| store.as_ref());
+        let rules: Vec<UserRule> = load_session_rules(
+            manager.audit_store_ref().as_ref(),
+            grant_store,
+            &project_id,
+            &session_ids,
+        )
+        .await;
+        info!(
+            "AI judge user rules rebuilt: session_id={}, project_id={}, dialog_turn_id={}, rules={}, sessions={:?}",
+            session_id,
+            project_id,
+            dialog_turn_id,
+            rules.len(),
+            session_ids
+        );
+        *cache = Some(UserRulesCacheEntry {
+            key,
+            rules: rules.clone(),
+        });
+        rules
+    }
+
+    /// Loads the project's user-configured sensitive-resource markers.
+    ///
+    /// The markers are read from the workspace `tool_permissions.json` (local
+    /// or remote), cached per workspace root, and used ONLY to keep such
+    /// resources out of the read-only fast path. They are never injected into
+    /// the judge prompt.
+    ///
+    /// Non-NotFound read errors are logged and not cached, so a transient
+    /// failure does not permanently disable user-configured protections.
+    /// Successful reads (including an empty config) are cached with a TTL so
+    /// edits made during a session are picked up without a process restart.
+    async fn load_sensitive_markers_for_task(&self, task: Option<&ToolTask>) -> Vec<String> {
+        let Some(task) = task else {
+            return Vec::new();
+        };
+        let Some(workspace) = task.context.workspace.as_ref() else {
+            return Vec::new();
+        };
+        let cache_key = workspace.root_path_string();
+        let now = Instant::now();
+        {
+            let cache = self.sensitive_markers_cache.lock().await;
+            if let Some((timestamp, markers)) = cache.get(&cache_key) {
+                if now.duration_since(*timestamp) < Self::SENSITIVE_MARKERS_CACHE_TTL {
+                    return markers.clone();
+                }
+            }
+        }
+
+        let config_result = if workspace.is_remote() {
+            match task.context.workspace_services.as_ref() {
+                Some(services) => {
+                    crate::service::config::project_permission_store::
+                        load_project_permission_config_remote(
+                            services.fs.as_ref(),
+                            &workspace.root_path_string(),
+                        )
+                        .await
+                }
+                None => Ok(crate::service::config::project_permission_store::ProjectPermissionConfig::default()),
+            }
+        } else {
+            crate::service::config::project_permission_store::load_project_permission_config_local(
+                workspace.root_path(),
+            )
+            .await
+        };
+
+        match config_result {
+            Ok(config) => {
+                let markers = config.sensitive_resources;
+                let mut cache = self.sensitive_markers_cache.lock().await;
+                cache.insert(cache_key, (Instant::now(), markers.clone()));
+                markers
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to load project sensitive-resource markers for workspace '{}': {}. \
+                     Falling back to built-in defaults only.",
+                    workspace.root_path_string(),
+                    error
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    /// Clears cached sensitive-resource markers for a workspace.
+    ///
+    /// Callers that save project permission config can await this to make
+    /// subsequent tool calls pick up the new markers immediately instead of
+    /// waiting for the TTL.
+    pub async fn clear_sensitive_markers_cache_for_workspace(&self, workspace_root: &str) {
+        let mut cache = self.sensitive_markers_cache.lock().await;
+        cache.remove(workspace_root);
+    }
+
     async fn register_permission_requests(
         &self,
         requests: Vec<PermissionRequest>,
         dialog_turn_id: &str,
         auto_approve: bool,
+        ai_auto_approve: bool,
+        judge_inputs: Vec<crate::agentic::execution::permission_ai_judge::AiJudgeInput>,
     ) -> BitFunResult<Vec<PendingPermissionReceiver>> {
         let manager = self.permission_request_manager.as_ref().ok_or_else(|| {
             BitFunError::service(
@@ -756,26 +1082,47 @@ impl ToolPipeline {
             )
         })?;
 
-        let receivers = if auto_approve {
+        let interactive = !auto_approve && !ai_auto_approve;
+        let receivers = if interactive {
+            manager
+                .register_batch_for_turn(requests.clone(), dialog_turn_id.to_string())
+                .await
+        } else {
             manager
                 .register_batch_non_interactive_for_turn(
                     requests.clone(),
                     dialog_turn_id.to_string(),
                 )
                 .await
-        } else {
-            manager
-                .register_batch_for_turn(requests.clone(), dialog_turn_id.to_string())
-                .await
         }
         .map_err(|error| BitFunError::service(error.to_string()))?;
 
-        if auto_approve {
+        // `ai_auto_approve` is the stricter path: when both flags are
+        // accidentally set, the AI judge must run instead of silently
+        // falling back to plain auto-approval.
+        if ai_auto_approve {
+            for (request, judge_input) in requests.iter().zip(judge_inputs) {
+                if let Err(error) = self
+                    .reply_ai_judged_request(manager, request, judge_input)
+                    .await
+                {
+                    self.cancel_permission_request_ids(
+                        requests
+                            .iter()
+                            .map(|request| request.request_id.clone())
+                            .collect(),
+                        "AI permission judging failed".to_string(),
+                    )
+                    .await;
+                    return Err(BitFunError::service(error.to_string()));
+                }
+            }
+        } else if auto_approve {
             for request in &requests {
                 if let Err(error) = manager
                     .reply(
                         &request.request_id,
-                        PermissionReply::Once,
+                        PermissionReply::Once { feedback: None },
                         bitfun_runtime_ports::PermissionReplySource::AutoApprove,
                     )
                     .await
@@ -794,6 +1141,150 @@ impl ToolPipeline {
         }
 
         Ok(receivers)
+    }
+
+    /// Applies the fast-model verdict to one already-registered permission
+    /// request: allow replies `once`, critical-risk rejections reply `reject`
+    /// with the judge's reason, and escalated requests are promoted to an
+    /// interactive prompt.
+    ///
+    /// Inherently read-only requests (e.g. `Read`, `Search` on non-sensitive
+    /// resources) are approved deterministically without a model call, so
+    /// read-only work never waits on the fast model.
+    async fn reply_ai_judged_request(
+        &self,
+        manager: &Arc<PermissionRequestManager>,
+        request: &PermissionRequest,
+        judge_input: crate::agentic::execution::permission_ai_judge::AiJudgeInput,
+    ) -> BitFunResult<()> {
+        use crate::agentic::execution::permission_ai_judge::{
+            is_deterministically_read_only_with_markers, AiPermissionDecision,
+        };
+
+        if is_deterministically_read_only_with_markers(
+            &request.action,
+            &request.source.identity,
+            &request.resources,
+            &judge_input.sensitive_resource_markers,
+        ) {
+            info!(
+                "AI permission judge fast-tracked read-only tool call: request_id={}, tool={}",
+                request.request_id, request.source.identity
+            );
+            manager
+                .reply(
+                    &request.request_id,
+                    PermissionReply::Once { feedback: None },
+                    bitfun_runtime_ports::PermissionReplySource::AiAutoApprove,
+                )
+                .await
+                .map_err(|error| BitFunError::service(error.to_string()))?;
+            return Ok(());
+        }
+
+        let auto_approve_mode = judge_input.auto_approve_mode;
+        let decision = if let Some(model) = self.ai_judge_model.as_ref() {
+            crate::agentic::execution::permission_ai_judge::evaluate_risk_with_model(
+                judge_input,
+                model.as_ref(),
+            )
+            .await
+        } else {
+            crate::agentic::execution::permission_ai_judge::evaluate_risk(judge_input).await
+        };
+        let source = bitfun_runtime_ports::PermissionReplySource::AiAutoApprove;
+        match decision {
+            AiPermissionDecision::Allow => {
+                info!(
+                    "AI permission judge allowed tool call: request_id={}",
+                    request.request_id
+                );
+                manager
+                    .reply(
+                        &request.request_id,
+                        PermissionReply::Once { feedback: None },
+                        source,
+                    )
+                    .await
+                    .map_err(|error| BitFunError::service(error.to_string()))?;
+            }
+            AiPermissionDecision::Reject { reason } => {
+                info!(
+                    "AI permission judge rejected tool call: request_id={}, reason={}",
+                    request.request_id, reason
+                );
+                manager
+                    .reply(
+                        &request.request_id,
+                        PermissionReply::Reject {
+                            feedback: Some(reason),
+                        },
+                        source,
+                    )
+                    .await
+                    .map_err(|error| BitFunError::service(error.to_string()))?;
+            }
+            AiPermissionDecision::Escalate { reason } => {
+                if let Some(reason) = reason.as_deref() {
+                    info!(
+                        "AI permission judge escalated tool call: request_id={}, mode={}, reason={}",
+                        request.request_id, auto_approve_mode, reason
+                    );
+                } else {
+                    info!(
+                        "AI permission judge escalated tool call: request_id={}, mode={}",
+                        request.request_id, auto_approve_mode
+                    );
+                }
+                use bitfun_product_domains::tool_permissions::AiAutoApproveMode;
+                match auto_approve_mode {
+                    AiAutoApproveMode::Aggressive => {
+                        info!(
+                            "AI permission judge aggressive mode auto-approved escalated call: request_id={}",
+                            request.request_id
+                        );
+                        manager
+                            .reply(
+                                &request.request_id,
+                                PermissionReply::Once {
+                                    feedback: Some(
+                                        "aggressive mode, auto-approve all escalated tool calls"
+                                            .to_string(),
+                                    ),
+                                },
+                                source,
+                            )
+                            .await
+                            .map_err(|error| BitFunError::service(error.to_string()))?;
+                    }
+                    AiAutoApproveMode::Passive => {
+                        info!(
+                            "AI permission judge passive mode auto-rejected escalated call: request_id={}",
+                            request.request_id
+                        );
+                        manager
+                            .reply(
+                                &request.request_id,
+                                PermissionReply::Reject {
+                                    feedback: Some(
+                                        "passive mode, reject all escalated tool calls".to_string(),
+                                    ),
+                                },
+                                source,
+                            )
+                            .await
+                            .map_err(|error| BitFunError::service(error.to_string()))?;
+                    }
+                    AiAutoApproveMode::Standard => {
+                        manager
+                            .promote_to_interactive(&request.request_id)
+                            .await
+                            .map_err(|error| BitFunError::service(error.to_string()))?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Run PreToolUse hooks for every valid task and record their decisions
@@ -979,10 +1470,99 @@ impl ToolPipeline {
                 .iter()
                 .map(|(_, request)| request.clone())
                 .collect::<Vec<_>>();
-            let auto_approve = task_ids
+            let (auto_approve, ai_auto_approve) = task_ids
                 .first()
                 .and_then(|task_id| self.state_manager.get_task(task_id))
-                .is_some_and(|task| task.options.auto_approve_ask);
+                .map(|task| {
+                    (
+                        task.options.auto_approve_ask,
+                        task.options.ai_auto_approve_ask,
+                    )
+                })
+                .unwrap_or((false, false));
+            let judge_inputs = if ai_auto_approve {
+                let current_batch_tool_ids = task_ids
+                    .iter()
+                    .map(|task_id| task_id.clone())
+                    .collect::<HashSet<_>>();
+                let dialog_turn_id = task_ids
+                    .first()
+                    .and_then(|task_id| self.state_manager.get_task(task_id))
+                    .map(|task| task.context.dialog_turn_id)
+                    .unwrap_or_default();
+                let history = judge_tool_history(
+                    &self.state_manager.get_dialog_turn_tasks(&dialog_turn_id),
+                    &current_batch_tool_ids,
+                );
+                // User rules are stable for the whole dialog turn: the first
+                // request of a turn builds (and caches) them, later requests
+                // reuse the exact same slice so the judge prefix stays
+                // byte-stable and KV-cache friendly.
+                let user_rules = match ordered_requests.first() {
+                    Some((_, request)) => {
+                        self.load_user_rules_for_batch(request, &dialog_turn_id)
+                            .await
+                    }
+                    None => Vec::new(),
+                };
+                let first_task = ordered_requests
+                    .first()
+                    .and_then(|(task_id, _)| self.state_manager.get_task(task_id));
+                let sensitive_markers = match &first_task {
+                    Some(task) => self.load_sensitive_markers_for_task(Some(task)).await,
+                    None => Vec::new(),
+                };
+                let auto_approve_mode = first_task
+                    .as_ref()
+                    .map(|task| task.options.ai_auto_approve_mode)
+                    .unwrap_or_default();
+                ordered_requests
+                    .iter()
+                    .map(|(task_id, request)| {
+                        use crate::agentic::execution::permission_ai_judge::AiJudgeInput;
+                        let task = self.state_manager.get_task(task_id);
+                        let tool_name = task
+                            .as_ref()
+                            .map(|task| task.invocation.effective_tool_name.clone());
+                        let arguments_preview = task.as_ref().and_then(|task| {
+                            crate::agentic::execution::permission_ai_judge::arguments_preview(
+                                &task.invocation.effective_arguments,
+                            )
+                        });
+                        let agent_type = task
+                            .as_ref()
+                            .map(|task| task.context.agent_type.clone())
+                            .unwrap_or_default();
+                        let is_remote_workspace = task
+                            .as_ref()
+                            .and_then(|task| task.context.workspace.as_ref())
+                            .is_some_and(|workspace| workspace.is_remote());
+                        let current_user_message = task
+                            .as_ref()
+                            .and_then(|task| task.context.current_user_message.clone());
+                        let workspace_root = task
+                            .as_ref()
+                            .and_then(|task| task.context.workspace.as_ref())
+                            .map(|workspace| workspace.root_path_string());
+                        AiJudgeInput {
+                            tool_name: tool_name.unwrap_or_default(),
+                            action: request.action.clone(),
+                            resources: request.resources.clone(),
+                            arguments_preview,
+                            agent_type,
+                            is_remote_workspace,
+                            user_task_summary: current_user_message,
+                            user_rules: user_rules.clone(),
+                            tool_history: history.clone(),
+                            workspace_root,
+                            sensitive_resource_markers: sensitive_markers.clone(),
+                            auto_approve_mode,
+                        }
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
             let dialog_turn_id = task_ids
                 .first()
                 .and_then(|task_id| self.state_manager.get_task(task_id))
@@ -991,7 +1571,13 @@ impl ToolPipeline {
                     BitFunError::service("Permission batch lost its owning Dialog Turn".to_string())
                 })?;
             let receivers = self
-                .register_permission_requests(batch_requests, &dialog_turn_id, auto_approve)
+                .register_permission_requests(
+                    batch_requests,
+                    &dialog_turn_id,
+                    auto_approve,
+                    ai_auto_approve,
+                    judge_inputs,
+                )
                 .await?;
 
             let mut receivers_by_task = HashMap::<String, Vec<PendingPermissionReceiver>>::new();
@@ -1040,7 +1626,9 @@ impl ToolPipeline {
         cancellation_token: &CancellationToken,
     ) -> BitFunResult<PermissionAuthorization> {
         let Some(plan) = self.permission_plans.lock().await.remove(task_id) else {
-            return Ok(PermissionAuthorization::Allowed);
+            return Ok(PermissionAuthorization::Allowed {
+                user_feedback: None,
+            });
         };
 
         self.await_permission_execution_plan(plan, cancellation_token)
@@ -1053,7 +1641,11 @@ impl ToolPipeline {
         cancellation_token: &CancellationToken,
     ) -> BitFunResult<PermissionAuthorization> {
         let receivers = match plan {
-            PermissionExecutionPlan::Allowed => return Ok(PermissionAuthorization::Allowed),
+            PermissionExecutionPlan::Allowed => {
+                return Ok(PermissionAuthorization::Allowed {
+                    user_feedback: None,
+                })
+            }
             PermissionExecutionPlan::Rejected { reason } => {
                 return Ok(PermissionAuthorization::PolicyDenied { reason });
             }
@@ -1061,6 +1653,7 @@ impl ToolPipeline {
         };
 
         let mut receivers = receivers.into_iter();
+        let mut user_feedback: Option<String> = None;
         while let Some(pending) = receivers.next() {
             let request_id = pending.request_id().to_string();
             let outcome = tokio::select! {
@@ -1080,7 +1673,16 @@ impl ToolPipeline {
             };
 
             match outcome {
-                PermissionWaitOutcome::Replied(PermissionReply::Once | PermissionReply::Always) => {
+                PermissionWaitOutcome::Replied(
+                    PermissionReply::Once { feedback } | PermissionReply::Always { feedback },
+                ) => {
+                    // Keep the first non-empty note attached to this approval;
+                    // batch replies carry the same note on every request.
+                    if user_feedback.is_none() {
+                        user_feedback = feedback
+                            .map(|feedback| feedback.trim().to_string())
+                            .filter(|feedback| !feedback.is_empty());
+                    }
                 }
                 PermissionWaitOutcome::Replied(PermissionReply::Reject { feedback }) => {
                     self.cancel_permission_request_ids(
@@ -1121,7 +1723,7 @@ impl ToolPipeline {
             }
         }
 
-        Ok(PermissionAuthorization::Allowed)
+        Ok(PermissionAuthorization::Allowed { user_feedback })
     }
 
     async fn cancel_permission_request_ids(&self, request_ids: Vec<String>, reason: String) {
@@ -1185,14 +1787,66 @@ impl ToolPipeline {
             PermissionPlanDraft::Rejected { reason } => {
                 PermissionExecutionPlan::Rejected { reason }
             }
-            PermissionPlanDraft::Requests(requests) => PermissionExecutionPlan::Awaiting(
-                self.register_permission_requests(
-                    requests,
-                    &task.context.dialog_turn_id,
-                    task.options.auto_approve_ask,
+            PermissionPlanDraft::Requests(requests) => {
+                let judge_inputs = if task.options.ai_auto_approve_ask {
+                    use crate::agentic::execution::permission_ai_judge::AiJudgeInput;
+                    let current_batch_tool_ids = HashSet::from([task.tool_call.tool_id.clone()]);
+                    let history = judge_tool_history(
+                        &self
+                            .state_manager
+                            .get_dialog_turn_tasks(&task.context.dialog_turn_id),
+                        &current_batch_tool_ids,
+                    );
+                    let user_rules = match requests.first() {
+                        Some(request) => {
+                            self.load_user_rules_for_batch(request, &task.context.dialog_turn_id)
+                                .await
+                        }
+                        None => Vec::new(),
+                    };
+                    let sensitive_markers = self.load_sensitive_markers_for_task(Some(&task)).await;
+                    requests
+                        .iter()
+                        .map(|request| AiJudgeInput {
+                            tool_name: tool_name.to_string(),
+                            action: request.action.clone(),
+                            resources: request.resources.clone(),
+                            arguments_preview:
+                                crate::agentic::execution::permission_ai_judge::arguments_preview(
+                                    &task.invocation.effective_arguments,
+                                ),
+                            agent_type: task.context.agent_type.clone(),
+                            is_remote_workspace: task
+                                .context
+                                .workspace
+                                .as_ref()
+                                .is_some_and(|workspace| workspace.is_remote()),
+                            user_task_summary: task.context.current_user_message.clone(),
+                            user_rules: user_rules.clone(),
+                            tool_history: history.clone(),
+                            workspace_root: task
+                                .context
+                                .workspace
+                                .as_ref()
+                                .map(|workspace| workspace.root_path_string()),
+                            sensitive_resource_markers: sensitive_markers.clone(),
+                            auto_approve_mode: task.options.ai_auto_approve_mode,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                PermissionExecutionPlan::Awaiting(
+                    self.register_permission_requests(
+                        requests,
+                        &task.context.dialog_turn_id,
+                        task.options.auto_approve_ask,
+                        task.options.ai_auto_approve_ask,
+                        judge_inputs,
+                    )
+                    .await?,
                 )
-                .await?,
-            ),
+            }
         };
 
         self.await_permission_execution_plan(plan, cancellation_token)
@@ -1775,8 +2429,12 @@ impl ToolPipeline {
             .await
         };
 
+        let mut approved_user_feedback: Option<String> = None;
         let rejected = match permission_authorization {
-            Ok(PermissionAuthorization::Allowed) => None,
+            Ok(PermissionAuthorization::Allowed { user_feedback }) => {
+                approved_user_feedback = user_feedback;
+                None
+            }
             Ok(PermissionAuthorization::UserRejected { feedback }) => {
                 let reason = user_rejection_audit_reason(&tool_name, feedback.as_deref());
                 let result = build_user_rejected_tool_result(
@@ -1818,6 +2476,11 @@ impl ToolPipeline {
             self.cancellation_tokens.remove(&tool_id);
             return Ok(result);
         }
+
+        // Keep the user's approval note on the task so the AI judge history
+        // can reference it for the rest of the turn.
+        self.state_manager
+            .update_approved_user_feedback(&tool_id, approved_user_feedback.clone());
 
         debug!("Executing tool: tool_name={}", tool_name);
 
@@ -1910,6 +2573,22 @@ impl ToolPipeline {
 
                 self.apply_post_tool_use_hooks(&task, &tool_name, &tool_id, &mut tool_result)
                     .await;
+
+                // Surface the user's approval note to the agent so it can honor
+                // the expressed intent in later calls of the same turn.
+                if let Some(feedback) = approved_user_feedback
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|feedback| !feedback.is_empty())
+                {
+                    let original = tool_result.result_for_assistant.take().unwrap_or_default();
+                    let notice = format!("User approved this tool call with feedback: {feedback}");
+                    tool_result.result_for_assistant = Some(if original.is_empty() {
+                        notice
+                    } else {
+                        format!("{original}\n\n{notice}")
+                    });
+                }
 
                 self.state_manager
                     .update_state(
@@ -2392,6 +3071,27 @@ mod tests {
     use std::time::SystemTime;
     use tokio::time::{sleep, Duration};
 
+    #[test]
+    fn review_agent_types_are_recognized_and_non_review_types_are_not() {
+        use bitfun_agent_runtime::deep_review::{
+            CODE_REVIEW_AGENT_TYPE, DEEP_REVIEW_AGENT_TYPE, REVIEW_FIXER_AGENT_TYPE,
+            REVIEW_JUDGE_AGENT_TYPE, REVIEW_WORKER_AGENT_TYPE,
+        };
+
+        // Review agents must bypass the sensitive-resource branch so unattended
+        // reviews do not stall on interactive prompts.
+        assert!(is_review_agent_type(CODE_REVIEW_AGENT_TYPE));
+        assert!(is_review_agent_type(DEEP_REVIEW_AGENT_TYPE));
+        assert!(is_review_agent_type(REVIEW_JUDGE_AGENT_TYPE));
+        assert!(is_review_agent_type(REVIEW_FIXER_AGENT_TYPE));
+        assert!(is_review_agent_type(REVIEW_WORKER_AGENT_TYPE));
+
+        // Ordinary agents must go through the sensitive-resource branch.
+        assert!(!is_review_agent_type("Explore"));
+        assert!(!is_review_agent_type("Code"));
+        assert!(!is_review_agent_type("Write"));
+    }
+
     fn loaded_spec(tool_name: &str, catalog_generation: u64) -> LoadedDeferredToolSpec {
         LoadedDeferredToolSpec {
             tool_name: tool_name.to_string(),
@@ -2789,6 +3489,7 @@ mod tests {
             workspace: None,
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             context_vars: HashMap::new(),
+            current_user_message: None,
             subagent_parent_info: None,
             permission_delegation: None,
             delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
@@ -2931,6 +3632,38 @@ mod tests {
         context
     }
 
+    fn fixed_judge_response(
+        text: &str,
+    ) -> Arc<dyn crate::agentic::execution::permission_ai_judge::AiJudgeModel> {
+        use crate::util::types::Message;
+        use bitfun_ai_adapters::GeminiResponse;
+
+        struct FixedJudgeModel {
+            text: String,
+        }
+
+        #[async_trait::async_trait]
+        impl crate::agentic::execution::permission_ai_judge::AiJudgeModel for FixedJudgeModel {
+            async fn send_judge_messages(
+                &self,
+                _messages: Vec<Message>,
+            ) -> anyhow::Result<GeminiResponse> {
+                Ok(GeminiResponse {
+                    text: self.text.clone(),
+                    reasoning_content: None,
+                    tool_calls: None,
+                    usage: None,
+                    finish_reason: None,
+                    provider_metadata: None,
+                })
+            }
+        }
+
+        Arc::new(FixedJudgeModel {
+            text: text.to_string(),
+        })
+    }
+
     #[tokio::test]
     async fn non_readonly_tools_use_v2_custom_tool_fallback() {
         let pipeline = test_tool_pipeline();
@@ -3013,6 +3746,18 @@ mod tests {
             sleep(Duration::from_millis(5)).await;
         }
         panic!("expected {expected} permission requests to be registered");
+    }
+
+    async fn wait_for_interactive_permission_request(
+        manager: &PermissionRequestManager,
+    ) -> bitfun_runtime_ports::PermissionRequest {
+        for _ in 0..100 {
+            if let Some(request) = manager.interactive_pending_requests().into_iter().next() {
+                return request;
+            }
+            sleep(Duration::from_millis(5)).await;
+        }
+        panic!("interactive permission request was not registered");
     }
 
     #[tokio::test]
@@ -3330,7 +4075,7 @@ mod tests {
         manager
             .reply(
                 &sibling_request.request_id,
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
                 bitfun_runtime_ports::PermissionReplySource::User,
             )
             .await
@@ -3409,6 +4154,617 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v2_approval_feedback_is_preserved_for_the_assistant() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("approve-with-feedback", "Write")],
+                    permission_test_context(),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+
+        let request = wait_for_permission_request(&manager).await;
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once {
+                    feedback: Some("Approve all log-viewing commands".to_string()),
+                },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("approve request with feedback");
+
+        let results = execution
+            .await
+            .expect("feedback approval task join")
+            .expect("feedback approval should execute");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+        let assistant_text = results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .expect("approved tool result keeps assistant text");
+        assert!(
+            assistant_text.contains(
+                "User approved this tool call with feedback: Approve all log-viewing commands"
+            ),
+            "assistant text: {assistant_text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn v2_approval_without_feedback_keeps_original_result_text() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("approve-plain", "Write")],
+                    permission_test_context(),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+
+        let request = wait_for_permission_request(&manager).await;
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("approve request without feedback");
+
+        let results = execution
+            .await
+            .expect("plain approval task join")
+            .expect("plain approval should execute");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let assistant_text = results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .expect("approved tool result keeps assistant text");
+        assert!(
+            !assistant_text.contains("User approved this tool call with feedback"),
+            "assistant text: {assistant_text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn v2_ai_auto_approve_allows_when_judge_returns_allow() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"allow\",\"risk_level\":\"low\",\"reason\":\"routine edit\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut options = ToolExecutionOptions::default();
+        options.ai_auto_approve_ask = true;
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("ai-allow", "Write")],
+                permission_test_context(),
+                options,
+            )
+            .await
+            .expect("ai judge should allow the tool");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+        assert!(manager.interactive_pending_requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn v2_ai_auto_approve_rejects_when_judge_returns_critical_deny() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"deny\",\"risk_level\":\"critical\",\"reason\":\"rm root\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut options = ToolExecutionOptions::default();
+        options.ai_auto_approve_ask = true;
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("ai-reject", "Write")],
+                permission_test_context(),
+                options,
+            )
+            .await
+            .expect("ai judge should return a structured rejection");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .expect("rejection feedback")
+            .contains("rm root"));
+        assert!(manager.interactive_pending_requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn v2_ai_auto_approve_escalates_to_interactive_when_judge_is_unsure() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"medium\",\"reason\":\"needs user context\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            let mut options = ToolExecutionOptions::default();
+            options.ai_auto_approve_ask = true;
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("ai-escalate", "Write")],
+                    permission_test_context(),
+                    options,
+                )
+                .await
+        });
+
+        let request = wait_for_interactive_permission_request(&manager).await;
+        assert_eq!(request.tool_call_id.as_deref(), Some("ai-escalate"));
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("user confirms escalated request");
+
+        let results = execution
+            .await
+            .expect("ai auto-approve task join")
+            .expect("escalated tool should execute after user confirmation");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+    }
+
+    #[tokio::test]
+    async fn v2_ai_auto_approve_fast_tracks_inherently_read_only_tools_without_the_judge() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        // The judge model always escalates, so any judge call would surface an
+        // interactive request. The read-only fast track must bypass it entirely.
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"medium\",\"reason\":\"should never be consulted\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "read",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut options = ToolExecutionOptions::default();
+        options.ai_auto_approve_ask = true;
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("ai-read-only", "Write")],
+                permission_test_context(),
+                options,
+            )
+            .await
+            .expect("read-only tool should execute without user interaction");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+        assert!(manager.interactive_pending_requests().is_empty());
+        // The audit records the AI auto-approve source for the fast-tracked call.
+        assert!(store.audit.lock().unwrap().iter().any(|record| matches!(
+            &record.event,
+            bitfun_runtime_ports::PermissionAuditEvent::Replied {
+                source: bitfun_runtime_ports::PermissionReplySource::AiAutoApprove,
+                ..
+            }
+        )));
+    }
+
+    #[tokio::test]
+    async fn v2_ai_auto_approve_read_of_sensitive_resource_still_reaches_the_judge() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"high\",\"reason\":\"env file\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new("read", vec![".env".to_string()])],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            let mut options = ToolExecutionOptions::default();
+            options.ai_auto_approve_ask = true;
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("ai-read-env", "Write")],
+                    permission_test_context(),
+                    options,
+                )
+                .await
+        });
+
+        // `.env` is sensitive, so the fast track must not apply and the judge
+        // verdict (escalate) surfaces an interactive request.
+        let request = wait_for_interactive_permission_request(&manager).await;
+        assert_eq!(request.tool_call_id.as_deref(), Some("ai-read-env"));
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("user confirms escalated request");
+
+        let results = execution
+            .await
+            .expect("ai auto-approve task join")
+            .expect("escalated tool should execute after user confirmation");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+    }
+
+    #[tokio::test]
+    async fn v2_sensitive_read_is_not_statically_allowed_even_when_policy_would_allow_it() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"high\",\"reason\":\"env file\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new("read", vec![".env".to_string()])],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            let mut options = ToolExecutionOptions::default();
+            // The static policy would allow every read: without the sensitive
+            // marker forcing, this call would never reach the judge.
+            options.permission_policy = ResolvedPermissionPolicy::new(
+                vec![PermissionRule::new("read", "*", PermissionEffect::Allow)],
+                Vec::new(),
+            );
+            options.ai_auto_approve_ask = true;
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("ai-read-env-allow-policy", "Write")],
+                    permission_test_context(),
+                    options,
+                )
+                .await
+        });
+
+        // The sensitive marker must override the static allow: the request
+        // reaches the judge, which escalates it to an interactive prompt.
+        let request = wait_for_interactive_permission_request(&manager).await;
+        assert_eq!(
+            request.tool_call_id.as_deref(),
+            Some("ai-read-env-allow-policy")
+        );
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("user confirms escalated request");
+
+        let results = execution
+            .await
+            .expect("ai auto-approve task join")
+            .expect("escalated tool should execute after user confirmation");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+    }
+
+    #[tokio::test]
+    async fn v2_custom_sensitive_resource_markers_force_read_through_judge() {
+        let temp_dir = std::env::temp_dir().join("bitfun-custom-marker-test");
+        let config_path = temp_dir.join(".bitfun").join("config");
+        std::fs::create_dir_all(&config_path).expect("create test config dir");
+        std::fs::write(
+            config_path.join("tool_permissions.json"),
+            r#"{"rules":[],"sensitive_resources":[".cursorrules","secrets/"]}"#,
+        )
+        .expect("write test project permission config");
+
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"high\",\"reason\":\"custom marker\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "read",
+                vec!["src/.cursorrules".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let context_dir = temp_dir.clone();
+        let execution = tokio::spawn(async move {
+            let mut options = ToolExecutionOptions::default();
+            // The static policy would allow every read: without the custom
+            // sensitive marker forcing, this call would never reach the judge.
+            options.permission_policy = ResolvedPermissionPolicy::new(
+                vec![PermissionRule::new("read", "*", PermissionEffect::Allow)],
+                Vec::new(),
+            );
+            options.ai_auto_approve_ask = true;
+            let mut context = permission_test_context();
+            context.workspace = Some(WorkspaceBinding::new(None, context_dir));
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("ai-read-custom-marker", "Write")],
+                    context,
+                    options,
+                )
+                .await
+        });
+
+        // The custom sensitive marker must override the static allow: the
+        // request reaches the judge, which escalates it to an interactive prompt.
+        let request = wait_for_interactive_permission_request(&manager).await;
+        assert_eq!(
+            request.tool_call_id.as_deref(),
+            Some("ai-read-custom-marker")
+        );
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("user confirms escalated request");
+
+        let results = execution
+            .await
+            .expect("ai auto-approve task join")
+            .expect("escalated tool should execute after user confirmation");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn v2_review_agent_sensitive_read_skips_the_sensitive_branch() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        // The judge would escalate, but the review agent must never stall on
+        // an interactive prompt: sensitive reads proceed unattended.
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"high\",\"reason\":\"env file\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new("read", vec![".env".to_string()])],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut context = permission_test_context();
+        context.agent_type = "CodeReview".to_string();
+        let mut options = ToolExecutionOptions::default();
+        options.permission_policy = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new("read", "*", PermissionEffect::Allow)],
+            Vec::new(),
+        );
+        options.ai_auto_approve_ask = true;
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("review-read-env", "Write")],
+                context,
+                options,
+            )
+            .await
+            .expect("review agent sensitive read should proceed");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+        assert!(manager.interactive_pending_requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn v2_ai_auto_approve_aggressive_mode_auto_allows_escalated_calls() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"medium\",\"reason\":\"needs context\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut options = ToolExecutionOptions::default();
+        options.ai_auto_approve_ask = true;
+        options.ai_auto_approve_mode =
+            bitfun_product_domains::tool_permissions::AiAutoApproveMode::Aggressive;
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("ai-aggressive", "Write")],
+                permission_test_context(),
+                options,
+            )
+            .await
+            .expect("aggressive mode should auto-approve the escalated call");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!results[0].result.is_error);
+        assert!(manager.interactive_pending_requests().is_empty());
+        // The automatic approval carries the fixed aggressive note so the
+        // agent and later judge calls know the session is unattended.
+        assert!(store.audit.lock().unwrap().iter().any(|record| {
+            matches!(
+                &record.event,
+                bitfun_runtime_ports::PermissionAuditEvent::Replied {
+                    reply: bitfun_runtime_ports::PermissionReply::Once { feedback: Some(note) },
+                    source: bitfun_runtime_ports::PermissionReplySource::AiAutoApprove,
+                    ..
+                } if note == "aggressive mode, auto-approve all escalated tool calls"
+            )
+        }));
+    }
+
+    #[tokio::test]
+    async fn v2_ai_auto_approve_passive_mode_auto_rejects_escalated_calls() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(fixed_judge_response(
+                "```json\n{\"decision\":\"escalate\",\"risk_level\":\"medium\",\"reason\":\"needs context\"}\n```",
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut options = ToolExecutionOptions::default();
+        options.ai_auto_approve_ask = true;
+        options.ai_auto_approve_mode =
+            bitfun_product_domains::tool_permissions::AiAutoApproveMode::Passive;
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("ai-passive", "Write")],
+                permission_test_context(),
+                options,
+            )
+            .await
+            .expect("passive mode should auto-reject the escalated call");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .expect("passive rejection feedback")
+            .contains("passive mode, reject all escalated tool calls"));
+        assert!(manager.interactive_pending_requests().is_empty());
+    }
+
+    #[tokio::test]
     async fn v2_subagent_request_projects_exact_parent_task_context() {
         let store = Arc::new(MemoryPermissionStore::default());
         let manager = permission_test_manager(Arc::clone(&store));
@@ -3453,7 +4809,7 @@ mod tests {
         manager
             .reply(
                 &request.request_id,
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
                 bitfun_runtime_ports::PermissionReplySource::User,
             )
             .await
@@ -3514,7 +4870,7 @@ mod tests {
         manager
             .reply(
                 &request.request_id,
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
                 bitfun_runtime_ports::PermissionReplySource::User,
             )
             .await
@@ -3558,7 +4914,7 @@ mod tests {
         manager
             .reply(
                 &request.request_id,
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
                 bitfun_runtime_ports::PermissionReplySource::User,
             )
             .await
@@ -3580,7 +4936,7 @@ mod tests {
         manager
             .reply(
                 &request.request_id,
-                PermissionReply::Always,
+                PermissionReply::Always { feedback: None },
                 bitfun_runtime_ports::PermissionReplySource::User,
             )
             .await
@@ -3763,7 +5119,7 @@ mod tests {
         assert!(matches!(
             audit[1].event,
             PermissionAuditEvent::Replied {
-                reply: PermissionReply::Once,
+                reply: PermissionReply::Once { feedback: None },
                 source: bitfun_runtime_ports::PermissionReplySource::AutoApprove,
             }
         ));

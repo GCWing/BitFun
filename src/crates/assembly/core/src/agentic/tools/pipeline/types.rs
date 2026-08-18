@@ -30,6 +30,14 @@ pub struct ToolExecutionOptions {
     pub permission_policy: ResolvedPermissionPolicy,
     /// Automatically reply `once` to `ask` requests through the permission manager.
     pub auto_approve_ask: bool,
+    /// Ask the fast-model permission judge before replying to `ask` requests:
+    /// safe requests auto-approve, critical-risk requests are rejected, and the
+    /// rest escalate to the user.
+    pub ai_auto_approve_ask: bool,
+    /// Unattended sub-mode of AI auto-approve: decides what happens to requests
+    /// the judge escalated (aggressive auto-approves them, passive
+    /// auto-rejects them, standard asks the user).
+    pub ai_auto_approve_mode: bitfun_product_domains::tool_permissions::AiAutoApproveMode,
     /// Optional owner-provided token that latches cancellation before tool
     /// validation and permission preflight have registered pipeline state.
     pub parent_cancellation_token: Option<CancellationToken>,
@@ -44,6 +52,9 @@ impl Default for ToolExecutionOptions {
             timeout_secs: None, // Default no timeout (infinite waiting)
             permission_policy: ResolvedPermissionPolicy::default(),
             auto_approve_ask: false,
+            ai_auto_approve_ask: false,
+            ai_auto_approve_mode:
+                bitfun_product_domains::tool_permissions::AiAutoApproveMode::Standard,
             parent_cancellation_token: None,
         }
     }
@@ -92,6 +103,10 @@ pub struct ToolExecutionContext {
     pub workspace: Option<WorkspaceBinding>,
     pub primary_model_facts: PrimaryModelFacts,
     pub context_vars: HashMap<String, String>,
+    /// The user's latest task message for this round, when available. Stable
+    /// for the whole round so permission judging can use it as a stable
+    /// session-context prefix.
+    pub current_user_message: Option<String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
     pub permission_delegation: Option<PermissionDelegationContext>,
     pub(crate) delegation_policy: DelegationPolicy,
@@ -122,6 +137,10 @@ pub struct ToolTask {
     pub context: ToolExecutionContext,
     pub options: ToolExecutionOptions,
     pub state: ToolExecutionState,
+    /// Note the user attached to the permission approval of this tool call,
+    /// when any. Surfaced to the AI judge as part of the tool history so the
+    /// intent stays visible for the rest of the turn.
+    pub approved_user_feedback: Option<String>,
     pub created_at: SystemTime,
     pub started_at: Option<SystemTime>,
     pub completed_at: Option<SystemTime>,
@@ -155,6 +174,7 @@ impl ToolTask {
             context,
             options,
             state: ToolExecutionState::Queued { position: 0 },
+            approved_user_feedback: None,
             created_at: SystemTime::now(),
             started_at: None,
             completed_at: None,

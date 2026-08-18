@@ -482,6 +482,7 @@ fn request(request_id: &str, session_id: &str) -> PermissionRequest {
             identity: format!("tool-{request_id}"),
         },
         delegation: None,
+        permission_mode: None,
         display_metadata: Map::new(),
     }
 }
@@ -506,7 +507,7 @@ async fn once_releases_only_the_selected_request_and_records_audit() {
     let resolution = manager
         .reply(
             "request-1",
-            PermissionReply::Once,
+            PermissionReply::Once { feedback: None },
             PermissionReplySource::User,
         )
         .await
@@ -514,7 +515,7 @@ async fn once_releases_only_the_selected_request_and_records_audit() {
 
     assert_eq!(
         receiver.wait().await,
-        PermissionWaitOutcome::Replied(PermissionReply::Once)
+        PermissionWaitOutcome::Replied(PermissionReply::Once { feedback: None })
     );
     assert_eq!(resolution.resolved_request_ids, vec!["request-1"]);
     assert!(resolution.saved_grants.is_empty());
@@ -537,7 +538,7 @@ async fn always_persists_unique_project_grants_without_releasing_other_pending_r
     let resolution = manager
         .reply(
             "request-1",
-            PermissionReply::Always,
+            PermissionReply::Always { feedback: None },
             PermissionReplySource::User,
         )
         .await
@@ -545,7 +546,7 @@ async fn always_persists_unique_project_grants_without_releasing_other_pending_r
 
     assert_eq!(
         receiver.wait().await,
-        PermissionWaitOutcome::Replied(PermissionReply::Always)
+        PermissionWaitOutcome::Replied(PermissionReply::Always { feedback: None })
     );
     assert_eq!(resolution.saved_grants.len(), 1);
     assert_eq!(store.grants.lock().unwrap().len(), 1);
@@ -672,7 +673,7 @@ async fn batch_reply_resolves_only_the_anchor_and_following_requests_in_one_roun
         .reply_from(
             "anchor",
             true,
-            PermissionReply::Once,
+            PermissionReply::Once { feedback: None },
             PermissionReplySource::User,
         )
         .await
@@ -682,7 +683,7 @@ async fn batch_reply_resolves_only_the_anchor_and_following_requests_in_one_roun
     for receiver in [anchor, following] {
         assert_eq!(
             receiver.wait().await,
-            PermissionWaitOutcome::Replied(PermissionReply::Once)
+            PermissionWaitOutcome::Replied(PermissionReply::Once { feedback: None })
         );
     }
     assert_eq!(
@@ -735,7 +736,7 @@ async fn batch_always_persists_each_request_grant_atomically() {
         .reply_from(
             "request-a",
             true,
-            PermissionReply::Always,
+            PermissionReply::Always { feedback: None },
             PermissionReplySource::User,
         )
         .await
@@ -750,7 +751,7 @@ async fn batch_always_persists_each_request_grant_atomically() {
     for receiver in receivers {
         assert_eq!(
             receiver.wait().await,
-            PermissionWaitOutcome::Replied(PermissionReply::Always)
+            PermissionWaitOutcome::Replied(PermissionReply::Always { feedback: None })
         );
     }
 }
@@ -928,7 +929,7 @@ async fn grant_persistence_failure_keeps_the_request_pending_and_waiting() {
     let error = manager
         .reply(
             "request-1",
-            PermissionReply::Always,
+            PermissionReply::Always { feedback: None },
             PermissionReplySource::User,
         )
         .await
@@ -953,7 +954,7 @@ async fn audit_persistence_failure_keeps_the_request_pending_and_waiting() {
     let error = manager
         .reply(
             "request-1",
-            PermissionReply::Once,
+            PermissionReply::Once { feedback: None },
             PermissionReplySource::User,
         )
         .await
@@ -990,7 +991,7 @@ async fn batch_reply_persistence_failure_keeps_every_request_pending() {
         .reply_from(
             "request-a",
             true,
-            PermissionReply::Once,
+            PermissionReply::Once { feedback: None },
             PermissionReplySource::User,
         )
         .await
