@@ -526,8 +526,9 @@ mistake this separates.
 **A tail-anchored window must grow with the session.** It stops at the newest
 Turn that existed when it was cut, and nothing moves its end afterwards, so an
 appended Turn is simply not rendered. That is worse than it sounds: `latestTurnId`
-is read off the rendered items, so follow-output never learns the Turn exists —
-no pin, no follow, and nothing to scroll to. `resolveTailWindowGrowth` is
+comes from the ledger, so follow-output learns the Turn exists but cannot reveal
+it from a projection that has no matching item; the arrival remains pending with
+nothing to scroll to. `resolveTailWindowGrowth` is
 level-triggered for that reason. An edge — "it reached the tail last render and
 does not now" — is consumed whether or not the extension succeeded, stranding
 the window permanently on one failure; the current state stays `'extend'` until
@@ -544,7 +545,7 @@ fallback, but it is the only branch that always shows the message just sent.
 *ends*, and a history window re-cut moves that to a Turn which has existed for
 hours: measured, navigating to Turn 2 landed correctly and was then overwritten
 twice, because each window loaded on the way ended somewhere new and each of
-those read as a submission, pinning the window's last Turn to the top.
+those read as a submission, moving the window's last Turn as though it were new.
 
 **Whether the Turn can be acted on is a second question, and it does not belong
 in the identity.** Qualifying `latestTurnId` by "and it is on screen" makes a
@@ -555,7 +556,7 @@ and it is how navigating to Turn 29 ended on Turn 38.
 to *detect* one, and the detector asked whether `latestTurnId` differed from
 last render. A rollback truncates `dialogTurns`, which moves that identity
 backwards onto a Turn that has been there all along — so undoing a message
-pinned the Turn *before* it to the viewport top. `dialogTurnCount` separates the
+moved the Turn *before* it as though it had just arrived. `dialogTurnCount` separates the
 two: an arrival grows the ledger, and nothing else that rewrites `dialogTurns`
 — a history page merging in above, a window re-cut, a hydration — moves the
 last Turn at all, so requiring growth costs nothing and excludes every
@@ -566,8 +567,7 @@ truncation.
 two dozen call sites write that array; inferring an action from its size is the
 same mistake as inferring intent from `scrollTop`. So the rollback announces
 itself through `FLOWCHAT_TURNS_ROLLED_BACK_EVENT`, exactly as a submission does,
-and the transcript settles on the new tail — the Turn it was pinning is one of
-the ones that stopped existing.
+and the transcript settles on the new tail.
 
 It takes the viewport whether or not follow owned it. A rollback at Turn N
 removes N *and everything after
@@ -588,13 +588,13 @@ already been committed to. Edit-and-rerun does not announce: its truncation is
 followed by a rerun whose Turn really is new, and announcing would spend a
 visible movement on the way to it.
 
-So the response carries it instead. A new Turn is answered by pinning it to the
-viewport top; until it is in the transcript on screen there is nothing to align,
-and the fallback — the end of real content — is not a stand-in, because it
-would leave the Turn unpinned or pull a reader out of a history window. The
-answer is therefore **deferred, not dropped**: held in `pendingNewTurnIdRef` and
-retried when the transcript next changes, which is exactly when the presentation
-is restored to the live tail.
+So the response carries it instead. A new Turn is answered by revealing the
+resident tail blank with one physical-bottom placement; until the Turn is in the
+live-tail projection there is nothing to reveal, and the old content end is not
+a stand-in because it can pull a reader out of a history window before the new
+Turn exists there. The answer is therefore **deferred, not dropped**: held in
+`pendingNewTurnIdRef` and retried when the transcript next changes, which is
+exactly when the presentation is restored to the live tail.
 
 **Submitting is what gives up a navigated window.** `resolveTailWindowGrowth`
 leaves such a window alone as the session grows, and that is right — a Turn

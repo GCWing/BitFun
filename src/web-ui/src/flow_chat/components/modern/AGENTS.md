@@ -11,7 +11,7 @@ Also follow the repository and Web UI instructions in the parent guides.
 
 | Changing | Read |
 |---|---|
-| the tail spacer, the follow target, pinning, holding, resizing, the footer, the reveal | `FLOWCHAT_SCROLL_STABILITY.md` |
+| the tail spacer, the follow target, new-Turn revealing, holding, resizing, the footer | `FLOWCHAT_SCROLL_STABILITY.md` |
 | history paging, the prepend, the viewport anchor, history presentation | `FLOWCHAT_HISTORY_PAGING.md` |
 | anything that writes `scrollTop`, one-shot navigation, the diagnostic trail | `FLOWCHAT_VIEWPORT_REGISTER.md` |
 | the virtualizer, item measurement, item keys, anything a row renders | `FLOWCHAT_VIRTUALIZATION.md` |
@@ -21,8 +21,8 @@ before reporting a defect as new.
 
 ## Reservation and Follow
 
-- FlowChat reserves a resident tail spacer of about one viewport, sized from
-  `scroller.clientHeight` and nothing else.
+- FlowChat caps the input footer plus resident tail spacer at three quarters of
+  `scroller.clientHeight`; the spacer also depends on the current footer inset.
 - Static reservation is allowed; reactive compensation is not. Do not derive any
   reserved height from a measured content height, a collapse delta, an animation
   duration, or a streaming rate.
@@ -31,7 +31,11 @@ before reporting a defect as new.
 - The follow target lives in `flowChatTailFollow.ts` as pure functions over
   geometry. Keep it free of timers and mutation observers.
 - `scheduleFollowToLatest` must not force the content end — the hold rule is
-  what keeps a collapse from moving the viewport.
+  what keeps a collapse from moving the viewport. During `revealing-tail` it
+  samples the blank crossing and performs no viewport write.
+- A new Turn gets one physical-bottom placement after it enters the live-tail
+  projection. Streaming consumes the exposed spacer at fixed `scrollTop`, then
+  hands off to `hold-tail` when the blank closes.
 - `useFlowChatFollowOutput` is the only continuous outer viewport writer.
 - The follow's **write** may be eased; its **target** may not. Everything that
   reads the follow — the settle budget and the at-tail band — reads
@@ -161,10 +165,10 @@ before reporting a defect as new.
   Virtualizer-specific compensation stays in `VirtualMessageList`.
 - "A new Turn" is `activeSession.dialogTurns.at(-1)`, never the end of the
   projection. Do not qualify that identity by whether the Turn is on screen —
-  that belongs to the response, which defers until the Turn can be aligned.
+  that belongs to the response, which defers until the Turn can be revealed.
 - Detecting one means the ledger **grew**, not that the identity changed. A
   rollback truncates `dialogTurns` and moves that identity backwards onto a Turn
-  that was always there; read as an arrival it pins the survivor to the top.
+  that was always there; read as an arrival it reveals the survivor as new.
 - An action that rewrites `dialogTurns` and wants the viewport moved announces
   it — `FLOWCHAT_MESSAGE_SUBMITTED_EVENT` for giving up a navigated history
   window, `FLOWCHAT_TURNS_ROLLED_BACK_EVENT` for settling on a new tail. The
