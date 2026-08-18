@@ -427,6 +427,24 @@ describe('useFlowChatViewportAnchor', () => {
     expect(scroller.scrollTop).toBeCloseTo(446.7, 6);
   });
 
+  it('does not credit a native viewport resume to the reader', () => {
+    scroller.scrollTop = 1_000;
+    layoutTurns({ 'turn-3': 1_100 });
+    api.captureAnchor();
+
+    // A minimized WebView can return with a transient viewport offset before
+    // its scroll event arrives. This is host recovery, not a reader choice.
+    scroller.scrollTop = 1_132;
+
+    expect(api.restoreAnchorAfterViewportResume()).toBe(true);
+    expect(scroller.scrollTop).toBe(1_000);
+
+    // The recovery correction becomes the new baseline, so ordinary settles do
+    // not borrow it back as an unclaimed scroll on their next frame.
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBe(1_000);
+  });
+
   it('does not re-owe a correction it has just made', () => {
     /*
      * The same two halves, on the other branch. The shift puts the Turn back at
