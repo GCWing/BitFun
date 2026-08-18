@@ -71,7 +71,6 @@ describe('FlowChat semantic typography roles', () => {
     expectRole(model, '&__option-name {', 'control');
     expectRole(reasoning, '&__title {', 'control');
     expectRole(reasoning, 'strong {', 'control');
-    expectRole(workspaceStrip, '&__permission-trigger {', 'control');
     expectRole(workspaceStrip, '&__permission-option-label {', 'control');
   });
 
@@ -80,10 +79,14 @@ describe('FlowChat semantic typography roles', () => {
     const modelRound = readSource('./modern/ModelRoundItem.scss');
     const userMessage = readSource('./modern/UserMessageItem.scss');
     const flowTextBlock = readSource('./FlowTextBlock.scss');
+    const workspaceStrip = readSource('./ChatInputWorkspaceStrip.scss');
 
     expectRole(chatInput, '&__placeholder {', 'body');
     expectRole(chatInput, '&__slash-command-label {', 'support');
     expectRole(chatInput, '&__slash-command-status {', 'meta');
+    // The status track is a footnote under the capsule: one meta step for
+    // every label on it, facts and controls alike.
+    expectRole(workspaceStrip, '&__permission-trigger {', 'meta');
     expectRole(modelRound, '.model-round-item__retry-toggle {', 'control');
     expectRole(modelRound, '.model-round-item__attempt-diagnostic-section pre {', 'support');
     expectRole(modelRound, '.model-round-item__meta {', 'meta');

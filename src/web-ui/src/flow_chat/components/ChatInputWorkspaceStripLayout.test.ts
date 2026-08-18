@@ -41,16 +41,17 @@ describe('status track layout', () => {
   it('keeps passive context aligned and promotes consequential controls', () => {
     const stylesheet = readWorkspaceStripStylesheet();
 
-    // Two roles, each declared once. The track sets the support size and its
-    // facts inherit it; every control takes the ladder's control step instead,
-    // so interactive labels cannot drift down to metadata size.
+    // One role for the whole track, declared once per species. The rail sets
+    // the meta size — a quiet footnote under the capsule above — and its
+    // facts inherit it; every control restates the same step through the
+    // shared mixin, so the row reads as a single hushed line.
     expect(stylesheet).toContain(
-      'font-size: flow-type.$support-size;\n  line-height:',
+      'font-size: flow-type.$meta-size;\n  line-height:',
     );
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(/&__branch \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(
-      /@mixin strip-control \{[\s\S]*?font-size: flow-type\.\$control-size;/,
+      /@mixin strip-control \{[\s\S]*?font-size: flow-type\.\$meta-size;/,
     );
     // No control names a size of its own — that is how the track drifted into
     // four of them before.
@@ -61,7 +62,7 @@ describe('status track layout', () => {
     expect(rails).not.toContain('$micro-size');
   });
 
-  it('gives every control on the track the same pill, and facts no pill at all', () => {
+  it('gives the track one pill shape, with a hover fill only on live controls', () => {
     const stylesheet = readWorkspaceStripStylesheet();
 
     // One shape, declared once. Four heights, three radii and two hover fills
@@ -85,17 +86,36 @@ describe('status track layout', () => {
       expect(stylesheet).toContain(control);
     }
 
-    // A fact carries no body and no hover, so nothing on the track offers a
-    // click it cannot answer.
+    // The workspace is the row's subject and, with more than one open, its
+    // switcher too. It cannot take the mixin — it must shrink on narrow
+    // rails, which the mixin's `flex: none` forbids — so it restates the same
+    // pill, and the `--switchable` modifier alone owns the hover fill; the
+    // static form stays inert beside it at exactly the same size.
+    expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?height: 18px;/);
+    expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?padding: 0 7px;/);
+    expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?border-radius: 999px;/);
+    expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?cursor: default;/);
+    expect(stylesheet).toMatch(
+      /&__workspace--switchable \{[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-appearance-token-element-bg-soft\);/,
+    );
+
+    // Branch wears the same pill so the three left-rail segments keep one
+    // rhythm, but it is still a fact — the picker and its uncommitted-changes
+    // guard are a follow-up — so nothing on it offers a click it cannot
+    // answer yet.
     const chip = stylesheet.slice(
       stylesheet.indexOf('  &__chip {'),
       stylesheet.indexOf('  // Isolation switch.'),
     );
     expect(chip).toContain('cursor: default;');
     expect(chip).not.toContain(':hover');
+    expect(chip).toMatch(/&--branch \{[\s\S]*?height: 18px;/);
+    expect(chip).toMatch(/&--branch \{[\s\S]*?padding: 0 7px;/);
+    expect(chip).toMatch(/&--branch \{[\s\S]*?border-radius: 999px;/);
 
-    // With no separators, spacing is the only thing grouping the row, so the
-    // two gaps are named and must stay far enough apart to read as a ratio.
+    // A hairline parts the segments; inside a segment spacing is the only
+    // grouping, so the two gaps are named and must stay far enough apart to
+    // read as a ratio.
     expect(stylesheet).toContain('$track-part-gap: 4px;');
     expect(stylesheet).toContain('$track-item-gap: 10px;');
     expect(stylesheet).toMatch(/&__context \{[\s\S]*?gap: \$track-item-gap;/);
@@ -133,6 +153,7 @@ describe('status track layout', () => {
 
   it('orders the left rail as situation and the right rail as the next turn', () => {
     const component = readWorkspaceStripComponent();
+    const stylesheet = readWorkspaceStripStylesheet();
     const contextIndex = component.indexOf('data-bf-part="context"');
     const nextIndex = component.indexOf('data-bf-part="next"');
 
@@ -143,9 +164,15 @@ describe('status track layout', () => {
     expect(component).toContain('__location');
     expect(component).toContain('__chip--branch');
     expect(component).toContain('data-testid="chat-input-worktree-toggle"');
-    // Each segment opens with its own glyph, so punctuation between them only
-    // repeats a boundary that is already drawn — and a slash claimed a path
-    // that a host, a workspace and a branch do not form.
+    // The workspace doubles as the rail's switcher once more than one is
+    // open; the menu lists every open workspace and marks the active one.
+    expect(component).toContain('data-testid="chat-input-workspace-trigger"');
+    expect(component).toContain('data-testid="chat-input-workspace-menu"');
+    expect(component).toContain('data-bf-part="workspaceOption"');
+    // Segments part on a hairline rule, never on a slash: a slash claimed a
+    // path that a host, a workspace and a branch do not form.
+    expect(component).toContain('__divider');
+    expect(stylesheet).toMatch(/&__divider \{[\s\S]*?width: 1px;/);
     expect(component).not.toContain('breadcrumb-separator');
     expect(component).not.toContain('>/</span>');
     // Next turn: how much confirmation it asks for, and how much room is left.
@@ -192,7 +219,22 @@ describe('status track layout', () => {
     expect(stylesheet).not.toContain('.bitfun-reasoning-preset-selector,');
     expect(stylesheet).toContain('.bitfun-model-selector__ctx-usage {');
     expect(stylesheet).toContain('.bitfun-reasoning-preset-selector__trigger {');
-    expect(stylesheet).toContain('padding-bottom: 30px;');
+  });
+
+  it('centres the status track in the band the capsule reserves below it', () => {
+    const chatInput = readChatInputStylesheet();
+    const stylesheet = readWorkspaceStripStylesheet();
+
+    // 36px band = 10px of air + the 20px track + a 6px offset, and the drop
+    // zone floats 4px off the window edge, so the track keeps the same air
+    // below (6 + 4) as above (10). Change any one of the four numbers and the
+    // row drifts off-centre.
+    expect(chatInput).toContain('padding-bottom: 36px;');
+    expect(chatInput).toMatch(
+      /\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: 4px;/,
+    );
+    expect(stylesheet).toContain('min-height: 20px;');
+    expect(stylesheet).toContain('bottom: 6px;');
   });
 
   it('keeps the model pair borderless at rest and reveals its boundary on interaction', () => {

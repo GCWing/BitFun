@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Check,
+  ChevronDown,
   Circle,
   EyeOff,
   GitBranch,
@@ -29,6 +30,10 @@ import { Tooltip } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import {
+  getWorkspaceDisplayName,
+  useOptionalWorkspaceContext,
+} from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
@@ -148,11 +153,15 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
   const { t: tCommon } = useI18n('common');
+  const workspaceContext = useOptionalWorkspaceContext();
   const permissionRootRef = useRef<HTMLDivElement>(null);
   const permissionTriggerRef = useRef<HTMLButtonElement>(null);
   const permissionMenuRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const permissionMenuLayout = useAnchoredPopoverPosition({
     open: permissionMenuOpen,
     anchorRef: permissionTriggerRef,
@@ -161,6 +170,14 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     alignment: 'end',
     gap: 7,
     layoutRevision: `${permissionControl?.options?.length ?? 0}:${Boolean(permissionControl?.onHide)}`,
+  });
+  const workspaceMenuLayout = useAnchoredPopoverPosition({
+    open: workspaceMenuOpen,
+    anchorRef: workspaceTriggerRef,
+    popoverRef: workspaceMenuRef,
+    preferredPlacement: 'top',
+    alignment: 'start',
+    gap: 7,
   });
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
@@ -265,6 +282,32 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     };
   }, [permissionMenuOpen]);
 
+  useEffect(() => {
+    if (!workspaceMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !workspaceTriggerRef.current?.contains(target)
+        && !workspaceMenuRef.current?.contains(target)
+      ) {
+        setWorkspaceMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setWorkspaceMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [workspaceMenuOpen]);
+
   const dispatchBranch = dispatchControl?.locked
     && worktreeControl?.lockedReason === 'dispatch'
     ? dispatchControl?.branch?.trim()
@@ -299,6 +342,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       : '—');
 
   const workspaceTooltipContent = trimmedPath || label;
+  const switchableWorkspaces = workspaceContext?.openedWorkspacesList ?? [];
+  // Same rule as the shell nav switcher: a single open workspace has nothing
+  // to switch to, so the name stays a fact rather than offering a dead menu.
+  const workspaceSwitchable = !!workspaceContext && switchableWorkspaces.length > 1;
   const worktreeToggleDisabled = !!worktreeControl?.locked;
   let worktreeTooltip = tWorktrees('strip.toggleOffDescription');
   if (worktreeControl?.lockedReason === 'dispatch') {
@@ -370,6 +417,95 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     </Tooltip>
   );
 
+  // The workspace names where the session lives; with more than one workspace
+  // open it doubles as the switcher. Either way it wears the track's pill so
+  // the row keeps one rhythm — only the hover fill says whether it answers.
+  const renderWorkspaceControl = () => {
+    if (!workspaceSwitchable || !workspaceContext) {
+      return (
+        <Tooltip content={workspaceTooltipContent} placement="top">
+          <span data-bf-component="chat-input-workspace-strip" data-bf-part="workspace" className="bitfun-chat-input-workspace-strip__workspace">
+            <span className="bitfun-chat-input-workspace-strip__workspace-name">{label}</span>
+          </span>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <>
+        <Tooltip content={tCommon('header.switchWorkspace')} placement="top">
+          <button
+            ref={workspaceTriggerRef}
+            type="button"
+            data-bf-component="chat-input-workspace-strip"
+            data-bf-part="workspace"
+            className="bitfun-chat-input-workspace-strip__workspace bitfun-chat-input-workspace-strip__workspace--switchable"
+            aria-haspopup="menu"
+            aria-expanded={workspaceMenuOpen}
+            data-testid="chat-input-workspace-trigger"
+            onClick={event => {
+              event.stopPropagation();
+              setWorkspaceMenuOpen(open => !open);
+            }}
+          >
+            <span className="bitfun-chat-input-workspace-strip__workspace-name">{label}</span>
+            <ChevronDown
+              className="bitfun-chat-input-workspace-strip__workspace-chevron"
+              size={10}
+              aria-hidden
+            />
+          </button>
+        </Tooltip>
+        {workspaceMenuOpen ? createPortal(
+          <div
+            ref={workspaceMenuRef}
+            data-bf-component="chat-input-workspace-strip"
+            data-bf-part="workspaceMenu"
+            data-bf-state="open"
+            data-bf-placement={workspaceMenuLayout?.placement ?? 'top'}
+            className="bitfun-chat-input-workspace-strip__workspace-menu"
+            style={{
+              top: `${workspaceMenuLayout?.top ?? 0}px`,
+              left: `${workspaceMenuLayout?.left ?? 0}px`,
+              visibility: workspaceMenuLayout ? 'visible' : 'hidden',
+            }}
+            role="menu"
+            aria-label={tCommon('header.switchWorkspace')}
+            data-testid="chat-input-workspace-menu"
+          >
+            {switchableWorkspaces.map(workspace => {
+              const isActive = workspace.id === workspaceContext.activeWorkspace?.id;
+              return (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={isActive}
+                  data-bf-component="chat-input-workspace-strip"
+                  data-bf-part="workspaceOption"
+                  data-bf-state={isActive ? 'active' : undefined}
+                  className="bitfun-chat-input-workspace-strip__workspace-option"
+                  data-testid={`chat-input-workspace-option-${workspace.id}`}
+                  onClick={event => {
+                    event.stopPropagation();
+                    setWorkspaceMenuOpen(false);
+                    if (!isActive) {
+                      void workspaceContext.setActiveWorkspace(workspace.id);
+                    }
+                  }}
+                >
+                  <span>{getWorkspaceDisplayName(workspace)}</span>
+                  {isActive ? <Check size={13} strokeWidth={2.2} aria-hidden /> : null}
+                </button>
+              );
+            })}
+          </div>,
+          getAppearanceOverlayHost(),
+        ) : null}
+      </>
+    );
+  };
+
   const renderWorktreeToggle = () => (showWorktreeToggle ? (
     <Tooltip content={worktreeTooltip} placement="top">
       <button
@@ -401,6 +537,20 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     </Tooltip>
   ) : null);
 
+  // A hairline between segments that are not part of the same thought — the
+  // host picker, the location phrase and the isolation switch are three
+  // separate statements and the row reads calmer when they part on a rule
+  // instead of running together.
+  const renderDivider = (key: string) => (
+    <span
+      key={key}
+      data-bf-component="chat-input-workspace-strip"
+      data-bf-part="divider"
+      className="bitfun-chat-input-workspace-strip__divider"
+      aria-hidden
+    />
+  );
+
   return (
     <div data-bf-component="chat-input-workspace-strip" data-bf-part="root"
       className="bitfun-chat-input-workspace-strip"
@@ -422,14 +572,14 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
             />
           </>
         ) : null}
+        {showDispatchPicker && label ? renderDivider('context-host') : null}
         {label ? (
           <>
             <span className="bitfun-chat-input-workspace-strip__location">
-              <Tooltip content={workspaceTooltipContent} placement="top">
-                <span data-bf-component="chat-input-workspace-strip" data-bf-part="workspace" className="bitfun-chat-input-workspace-strip__workspace">{label}</span>
-              </Tooltip>
+              {renderWorkspaceControl()}
               {renderBranchChip()}
             </span>
+            {showWorktreeToggle ? renderDivider('context-isolation') : null}
             {renderWorktreeToggle()}
           </>
         ) : null}

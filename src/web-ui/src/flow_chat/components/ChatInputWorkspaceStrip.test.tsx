@@ -10,11 +10,16 @@ import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
 
 const mocks = vi.hoisted(() => ({
   refreshBasic: vi.fn(async () => undefined),
+  setActiveWorkspace: vi.fn(async () => undefined),
   useGitState: vi.fn(() => ({
     currentBranch: 'main',
     isRepository: true,
     refreshBasic: vi.fn(async () => undefined),
   })),
+  // The strip only switches workspaces when more than one is open; bare
+  // mounts in this suite default to "no provider", and the switcher tests
+  // override this per case.
+  useOptionalWorkspaceContext: vi.fn((): object | null => null),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -61,6 +66,15 @@ vi.mock('@/features/dispatch/DispatchTargetPicker', () => ({
   ),
 }));
 
+// The workspace switcher is the only thing the strip asks of the workspace
+// context; the display-name helper is trivial and stays real-shaped.
+vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
+  useOptionalWorkspaceContext: mocks.useOptionalWorkspaceContext,
+  getWorkspaceDisplayName: (workspace: { name?: string; path?: string }) => (
+    workspace.name ?? workspace.path ?? ''
+  ),
+}));
+
 describe('ChatInputWorkspaceStrip git refresh behavior', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -76,6 +90,8 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       isRepository: true,
       refreshBasic: mocks.refreshBasic,
     });
+    mocks.useOptionalWorkspaceContext.mockReturnValue(null);
+    mocks.setActiveWorkspace.mockClear();
   });
 
   afterEach(() => {
@@ -124,6 +140,70 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       refreshOnMount: true,
       refreshOnActive: false,
     }));
+  });
+
+  it('keeps the workspace an inert fact when there is nothing to switch to', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+        />
+      );
+    });
+
+    // No provider, one workspace — same outcome: the name is a span, not a
+    // trigger, and no menu can appear.
+    const workspace = container.querySelector('[data-bf-part="workspace"]');
+    expect(workspace?.tagName).toBe('SPAN');
+    expect(container.querySelector('[data-testid="chat-input-workspace-trigger"]')).toBeNull();
+  });
+
+  it('switches the active workspace from the strip menu when several are open', async () => {
+    mocks.useOptionalWorkspaceContext.mockReturnValue({
+      openedWorkspacesList: [
+        { id: 'ws-1', name: 'BitFun', path: 'D:/workspace/BitFun' },
+        { id: 'ws-2', name: 'Other', path: 'D:/workspace/Other' },
+      ],
+      activeWorkspace: { id: 'ws-1', name: 'BitFun', path: 'D:/workspace/BitFun' },
+      setActiveWorkspace: mocks.setActiveWorkspace,
+    });
+
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+        />
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-workspace-trigger"]',
+    );
+    expect(trigger).not.toBeNull();
+    expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
+
+    await act(async () => {
+      trigger?.click();
+    });
+
+    const menu = document.querySelector('[data-testid="chat-input-workspace-menu"]');
+    expect(menu).not.toBeNull();
+    // The active workspace is marked and is not re-selected.
+    expect(
+      menu?.querySelector('[data-testid="chat-input-workspace-option-ws-1"]')?.getAttribute('aria-checked'),
+    ).toBe('true');
+
+    const other = menu?.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-workspace-option-ws-2"]',
+    );
+    await act(async () => {
+      other?.click();
+    });
+
+    expect(mocks.setActiveWorkspace).toHaveBeenCalledWith('ws-2');
+    expect(document.querySelector('[data-testid="chat-input-workspace-menu"]')).toBeNull();
   });
 
   it('splits the situation from the contract for the next turn', async () => {

@@ -7,19 +7,21 @@
  * other one.
  *
  * The track has exactly two species and shape tells them apart. A *fact* — the
- * workspace name, the branch — is bare text at the track's support size with a
- * muted 12px glyph and no body, so it never invites a click it cannot answer.
- * A *control* is the pill below: one height, one radius, one hover fill, one
- * glyph size and the control type role, for every item on the track that does
- * something. State is carried by color, never by an outline, because one
- * bordered item in a borderless row reads as an error rather than a mode.
+ * workspace name, the branch — is bare text with a muted 12px glyph and no
+ * body, so it never invites a click it cannot answer. A *control* is the pill
+ * below: one height, one radius, one hover fill, one glyph size, for every
+ * item on the track that does something. Both species speak at one size — the
+ * ladder's meta step, a quiet footnote under the capsule above — and in one
+ * muted ink, so the row reads as a single hushed line of text and only shape
+ * and fill say what can be clicked. State is carried by color, never by an
+ * outline, because one bordered item in a borderless row reads as an error
+ * rather than a mode.
  *
- * Nothing punctuates the segments. Each one already opens with a glyph that
- * says what it is, so a separator between them would only repeat the boundary
- * the glyph has drawn — and a slash in particular claimed a path that does not
- * exist: a host, a workspace and a branch are three coordinates, not three
- * directories. Grouping is spacing alone, at a fixed 2.5:1 — $track-item-gap
- * between segments, $track-part-gap inside one.
+ * Segments part on a hairline divider — a 10px vertical rule that groups
+ * without claiming anything about what sits either side of it. A slash stays
+ * banned: it claimed a path that a host, a workspace and a branch do not
+ * form. Inside one segment, grouping is spacing alone, at a fixed 2.5:1 —
+ * $track-item-gap between segments, $track-part-gap inside one.
  */
 
 @use '../../component-library/styles/tokens' as *;
@@ -58,12 +60,12 @@ $track-pad-right: $track-edge - 3px;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-appearance-token-color-text-muted);
   font: inherit;
-  // Not the rail's own support size: a control's label is interactive text and
-  // takes the control role, which is the ladder's next step up. The facts
-  // around it keep the support size they inherit from the track.
-  font-size: flow-type.$control-size;
+  // The whole track speaks at one size: facts inherit it from the rail and
+  // controls restate it here. Shape — the pill and its hover fill — is what
+  // says a control is a control, so a label never needs a size of its own.
+  font-size: flow-type.$meta-size;
   line-height: 1;
   letter-spacing: inherit;
   white-space: nowrap;
@@ -75,7 +77,7 @@ $track-pad-right: $track-edge - 3px;
   &:hover:not(:disabled),
   &[aria-expanded='true']:not(:disabled) {
     background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &:focus-visible {
@@ -100,7 +102,10 @@ $track-pad-right: $track-edge - 3px;
 
 .bitfun-chat-input-workspace-strip {
   position: absolute;
-  bottom: 0;
+  // Lifted off the zone's bottom edge so the band the capsule reserves below
+  // it (36px) splits into equal air: 10px to the capsule, 6px here plus the
+  // zone's own 4px off the window edge to the bottom.
+  bottom: 6px;
   z-index: 4;
   box-sizing: border-box;
   display: flex;
@@ -113,11 +118,11 @@ $track-pad-right: $track-edge - 3px;
   border-radius: 0;
   background: transparent;
   font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: flow-type.$support-size;
+  font-size: flow-type.$meta-size;
   line-height: var(--bf-appearance-token-flowchat-support-line-height);
   font-weight: 400;
   letter-spacing: 0.01em;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-appearance-token-color-text-muted);
   user-select: text;
   pointer-events: auto;
 
@@ -150,6 +155,7 @@ $track-pad-right: $track-edge - 3px;
       > span {
         min-width: 0;
         overflow: hidden;
+        padding-bottom: 1px;
         text-overflow: ellipsis;
       }
 
@@ -173,6 +179,16 @@ $track-pad-right: $track-edge - 3px;
     gap: $track-item-gap;
     min-width: 0;
     height: 18px;
+  }
+
+  // The group boundary. Hairline-thin and shorter than the pills it parts, so
+  // it structures the row without becoming a rail of its own.
+  &__divider {
+    flex: none;
+    width: 1px;
+    height: 10px;
+    background: var(--bf-appearance-token-border-medium);
+    opacity: 0.6;
   }
 
   &__permission {
@@ -199,6 +215,7 @@ $track-pad-right: $track-edge - 3px;
     > span {
       min-width: 0;
       overflow: hidden;
+      padding-bottom: 1px;
       text-overflow: ellipsis;
     }
   }
@@ -208,15 +225,19 @@ $track-pad-right: $track-edge - 3px;
 
     position: relative;
     max-width: 100%;
-    color: var(--bf-appearance-token-color-text-primary);
+    // The one control whose value decides what the next turn may do, so it is
+    // the row's anchor: it rests on a soft body before it is ever hovered,
+    // while the quieter controls around it stay ghost until touched.
+    background: var(--bf-appearance-token-element-bg-soft);
 
+    &:hover:not(:disabled),
     &--open:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
 
     // Full access is the one mode whose risk must stay visible after the label
-    // is dropped on a narrow composer, so it keeps a tinted body of its own.
-    // It is the track's only coloured body, which is the point.
+    // is dropped on a narrow composer, so its soft body turns to the error
+    // tint — the track's only risk-coloured body, which is the point.
     &--full_access {
       background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
 
@@ -230,7 +251,7 @@ $track-pad-right: $track-edge - 3px;
   // The risk ramp lives on the trigger too, not only inside the menu: this is
   // the one control on the strip whose wrong value is expensive.
   &__permission-overview-icon {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-appearance-token-color-text-muted);
 
     .bitfun-chat-input-workspace-strip__permission-trigger--ask & {
       color: var(--bf-appearance-token-color-success);
@@ -250,12 +271,16 @@ $track-pad-right: $track-edge - 3px;
     }
   }
 
+  // The anchor's label is a state word, so it carries the same weight the
+  // workspace name does on the opposite rail — the two subjects of the track.
   &__permission-label {
     min-width: 0;
     max-width: 88px;
     overflow: hidden;
+    padding-bottom: 1px;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 500;
   }
 
   // Scope is chosen per click: the row body writes the session, the trailing
@@ -608,6 +633,13 @@ $track-pad-right: $track-edge - 3px;
     &--branch {
       flex: 0 1 auto;
       max-width: 112px;
+      // Wears the buttons' pill so the three left-rail segments read at one
+      // rhythm. Still inert for now — the branch picker and its
+      // uncommitted-changes guard are a follow-up — so no hover fill and the
+      // cursor stays the default.
+      height: 18px;
+      padding: 0 7px;
+      border-radius: 999px;
     }
   }
 
@@ -620,6 +652,9 @@ $track-pad-right: $track-edge - 3px;
 
     &--on {
       color: var(--bf-appearance-token-color-accent-500);
+      // An engaged isolation is a state, not a resting control, so it keeps a
+      // whisper of the accent body the hover state will deepen.
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
 
       &:hover:not(:disabled) {
         color: var(--bf-appearance-token-color-accent-500);
@@ -640,19 +675,61 @@ $track-pad-right: $track-edge - 3px;
   }
 
   // The one thing on the track that is a subject rather than a qualifier, so
-  // it is the only text carrying full weight and full contrast.
+  // it carries full weight either way. With more than one workspace open it is
+  // also the switcher; the pill metrics apply to both forms so a static
+  // workspace and a live one sit at exactly the same size.
   &__workspace {
+    box-sizing: border-box;
+    display: inline-flex;
     flex: 0 1 auto;
+    align-items: center;
+    gap: $track-part-gap;
     min-width: 0;
     max-width: 180px;
-    white-space: nowrap;
+    height: 18px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
     font-family: inherit;
     font-size: inherit;
     font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  &__workspace-name {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     padding-bottom: 1px;
-    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__workspace-chevron {
+    flex: none;
+    opacity: 0.55;
+  }
+
+  // Only the interactive form answers a click — the hover fill is the whole
+  // difference between a fact and a control here.
+  &__workspace--switchable {
+    cursor: pointer;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
+
+    &:hover:not(:disabled),
+    &[aria-expanded='true']:not(:disabled) {
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: 1px;
+    }
   }
 
   // The track's one remaining fact glyph. It says "branch", which is exactly
@@ -674,7 +751,65 @@ $track-pad-right: $track-edge - 3px;
     overflow: hidden;
     text-overflow: ellipsis;
     padding-bottom: 1px;
-    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  // Shares the permission menu's floating surface so both popovers off this
+  // strip feel like one family; the layout is simpler — a single column of
+  // workspace names with a check on the active one.
+  &__workspace-menu {
+    @include surfaces.floating-surface;
+
+    position: fixed;
+    z-index: $z-popover;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: min(220px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    padding: 6px;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
+    font-size: flow-type.$support-size;
+    user-select: none;
+  }
+
+  &__workspace-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font: inherit;
+    letter-spacing: 0;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--bf-appearance-token-element-bg-soft);
+      outline: none;
+    }
+
+    > span {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > svg {
+      flex: none;
+      color: var(--bf-appearance-token-color-accent-500);
+    }
   }
 
 }

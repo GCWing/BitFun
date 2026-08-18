@@ -24,9 +24,11 @@
   padding: 0 $size-gap-2;
   pointer-events: auto !important;
 
-  /* Reserve the compact status band plus a small optical gap below the input. */
+  /* Reserve the status band below the input: 10px of air, the 20px track, and
+     a 6px offset that — with the zone's own 4px off the window edge — gives the
+     track the same air below as above. */
   &:has(.bitfun-chat-input-workspace-strip) {
-    padding-bottom: 30px;
+    padding-bottom: 36px;
   }
 
   &.bitfun-context-drop-zone--can-accept {
@@ -371,7 +373,7 @@
         flex-shrink: 0;
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 6px;
         padding: 0;
         // Keep the input text clear of the left-hand controls.
         margin-right: 10px;
@@ -400,6 +402,30 @@
           .bitfun-chat-input__box:focus-within & {
             border-color: var(--bf-appearance-token-border-medium) !important;
             background: var(--bf-appearance-token-element-bg-soft) !important;
+          }
+        }
+
+        // The Harness chip mirrors the model pill at the opposite end of the
+        // capsule — same height, radius, resting fill and text size — so the
+        // two configuration controls read as a pair and every label in the row
+        // speaks at the input's own size.
+        .bitfun-harness-selector__trigger {
+          height: 30px;
+          padding: 0 10px 0 8px;
+          border-radius: 15px;
+          background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
+          font-size: flow-type.$body-size;
+
+          &:hover,
+          &[data-bf-state='open'] {
+            background: var(--bf-appearance-token-element-bg-soft);
+          }
+        }
+
+        // Collapsed to the density mark alone, the padding centres the mark.
+        @media (max-width: 560px) {
+          .bitfun-harness-selector__trigger {
+            padding: 0 8px;
           }
         }
       }
@@ -488,14 +514,16 @@
 
         // The pill owns the interaction boundary and background; the trigger
         // inside it is a plain segment so the pair does not read as two stacked
-        // controls. Its resting boundary stays transparent.
+        // controls. Its resting boundary stays transparent. The label takes the
+        // input's own size: every line of text in the capsule speaks at one
+        // size, and body is the role the placeholder already claims.
         .bitfun-model-selector__trigger {
           height: 28px;
           padding: 0 6px 0 11px;
           border: 0;
           border-radius: 14px;
           background: transparent;
-          font-size: flow-type.$control-size;
+          font-size: flow-type.$body-size;
           opacity: 1;
         }
 
