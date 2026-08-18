@@ -84,7 +84,6 @@ type ToolPermissionMode = 'ask' | 'auto' | 'full_access';
 
 const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'force_parallel';
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY = 5;
-const DEFAULT_SWARM_MAX_CONCURRENCY = 16;
 const SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH = 'app.flow_chat.show_permission_mode_control';
 
 function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExecutionPolicy {
@@ -123,7 +122,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [companionPetListExpanded, setCompanionPetListExpanded] = useState(false);
   const [enableDeferredToolLoading, setEnableDeferredToolLoading] = useState(true);
   const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
-  const [swarmMaxConcurrency, setSwarmMaxConcurrency] = useState(DEFAULT_SWARM_MAX_CONCURRENCY);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
     useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
@@ -241,7 +239,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         loadedSettings,
         deferredToolLoadingEnabled,
         loadedSubagentMaxConcurrency,
-        loadedSwarmMaxConcurrency,
         execTimeout,
         loadedSubagentBatchExecutionPolicy,
         debugConfigData,
@@ -255,7 +252,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         aiExperienceConfigService.getSettingsAsync(),
         configManager.getConfig<boolean>('ai.enable_deferred_tool_loading'),
         configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
-        configManager.getConfig<number | null>('ai.swarm_max_concurrency'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<SubagentBatchExecutionPolicy>('ai.subagent_batch_execution_policy'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
@@ -273,9 +269,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSubagentMaxConcurrency(loadedSubagentMaxConcurrency != null
         ? loadedSubagentMaxConcurrency
         : DEFAULT_SUBAGENT_MAX_CONCURRENCY);
-      setSwarmMaxConcurrency(loadedSwarmMaxConcurrency != null
-        ? loadedSwarmMaxConcurrency
-        : DEFAULT_SWARM_MAX_CONCURRENCY);
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
@@ -572,17 +565,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       await configManager.setConfig('ai.subagent_max_concurrency', value);
     } catch (error) {
       log.error('Failed to save subagent_max_concurrency', error);
-      notificationService.error(tTools('messages.saveFailed'));
-    }
-  };
-
-  const handleSwarmMaxConcurrencyChange = async (value: number) => {
-    if (Number.isNaN(value) || value < 1) return;
-    setSwarmMaxConcurrency(value);
-    try {
-      await configManager.setConfig('ai.swarm_max_concurrency', value);
-    } catch (error) {
-      log.error('Failed to save swarm_max_concurrency', error);
       notificationService.error(tTools('messages.saveFailed'));
     }
   };
@@ -1302,23 +1284,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               <NumberInput
                 value={subagentMaxConcurrency}
                 onChange={(val) => void handleSubagentMaxConcurrencyChange(val)}
-                min={1}
-                max={100}
-                step={1}
-                size="small"
-                variant="compact"
-              />
-            </div>
-          </ConfigPageRow>
-          <ConfigPageRow
-            label={tTools('config.swarmMaxConcurrency')}
-            description={tTools('config.swarmMaxConcurrencyDesc')}
-            align="center"
-          >
-            <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
-              <NumberInput
-                value={swarmMaxConcurrency}
-                onChange={(val) => void handleSwarmMaxConcurrencyChange(val)}
                 min={1}
                 max={100}
                 step={1}
