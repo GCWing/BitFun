@@ -366,13 +366,7 @@ fn every_builtin_mode_with_control_hub_can_also_schedule_with_cron() {
 
 #[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
-    for agent_type in [
-        "Explore",
-        "FileFinder",
-        "CodeReview",
-        "GeneralPurpose",
-        "MemoryPhase2",
-    ] {
+    for agent_type in ["Explore", "CodeReview", "GeneralPurpose", "MemoryPhase2"] {
         assert_eq!(
             default_model_id_for_builtin_agent(agent_type),
             "primary",
@@ -663,7 +657,6 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
     let expected = vec![
         "ABuiltin",
         "Explore",
-        "FileFinder",
         "GeneralPurpose",
         "zBuiltin",
         "AProject",

@@ -2,10 +2,10 @@ use super::types::AgentCategory;
 use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
     Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode,
-    DeepResearchMode, DeepReviewAgent, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
-    GenerateDocAgent, MultitaskMode, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
-    ReviewJudgeAgent, ReviewWorkerAgent, SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent,
-    TeamMode, UltraMode,
+    DeepResearchMode, DeepReviewAgent, ExploreAgent, GeneralPurposeAgent, GenerateDocAgent,
+    MultitaskMode, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent,
+    ReviewWorkerAgent, SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent, TeamMode,
+    UltraMode,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
 use bitfun_agent_runtime::agents as runtime_agents;
@@ -47,7 +47,6 @@ fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
         "Explore" => || Arc::new(ExploreAgent::new()),
         "GeneralPurpose" => || Arc::new(GeneralPurposeAgent::new()),
         "ResearchSpecialist" => || Arc::new(ResearchSpecialistAgent::new()),
-        "FileFinder" => || Arc::new(FileFinderAgent::new()),
         "ReviewWorker" => || Arc::new(ReviewWorkerAgent::new()),
         "ReviewJudge" => || Arc::new(ReviewJudgeAgent::new()),
         "ReviewFixer" => || Arc::new(ReviewFixerAgent::new()),

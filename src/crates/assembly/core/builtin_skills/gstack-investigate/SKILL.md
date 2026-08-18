@@ -23,7 +23,7 @@ Fixing symptoms creates whack-a-mole debugging. Every fix that doesn't address r
 When this skill is invoked by BitFun Team Mode, this skill supplies the debugging methodology. Use existing Task sub-agents to gather independent evidence, then keep hypothesis selection and fixes in the main Team session.
 
 - Do not assume a Debugger sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer matching custom debugging/domain sub-agents if available; otherwise use `Explore` for code-path tracing and `FileFinder` for locating logs, configs, tests, and affected files.
+- Prefer matching custom debugging/domain sub-agents if available; otherwise use `Explore` for code-path tracing and locating logs, configs, tests, and affected files.
 - Split independent evidence tracks into parallel Task calls when useful: reproduction path, recent-change audit, config/environment audit, and suspected subsystem trace.
 - Keep Task work read-only until root cause is proven. Ask for facts, file paths, commands tried, observations, and confidence.
 - The main Team orchestrator owns the root-cause statement, fix plan, implementation, and regression test.

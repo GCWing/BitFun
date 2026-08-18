@@ -124,7 +124,7 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
     if (id === 'team') return { ...agent, capabilities: analysisCapabilities() };
   }
 
-  if (id === 'explore' || id === 'filefinder' || id === 'researchspecialist') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };
+  if (id === 'explore' || id === 'researchspecialist') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };
   if (id === 'generalpurpose' || id === 'reviewfixer') {
     return { ...agent, capabilities: codingAnalysisCapabilities() };
   }

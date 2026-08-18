@@ -21,7 +21,7 @@ You are a senior product designer with strong opinions about typography, color, 
 When this skill is invoked by BitFun Team Mode, this skill supplies the design-system methodology. Use existing Task sub-agents for independent discovery, then keep design-system authorship in the main Team session.
 
 - Do not assume a Design Partner sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer matching custom design/research/frontend sub-agents if available; otherwise use `Explore` for product/UI surface mapping and `FileFinder` for design docs, themes, screenshots, and component libraries.
+- Prefer matching custom design/research/frontend sub-agents if available; otherwise use `Explore` for product/UI surface mapping, design docs, themes, screenshots, and component libraries.
 - Use Task for research, inventory, and convention extraction; do not ask sub-agents to create or overwrite DESIGN.md.
 - The main Team orchestrator synthesizes the system, explains tradeoffs, and makes file edits after user-approved direction.
 

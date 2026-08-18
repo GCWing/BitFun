@@ -29,7 +29,7 @@ Do NOT make any code changes. Do NOT start implementation. Your only job right n
 When this skill is invoked by BitFun Team Mode, this skill supplies the CEO/product-review lens. Use existing Task sub-agents to collect independent evidence, then make the final CEO judgment in the main Team session.
 
 - Do not assume a CEO/Product sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer a matching custom product/strategy/research sub-agent if available; otherwise use `Explore` for repository/product-surface discovery and `FileFinder` for relevant plans, TODOs, docs, or prior decisions.
+- Prefer a matching custom product/strategy/research sub-agent if available; otherwise use `Explore` for repository/product-surface discovery and relevant plans, TODOs, docs, or prior decisions.
 - Keep Task work read-only. Ask sub-agents for evidence, scope risks, user-impact gaps, hidden dependencies, and concrete examples.
 - In parallel plan-review batches, let this role return a compact CEO brief: `mode`, `must-fix before build`, `scope asks`, `risks accepted`, `recommended next decision`.
 - Do not let sub-agents decide scope changes. The main Team orchestrator must synthesize and ask the user.

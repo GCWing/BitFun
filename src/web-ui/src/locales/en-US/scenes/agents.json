@@ -365,7 +365,6 @@
     "ComputerUse": "Computer use mode: capable of operating browsers, desktop apps, and file systems",
     "DeepResearch": "Deep research agent: conduct systematic investigation and analysis on complex topics",
     "Explore": "Explore agent: quickly browse the codebase to understand project structure and key files",
-    "FileFinder": "File finder agent: locate relevant files and code snippets based on requirements",
     "CodeReview": "Code review agent: perform quality checks and provide improvement suggestions",
     "DeepReview": "Strict Review compatibility agent: runs the highest-strength Review path when historical sessions or commands need it",
     "GenerateDoc": "Documentation agent: automatically generate code documentation and explanations",

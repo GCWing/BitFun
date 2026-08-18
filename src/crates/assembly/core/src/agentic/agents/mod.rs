@@ -34,8 +34,8 @@ pub use definitions::modes::{
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
-    ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent, ResearchSpecialistAgent,
-    SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent,
+    ComputerUseMode, ExploreAgent, GeneralPurposeAgent, ResearchSpecialistAgent, SwarmPlannerAgent,
+    SwarmReviewerAgent, SwarmWorkerAgent,
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{

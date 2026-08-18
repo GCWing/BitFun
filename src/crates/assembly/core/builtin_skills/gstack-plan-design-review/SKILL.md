@@ -22,7 +22,7 @@ The output of this skill is a better plan, not a document about the plan.
 When this skill is invoked by BitFun Team Mode, this skill supplies the design-review lens. Use existing Task sub-agents for independent UI/UX discovery only when they add evidence, then keep design decisions in the main Team session.
 
 - Do not assume a Designer sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer a matching custom design/frontend/accessibility sub-agent if available; otherwise use `Explore` for component/style-system discovery and `FileFinder` for design docs, screenshots, routes, styles, and UI tests.
+- Prefer a matching custom design/frontend/accessibility sub-agent if available; otherwise use `Explore` for component/style-system discovery, design docs, screenshots, routes, styles, and UI tests.
 - Use `ComputerUse` only when the review needs browser/desktop inspection and it is available.
 - Keep Task work read-only before Build. Ask for hierarchy gaps, edge cases, accessibility risks, responsive concerns, existing design conventions, and screenshots/paths when relevant.
 - In parallel plan-review batches, return a compact Design brief: `UX blockers`, `visual/system risks`, `required states`, `accessibility notes`, `plan edits`.

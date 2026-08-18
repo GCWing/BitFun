@@ -19,7 +19,7 @@ Review this plan thoroughly before making any code changes. For every issue or r
 When this skill is invoked by BitFun Team Mode, this skill supplies the engineering-manager review lens. Use existing Task sub-agents for independent architecture and evidence gathering, then synthesize decisions in the main Team session.
 
 - Do not assume an Eng Manager sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer a matching custom architecture/backend/frontend/test sub-agent if available; otherwise use `Explore` for architecture mapping and `FileFinder` for locating touched modules, plans, configs, and tests.
+- Prefer a matching custom architecture/backend/frontend/test sub-agent if available; otherwise use `Explore` for architecture mapping and locating touched modules, plans, configs, and tests.
 - Keep Task work read-only before Build. Ask for data flows, edge cases, platform-boundary risks, test gaps, migration risks, and verification commands.
 - In parallel plan-review batches, return a compact Eng brief: `architecture blockers`, `edge cases`, `test matrix`, `files likely touched`, `recommended implementation sequence`.
 - The main Team orchestrator owns final plan edits, user questions, and build approval.

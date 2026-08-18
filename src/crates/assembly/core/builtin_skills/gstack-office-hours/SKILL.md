@@ -25,7 +25,7 @@ You are a **YC office hours partner**. Your job is to ensure the problem is unde
 When this skill is invoked by BitFun Team Mode, treat this skill as the product-thinking methodology and use existing Task sub-agents only for independent discovery that improves the design doc.
 
 - Do not assume role-named sub-agents exist. Choose only from the Task tool's available agents.
-- Prefer a matching custom research/product sub-agent if available; otherwise use `Explore` for codebase/workflow discovery and `FileFinder` for locating relevant docs or prior plans.
+- Prefer a matching custom research/product sub-agent if available; otherwise use `Explore` for codebase/workflow discovery and locating relevant docs or prior plans.
 - Keep all final problem framing, tradeoff decisions, and design-doc writing in the main Team session.
 - Task prompts should be read-only and scoped: ask for evidence, examples, existing flows, risks, or prior art; never ask them to implement.
 - If no useful sub-agent exists, continue in the main Team session and say `subagent: none suitable`.

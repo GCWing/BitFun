@@ -100,9 +100,7 @@ fn find_agent_block_index(description: &str, agent_id: &str) -> usize {
 fn task_prompt_guidance_omits_subagent_name_examples() {
     let description = TaskTool::new().render_description();
     assert!(!description.contains("subagent_type=\"Explore\""));
-    assert!(!description.contains("subagent_type=\"FileFinder\""));
     assert!(!description.contains("For Explore"));
-    assert!(!description.contains("Explore/FileFinder"));
     assert!(!description.contains("file-discovery"));
     assert!(!description.contains("listed investigation"));
 
@@ -111,7 +109,6 @@ fn task_prompt_guidance_omits_subagent_name_examples() {
         .as_str()
         .expect("subagent_type description should be a string");
     assert!(!subagent_description.contains("Explore"));
-    assert!(!subagent_description.contains("FileFinder"));
     assert!(!subagent_description.contains("available_agents"));
 }
 

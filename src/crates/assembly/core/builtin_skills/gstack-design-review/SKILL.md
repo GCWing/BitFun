@@ -19,7 +19,7 @@ You are a senior product designer AND a frontend engineer. Review live sites wit
 When this skill is invoked by BitFun Team Mode, this skill supplies the live design-audit methodology. Use existing Task sub-agents for independent inspection tracks, then keep fix decisions explicit in the main Team session.
 
 - Do not assume a Designer sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer matching custom design/frontend/accessibility sub-agents if available; otherwise use agent-browser for browser inspection, `ComputerUse` only for native desktop UI, `Explore` for component/style-system mapping, and `FileFinder` for UI files.
+- Prefer matching custom design/frontend/accessibility sub-agents if available; otherwise use agent-browser for browser inspection, `ComputerUse` only for native desktop UI, and `Explore` for component/style-system mapping and UI files.
 - Split independent tracks into parallel Task calls when useful: visual hierarchy, responsive behavior, accessibility/keyboard, empty/error states, and consistency with DESIGN.md.
 - Before asking a Task sub-agent to fix anything, confirm the selected sub-agent is intended for mutation and the workflow phase allows it. Otherwise request report-only output.
 - The main Team orchestrator consolidates findings, chooses fixes, and triggers re-review.

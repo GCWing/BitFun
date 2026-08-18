@@ -54,10 +54,6 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/agents/explore_agent.md"),
     ),
     (
-        "file_finder_agent",
-        include_bytes!("../prompts/agents/file_finder_agent.md"),
-    ),
-    (
         "general_purpose_agent",
         include_bytes!("../prompts/agents/general_purpose_agent.md"),
     ),
