@@ -1,6 +1,7 @@
 import buffer from '@ohos.buffer';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import util from '@ohos.util';
+import { OhosError } from './OhosError';
 
 /**
  * Byte/text conversions on the path every relay RPC takes.
@@ -15,31 +16,53 @@ import util from '@ohos.util';
  */
 export class Encoding {
   static utf8ToBytes(text: string): Uint8Array {
-    const value = buffer.from(text, 'utf-8');
-    return Encoding.copyBuffer(value);
+    try {
+      return Encoding.copyBuffer(buffer.from(text, 'utf-8'));
+    } catch (err) {
+      throw OhosError.wrap('utf8 encode', err);
+    }
   }
 
   static bytesToUtf8(bytes: Uint8Array): string {
-    return buffer.from(bytes).toString('utf-8');
+    try {
+      return buffer.from(bytes).toString('utf-8');
+    } catch (err) {
+      throw OhosError.wrap('utf8 decode', err);
+    }
   }
 
   static base64ToBytes(text: string): Uint8Array {
-    const value = buffer.from(text, 'base64');
-    return Encoding.copyBuffer(value);
+    try {
+      return Encoding.copyBuffer(buffer.from(text, 'base64'));
+    } catch (err) {
+      throw OhosError.wrap('base64 decode', err);
+    }
   }
 
   static bytesToBase64(bytes: Uint8Array): string {
-    return buffer.from(bytes).toString('base64');
+    try {
+      return buffer.from(bytes).toString('base64');
+    } catch (err) {
+      throw OhosError.wrap('base64 encode', err);
+    }
   }
 
   static randomBytes(size: number): Uint8Array {
-    const random = cryptoFramework.createRandom();
-    const data = random.generateRandomSync(size).data;
-    return Encoding.copyRandomData(data, size);
+    try {
+      const random = cryptoFramework.createRandom();
+      const data = random.generateRandomSync(size).data;
+      return Encoding.copyRandomData(data, size);
+    } catch (err) {
+      throw OhosError.wrap('random bytes', err);
+    }
   }
 
   static randomId(prefix: string): string {
-    return `${prefix}-${util.generateRandomUUID(false)}`;
+    try {
+      return `${prefix}-${util.generateRandomUUID(false)}`;
+    } catch (err) {
+      throw OhosError.wrap('random id', err);
+    }
   }
 
   static concat(left: Uint8Array, right: Uint8Array): Uint8Array {
@@ -96,7 +119,12 @@ export class Encoding {
     const out = new Uint8Array(size);
     let offset = 0;
     while (offset < size) {
-      const uuid = util.generateRandomUUID(false).replace(/-/g, '');
+      let uuid = '';
+      try {
+        uuid = util.generateRandomUUID(false).replace(/-/g, '');
+      } catch (err) {
+        throw OhosError.wrap('random uuid', err);
+      }
       if (uuid.length < 2) {
         throw new Error(`Expected ${size} random bytes.`);
       }

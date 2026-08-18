@@ -3,6 +3,7 @@ import image from '@ohos.multimedia.image';
 import photoAccessHelper from '@ohos.file.photoAccessHelper';
 import util from '@ohos.util';
 import { RemoteI18n } from '../i18n/RemoteI18n';
+import { OhosError } from './OhosError';
 import { RemoteLogger } from './RemoteLogger';
 import { RemoteImageContext, SelectedImageAttachment } from '../model/RemoteModels';
 
@@ -47,7 +48,12 @@ export class ImagePickerService {
     options.isOriginalSupported = false;
 
     const picker = new photoAccessHelper.PhotoViewPicker();
-    const result = await picker.select(options);
+    let result: photoAccessHelper.PhotoSelectResult;
+    try {
+      result = await picker.select(options);
+    } catch (err) {
+      throw OhosError.wrap('image picker select', err);
+    }
     const uris = result.photoUris || [];
     const selected: SelectedImageAttachment[] = [];
     for (let index = 0; index < uris.length; index += 1) {
@@ -74,15 +80,25 @@ export class ImagePickerService {
   }
 
   private async readImage(uri: string, index: number): Promise<SelectedImageAttachment> {
-    const stat = fs.statSync(uri);
-    const encoded = await this.encodeImage(uri, stat.size);
+    let originalSize = 0;
+    try {
+      originalSize = fs.statSync(uri).size;
+    } catch (err) {
+      throw OhosError.wrap('image stat', err);
+    }
+    const encoded = await this.encodeImage(uri, originalSize);
     if (encoded.bytes.length > this.maxImageBytes) {
       throw new Error(RemoteI18n.f('errors.imageTooLargeAfterCompression', `${Math.round(this.maxImageBytes / 1024 / 1024)}`));
     }
 
-    const base64 = new util.Base64Helper().encodeToStringSync(encoded.bytes);
+    let base64 = '';
+    try {
+      base64 = new util.Base64Helper().encodeToStringSync(encoded.bytes);
+    } catch (err) {
+      throw OhosError.wrap('image base64 encode', err);
+    }
     const name = this.imageName(uri, index);
-    RemoteLogger.info(`image picked original=${stat.size} encoded=${encoded.bytes.length} compressed=${encoded.compressed ? '1' : '0'} mime=${encoded.mimeType}`);
+    RemoteLogger.info(`image picked original=${originalSize} encoded=${encoded.bytes.length} compressed=${encoded.compressed ? '1' : '0'} mime=${encoded.mimeType}`);
     return {
       id: `harmony-image-${Date.now()}-${index}`,
       uri,
@@ -90,7 +106,7 @@ export class ImagePickerService {
       data_url: `data:${encoded.mimeType};base64,${base64}`,
       mime_type: encoded.mimeType,
       size: encoded.bytes.length,
-      original_size: stat.size,
+      original_size: originalSize,
       compressed: encoded.compressed
     };
   }
@@ -111,8 +127,9 @@ export class ImagePickerService {
   }
 
   private readOriginalImage(uri: string, originalSize: number): EncodedImage {
-    const file = fs.openSync(uri);
+    let file: fs.File | undefined = undefined;
     try {
+      file = fs.openSync(uri);
       const buffer = new ArrayBuffer(originalSize);
       const readSize = fs.readSync(file.fd, buffer, { length: originalSize });
       const bytes = new Uint8Array(buffer);
@@ -122,18 +139,27 @@ export class ImagePickerService {
         mimeType: this.inferMimeType(uri),
         compressed: false
       };
+    } catch (err) {
+      throw OhosError.wrap('image read original', err);
     } finally {
-      fs.closeSync(file);
+      if (file) {
+        try {
+          fs.closeSync(file);
+        } catch (closeErr) {
+          throw OhosError.wrap('image close original', closeErr);
+        }
+      }
     }
   }
 
   private async compressImage(uri: string, originalSize: number): Promise<EncodedImage> {
-    const file = fs.openSync(uri);
+    let file: fs.File | undefined = undefined;
     let source: image.ImageSource | undefined = undefined;
     let pixelMap: image.PixelMap | undefined = undefined;
     let packer: image.ImagePacker | undefined = undefined;
 
     try {
+      file = fs.openSync(uri);
       source = image.createImageSource(file.fd);
       const info = await source.getImageInfo();
       const targetSize = this.targetSize(info.size.width, info.size.height);
@@ -163,11 +189,19 @@ export class ImagePickerService {
         mimeType: 'image/jpeg',
         compressed: true
       };
+    } catch (err) {
+      throw OhosError.wrap('image compress', err);
     } finally {
       await this.releasePacker(packer);
       await this.releasePixelMap(pixelMap);
       await this.releaseSource(source);
-      fs.closeSync(file);
+      if (file) {
+        try {
+          fs.closeSync(file);
+        } catch (closeErr) {
+          throw OhosError.wrap('image close compressed', closeErr);
+        }
+      }
     }
   }
 

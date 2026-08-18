@@ -1,5 +1,6 @@
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { Encoding } from './Encoding';
+import { OhosError } from './OhosError';
 import { X25519, X25519KeyPair } from './X25519';
 import { EncryptedPayload } from '../model/RemoteModels';
 
@@ -16,22 +17,25 @@ export interface RemoteCryptoOptions {
 
 export class HarmonyRemoteCryptoCipher implements RemoteCryptoCipher {
   async encrypt(plainBytes: Uint8Array, key: Uint8Array, nonce: Uint8Array): Promise<Uint8Array> {
-    const symKey = await cryptoFramework.createSymKeyGenerator('AES256').convertKey({ data: key });
-    const cipher = cryptoFramework.createCipher('AES256|GCM|NoPadding');
-    const params: cryptoFramework.GcmParamsSpec = {
-      algName: 'GcmParamsSpec',
-      iv: { data: nonce },
-      aad: { data: new Uint8Array(0) },
-      authTag: { data: new Uint8Array(0) }
-    };
-    await cipher.init(cryptoFramework.CryptoMode.ENCRYPT_MODE, symKey, params);
-    const out = await cipher.doFinal({ data: plainBytes });
-    const data = out.data;
-    if (data.length > plainBytes.length) {
-      return data;
+    try {
+      const symKey = await cryptoFramework.createSymKeyGenerator('AES256').convertKey({ data: key });
+      const cipher = cryptoFramework.createCipher('AES256|GCM|NoPadding');
+      const params: cryptoFramework.GcmParamsSpec = {
+        algName: 'GcmParamsSpec',
+        iv: { data: nonce },
+        aad: { data: new Uint8Array(0) },
+        authTag: { data: new Uint8Array(0) }
+      };
+      await cipher.init(cryptoFramework.CryptoMode.ENCRYPT_MODE, symKey, params);
+      const out = await cipher.doFinal({ data: plainBytes });
+      const data = out.data;
+      if (data.length > plainBytes.length) {
+        return data;
+      }
+      return Encoding.concat(data, params.authTag.data);
+    } catch (err) {
+      throw OhosError.wrap('remote encrypt', err);
     }
-    const authTag = params.authTag.data;
-    return Encoding.concat(data, authTag);
   }
 
   async decrypt(encryptedBytes: Uint8Array, key: Uint8Array, nonce: Uint8Array): Promise<Uint8Array> {
@@ -40,17 +44,21 @@ export class HarmonyRemoteCryptoCipher implements RemoteCryptoCipher {
     }
     const cipherText = encryptedBytes.slice(0, encryptedBytes.length - 16);
     const authTag = encryptedBytes.slice(encryptedBytes.length - 16);
-    const symKey = await cryptoFramework.createSymKeyGenerator('AES256').convertKey({ data: key });
-    const cipher = cryptoFramework.createCipher('AES256|GCM|NoPadding');
-    const params: cryptoFramework.GcmParamsSpec = {
-      algName: 'GcmParamsSpec',
-      iv: { data: nonce },
-      aad: { data: new Uint8Array(0) },
-      authTag: { data: authTag }
-    };
-    await cipher.init(cryptoFramework.CryptoMode.DECRYPT_MODE, symKey, params);
-    const out = await cipher.doFinal({ data: cipherText });
-    return out.data;
+    try {
+      const symKey = await cryptoFramework.createSymKeyGenerator('AES256').convertKey({ data: key });
+      const cipher = cryptoFramework.createCipher('AES256|GCM|NoPadding');
+      const params: cryptoFramework.GcmParamsSpec = {
+        algName: 'GcmParamsSpec',
+        iv: { data: nonce },
+        aad: { data: new Uint8Array(0) },
+        authTag: { data: authTag }
+      };
+      await cipher.init(cryptoFramework.CryptoMode.DECRYPT_MODE, symKey, params);
+      const out = await cipher.doFinal({ data: cipherText });
+      return out.data;
+    } catch (err) {
+      throw OhosError.wrap('remote decrypt', err);
+    }
   }
 }
 

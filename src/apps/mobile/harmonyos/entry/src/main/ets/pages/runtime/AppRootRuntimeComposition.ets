@@ -884,7 +884,7 @@ export abstract class AppRootRuntimeComposition {
       userChanged: (user: string): void => this.remotePageState.setUserId(user),
       detected: (url: string): string => this.handleDetectedRemoteUrl(url),
       inputVisible: (visible: boolean): void => this.remotePageState.setRemoteUrlInputVisible(visible),
-      paste: (): void => { this.remoteConnectionController.paste(); },
+      paste: (): void => { void this.remoteConnectionController.paste(this.host.context()); },
       scan: (): void => { void this.scanRemotePairCode(); },
       cloudListDevices: (): Promise<CloudAccountDevice[]> => this.settingsController.listCloudAccountDevices(),
       cloudSelectDevice: (device: CloudAccountDevice): Promise<void> =>
