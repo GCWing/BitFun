@@ -67,7 +67,7 @@ describe('createTodoRenderItems', () => {
   });
 });
 
-describe('TodoWriteDisplay automatic collapse', () => {
+describe('TodoWriteDisplay expansion', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -98,19 +98,31 @@ describe('TodoWriteDisplay automatic collapse', () => {
     vi.restoreAllMocks();
   });
 
-  it('lets completed todo content collapse through normal layout state', () => {
+  it('stays collapsed during streaming until the user expands it', () => {
     vi.useFakeTimers();
+    act(() => {
+      root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
+    });
+    expect(container.querySelector('.todo-expanded-body')).toBeNull();
+
+    act(() => {
+      root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('in_progress')} config={config} />);
+    });
+    expect(container.querySelector('.todo-expanded-body')).toBeNull();
+
+    act(() => {
+      container.querySelector<HTMLElement>('[data-testid="todo-write-toggle"]')?.click();
+    });
+    expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
+
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
     });
     expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
 
     act(() => {
-      root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('in_progress')} config={config} />);
+      container.querySelector<HTMLElement>('[data-testid="todo-write-toggle"]')?.click();
     });
-
-    expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
-
     act(() => {
       vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS);
     });
