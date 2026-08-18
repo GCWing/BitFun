@@ -11,6 +11,7 @@ import {
   ConnectSheetStep
 } from '../policy/ConnectSheetLandingPolicy';
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
+import { OhosError } from '../../services/OhosError';
 import { CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
   CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT,
   SUBTLE } from './Theme';
@@ -644,12 +645,16 @@ export struct ConnectView {
   }
 
   private async ensureCameraPermission(): Promise<void> {
-    const atManager = abilityAccessCtrl.createAtManager();
-    const context = this.permissionRequestContext();
-    const result = await atManager.requestPermissionsFromUser(context, [CAMERA_PERMISSION]);
-    if (result.authResults.length > 0 &&
-      result.authResults[0] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
-      return;
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const context = this.permissionRequestContext();
+      const result = await atManager.requestPermissionsFromUser(context, [CAMERA_PERMISSION]);
+      if (result.authResults.length > 0 &&
+        result.authResults[0] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+        return;
+      }
+    } catch (err) {
+      throw OhosError.wrap('camera permission', err);
     }
     throw new Error(RemoteI18n.t('errors.permissionDenied'));
   }

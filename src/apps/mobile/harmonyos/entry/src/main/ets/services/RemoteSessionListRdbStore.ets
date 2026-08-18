@@ -1,6 +1,7 @@
 import { relationalStore } from '@kit.ArkData';
 import { RemoteSession } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
+import { OhosError } from './OhosError';
 import { RemoteSessionListSlice, RemoteSessionListStore } from './RemoteSessionListCache';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
@@ -30,41 +31,49 @@ export class RemoteSessionListRdbStore implements RemoteSessionListStore {
   private store?: relationalStore.RdbStore;
 
   async init(context: Context): Promise<void> {
-    const store = await relationalStore.getRdbStore(context, STORE_CONFIG);
-    await store.executeSql(CREATE_META_SQL);
-    if (await RemoteSessionListRdbStore.storedValue(store, SCHEMA_VERSION_KEY) !== `${SCHEMA_VERSION}`) {
-      await store.executeSql('DROP TABLE IF EXISTS remote_session_list');
-      await store.executeSql(
-        'DELETE FROM remote_session_meta WHERE key = ?',
-        [LAST_DEVICE_KEY]
-      );
-      await store.executeSql(
-        'INSERT OR REPLACE INTO remote_session_meta (key, value) VALUES (?, ?)',
-        [SCHEMA_VERSION_KEY, `${SCHEMA_VERSION}`]
-      );
+    try {
+      const store = await relationalStore.getRdbStore(context, STORE_CONFIG);
+      await store.executeSql(CREATE_META_SQL);
+      if (await RemoteSessionListRdbStore.storedValue(store, SCHEMA_VERSION_KEY) !== `${SCHEMA_VERSION}`) {
+        await store.executeSql('DROP TABLE IF EXISTS remote_session_list');
+        await store.executeSql(
+          'DELETE FROM remote_session_meta WHERE key = ?',
+          [LAST_DEVICE_KEY]
+        );
+        await store.executeSql(
+          'INSERT OR REPLACE INTO remote_session_meta (key, value) VALUES (?, ?)',
+          [SCHEMA_VERSION_KEY, `${SCHEMA_VERSION}`]
+        );
+      }
+      await store.executeSql(CREATE_LIST_SQL);
+      this.store = store;
+    } catch (err) {
+      throw OhosError.wrap('remote session list store init', err);
     }
-    await store.executeSql(CREATE_LIST_SQL);
-    this.store = store;
   }
 
   async loadList(deviceKey: string): Promise<RemoteSessionListSlice> {
     if (deviceKey.length === 0) {
       return RemoteSessionListRdbStore.empty();
     }
-    const rows = await this.requireStore().querySql(
-      'SELECT payload, has_more FROM remote_session_list WHERE device_key = ?',
-      [deviceKey]
-    );
     try {
-      if (!rows.goToNextRow()) {
-        return RemoteSessionListRdbStore.empty();
+      const rows = await this.requireStore().querySql(
+        'SELECT payload, has_more FROM remote_session_list WHERE device_key = ?',
+        [deviceKey]
+      );
+      try {
+        if (!rows.goToNextRow()) {
+          return RemoteSessionListRdbStore.empty();
+        }
+        return {
+          sessions: Encoding.parseJsonObject<RemoteSession[]>(rows.getString(rows.getColumnIndex('payload'))),
+          hasMore: rows.getLong(rows.getColumnIndex('has_more')) === 1
+        };
+      } finally {
+        RemoteSessionListRdbStore.closeResult(rows);
       }
-      return {
-        sessions: Encoding.parseJsonObject<RemoteSession[]>(rows.getString(rows.getColumnIndex('payload'))),
-        hasMore: rows.getLong(rows.getColumnIndex('has_more')) === 1
-      };
-    } finally {
-      rows.close();
+    } catch (err) {
+      throw OhosError.wrap('remote session list load', err);
     }
   }
 
@@ -77,39 +86,59 @@ export class RemoteSessionListRdbStore implements RemoteSessionListStore {
     if (deviceKey.length === 0) {
       return;
     }
-    const store = this.requireStore();
-    const values: relationalStore.ValuesBucket = {
-      device_key: deviceKey,
-      payload: JSON.stringify(sessions),
-      has_more: hasMore ? 1 : 0,
-      updated_at: Date.now()
-    };
-    await store.insert('remote_session_list', values, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
-    // Written after the list, so a pointer never names a row that is not there.
-    await store.executeSql(
-      'INSERT OR REPLACE INTO remote_session_meta (key, value) VALUES (?, ?)',
-      [LAST_DEVICE_KEY, deviceKey]
-    );
+    try {
+      const store = this.requireStore();
+      const values: relationalStore.ValuesBucket = {
+        device_key: deviceKey,
+        payload: JSON.stringify(sessions),
+        has_more: hasMore ? 1 : 0,
+        updated_at: Date.now()
+      };
+      await store.insert('remote_session_list', values, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
+      // Written after the list, so a pointer never names a row that is not there.
+      await store.executeSql(
+        'INSERT OR REPLACE INTO remote_session_meta (key, value) VALUES (?, ?)',
+        [LAST_DEVICE_KEY, deviceKey]
+      );
+    } catch (err) {
+      throw OhosError.wrap('remote session list save', err);
+    }
   }
 
   async clearAll(): Promise<void> {
-    const store = this.requireStore();
-    await store.executeSql('DELETE FROM remote_session_list');
-    await store.executeSql('DELETE FROM remote_session_meta WHERE key = ?', [LAST_DEVICE_KEY]);
+    try {
+      const store = this.requireStore();
+      await store.executeSql('DELETE FROM remote_session_list');
+      await store.executeSql('DELETE FROM remote_session_meta WHERE key = ?', [LAST_DEVICE_KEY]);
+    } catch (err) {
+      throw OhosError.wrap('remote session list clear', err);
+    }
   }
 
   private static async storedValue(store: relationalStore.RdbStore, key: string): Promise<string> {
-    const rows = await store.querySql(
-      'SELECT value FROM remote_session_meta WHERE key = ?',
-      [key]
-    );
     try {
-      if (!rows.goToNextRow()) {
-        return '';
+      const rows = await store.querySql(
+        'SELECT value FROM remote_session_meta WHERE key = ?',
+        [key]
+      );
+      try {
+        if (!rows.goToNextRow()) {
+          return '';
+        }
+        return rows.getString(rows.getColumnIndex('value'));
+      } finally {
+        RemoteSessionListRdbStore.closeResult(rows);
       }
-      return rows.getString(rows.getColumnIndex('value'));
-    } finally {
-      rows.close();
+    } catch (err) {
+      throw OhosError.wrap('remote session list stored value', err);
+    }
+  }
+
+  private static closeResult(result: relationalStore.ResultSet): void {
+    try {
+      result.close();
+    } catch (err) {
+      throw OhosError.wrap('remote session list close cursor', err);
     }
   }
 

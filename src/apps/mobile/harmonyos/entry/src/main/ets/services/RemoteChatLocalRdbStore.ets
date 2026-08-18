@@ -1,6 +1,7 @@
 import { relationalStore } from '@kit.ArkData';
 import { ChatMessage } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
+import { OhosError } from './OhosError';
 import { RemoteChatCacheSlice, RemoteChatCacheStore } from './RemoteChatCache';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
@@ -40,64 +41,72 @@ export class RemoteChatLocalRdbStore implements RemoteChatCacheStore {
   private store?: relationalStore.RdbStore;
 
   async init(context: Context): Promise<void> {
-    const store = await relationalStore.getRdbStore(context, STORE_CONFIG);
-    await store.executeSql(CREATE_META_SQL);
-    if (await RemoteChatLocalRdbStore.storedSchemaVersion(store) !== SCHEMA_VERSION) {
-      await store.executeSql('DROP TABLE IF EXISTS remote_chat_messages');
-      await store.executeSql('DROP TABLE IF EXISTS remote_chat_sessions');
-      await store.executeSql(
-        'INSERT OR REPLACE INTO remote_chat_meta (key, value) VALUES (?, ?)',
-        [SCHEMA_VERSION_KEY, `${SCHEMA_VERSION}`]
-      );
+    try {
+      const store = await relationalStore.getRdbStore(context, STORE_CONFIG);
+      await store.executeSql(CREATE_META_SQL);
+      if (await RemoteChatLocalRdbStore.storedSchemaVersion(store) !== SCHEMA_VERSION) {
+        await store.executeSql('DROP TABLE IF EXISTS remote_chat_messages');
+        await store.executeSql('DROP TABLE IF EXISTS remote_chat_sessions');
+        await store.executeSql(
+          'INSERT OR REPLACE INTO remote_chat_meta (key, value) VALUES (?, ?)',
+          [SCHEMA_VERSION_KEY, `${SCHEMA_VERSION}`]
+        );
+      }
+      await store.executeSql(CREATE_SESSIONS_SQL);
+      await store.executeSql(CREATE_MESSAGES_SQL);
+      this.store = store;
+    } catch (err) {
+      throw OhosError.wrap('remote chat store init', err);
     }
-    await store.executeSql(CREATE_SESSIONS_SQL);
-    await store.executeSql(CREATE_MESSAGES_SQL);
-    this.store = store;
   }
 
   async loadSlice(deviceKey: string, sessionId: string): Promise<RemoteChatCacheSlice> {
-    const store = this.requireStore();
-    let expectedCount = 0;
-    let lastMessageId = '';
-    const header = await store.querySql(
-      'SELECT message_count, last_message_id FROM remote_chat_sessions ' +
-      'WHERE device_key = ? AND session_id = ?',
-      [deviceKey, sessionId]
-    );
     try {
-      if (header.goToNextRow()) {
-        expectedCount = header.getLong(header.getColumnIndex('message_count'));
-        lastMessageId = header.getString(header.getColumnIndex('last_message_id'));
+      const store = this.requireStore();
+      let expectedCount = 0;
+      let lastMessageId = '';
+      const header = await store.querySql(
+        'SELECT message_count, last_message_id FROM remote_chat_sessions ' +
+        'WHERE device_key = ? AND session_id = ?',
+        [deviceKey, sessionId]
+      );
+      try {
+        if (header.goToNextRow()) {
+          expectedCount = header.getLong(header.getColumnIndex('message_count'));
+          lastMessageId = header.getString(header.getColumnIndex('last_message_id'));
+        }
+      } finally {
+        RemoteChatLocalRdbStore.closeResult(header);
       }
-    } finally {
-      header.close();
-    }
-    if (expectedCount <= 0) {
-      return { messages: [], lastMessageId: '' };
-    }
+      if (expectedCount <= 0) {
+        return { messages: [], lastMessageId: '' };
+      }
 
-    const messages: ChatMessage[] = [];
-    const rows = await store.querySql(
-      'SELECT payload FROM remote_chat_messages ' +
-      'WHERE device_key = ? AND session_id = ? AND seq < ? ORDER BY seq ASC',
-      [deviceKey, sessionId, expectedCount]
-    );
-    try {
-      const payloadColumn = rows.getColumnIndex('payload');
-      while (rows.goToNextRow()) {
-        messages.push(Encoding.parseJsonObject<ChatMessage>(rows.getString(payloadColumn)));
+      const messages: ChatMessage[] = [];
+      const rows = await store.querySql(
+        'SELECT payload FROM remote_chat_messages ' +
+        'WHERE device_key = ? AND session_id = ? AND seq < ? ORDER BY seq ASC',
+        [deviceKey, sessionId, expectedCount]
+      );
+      try {
+        const payloadColumn = rows.getColumnIndex('payload');
+        while (rows.goToNextRow()) {
+          messages.push(Encoding.parseJsonObject<ChatMessage>(rows.getString(payloadColumn)));
+        }
+      } finally {
+        RemoteChatLocalRdbStore.closeResult(rows);
       }
-    } finally {
-      rows.close();
+      // Fewer rows than the header claims means a write was interrupted partway.
+      // Reporting a miss costs one fetch; reporting the rows would show the user
+      // a transcript with messages missing out of the middle.
+      if (messages.length !== expectedCount) {
+        return { messages: [], lastMessageId: '' };
+      }
+      await this.touchSession(deviceKey, sessionId);
+      return { messages, lastMessageId };
+    } catch (err) {
+      throw OhosError.wrap('remote chat load slice', err);
     }
-    // Fewer rows than the header claims means a write was interrupted partway.
-    // Reporting a miss costs one fetch; reporting the rows would show the user
-    // a transcript with messages missing out of the middle.
-    if (messages.length !== expectedCount) {
-      return { messages: [], lastMessageId: '' };
-    }
-    await this.touchSession(deviceKey, sessionId);
-    return { messages, lastMessageId };
   }
 
   async appendMessages(
@@ -110,18 +119,22 @@ export class RemoteChatLocalRdbStore implements RemoteChatCacheStore {
     if (messages.length === 0) {
       return;
     }
-    const store = this.requireStore();
-    // Clearing the range first makes a retried append idempotent, which is what
-    // lets the write run without a transaction around it.
-    await store.executeSql(
-      'DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id = ? AND seq >= ?',
-      [deviceKey, sessionId, startSeq]
-    );
-    await store.batchInsert(
-      'remote_chat_messages',
-      RemoteChatLocalRdbStore.rows(deviceKey, sessionId, startSeq, messages)
-    );
-    await this.writeHeader(deviceKey, sessionId, startSeq + messages.length, lastMessageId);
+    try {
+      const store = this.requireStore();
+      // Clearing the range first makes a retried append idempotent, which is what
+      // lets the write run without a transaction around it.
+      await store.executeSql(
+        'DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id = ? AND seq >= ?',
+        [deviceKey, sessionId, startSeq]
+      );
+      await store.batchInsert(
+        'remote_chat_messages',
+        RemoteChatLocalRdbStore.rows(deviceKey, sessionId, startSeq, messages)
+      );
+      await this.writeHeader(deviceKey, sessionId, startSeq + messages.length, lastMessageId);
+    } catch (err) {
+      throw OhosError.wrap('remote chat append messages', err);
+    }
   }
 
   async replaceMessages(
@@ -130,59 +143,79 @@ export class RemoteChatLocalRdbStore implements RemoteChatCacheStore {
     messages: ChatMessage[],
     lastMessageId: string
   ): Promise<void> {
-    const store = this.requireStore();
-    await store.executeSql(
-      'DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id = ?',
-      [deviceKey, sessionId]
-    );
-    if (messages.length > 0) {
-      await store.batchInsert(
-        'remote_chat_messages',
-        RemoteChatLocalRdbStore.rows(deviceKey, sessionId, 0, messages)
+    try {
+      const store = this.requireStore();
+      await store.executeSql(
+        'DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id = ?',
+        [deviceKey, sessionId]
       );
+      if (messages.length > 0) {
+        await store.batchInsert(
+          'remote_chat_messages',
+          RemoteChatLocalRdbStore.rows(deviceKey, sessionId, 0, messages)
+        );
+      }
+      await this.writeHeader(deviceKey, sessionId, messages.length, lastMessageId);
+    } catch (err) {
+      throw OhosError.wrap('remote chat replace messages', err);
     }
-    await this.writeHeader(deviceKey, sessionId, messages.length, lastMessageId);
   }
 
   async deleteSession(deviceKey: string, sessionId: string): Promise<void> {
-    const store = this.requireStore();
-    await store.executeSql(
-      'DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id = ?',
-      [deviceKey, sessionId]
-    );
-    await store.executeSql(
-      'DELETE FROM remote_chat_sessions WHERE device_key = ? AND session_id = ?',
-      [deviceKey, sessionId]
-    );
+    try {
+      const store = this.requireStore();
+      await store.executeSql(
+        'DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id = ?',
+        [deviceKey, sessionId]
+      );
+      await store.executeSql(
+        'DELETE FROM remote_chat_sessions WHERE device_key = ? AND session_id = ?',
+        [deviceKey, sessionId]
+      );
+    } catch (err) {
+      throw OhosError.wrap('remote chat delete session', err);
+    }
   }
 
   async pruneSessions(deviceKey: string, keepMostRecent: number): Promise<void> {
-    const store = this.requireStore();
-    const stale =
-      'SELECT session_id FROM remote_chat_sessions WHERE device_key = ? ' +
-      'ORDER BY updated_at DESC LIMIT -1 OFFSET ?';
-    await store.executeSql(
-      `DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id IN (${stale})`,
-      [deviceKey, deviceKey, keepMostRecent]
-    );
-    await store.executeSql(
-      `DELETE FROM remote_chat_sessions WHERE device_key = ? AND session_id IN (${stale})`,
-      [deviceKey, deviceKey, keepMostRecent]
-    );
+    try {
+      const store = this.requireStore();
+      const stale =
+        'SELECT session_id FROM remote_chat_sessions WHERE device_key = ? ' +
+        'ORDER BY updated_at DESC LIMIT -1 OFFSET ?';
+      await store.executeSql(
+        `DELETE FROM remote_chat_messages WHERE device_key = ? AND session_id IN (${stale})`,
+        [deviceKey, deviceKey, keepMostRecent]
+      );
+      await store.executeSql(
+        `DELETE FROM remote_chat_sessions WHERE device_key = ? AND session_id IN (${stale})`,
+        [deviceKey, deviceKey, keepMostRecent]
+      );
+    } catch (err) {
+      throw OhosError.wrap('remote chat prune sessions', err);
+    }
   }
 
   async clearAll(): Promise<void> {
-    const store = this.requireStore();
-    await store.executeSql('DELETE FROM remote_chat_messages');
-    await store.executeSql('DELETE FROM remote_chat_sessions');
+    try {
+      const store = this.requireStore();
+      await store.executeSql('DELETE FROM remote_chat_messages');
+      await store.executeSql('DELETE FROM remote_chat_sessions');
+    } catch (err) {
+      throw OhosError.wrap('remote chat clear all', err);
+    }
   }
 
   /** Keeps [pruneSessions] evicting the sessions the user stopped opening. */
   private async touchSession(deviceKey: string, sessionId: string): Promise<void> {
-    await this.requireStore().executeSql(
-      'UPDATE remote_chat_sessions SET updated_at = ? WHERE device_key = ? AND session_id = ?',
-      [Date.now(), deviceKey, sessionId]
-    );
+    try {
+      await this.requireStore().executeSql(
+        'UPDATE remote_chat_sessions SET updated_at = ? WHERE device_key = ? AND session_id = ?',
+        [Date.now(), deviceKey, sessionId]
+      );
+    } catch (err) {
+      throw OhosError.wrap('remote chat touch session', err);
+    }
   }
 
   private async writeHeader(
@@ -198,11 +231,15 @@ export class RemoteChatLocalRdbStore implements RemoteChatCacheStore {
       last_message_id: lastMessageId,
       updated_at: Date.now()
     };
-    await this.requireStore().insert(
-      'remote_chat_sessions',
-      values,
-      relationalStore.ConflictResolution.ON_CONFLICT_REPLACE
-    );
+    try {
+      await this.requireStore().insert(
+        'remote_chat_sessions',
+        values,
+        relationalStore.ConflictResolution.ON_CONFLICT_REPLACE
+      );
+    } catch (err) {
+      throw OhosError.wrap('remote chat write header', err);
+    }
   }
 
   private static rows(
@@ -220,17 +257,29 @@ export class RemoteChatLocalRdbStore implements RemoteChatCacheStore {
   }
 
   private static async storedSchemaVersion(store: relationalStore.RdbStore): Promise<number> {
-    const result = await store.querySql(
-      'SELECT value FROM remote_chat_meta WHERE key = ?',
-      [SCHEMA_VERSION_KEY]
-    );
     try {
-      if (!result.goToNextRow()) {
-        return 0;
+      const result = await store.querySql(
+        'SELECT value FROM remote_chat_meta WHERE key = ?',
+        [SCHEMA_VERSION_KEY]
+      );
+      try {
+        if (!result.goToNextRow()) {
+          return 0;
+        }
+        return Number.parseInt(result.getString(result.getColumnIndex('value')), 10) || 0;
+      } finally {
+        RemoteChatLocalRdbStore.closeResult(result);
       }
-      return Number.parseInt(result.getString(result.getColumnIndex('value')), 10) || 0;
-    } finally {
+    } catch (err) {
+      throw OhosError.wrap('remote chat schema version', err);
+    }
+  }
+
+  private static closeResult(result: relationalStore.ResultSet): void {
+    try {
       result.close();
+    } catch (err) {
+      throw OhosError.wrap('remote chat close cursor', err);
     }
   }
 
