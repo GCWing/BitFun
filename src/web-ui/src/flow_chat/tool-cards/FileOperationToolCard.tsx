@@ -509,16 +509,30 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [sessionId, toolCall?.id, status, isFailed]);
 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
+  /*
+   * Auto-managed completed cards must keep their compact streaming preview
+   * from the first completed render through the collapse commit. Waiting for
+   * the grace-period layout effect to set its state briefly renders the large
+   * diff preview, and follow-output can treat that transient height as output.
+   * A manually expanded card marks itself as user-owned and still gets the
+   * full diff preview.
+   */
+  const keepAutoCompletionPreview =
+    status === 'completed' &&
+    !isFailed &&
+    !userToggledContentRef.current;
+  const keepCompactCompletionPreview =
+    retainLiveCompletionPreview || keepAutoCompletionPreview;
   const shouldUseExpandedDiffPreviewHeight =
     status === 'completed' &&
     isContentExpanded &&
-    !retainLiveCompletionPreview;
+    !keepCompactCompletionPreview;
   const keepLiveEditPreview =
-    retainLiveCompletionPreview &&
+    keepCompactCompletionPreview &&
     toolItem.toolName === 'Edit' &&
     Boolean(newStringContent);
   const keepLiveWritePreview =
-    retainLiveCompletionPreview &&
+    keepCompactCompletionPreview &&
     toolItem.toolName === 'Write' &&
     Boolean(contentPreview);
   const previewVariant = useMemo(() => {
