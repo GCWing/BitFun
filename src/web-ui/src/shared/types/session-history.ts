@@ -204,6 +204,13 @@ export interface DialogTurnData {
   tokenUsage?: DialogTurnTokenUsageData;
   status: TurnStatus;
   finishReason?: string;
+  recovery?: {
+    status: 'interrupted' | 'recovering';
+    executionGeneration: number;
+    resumeCount: number;
+    interruptedAt?: number;
+    modelId?: string;
+  };
   hasFinalResponse?: boolean;
   error?: string;
   errorDetail?: AiErrorDetail;

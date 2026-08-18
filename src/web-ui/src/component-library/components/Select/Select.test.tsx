@@ -18,7 +18,7 @@ describe('Select', () => {
   let root: Root;
   let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn>;
   let offsetHeightSpy: ReturnType<typeof vi.spyOn>;
-  let innerHeight = 800;
+  const innerHeight = 800;
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -79,6 +79,7 @@ describe('Select', () => {
     document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     getBoundingClientRectSpy.mockRestore();
     offsetHeightSpy.mockRestore();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -295,7 +296,7 @@ describe('Select', () => {
     );
   });
 
-  it('keeps portalled interactions inside the Select and closes on a true outside press', async () => {
+  it('keeps portalled interactions inside the Select and safely retains an outside-closed dropdown', async () => {
     await act(async () => {
       root.render(<Select options={[{ value: 'one', label: 'One' }]} />);
     });
@@ -308,10 +309,117 @@ describe('Select', () => {
     });
     expect(document.querySelector('.select__dropdown')).not.toBeNull();
 
+    vi.useFakeTimers();
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
+    const closingDropdown = document.querySelector<HTMLElement>('.select__dropdown');
+    expect(closingDropdown).not.toBeNull();
+    expect(closingDropdown?.getAttribute('data-open')).toBe('false');
+    expect(closingDropdown?.getAttribute('aria-hidden')).toBe('true');
+    expect(closingDropdown?.hasAttribute('inert')).toBe(true);
+    expect(closingDropdown?.getAttribute('tabindex')).toBe('-1');
+
+    act(() => vi.advanceTimersByTime(119));
+    expect(document.querySelector('.select__dropdown')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
     expect(document.querySelector('.select__dropdown')).toBeNull();
+  });
+
+  it('keeps the last options and resolved placement stable during exit', async () => {
+    await act(async () => {
+      root.render(
+        <Select
+          options={[{ value: 'old', label: 'Original option' }]}
+          placement="top"
+        />,
+      );
+    });
+    const trigger = container.querySelector<HTMLElement>('.select__trigger');
+    await act(async () => trigger?.click());
+
+    expect(document.querySelector('.select__dropdown--top')).not.toBeNull();
+    expect(document.querySelector('.select__option')?.textContent).toContain('Original option');
+
+    vi.useFakeTimers();
+    await act(async () => trigger?.click());
+    await act(async () => {
+      root.render(
+        <Select
+          options={[{ value: 'new', label: 'Replacement option' }]}
+          placement="bottom"
+        />,
+      );
+    });
+
+    const closingDropdown = document.querySelector<HTMLElement>('.select__dropdown');
+    expect(closingDropdown?.className).toContain('select__dropdown--top');
+    expect(closingDropdown?.textContent).toContain('Original option');
+    expect(closingDropdown?.textContent).not.toContain('Replacement option');
+
+    act(() => vi.advanceTimersByTime(120));
+    expect(document.querySelector('.select__dropdown')).toBeNull();
+  });
+
+  it('cancels pending dropdown removal when reopened quickly', async () => {
+    await act(async () => {
+      root.render(<Select options={[{ value: 'one', label: 'One' }]} />);
+    });
+    const trigger = container.querySelector<HTMLElement>('.select__trigger');
+    await act(async () => trigger?.click());
+
+    vi.useFakeTimers();
+    await act(async () => trigger?.click());
+    act(() => vi.advanceTimersByTime(60));
+    await act(async () => trigger?.click());
+    act(() => vi.advanceTimersByTime(120));
+
+    const reopenedDropdown = document.querySelector<HTMLElement>('.select__dropdown');
+    expect(reopenedDropdown).not.toBeNull();
+    expect(reopenedDropdown?.getAttribute('data-open')).toBe('true');
+    expect(reopenedDropdown?.getAttribute('aria-hidden')).toBe('false');
+    expect(reopenedDropdown?.hasAttribute('inert')).toBe(false);
+  });
+
+  it('opens from the keyboard without motion and returns focus when closed', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    await act(async () => {
+      root.render(
+        <Select
+          searchable
+          options={[{ value: 'one', label: 'One' }]}
+        />,
+      );
+    });
+    const trigger = container.querySelector<HTMLElement>('.select__trigger');
+    await act(async () => {
+      trigger?.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+      }));
+    });
+
+    const openDropdown = document.querySelector<HTMLElement>('.select__dropdown');
+    const searchInput = document.querySelector<HTMLInputElement>('.select__search-input');
+    expect(openDropdown?.getAttribute('data-keyboard-open')).toBe('true');
+    expect(document.activeElement).toBe(searchInput);
+
+    vi.useFakeTimers();
+    await act(async () => {
+      searchInput?.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      }));
+    });
+
+    const closingDropdown = document.querySelector<HTMLElement>('.select__dropdown');
+    expect(document.activeElement).toBe(trigger);
+    expect(closingDropdown?.getAttribute('data-open')).toBe('false');
+    expect(closingDropdown?.getAttribute('data-keyboard-open')).toBe('true');
+    expect(searchInput?.tabIndex).toBe(-1);
   });
 
   it('retains the explicit inline mode for layout-expanding selectors', async () => {

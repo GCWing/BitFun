@@ -221,6 +221,18 @@ impl RemoteWorkspaceStateManager {
             .await
     }
 
+    /// Resolve an exact `(connection_id, path)` workspace scope without
+    /// selecting a different connection through legacy hint behavior.
+    pub async fn lookup_scoped_connection(
+        &self,
+        path: &str,
+        connection_id: &str,
+    ) -> Option<RemoteWorkspaceEntry> {
+        self.registry
+            .lookup_scoped_connection(path, connection_id)
+            .await
+    }
+
     /// True if `path` could belong to **any** registered remote root (before disambiguation).
     pub async fn is_remote_path(&self, path: &str) -> bool {
         if get_path_manager_arc().is_local_assistant_workspace_path(path) {
@@ -400,6 +412,15 @@ pub async fn lookup_remote_connection_with_hint(
     manager
         .lookup_connection(path, preferred_connection_id)
         .await
+}
+
+/// Look up an exact `(connection_id, path)` remote workspace scope.
+pub async fn lookup_remote_connection_scoped(
+    path: &str,
+    connection_id: &str,
+) -> Option<RemoteWorkspaceEntry> {
+    let manager = get_remote_workspace_manager()?;
+    manager.lookup_scoped_connection(path, connection_id).await
 }
 
 /// Look up using path only (uses active hint when ambiguous).

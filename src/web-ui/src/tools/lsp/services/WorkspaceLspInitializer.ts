@@ -10,6 +10,7 @@ import { WorkspaceLspManager } from './WorkspaceLspManager';
 import { lspConfigService } from './LspConfigService';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
+import { isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('WorkspaceLspInitializer');
 
@@ -94,7 +95,7 @@ class WorkspaceLspInitializer {
       });
       
     } catch (error) {
-      log.error('Failed to initialize LSP', { workspacePath, error });
+      logLspInitializationFailure(workspacePath, error);
     }
   }
 
@@ -155,10 +156,23 @@ class WorkspaceLspInitializer {
       
       log.info('LSP initialized for switched workspace', { workspacePath });
     } catch (error) {
-      log.error('Failed to initialize LSP', { workspacePath, error });
+      logLspInitializationFailure(workspacePath, error);
     }
   }
 }
 
 // Singleton export
 export const workspaceLspInitializer = WorkspaceLspInitializer.getInstance();
+
+/**
+ * A device surface switch supersedes an in-flight LSP bootstrap. The manager
+ * belongs to the device we left, so abandoning is the correct outcome and must
+ * not be reported as a broken workspace.
+ */
+function logLspInitializationFailure(workspacePath: string, error: unknown): void {
+  if (isSurfaceChangedError(error)) {
+    log.debug('LSP bootstrap abandoned after a device surface switch', { workspacePath });
+    return;
+  }
+  log.error('Failed to initialize LSP', { workspacePath, error });
+}

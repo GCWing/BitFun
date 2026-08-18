@@ -1,12 +1,28 @@
-use serde_json::Value;
+use serde::Serialize;
+use serde_json::{Map, Value};
 use std::fmt;
 
 pub const CALL_DEFERRED_TOOL_NAME: &str = "CallDeferredTool";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CallDeferredToolInput {
     pub tool_name: String,
     pub args: Value,
+}
+
+impl CallDeferredToolInput {
+    pub fn canonical_wire_arguments(&self) -> Value {
+        serde_json::json!({
+            "tool_name": self.tool_name,
+            "args": self.args,
+        })
+    }
+
+    /// Serialize through the typed envelope so `tool_name` precedes `args` in
+    /// provider-visible replay JSON even when JSON object maps reorder keys.
+    pub fn canonical_wire_json(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,11 +88,33 @@ The order is important. ALWAYS output tool_name first, then args."#
 pub fn parse_call_deferred_tool_input(
     input: &Value,
 ) -> Result<CallDeferredToolInput, CallDeferredToolInputError> {
-    let (tool_name, args) = parse_call_deferred_tool_input_ref(input)?;
+    let object = input
+        .as_object()
+        .ok_or(CallDeferredToolInputError::InputMustBeObject)?;
+
+    let tool_name = object
+        .get("tool_name")
+        .and_then(Value::as_str)
+        .ok_or(CallDeferredToolInputError::MissingToolName)?;
+    if tool_name.trim().is_empty() {
+        return Err(CallDeferredToolInputError::EmptyToolName);
+    }
+
+    let mut args = match object.get("args") {
+        Some(Value::Object(args)) => args.clone(),
+        Some(_) => return Err(CallDeferredToolInputError::ArgsMustBeObject),
+        None => Map::new(),
+    };
+
+    for (field, value) in object {
+        if field != "tool_name" && field != "args" && !args.contains_key(field) {
+            args.insert(field.clone(), value.clone());
+        }
+    }
 
     Ok(CallDeferredToolInput {
         tool_name: tool_name.to_string(),
-        args: args.clone(),
+        args: Value::Object(args),
     })
 }
 
@@ -163,9 +201,10 @@ impl ResolvedToolInvocation {
         }
 
         let parsed = parse_call_deferred_tool_input(&arguments)?;
+        let wire_arguments = parsed.canonical_wire_arguments();
         Ok(Self {
             wire_tool_name: tool_name.clone(),
-            wire_arguments: arguments,
+            wire_arguments,
             effective_tool_name: parsed.tool_name,
             effective_arguments: parsed.args,
             kind: ToolInvocationKind::Deferred {

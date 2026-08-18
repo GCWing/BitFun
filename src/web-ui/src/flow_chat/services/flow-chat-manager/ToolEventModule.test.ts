@@ -304,7 +304,42 @@ describe('processToolEvent late Started event behavior', () => {
     expect(updatedRound2?.items.some(item => item.id === 'tool-late-1')).toBe(false);
   });
 
-  it('drops a Started event when the referenced round does not exist', () => {
+  it('does not downgrade a completed tool when a late Started event arrives', () => {
+    const session = createSessionWithTool({
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Read',
+      timestamp: 1000,
+      status: 'completed',
+      toolCall: { id: 'tool-1', input: { file_path: 'README.md' } },
+      toolResult: { result: 'ok', success: true },
+    });
+    FlowChatStore.getInstance().setState(prev => ({
+      ...prev,
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolEvent(
+      makeToolContext(),
+      'session-1',
+      'turn-1',
+      'round-1',
+      {
+        event_type: 'Started',
+        tool_id: 'tool-1',
+        tool_name: 'Read',
+        params: { file_path: 'README.md' },
+      },
+    );
+
+    const tool = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'tool-1') as FlowToolItem;
+    expect(tool.status).toBe('completed');
+    expect(tool.toolResult).toMatchObject({ success: true });
+  });
+
+  it('creates the journal round when a Started event references a missing round', () => {
     const turn: DialogTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
@@ -357,7 +392,51 @@ describe('processToolEvent late Started event behavior', () => {
     );
 
     const updatedTurn = FlowChatStore.getInstance().getState().sessions.get('session-1')?.dialogTurns[0];
-    expect(updatedTurn?.modelRounds[0]?.items.some(item => item.id === 'tool-late-1')).toBe(false);
+    expect(updatedTurn?.modelRounds.some(round => round.id === 'round-missing')).toBe(true);
+    expect(
+      updatedTurn?.modelRounds
+        .find(round => round.id === 'round-missing')
+        ?.items.some(item => item.id === 'tool-late-1'),
+    ).toBe(true);
+  });
+
+  it('upserts a Completed card when Started never created one', () => {
+    const session = createSessionWithTool({
+      id: 'placeholder',
+      type: 'tool',
+      toolName: 'Read',
+      timestamp: 1000,
+      status: 'running',
+      toolCall: { id: 'placeholder', input: {} },
+    });
+    session.dialogTurns[0].modelRounds[0].items = [];
+    FlowChatStore.getInstance().setState(prev => ({
+      ...prev,
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolEvent(
+      makeToolContext(),
+      'session-1',
+      'turn-1',
+      'round-1',
+      {
+        event_type: 'Completed',
+        tool_id: 'read-1',
+        tool_name: 'Read',
+        result: 'file contents',
+        result_for_assistant: 'file contents',
+      } as any,
+    );
+
+    const tool = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'read-1') as FlowToolItem;
+    expect(tool).toMatchObject({
+      id: 'read-1',
+      status: 'completed',
+      toolName: 'Read',
+    });
   });
 });
 

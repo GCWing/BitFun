@@ -1,10 +1,11 @@
  
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { useContextStore, selectContexts } from '../../../stores/contextStore';
 import { ContextCard } from '../ContextCard/ContextCard';
 import { useI18n } from '@/infrastructure/i18n';
+import { isReducedMotionPreferred } from '@/shared/utils/motionPreference';
 import './ContextList.scss';
 
 export interface ContextListProps {
@@ -15,6 +16,8 @@ export interface ContextListProps {
   className?: string;
   onContextClick?: (contextId: string) => void;
 }
+
+const CONTEXT_ROW_EXIT_MS = 160;
 
 export const ContextList: React.FC<ContextListProps> = ({
   compact = false,
@@ -27,24 +30,71 @@ export const ContextList: React.FC<ContextListProps> = ({
   const { t } = useI18n('components');
   const contexts = useContextStore(selectContexts);
   const removeContext = useContextStore(state => state.removeContext);
-  const clearContexts = useContextStore(state => state.clearContexts);
+  const [leavingContextIds, setLeavingContextIds] = useState<Set<string>>(new Set());
+  const exitTimersRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => () => {
+    const pendingContextIds = [...exitTimersRef.current.keys()];
+    exitTimersRef.current.forEach(timer => window.clearTimeout(timer));
+    exitTimersRef.current.clear();
+    pendingContextIds.forEach(removeContext);
+  }, [removeContext]);
+
+  const removeAfterExit = useCallback((contextIds: string[]) => {
+    if (isReducedMotionPreferred()) {
+      contextIds.forEach(removeContext);
+      return;
+    }
+
+    setLeavingContextIds(previous => {
+      const next = new Set(previous);
+      contextIds.forEach(id => next.add(id));
+      return next;
+    });
+
+    contextIds.forEach((contextId) => {
+      const existingTimer = exitTimersRef.current.get(contextId);
+      if (existingTimer) window.clearTimeout(existingTimer);
+      const timer = window.setTimeout(() => {
+        exitTimersRef.current.delete(contextId);
+        removeContext(contextId);
+        setLeavingContextIds(previous => {
+          const next = new Set(previous);
+          next.delete(contextId);
+          return next;
+        });
+      }, CONTEXT_ROW_EXIT_MS);
+      exitTimersRef.current.set(contextId, timer);
+    });
+  }, [removeContext]);
   
   const handleRemove = useCallback((id: string) => {
-    removeContext(id);
-  }, [removeContext]);
+    if (!contexts.some(item => item.id === id) || leavingContextIds.has(id)) return;
+    removeAfterExit([id]);
+  }, [contexts, leavingContextIds, removeAfterExit]);
   
   const handleClearAll = useCallback(async () => {
     
-    if (await window.confirm(t('contextSystem.contextList.clearAllConfirm', { count: contexts.length }))) {
-      clearContexts();
+    if (
+      leavingContextIds.size === 0
+      && await window.confirm(t('contextSystem.contextList.clearAllConfirm', { count: contexts.length }))
+    ) {
+      removeAfterExit(contexts.map(context => context.id));
     }
-  }, [contexts.length, clearContexts, t]);
+  }, [contexts, leavingContextIds.size, removeAfterExit, t]);
   
   const handleCardClick = useCallback((contextId: string) => {
     onContextClick?.(contextId);
   }, [onContextClick]);
+
+  const renderedContexts = useMemo(() => {
+    return contexts.map(context => ({
+      context,
+      exiting: leavingContextIds.has(context.id),
+    }));
+  }, [contexts, leavingContextIds]);
   
-  if (contexts.length === 0) {
+  if (renderedContexts.length === 0) {
     return (
       <div className={`bitfun-context-list bitfun-context-list--empty ${className}`} data-bf-component="context-list" data-bf-part="root" data-bf-state="empty">
         <div className="bitfun-context-list__empty-state" data-bf-component="context-list" data-bf-part="empty">
@@ -74,6 +124,7 @@ export const ContextList: React.FC<ContextListProps> = ({
         <button
           className="bitfun-context-list__clear-btn"
           onClick={handleClearAll}
+          disabled={leavingContextIds.size > 0}
           title={t('contextSystem.contextList.clearAllTitle')}
           data-bf-component="context-list"
           data-bf-part="clear"
@@ -90,21 +141,26 @@ export const ContextList: React.FC<ContextListProps> = ({
         data-bf-component="context-list"
         data-bf-part="items"
       >
-        {contexts.map((context) => (
+        {renderedContexts.map(({ context, exiting }) => (
           <div
             key={context.id}
             className="bitfun-context-list__item"
-            onClick={() => handleCardClick(context.id)}
+            data-exiting={exiting ? 'true' : 'false'}
+            aria-hidden={exiting || undefined}
+            {...(exiting ? { inert: '' } : {})}
+            onClick={exiting ? undefined : () => handleCardClick(context.id)}
             data-bf-component="context-list"
             data-bf-part="item"
           >
-            <ContextCard
-              context={context}
-              onRemove={handleRemove}
-              compact={compact}
-              interactive={interactive}
-              showPreview={showPreview}
-            />
+            <div className="bitfun-context-list__item-inner">
+              <ContextCard
+                context={context}
+                onRemove={exiting ? undefined : handleRemove}
+                compact={compact}
+                interactive={interactive && !exiting}
+                showPreview={showPreview}
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -113,4 +169,3 @@ export const ContextList: React.FC<ContextListProps> = ({
 };
 
 export default ContextList;
-

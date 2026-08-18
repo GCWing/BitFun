@@ -227,7 +227,7 @@ export const NotificationCenter: React.FC = () => {
               <div className="notification-center__active-task-progress-bar">
                 <div
                   className="notification-center__active-task-progress-fill"
-                  style={{ width: `${notification.progress || 0}%` }}
+                  style={{ transform: `scaleX(${Math.max(0, Math.min(100, notification.progress || 0)) / 100})` }}
                 />
               </div>
             );
@@ -311,7 +311,7 @@ export const NotificationCenter: React.FC = () => {
               <div className="notification-center__item-progress-bar">
                 <div
                   className={`notification-center__item-progress-fill ${notification.status ? `is-${notification.status}` : ''}`}
-                  style={{ width: `${notification.progress || 0}%` }}
+                  style={{ transform: `scaleX(${Math.max(0, Math.min(100, notification.progress || 0)) / 100})` }}
                 />
               </div>
             );

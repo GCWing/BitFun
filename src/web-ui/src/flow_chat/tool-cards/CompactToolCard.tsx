@@ -8,10 +8,11 @@
  * - Simple gray style, text brightens on hover
  */
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useRef, useState } from 'react';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { BaseToolCard, type BaseToolCardProps } from './BaseToolCard';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../components/modern/flowChatCollapseMotion';
 import { ToolCardIconSlot } from './ToolCardIconSlot';
 import { ToolCardStatusIcon } from './ToolCardStatusIcon';
 import type { ToolCardHeaderAffordanceKind } from './ToolCardHeaderLayoutContext';
@@ -61,11 +62,53 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
     status === 'running' ||
     status === 'analyzing';
 
-  if (isExpanded && expandedContent) {
+  const hasExpandedContent = Boolean(expandedContent);
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [useExpandedShell, setUseExpandedShell] = useState(
+    Boolean(isExpanded && hasExpandedContent),
+  );
+
+  useEffect(() => {
+    if (collapseTimerRef.current !== null) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+
+    const isCurrentlyExpanded = Boolean(isExpanded && hasExpandedContent);
+
+    if (isCurrentlyExpanded) {
+      setUseExpandedShell(true);
+      return;
+    }
+
+    if (!hasExpandedContent) {
+      setUseExpandedShell(false);
+      return;
+    }
+
+    if (useExpandedShell && hasExpandedContent) {
+      collapseTimerRef.current = setTimeout(() => {
+        collapseTimerRef.current = null;
+        setUseExpandedShell(false);
+      }, FLOWCHAT_COLLAPSE_DURATION_MS);
+    }
+  }, [hasExpandedContent, isExpanded, useExpandedShell]);
+
+  useEffect(() => () => {
+    if (collapseTimerRef.current !== null) {
+      clearTimeout(collapseTimerRef.current);
+    }
+  }, []);
+
+  const shouldRenderExpandedShell = Boolean(
+    useExpandedShell || (isExpanded && hasExpandedContent),
+  );
+
+  if (shouldRenderExpandedShell) {
     return (
       <BaseToolCard
         status={status}
-        isExpanded
+        isExpanded={isExpanded}
         onClick={handleWrapperClick}
         className={`compact-tool-card-wrapper--expanded-card ${className}`.trim()}
         header={header}

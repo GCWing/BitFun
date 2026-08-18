@@ -16,8 +16,8 @@ pub use role::{AppClient, AppServer};
 // Keep the established public domain paths while the schema sources live in a
 // single physical directory.
 pub use schemas::{
-    account, agent, app, error, event, external_source, hook, mcp, method, model, session, skill,
-    subagent, workspace, worktree,
+    account, agent, app, error, event, external_source, git, hook, i18n, mcp, method, model,
+    permission, session, skill, subagent, workspace, worktree,
 };
 
 /// Current App Server protocol version.

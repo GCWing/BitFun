@@ -4,6 +4,10 @@
 
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  getActiveSurfaceScope,
+  type SurfaceScope,
+} from '@/infrastructure/peer-device/deviceSurface';
 import type {
   CreateSessionRequest,
   SessionResponse,
@@ -38,6 +42,9 @@ export class TerminalService {
 
   private connected: boolean = false;
 
+  /** The surface the current event stream is bound to. */
+  private streamScope: SurfaceScope | null = null;
+
   private connectingPromise: Promise<void> | null = null;
 
   private constructor() {
@@ -51,39 +58,67 @@ export class TerminalService {
   }
 
   async connect(): Promise<void> {
-    if (this.connected) return;
+    if (this.connected) {
+      if (this.isStreamCurrent()) return;
+      // The stream belongs to a device this window no longer renders. Drop the
+      // listener only — the PTYs on that device stay up for its agent.
+      this.detachEventStream();
+    }
     if (this.connectingPromise) return this.connectingPromise;
 
-    this.connectingPromise = (async () => {
-      try {
-        this.unlistenFn = api.listen<any>('terminal_event', (payload) => {
-          this.handleTerminalEvent(payload);
-        });
-        this.connected = true;
-        log.debug('Connected to terminal event stream');
-      } catch (error) {
-        log.error('Failed to connect', error);
-        throw error;
-      } finally {
-        this.connectingPromise = null;
-      }
+    const scope = getActiveSurfaceScope();
+    const connecting = (async () => {
+      this.unlistenFn = api.listen<any>('terminal_event', (payload) => {
+        this.handleTerminalEvent(payload);
+      });
+      this.streamScope = scope;
+      this.connected = true;
+      log.debug('Connected to terminal event stream');
     })();
 
-    return this.connectingPromise;
+    // Cleared only after the attempt settles. Clearing it inside the task ran
+    // before this assignment and latched a stale promise, so a reconnect after
+    // a surface switch was answered by a connect that had already finished.
+    this.connectingPromise = connecting;
+    try {
+      await connecting;
+    } catch (error) {
+      log.error('Failed to connect', error);
+      throw error;
+    } finally {
+      if (this.connectingPromise === connecting) {
+        this.connectingPromise = null;
+      }
+    }
   }
 
+  /**
+   * Leave the terminal event stream. Frontend-only, and must stay that way:
+   * this is what a device surface switch calls, it runs before the transport
+   * swaps, so a `terminal_shutdown_all` here would kill the PTYs of the device
+   * being left — including the one an agent turn is running in.
+   */
   async disconnect(): Promise<void> {
-    if (this.unlistenFn) {
-      this.unlistenFn();
-      this.unlistenFn = null;
-    }
-    this.connected = false;
+    this.detachEventStream();
     this.eventListeners.clear();
     this.globalListeners.clear();
   }
 
+  private detachEventStream(): void {
+    if (this.unlistenFn) {
+      this.unlistenFn();
+      this.unlistenFn = null;
+    }
+    this.streamScope = null;
+    this.connected = false;
+  }
+
+  private isStreamCurrent(): boolean {
+    return this.streamScope?.isCurrent() ?? false;
+  }
+
   isConnected(): boolean {
-    return this.connected;
+    return this.connected && this.isStreamCurrent();
   }
 
   /**
@@ -92,6 +127,12 @@ export class TerminalService {
    * Frontend format: { type, sessionId, ... }
    */
   private handleTerminalEvent(rawEvent: any): void {
+    // An event that raced the switch describes a PTY on the device we left;
+    // delivering it here would close tabs and scenes of the one we render now.
+    if (!this.isStreamCurrent()) {
+      return;
+    }
+
     const eventType = rawEvent.type;
     const payload = rawEvent.payload || {};
     const sessionId = payload.session_id;
@@ -242,6 +283,10 @@ export class TerminalService {
     }
   }
 
+  /**
+   * Kill every PTY on the host. Never part of a device surface switch — use
+   * `disconnect()` there; see the comment on it.
+   */
   async shutdownAll(): Promise<void> {
     try {
       await api.invoke('terminal_shutdown_all');

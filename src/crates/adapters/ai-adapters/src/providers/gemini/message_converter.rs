@@ -673,6 +673,7 @@ mod tests {
                 name: None,
                 is_error: None,
                 tool_image_attachments: None,
+                model_response_replay: None,
             },
             Message {
                 role: "tool".to_string(),
@@ -684,6 +685,7 @@ mod tests {
                 name: Some("get_weather".to_string()),
                 is_error: None,
                 tool_image_attachments: None,
+                model_response_replay: None,
             },
         ];
 
@@ -726,6 +728,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }];
 
         let (_, contents) =
@@ -764,6 +767,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }];
 
         let (_, contents) = GeminiMessageConverter::convert_messages(messages, "gemini-2.5-pro");

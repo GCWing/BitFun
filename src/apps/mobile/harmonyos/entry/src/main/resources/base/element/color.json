@@ -9,6 +9,10 @@
       "value": "#FDFDFB"
     },
     {
+      "name": "page_bg_fade",
+      "value": "#00FDFDFB"
+    },
+    {
       "name": "ink",
       "value": "#171717"
     },

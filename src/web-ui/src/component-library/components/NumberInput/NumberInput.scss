@@ -22,7 +22,9 @@
     background: transparent;
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: var(--bf-appearance-token-size-radius-sm);
-    transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     overflow: hidden;
 
     &:hover:not(.bitfun-number-input--disabled &) {
@@ -110,7 +112,10 @@
     border: none;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     position: relative;
     overflow: hidden;
 
@@ -120,7 +125,7 @@
     }
 
     &:active:not(:disabled) {
-      transform: scale(0.9);
+      scale: 0.97;
     }
 
     &:disabled {
@@ -298,5 +303,23 @@
   }
 
   &--editing {
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-number-input__container,
+  .bitfun-number-input__progress,
+  .bitfun-number-input__progress-bar {
+    transition-duration: var(--bf-appearance-token-motion-instant);
+  }
+
+  .bitfun-number-input__btn {
+    transition:
+      background-color var(--bf-appearance-token-motion-instant) ease,
+      color var(--bf-appearance-token-motion-instant) ease;
+
+    &:active:not(:disabled) {
+      scale: none;
+    }
   }
 }

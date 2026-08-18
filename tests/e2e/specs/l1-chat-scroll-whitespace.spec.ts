@@ -33,8 +33,8 @@ async function dumpDomDiagnostics(): Promise<void> {
       if (tid && (tid.includes('chat') || tid.includes('session') || tid.includes('message'))) {
         testIdSet.add(tid);
       }
-      if (el.hasAttribute('data-virtuoso-scroller')) {
-        classSet.add('[data-virtuoso-scroller]');
+      if (el.hasAttribute('data-flowchat-scroller')) {
+        classSet.add('[data-flowchat-scroller]');
       }
     }
     // Read data attributes from the messages container
@@ -43,7 +43,7 @@ async function dumpDomDiagnostics(): Promise<void> {
       relevantClasses: Array.from(classSet).sort(),
       relevantTestIds: Array.from(testIdSet).sort(),
       virtualMessageList: !!document.querySelector('.virtual-message-list'),
-      virtuosoScroller: !!document.querySelector('[data-virtuoso-scroller]'),
+      flowChatScroller: !!document.querySelector('[data-flowchat-scroller]'),
       messageListFooter: !!document.querySelector('.message-list-footer'),
       chatInputContainer: !!document.querySelector('[data-testid="chat-input-container"]'),
       sessionScene: !!document.querySelector('.bitfun-session-scene'),
@@ -409,7 +409,7 @@ describe('L1 Chat Scroll Whitespace (#1176)', () => {
   }> {
     return browser.execute(() => {
       // Find the scroller DOM element
-      const scrollerEl = document.querySelector('[data-virtuoso-scroller]') as HTMLElement | null;
+      const scrollerEl = document.querySelector('[data-flowchat-scroller]') as HTMLElement | null;
       const footer = document.querySelector('.message-list-footer') as HTMLElement | null;
 
       // Try to find the React component instance via fiber
@@ -491,7 +491,7 @@ describe('L1 Chat Scroll Whitespace (#1176)', () => {
       // Strategy: Walk the fiber tree from DOM elements inside VirtualMessageList,
       // then traverse the hooks chain to find bottomReservationStateRef.
       const rootCandidates = [
-        document.querySelector('[data-virtuoso-scroller]'),
+        document.querySelector('[data-flowchat-scroller]'),
         document.querySelector('.virtual-message-list'),
         document.querySelector('.message-list-footer'),
       ];
@@ -569,7 +569,7 @@ describe('L1 Chat Scroll Whitespace (#1176)', () => {
       // Force layout reflow
       void footer.offsetHeight;
 
-      const scroller = document.querySelector('[data-virtuoso-scroller]') as HTMLElement | null;
+      const scroller = document.querySelector('[data-flowchat-scroller]') as HTMLElement | null;
       if (scroller) void scroller.scrollHeight;
 
       return true;
@@ -587,7 +587,7 @@ describe('L1 Chat Scroll Whitespace (#1176)', () => {
   }> {
     return browser.execute(() => {
       const el = (
-        document.querySelector('[data-virtuoso-scroller]') ||
+        document.querySelector('[data-flowchat-scroller]') ||
         document.querySelector('.virtual-message-list__static-scroller') ||
         document.querySelector('.virtual-message-list')
       ) as HTMLElement | null;
@@ -634,7 +634,7 @@ describe('L1 Chat Scroll Whitespace (#1176)', () => {
 
     // Verify scroller exists
     const scrollerExists = await browser.execute(() => {
-      return !!document.querySelector('[data-virtuoso-scroller]');
+      return !!document.querySelector('[data-flowchat-scroller]');
     });
     expect(scrollerExists).toBe(true);
 

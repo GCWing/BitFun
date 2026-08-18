@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { Folder, ChevronRight, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
-import { FileTree } from './FileTree';
+import { Folder, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
 import { VirtualFileTree } from './VirtualFileTree';
 import { FileExplorerProps, FileSystemNode, FlatFileNode } from '../types';
 import { flattenFileTree } from '../utils/treeFlattening';
@@ -44,134 +43,6 @@ function buildFileNodeContext(node: FileSystemNode, workspacePath?: string): Fil
     workspacePath,
   };
 }
-
-const VIRTUAL_SCROLL_THRESHOLD = 100;
-
-interface ScrollBreadcrumbProps {
-  containerRef: React.RefObject<HTMLDivElement>;
-  workspacePath?: string;
-  onNavigate?: (path: string) => void;
-}
-
-const ScrollBreadcrumb: React.FC<ScrollBreadcrumbProps> = ({ containerRef, workspacePath, onNavigate }) => {
-  const [visiblePath, setVisiblePath] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    
-    const detectCurrentDirectory = () => {
-      const treeContainer = container.querySelector('.bitfun-file-explorer__tree');
-      if (!treeContainer) return;
-      
-      const containerRect = treeContainer.getBoundingClientRect();
-      
-      const expandedDirNodes = treeContainer.querySelectorAll('[data-is-directory="true"][data-is-expanded="true"]');
-      
-      const activeDirs: { path: string; top: number }[] = [];
-      
-      expandedDirNodes.forEach((node) => {
-        const rect = node.getBoundingClientRect();
-        const relativeTop = rect.top - containerRect.top;
-        const path = node.getAttribute('data-file-path');
-        
-        if (!path) return;
-        
-        if (relativeTop >= 0) return;
-        
-        const nodeElement = node.closest('.bitfun-file-explorer__node');
-        const childrenContainer = nodeElement?.querySelector(':scope > .bitfun-file-explorer__node-children');
-        
-        if (childrenContainer) {
-          const childrenRect = childrenContainer.getBoundingClientRect();
-          const childrenBottom = childrenRect.bottom - containerRect.top;
-          
-          if (childrenBottom > 0) {
-            activeDirs.push({ path, top: relativeTop });
-          }
-        }
-      });
-      
-      if (activeDirs.length > 0) {
-        activeDirs.sort((a, b) => b.top - a.top);
-        setVisiblePath(activeDirs[0].path);
-      } else {
-        setVisiblePath(null);
-      }
-    };
-
-    detectCurrentDirectory();
-
-    // rAF-merge the raw scroll events: the detection walks every expanded
-    // directory node and reads two rects per node, so run it at most once
-    // per frame instead of per scroll event.
-    let frameId: number | null = null;
-    const handleScroll = () => {
-      if (frameId !== null) return;
-      frameId = requestAnimationFrame(() => {
-        frameId = null;
-        detectCurrentDirectory();
-      });
-    };
-
-    const treeContainer = container.querySelector('.bitfun-file-explorer__tree');
-    if (treeContainer) {
-      treeContainer.addEventListener('scroll', handleScroll, { passive: true });
-      return () => {
-        treeContainer.removeEventListener('scroll', handleScroll);
-        if (frameId !== null) {
-          cancelAnimationFrame(frameId);
-        }
-      };
-    }
-    return () => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
-      }
-    };
-  }, [containerRef]);
-  
-  if (!visiblePath) return null;
-  
-  let relativePath = visiblePath;
-  if (workspacePath && visiblePath.startsWith(workspacePath)) {
-    relativePath = visiblePath.slice(workspacePath.length).replace(/^[/\\]/, '');
-  }
-  
-  const parts = relativePath.split(/[/\\]/).filter(Boolean);
-  if (parts.length === 0) return null;
-  
-  const pathSegments: { name: string; fullPath: string }[] = [];
-  let currentPath = workspacePath || '';
-  
-  for (const part of parts) {
-    currentPath = currentPath ? `${currentPath}/${part}` : part;
-    pathSegments.push({ name: part, fullPath: currentPath });
-  }
-  
-  const displaySegments = pathSegments.length > 4 
-    ? [{ name: '…', fullPath: '' }, ...pathSegments.slice(-4)]
-    : pathSegments;
-  
-  return (
-    <div className="bitfun-file-explorer__breadcrumb">
-      {displaySegments.map((segment, index) => (
-        <React.Fragment key={segment.fullPath || index}>
-          {index > 0 && (
-            <ChevronRight size={10} className="bitfun-file-explorer__breadcrumb-separator" />
-          )}
-          <span 
-            className={`bitfun-file-explorer__breadcrumb-item ${segment.fullPath ? 'bitfun-file-explorer__breadcrumb-item--clickable' : ''}`}
-            onClick={() => segment.fullPath && onNavigate?.(segment.fullPath)}
-            title={segment.fullPath || undefined}
-          >
-            {segment.name}
-          </span>
-        </React.Fragment>
-      ))}
-    </div>
-  );
-};
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({
   fileTree,
@@ -238,7 +109,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     return flattenFileTree(filteredFileTree, expandedFolders, loadingPaths);
   }, [filteredFileTree, expandedFolders, loadingPaths]);
 
-  const useVirtualScroll = flatNodes.length > VIRTUAL_SCROLL_THRESHOLD;
+  // Keep hooks before any early returns (React Hooks rules).
+  const containerRef = useRef<HTMLDivElement>(null);
   
   const toggleExpandedState = useCallback((path: string) => {
     const isCurrentlyExpanded = expandedFoldersContains(expandedFolders, path);
@@ -267,9 +139,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     );
   }, [showFileSize, showLastModified]);
 
-  // Keep hooks before any early returns (React Hooks rules).
-  const containerRef = useRef<HTMLDivElement>(null);
-  
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   
@@ -373,18 +242,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
 
     await commandExecutor.execute('file.delete', buildFileNodeContext(node, workspacePath));
   }, [selectedFile, fileTree, workspacePath]);
-
-  const handleBreadcrumbNavigate = useCallback((path: string) => {
-    if (externalOnNodeExpand) {
-      externalOnNodeExpand(path, true);
-    } else {
-      setInternalExpandedFolders(prev => {
-        const newSet = new Set(prev);
-        newSet.add(path);
-        return newSet;
-      });
-    }
-  }, [externalOnNodeExpand]);
 
   useShortcut(
     'filetree.refresh',
@@ -501,44 +358,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         </div>
       )}
       
-      {!useVirtualScroll && (
-        <ScrollBreadcrumb 
-          containerRef={containerRef}
-          workspacePath={workspacePath}
-          onNavigate={handleBreadcrumbNavigate}
-        />
-      )}
-      
-      {useVirtualScroll ? (
-        <VirtualFileTree
-          flatNodes={flatNodes}
-          selectedFile={selectedFile}
-          expandedFolders={expandedFolders}
-          onNodeSelect={(node: FlatFileNode) => emitFileSelect(node.path, node.name)}
-          onToggleExpand={toggleExpandedState}
-          className="bitfun-file-explorer__tree"
-          workspacePath={workspacePath}
-          renamingPath={renamingPath}
-          onRename={onRename}
-          onCancelRename={onCancelRename}
-          renderNodeContent={renderNodeContent}
-        />
-      ) : (
-        <FileTree
-          nodes={filteredFileTree}
-          selectedFile={selectedFile}
-          expandedFolders={expandedFolders}
-          loadingPaths={loadingPaths}
-          onNodeSelect={(node: FileSystemNode) => emitFileSelect(node.path, node.name)}
-          onNodeExpand={setExpandedState}
-          renderNodeContent={renderNodeContent}
-          className="bitfun-file-explorer__tree"
-          renamingPath={renamingPath}
-          onRename={onRename}
-          onCancelRename={onCancelRename}
-          workspacePath={workspacePath}
-        />
-      )}
+      <VirtualFileTree
+        flatNodes={flatNodes}
+        selectedFile={selectedFile}
+        expandedFolders={expandedFolders}
+        onNodeSelect={(node: FlatFileNode) => emitFileSelect(node.path, node.name)}
+        onToggleExpand={toggleExpandedState}
+        className="bitfun-file-explorer__tree"
+        workspacePath={workspacePath}
+        renamingPath={renamingPath}
+        onRename={onRename}
+        onCancelRename={onCancelRename}
+        renderNodeContent={renderNodeContent}
+      />
     </div>
   );
 };

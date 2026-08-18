@@ -356,8 +356,11 @@ export interface RemoteToolStatusResponse {
 }
 
 export interface RemoteQuestionAnswerPayload {
-  answer: string;
-  '0': string;
+  answer?: string;
+  '0'?: string | string[];
+  '1'?: string | string[];
+  '2'?: string | string[];
+  '3'?: string | string[];
 }
 
 export interface ChatMessageItemResponse {
@@ -371,6 +374,7 @@ export interface ChatMessageItemResponse {
 export interface ImageAttachment {
   name: string;
   data_url: string;
+  mime_type?: string;
 }
 
 export interface SelectedImageAttachment extends ImageAttachment {

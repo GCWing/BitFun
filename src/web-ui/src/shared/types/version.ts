@@ -20,6 +20,8 @@ export interface VersionInfo {
   isDev: boolean;
    
   buildEnv: 'development' | 'production' | 'preview';
+
+  releaseChannel?: 'stable' | 'beta' | 'nightly';
 }
 
  
@@ -47,4 +49,3 @@ export interface AboutInfo {
     issues?: string;
   };
 }
-

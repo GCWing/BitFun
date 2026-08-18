@@ -28,14 +28,6 @@ export function shouldUseLatestTurnFollowOutput(turn: DialogTurn | undefined): b
   return isDialogTurnInFlight(turn);
 }
 
-/** Sticky-latest pin starts only after model output exists. */
-export function shouldUseStickyLatestPin(turn: DialogTurn | undefined): boolean {
-  if (!turn || !shouldUseLatestTurnFollowOutput(turn)) {
-    return false;
-  }
-  return turn.modelRounds.length > 0;
-}
-
 export function findDialogTurn(
   dialogTurns: DialogTurn[] | undefined,
   turnId: string | null | undefined,

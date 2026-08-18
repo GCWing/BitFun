@@ -64,6 +64,7 @@ pub enum RelayMessage {
     AuthConnect {
         token: String,
         device_name: String,
+        device_kind: String,
     },
     /// Route an encrypted payload to another device in the same account.
     DeviceMessage {
@@ -354,6 +355,7 @@ impl RelayClient {
                                 let reauth = RelayMessage::AuthConnect {
                                     token: ctx.token.clone(),
                                     device_name: ctx.device_name.clone(),
+                                    device_kind: "desktop".to_string(),
                                 };
                                 let _ = new_cmd_tx.send(reauth);
                                 info!("Re-sent AuthConnect after reconnect");
@@ -534,9 +536,12 @@ impl RelayClient {
         }
         drop(guard);
 
+        // Only desktops hold a relay WebSocket — phones and watches talk HTTP —
+        // so the kind is a constant here rather than a parameter.
         self.send(RelayMessage::AuthConnect {
             token: token.to_string(),
             device_name: device_name.to_string(),
+            device_kind: "desktop".to_string(),
         })
         .await
     }

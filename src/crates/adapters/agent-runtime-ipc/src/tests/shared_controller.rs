@@ -297,6 +297,11 @@ impl RuntimeIpcRequestHandler for FakeHandler {
                         retired_turn_ids: Vec::new(),
                         changed: true,
                         hidden_turn_count: 1,
+                        boundary_storage_turn_index: None,
+                        target_turn_id: None,
+                        restored_files: Vec::new(),
+                        reload_required: false,
+                        reload_reason: None,
                     },
                 })
             }
@@ -705,6 +710,8 @@ fn steer_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
             turn_id: turn_id.to_string(),
             content: "check tests".to_string(),
             display_content: None,
+            attachments: Vec::new(),
+            metadata: serde_json::Map::new(),
         },
     }
 }

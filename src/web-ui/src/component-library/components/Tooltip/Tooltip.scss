@@ -115,8 +115,9 @@
     border-right: 0;
   }
 
-  &--top.bitfun-tooltip--visible {
-    animation: bitfun-tooltip-fade-in-top 0.12s ease-out;
+  &--top {
+    --tooltip-enter-y: 3px;
+    transform-origin: center bottom;
   }
 
   &--bottom {
@@ -157,6 +158,10 @@
 
     &--visible {
       transform: none;
+    }
+
+    &[data-instant='true'] {
+      transition-duration: 0ms;
     }
   }
 }

@@ -12,24 +12,18 @@
   outline: none;
   user-select: none;
   flex-shrink: 0;
-  transform: scale(1);
+  scale: 1;
   transform-origin: center;
   transition:
-    transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-    background var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
     color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
   background: transparent;
   color: var(--bf-appearance-token-color-text-secondary);
 
-  &:hover:not(:disabled) {
-    transform: scale(1.06);
-    background: var(--bf-appearance-token-color-overlay-white-08);
-    color: var(--bf-appearance-token-color-accent-500);
-  }
-
   &:active:not(:disabled) {
-    transform: scale(1.02);
+    scale: 0.97;
     background: var(--bf-appearance-token-color-overlay-white-08);
   }
 
@@ -88,10 +82,6 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
     color: var(--bf-appearance-token-color-static-white);
 
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent);
-    }
-
     &:active:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
     }
@@ -100,11 +90,6 @@
   &--danger {
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 28%, transparent);
-      color: var(--bf-appearance-token-color-error);
-    }
 
     &:active:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-error) 22%, transparent);
@@ -116,11 +101,6 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent);
     color: var(--bf-appearance-token-color-success);
 
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, transparent);
-      color: var(--bf-appearance-token-color-static-white);
-    }
-
     &:active:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-success) 22%, transparent);
     }
@@ -130,11 +110,6 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
     color: var(--bf-appearance-token-color-warning);
 
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 28%, transparent);
-      color: var(--bf-appearance-token-color-static-white);
-    }
-
     &:active:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 22%, transparent);
     }
@@ -143,11 +118,6 @@
   &--ai {
     background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 18%, transparent);
     color: var(--bf-appearance-token-color-purple-500);
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 28%, transparent);
-      color: var(--bf-appearance-token-color-static-white);
-    }
 
     &:active:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 22%, transparent);
@@ -210,12 +180,16 @@
 @media (prefers-reduced-motion: reduce) {
   .icon-btn {
     transition:
-      background-color var(--bf-appearance-token-motion-fast) ease,
-      color var(--bf-appearance-token-motion-fast) ease;
+      background-color var(--bf-appearance-token-motion-instant) ease,
+      color var(--bf-appearance-token-motion-instant) ease;
 
     &:active:not(:disabled) {
-      transform: none;
+      scale: none;
     }
+  }
+
+  .icon-btn--loading svg {
+    animation: none;
   }
 }
 

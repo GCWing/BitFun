@@ -424,5 +424,16 @@
     "discardAllChanges": "警告：此操作將會：\n\n1. 回退所有暫存區的更改\n2. 回退所有工作區的更改\n3. 刪除所有未跟蹤的檔案\n\n此操作不可恢復！確定要繼續嗎？",
     "resetToCommit": "確定要重設到提交 {{hash}} 嗎？\n\n這將移動目前分支指針到此提交。",
     "deleteBranch": "確定要刪除分支 \"{{branch}}\" 嗎？"
+  },
+  "trust": {
+    "title": "信任此儲存庫？",
+    "message": "Git 拒絕讀取 \"{{path}}\"，因為該目錄屬於其他使用者。\n\n信任後會把該目錄加入全域 safe.directory 清單，Git 將從你並不擁有的目錄中讀取設定並執行掛鉤。請僅在確認該目錄來源可靠時繼續。",
+    "confirm": "信任該目錄",
+    "cancel": "取消",
+    "granted": "Git 已信任 \"{{path}}\"。",
+    "alreadyTrusted": "Git 現在已經接受 \"{{path}}\"，無需再次授權。",
+    "unavailable": "無法在此處為 \"{{path}}\" 授予 Git 所有權信任，請在持有該儲存庫的機器上授予。",
+    "unavailableWithCommand": "無法在此處為 \"{{path}}\" 授予 Git 所有權信任。請在持有該儲存庫的機器上執行：\n\n{{command}}",
+    "required": "在你信任其所有權之前，Git 不會讀取 \"{{path}}\"。"
   }
 }

@@ -125,13 +125,13 @@ export const bitfunChinaStylePalette: AppearancePalette = {
 
   motion: {
     duration: {
-      instant: '0.1s',
-      fast: '0.2s',
-      base: '0.35s',
-      slow: '0.7s',
+      instant: '0.08s',
+      fast: '0.14s',
+      base: '0.24s',
+      slow: '0.44s',
     },
 
-    easing: createStandardEasing('cubic-bezier(0.25, 0.1, 0.25, 1)'),
+    easing: createStandardEasing(),
   },
 
 

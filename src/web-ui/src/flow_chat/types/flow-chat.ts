@@ -107,6 +107,17 @@ export interface FlowToolItem extends FlowItem {
   isParamsStreaming?: boolean;  // Params are streaming in.
   partialParams?: Record<string, any>;  // Partial params during streaming.
   _paramsBuffer?: string;  // Internal buffer for accumulated params.
+
+  /**
+   * Runtime re-attachment marker. This item was reconstructed from an
+   * authoritative pending-interaction mailbox rather than a persisted Turn.
+   * It is removed or settled when a newer mailbox revision says the request
+   * no longer exists.
+   */
+  _runtimeInteractionProjection?: {
+    kind: 'user_question';
+    revision: number;
+  };
 }
 
 export interface ToolRejectOptions {
@@ -126,10 +137,21 @@ export interface FlowImageAnalysisItem extends FlowItem {
  * `steer_dialog_turn` Tauri command. Rendered inline inside the running
  * model round so the user can see the message they steered the agent with.
  */
+/** One image attached to a steering message, in display shape. */
+export interface SteeringImage {
+  id: string;
+  name?: string;
+  dataUrl?: string;
+  imagePath?: string;
+  mimeType?: string;
+}
+
 export interface FlowUserSteeringItem extends FlowItem {
   type: 'user-steering';
   steeringId: string;
   content: string;
+  /** Images sent with the steering message, rendered under its text. */
+  images?: SteeringImage[];
   /** Round index reported by the backend at injection time. */
   roundIndex: number;
 }
@@ -267,6 +289,14 @@ export interface DialogTurn {
   success?: boolean;
   /** Why the turn finished. */
   finishReason?: string;
+  /** Additive recovery metadata for an intentionally interrupted turn. */
+  recovery?: {
+    status: 'interrupted' | 'recovering';
+    executionGeneration: number;
+    resumeCount: number;
+    interruptedAt?: number;
+    modelId?: string;
+  };
   /** Whether the turn produced a final assistant response visible to the user. */
   hasFinalResponse?: boolean;
 }

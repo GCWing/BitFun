@@ -122,6 +122,12 @@ $_section-gap: 12px;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .editor-status-bar__lsp-spinner {
+    animation: none;
+  }
+}
+
 // Responsive
 @media (max-width: 640px) {
   .editor-status-bar {

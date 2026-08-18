@@ -48,7 +48,9 @@ export {
   cancelSessionTask,
   markCurrentTurnItemsAsCancelled,
   drainPendingQueue,
-  installPendingQueueDrainListener
+  installPendingQueueDrainListener,
+  inFlightSubmissionCount,
+  waitForInFlightSubmissions
 } from './MessageModule';
 
 export { pendingQueueManager } from './PendingQueueModule';
@@ -58,7 +60,8 @@ export {
   shouldProcessEvent,
   mapBackendStateToFrontend,
   initializeEventListeners,
-  processBatchedEvents
+  processBatchedEvents,
+  projectDialogTurnRecovered,
 } from './EventHandlerModule';
 
 export {

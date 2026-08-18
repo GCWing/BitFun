@@ -12,8 +12,14 @@ use tauri::State;
 
 use crate::api::app_state::AppState;
 
-use bitfun_core::agentic::coordination::ConversationCoordinator;
+use bitfun_core::agentic::coordination::{
+    ConversationCoordinator, DialogSubmissionPolicy, DialogTriggerSource,
+};
 use bitfun_core::agentic::image_analysis::ImageContextData;
+
+fn desktop_btw_submission_policy() -> DialogSubmissionPolicy {
+    DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi)
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -105,6 +111,7 @@ pub async fn btw_ask_stream(
             &child_session_id,
             child_session_name.as_deref(),
             &request.question,
+            desktop_btw_submission_policy(),
             model_id.as_deref(),
             image_contexts,
             request.parent_dialog_turn_id.as_deref(),
@@ -149,4 +156,17 @@ pub async fn btw_ask_stream(
     });
 
     Ok(BtwAskStreamResponse { ok: true })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn btw_turns_use_the_desktop_chat_output_surface() {
+        assert_eq!(
+            desktop_btw_submission_policy(),
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi)
+        );
+    }
 }

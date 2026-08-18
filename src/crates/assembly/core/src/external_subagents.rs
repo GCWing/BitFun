@@ -33,6 +33,7 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentDiagnosticSummary, ExternalSubagentModelBindingGroup,
     ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingOption,
     ExternalSubagentModelBindingTarget, ExternalSubagentModelRequest, ExternalSubagentSummary,
+    ExternalSubagentToolCapability,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -248,12 +249,11 @@ async fn gather_product_facts(
         .iter()
         .flat_map(|definition| &definition.requested_tools.selectors)
         .filter(|selector| selector.allowed)
-        .map(|selector| {
+        .filter_map(|selector| {
             selector
-                .canonical_host_name
-                .as_deref()
-                .unwrap_or(&selector.source_name)
-                .to_string()
+                .canonical_capability
+                .map(host_tool_name)
+                .map(str::to_string)
         })
         .collect::<BTreeSet<_>>();
     let mut tools = BTreeMap::new();
@@ -331,6 +331,18 @@ async fn gather_product_facts(
         models_dev,
         tools,
         locals,
+    }
+}
+
+fn host_tool_name(capability: ExternalSubagentToolCapability) -> &'static str {
+    match capability {
+        ExternalSubagentToolCapability::DirectoryList => "LS",
+        ExternalSubagentToolCapability::ReadFile => "Read",
+        ExternalSubagentToolCapability::GlobFiles => "Glob",
+        ExternalSubagentToolCapability::SearchText => "Grep",
+        ExternalSubagentToolCapability::ExecuteCommand => "ExecCommand",
+        ExternalSubagentToolCapability::EditFile => "Edit",
+        ExternalSubagentToolCapability::WriteFile => "Write",
     }
 }
 
@@ -1031,10 +1043,18 @@ fn resolve_external_candidate(
         .iter()
         .filter(|selector| selector.allowed)
     {
-        let name = selector
-            .canonical_host_name
-            .as_deref()
-            .unwrap_or(&selector.source_name);
+        let Some(capability) = selector.canonical_capability else {
+            if matches!(compatibility, ExternalSubagentCompatibilityState::Ready) {
+                compatibility = ExternalSubagentCompatibilityState::ReadyWithDegradation;
+            }
+            unavailable_tool_labels.push(selector.source_name.clone());
+            diagnostics.push(ExternalSubagentDiagnosticSummary {
+                code: "external_subagent.tool_unavailable".to_string(),
+                blocks_activation: false,
+            });
+            continue;
+        };
+        let name = host_tool_name(capability);
         match facts.tools.get(name) {
             Some(tool) => tools.push(tool.clone()),
             None => {
@@ -1482,8 +1502,8 @@ mod tests {
         ExternalSubagentContributionId, ExternalSubagentContributionRole, ExternalSubagentLocalId,
         ExternalSubagentMode, ExternalSubagentModelBindingMethod,
         ExternalSubagentModelBindingTarget, ExternalSubagentModelProfileRequest,
-        ExternalSubagentProvenanceRef, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
-        SecretText,
+        ExternalSubagentProvenanceRef, ExternalSubagentToolCapability, ExternalSubagentToolRequest,
+        ExternalSubagentToolSelector, SecretText,
     };
     use bitfun_product_domains::tool_permissions::{
         PermissionConstraintLayer, PermissionEffect, PermissionRule,
@@ -1517,7 +1537,7 @@ mod tests {
                 requested_tools: ExternalSubagentToolRequest {
                     selectors: vec![ExternalSubagentToolSelector {
                         source_name: "read".to_string(),
-                        canonical_host_name: Some("Read".to_string()),
+                        canonical_capability: Some(ExternalSubagentToolCapability::ReadFile),
                         allowed: true,
                     }],
                     uses_conservative_default: false,
@@ -2285,18 +2305,16 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_tool_labels_are_preserved_for_product_diagnostics() {
+    fn unknown_source_tool_degrades_without_borrowing_a_same_named_host_tool() {
         let empty_set = BTreeSet::new();
         let empty_map = BTreeMap::new();
         let mut definition_snapshot = snapshot("behavior-v1", "catalog-v1");
-        definition_snapshot.definitions[0]
-            .requested_tools
-            .selectors
-            .push(ExternalSubagentToolSelector {
-                source_name: "shell".to_string(),
-                canonical_host_name: Some("Shell".to_string()),
+        definition_snapshot.definitions[0].requested_tools.selectors[0] =
+            ExternalSubagentToolSelector {
+                source_name: "Read".to_string(),
+                canonical_capability: None,
                 allowed: true,
-            });
+            };
 
         let state = reconcile_with_facts(
             Some(Path::new("C:/repo")),
@@ -2313,10 +2331,31 @@ mod tests {
             &facts(),
         );
 
-        assert_eq!(state.summaries[0].unavailable_tool_labels, ["Shell"]);
+        assert_eq!(state.summaries[0].unavailable_tool_labels, ["Read"]);
+        assert_eq!(
+            state.summaries[0].compatibility_state,
+            ExternalSubagentCompatibilityState::ReadyWithDegradation
+        );
+        assert!(state.summaries[0].effective_tool_labels.is_empty());
         assert!(state.summaries[0].diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == "external_subagent.tool_unavailable" && diagnostic.blocks_activation
+            diagnostic.code == "external_subagent.tool_unavailable" && !diagnostic.blocks_activation
         }));
+    }
+
+    #[test]
+    fn executable_and_file_mutation_capabilities_use_bitfun_builtin_tools() {
+        assert_eq!(
+            host_tool_name(ExternalSubagentToolCapability::ExecuteCommand),
+            "ExecCommand"
+        );
+        assert_eq!(
+            host_tool_name(ExternalSubagentToolCapability::EditFile),
+            "Edit"
+        );
+        assert_eq!(
+            host_tool_name(ExternalSubagentToolCapability::WriteFile),
+            "Write"
+        );
     }
 
     #[test]

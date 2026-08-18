@@ -13,7 +13,7 @@ export interface ResolvedFocusTarget {
   resolvedTurnIndex?: number;
   focusItemId?: string;
   expandExploreGroupId?: string;
-  preferPinnedTurnNavigation: boolean;
+  preferTurnNavigation: boolean;
 }
 
 export function resolveFlowChatFocusTarget(
@@ -74,6 +74,6 @@ export function resolveFlowChatFocusTarget(
     resolvedTurnIndex,
     focusItemId: itemId,
     expandExploreGroupId,
-    preferPinnedTurnNavigation: source === 'btw-back',
+    preferTurnNavigation: source === 'btw-back',
   };
 }

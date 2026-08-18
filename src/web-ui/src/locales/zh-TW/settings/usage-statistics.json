@@ -1,0 +1,78 @@
+{
+  "title": "調用統計",
+  "subtitle": "目前裝置本機儲存的歷史模型調用統計，不會跨裝置合併或同步；包含按模型、供應商與端點統計的請求數、Token 用量與快取命中率。",
+  "timeRange": {
+    "label": "時間範圍",
+    "last24Hours": "近24小時",
+    "today": "今日",
+    "thisWeek": "本週",
+    "thisMonth": "本月",
+    "all": "全部"
+  },
+  "granularity": {
+    "label": "粒度",
+    "hour": "按小時",
+    "day": "按天"
+  },
+  "filter": {
+    "kind": {
+      "label": "篩選欄位",
+      "all": "全部",
+      "provider": "供應商",
+      "model": "模型"
+    },
+    "placeholder": "篩選供應商或模型",
+    "inputLabel": "篩選調用統計",
+    "clear": "清除篩選",
+    "empty": {
+      "title": "沒有符合的調用資料",
+      "description": "目前篩選條件下沒有調用記錄。"
+    }
+  },
+  "refresh": "重新整理",
+  "loading": "正在載入調用統計…",
+  "loadFailed": "載入調用統計失敗，請重試。",
+  "unsupported": "目前連線裝置的 BitFun 版本較舊，暫不支援調用統計。",
+  "empty": {
+    "title": "暫無調用資料",
+    "description": "開始與模型對話後，這裡會顯示模型調用統計。"
+  },
+  "summary": {
+    "requests": "請求數",
+    "tokens": "Token 總量",
+    "cachedTokens": "快取命中 Token",
+    "cacheHitRate": "快取命中率"
+  },
+  "distributions": {
+    "byModel": "模型分佈",
+    "byGroup": "分組使用分佈",
+    "byEndpoint": "端點分佈"
+  },
+  "cacheHitRate": {
+    "title": "模型快取命中率"
+  },
+  "attribution": {
+    "deletedConfig": "已刪除設定",
+    "unknownConfig": "未知設定",
+    "unknownProvider": "未知供應商",
+    "unknownModel": "未知模型",
+    "unknownEndpoint": "未知端點"
+  },
+  "trend": {
+    "title": "Token 使用趨勢",
+    "legend": {
+      "input": "Input",
+      "output": "Output",
+      "cacheCreation": "Cache Creation",
+      "cacheRead": "Cache Read",
+      "cacheHitRate": "快取命中率"
+    }
+  },
+  "table": {
+    "model": "模型",
+    "group": "分組",
+    "endpoint": "端點",
+    "requests": "請求",
+    "tokens": "Token"
+  }
+}

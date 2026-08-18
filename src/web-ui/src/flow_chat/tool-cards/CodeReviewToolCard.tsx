@@ -41,6 +41,7 @@ import { CodeReviewReportExportActions } from './CodeReviewReportExportActions';
 import { DEEP_REVIEW_SCROLL_TO_EVENT, type DeepReviewScrollToRequest } from '../events/flowchatNavigation';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { normalizeDecisionEntry, type DecisionContext } from '../utils/codeReviewReport';
+import { getMotionAwareScrollBehavior } from '../utils/motionPreference';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import './CodeReviewToolCard.scss';
 
@@ -458,7 +459,10 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             anchor = document.getElementById(`review-remediation-${request.groupId}-${request.groupIndex}`);
           }
           if (anchor) {
-            anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            anchor.scrollIntoView({
+              behavior: getMotionAwareScrollBehavior('smooth'),
+              block: 'center',
+            });
             anchor.classList.add('is-highlighted');
             setTimeout(() => anchor!.classList.remove('is-highlighted'), 2000);
           }

@@ -431,6 +431,12 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .git-branch-history-view__spinner {
+    animation: none;
+  }
+}
+
 
 .bitfun-right-panel[data-mode="compact"] {
   .git-branch-history-view {

@@ -93,6 +93,19 @@ export default function architectureUnitTest() {
       expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
     });
 
+    // Switching sessions is a state change, not a navigation. Treating the
+    // session id as part of the destination made every row tap clear the stack
+    // and push a fresh one, and on the wide layout the master pane lives inside
+    // that destination — so the whole sidebar was rebuilt on each tap.
+    it('keeps a session switch from rebuilding the chat destination', 0, () => {
+      const shell = new AppShellViewModel();
+      shell.pushRoute(AppRoute.RemoteHome);
+      shell.pushRoute(AppRoute.RemoteChat, 'session-a');
+      shell.replaceRouteWithoutAnimation(AppRoute.RemoteChat, 'session-b');
+      expect(shell.currentRoute()).assertEqual(AppRoute.RemoteChat);
+      expect(shell.navigationStack.getAllPathName().length).assertEqual(2);
+    });
+
     it('keeps wide layout geometry pure and deterministic', 0, () => {
       expect(WideLayoutGeometry.detailOffset(false, 24, 8)).assertEqual(24);
       expect(WideLayoutGeometry.detailOffset(true, 24, 8)).assertEqual(8);

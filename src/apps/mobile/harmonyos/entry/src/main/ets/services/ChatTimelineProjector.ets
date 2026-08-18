@@ -21,14 +21,28 @@ export class ChatTimelineRevisionTracker {
   private signature: string = '';
   private revision: number = 0;
 
+  /**
+   * Identity of a single rendered item: its own id, plus everything about it
+   * the bubble draws.
+   *
+   * Doubles as the timeline's `ForEach` key, which is the point of it being
+   * per-item. Keying on the revision instead made every bubble in the
+   * transcript a new node whenever any one of them changed — during a run that
+   * is a full rebuild per poll tick, to show one message growing.
+   */
+  static itemSignature(item: ChatTimelineItem): string {
+    const message = item.message;
+    return `${item.type}:${item.id}:${item.isStreaming}:${item.isFinalizing}:` +
+      `${message ? message.status : ''}:${message ? message.renderVersion || 0 : 0}:` +
+      `${message ? ChatTimelineRevisionTracker.textSignature(message.text) : ''}:` +
+      `${message && message.thinking ? ChatTimelineRevisionTracker.textSignature(message.thinking) : ''}:` +
+      `${message && message.items ? message.items.length : 0}:${message && message.tools ? message.tools.length : 0}`;
+  }
+
   update(items: ChatTimelineItem[]): number {
-    const nextSignature = items.map((item: ChatTimelineItem) => {
-      const message = item.message;
-      return `${item.type}:${item.id}:${item.isStreaming}:${item.isFinalizing}:` +
-        `${message ? message.status : ''}:${message ? message.renderVersion || 0 : 0}:` +
-        `${message ? this.textSignature(message.text) : ''}:${message && message.thinking ? this.textSignature(message.thinking) : ''}:` +
-        `${message && message.items ? message.items.length : 0}:${message && message.tools ? message.tools.length : 0}`;
-    }).join('|');
+    const nextSignature = items
+      .map((item: ChatTimelineItem) => ChatTimelineRevisionTracker.itemSignature(item))
+      .join('|');
     if (nextSignature !== this.signature) {
       this.signature = nextSignature;
       this.revision += 1;
@@ -36,7 +50,7 @@ export class ChatTimelineRevisionTracker {
     return this.revision;
   }
 
-  private textSignature(value: string): string {
+  private static textSignature(value: string): string {
     let hash = 0;
     for (let index = 0; index < value.length; index++) {
       hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
@@ -52,15 +66,23 @@ export class ChatTimelineRevisionTracker {
 }
 
 export class ChatTimelineProjector {
+  /**
+   * `activeTurnAnchorId` is the id of the optimistic message the running turn
+   * is answering. Anything sent after that message is queued behind the turn,
+   * so it belongs below the reply rather than above it — appending the turn
+   * last would push a mid-run message up under the previous one instead.
+   */
   static project(
     messages: ChatMessage[],
     pendingMessages: ChatMessage[],
     activeTurn: ChatMessage,
-    hasMoreMessages: boolean
+    hasMoreMessages: boolean,
+    activeTurnAnchorId: string = ''
   ): ChatTimelineItem[] {
     const timelineMessages = ChatTimelineProjector.realMessages(messages);
     const pendingItems = ChatTimelineProjector.pendingMessagesNotPersisted(pendingMessages, timelineMessages);
     const shouldRenderActiveTurn = ChatTimelineProjector.shouldRenderActiveTurn(timelineMessages, activeTurn);
+    const anchorIndex = ChatTimelineProjector.anchorIndex(pendingItems, activeTurnAnchorId);
     const items: ChatTimelineItem[] = timelineMessages.map((message: ChatMessage) => {
       const item: ChatTimelineItem = {
         id: `message-${message.id}`,
@@ -73,7 +95,14 @@ export class ChatTimelineProjector {
       return item;
     });
 
-    pendingItems.forEach((message: ChatMessage) => {
+    // The message that started the turn has usually been persisted by the time
+    // the reply streams, so no anchor is left to sit behind: whatever is still
+    // optimistic was sent later and is waiting its turn.
+    if (shouldRenderActiveTurn && anchorIndex < 0) {
+      items.push(ChatTimelineProjector.activeTurnItem(activeTurn));
+    }
+
+    pendingItems.forEach((message: ChatMessage, index: number) => {
       const item: ChatTimelineItem = {
         id: `pending-${message.id}`,
         type: 'optimistic_user_message',
@@ -83,20 +112,10 @@ export class ChatTimelineProjector {
         showRetryAction: false
       };
       items.push(item);
+      if (shouldRenderActiveTurn && index === anchorIndex) {
+        items.push(ChatTimelineProjector.activeTurnItem(activeTurn));
+      }
     });
-
-    if (shouldRenderActiveTurn) {
-      const turnKey = ChatTimelineProjector.activeTurnKey(activeTurn);
-      const item: ChatTimelineItem = {
-        id: `active-${turnKey}-${ChatTimelineProjector.activeTurnVersionKey(activeTurn)}`,
-        type: 'assistant_live_turn',
-        message: activeTurn,
-        isStreaming: (activeTurn.status || '').toLowerCase() === 'active',
-        isFinalizing: (activeTurn.status || '').toLowerCase() === 'completed',
-        showRetryAction: false
-      };
-      items.push(item);
-    }
 
     if (items.length === 0 && !hasMoreMessages) {
       const item: ChatTimelineItem = {
@@ -111,6 +130,31 @@ export class ChatTimelineProjector {
 
     ChatTimelineProjector.markLatestFailedMessageRetryable(items);
     return items;
+  }
+
+  private static anchorIndex(pendingItems: ChatMessage[], activeTurnAnchorId: string): number {
+    if (activeTurnAnchorId.length === 0) {
+      return -1;
+    }
+    for (let index = 0; index < pendingItems.length; index++) {
+      if (pendingItems[index].id === activeTurnAnchorId) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  private static activeTurnItem(activeTurn: ChatMessage): ChatTimelineItem {
+    const turnKey = ChatTimelineProjector.activeTurnKey(activeTurn);
+    const item: ChatTimelineItem = {
+      id: `active-${turnKey}-${ChatTimelineProjector.activeTurnVersionKey(activeTurn)}`,
+      type: 'assistant_live_turn',
+      message: activeTurn,
+      isStreaming: (activeTurn.status || '').toLowerCase() === 'active',
+      isFinalizing: (activeTurn.status || '').toLowerCase() === 'completed',
+      showRetryAction: false
+    };
+    return item;
   }
 
   private static markLatestFailedMessageRetryable(items: ChatTimelineItem[]): void {

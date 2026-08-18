@@ -1,6 +1,7 @@
 use crate::agent::{bitfun_error, config_get_error};
 use crate::role::{AppClient, AppServer};
 use crate::schema::*;
+use crate::server::wire;
 use agent_client_protocol::{Builder, HandleDispatchFrom};
 
 pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
@@ -11,7 +12,12 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             async move |_: GetAgentProfileConfigsMessage, responder, _cx| {
                 let result = bitfun_core::service::config::mode_config_canonicalizer::get_agent_profile_views()
                     .await
-                    .map(|profiles| GetAgentProfileConfigsResponse { profiles })
+                    .map(|profiles| GetAgentProfileConfigsResponse {
+                        profiles: profiles
+                            .into_iter()
+                            .map(|(id, profile)| (id, wire::agent_profile_view(profile)))
+                            .collect(),
+                    })
                     .map_err(bitfun_error);
                 responder.respond_with_result(result)
             },
@@ -21,7 +27,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             async move |request: GetAgentProfileConfigMessage, responder, _cx| {
                 let result = bitfun_core::service::config::mode_config_canonicalizer::get_agent_profile_view(&request.agent_id)
                     .await
-                    .map(GetAgentProfileConfigResponse)
+                    .map(|profile| GetAgentProfileConfigResponse(wire::agent_profile_view(profile)))
                     .map_err(bitfun_error);
                 responder.respond_with_result(result)
             },
@@ -31,7 +37,12 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             async move |_: GetModelConfigsMessage, responder, _cx| {
                 let result = async {
                     let service = bitfun_core::service::config::get_global_config_service().await?;
-                    service.get_ai_models().await
+                    let models = service.get_ai_models().await?;
+                    models
+                        .into_iter()
+                        .map(wire::model_config)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(bitfun_core::BitFunError::from)
                 }
                 .await
                 .map(|models| GetModelConfigsResponse { models })
@@ -152,7 +163,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
                     .await
                 }
                 .await
-                .map(SetAgentProfileConfigResponse)
+                .map(|profile| SetAgentProfileConfigResponse(wire::agent_profile_view(profile)))
                 .map_err(bitfun_error);
                 responder.respond_with_result(result)
             },
@@ -171,7 +182,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
                     .await
                 }
                 .await
-                .map(ResetAgentProfileConfigResponse)
+                .map(|profile| ResetAgentProfileConfigResponse(wire::agent_profile_view(profile)))
                 .map_err(bitfun_error);
                 responder.respond_with_result(result)
             },

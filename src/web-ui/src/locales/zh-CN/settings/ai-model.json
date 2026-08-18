@@ -30,6 +30,7 @@
     "loadFailed": "加载会话标题配置失败",
     "model": {
       "label": "会话标题生成模型",
+      "inherit": "当前会话模型",
       "primary": "主力模型",
       "fast": "快速模型"
     },

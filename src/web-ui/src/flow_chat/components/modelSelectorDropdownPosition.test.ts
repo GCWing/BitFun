@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getModelSelectorDropdownStyle } from './modelSelectorDropdownPosition';
+import {
+  getModelSelectorDropdownLayout,
+  getModelSelectorDropdownStyle,
+} from './modelSelectorDropdownPosition';
 
 describe('getModelSelectorDropdownStyle', () => {
   it('preserves the measured intrinsic width in a wide viewport', () => {
@@ -28,13 +31,14 @@ describe('getModelSelectorDropdownStyle', () => {
   });
 
   it('flips below the trigger when the preferred top placement does not fit', () => {
-    const style = getModelSelectorDropdownStyle(
+    const layout = getModelSelectorDropdownLayout(
       { left: 24, top: 20, bottom: 44 },
       { width: 240, height: 200 },
       'top',
       { width: 800, height: 600 },
     );
 
-    expect(style.top).toBe('50px');
+    expect(layout.style.top).toBe('50px');
+    expect(layout.placement).toBe('bottom');
   });
 });

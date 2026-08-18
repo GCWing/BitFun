@@ -191,20 +191,23 @@ describe('ConfigManager', () => {
     configApiMocks.getConfigs.mockResolvedValueOnce({
       'ai.models': [{ id: 'model-1' }],
       'ai.default_models': { primary: 'model-1' },
-      'ai.func_agent_models': { title: 'primary' },
+      'ai.task_models': {
+        session_title: { kind: 'inherit' },
+        git_commit: { kind: 'fixed', model_id: 'fast' },
+      },
     });
 
     const configs = await configManager.getConfigs([
       'ai.models',
       'ai.default_models',
-      'ai.func_agent_models',
+      'ai.task_models',
     ]);
 
     expect(configApiMocks.getConfigs).toHaveBeenCalledTimes(1);
     expect(configApiMocks.getConfigs).toHaveBeenCalledWith([
       'ai.models',
       'ai.default_models',
-      'ai.func_agent_models',
+      'ai.task_models',
     ]);
     expect(configApiMocks.getConfig).not.toHaveBeenCalled();
     expect(configs['ai.models']).toMatchObject([{ id: 'model-1' }]);
@@ -298,19 +301,22 @@ describe('ConfigManager', () => {
     configApiMocks.getConfig.mockReturnValueOnce(defaultModels.promise);
     configApiMocks.getConfigs.mockResolvedValueOnce({
       'ai.models': [],
-      'ai.func_agent_models': { title: 'fast' },
+      'ai.task_models': {
+        session_title: { kind: 'fixed', model_id: 'fast' },
+        git_commit: { kind: 'fixed', model_id: 'fast' },
+      },
     });
 
     const singleRead = configManager.getConfig('ai.default_models');
     const batchRead = configManager.getConfigs([
       'ai.models',
       'ai.default_models',
-      'ai.func_agent_models',
+      'ai.task_models',
     ]);
 
     expect(configApiMocks.getConfigs).toHaveBeenCalledWith([
       'ai.models',
-      'ai.func_agent_models',
+      'ai.task_models',
     ]);
     defaultModels.resolve({ primary: 'model-1' });
 
@@ -318,7 +324,10 @@ describe('ConfigManager', () => {
     await expect(batchRead).resolves.toEqual({
       'ai.models': [],
       'ai.default_models': { primary: 'model-1' },
-      'ai.func_agent_models': { title: 'fast' },
+      'ai.task_models': {
+        session_title: { kind: 'fixed', model_id: 'fast' },
+        git_commit: { kind: 'fixed', model_id: 'fast' },
+      },
     });
     expect(configApiMocks.getConfig).toHaveBeenCalledTimes(1);
   });
@@ -353,7 +362,7 @@ describe('ConfigManager', () => {
       'ai.models',
       'ai.default_models',
       'ai.agent_model_defaults',
-      'ai.func_agent_models',
+      'ai.task_models',
     ])).resolves.toEqual({
       'ai.models': [],
       'ai.default_models': {},
@@ -367,7 +376,10 @@ describe('ConfigManager', () => {
           fork: { kind: 'inherit' },
         },
       },
-      'ai.func_agent_models': {},
+      'ai.task_models': {
+        session_title: { kind: 'fixed', model_id: 'fast' },
+        git_commit: { kind: 'fixed', model_id: 'fast' },
+      },
     });
   });
 
@@ -399,7 +411,10 @@ describe('ConfigManager', () => {
           fork: { kind: 'inherit' },
         },
       },
-      'ai.func_agent_models': { title: 'gpt-5-mini' },
+      'ai.task_models': {
+        session_title: { kind: 'fixed', model_id: 'gpt-5-mini' },
+        git_commit: { kind: 'fixed', model_id: 'fast' },
+      },
       'ai.default_models': { chat: 'gpt-5' },
     });
 
@@ -409,7 +424,7 @@ describe('ConfigManager', () => {
     expect(configApiMocks.getConfigs).toHaveBeenCalledWith([
       'ai.models',
       'ai.agent_model_defaults',
-      'ai.func_agent_models',
+      'ai.task_models',
       'ai.default_models',
     ]);
     expect(configApiMocks.getConfig).not.toHaveBeenCalled();

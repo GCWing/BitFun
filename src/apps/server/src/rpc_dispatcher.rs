@@ -180,6 +180,14 @@ pub async fn dispatch(
                 .map_err(|e| anyhow!("{}", e))?;
             Ok(serde_json::to_value(&models).unwrap_or_default())
         }
+        "get_token_usage_statistics" => {
+            let request = serde_json::from_value(extract_request(&params)?.clone())?;
+            let statistics = state
+                .token_usage_service
+                .get_statistics_for_request(request)
+                .await?;
+            Ok(serde_json::to_value(statistics)?)
+        }
 
         "list_subagents" => {
             let request = extract_request(&params)?;

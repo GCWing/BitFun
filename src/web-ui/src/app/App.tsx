@@ -10,6 +10,7 @@ import { NotificationContainer, notificationService } from '../shared/notificati
 import { NotificationCenter } from '../shared/notification-system/components/NotificationCenter';
 import { AnnouncementProvider } from '../shared/announcement-system';
 import { ConfirmDialogRenderer } from '../component-library';
+import { SessionUsageModal } from '../flow_chat/components/usage/SessionUsageModal';
 import { createLogger } from '@/shared/utils/logger';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { isTauriRuntime } from '@/infrastructure/runtime';
@@ -897,6 +898,11 @@ function App() {
 
             {/* Confirm dialog */}
             <ConfirmDialogRenderer />
+
+            {/* Session usage report. Mounted here rather than in a chat view:
+                the request runs below any component, and the report outlives
+                whichever session view is on screen. */}
+            <SessionUsageModal />
 
             {/* Announcement / feature-demo / tips system */}
             <AnnouncementProvider />

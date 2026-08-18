@@ -19,13 +19,14 @@ import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
+import { isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 import WorkspaceBody from './WorkspaceBody';
 import { useToolbarModeContext } from '../../flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInteractionDialog';
 import { workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
-import { confirmDialog } from '@/component-library';
+import { confirmDialog, PresenceBoundary } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { DailyAppUpdateGate } from '@/infrastructure/update';
 import { useI18n } from '@/infrastructure/i18n';
@@ -397,6 +398,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         }
       } catch (error) {
         if (cancelled) {
+          return;
+        }
+        // A newer device surface superseded this bootstrap. The activation that
+        // replaced it runs its own, so this is ordinary control flow — not a
+        // failure the user should see, and not a reason to leave the window
+        // without a live subscription.
+        if (isSurfaceChangedError(error)) {
+          void FlowChatManager.getInstance().ensureEventListeners();
           return;
         }
         log.error('FlowChatManager initialization failed', error);
@@ -777,7 +786,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       </div>
 
       {/* Dialogs (previously owned by TitleBar) */}
-      {showNewProjectDialog && (
+      <PresenceBoundary active={showNewProjectDialog}>
         <Suspense fallback={null}>
           <NewProjectDialog
             isOpen={showNewProjectDialog}
@@ -786,16 +795,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             defaultParentPath={hasWorkspace ? currentWorkspace?.rootPath : undefined}
           />
         </Suspense>
-      )}
-      {showAboutDialog && (
+      </PresenceBoundary>
+      <PresenceBoundary active={showAboutDialog}>
         <Suspense fallback={null}>
           <AboutDialog
             isOpen={showAboutDialog}
             onClose={() => setShowAboutDialog(false)}
           />
         </Suspense>
-      )}
-      {showWorkspaceStatus && (
+      </PresenceBoundary>
+      <PresenceBoundary active={showWorkspaceStatus}>
         <Suspense fallback={null}>
           <WorkspaceManager
             isVisible={showWorkspaceStatus}
@@ -803,7 +812,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             onWorkspaceSelect={() => {}}
           />
         </Suspense>
-      )}
+      </PresenceBoundary>
       <MCPInteractionDialog />
     </>
   );

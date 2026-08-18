@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
-import { Button, ConfirmDialog, InputDialog, Modal, Tooltip } from '@/component-library';
+import { Button, ConfirmDialog, InputDialog, Modal, PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
@@ -1017,7 +1017,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           confirmDanger
           preview={`${t('nav.workspaces.resetWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
         />
-        {scheduledJobsModalOpen && (
+        <PresenceBoundary active={scheduledJobsModalOpen}>
           <Suspense fallback={null}>
             <ScheduledJobsModal
               isOpen={scheduledJobsModalOpen}
@@ -1033,8 +1033,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               targetDescription={workspace.rootPath}
             />
           </Suspense>
-        )}
-        {projectPermissionsDialogOpen && (
+        </PresenceBoundary>
+        <PresenceBoundary active={projectPermissionsDialogOpen}>
           <Suspense fallback={null}>
             <WorkspaceProjectPermissionsDialog
               workspace={workspace}
@@ -1042,7 +1042,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               onClose={() => setProjectPermissionsDialogOpen(false)}
             />
           </Suspense>
-        )}
+        </PresenceBoundary>
       </div>
     );
   }
@@ -1527,7 +1527,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         validator={validateWorkspaceName}
         required={false}
       />
-      {relatedPathsDialogOpen && (
+      <PresenceBoundary active={relatedPathsDialogOpen}>
         <Suspense fallback={null}>
           <WorkspaceRelatedPathsDialog
             workspace={workspace}
@@ -1535,8 +1535,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             onClose={() => setRelatedPathsDialogOpen(false)}
           />
         </Suspense>
-      )}
-      {projectPermissionsDialogOpen && (
+      </PresenceBoundary>
+      <PresenceBoundary active={projectPermissionsDialogOpen}>
         <Suspense fallback={null}>
           <WorkspaceProjectPermissionsDialog
             workspace={workspace}
@@ -1544,8 +1544,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             onClose={() => setProjectPermissionsDialogOpen(false)}
           />
         </Suspense>
-      )}
-      {sessionBatchModalOpen && (
+      </PresenceBoundary>
+      <PresenceBoundary active={sessionBatchModalOpen}>
         <Suspense fallback={null}>
           <WorkspaceSessionBatchModal
             isOpen={sessionBatchModalOpen}
@@ -1556,8 +1556,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           />
         </Suspense>
-      )}
-      {scheduledJobsModalOpen && (
+      </PresenceBoundary>
+      <PresenceBoundary active={scheduledJobsModalOpen}>
         <Suspense fallback={null}>
           <ScheduledJobsModal
             isOpen={scheduledJobsModalOpen}
@@ -1573,7 +1573,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             targetDescription={workspace.rootPath}
           />
         </Suspense>
-      )}
+      </PresenceBoundary>
     </div>
   );
 };

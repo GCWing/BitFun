@@ -16,9 +16,6 @@
   border-radius: var(--bf-appearance-token-size-radius-base);
   color: var(--bf-appearance-token-color-text-secondary);
 
-  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
-
-
   &--default {
     background: var(--v-card-bg-default);
   }
@@ -51,10 +48,15 @@
 
   &--interactive {
     cursor: pointer;
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:active {
       background: var(--v-card-bg-active);
-      transform: scale(0.985);
+      scale: 0.985;
     }
   }
 
@@ -91,6 +93,19 @@
 
   &--full-width {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-card--interactive {
+    transition:
+      background-color var(--bf-appearance-token-motion-instant) ease,
+      border-color var(--bf-appearance-token-motion-instant) ease,
+      box-shadow var(--bf-appearance-token-motion-instant) ease;
+
+    &:active {
+      scale: none;
+    }
   }
 }
 

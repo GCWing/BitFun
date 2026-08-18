@@ -1,3 +1,6 @@
+#[cfg(feature = "mcp-bridge")]
+use bitfun_agent_tools::validate_mcp_tool_bridge_input;
+#[cfg(feature = "acp-bridge")]
 use bitfun_agent_tools::{
     acp_external_agent_tool_input_schema, build_acp_external_agent_tool_definition,
     build_acp_external_agent_tool_name, build_acp_external_agent_tool_result,
@@ -26,13 +29,11 @@ use bitfun_agent_tools::{
     resolve_tool_path_with_context_roots, resolve_workspace_tool_path,
     sort_tool_manifest_definitions, summarize_get_tool_spec_deferred_tools,
     tool_path_is_effectively_absolute, validate_deferred_tool_usage, validate_get_tool_spec_input,
-    validate_mcp_tool_bridge_input, validate_tool_allowed_by_list,
-    validate_tool_execution_admission, CallDeferredToolInputError, DynamicMcpToolInfo,
-    DynamicToolInfo, GetToolSpecDeferredToolSummary, GetToolSpecExecutionError,
+    validate_tool_allowed_by_list, validate_tool_execution_admission, CallDeferredToolInputError,
+    DynamicMcpToolInfo, DynamicToolInfo, GetToolSpecDeferredToolSummary, GetToolSpecExecutionError,
     GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
-    LoadedDeferredToolSpec, McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput,
-    PromptVisibleToolManifestItem, ResolvedToolInvocation, ToolContextFacts,
-    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
+    LoadedDeferredToolSpec, PromptVisibleToolManifestItem, ResolvedToolInvocation,
+    ToolContextFacts, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
     ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
     ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
     ToolWorkspaceKind, ValidationResult, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
@@ -46,11 +47,13 @@ use bitfun_agent_tools::{
     TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
     USER_STEERING_INTERRUPTED_MESSAGE,
 };
+#[cfg(feature = "mcp-bridge")]
 use bitfun_agent_tools::{
     build_mcp_tool_bridge_definition, build_mcp_tool_bridge_name, build_mcp_tool_bridge_result,
     mcp_tool_bridge_dynamic_tool_info, mcp_tool_bridge_short_description, normalize_name_for_mcp,
     render_mcp_tool_bridge_rejected_message, render_mcp_tool_bridge_result_message,
-    render_mcp_tool_bridge_use_message, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
+    render_mcp_tool_bridge_use_message, McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput,
+    MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
 use bitfun_agent_tools::{
     build_persisted_tool_output_message, count_tool_result_lines, file_tool_guidance_message,
@@ -134,20 +137,56 @@ fn effective_tool_invocation_borrows_deferred_identity_from_wire_call() {
 }
 
 #[test]
-fn call_deferred_tool_contract_rejects_flat_or_string_arguments() {
-    let flat = ResolvedToolInvocation::from_wire_call(
+fn call_deferred_tool_contract_normalizes_overflow_and_missing_args() {
+    let overflow = ResolvedToolInvocation::from_wire_call(
+        CALL_DEFERRED_TOOL_NAME,
+        json!({
+            "tool_name": "get_weather",
+            "args": {
+                "city": "Shanghai",
+                "unit": "celsius"
+            },
+            "city": "Beijing",
+            "language": "zh-CN"
+        }),
+    )
+    .expect("overflow target arguments should be normalized");
+    assert_eq!(
+        overflow.effective_arguments,
+        json!({
+            "city": "Shanghai",
+            "unit": "celsius",
+            "language": "zh-CN"
+        })
+    );
+    assert_eq!(
+        overflow.wire_arguments,
+        json!({
+            "tool_name": "get_weather",
+            "args": {
+                "city": "Shanghai",
+                "unit": "celsius",
+                "language": "zh-CN"
+            }
+        })
+    );
+
+    let missing_args = ResolvedToolInvocation::from_wire_call(
         CALL_DEFERRED_TOOL_NAME,
         json!({
             "tool_name": "get_weather",
             "city": "Shanghai"
         }),
     )
-    .expect_err("flat target arguments must be rejected");
+    .expect("missing args should be treated as an empty object");
     assert_eq!(
-        flat,
-        CallDeferredToolInputError::UnexpectedField("city".to_string())
+        missing_args.effective_arguments,
+        json!({ "city": "Shanghai" })
     );
+}
 
+#[test]
+fn call_deferred_tool_contract_rejects_non_object_arguments() {
     let encoded = ResolvedToolInvocation::from_wire_call(
         CALL_DEFERRED_TOOL_NAME,
         json!({
@@ -157,6 +196,34 @@ fn call_deferred_tool_contract_rejects_flat_or_string_arguments() {
     )
     .expect_err("JSON-encoded string arguments must be rejected");
     assert_eq!(encoded, CallDeferredToolInputError::ArgsMustBeObject);
+}
+
+#[test]
+fn call_deferred_tool_input_serializes_canonical_wire_shape() {
+    let parsed = bitfun_agent_tools::parse_call_deferred_tool_input(&json!({
+        "tool_name": "CreatePlan",
+        "overview": "outside",
+        "args": {
+            "overview": "inside",
+            "plan": "# Plan"
+        }
+    }))
+    .expect("overflow arguments should normalize");
+
+    assert_eq!(
+        parsed.canonical_wire_arguments(),
+        json!({
+            "tool_name": "CreatePlan",
+            "args": {
+                "overview": "inside",
+                "plan": "# Plan"
+            }
+        })
+    );
+    assert_eq!(
+        parsed.canonical_wire_json().expect("canonical JSON"),
+        r##"{"tool_name":"CreatePlan","args":{"overview":"inside","plan":"# Plan"}}"##
+    );
 }
 
 #[test]
@@ -185,6 +252,7 @@ fn resolved_tool_invocation_updates_effective_arguments_without_losing_wire_iden
 }
 
 #[test]
+#[cfg(feature = "mcp-bridge")]
 fn mcp_tool_bridge_preserves_prompt_visible_name_and_descriptor_contract() {
     assert_eq!(MCP_TOOL_PREFIX, "mcp__");
     assert_eq!(MCP_TOOL_DELIMITER, "__");
@@ -239,6 +307,7 @@ fn mcp_tool_bridge_preserves_prompt_visible_name_and_descriptor_contract() {
 }
 
 #[test]
+#[cfg(feature = "mcp-bridge")]
 fn mcp_tool_bridge_preserves_dynamic_info_validation_and_rendering_contract() {
     let definition = build_mcp_tool_bridge_definition(McpToolBridgeDefinitionInput {
         server_id: "github",
@@ -309,6 +378,7 @@ fn mcp_tool_bridge_preserves_dynamic_info_validation_and_rendering_contract() {
 }
 
 #[test]
+#[cfg(feature = "acp-bridge")]
 fn acp_external_agent_bridge_preserves_tool_contract() {
     assert_eq!(ACP_TOOL_PREFIX, "acp__");
     assert_eq!(ACP_TOOL_SUFFIX, "__prompt");
@@ -1392,7 +1462,6 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
 
     let err = validate_deferred_tool_usage(
         "WebFetch",
-        true,
         &deferred_tools,
         &loaded_deferred_tool_specs,
         0,
@@ -1401,7 +1470,7 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
     .expect_err("deferred tool should require GetToolSpec unlock");
     assert_eq!(
         err.to_string(),
-        "Tool 'WebFetch' is deferred. Call GetToolSpec first with {\"tool_name\":\"WebFetch\"} to read its full usage instructions and input schema, then call it through CallDeferredTool."
+        "Tool 'WebFetch' is deferred. Call GetToolSpec first with {\"tool_name\":\"WebFetch\"} to read its full usage instructions and input schema before invoking it."
     );
 
     let loaded_deferred_tool_specs = vec![LoadedDeferredToolSpec {
@@ -1410,7 +1479,6 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
     }];
     validate_deferred_tool_usage(
         "WebFetch",
-        true,
         &deferred_tools,
         &loaded_deferred_tool_specs,
         0,
@@ -1420,7 +1488,6 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
 
     let stale = validate_deferred_tool_usage(
         "WebFetch",
-        true,
         &deferred_tools,
         &[LoadedDeferredToolSpec {
             tool_name: "WebFetch".to_string(),
@@ -1434,22 +1501,8 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
         .to_string()
         .contains("loaded catalog generation 41, current generation 42"));
 
-    let direct = validate_deferred_tool_usage(
-        "WebFetch",
-        false,
-        &deferred_tools,
-        &loaded_deferred_tool_specs,
-        0,
-        GET_TOOL_SPEC_TOOL_NAME,
-    )
-    .expect_err("deferred tools must not be called directly");
-    assert!(direct
-        .to_string()
-        .contains("deferred and cannot be called directly"));
-
     validate_deferred_tool_usage(
         GET_TOOL_SPEC_TOOL_NAME,
-        false,
         &deferred_tools,
         &[],
         0,
@@ -1485,7 +1538,6 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["Read".to_string()],
         runtime_tool_restrictions: &restrictions,
-        invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
         current_catalog_generation: 0,
@@ -1508,7 +1560,6 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &restrictions,
-        invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
         current_catalog_generation: 0,
@@ -1531,7 +1582,6 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &ToolRuntimeRestrictions::default(),
-        invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
         current_catalog_generation: 0,
@@ -1920,8 +1970,15 @@ fn get_tool_spec_contract_escapes_assistant_detail_for_xml_sections() {
     );
 
     assert!(detail.contains("<description>\nUse &lt;danger&gt; &amp; keep output valid."));
-    assert!(detail.contains("\"description\":\"Match &lt;tag&gt; &amp; symbols\""));
-    assert!(detail.contains("CallDeferredTool({\"tool_name\":\"Git\",\"args\":{...}})"));
+    assert!(
+        detail.contains("<calling>\nCall `CallDeferredTool` with arguments matching this schema:")
+    );
+    assert!(detail.contains("\"required\": [\"tool_name\", \"args\"]"));
+    assert!(detail.contains("\"tool_name\": {\n      \"const\": \"Git\"\n    }"));
+    assert!(detail.contains("\"args\": {"));
+    assert!(detail.contains("\"description\": \"Match &lt;tag&gt; &amp; symbols\""));
+    assert!(!detail.contains("<input_schema>"));
+    assert!(!detail.contains("<execution>"));
     assert!(!detail.contains("Use <danger> & keep output valid."));
 }
 
@@ -1992,6 +2049,10 @@ fn get_tool_spec_contract_builds_detail_result() {
     let assistant = result_for_assistant.expect("assistant detail");
     assert!(assistant.contains("Use &lt;repo&gt; &amp; inspect changes."));
     assert!(assistant.contains("Run &lt;safe&gt; git commands"));
+    assert!(assistant.contains("\"tool_name\": {\n      \"const\": \"Git\"\n    }"));
+    assert!(assistant.contains("\"args\": {"));
+    assert!(!assistant.contains("<input_schema>"));
+    assert!(!assistant.contains("<execution>"));
     assert_eq!(image_attachments, None);
 }
 

@@ -90,3 +90,9 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-acp-plan__icon--active {
+    animation: none;
+  }
+}

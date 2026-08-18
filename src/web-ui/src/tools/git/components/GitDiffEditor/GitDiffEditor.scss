@@ -168,7 +168,7 @@ $_diff-padding-desktop: 32px;
           width: 1px;
           background: var(--bf-appearance-token-border-medium);
           border-left: 1px dashed var(--bf-appearance-token-border-medium);
-          transition: all 0.2s ease;
+          transition: border-left-color 0.2s ease;
         }
         
         &:hover::before {
@@ -441,6 +441,25 @@ $_diff-padding-desktop: 32px;
       width: $_diff-spinner-size * 0.75;
       height: $_diff-spinner-size * 0.75;
       border-width: $_diff-spinner-border - 1px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-diff-editor {
+    &__error,
+    &__saving-indicator,
+    &__processing-overlay,
+    &__spinner,
+    &__completed-message,
+    &__completed-icon,
+    &__completed-title,
+    &__completed-details {
+      animation: none;
+    }
+
+    &__processing-overlay p {
+      animation: none;
     }
   }
 }

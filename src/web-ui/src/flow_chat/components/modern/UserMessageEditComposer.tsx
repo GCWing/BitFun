@@ -25,6 +25,7 @@ interface UserMessageEditComposerProps {
   presentation?: ComposerPresentation | null;
   workspacePath?: string;
   workspaceId?: string;
+  remoteConnectionId?: string;
   excludeSessionId?: string;
 }
 
@@ -44,6 +45,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   presentation,
   workspacePath,
   workspaceId,
+  remoteConnectionId,
   excludeSessionId,
 }) => {
   const editorRef = useRef<RichTextInputElement>(null);
@@ -133,6 +135,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
           searchQuery={mentionState.query}
           workspacePath={workspacePath}
           workspaceId={workspaceId}
+          remoteConnectionId={remoteConnectionId}
           excludeSessionId={excludeSessionId}
           anchorRef={mentionAnchorRef}
           onSelect={handleSelectContext}
@@ -183,6 +186,7 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
   presentation,
   workspacePath,
   workspaceId,
+  remoteConnectionId,
   excludeSessionId,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -229,6 +233,7 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
         presentation={presentation}
         workspacePath={workspacePath}
         workspaceId={workspaceId}
+        remoteConnectionId={remoteConnectionId}
         excludeSessionId={excludeSessionId}
       />
     );

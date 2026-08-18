@@ -5,6 +5,7 @@
  */
 
 import { useRef, useCallback, useState, useEffect, RefObject } from 'react';
+import { getMotionAwareScrollBehavior } from '../utils/motionPreference';
 
 interface UseAutoScrollOptions {
   enabled?: boolean;
@@ -49,7 +50,9 @@ export const useAutoScroll = (
     
     // Force scroll, or auto-scroll when user is at the bottom.
     if (force || (enabled && !isUserScrolledUp)) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({
+        behavior: force ? getMotionAwareScrollBehavior('smooth') : 'auto',
+      });
       
       // Reset the user-scrolled-up state on force.
       if (force) {
@@ -94,4 +97,3 @@ export const useAutoScroll = (
     shouldShowScrollButton
   };
 };
-

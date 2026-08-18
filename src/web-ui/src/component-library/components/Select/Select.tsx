@@ -6,14 +6,21 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useCallback,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
-import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import {
+  useAnchoredPopoverPosition,
+  type AnchoredPopoverLayout,
+} from '@/shared/utils/useAnchoredPopoverPosition';
+import { PresenceBoundary } from '../PresenceBoundary/PresenceBoundary';
 import './Select.scss';
+
+const SELECT_DROPDOWN_EXIT_RETENTION_MS = 120;
 
 export interface SelectOption {
   label: string;
@@ -65,6 +72,17 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   /** Match the trigger width, preserving the historical Select default. */
   dropdownMatchTriggerWidth?: boolean;
 }
+
+interface SelectDropdownMountProps {
+  mode: NonNullable<SelectProps['dropdownMode']>;
+  children: React.ReactNode;
+}
+
+const SelectDropdownMount: React.FC<SelectDropdownMountProps> = ({ mode, children }) => (
+  mode === 'overlay'
+    ? createPortal(children, getAppearanceOverlayHost())
+    : <>{children}</>
+);
 
 export const Select: React.FC<SelectProps> = ({
   options = [],
@@ -120,6 +138,7 @@ export const Select: React.FC<SelectProps> = ({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const hasMountedRef = useRef(false);
   
   const selectRef = useRef<HTMLDivElement>(null);
@@ -179,6 +198,50 @@ export const Select: React.FC<SelectProps> = ({
     ...groupedOptions.ungrouped,
     ...Object.values(groupedOptions.groups).flat(),
   ], [groupedOptions]);
+
+  const liveDropdownSnapshot = useMemo<{
+    filteredOptions: SelectOption[];
+    groupedOptions: typeof groupedOptions;
+    highlightedIndex: number;
+    searchQuery: string;
+    loading: boolean;
+    placement: 'bottom' | 'top';
+    layout: AnchoredPopoverLayout | null;
+  }>(() => ({
+    filteredOptions,
+    groupedOptions,
+    highlightedIndex,
+    searchQuery,
+    loading,
+    placement: resolvedPlacement,
+    layout: dropdownLayout,
+  }), [
+    dropdownLayout,
+    filteredOptions,
+    groupedOptions,
+    highlightedIndex,
+    loading,
+    resolvedPlacement,
+    searchQuery,
+  ]);
+  const lastOpenDropdownSnapshotRef = useRef(liveDropdownSnapshot);
+  useLayoutEffect(() => {
+    if (isOpen) {
+      lastOpenDropdownSnapshotRef.current = liveDropdownSnapshot;
+    }
+  }, [isOpen, liveDropdownSnapshot]);
+  const renderedDropdownSnapshot = isOpen
+    ? liveDropdownSnapshot
+    : lastOpenDropdownSnapshotRef.current;
+  const {
+    filteredOptions: renderedFilteredOptions,
+    groupedOptions: renderedGroupedOptions,
+    highlightedIndex: renderedHighlightedIndex,
+    searchQuery: renderedSearchQuery,
+    loading: renderedLoading,
+    placement: renderedPlacement,
+    layout: renderedDropdownLayout,
+  } = renderedDropdownSnapshot;
 
   const isSelected = useCallback((optionValue: string | number) => {
     if (multiple) {
@@ -297,6 +360,10 @@ export const Select: React.FC<SelectProps> = ({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (disabled) return;
 
+    if (['Enter', 'Escape', 'ArrowDown', 'ArrowUp', 'Tab'].includes(e.key)) {
+      setKeyboardOpen(true);
+    }
+
     switch (e.key) {
       case 'Enter':
         e.preventDefault();
@@ -357,6 +424,7 @@ export const Select: React.FC<SelectProps> = ({
         && !selectRef.current.contains(target)
         && !dropdownRef.current?.contains(target)
       ) {
+        setKeyboardOpen(false);
         if (allowCustomValue && !multiple && searchQuery.trim()) {
           const trimmedValue = searchQuery.trim();
           const existingOption = options.find(opt => 
@@ -392,6 +460,15 @@ export const Select: React.FC<SelectProps> = ({
       searchInputRef.current.focus();
     }
   }, [isOpen, searchable]);
+
+  useLayoutEffect(() => {
+    if (
+      !isOpen
+      && dropdownRef.current?.contains(document.activeElement)
+    ) {
+      triggerRef.current?.focus({ preventScroll: true });
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (highlightedIndex >= 0 && dropdownRef.current && isKeyboardNavigation.current) {
@@ -478,7 +555,7 @@ export const Select: React.FC<SelectProps> = ({
 
   const renderOptionItem = (option: SelectOption, index: number) => {
     const selected = isSelected(option.value);
-    const highlighted = index === highlightedIndex;
+    const highlighted = index === renderedHighlightedIndex;
     
     return (
       <div
@@ -487,7 +564,10 @@ export const Select: React.FC<SelectProps> = ({
         className={`select__option ${selected ? 'select__option--selected' : ''} ${
           option.disabled ? 'select__option--disabled' : ''
         } ${highlighted ? 'select__option--highlighted' : ''}`}
-        onClick={() => handleSelect(option)}
+        onClick={() => {
+          setKeyboardOpen(false);
+          handleSelect(option);
+        }}
         onMouseEnter={() => {
           if (!option.disabled) setHighlightedIndex(index);
         }}
@@ -527,7 +607,7 @@ export const Select: React.FC<SelectProps> = ({
       id={listboxId}
       className={[
         'select__dropdown',
-        `select__dropdown--${resolvedPlacement}`,
+        `select__dropdown--${renderedPlacement}`,
         `select__dropdown--${size}`,
         `select__dropdown--${dropdownMode}`,
         dropdownClassName,
@@ -535,18 +615,25 @@ export const Select: React.FC<SelectProps> = ({
       ref={dropdownRef}
       style={dropdownMode === 'overlay' ? {
         position: 'fixed',
-        top: `${dropdownLayout?.top ?? 0}px`,
-        left: `${dropdownLayout?.left ?? 0}px`,
-        width: dropdownLayout?.width === undefined ? undefined : `${dropdownLayout.width}px`,
-        visibility: dropdownLayout ? 'visible' : 'hidden',
+        top: `${renderedDropdownLayout?.top ?? 0}px`,
+        left: `${renderedDropdownLayout?.left ?? 0}px`,
+        width: renderedDropdownLayout?.width === undefined
+          ? undefined
+          : `${renderedDropdownLayout.width}px`,
+        visibility: renderedDropdownLayout ? 'visible' : 'hidden',
       } : undefined}
       role="listbox"
+      tabIndex={isOpen ? undefined : -1}
+      aria-hidden={!isOpen}
+      {...(!isOpen ? { inert: '' } : {})}
       aria-multiselectable={multiple || undefined}
-      aria-busy={loading || undefined}
+      aria-busy={renderedLoading || undefined}
       data-testid={dropdownTestId}
       data-bf-component="select"
       data-bf-part="dropdown"
-      data-bf-placement={resolvedPlacement}
+      data-bf-placement={renderedPlacement}
+      data-open={isOpen ? 'true' : 'false'}
+      data-keyboard-open={keyboardOpen ? 'true' : 'false'}
     >
       {searchable && (
         <div className="select__search" data-bf-component="select" data-bf-part="search">
@@ -559,14 +646,18 @@ export const Select: React.FC<SelectProps> = ({
             aria-autocomplete="list"
             aria-expanded={isOpen}
             aria-controls={listboxId}
-            aria-activedescendant={highlightedIndex >= 0
-              ? `${listboxId}-option-${highlightedIndex}`
+            aria-activedescendant={isOpen && renderedHighlightedIndex >= 0
+              ? `${listboxId}-option-${renderedHighlightedIndex}`
               : undefined}
             placeholder={resolvedSearchPlaceholder}
-            value={searchQuery}
+            value={renderedSearchQuery}
+            tabIndex={isOpen ? 0 : -1}
             onChange={(e) => setSearchQuery(e.target.value)}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
+              if (['Enter', 'Escape', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                setKeyboardOpen(true);
+              }
               if (e.key === 'Enter') {
                 e.preventDefault();
                 if (highlightedIndex >= 0 && highlightedIndex < displayOptions.length) {
@@ -594,10 +685,11 @@ export const Select: React.FC<SelectProps> = ({
             data-bf-component="select"
             data-bf-part="searchInput"
           />
-          {searchQuery && (
+          {renderedSearchQuery && (
             <button
               type="button"
               className="select__search-clear"
+              tabIndex={isOpen ? 0 : -1}
               onClick={(e) => {
                 e.stopPropagation();
                 setSearchQuery('');
@@ -612,45 +704,58 @@ export const Select: React.FC<SelectProps> = ({
         </div>
       )}
 
-      {multiple && showSelectAll && filteredOptions.length > 0 && (
+      {multiple && showSelectAll && renderedFilteredOptions.length > 0 && (
         <div
           className="select__select-all"
-          onClick={handleSelectAll}
+          onClick={() => {
+            setKeyboardOpen(false);
+            handleSelectAll();
+          }}
           role="option"
-          aria-selected={filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))}
+          aria-selected={renderedFilteredOptions
+            .filter(opt => !opt.disabled)
+            .every(opt => isSelected(opt.value))}
         >
           <span className={`select__checkbox ${
-            filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))
+            renderedFilteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))
               ? 'select__checkbox--checked' : ''
           }`}>
-            {filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value)) && '✓'}
+            {renderedFilteredOptions
+              .filter(opt => !opt.disabled)
+              .every(opt => isSelected(opt.value)) && '✓'}
           </span>
           <span>{t('select.selectAll')}</span>
         </div>
       )}
 
       <div className="select__options" data-bf-component="select" data-bf-part="options">
-        {filteredOptions.length === 0 ? (
-          loading ? (
+        {renderedFilteredOptions.length === 0 ? (
+          renderedLoading ? (
             <div className="select__empty select__empty--loading" data-bf-component="select" data-bf-part="empty">
               <span className="select__loading-spinner" aria-hidden="true" />
               <span>{t('select.loading')}</span>
             </div>
-          ) : allowCustomValue && searchQuery.trim() ? (
-            <div className="select__custom-value-hint" onClick={() => handleCustomValueSubmit()}>
-              <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
+          ) : allowCustomValue && renderedSearchQuery.trim() ? (
+            <div
+              className="select__custom-value-hint"
+              onClick={() => {
+                setKeyboardOpen(false);
+                handleCustomValueSubmit();
+              }}
+            >
+              <span className="select__custom-value-text">"{renderedSearchQuery.trim()}"</span>
               <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
             </div>
           ) : (
             <div className="select__empty" data-bf-component="select" data-bf-part="empty">{resolvedEmptyText}</div>
           )
-        ) : groupedOptions.hasGroups ? (
+        ) : renderedGroupedOptions.hasGroups ? (
           (() => {
             let globalIndex = 0;
             return (
               <>
-                {groupedOptions.ungrouped.map((option) => renderOptionItem(option, globalIndex++))}
-                {Object.entries(groupedOptions.groups).map(([groupName, groupOptions]) => (
+                {renderedGroupedOptions.ungrouped.map((option) => renderOptionItem(option, globalIndex++))}
+                {Object.entries(renderedGroupedOptions.groups).map(([groupName, groupOptions]) => (
                   <div
                     key={groupName}
                     className="select__group"
@@ -668,14 +773,20 @@ export const Select: React.FC<SelectProps> = ({
           })()
         ) : (
           <>
-            {filteredOptions.map((option, index) => renderOptionItem(option, index))}
-            {allowCustomValue && searchQuery.trim()
-              && !filteredOptions.some(opt => (
-                opt.label.toLowerCase() === searchQuery.trim().toLowerCase()
-                || String(opt.value).toLowerCase() === searchQuery.trim().toLowerCase()
+            {renderedFilteredOptions.map((option, index) => renderOptionItem(option, index))}
+            {allowCustomValue && renderedSearchQuery.trim()
+              && !renderedFilteredOptions.some(opt => (
+                opt.label.toLowerCase() === renderedSearchQuery.trim().toLowerCase()
+                || String(opt.value).toLowerCase() === renderedSearchQuery.trim().toLowerCase()
               )) && (
-              <div className="select__custom-value-hint" onClick={() => handleCustomValueSubmit()}>
-                <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
+              <div
+                className="select__custom-value-hint"
+                onClick={() => {
+                  setKeyboardOpen(false);
+                  handleCustomValueSubmit();
+                }}
+              >
+                <span className="select__custom-value-text">"{renderedSearchQuery.trim()}"</span>
                 <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
               </div>
             )}
@@ -692,13 +803,17 @@ export const Select: React.FC<SelectProps> = ({
       <div
         ref={triggerRef}
         className="select__trigger"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={(event) => {
+          if (disabled) return;
+          setKeyboardOpen(event.detail === 0);
+          setIsOpen(!isOpen);
+        }}
         onKeyDown={handleKeyDown}
         tabIndex={disabled ? -1 : 0}
         role="combobox"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        aria-controls={listboxId}
+        aria-controls={isOpen ? listboxId : undefined}
         aria-activedescendant={isOpen && highlightedIndex >= 0
           ? `${listboxId}-option-${highlightedIndex}`
           : undefined}
@@ -731,9 +846,15 @@ export const Select: React.FC<SelectProps> = ({
         </div>
       </div>
 
-      {isOpen && (dropdownMode === 'overlay'
-        ? createPortal(dropdownNode, getAppearanceOverlayHost())
-        : dropdownNode)}
+      <PresenceBoundary
+        active={isOpen}
+        exitDurationMs={SELECT_DROPDOWN_EXIT_RETENTION_MS}
+        minimumExitDurationMs={SELECT_DROPDOWN_EXIT_RETENTION_MS}
+      >
+        <SelectDropdownMount mode={dropdownMode}>
+          {dropdownNode}
+        </SelectDropdownMount>
+      </PresenceBoundary>
 
       {error && errorMessage && (
         <div className="select__error-message" data-bf-component="select" data-bf-part="message">{errorMessage}</div>

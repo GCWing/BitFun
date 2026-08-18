@@ -10,15 +10,27 @@ Below is the list of skills that can be used with the Skill tool. Each entry inc
 const AGENT_LISTING_TITLE: &str = "# Agent Listing";
 const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";
 const TOOL_CALLING_GUIDANCE_TITLE: &str = "# Tool Calling Guide";
-const TOOL_CALLING_GUIDANCE: &str = r#"You can access two types of tools:
-- Direct tools: tools in the available tool list include their full definitions. Call them directly using their listed names and input schemas.
-- Deferred tools: call them through `CallDeferredTool`.
-  Before the first call for a deferred tool whose full spec is not already available in the current conversation, call `GetToolSpec` with its exact name.
-  Once its spec is available, call `CallDeferredTool` directly with that tool name and its arguments inside `args`.
-  Do not call `GetToolSpec` again unless the system reports that the spec is stale or unavailable.
+const TOOL_CALLING_GUIDANCE: &str = "You can access two types of tools.";
+const DIRECT_TOOL_LISTING_TITLE: &str = "## Direct tools";
+const DIRECT_TOOL_LISTING_GUIDANCE: &str = r#"Their definitions are already available. You can call them directly.
+Each entry below is a directly callable tool name."#;
+const DEFERRED_TOOL_LISTING_TITLE: &str = "## Deferred tools";
+const DEFERRED_TOOL_LISTING_GUIDANCE: &str = r#"Their definitions are not loaded at the start of the conversation.
+You must obtain the tool definition using GetToolSpec before you first invoke a deferred tool. Once its definition is available in the conversation, you can call it through CallDeferredTool.
+Each entry below is a deferred tool name with an optional short description."#;
 
-## Deferred Tool Listing
-Each entry has the form `tool_name[: optional short description]`."#;
+pub fn render_direct_tool_listing_body<'a>(
+    tool_names: impl IntoIterator<Item = &'a str>,
+) -> String {
+    format!(
+        "<direct_tools>\n{}\n</direct_tools>",
+        tool_names
+            .into_iter()
+            .map(|tool_name| format!("- {tool_name}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    )
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PromptEnvironmentFacts<'a> {
@@ -623,6 +635,7 @@ impl UserContextSection {
 pub struct ToolListingSections {
     pub skill_listing: Option<String>,
     pub agent_listing: Option<String>,
+    pub direct_tool_listing: Option<String>,
     pub deferred_tool_listing: Option<String>,
 }
 
@@ -630,6 +643,7 @@ impl ToolListingSections {
     pub fn is_empty(&self) -> bool {
         self.skill_listing.is_none()
             && self.agent_listing.is_none()
+            && self.direct_tool_listing.is_none()
             && self.deferred_tool_listing.is_none()
     }
 
@@ -657,10 +671,17 @@ impl ToolListingSections {
         self.deferred_tool_listing
             .as_deref()
             .map(|deferred_tool_listing| {
-                Self::render_section(
+                let direct_tool_listing = self.direct_tool_listing.as_deref().unwrap_or_default();
+                format!(
+                    "{}\n{}\n\n{}\n{}\n\n{}\n\n{}\n{}\n\n{}",
                     TOOL_CALLING_GUIDANCE_TITLE,
-                    deferred_tool_listing,
-                    Some(TOOL_CALLING_GUIDANCE),
+                    TOOL_CALLING_GUIDANCE,
+                    DIRECT_TOOL_LISTING_TITLE,
+                    DIRECT_TOOL_LISTING_GUIDANCE,
+                    direct_tool_listing.trim(),
+                    DEFERRED_TOOL_LISTING_TITLE,
+                    DEFERRED_TOOL_LISTING_GUIDANCE,
+                    deferred_tool_listing.trim(),
                 )
             })
     }

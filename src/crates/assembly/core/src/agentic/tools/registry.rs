@@ -1015,7 +1015,6 @@ mod tests {
         assert!(refreshed_generation > removed_generation);
         let error = bitfun_agent_tools::validate_deferred_tool_usage(
             "mcp__github__search_repos",
-            true,
             &["mcp__github__search_repos".to_string()],
             &[bitfun_agent_tools::LoadedDeferredToolSpec {
                 tool_name: "mcp__github__search_repos".to_string(),

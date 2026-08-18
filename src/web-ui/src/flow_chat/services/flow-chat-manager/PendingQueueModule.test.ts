@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   pendingQueueManager,
-  queuedMessageHasUnsupportedSteeringPayload,
+  queuedItemDuplicatesLiveTurn,
 } from './PendingQueueModule';
+import {
+  LOCAL_SURFACE_ID,
+  activateSurface,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const sessions: string[] = [];
 
@@ -14,7 +18,12 @@ function testSession(): string {
   return sessionId;
 }
 
+beforeEach(() => {
+  activateSurface(LOCAL_SURFACE_ID);
+});
+
 afterEach(() => {
+  activateSurface(LOCAL_SURFACE_ID);
   for (const sessionId of sessions.splice(0)) {
     pendingQueueManager.clear(sessionId);
   }
@@ -57,40 +66,66 @@ describe('PendingQueueModule', () => {
     expect(items[0].retryCount).toBe(0);
   });
 
-  it('rejects only payloads that the text-only steering contract would flatten', () => {
-    const plain = {
-      id: 'plain',
-      sessionId: 'session-1',
-      content: 'plain text',
-      timestamp: 1,
-      status: 'queued' as const,
-      retryCount: 0,
-    };
+  it('keeps equal session ids isolated across device surfaces', () => {
+    const sessionId = testSession();
+    pendingQueueManager.enqueue({ sessionId, content: 'local draft' });
 
-    expect(queuedMessageHasUnsupportedSteeringPayload(plain)).toBe(false);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        imageContexts: [{ id: 'image-1' }],
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { deepReviewRunManifest: { requestId: 'review-1' } },
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { sessionReferences: [{ sessionId: 'source' }] },
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { composerPresentation: { parts: [] } },
-      }),
-    ).toBe(true);
+    activateSurface('peer-b');
+    expect(pendingQueueManager.list(sessionId)).toEqual([]);
+    pendingQueueManager.enqueue({ sessionId, content: 'peer draft' });
+
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'local draft',
+    ]);
+    activateSurface('peer-b');
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'peer draft',
+    ]);
+
+    pendingQueueManager.clearSurface('peer-b');
+    activateSurface(LOCAL_SURFACE_ID);
+  });
+
+  it('drops a queued duplicate of a live turn after a surface switch', () => {
+    const sessionId = testSession();
+    pendingQueueManager.enqueue({
+      sessionId,
+      content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧',
+      initialStatus: 'failed',
+    });
+    pendingQueueManager.enqueue({
+      sessionId,
+      content: 'a later follow-up that should stay',
+    });
+
+    const removed = pendingQueueManager.reconcileAgainstLiveTurns(sessionId, [
+      {
+        id: 'dialog_live',
+        status: 'processing',
+        userMessage: {
+          id: 'user-1',
+          content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧',
+          timestamp: Date.now(),
+        },
+      },
+    ]);
+
+    expect(removed).toBe(1);
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'a later follow-up that should stay',
+    ]);
+    expect(queuedItemDuplicatesLiveTurn(
+      { content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧' },
+      [{
+        id: 'dialog_live',
+        status: 'processing',
+        userMessage: {
+          id: 'user-1',
+          content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧',
+          timestamp: Date.now(),
+        },
+      }],
+    )).toBe(true);
   });
 });

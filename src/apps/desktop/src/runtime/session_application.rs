@@ -13,7 +13,8 @@ use bitfun_agent_runtime::sdk::{
     AgentLocalCommandTurnRecordRequest, AgentRuntime, AgentSessionArchiveStateRequest,
     AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionRenameRequest, AgentSessionUsageRequest,
-    PortErrorKind, RuntimeError,
+    PortErrorKind, RuntimeError, SessionEventBackfill, SessionEventJournal,
+    SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::agentic::core::Session;
@@ -125,18 +126,12 @@ fn local_command_turn_record_request(
 pub(crate) struct DesktopSessionViewRestore {
     pub session: Session,
     pub turns: Vec<DialogTurnData>,
+    pub interaction_snapshot: SessionInteractionSnapshot,
+    pub runtime_event_snapshot: Option<SessionEventProjectionSnapshot>,
     pub current_context_usage: Option<SessionContextUsage>,
     pub total_turn_count: usize,
     pub turn_catalog: SessionTurnCatalog,
     pub timings: SessionViewRestoreTiming,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct DesktopRecordedLocalCommandTurn {
-    pub turn_id: String,
-    pub storage_turn_index: usize,
-    pub total_turn_count: usize,
-    pub turn_catalog: SessionTurnCatalog,
 }
 
 #[derive(Debug)]
@@ -296,11 +291,13 @@ impl DesktopSessionApplication {
         workspace_service: Arc<WorkspaceService>,
         ssh_manager: Arc<RwLock<Option<SSHConnectionManager>>>,
         host_effects: Arc<dyn DesktopSessionHostEffects>,
+        session_event_journal: Arc<SessionEventJournal>,
     ) -> Result<Self, String> {
-        let agent_runtime = CoreProductAgentRuntime::build_session_surface(
+        let agent_runtime = CoreProductAgentRuntime::build_session_surface_with_event_journal(
             coordinator.clone(),
             scheduler.clone(),
             token_usage_service,
+            session_event_journal,
         )?;
         let compatibility = CoreAgentRuntimeCompatibility::build(coordinator.clone(), scheduler);
 
@@ -332,6 +329,17 @@ impl DesktopSessionApplication {
             .reload_session_context(request)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    pub(crate) async fn rollback_session_to_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest,
+    ) -> DesktopSessionApplicationResult<bitfun_runtime_ports::AgentSessionRollbackToTurnOutcome>
+    {
+        self.agent_runtime
+            .rollback_session_to_turn(request)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Runtime(error.into_message()))
     }
 
     async fn resolved_scope(
@@ -494,10 +502,19 @@ impl DesktopSessionApplication {
         let scope = self.resolved_scope(request).await;
         self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
-        self.compatibility
-            .ensure_session_loaded_from_storage_path(&storage_path, &turn.session_id, false)
+        // An externally projected Session has no Runtime state to restore, and
+        // loading one would rewrite its persisted mode to a local fallback.
+        if !self
+            .compatibility
+            .is_externally_projected_session(&storage_path, &turn.session_id)
             .await
-            .map_err(desktop_core_session_error)?;
+            .map_err(desktop_core_session_error)?
+        {
+            self.compatibility
+                .ensure_session_loaded_from_storage_path(&storage_path, &turn.session_id, false)
+                .await
+                .map_err(desktop_core_session_error)?;
+        }
         if let Some(local_command) = local_command_turn_record_request(turn)? {
             return self
                 .agent_runtime
@@ -515,55 +532,6 @@ impl DesktopSessionApplication {
             .save_persisted_dialog_turn(&mutation, turn)
             .await
             .map_err(desktop_core_session_error)
-    }
-
-    pub(crate) async fn record_local_command_turn(
-        &self,
-        request: DesktopSessionScopeRequest,
-        turn: &DialogTurnData,
-    ) -> DesktopSessionApplicationResult<DesktopRecordedLocalCommandTurn> {
-        let scope = self.resolved_scope(request).await;
-        self.ensure_runtime_ownership(&scope)?;
-        let storage_path = self.storage_path(&scope);
-        self.compatibility
-            .ensure_session_loaded_from_storage_path(&storage_path, &turn.session_id, false)
-            .await
-            .map_err(desktop_core_session_error)?;
-        let local_command = local_command_turn_record_request(turn)?.ok_or_else(|| {
-            DesktopSessionApplicationError::Validation(
-                "record_local_command_turn accepts only local_command Turns".to_string(),
-            )
-        })?;
-        let recorded = self
-            .agent_runtime
-            .record_completed_local_command_turn(local_command)
-            .await
-            .map_err(desktop_runtime_session_error)?;
-        let (_, _, total_turn_count, turn_catalog, _) = self
-            .compatibility
-            .restore_session_view_from_storage_path(&storage_path, &turn.session_id, false, Some(1))
-            .await
-            .map_err(desktop_core_session_error)?;
-        let catalog_entry = turn_catalog
-            .entries
-            .iter()
-            .find(|entry| {
-                entry.turn_id.as_deref() == Some(recorded.turn_id.as_str())
-                    && entry.storage_turn_index == recorded.storage_turn_index
-            })
-            .ok_or_else(|| {
-                DesktopSessionApplicationError::OutcomeUnknown(format!(
-                    "Recorded local command Turn is missing from the authoritative catalog: {}",
-                    recorded.turn_id
-                ))
-            })?;
-
-        Ok(DesktopRecordedLocalCommandTurn {
-            turn_id: recorded.turn_id,
-            storage_turn_index: catalog_entry.storage_turn_index,
-            total_turn_count,
-            turn_catalog,
-        })
     }
 
     pub(crate) async fn touch_session(
@@ -792,6 +760,27 @@ impl DesktopSessionApplication {
             .map_err(desktop_core_session_error)
     }
 
+    pub(crate) fn session_interaction_snapshot(
+        &self,
+        session_id: &str,
+    ) -> SessionInteractionSnapshot {
+        self.agent_runtime.session_interaction_snapshot(session_id)
+    }
+
+    /// Incremental catch-up for a client that already applied up to `cursor`.
+    ///
+    /// Workspace-agnostic: the journal belongs to this Runtime Host, not to any
+    /// workspace filesystem, so no session scope is resolved here.
+    pub(crate) fn session_events_since(
+        &self,
+        session_id: &str,
+        stream_id: &str,
+        cursor: u64,
+    ) -> Option<SessionEventBackfill> {
+        self.agent_runtime
+            .session_events_since(session_id, stream_id, cursor)
+    }
+
     pub(crate) async fn restore_session_view<F>(
         &self,
         request: DesktopSessionScopeRequest,
@@ -824,6 +813,10 @@ impl DesktopSessionApplication {
             .loaded_session_snapshot(session_id)
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
         overlay_live_session_state(&mut session, live_session);
+        let interaction_snapshot = self.agent_runtime.session_interaction_snapshot(session_id);
+        let runtime_event_snapshot = self
+            .agent_runtime
+            .session_event_projection_snapshot(session_id);
         let current_context_usage = self
             .compatibility
             .load_persisted_session_metadata(&storage_path, session_id)
@@ -834,6 +827,8 @@ impl DesktopSessionApplication {
         Ok(DesktopSessionViewRestore {
             session,
             turns,
+            interaction_snapshot,
+            runtime_event_snapshot,
             current_context_usage,
             total_turn_count,
             turn_catalog,

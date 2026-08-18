@@ -1,0 +1,392 @@
+// @vitest-environment jsdom
+
+import React, { act } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRoot, type Root } from 'react-dom/client';
+import UsageStatisticsConfig from './UsageStatisticsConfig';
+import type { UsageStatistics } from '@/infrastructure/api';
+
+const getStatisticsMock = vi.hoisted(() => vi.fn());
+const translateMock = vi.hoisted(() => vi.fn((key: string) => key));
+const TokenUsageStatisticsUnavailableErrorMock = vi.hoisted(() => class extends Error {
+  constructor() {
+    super('Usage statistics are not supported by the active host');
+    this.name = 'TokenUsageStatisticsUnavailableError';
+  }
+});
+
+vi.mock('@/infrastructure/api', () => ({
+  TokenUsageStatisticsUnavailableError: TokenUsageStatisticsUnavailableErrorMock,
+  tokenUsageStatisticsApi: {
+    getStatistics: getStatisticsMock,
+  },
+}));
+
+vi.mock('@/infrastructure/i18n', () => ({
+  useI18n: () => ({
+    t: translateMock,
+    formatDate: (date: Date | number) => new Date(date).toISOString(),
+    resolvedTimeZone: 'UTC',
+  }),
+}));
+
+vi.mock('@/component-library', () => ({
+  ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
+  ConfigPageMessage: ({
+    message,
+  }: {
+    message: { type: string; text: string } | null;
+  }) => message ? (
+    <div data-testid="usage-message" data-message-type={message.type}>{message.text}</div>
+  ) : null,
+  ConfigPageRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
+  IconButton: ({
+    children,
+    tooltip: _tooltip,
+    size: _size,
+    variant: _variant,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    tooltip?: React.ReactNode;
+    size?: string;
+    variant?: string;
+  }) => <button {...props}>{children}</button>,
+  Input: ({
+    prefix,
+    suffix,
+    inputSize: _inputSize,
+    ...props
+  }: React.InputHTMLAttributes<HTMLInputElement> & {
+    prefix?: React.ReactNode;
+    suffix?: React.ReactNode;
+    inputSize?: string;
+  }) => (
+    <div>
+      {prefix}
+      <input {...props} />
+      {suffix}
+    </div>
+  ),
+  Select: ({
+    value,
+    options,
+    onChange,
+  }: {
+    value: string | number;
+    options: { value: string | number; label: string }[];
+    onChange?: (value: string | number) => void;
+  }) => (
+    <select
+      data-testid="usage-select"
+      value={String(value)}
+      onChange={(event) => onChange?.(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={String(option.value)} value={String(option.value)}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
+const SAMPLE_STATS: UsageStatistics = {
+  totalRequests: 47,
+  totalTokens: 4_800_000,
+  totalInputTokens: 4_400_000,
+  totalOutputTokens: 400_000,
+  totalCachedTokens: 4_200_000,
+  totalCacheWriteTokens: 0,
+  totalCacheReportedInputTokens: 4_400_000,
+  byModel: [
+    {
+      key: 'model-config:deepseek',
+      name: 'deepseek-v4-flash',
+      providerName: 'DeepSeek',
+      attributionStatus: 'resolved',
+      requests: 47,
+      tokens: 4_800_000,
+      cacheHitRate: 0.95,
+    },
+  ],
+  byGroup: [
+    {
+      key: 'provider:deepseek',
+      name: 'DeepSeek',
+      providerName: null,
+      attributionStatus: 'resolved',
+      requests: 47,
+      tokens: 4_800_000,
+      cacheHitRate: 0.95,
+    },
+  ],
+  byEndpoint: [
+    {
+      key: 'endpoint:api.openbitfun.com/v1/chat/completions',
+      name: 'api.openbitfun.com/v1/chat/completions',
+      providerName: null,
+      attributionStatus: 'resolved',
+      requests: 47,
+      tokens: 4_800_000,
+      cacheHitRate: 0.95,
+    },
+  ],
+  trend: [
+    {
+      bucket: '2026-08-16T11:00:00.000Z',
+      inputTokens: 1_000_000,
+      outputTokens: 100_000,
+      cacheReadTokens: 900_000,
+      cacheWriteTokens: 0,
+      cacheHitRate: 0.9,
+    },
+    {
+      bucket: '2026-08-16T12:00:00.000Z',
+      inputTokens: 2_000_000,
+      outputTokens: 200_000,
+      cacheReadTokens: 1_900_000,
+      cacheWriteTokens: 0,
+      cacheHitRate: 0.95,
+    },
+  ],
+  granularity: 'hour',
+};
+
+describe('UsageStatisticsConfig', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    getStatisticsMock.mockReset();
+    getStatisticsMock.mockResolvedValue(SAMPLE_STATS);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  async function render() {
+    await act(async () => {
+      root.render(<UsageStatisticsConfig />);
+    });
+    // Flush the async load that fires from useEffect.
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  it('requests statistics on mount and renders summary, distributions, and trend', async () => {
+    await render();
+
+    expect(getStatisticsMock).toHaveBeenCalledTimes(1);
+    expect(getStatisticsMock).toHaveBeenCalledWith({
+      timeRange: 'last24Hours',
+      granularity: 'hour',
+      timeZone: 'UTC',
+    });
+
+    expect(container.querySelector('[data-bf-part="summary"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="distributions"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="modelHitRate"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="trendPanel"]')).not.toBeNull();
+    expect(container.querySelectorAll('.bitfun-usage-stats__donut').length).toBe(3);
+    expect(container.querySelectorAll('[data-bf-part="trendPanel"] svg').length).toBe(1);
+    // Hit rate is truncated to two decimals, never rounded up.
+    expect(container.textContent).toContain('95.00%');
+  });
+
+  it('keeps same-named models distinct and labels deleted configurations', async () => {
+    getStatisticsMock.mockResolvedValue({
+      ...SAMPLE_STATS,
+      byModel: [
+        {
+          ...SAMPLE_STATS.byModel[0],
+          key: 'model-config:openbitfun',
+          name: 'MiniMax-M3',
+          providerName: 'OpenBitFun',
+        },
+        {
+          ...SAMPLE_STATS.byModel[0],
+          key: 'model-config:minimax',
+          name: 'MiniMax-M3',
+          providerName: 'MiniMax',
+        },
+        {
+          ...SAMPLE_STATS.byModel[0],
+          key: 'missing-config:deleted',
+          name: 'legacy-model',
+          providerName: null,
+          attributionStatus: 'config_missing',
+        },
+      ],
+    });
+
+    await render();
+
+    expect(container.textContent).toContain('OpenBitFun');
+    expect(container.textContent).toContain('MiniMax');
+    expect(container.textContent).toContain('attribution.deletedConfig');
+    expect(container.querySelectorAll('.bitfun-usage-stats__hit-rate-row')).toHaveLength(3);
+  });
+
+  it('shows the empty state when there are no records', async () => {
+    getStatisticsMock.mockResolvedValue({
+      ...SAMPLE_STATS,
+      totalRequests: 0,
+      byModel: [],
+      byGroup: [],
+      byEndpoint: [],
+      trend: [],
+    });
+
+    await render();
+
+    expect(container.querySelector('[data-bf-part="empty"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="summary"]')).toBeNull();
+  });
+
+  it('shows a distinct informational state for an older Peer host', async () => {
+    getStatisticsMock.mockRejectedValue(new TokenUsageStatisticsUnavailableErrorMock());
+
+    await render();
+
+    const message = container.querySelector('[data-testid="usage-message"]');
+    expect(message?.getAttribute('data-message-type')).toBe('info');
+    expect(message?.textContent).toBe('unsupported');
+  });
+
+  it('refetches when the time range selection changes', async () => {
+    await render();
+    expect(getStatisticsMock).toHaveBeenCalledTimes(1);
+
+    const select = container.querySelector('[data-testid="usage-select"]') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+
+    await act(async () => {
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // Simulate the second (time range) select value change via React state by
+    // re-rendering the component with a new selection using the select element.
+    // The first select is time range; the second is granularity.
+    const selects = container.querySelectorAll('[data-testid="usage-select"]');
+    expect(selects.length).toBe(3);
+
+    await act(async () => {
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        'value',
+      )?.set;
+      nativeSet?.call(selects[0], 'thisMonth');
+      selects[0].dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getStatisticsMock).toHaveBeenCalledTimes(2);
+    expect(getStatisticsMock).toHaveBeenLastCalledWith({
+      timeRange: 'thisMonth',
+      granularity: 'hour',
+      timeZone: 'UTC',
+    });
+  });
+
+  it('debounces text filtering and refetches when the filter kind changes', async () => {
+    await render();
+    const input = container.querySelector(
+      '[data-testid="usage-filter-input"]',
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      nativeSet?.call(input, 'DeepSeek');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getStatisticsMock).toHaveBeenCalledTimes(2);
+    expect(getStatisticsMock).toHaveBeenLastCalledWith({
+      timeRange: 'last24Hours',
+      granularity: 'hour',
+      timeZone: 'UTC',
+      filterKind: 'all',
+      filterQuery: 'DeepSeek',
+    });
+
+    const selects = container.querySelectorAll('[data-testid="usage-select"]');
+    await act(async () => {
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        'value',
+      )?.set;
+      nativeSet?.call(selects[2], 'provider');
+      selects[2].dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getStatisticsMock).toHaveBeenCalledTimes(3);
+    expect(getStatisticsMock).toHaveBeenLastCalledWith({
+      timeRange: 'last24Hours',
+      granularity: 'hour',
+      timeZone: 'UTC',
+      filterKind: 'provider',
+      filterQuery: 'DeepSeek',
+    });
+  });
+
+  it('shows a distinct empty state when a filter has no matches', async () => {
+    getStatisticsMock
+      .mockResolvedValueOnce(SAMPLE_STATS)
+      .mockResolvedValueOnce({
+        ...SAMPLE_STATS,
+        totalRequests: 0,
+        byModel: [],
+        byGroup: [],
+        byEndpoint: [],
+        trend: [],
+      });
+
+    await render();
+    const input = container.querySelector(
+      '[data-testid="usage-filter-input"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      nativeSet?.call(input, 'missing-model');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('filter.empty.title');
+    expect(container.textContent).toContain('filter.empty.description');
+  });
+
+  it('surfaces load failures without crashing', async () => {
+    getStatisticsMock.mockRejectedValue(new Error('boom'));
+
+    await render();
+
+    expect(container.querySelector('[data-testid="usage-loading"]')).toBeNull();
+  });
+});

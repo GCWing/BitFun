@@ -12,7 +12,7 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 2. 日常开发使用下方主要产品循环；surface 专属的替代命令由最近的应用指南维护。
 3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
 4. 改完后从离改动最近的 `AGENTS.md` 选择 focused 验证命令；下方仓库级验证章节只维护跨模块检查原则。
-5. Rust workspace 依赖应在根清单中统一版本，而由消费 crate 按自身职责声明所需 feature；仅测试所需的 feature 应放入 `dev-dependencies`，受 crate feature 控制的服务能力应只在对应 feature 中启用。禁止使用 `tokio/full` 绕过依赖边界设计。
+5. Rust workspace 依赖应在根清单中统一版本，而由消费 crate 按自身职责声明所需 feature；仅测试所需的 feature 应放入 `dev-dependencies`，受 crate feature 控制的服务能力应只在对应 feature 中启用。第三方依赖的默认 feature 若不是所有 consumer 的稳定契约，应在 `[workspace.dependencies]` 统一关闭，成员只增加自身需要的切片。仓内 crate 的 `default` 已由边界契约保证为空时，不在每条依赖边重复写 `default-features = false`；ACP 这类有意保留兼容默认的 crate 仍由窄 consumer 显式关闭。被单独复制到 Docker 构建上下文的 manifest 无法继承 workspace 根，必须继续维护显式版本和默认策略。禁止使用 `tokio/full` 绕过依赖边界设计。
 
 ## 分层模块索引
 

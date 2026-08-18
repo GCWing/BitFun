@@ -16,7 +16,7 @@ import {
 import { createLogger } from '@/shared/utils/logger';
 import { systemAPI } from '@/infrastructure/api';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
-import { isTauriRuntime } from '@/infrastructure/update/tauriEnv';
+import { canCheckForAppUpdates, isTauriRuntime } from '@/infrastructure/update/tauriEnv';
 import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDialog';
 import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
@@ -51,6 +51,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const aboutInfo = getAboutInfo();
   const { version, license } = aboutInfo;
   const nativeRuntime = isTauriRuntime();
+  const updateChecksAvailable = canCheckForAppUpdates();
   const displayedVersion = formatDisplayedVersion(
     version,
     nativeVersion,
@@ -85,7 +86,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   }, [isOpen, nativeRuntime]);
 
   const handleCheckForUpdates = useCallback(async () => {
-    if (!isTauriRuntime()) {
+    if (!canCheckForAppUpdates()) {
       return;
     }
     setManualCheckStatus('idle');
@@ -169,7 +170,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 
         {/* Scrollable area */}
         <div className="bitfun-about-dialog__scrollable" data-bf-component="about-dialog" data-bf-part="content">
-          {nativeRuntime ? (
+          {updateChecksAvailable ? (
             <div
               className="bitfun-about-dialog__update-card"
               data-bf-component="about-dialog"
@@ -286,9 +287,9 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 />
               ) : null}
             </div>
-          ) : (
+          ) : !nativeRuntime ? (
             <p className="bitfun-about-dialog__update-hint">{t('update.desktopOnly')}</p>
-          )}
+          ) : null}
           <div className="bitfun-about-dialog__info-section">
             <div className="bitfun-about-dialog__info-card" data-bf-component="about-dialog" data-bf-part="infoCard">
               <div className="bitfun-about-dialog__info-row" data-bf-component="about-dialog" data-bf-part="infoRow">

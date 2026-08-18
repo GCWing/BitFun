@@ -86,7 +86,10 @@
   user-select: text;
   vertical-align: middle;
   line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  transition: all 0.2s ease;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
   white-space: nowrap;
   
   &:hover {
@@ -143,7 +146,9 @@
   user-select: none;
   vertical-align: middle;
   line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
   
   &:hover {
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent);

@@ -16,12 +16,13 @@ use crate::runtime::{
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
-    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
-    AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
-    DialogSteerOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PermissionReply, PermissionRequest,
+    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRecoveryOutcome,
+    AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentSessionCreateResult, AgentSessionModeUpdateRequest, AgentSessionModelSelection,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
+    AgentTurnCancellationRequest, AgentTurnInterruptionRequest, DialogSteerOutcome,
+    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
+    RuntimeError, SessionEventBackfill, SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -65,7 +66,7 @@ use bitfun_core_types::{
     WorktreeError, WorktreeErrorCode,
 };
 use bitfun_product_domains::tool_permissions::PermissionRule;
-use bitfun_runtime_ports::{PermissionMode, SessionTurnWindowRequest};
+use bitfun_runtime_ports::{PermissionMode, PortErrorKind, SessionTurnWindowRequest};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -252,6 +253,27 @@ pub struct UpdateSessionPermissionModeRequest {
     #[serde(default)]
     pub mode: Option<String>,
     #[serde(default)]
+    pub turn_id: Option<String>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateActiveTurnPermissionModeRequest {
+    pub session_id: String,
+    pub turn_id: String,
+    /// `None` clears the one-off override and returns the active turn to its
+    /// session mode at the next model-round boundary.
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -266,6 +288,9 @@ pub struct UpdateSessionPermissionModeRequest {
 pub struct SessionPermissionModeResponse {
     /// The session's own selection, or `null` when it follows the default.
     pub mode: Option<PermissionMode>,
+    /// Ephemeral override for the requested active turn, when one exists.
+    pub turn_mode: Option<PermissionMode>,
+    pub active_turn_id: Option<String>,
 }
 
 fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -527,6 +552,12 @@ pub struct RestoreSessionWithTurnsResponse {
 pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
+    pub interaction_snapshot: SessionInteractionSnapshot,
+    /// Runtime-owned projection of the current Turn. New clients use this to
+    /// reattach without relying on UI-written intermediate checkpoints; older
+    /// hosts omit it and remain compatible with the persisted-turn fallback.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_event_snapshot: Option<FrontendSessionEventProjectionSnapshot>,
     pub current_context_usage: Option<SessionContextUsage>,
     pub turn_catalog: SessionTurnCatalog,
     pub context_restore_state: String,
@@ -534,6 +565,93 @@ pub struct RestoreSessionViewResponse {
     pub loaded_turn_count: usize,
     pub total_turn_count: usize,
     pub timings: SessionViewRestoreTiming,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendSessionEventProjectionSnapshot {
+    pub session_id: String,
+    pub stream_id: String,
+    pub cursor: u64,
+    pub active_turn_id: Option<String>,
+    pub events: Vec<FrontendProjectedAgenticEvent>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendProjectedAgenticEvent {
+    pub event_name: String,
+    pub payload: serde_json::Value,
+}
+
+fn frontend_event_projection_snapshot(
+    snapshot: SessionEventProjectionSnapshot,
+) -> FrontendSessionEventProjectionSnapshot {
+    FrontendSessionEventProjectionSnapshot {
+        session_id: snapshot.session_id,
+        stream_id: snapshot.stream_id,
+        cursor: snapshot.cursor,
+        active_turn_id: snapshot.active_turn_id,
+        events: snapshot
+            .events
+            .into_iter()
+            .filter_map(bitfun_events::project_agentic_frontend_event)
+            .map(|event| FrontendProjectedAgenticEvent {
+                event_name: event.event_name,
+                payload: event.payload,
+            })
+            .collect(),
+    }
+}
+
+/// Incremental catch-up answer, in the same event shape the snapshot uses so a
+/// client applies both through one path.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum FrontendSessionEventBackfill {
+    Delta {
+        stream_id: String,
+        cursor: u64,
+        events: Vec<FrontendProjectedAgenticEvent>,
+        /// Replaying events rebuilds a blocking interaction's card; only the
+        /// mailbox makes it answerable. A catch-up that skipped this left the
+        /// card on screen with no surface able to resolve it.
+        interaction_snapshot: SessionInteractionSnapshot,
+    },
+    SnapshotRequired,
+}
+
+fn session_event_backfill_to_response(
+    backfill: Option<SessionEventBackfill>,
+    interaction_snapshot: SessionInteractionSnapshot,
+) -> serde_json::Value {
+    let projected = match backfill {
+        Some(SessionEventBackfill::Delta {
+            stream_id,
+            cursor,
+            events,
+        }) => FrontendSessionEventBackfill::Delta {
+            stream_id,
+            cursor,
+            interaction_snapshot,
+            events: events
+                .into_iter()
+                .filter_map(bitfun_events::project_agentic_frontend_event)
+                .map(|event| FrontendProjectedAgenticEvent {
+                    event_name: event.event_name,
+                    payload: event.payload,
+                })
+                .collect(),
+        },
+        Some(SessionEventBackfill::SnapshotRequired) | None => {
+            FrontendSessionEventBackfill::SnapshotRequired
+        }
+    };
+    serde_json::to_value(projected).unwrap_or_else(|_| {
+        serde_json::json!({
+            "kind": "snapshotRequired",
+        })
+    })
 }
 
 #[derive(Debug, Default)]
@@ -742,6 +860,20 @@ pub struct CancelDialogTurnRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RecoverInterruptedDialogTurnRequest {
+    pub session_id: String,
+    pub dialog_turn_id: String,
+    pub execution_generation: u32,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SteerDialogTurnRequest {
     pub session_id: String,
     pub dialog_turn_id: String,
@@ -751,6 +883,14 @@ pub struct SteerDialogTurnRequest {
     /// Original user text for UI rendering (defaults to `content`).
     #[serde(default)]
     pub display_content: Option<String>,
+    /// Images attached to the steering message. Same shape the composer sends
+    /// when it starts a turn — a message keeps its attachments whether it is
+    /// submitted at a turn boundary or injected into a running turn.
+    #[serde(default)]
+    pub image_contexts: Option<Vec<ImageContextData>>,
+    /// Structured metadata carried with the steering message.
+    #[serde(default)]
+    pub user_message_metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1880,14 +2020,110 @@ pub async fn update_session_permission_mode(
         request.include_internal,
     )
     .await?;
+    let session_manager = coordinator.get_session_manager();
+    let requested_turn_id = request
+        .turn_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
 
-    coordinator
-        .get_session_manager()
+    session_manager
         .update_session_permission_mode(&session_id, mode)
         .await
         .map_err(|error| format!("Failed to update session permission mode: {error}"))?;
+    if let Some(turn_id) = requested_turn_id {
+        session_manager.clear_active_turn_permission_mode(&session_id, turn_id);
+    }
 
-    Ok(SessionPermissionModeResponse { mode })
+    let active_turn_id = requested_turn_id.and_then(|turn_id| {
+        session_manager
+            .get_session(&session_id)
+            .filter(|session| {
+                matches!(
+                    &session.state,
+                    SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+                )
+            })
+            .map(|_| turn_id.to_string())
+    });
+    Ok(SessionPermissionModeResponse {
+        mode: session_manager.session_permission_mode(&session_id),
+        turn_mode: active_turn_id
+            .as_deref()
+            .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
+        active_turn_id,
+    })
+}
+
+/// Replaces or clears the temporary mode for one exact active turn.
+///
+/// This is intentionally a distinct command from the session setter: a new
+/// frontend talking to an older backend must fail loudly instead of having an
+/// unknown scope field ignored and accidentally persisting a one-off choice.
+#[tauri::command]
+pub async fn update_active_turn_permission_mode(
+    runtime: State<'_, DesktopRuntimeContext>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: UpdateActiveTurnPermissionModeRequest,
+) -> Result<SessionPermissionModeResponse, String> {
+    let session_id = request.session_id.trim().to_string();
+    let turn_id = request.turn_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    if turn_id.is_empty() {
+        return Err("turn_id is required".to_string());
+    }
+    let mode = match request.mode.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(value) => Some(
+            PermissionMode::parse(value)
+                .ok_or_else(|| format!("unsupported permission mode: {value}"))?,
+        ),
+    };
+
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+
+    let session_manager = coordinator.get_session_manager();
+    let is_active = match mode {
+        Some(turn_mode) => {
+            session_manager.set_active_turn_permission_mode(&session_id, &turn_id, turn_mode)
+        }
+        None => {
+            let is_active = session_manager
+                .get_session(&session_id)
+                .is_some_and(|session| {
+                    matches!(
+                        &session.state,
+                        SessionState::Processing { current_turn_id, .. }
+                            if current_turn_id == &turn_id
+                    )
+                });
+            if is_active {
+                session_manager.clear_active_turn_permission_mode(&session_id, &turn_id);
+            }
+            is_active
+        }
+    };
+    if !is_active {
+        return Err(format!(
+            "Turn is no longer active for this session: session_id={session_id}, turn_id={turn_id}"
+        ));
+    }
+
+    Ok(SessionPermissionModeResponse {
+        mode: session_manager.session_permission_mode(&session_id),
+        turn_mode: session_manager.active_turn_permission_mode(&session_id, &turn_id),
+        active_turn_id: Some(turn_id),
+    })
 }
 
 /// Reads the session's own permission mode selection.
@@ -1913,10 +2149,29 @@ pub async fn get_session_permission_mode(
     )
     .await?;
 
+    let session_manager = coordinator.get_session_manager();
+    let requested_turn_id = request
+        .turn_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let active_turn_id = requested_turn_id.and_then(|turn_id| {
+        session_manager
+            .get_session(&session_id)
+            .filter(|session| {
+                matches!(
+                    &session.state,
+                    SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+                )
+            })
+            .map(|_| turn_id.to_string())
+    });
     Ok(SessionPermissionModeResponse {
-        mode: coordinator
-            .get_session_manager()
-            .session_permission_mode(&session_id),
+        mode: session_manager.session_permission_mode(&session_id),
+        turn_mode: active_turn_id
+            .as_deref()
+            .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
+        active_turn_id,
     })
 }
 
@@ -2763,6 +3018,97 @@ pub async fn cancel_dialog_turn(
         .map(|_| ())
 }
 
+/// Request a recoverable interruption for a native local dialog turn. The
+/// command returns only after the old execution has settled and the
+/// `dialog-turn-interrupted` event is safe to act on.
+#[tauri::command]
+pub async fn interrupt_dialog_turn(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: CancelDialogTurnRequest,
+) -> Result<(), String> {
+    let interruption = runtime
+        .agent_runtime()
+        .interrupt_turn(AgentTurnInterruptionRequest {
+            session_id: request.session_id.clone(),
+            turn_id: request.dialog_turn_id.clone(),
+            source: Some(AgentSubmissionSource::DesktopUi),
+            wait_timeout_ms: Some(30_000),
+        })
+        .await;
+    match interruption {
+        Ok(_) => Ok(()),
+        // Stop remains universally available. Unsupported recovery surfaces
+        // (external routes, Goal, remote, non-standard sessions) degrade to
+        // the existing hard cancellation and emit DialogTurnCancelled.
+        Err(RuntimeError::Port(error))
+            if matches!(error.kind, PortErrorKind::InvalidRequest | PortErrorKind::Timeout) => runtime
+            .agent_runtime()
+            .cancel_turn(AgentTurnCancellationRequest {
+                session_id: request.session_id.clone(),
+                turn_id: Some(request.dialog_turn_id.clone()),
+                source: Some(AgentSubmissionSource::DesktopUi),
+                requester_session_id: None,
+                reason: Some(if error.kind == PortErrorKind::Timeout {
+                    "recoverable interruption timed out".to_string()
+                } else {
+                    "recoverable interruption unavailable".to_string()
+                }),
+                wait_timeout_ms: None,
+                cancel_descendants: true,
+            })
+            .await
+            .map(|_| ())
+            .map_err(|fallback_error| {
+                log::error!(
+                    "Failed to cancel dialog turn after interruption was unavailable: session_id={}, dialog_turn_id={}, error={}",
+                    request.session_id,
+                    request.dialog_turn_id,
+                    fallback_error
+                );
+                format!("Failed to cancel dialog turn: {}", fallback_error.into_message())
+            }),
+        Err(error) => {
+            log::error!(
+                "Failed to interrupt dialog turn: session_id={}, dialog_turn_id={}, error={}",
+                request.session_id,
+                request.dialog_turn_id,
+                error
+            );
+            Err(format!("Failed to interrupt dialog turn: {}", error.into_message()))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn recover_interrupted_dialog_turn(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: RecoverInterruptedDialogTurnRequest,
+) -> Result<AgentDialogTurnRecoveryOutcome, String> {
+    runtime
+        .agent_runtime()
+        .recover_interrupted_turn(AgentDialogTurnRecoveryRequest {
+            session_id: request.session_id.clone(),
+            turn_id: request.dialog_turn_id.clone(),
+            execution_generation: request.execution_generation,
+            workspace_path: request.workspace_path,
+            remote_connection_id: request.remote_connection_id,
+            remote_ssh_host: request.remote_ssh_host,
+        })
+        .await
+        .map_err(|error| {
+            log::error!(
+                "Failed to recover interrupted dialog turn: session_id={}, dialog_turn_id={}, error={}",
+                request.session_id,
+                request.dialog_turn_id,
+                error
+            );
+            format!(
+                "Failed to recover interrupted dialog turn: {}",
+                error.into_message()
+            )
+        })
+}
+
 #[tauri::command]
 pub async fn steer_dialog_turn(
     runtime: State<'_, DesktopRuntimeContext>,
@@ -2773,12 +3119,23 @@ pub async fn steer_dialog_turn(
         dialog_turn_id,
         content,
         display_content,
+        image_contexts,
+        user_message_metadata,
     } = request;
 
-    let trimmed = content.trim();
-    if trimmed.is_empty() {
+    let attachments: Vec<AgentInputAttachment> = image_contexts
+        .unwrap_or_default()
+        .into_iter()
+        .map(desktop_image_attachment)
+        .collect();
+
+    // An image-only steering message is a real message; only a message with
+    // neither text nor attachments is empty.
+    if content.trim().is_empty() && attachments.is_empty() {
         return Err("Steering content cannot be empty".to_string());
     }
+
+    let metadata = desktop_user_message_metadata(user_message_metadata);
 
     let outcome = runtime
         .agent_runtime()
@@ -2787,6 +3144,8 @@ pub async fn steer_dialog_turn(
             turn_id: dialog_turn_id,
             content,
             display_content,
+            attachments,
+            metadata,
         })
         .await
         .map_err(|error| format!("Failed to steer dialog turn: {}", error.into_message()))?;
@@ -3194,6 +3553,10 @@ pub async fn restore_session_view(
             .map_err(|error| format!("Failed to restore session view: {error}"))?;
         let session = restored.session;
         let mut turns = restored.turns;
+        let interaction_snapshot = restored.interaction_snapshot;
+        let runtime_event_snapshot = restored
+            .runtime_event_snapshot
+            .map(frontend_event_projection_snapshot);
         let current_context_usage = restored.current_context_usage;
         let total_turn_count = restored.total_turn_count;
         let turn_catalog = restored.turn_catalog;
@@ -3247,6 +3610,8 @@ pub async fn restore_session_view(
         Ok(RestoreSessionViewResponse {
             session: session_to_response_with_turn_count(session, total_turn_count),
             turns,
+            interaction_snapshot,
+            runtime_event_snapshot,
             current_context_usage,
             turn_catalog,
             context_restore_state: "pending".to_string(),
@@ -3259,6 +3624,37 @@ pub async fn restore_session_view(
     .await;
     startup_trace.record_tauri_command_elapsed("restore_session_view", None, started_at);
     result
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadSessionEventBackfillRequest {
+    pub session_id: String,
+    pub stream_id: String,
+    #[serde(default)]
+    pub cursor: u64,
+}
+
+/// Serve everything a client missed after the cursor it already applied.
+///
+/// The journal answers either with a contiguous delta or with
+/// `snapshotRequired`; a Host with no journal cannot prove contiguity and
+/// answers the same way an aged-out cursor does.
+#[tauri::command]
+pub async fn load_session_event_backfill(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: LoadSessionEventBackfillRequest,
+) -> Result<serde_json::Value, String> {
+    Ok(session_event_backfill_to_response(
+        runtime.session_application().session_events_since(
+            &request.session_id,
+            &request.stream_id,
+            request.cursor,
+        ),
+        runtime
+            .session_application()
+            .session_interaction_snapshot(&request.session_id),
+    ))
 }
 
 #[tauri::command]
@@ -3664,6 +4060,7 @@ mod tests {
     use bitfun_core::service::session::{
         ModelRoundData, ToolCallData, ToolItemData, ToolResultData, TurnStatus, UserMessageData,
     };
+    use bitfun_events::AgenticEvent;
     use bitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
     use serde_json::json;
 
@@ -3692,6 +4089,31 @@ mod tests {
         };
 
         assert!(!mode_catalog_supports_external_sources(&request, Some(&desktop_host_path)).await);
+    }
+
+    #[test]
+    fn desktop_restore_projects_runtime_events_with_the_cursor_fence() {
+        let snapshot = frontend_event_projection_snapshot(SessionEventProjectionSnapshot {
+            session_id: "session-1".to_string(),
+            stream_id: "runtime-a".to_string(),
+            cursor: 9,
+            active_turn_id: Some("turn-1".to_string()),
+            events: vec![AgenticEvent::TextChunk {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
+                text: "hello".to_string(),
+            }],
+        });
+
+        assert_eq!(snapshot.session_id, "session-1");
+        assert_eq!(snapshot.stream_id, "runtime-a");
+        assert_eq!(snapshot.cursor, 9);
+        assert_eq!(snapshot.active_turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(snapshot.events[0].event_name, "agentic://text-chunk");
+        assert_eq!(snapshot.events[0].payload["text"], "hello");
     }
 
     #[test]
@@ -4159,6 +4581,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            recovery: None,
+            recovery_epoch: None,
             error: None,
             error_detail: None,
             status: TurnStatus::Completed,
@@ -4243,6 +4667,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            recovery: None,
+            recovery_epoch: None,
             error: None,
             error_detail: None,
             status: TurnStatus::Completed,
@@ -4308,6 +4734,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            recovery: None,
+            recovery_epoch: None,
             error: None,
             error_detail: None,
             status: TurnStatus::Completed,

@@ -535,3 +535,10 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-scene__spinning {
+    animation: none;
+    transform: none;
+  }
+}

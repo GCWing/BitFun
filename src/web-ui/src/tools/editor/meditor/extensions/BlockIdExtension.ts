@@ -15,6 +15,7 @@ const TOP_LEVEL_TYPES = [
   'horizontalRule',
   'markdownTable',
   'details',
+  'frontmatter',
   'renderOnlyBlock',
   'rawHtmlBlock',
 ];

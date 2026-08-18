@@ -299,7 +299,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       /* Sync before the next commit paints so subagent wrapper + task card merge in one frame. */
       taskCollapseStateManager.setCollapsed(toolItem.id, !nextExpanded);
     }
-    applyExpandedState(isExpanded, nextExpanded, setIsExpanded, { reason });
+    applyExpandedState(isExpanded, nextExpanded, setIsExpanded);
   }, [applyExpandedState, isExpanded, toolItem.id]);
 
   useLayoutEffect(() => {

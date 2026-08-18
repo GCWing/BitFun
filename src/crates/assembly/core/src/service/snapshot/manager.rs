@@ -79,14 +79,14 @@ impl SnapshotManager {
     }
 
     /// Rolls back to a specific turn.
-    pub async fn rollback_to_turn(
+    pub async fn rollback_workspace_files_to_boundary(
         &self,
         session_id: &str,
         turn_index: usize,
     ) -> SnapshotResult<Vec<PathBuf>> {
         let snapshot_service = self.snapshot_service.read().await;
         snapshot_service
-            .rollback_to_turn(session_id, turn_index)
+            .rollback_workspace_files_to_boundary(session_id, turn_index)
             .await
     }
 

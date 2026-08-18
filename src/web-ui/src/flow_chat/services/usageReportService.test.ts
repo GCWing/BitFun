@@ -2,14 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   SessionUsageReport,
 } from '@/infrastructure/api/service-api/SessionAPI';
-import type { DialogTurnData } from '@/shared/types/session-history';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
+import {
+  closeSessionUsageModal,
+  getSessionUsageModalState,
+} from '../components/usage/sessionUsageModalState';
 
 const sessionApiMocks = vi.hoisted(() => ({
   getSessionUsageReport: vi.fn(),
-  saveSessionTurn: vi.fn(),
-  recordLocalCommandTurn: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
@@ -101,6 +102,18 @@ const usageReport = (overrides: Partial<SessionUsageReport> = {}): SessionUsageR
   ...overrides,
 });
 
+const uiParams = {
+  isProcessing: false,
+  busyMessage: 'busy',
+  noWorkspaceMessage: 'missing workspace',
+  failedTitle: 'failed',
+  unknownErrorMessage: 'unknown',
+};
+
+const transcriptOf = (sessionId = 'session-1') => (
+  flowChatStore.getState().sessions.get(sessionId)?.dialogTurns ?? []
+);
+
 describe('runUsageReportCommand', () => {
   beforeEach(() => {
     flowChatStore.setState((): FlowChatState => ({
@@ -108,79 +121,46 @@ describe('runUsageReportCommand', () => {
       activeSessionId: 'session-1',
     }));
     sessionApiMocks.getSessionUsageReport.mockReset();
-    sessionApiMocks.saveSessionTurn.mockReset();
-    sessionApiMocks.recordLocalCommandTurn.mockReset();
-    sessionApiMocks.saveSessionTurn.mockResolvedValue(undefined);
-    sessionApiMocks.recordLocalCommandTurn.mockImplementation(
-      async (turnData: DialogTurnData) => ({
-        turnId: turnData.turnId,
-        storageTurnIndex: 0,
-        totalTurnCount: 1,
-        turnCatalog: {
-          schemaVersion: 1,
-          sessionId: turnData.sessionId,
-          revision: 'catalog-1',
-          totalTurnCount: 1,
-          complete: true,
-          entries: [{
-            ordinal: 0,
-            storageTurnIndex: 0,
-            turnId: turnData.turnId,
-            previewTruncated: false,
-          }],
-        },
-      }),
-    );
   });
 
   afterEach(() => {
+    closeSessionUsageModal();
     flowChatStore.setState((): FlowChatState => ({
       sessions: new Map(),
       activeSessionId: null,
     }));
   });
 
-  it('inserts a loading usage card immediately and replaces it with the final report', async () => {
+  it('shows the waiting state immediately and replaces it with the report', async () => {
     let resolveReport: (report: SessionUsageReport) => void = () => {};
     sessionApiMocks.getSessionUsageReport.mockReturnValue(new Promise<SessionUsageReport>(resolve => {
       resolveReport = resolve;
     }));
     const { runUsageReportCommand } = await import('./usageReportService');
 
-    const pending = runUsageReportCommand({
-      session: createSession(),
-      isProcessing: false,
-      busyMessage: 'busy',
-      noWorkspaceMessage: 'missing workspace',
-      failedTitle: 'failed',
-      unknownErrorMessage: 'unknown',
-      loadingMarkdown: 'Generating usage report...',
-    });
+    const pending = runUsageReportCommand({ session: createSession(), ...uiParams });
 
-    const loadingTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
-    expect(loadingTurn?.userMessage.content).toBe('Generating usage report...');
-    expect(loadingTurn?.userMessage.metadata).toMatchObject({
-      localCommandKind: 'usage_report',
-      usageReportStatus: 'loading',
-      modelVisible: false,
+    // Open before the request resolves. The wait is the whole reason the report
+    // used to be inserted as a turn in two stages.
+    expect(getSessionUsageModalState()).toMatchObject({
+      open: true,
+      isLoading: true,
+      sessionId: 'session-1',
     });
+    expect(getSessionUsageModalState().report).toBeUndefined();
 
     resolveReport(usageReport());
     const result = await pending;
 
-    const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
-    expect(result.inserted).toBe(true);
-    expect(finalTurn?.id).toBe(loadingTurn?.id);
-    expect(finalTurn?.status).toBe('completed');
-    expect(finalTurn?.userMessage.content).toContain('# Session Usage Report');
-    expect(finalTurn?.userMessage.content).toContain('Session span');
-    expect(finalTurn?.userMessage.content).toContain('not reported');
-    expect(finalTurn?.userMessage.content).not.toContain('Wall time');
-    expect(finalTurn?.userMessage.content).not.toContain('Cached | unavailable');
-    expect(finalTurn?.userMessage.metadata).toMatchObject({
-      reportId: 'usage-report-1',
-      usageReportStatus: 'completed',
-    });
+    expect(result.shown).toBe(true);
+    const state = getSessionUsageModalState();
+    expect(state).toMatchObject({ open: true, isLoading: false });
+    expect(state.report?.reportId).toBe('usage-report-1');
+    expect(state.markdown).toContain('# Session Usage Report');
+    expect(state.markdown).toContain('Session span');
+    expect(state.markdown).toContain('not reported');
+    expect(state.markdown).not.toContain('Wall time');
+    expect(state.markdown).not.toContain('Cached | unavailable');
     expect(sessionApiMocks.getSessionUsageReport).toHaveBeenCalledWith({
       sessionId: 'session-1',
       workspacePath: 'D:/workspace/BitFun',
@@ -188,53 +168,51 @@ describe('runUsageReportCommand', () => {
       remoteSshHost: undefined,
       includeHiddenSubagents: true,
     });
-    expect(sessionApiMocks.recordLocalCommandTurn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        turnId: finalTurn?.id,
-        turnIndex: 0,
-        kind: 'local_command',
-      }),
-      'D:/workspace/BitFun',
-      undefined,
-      undefined,
-    );
-    const persistedTurn = sessionApiMocks.recordLocalCommandTurn.mock.calls[0][0] as DialogTurnData;
-    expect(persistedTurn.userMessage.metadata).not.toHaveProperty('usageReportProvisional');
-    expect(sessionApiMocks.saveSessionTurn).not.toHaveBeenCalled();
-    expect(finalTurn?.backendTurnIndex).toBe(0);
-    expect(finalTurn?.userMessage.metadata?.usageReportProvisional).toBeUndefined();
-    expect(flowChatStore.getState().sessions.get('session-1')).toMatchObject({
-      totalTurnCount: 1,
-      turnCatalog: { totalTurnCount: 1 },
-    });
   });
 
-  it('removes the provisional report when authoritative persistence fails', async () => {
+  it('leaves the transcript alone, which is the point of it', async () => {
+    /*
+     * A report about a session is not an event in it. As a turn it grew
+     * `dialogTurns` and moved `at(-1)`, which is what follow-output reads as a
+     * Turn arriving, so a report pinned itself to the top of the viewport; and
+     * once persisted it took a numbered slot in the Turn rail.
+     */
     sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport());
-    sessionApiMocks.recordLocalCommandTurn.mockRejectedValueOnce(new Error('record failed'));
     const { runUsageReportCommand } = await import('./usageReportService');
 
-    await expect(runUsageReportCommand({
-      session: createSession(),
-      isProcessing: false,
-      busyMessage: 'busy',
-      noWorkspaceMessage: 'missing workspace',
-      failedTitle: 'failed',
-      unknownErrorMessage: 'unknown',
-      loadingMarkdown: 'Generating usage report...',
-    })).rejects.toThrow('record failed');
+    await runUsageReportCommand({ session: createSession(), ...uiParams });
 
-    expect(flowChatStore.getState().sessions.get('session-1')?.dialogTurns).toEqual([]);
+    expect(transcriptOf()).toEqual([]);
+  });
+
+  it('closes the waiting state when the report cannot be produced', async () => {
+    sessionApiMocks.getSessionUsageReport.mockRejectedValueOnce(new Error('report failed'));
+    const { runUsageReportCommand } = await import('./usageReportService');
+
+    await expect(runUsageReportCommand({ session: createSession(), ...uiParams }))
+      .rejects.toThrow('report failed');
+
+    // Left open it would wait forever: no second request is coming.
+    expect(getSessionUsageModalState().open).toBe(false);
+    expect(transcriptOf()).toEqual([]);
+  });
+
+  it('does not open at all when there is no workspace to report on', async () => {
+    const { runUsageReportCommand } = await import('./usageReportService');
+
+    const result = await runUsageReportCommand({
+      session: createSession({ workspacePath: undefined }),
+      ...uiParams,
+    });
+
+    expect(result).toMatchObject({ shown: false, reason: 'missing_workspace' });
+    expect(getSessionUsageModalState().open).toBe(false);
   });
 
   it('infers legacy model rows from the session model without showing raw missing-model copy', async () => {
     const session = createSession({
       config: { agentType: 'agentic', modelName: 'gpt-5.4' },
     });
-    flowChatStore.setState((): FlowChatState => ({
-      sessions: new Map([['session-1', session]]),
-      activeSessionId: 'session-1',
-    }));
     sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
       models: [{
         modelId: 'unknown_model',
@@ -250,15 +228,7 @@ describe('runUsageReportCommand', () => {
     }));
     const { runUsageReportCommand } = await import('./usageReportService');
 
-    const result = await runUsageReportCommand({
-      session,
-      isProcessing: false,
-      busyMessage: 'busy',
-      noWorkspaceMessage: 'missing workspace',
-      failedTitle: 'failed',
-      unknownErrorMessage: 'unknown',
-      loadingMarkdown: 'Generating usage report...',
-    });
+    const result = await runUsageReportCommand({ session, ...uiParams });
 
     expect(result.report?.models[0]).toMatchObject({
       modelId: 'gpt-5.4',
@@ -270,15 +240,13 @@ describe('runUsageReportCommand', () => {
     });
     expect(result.report?.slowest[0].label).not.toBe('unknown_model');
 
-    const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
-    expect(finalTurn?.userMessage.metadata?.usageReport).toMatchObject({
-      models: [expect.objectContaining({
-        modelId: 'gpt-5.4',
-        modelIdSource: 'inferred_session_model',
-      })],
+    const state = getSessionUsageModalState();
+    expect(state.report?.models[0]).toMatchObject({
+      modelId: 'gpt-5.4',
+      modelIdSource: 'inferred_session_model',
     });
-    expect(finalTurn?.userMessage.content).toContain('gpt-5.4 (inferred)');
-    expect(finalTurn?.userMessage.content).not.toContain('Model not recorded');
+    expect(state.markdown).toContain('gpt-5.4 (inferred)');
+    expect(state.markdown).not.toContain('Model not recorded');
   });
 
   it('does not infer legacy model rows from opaque session model identifiers', async () => {
@@ -291,10 +259,6 @@ describe('runUsageReportCommand', () => {
       const session = createSession({
         config: { agentType: 'agentic', modelName: opaqueModelId },
       });
-      flowChatStore.setState((): FlowChatState => ({
-        sessions: new Map([['session-1', session]]),
-        activeSessionId: 'session-1',
-      }));
       sessionApiMocks.getSessionUsageReport.mockResolvedValueOnce(usageReport({
         models: [{
           modelId: 'unknown_model',
@@ -309,15 +273,7 @@ describe('runUsageReportCommand', () => {
         }],
       }));
 
-      const result = await runUsageReportCommand({
-        session,
-        isProcessing: false,
-        busyMessage: 'busy',
-        noWorkspaceMessage: 'missing workspace',
-        failedTitle: 'failed',
-        unknownErrorMessage: 'unknown',
-        loadingMarkdown: 'Generating usage report...',
-      });
+      const result = await runUsageReportCommand({ session, ...uiParams });
 
       expect(result.report?.models[0]).toMatchObject({
         modelId: 'unknown_model',
@@ -328,10 +284,11 @@ describe('runUsageReportCommand', () => {
         modelIdSource: 'legacy_missing',
       });
 
-      const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
-      expect(finalTurn?.userMessage.content).toContain('Legacy model not tracked');
-      expect(finalTurn?.userMessage.content).not.toContain(opaqueModelId);
-      expect(finalTurn?.userMessage.content).not.toContain('(inferred)');
+      const { markdown } = getSessionUsageModalState();
+      expect(markdown).toContain('Legacy model not tracked');
+      expect(markdown).not.toContain(opaqueModelId);
+      expect(markdown).not.toContain('(inferred)');
+      closeSessionUsageModal();
     }
   });
 
@@ -339,10 +296,6 @@ describe('runUsageReportCommand', () => {
     const session = createSession({
       config: { agentType: 'agentic', modelName: '019e0c07-c7bc-73f1-b1d6-5260ed215fe0' },
     });
-    flowChatStore.setState((): FlowChatState => ({
-      sessions: new Map([['session-1', session]]),
-      activeSessionId: 'session-1',
-    }));
     sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
       models: [{
         modelId: 'model round 0',
@@ -358,15 +311,7 @@ describe('runUsageReportCommand', () => {
     }));
     const { runUsageReportCommand } = await import('./usageReportService');
 
-    const result = await runUsageReportCommand({
-      session,
-      isProcessing: false,
-      busyMessage: 'busy',
-      noWorkspaceMessage: 'missing workspace',
-      failedTitle: 'failed',
-      unknownErrorMessage: 'unknown',
-      loadingMarkdown: 'Generating usage report...',
-    });
+    const result = await runUsageReportCommand({ session, ...uiParams });
 
     expect(result.report?.models[0]).toMatchObject({
       modelId: 'unknown_model',
@@ -377,8 +322,8 @@ describe('runUsageReportCommand', () => {
       modelIdSource: 'legacy_missing',
     });
 
-    const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
-    expect(finalTurn?.userMessage.content).toContain('Legacy model not tracked');
-    expect(finalTurn?.userMessage.content).not.toContain('model round');
+    const { markdown } = getSessionUsageModalState();
+    expect(markdown).toContain('Legacy model not tracked');
+    expect(markdown).not.toContain('model round');
   });
 });

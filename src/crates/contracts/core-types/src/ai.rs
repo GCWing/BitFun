@@ -643,6 +643,46 @@ pub struct AIConfig {
     pub custom_request_body_mode: Option<String>,
 }
 
+/// Provider-neutral options that vary per model request rather than per model
+/// configuration.
+///
+/// Adapters may map these opaque facts to provider-specific request fields.
+/// Runtime owners must not place provider field names or raw local identifiers
+/// in this contract.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelRequestContext {
+    /// Stable, opaque routing identity for provider-side prompt-prefix caches.
+    pub prompt_cache_route_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelResponseReplay {
+    pub protocol: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub items: Vec<ModelResponseReplayItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ModelResponseReplayItem {
+    OpaqueReasoning {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        item_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        summary: Vec<ModelReasoningSummaryPart>,
+        opaque_state: String,
+    },
+    AssistantMessage,
+    FunctionCall {
+        call_id: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelReasoningSummaryPart {
+    pub text: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,
@@ -719,6 +759,8 @@ pub struct Message {
     pub is_error: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_image_attachments: Option<Vec<ToolImageAttachment>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_response_replay: Option<ModelResponseReplay>,
 }
 
 impl Message {
@@ -733,6 +775,7 @@ impl Message {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }
     }
 
@@ -747,6 +790,7 @@ impl Message {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }
     }
 
@@ -761,6 +805,7 @@ impl Message {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }
     }
 
@@ -775,6 +820,7 @@ impl Message {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }
     }
 }

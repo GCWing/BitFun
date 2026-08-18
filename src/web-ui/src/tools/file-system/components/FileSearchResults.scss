@@ -84,7 +84,9 @@ $_icon-size: 16px;
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      color $motion-base $easing-standard;
     color: var(--bf-appearance-token-color-text-secondary);
     text-align: left;
     font: inherit;

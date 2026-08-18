@@ -27,6 +27,7 @@ export interface UseI18nReturn {
   isChanging: boolean;
    
   formatDate: (date: Date | number, options?: Intl.DateTimeFormatOptions) => string;
+  resolvedTimeZone: string;
    
   formatNumber: (number: number, options?: Intl.NumberFormatOptions) => string;
    
@@ -91,6 +92,8 @@ export function useI18n(
     []
   );
 
+  const resolvedTimeZone = i18nService.getResolvedTimeZone();
+
   const formatNumber = useCallback(
     (number: number, options?: Intl.NumberFormatOptions) => {
       return i18nService.formatNumber(number, options);
@@ -127,6 +130,7 @@ export function useI18n(
     isReady: ready && isInitialized,
     isChanging,
     formatDate,
+    resolvedTimeZone,
     formatNumber,
     formatCurrency,
     formatRelativeTime,

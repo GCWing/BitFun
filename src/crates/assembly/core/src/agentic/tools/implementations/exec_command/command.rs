@@ -643,9 +643,7 @@ Output:
                 meta: None,
             };
         }
-        if let (Some(context), Some(parsed)) =
-            (context, exec_command_run_input_from_input(input))
-        {
+        if let (Some(context), Some(parsed)) = (context, exec_command_run_input_from_input(input)) {
             if let Some(rejection) =
                 crate::agentic::execution::edit_constraint_guard::check_bash_command(
                     context, parsed.cmd,

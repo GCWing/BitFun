@@ -1,8 +1,12 @@
+#[cfg(feature = "token-usage-statistics")]
+use super::time_zone::{local_date_start_utc, parse_time_zone};
 use super::types::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
     TokenUsageSummary,
 };
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
+#[cfg(feature = "token-usage-statistics")]
+use chrono_tz::Tz;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -64,11 +68,6 @@ impl TokenUsageService {
 
     fn get_model_stats_path(&self) -> PathBuf {
         self.base_dir.join(MODEL_STATS_FILE)
-    }
-
-    fn get_records_path(&self, date: DateTime<Utc>) -> PathBuf {
-        let filename = format!("{}.json", records_date_key(date));
-        self.base_dir.join(RECORDS_DIR).join(filename)
     }
 
     fn get_records_path_for_key(&self, date_key: &str) -> PathBuf {
@@ -315,6 +314,7 @@ impl TokenUsageService {
             model_id: Some(model_id.to_string()),
             session_id: None,
             time_range,
+            time_zone: None,
             limit: None,
             offset: None,
             include_subagent,
@@ -388,7 +388,8 @@ impl TokenUsageService {
         session_ids: Option<&HashSet<String>>,
     ) -> Result<Vec<TokenUsageRecord>, String> {
         let _usage_guard = self.usage_lifecycle.read().await;
-        let record_paths = self.record_paths_for_range(&query.time_range).await?;
+        let time_bounds = resolve_time_bounds(&query, Utc::now())?;
+        let record_paths = self.record_paths_for_range(time_bounds).await?;
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(usize::MAX);
         if limit == 0 {
@@ -403,6 +404,11 @@ impl TokenUsageService {
                 .map_err(|e| format!("Failed to read token usage records: {}", e))?;
             if let Ok(batch) = serde_json::from_str::<RecordsBatch>(&content) {
                 for record in batch.records {
+                    if time_bounds.is_some_and(|(start, end)| {
+                        record.timestamp < start || record.timestamp >= end
+                    }) {
+                        continue;
+                    }
                     if !query.include_subagent && record.is_subagent {
                         continue;
                     }
@@ -439,21 +445,27 @@ impl TokenUsageService {
         Ok(records)
     }
 
-    async fn record_paths_for_range(&self, time_range: &TimeRange) -> Result<Vec<PathBuf>, String> {
-        if matches!(time_range, TimeRange::All) {
+    async fn record_paths_for_range(
+        &self,
+        time_bounds: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    ) -> Result<Vec<PathBuf>, String> {
+        let Some((start_date, end_date)) = time_bounds else {
             return self.all_record_paths().await;
-        }
+        };
 
-        let (start_date, end_date) = self.get_date_range(time_range);
         let mut paths = Vec::new();
-        let mut current_date = start_date;
+        let mut current_date = start_date.date_naive();
+        let end_date = end_date.date_naive();
 
         while current_date <= end_date {
-            let path = self.get_records_path(current_date);
+            let path = self.get_records_path_for_key(&current_date.format("%Y-%m-%d").to_string());
             if fs::try_exists(&path).await.unwrap_or(false) {
                 paths.push(path);
             }
-            current_date += Duration::days(1);
+            let Some(next_date) = current_date.succ_opt() else {
+                break;
+            };
+            current_date = next_date;
         }
 
         Ok(paths)
@@ -483,43 +495,6 @@ impl TokenUsageService {
         paths.sort();
         Ok(paths)
     }
-
-    fn get_date_range(&self, time_range: &TimeRange) -> (DateTime<Utc>, DateTime<Utc>) {
-        let now = Utc::now();
-        let epoch = DateTime::UNIX_EPOCH;
-
-        match time_range {
-            TimeRange::Today => {
-                let start = now
-                    .date_naive()
-                    .and_hms_opt(0, 0, 0)
-                    .map(|t| t.and_utc())
-                    .unwrap_or(epoch);
-                (start, now)
-            }
-            TimeRange::ThisWeek => {
-                let days_from_monday = now.weekday().num_days_from_monday();
-                let start = (now - Duration::days(days_from_monday as i64))
-                    .date_naive()
-                    .and_hms_opt(0, 0, 0)
-                    .map(|t| t.and_utc())
-                    .unwrap_or(epoch);
-                (start, now)
-            }
-            TimeRange::ThisMonth => {
-                let start = now
-                    .date_naive()
-                    .with_day(1)
-                    .and_then(|d| d.and_hms_opt(0, 0, 0))
-                    .map(|t| t.and_utc())
-                    .unwrap_or(epoch);
-                (start, now)
-            }
-            TimeRange::All => (epoch, now),
-            TimeRange::Custom { start, end } => (*start, *end),
-        }
-    }
-
     pub async fn get_summary(&self, query: TokenUsageQuery) -> Result<TokenUsageSummary, String> {
         let records = self.query_records(query).await?;
 
@@ -662,6 +637,97 @@ impl TokenUsageService {
     }
 }
 
+#[cfg(feature = "token-usage-statistics")]
+fn resolve_time_bounds(
+    query: &TokenUsageQuery,
+    now: DateTime<Utc>,
+) -> Result<Option<(DateTime<Utc>, DateTime<Utc>)>, String> {
+    let time_zone = parse_time_zone(query.time_zone.as_deref())?;
+    time_bounds_at(&query.time_range, time_zone, now)
+}
+
+#[cfg(not(feature = "token-usage-statistics"))]
+fn resolve_time_bounds(
+    query: &TokenUsageQuery,
+    now: DateTime<Utc>,
+) -> Result<Option<(DateTime<Utc>, DateTime<Utc>)>, String> {
+    if query
+        .time_zone
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty() && !matches!(value, "UTC" | "Etc/UTC" | "Etc/GMT"))
+    {
+        return Err(
+            "IANA token usage time zones require the token-usage-statistics feature".to_string(),
+        );
+    }
+
+    time_bounds_utc_at(&query.time_range, now)
+}
+
+#[cfg(feature = "token-usage-statistics")]
+fn time_bounds_at(
+    time_range: &TimeRange,
+    time_zone: Tz,
+    now: DateTime<Utc>,
+) -> Result<Option<(DateTime<Utc>, DateTime<Utc>)>, String> {
+    let local_now = now.with_timezone(&time_zone);
+    let start_date =
+        match time_range {
+            TimeRange::Today => Some(local_now.date_naive()),
+            TimeRange::ThisWeek => Some(
+                local_now.date_naive()
+                    - Duration::days(local_now.weekday().num_days_from_monday() as i64),
+            ),
+            TimeRange::ThisMonth => Some(local_now.date_naive().with_day(1).ok_or_else(|| {
+                "Unable to resolve the first day of the current month".to_string()
+            })?),
+            TimeRange::All => None,
+            TimeRange::Custom { start, end } => {
+                if end <= start {
+                    return Err("Token usage time range end must be after start".to_string());
+                }
+                return Ok(Some((*start, *end)));
+            }
+        };
+
+    start_date
+        .map(|date| local_date_start_utc(date, time_zone).map(|start| (start, now)))
+        .transpose()
+}
+
+#[cfg(not(feature = "token-usage-statistics"))]
+fn time_bounds_utc_at(
+    time_range: &TimeRange,
+    now: DateTime<Utc>,
+) -> Result<Option<(DateTime<Utc>, DateTime<Utc>)>, String> {
+    let start_date =
+        match time_range {
+            TimeRange::Today => Some(now.date_naive()),
+            TimeRange::ThisWeek => {
+                Some(now.date_naive() - Duration::days(now.weekday().num_days_from_monday() as i64))
+            }
+            TimeRange::ThisMonth => Some(now.date_naive().with_day(1).ok_or_else(|| {
+                "Unable to resolve the first day of the current month".to_string()
+            })?),
+            TimeRange::All => None,
+            TimeRange::Custom { start, end } => {
+                if end <= start {
+                    return Err("Token usage time range end must be after start".to_string());
+                }
+                return Ok(Some((*start, *end)));
+            }
+        };
+
+    Ok(start_date.map(|date| {
+        let start = date
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is valid")
+            .and_utc();
+        (start, now)
+    }))
+}
+
 fn records_date_key(date: DateTime<Utc>) -> String {
     date.format("%Y-%m-%d").to_string()
 }
@@ -696,6 +762,7 @@ async fn read_records_batch(path: &Path) -> Result<RecordsBatch, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
     use std::collections::HashSet;
 
     #[tokio::test]
@@ -739,6 +806,7 @@ mod tests {
                     model_id: None,
                     session_id: None,
                     time_range: TimeRange::All,
+                    time_zone: None,
                     limit: None,
                     offset: None,
                     include_subagent: true,
@@ -750,5 +818,109 @@ mod tests {
 
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].session_id, "parent-session");
+    }
+
+    #[cfg(feature = "token-usage-statistics")]
+    #[test]
+    fn today_uses_the_requested_local_calendar() {
+        let now = Utc.with_ymd_and_hms(2026, 8, 16, 1, 30, 0).unwrap();
+        let bounds = time_bounds_at(&TimeRange::Today, chrono_tz::Asia::Shanghai, now)
+            .expect("today bounds")
+            .expect("bounded range");
+
+        assert_eq!(
+            bounds.0,
+            Utc.with_ymd_and_hms(2026, 8, 15, 16, 0, 0).unwrap()
+        );
+        assert_eq!(bounds.1, now);
+    }
+
+    #[cfg(not(feature = "token-usage-statistics"))]
+    #[test]
+    fn local_storage_only_keeps_utc_calendar_ranges() {
+        let now = Utc.with_ymd_and_hms(2026, 8, 16, 1, 30, 0).unwrap();
+        let bounds = time_bounds_utc_at(&TimeRange::Today, now)
+            .expect("today bounds")
+            .expect("bounded range");
+
+        assert_eq!(
+            bounds.0,
+            Utc.with_ymd_and_hms(2026, 8, 16, 0, 0, 0).unwrap()
+        );
+        assert_eq!(bounds.1, now);
+    }
+
+    #[tokio::test]
+    async fn query_records_filters_boundary_day_records_by_timestamp() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let service = TokenUsageService::new(dir.path().to_path_buf())
+            .await
+            .expect("token usage service");
+        let start = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
+        let end = Utc.with_ymd_and_hms(2026, 8, 17, 10, 0, 0).unwrap();
+
+        for (date, records) in [
+            (
+                "2026-08-16",
+                vec![
+                    record_at("before", start - Duration::seconds(1)),
+                    record_at("start", start),
+                ],
+            ),
+            (
+                "2026-08-17",
+                vec![
+                    record_at("inside", end - Duration::seconds(1)),
+                    record_at("end", end),
+                ],
+            ),
+        ] {
+            let path = service.get_records_path_for_key(date);
+            fs::write(
+                path,
+                serde_json::to_string(&RecordsBatch { records }).expect("serialize batch"),
+            )
+            .await
+            .expect("write record batch");
+        }
+
+        let records = service
+            .query_records(TokenUsageQuery {
+                model_id: None,
+                session_id: None,
+                time_range: TimeRange::Custom { start, end },
+                time_zone: None,
+                limit: None,
+                offset: None,
+                include_subagent: true,
+            })
+            .await
+            .expect("query records");
+
+        assert_eq!(
+            records
+                .iter()
+                .map(|record| record.turn_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["start", "inside"]
+        );
+    }
+
+    fn record_at(turn_id: &str, timestamp: DateTime<Utc>) -> TokenUsageRecord {
+        TokenUsageRecord {
+            model_config_id: "config".to_string(),
+            effective_model_name: "model".to_string(),
+            session_id: "session".to_string(),
+            turn_id: turn_id.to_string(),
+            timestamp,
+            input_tokens: 1,
+            output_tokens: 1,
+            cached_tokens: 0,
+            cached_tokens_available: false,
+            cache_write_tokens: 0,
+            total_tokens: 2,
+            token_details: None,
+            is_subagent: false,
+        }
     }
 }

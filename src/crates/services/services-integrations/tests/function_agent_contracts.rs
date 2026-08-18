@@ -63,59 +63,6 @@ async fn git_service_builds_commit_snapshot_from_staged_diff_without_unstaged_co
     assert!(!snapshot.diff_content.contains("unstaged only"));
 }
 
-#[tokio::test]
-async fn git_service_startchat_snapshot_preserves_no_head_and_non_git_fallback() {
-    let no_head_repo = TestTempDir::new("startchat-no-head");
-    init_git_repo(no_head_repo.path());
-    fs::write(no_head_repo.path().join("new.txt"), "new\n").unwrap();
-
-    let no_head =
-        FunctionAgentGitService::startchat_git_snapshot(no_head_repo.path().to_path_buf())
-            .await
-            .unwrap();
-
-    assert_eq!(no_head.current_branch, "main");
-    assert!(no_head.status_porcelain.contains("?? new.txt"));
-    assert!(no_head.unstaged_diff.is_empty());
-    assert!(no_head.staged_diff.is_empty());
-    assert_eq!(no_head.unpushed_commits, 0);
-    assert!(no_head.ahead_behind.is_none());
-    assert!(no_head.last_commit_timestamp.is_none());
-
-    let plain_dir = TestTempDir::new("not-git");
-    let non_git = FunctionAgentGitService::startchat_git_snapshot(plain_dir.path().to_path_buf())
-        .await
-        .unwrap();
-
-    assert!(non_git.current_branch.is_empty());
-    assert!(non_git.status_porcelain.is_empty());
-    assert!(non_git.unstaged_diff.is_empty());
-    assert!(non_git.staged_diff.is_empty());
-    assert_eq!(non_git.unpushed_commits, 0);
-    assert!(non_git.ahead_behind.is_none());
-    assert!(non_git.last_commit_timestamp.is_none());
-}
-
-#[tokio::test]
-async fn git_service_time_snapshot_uses_last_commit_timestamp() {
-    let repo = TestTempDir::new("time-snapshot");
-    init_git_repo(repo.path());
-    fs::write(repo.path().join("tracked.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "tracked.txt"]);
-    git_with_env(
-        repo.path(),
-        &["commit", "-m", "initial"],
-        &[
-            ("GIT_AUTHOR_DATE", "1700000000 +0000"),
-            ("GIT_COMMITTER_DATE", "1700000000 +0000"),
-        ],
-    );
-
-    let snapshot = FunctionAgentGitService::startchat_time_snapshot(repo.path());
-
-    assert_eq!(snapshot.last_commit_timestamp, Some(1_700_000_000));
-}
-
 fn init_git_repo(repo: &Path) {
     git(repo, &["init", "-b", "main"]);
     git(repo, &["config", "user.email", "test@example.com"]);

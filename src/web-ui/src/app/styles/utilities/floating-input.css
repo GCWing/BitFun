@@ -19,7 +19,15 @@
     inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
   padding: var(--bf-appearance-token-size-gap-3) var(--bf-appearance-token-size-gap-4);
   z-index: 100;
-  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    border-radius var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    opacity var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    padding var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    transform var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    width var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
   opacity: 0.6; /* Overall opacity when inactive */
   display: flex;
   align-items: center;
@@ -80,7 +88,11 @@
   cursor: pointer;
   padding: var(--bf-appearance-token-size-gap-2);
   border-radius: var(--bf-appearance-token-size-radius-sm);
-  transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   display: flex;
   align-items: center;
   justify-content: center;

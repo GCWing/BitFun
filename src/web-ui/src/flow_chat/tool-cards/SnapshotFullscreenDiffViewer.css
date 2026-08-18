@@ -110,7 +110,12 @@
   font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
 .header-btn:disabled {
@@ -181,7 +186,11 @@
   background: var(--bf-appearance-token-color-overlay-white-08);
   color: var(--bf-appearance-token-color-overlay-white-70);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
   flex-shrink: 0;
 }
 
@@ -219,7 +228,10 @@
   background: transparent;
   color: var(--bf-appearance-token-color-overlay-white-60);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
   white-space: nowrap;
   flex-shrink: 0;
   font-size: var(--bf-appearance-token-tool-card-action-font-size);
@@ -332,7 +344,12 @@
   font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
 .file-action-btn:disabled {
@@ -413,10 +430,10 @@
   border: 2px solid var(--bf-appearance-token-color-overlay-white-20);
   border-top: 2px solid var(--private-diff-fullscreen-selected-color);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: snapshot-fullscreen-diff-spin 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes snapshot-fullscreen-diff-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
@@ -521,4 +538,10 @@
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snapshot-fullscreen-overlay .loading-spinner {
+    animation: none;
+  }
 }

@@ -452,8 +452,18 @@ export class I18nService {
   
 
    
+  private createDateTimeFormatter(
+    options?: Intl.DateTimeFormatOptions,
+  ): Intl.DateTimeFormat {
+    return new Intl.DateTimeFormat(this.currentLocaleId, options);
+  }
+
   formatDate(date: Date | number, options?: Intl.DateTimeFormatOptions): string {
-    return new Intl.DateTimeFormat(this.currentLocaleId, options).format(date);
+    return this.createDateTimeFormatter(options).format(date);
+  }
+
+  getResolvedTimeZone(): string {
+    return this.createDateTimeFormatter().resolvedOptions().timeZone || 'UTC';
   }
 
    

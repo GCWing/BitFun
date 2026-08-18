@@ -74,12 +74,12 @@ describe('FlowToolCard deferred identity', () => {
     permissionContextMock.pendingPermissionToolCallIds.clear();
   });
 
-  it('switches from the gateway card to the effective card when wire input completes', () => {
+  it('switches to the effective card once the deferred tool name is available', () => {
     const base: FlowToolItem = {
       id: 'tool-1',
       type: 'tool',
       toolName: 'CallDeferredTool',
-      toolCall: { id: 'tool-1', input: { tool_name: 'CreatePlan' } },
+      toolCall: { id: 'tool-1', input: {} },
       status: 'streaming',
       timestamp: 1,
     };
@@ -95,7 +95,6 @@ describe('FlowToolCard deferred identity', () => {
             id: 'tool-1',
             input: {
               tool_name: 'CreatePlan',
-              args: { name: 'Plan', overview: 'Overview', plan: '# Plan' },
             },
           },
         }}

@@ -1,5 +1,5 @@
 pub use bitfun_core_types::{
-    AIConfig, ProxyConfig, ReasoningPresetAction, ReasoningPresetDescriptor,
+    AIConfig, ModelRequestContext, ProxyConfig, ReasoningPresetAction, ReasoningPresetDescriptor,
 };
 
 fn append_endpoint(base_url: &str, endpoint: &str) -> String {

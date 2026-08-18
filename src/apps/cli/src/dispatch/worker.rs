@@ -505,6 +505,8 @@ async fn process_mailboxes(
                 turn_id: turn_id.to_string(),
                 content: request.content.clone(),
                 display_content: request.display_content.clone(),
+                attachments: runtime_attachments(&request.attachments),
+                metadata: serde_json::Map::new(),
             })
             .await
             .map_err(|error| anyhow!(error.into_message()))

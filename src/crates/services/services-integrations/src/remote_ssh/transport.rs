@@ -394,6 +394,23 @@ impl WorkspacePipes {
     }
 }
 
+/// Resolve on the next real signal, and never on the channel closing.
+///
+/// A caller that keeps no `WorkspaceProcessControl` — because it drives the
+/// process purely over its IO streams — closes this channel the moment the
+/// handle it was given falls out of scope. That is not a request to kill
+/// anything: what leases the process is the three IO streams, as
+/// [`WorkspaceStdio`] documents. Reading the close as a `Kill` killed such a
+/// process microseconds after it started, before it could say a word.
+async fn next_control_signal(
+    control_rx: &mut mpsc::Receiver<WorkspaceProcessSignal>,
+) -> WorkspaceProcessSignal {
+    match control_rx.recv().await {
+        Some(signal) => signal,
+        None => std::future::pending().await,
+    }
+}
+
 #[cfg(feature = "remote-ssh-concrete")]
 async fn run_ssh_channel(mut channel: Channel<Msg>, mut pipes: WorkspacePipeOwner) {
     let mut stdin_buffer = vec![0u8; 16 * 1024];
@@ -413,12 +430,12 @@ async fn run_ssh_channel(mut channel: Channel<Msg>, mut pipes: WorkspacePipeOwne
         tokio::select! {
             biased;
 
-            signal = pipes.control_rx.recv() => {
+            signal = next_control_signal(&mut pipes.control_rx) => {
                 match signal {
-                    Some(WorkspaceProcessSignal::Interrupt) => {
+                    WorkspaceProcessSignal::Interrupt => {
                         let _ = channel.signal(Sig::INT).await;
                     }
-                    Some(WorkspaceProcessSignal::Kill) | None => {
+                    WorkspaceProcessSignal::Kill => {
                         let _ = channel.signal(Sig::KILL).await;
                         let _ = channel.close().await;
                         exit_code.get_or_insert(137);
@@ -543,10 +560,10 @@ async fn run_local_process(
         // We are the ones ending the process here, so a signal death says
         // nothing the caller does not already know. Prefer a status the
         // child chose for itself and otherwise report the requested intent.
-        signal = pipes.control_rx.recv() => {
+        signal = next_control_signal(&mut pipes.control_rx) => {
             let fallback = match signal {
-                Some(WorkspaceProcessSignal::Interrupt) => 130,
-                Some(WorkspaceProcessSignal::Kill) | None => 137,
+                WorkspaceProcessSignal::Interrupt => 130,
+                WorkspaceProcessSignal::Kill => 137,
             };
             let _ = child.start_kill();
             child.wait().await.ok().and_then(|status| status.code()).or(Some(fallback))
@@ -687,6 +704,18 @@ mod ssh_channel_tests {
     }
 
     async fn workspace_exit_for(report: ExitReport) -> WorkspaceProcessExit {
+        let transport = workspace_stdio_for(report).await;
+        let (_stdin, mut stdout, _stderr, _control, completion) = transport.into_parts();
+        let mut stdout_bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut stdout_bytes).await;
+        assert_eq!(stdout_bytes, b"workspace output\n");
+
+        tokio::time::timeout(Duration::from_secs(20), completion.wait())
+            .await
+            .expect("channel owner should report completion")
+    }
+
+    async fn workspace_stdio_for(report: ExitReport) -> WorkspaceStdio {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("test SSH listener should bind");
@@ -724,15 +753,7 @@ mod ssh_channel_tests {
             .await
             .expect("test exec should start");
 
-        let transport = WorkspaceStdio::from_ssh_channel(channel);
-        let (_stdin, mut stdout, _stderr, _control, completion) = transport.into_parts();
-        let mut stdout_bytes = Vec::new();
-        let _ = stdout.read_to_end(&mut stdout_bytes).await;
-        assert_eq!(stdout_bytes, b"workspace output\n");
-
-        tokio::time::timeout(Duration::from_secs(20), completion.wait())
-            .await
-            .expect("channel owner should report completion")
+        WorkspaceStdio::from_ssh_channel(channel)
     }
 
     #[tokio::test]
@@ -758,6 +779,32 @@ mod ssh_channel_tests {
         let exit = workspace_exit_for(ExitReport::EofBeforeExitSignal).await;
 
         assert_eq!(exit.exit_code, Some(143));
+    }
+
+    #[tokio::test]
+    async fn dropping_the_control_handle_does_not_end_the_channel() {
+        let transport = workspace_stdio_for(ExitReport::EofBeforeExitStatus).await;
+        let (_stdin, mut stdout, _stderr, control, completion) = transport.into_parts();
+        // A caller that drives the process over its IO streams alone has no use
+        // for this handle, and every ACP client is such a caller. Letting it go
+        // says nothing about whether the process should keep running.
+        drop(control);
+
+        let mut stdout_bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut stdout_bytes).await;
+        let exit = tokio::time::timeout(Duration::from_secs(20), completion.wait())
+            .await
+            .expect("channel owner should report completion");
+
+        assert_eq!(
+            stdout_bytes, b"workspace output\n",
+            "the remote process must still get to say what it had to say"
+        );
+        assert_eq!(
+            exit.exit_code,
+            Some(7),
+            "a dropped control handle is not a kill request"
+        );
     }
 
     #[tokio::test]
@@ -880,6 +927,29 @@ mod tests {
             exit.exit_code,
             Some(7),
             "a hook-handled soft interrupt must not kill the owning transport"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn dropping_the_control_handle_does_not_end_the_local_process() {
+        let transport = WorkspaceStdio::spawn_local_process(
+            "sh",
+            &["-lc".to_string(), "sleep 0.3; exit 5".to_string()],
+        )
+        .unwrap();
+        let (_stdin, _stdout, _stderr, control, completion) = transport.into_parts();
+        // The IO streams are the lease; this handle is not.
+        drop(control);
+
+        let exit = tokio::time::timeout(std::time::Duration::from_secs(5), completion.wait())
+            .await
+            .expect("the process should run to its own end");
+
+        assert_eq!(
+            exit.exit_code,
+            Some(5),
+            "a dropped control handle must not be read as a kill request"
         );
     }
 

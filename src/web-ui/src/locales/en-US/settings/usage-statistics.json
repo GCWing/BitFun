@@ -1,0 +1,78 @@
+{
+  "title": "Usage Statistics",
+  "subtitle": "Historical model calls stored on this device. Usage is not merged or synced across devices; view requests, tokens, and cache hit rates by model, provider, and endpoint.",
+  "timeRange": {
+    "label": "Time range",
+    "last24Hours": "Last 24 Hours",
+    "today": "Today",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "all": "All Time"
+  },
+  "granularity": {
+    "label": "Granularity",
+    "hour": "By Hour",
+    "day": "By Day"
+  },
+  "filter": {
+    "kind": {
+      "label": "Filter field",
+      "all": "All",
+      "provider": "Provider",
+      "model": "Model"
+    },
+    "placeholder": "Filter providers or models",
+    "inputLabel": "Filter usage statistics",
+    "clear": "Clear filter",
+    "empty": {
+      "title": "No matching usage data",
+      "description": "No calls match the current filter."
+    }
+  },
+  "refresh": "Refresh",
+  "loading": "Loading usage statistics…",
+  "loadFailed": "Failed to load usage statistics. Please try again.",
+  "unsupported": "The connected device uses an older BitFun version that does not support usage statistics.",
+  "empty": {
+    "title": "No usage data yet",
+    "description": "Model call statistics will appear here once you start chatting with a model."
+  },
+  "summary": {
+    "requests": "Requests",
+    "tokens": "Total Tokens",
+    "cachedTokens": "Cached Tokens",
+    "cacheHitRate": "Cache Hit Rate"
+  },
+  "distributions": {
+    "byModel": "Model Distribution",
+    "byGroup": "Group Usage Distribution",
+    "byEndpoint": "Endpoint Distribution"
+  },
+  "cacheHitRate": {
+    "title": "Model Cache Hit Rate"
+  },
+  "attribution": {
+    "deletedConfig": "Deleted configuration",
+    "unknownConfig": "Unknown configuration",
+    "unknownProvider": "Unknown provider",
+    "unknownModel": "Unknown model",
+    "unknownEndpoint": "Unknown endpoint"
+  },
+  "trend": {
+    "title": "Token Usage Trend",
+    "legend": {
+      "input": "Input",
+      "output": "Output",
+      "cacheCreation": "Cache Creation",
+      "cacheRead": "Cache Read",
+      "cacheHitRate": "Cache Hit Rate"
+    }
+  },
+  "table": {
+    "model": "Model",
+    "group": "Group",
+    "endpoint": "Endpoint",
+    "requests": "Requests",
+    "tokens": "Token"
+  }
+}

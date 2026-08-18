@@ -3,21 +3,26 @@
 //! Pure tool DTOs and helpers live here before the concrete tool framework and
 //! tool packs are moved out of the core facade.
 
+#[cfg(feature = "acp-bridge")]
 pub mod acp_tool_bridge;
+#[cfg(feature = "computer-use-contract")]
 pub mod computer_use;
 pub mod deferred_tool;
+#[cfg(feature = "element-token")]
 pub mod element_token;
 pub mod execution_gate;
 pub mod file_guidance;
 pub mod file_read_freshness;
 pub mod framework;
 pub mod input_validator;
+#[cfg(feature = "mcp-bridge")]
 pub mod mcp_tool_bridge;
 pub mod permission_intent;
 pub mod tool_execution_presentation;
 pub mod tool_result_storage;
 pub mod tool_snapshot;
 
+#[cfg(feature = "acp-bridge")]
 pub use acp_tool_bridge::{
     acp_external_agent_tool_input_schema, build_acp_external_agent_tool_definition,
     build_acp_external_agent_tool_name, build_acp_external_agent_tool_result,
@@ -93,6 +98,7 @@ pub use framework::{
     BITFUN_CURRENT_SESSION_URI_PREFIX, BITFUN_RUNTIME_URI_PREFIX, GET_TOOL_SPEC_TOOL_NAME,
 };
 pub use input_validator::InputValidator;
+#[cfg(feature = "mcp-bridge")]
 pub use mcp_tool_bridge::{
     build_mcp_tool_bridge_definition, build_mcp_tool_bridge_name, build_mcp_tool_bridge_result,
     mcp_tool_bridge_dynamic_tool_info, mcp_tool_bridge_short_description, normalize_name_for_mcp,

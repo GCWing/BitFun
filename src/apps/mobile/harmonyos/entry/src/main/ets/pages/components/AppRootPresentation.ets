@@ -1,5 +1,4 @@
 import display from '@ohos.display';
-import deviceInfo from '@ohos.deviceInfo';
 import mediaQuery from '@ohos.mediaquery';
 import { RemoteUiState } from '../../services/RemoteUiState';
 import { AppShell } from './AppShell';
@@ -13,7 +12,8 @@ import {
 import { AppShellState } from '../state/AppShellState';
 import {
   ConversationLayoutCrease,
-  ConversationLayoutPolicy
+  ConversationLayoutPolicy,
+  ConversationLayoutRect
 } from '../policy/ConversationLayoutPolicy';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { RemotePageState } from '../state/RemotePageState';
@@ -46,14 +46,6 @@ function safeFoldStatus(): display.FoldStatus {
   }
 }
 
-function safeDeviceType(): string {
-  try {
-    return deviceInfo.deviceType || '';
-  } catch (_err) {
-    return '';
-  }
-}
-
 @ComponentV2
 export struct AppRootPresentation {
   @Param shellState: AppShellState = new AppShellState();
@@ -64,6 +56,7 @@ export struct AppRootPresentation {
   @Param filePreviewState: FilePreviewState = new FilePreviewState();
   @Param deviceId: string = '';
   @Local viewportWidth: number = 0;
+  @Local viewportHeight: number = 0;
   @Local wideLayoutMatched: boolean = false;
   @Local foldStatus: display.FoldStatus = safeFoldStatus();
   @Local largeScreenLayout: boolean = false;
@@ -78,12 +71,15 @@ export struct AppRootPresentation {
   @Local restoreCollapsedMasterAfterPreview: boolean = false;
   @Local showRemoteViewSettings: boolean = false;
   @Local remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
-  private readonly deviceType: string = safeDeviceType();
   private verticalCreases: ConversationLayoutCrease[] = [];
   private wideQueryListener?: mediaQuery.MediaQueryListener;
   private foldStatusChanged: (status: display.FoldStatus) => void =
     (status: display.FoldStatus): void => {
       this.foldStatus = status;
+      this.refreshWideGeometry();
+    };
+  private foldDisplayModeChanged: (mode: display.FoldDisplayMode) => void =
+    (_mode: display.FoldDisplayMode): void => {
       this.refreshWideGeometry();
     };
   private wideQueryChanged: (result: mediaQuery.MediaQueryResult) => void =
@@ -125,16 +121,44 @@ export struct AppRootPresentation {
     }.width('100%').height('100%')
     .bindSheet($$this.showRemoteViewSettings, this.RemoteViewSettingsSheet(), this.remoteViewSettingsSheetOptions())
     .onAreaChange((_oldArea: Area, newArea: Area) => {
-      this.viewportWidth = this.areaWidth(newArea.width);
+      const areaWidth = this.areaWidth(newArea.width);
+      const areaHeight = this.areaWidth(newArea.height);
+      const displaySize = this.currentDisplaySize();
+      this.viewportWidth = ConversationLayoutPolicy.resolveLayoutViewportWidth(
+        areaWidth,
+        areaHeight,
+        displaySize[0],
+        displaySize[1],
+        displaySize[2]
+      );
+      this.viewportHeight = areaHeight > 0 ? areaHeight : displaySize[1];
+      if (this.viewportWidth === Math.max(displaySize[0], displaySize[1]) &&
+        areaWidth !== this.viewportWidth) {
+        this.viewportHeight = Math.min(displaySize[0], displaySize[1]);
+      }
       this.refreshWideGeometry();
     })
   }
 
   @Builder
   NavigationContent() {
-    Navigation(this.navigationStack) { this.RouteContent(AppRoute.ChatHome) }
-      .width('100%').height('100%').hideTitleBar(true).mode(NavigationMode.Stack)
-      .navDestination(this.NavigationDestination)
+    Stack() {
+      Navigation(this.navigationStack) { this.RouteContent(AppRoute.ChatHome) }
+        .id('bitfunHomeNavigation')
+        .width('100%').height('100%').hideTitleBar(true)
+        .mode(NavigationMode.Stack)
+        .navBarWidth('100%')
+        .minContentWidth(0)
+        .navDestination(this.NavigationDestination)
+        .visibility(this.isWideLayout() ? Visibility.Hidden : Visibility.Visible)
+
+      if (this.isWideLayout()) {
+        Column() { this.WideRouteContent() }
+          .width('100%').height('100%').backgroundColor(PAGE_BG)
+      }
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -143,32 +167,48 @@ export struct AppRootPresentation {
       .onBackPressed(() => this.actions.onNavigationBack(name as AppRoute))
   }
 
+  /**
+   * The wide column, and the only place the wide surface is built. The route is
+   * read here rather than taken as a @Builder parameter: a parameterised
+   * builder re-evaluates its arguments only when its own body re-runs, so the
+   * column used to keep whatever route it was first built with and a workspace
+   * session opened behind a pane that never followed.
+   */
+  @Builder
+  WideRouteContent() {
+    WideConversationHost({
+      route: this.shellState.activeRoute,
+      shellState: this.shellState,
+      remotePageState: this.remotePageState,
+      remoteCreateState: this.remoteCreateState,
+      generalPageState: this.generalPageState,
+      filePreviewState: this.filePreviewState,
+      remoteSurfaceState: this.remoteSurfaceState,
+      actions: this.actions,
+      filePreviewLayout: this.filePreviewLayout(),
+      wideMasterPaneWidth: this.wideMasterPaneWidth,
+      wideMasterDetailGap: this.wideMasterDetailGap,
+      wideDetailContentOffset: this.wideDetailContentOffset,
+      wideDetailContentWidth: this.wideDetailContentWidth,
+      wideCollapsedDetailContentOffset: this.wideCollapsedDetailContentOffset,
+      wideCollapsedDetailContentWidth: this.wideCollapsedDetailContentWidth,
+      wideMasterPaneCollapsed: this.wideMasterPaneCollapsed,
+      wideMasterPaneMotionActive: this.wideMasterPaneMotionActive,
+      onCollapseMasterPane: () => this.collapseWideMasterPane(),
+      onRestoreMasterPane: () => this.restoreWideMasterPane(),
+      onOpenRemoteViewSettings: () => { this.showRemoteViewSettings = true; }
+    })
+  }
+
+  /**
+   * Navigation content, which is the compact surface only. Wide layout keeps
+   * the stack for its paths and its back handling but draws the surface in
+   * WideRouteContent, so building it here too would put an invisible second
+   * copy behind the visible one — per nav bar, and per pushed destination.
+   */
   @Builder
   RouteContent(route: AppRoute) {
-    if (this.isWideLayout() && this.isConversationRoute(route)) {
-      WideConversationHost({
-        route,
-        shellState: this.shellState,
-        remotePageState: this.remotePageState,
-        remoteCreateState: this.remoteCreateState,
-        generalPageState: this.generalPageState,
-        filePreviewState: this.filePreviewState,
-        remoteSurfaceState: this.remoteSurfaceState,
-        actions: this.actions,
-        filePreviewLayout: this.filePreviewLayout(),
-        wideMasterPaneWidth: this.wideMasterPaneWidth,
-        wideMasterDetailGap: this.wideMasterDetailGap,
-        wideDetailContentOffset: this.wideDetailContentOffset,
-        wideDetailContentWidth: this.wideDetailContentWidth,
-        wideCollapsedDetailContentOffset: this.wideCollapsedDetailContentOffset,
-        wideCollapsedDetailContentWidth: this.wideCollapsedDetailContentWidth,
-        wideMasterPaneCollapsed: this.wideMasterPaneCollapsed,
-        wideMasterPaneMotionActive: this.wideMasterPaneMotionActive,
-        onCollapseMasterPane: () => this.collapseWideMasterPane(),
-        onRestoreMasterPane: () => this.restoreWideMasterPane(),
-        onOpenRemoteViewSettings: () => { this.showRemoteViewSettings = true; }
-      })
-    } else {
+    if (!this.isWideLayout()) {
       ConversationRouteSurface({
         route,
         remotePageState: this.remotePageState,
@@ -181,6 +221,7 @@ export struct AppRootPresentation {
         // Compact conversations own the drawer, not a back control: Local and
         // Remote both open the sidebar over the chat instead of leaving it.
         showBackButton: false,
+        hoverOperateMode: this.isHoverLayout(),
         onRestoreSidebar: () => this.restoreWideMasterPane()
       })
     }
@@ -261,17 +302,12 @@ export struct AppRootPresentation {
     );
   }
 
-  private isConversationRoute(route: AppRoute): boolean {
-    return route === AppRoute.ChatHome || route === AppRoute.GeneralChat ||
-      route === AppRoute.RemoteHome || route === AppRoute.RemoteCreate || route === AppRoute.RemoteChat;
-  }
-
   private bindResponsiveQueries(): void {
     this.unbindResponsiveQueries();
     try {
       const appMediaQuery = this.getUIContext().getMediaQuery();
       this.wideQueryListener = appMediaQuery.matchMediaSync(
-        `screen and (${ConversationLayoutPolicy.WIDE_LAYOUT_MIN_WIDTH} < width)`
+        `screen and (${ConversationLayoutPolicy.MD_MIN_WIDTH} < width)`
       );
       this.wideLayoutMatched = this.wideQueryListener.matches;
       this.wideQueryListener.on('change', this.wideQueryChanged);
@@ -287,6 +323,7 @@ export struct AppRootPresentation {
       this.foldStatus = display.getFoldStatus();
       this.refreshWideGeometry();
       display.on('foldStatusChange', this.foldStatusChanged);
+      display.on('foldDisplayModeChange', this.foldDisplayModeChanged);
     } catch (_err) {
       this.foldStatus = display.FoldStatus.FOLD_STATUS_UNKNOWN;
       this.unbindFoldStatus();
@@ -296,6 +333,7 @@ export struct AppRootPresentation {
   private unbindFoldStatus(): void {
     try {
       display.off('foldStatusChange', this.foldStatusChanged);
+      display.off('foldDisplayModeChange', this.foldDisplayModeChanged);
     } catch (_err) {
     }
   }
@@ -318,9 +356,10 @@ export struct AppRootPresentation {
     this.largeScreenLayout = ConversationLayoutPolicy.useMasterDetail(
       this.viewportWidth,
       this.wideLayoutMatched,
-      this.foldStatus === display.FoldStatus.FOLD_STATUS_FOLDED,
-      this.deviceType,
-      verticalCreases
+      ConversationLayoutPolicy.isFoldedStatus(this.foldStatus),
+      verticalCreases,
+      this.isExpandedFoldable(),
+      this.isHoverLayout()
     );
     const geometry = ConversationLayoutPolicy.resolveWideGeometry(
       this.viewportWidth,
@@ -338,20 +377,71 @@ export struct AppRootPresentation {
     }
   }
 
+  private isHoverLayout(): boolean {
+    return ConversationLayoutPolicy.useHoverOperate(
+      this.foldStatus,
+      this.viewportWidth,
+      this.viewportHeight
+    );
+  }
+
+  private isExpandedFoldable(): boolean {
+    return ConversationLayoutPolicy.isExpandedFoldableStatus(this.foldStatus) && this.isFoldableDevice();
+  }
+
+  private currentDisplaySize(): [number, number, number] {
+    try {
+      const metrics = display.getDefaultDisplaySync();
+      return [
+        this.getUIContext().px2vp(metrics.width),
+        this.getUIContext().px2vp(metrics.height),
+        metrics.rotation
+      ];
+    } catch (_err) {
+      return [0, 0, 0];
+    }
+  }
+
+  private isFoldableDevice(): boolean {
+    try {
+      return display.isFoldable();
+    } catch (_err) {
+      return ConversationLayoutPolicy.isExpandedFoldableStatus(this.foldStatus) ||
+        ConversationLayoutPolicy.isFoldedStatus(this.foldStatus);
+    }
+  }
+
   private currentVerticalCreases(): ConversationLayoutCrease[] {
-    if (this.foldStatus === display.FoldStatus.FOLD_STATUS_FOLDED) {
+    if (ConversationLayoutPolicy.isFoldedStatus(this.foldStatus) || this.isHoverLayout()) {
       return [];
     }
+    return ConversationLayoutPolicy.effectiveVerticalCreases(
+      this.viewportWidth,
+      this.reportedVerticalCreases(),
+      this.isExpandedFoldable()
+    );
+  }
+
+  private reportedVerticalCreases(): ConversationLayoutCrease[] {
     try {
       const region = display.getCurrentFoldCreaseRegion();
-      return region.creaseRects
-        .filter((rect: display.Rect): boolean => rect.height > rect.width)
-        .map((rect: display.Rect): ConversationLayoutCrease => {
-          return new ConversationLayoutCrease(
-            this.getUIContext().px2vp(rect.left),
-            this.getUIContext().px2vp(rect.width)
-          );
-        });
+      const creaseRects = region.creaseRects;
+      if (!creaseRects) {
+        return [];
+      }
+      const rects = creaseRects.map((rect: display.Rect): ConversationLayoutRect => {
+        return new ConversationLayoutRect(
+          this.getUIContext().px2vp(rect.left),
+          this.getUIContext().px2vp(rect.top),
+          this.getUIContext().px2vp(rect.width),
+          this.getUIContext().px2vp(rect.height)
+        );
+      });
+      return ConversationLayoutPolicy.verticalCreasesFromRects(
+        this.viewportWidth,
+        this.viewportHeight,
+        rects
+      );
     } catch (_err) {
       return [];
     }
@@ -403,6 +493,7 @@ export struct AppRootPresentation {
     AppConnectSurface({
       remotePageState: this.remotePageState,
       deviceId: this.deviceId,
+      openIntent: this.shellState.connectSheetIntent,
       actions: this.actions
     })
   }

@@ -9,9 +9,10 @@ import './NotificationItem.scss';
 
 export interface NotificationItemProps {
   notification: Notification;
+  isExiting?: boolean;
 }
 
-export const NotificationItem: React.FC<NotificationItemProps> = ({ notification }) => {
+export const NotificationItem: React.FC<NotificationItemProps> = ({ notification, isExiting = false }) => {
   const { id, type, title, message, messageNode, closable, actions } = notification;
   const isAssertive = type === 'error' || type === 'warning';
   const { t } = useI18n('common');
@@ -47,7 +48,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
 
   return (
     <div
-      className={`notification-item notification-item--${type}`}
+      className={`notification-item notification-item--${type}${isExiting ? ' notification-item--exiting' : ''}`}
       data-bf-component="notification"
       data-bf-part="item"
       role={isAssertive ? 'alert' : 'status'}
@@ -95,4 +96,3 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
     </div>
   );
 };
-

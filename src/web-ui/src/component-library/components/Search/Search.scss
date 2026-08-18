@@ -39,7 +39,6 @@
 
   &--expandable:not(.search--focused) &__wrapper {
     width: 200px;
-    transition: width var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
   &--expandable.search--focused &__wrapper {
@@ -133,12 +132,8 @@
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: color $motion-base $easing-standard;
-    animation: search-fade-in 0.2s ease forwards;
-
-    &:hover {
-      color: var(--bf-appearance-token-color-text-secondary);
-    }
+    scale: none;
+    transition: none;
 
     &:active {
       color: var(--bf-appearance-token-color-text-primary);
@@ -167,21 +162,16 @@
     font-weight: $font-weight-medium;
     font-family: $font-family-sans;
     cursor: pointer;
-    transform: scale(1);
+    scale: 1;
     transition:
       background-color var(--bf-appearance-token-motion-fast) ease,
       border-color var(--bf-appearance-token-motion-fast) ease,
       color var(--bf-appearance-token-motion-fast) ease,
-      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     white-space: nowrap;
 
-    &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-color-accent-100);
-      color: var(--bf-appearance-token-color-accent-400);
-    }
-
     &:active:not(:disabled) {
-      transform: scale(0.98);
+      scale: 0.97;
     }
 
     &:disabled {
@@ -297,17 +287,6 @@
   }
 }
 
-@keyframes search-fade-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes search-slide-down {
   from {
     opacity: 0;
@@ -333,12 +312,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .search__wrapper,
-  .search__clear,
   .search__button {
     transition:
-      background-color var(--bf-appearance-token-motion-fast) ease,
-      border-color var(--bf-appearance-token-motion-fast) ease,
-      color var(--bf-appearance-token-motion-fast) ease;
+      background-color var(--bf-appearance-token-motion-instant) ease,
+      border-color var(--bf-appearance-token-motion-instant) ease,
+      color var(--bf-appearance-token-motion-instant) ease;
   }
 
   .search__clear,
@@ -346,8 +324,17 @@
     animation: none;
   }
 
+  .search__clear {
+    transition: none;
+    scale: none;
+  }
+
+  .search__loading-icon {
+    animation: none;
+  }
+
   .search__clear:active,
   .search__button:active:not(:disabled) {
-    transform: none;
+    scale: none;
   }
 }

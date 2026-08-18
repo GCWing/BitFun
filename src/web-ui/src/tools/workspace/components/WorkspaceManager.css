@@ -55,7 +55,11 @@
     0 4px 16px var(--bf-appearance-token-color-overlay-black-08),
     inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12),
     inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: slideInUp 0.4s ease-out;
 }
 
@@ -127,7 +131,9 @@
   box-shadow:
     0 4px 16px var(--bf-appearance-token-color-accent-300),
     inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-20);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .workspace-icon:hover {
@@ -322,7 +328,10 @@
     color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 2%, transparent) 100%);
   border-radius: 8px;
   border: 1px solid var(--bf-appearance-token-color-accent-100);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .stat-item:hover {
@@ -412,7 +421,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workspace-card {
+  .workspace-card,
+  .workspace-icon,
+  .stat-item {
     transition: none;
+  }
+
+  .workspace-card {
+    animation: none;
+  }
+
+  .workspace-card.recent:hover,
+  .workspace-icon:hover,
+  .stat-item:hover {
+    transform: none;
   }
 }

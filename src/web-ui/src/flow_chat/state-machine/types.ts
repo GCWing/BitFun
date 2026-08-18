@@ -58,6 +58,7 @@ export enum SessionExecutionEvent {
   BACKEND_STREAM_COMPLETED = 'backend_stream_completed',
   FINISHING_SETTLED = 'finishing_settled',
   USER_CANCEL = 'user_cancel',
+  USER_CANCEL_FAILED = 'user_cancel_failed',
   ERROR_OCCURRED = 'error_occurred',
   RESET = 'reset',
 }

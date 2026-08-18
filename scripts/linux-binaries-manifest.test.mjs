@@ -374,15 +374,17 @@ test('website download manifest uses installer while updater manifest keeps setu
   );
 });
 
-test('Linux archives are mirrored before the much larger Desktop packages', () => {
+test('stable Linux archives are mirrored before the much larger Desktop packages', () => {
   const syncScript = fs.readFileSync(
     path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
     'utf8'
   );
 
-  const linuxCall = syncScript.indexOf('\n  mirror_linux_binaries\n');
+  const stableBranch = syncScript.indexOf('if [ "$RELEASE_CHANNEL" = "stable" ]; then');
+  const linuxCall = syncScript.indexOf('\n    mirror_linux_binaries\n', stableBranch);
   const desktopLoop = syncScript.indexOf('Mirroring Desktop asset');
-  assert.ok(linuxCall > 0, 'mirror_linux_binaries must be called from main');
+  assert.ok(stableBranch > 0, 'stable channel branch must exist');
+  assert.ok(linuxCall > stableBranch, 'stable main path must call mirror_linux_binaries');
   assert.ok(desktopLoop > 0, 'Desktop asset mirroring must still exist');
   assert.ok(
     linuxCall < desktopLoop,
@@ -404,5 +406,46 @@ test('the mirror retains enough releases for older Desktop builds', () => {
   assert.ok(
     Number(keep[1]) >= 4,
     `KEEP_VERSIONS must retain several releases, got ${keep[1]}`
+  );
+});
+
+test('openbitfun sync lock and cron use the in-repo script, not a server-only copy', () => {
+  const syncScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
+    'utf8'
+  );
+  const cronFile = fs.readFileSync(
+    path.join(repoRoot, 'deploy/openbitfun-host/release-sync.cron'),
+    'utf8'
+  );
+  assert.match(
+    syncScript,
+    /BITFUN_RELEASE_SYNC_LOCK/,
+    'lock path must be overridable so a new host can run the repo script'
+  );
+  assert.match(
+    syncScript,
+    /\/root\/repos\/BitFun\/scripts\/openbitfun-release-sync\.sh/,
+    'documented cron must invoke the BitFun checkout, not a detached copy'
+  );
+  assert.doesNotMatch(
+    syncScript,
+    /LOCK_FILE="\/root\/repos\/BitFun-AutoUpdate\/sync\.lock"/,
+    'a hardcoded AutoUpdate lock forces every new host to recreate a server-only tree'
+  );
+  assert.match(
+    cronFile,
+    /\/root\/repos\/BitFun\/scripts\/openbitfun-release-sync\.sh/,
+    'installed crontab must invoke the BitFun checkout, not a detached copy'
+  );
+  assert.doesNotMatch(
+    cronFile,
+    /BitFun-AutoUpdate/,
+    'the crontab file must not revive the server-only AutoUpdate copy'
+  );
+  assert.match(
+    syncScript,
+    /LOCK_FILE="\$\{BITFUN_RELEASE_SYNC_LOCK:-\/var\/lock\/bitfun-release-sync\.lock\}"/,
+    'default lock must stay off the Nginx /release/ alias'
   );
 });

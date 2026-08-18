@@ -2,11 +2,25 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, posix, relative } from 'node:path';
 
 export const agentRuntimeIntegrationTestTargets = [
-  { name: 'agent_definition_contracts', path: 'tests/agent_definition_contracts.rs' },
-  { name: 'agent_interaction_contracts', path: 'tests/agent_interaction_contracts.rs' },
-  { name: 'agent_long_horizon_contracts', path: 'tests/agent_long_horizon_contracts.rs' },
-  { name: 'agent_session_contracts', path: 'tests/agent_session_contracts.rs' },
-  { name: 'native_hook_execution_contracts', path: 'tests/native_hook_execution_contracts.rs' },
+  { name: 'agent_definition_contracts', path: 'tests/agent_definition_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  { name: 'agent_interaction_contracts', path: 'tests/agent_interaction_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  { name: 'agent_long_horizon_contracts', path: 'tests/agent_long_horizon_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  { name: 'agent_session_contracts', path: 'tests/agent_session_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  {
+    name: 'deep_research_contracts',
+    path: 'tests/deep_research_contracts.rs',
+    requiredFeatures: ['deep-research'],
+  },
+  {
+    name: 'native_hook_execution_contracts',
+    path: 'tests/native_hook_execution_contracts.rs',
+    requiredFeatures: ['native-hook-runtime'],
+  },
+  {
+    name: 'native_hook_settings_contracts',
+    path: 'tests/native_hook_settings_contracts.rs',
+    requiredFeatures: ['native-hook-settings'],
+  },
 ];
 
 export const cliIntegrationTestTargets = [
@@ -124,16 +138,28 @@ export const coreTypesIntegrationTestTargets = [
 
 export const runtimePortsIntegrationTestTargets = [
   {
-    name: 'runtime_port_contracts',
+    name: 'plugin_runtime_contracts',
     path: 'tests/runtime_port_contracts.rs',
     leaves: [
-      'tests/runtime_port_contracts/git_port_contracts.rs',
       'tests/runtime_port_contracts/plugin_runtime_contracts.rs',
       'tests/runtime_port_contracts/plugin_runtime_diagnostics_contracts.rs',
-      'tests/runtime_port_contracts/script_tool_port_contracts.rs',
-      'tests/runtime_port_contracts/session_store_contracts.rs',
     ],
-    forbidRequiredFeatures: true,
+    requiredFeatures: ['plugin-runtime'],
+  },
+  {
+    name: 'git_port_contracts',
+    path: 'tests/git_port_contracts.rs',
+    requiredFeatures: ['git-port'],
+  },
+  {
+    name: 'script_tool_port_contracts',
+    path: 'tests/script_tool_port_contracts.rs',
+    requiredFeatures: ['script-tool-runtime'],
+  },
+  {
+    name: 'session_store_contracts',
+    path: 'tests/session_store_contracts.rs',
+    requiredFeatures: ['workspace-ports'],
   },
 ];
 

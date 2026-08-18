@@ -3,12 +3,12 @@
 /* ========== Core keyframe animations ========== */
 
 /* Base animations */
-@keyframes fadeIn {
+@keyframes bitfun-utility-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes fadeInUp {
+@keyframes bitfun-utility-fade-in-up {
   from {
     opacity: 0;
     transform: translateY(20px);
@@ -19,7 +19,7 @@
   }
 }
 
-@keyframes slideInUp {
+@keyframes bitfun-utility-slide-in-up {
   from {
     opacity: 0;
     transform: translateY(20px);
@@ -30,7 +30,7 @@
   }
 }
 
-@keyframes slideInLeft {
+@keyframes bitfun-utility-slide-in-left {
   from {
     opacity: 0;
     transform: translateX(-20px);
@@ -41,7 +41,7 @@
   }
 }
 
-@keyframes slideInRight {
+@keyframes bitfun-utility-slide-in-right {
   from {
     opacity: 0;
     transform: translateX(20px);
@@ -52,7 +52,7 @@
   }
 }
 
-@keyframes scaleIn {
+@keyframes bitfun-utility-scale-in {
   from {
     opacity: 0;
     transform: scale(0.9);
@@ -64,7 +64,7 @@
 }
 
 /* Interaction animations */
-@keyframes pulse {
+@keyframes bitfun-utility-pulse {
   0%, 100% {
     opacity: 1;
     transform: scale(1);
@@ -75,19 +75,19 @@
   }
 }
 
-@keyframes spin {
+@keyframes bitfun-utility-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-@keyframes bounce {
+@keyframes bitfun-utility-bounce {
   0%, 20%, 53%, 80%, 100% { transform: translateY(0); }
   40%, 43% { transform: translateY(-8px); }
   70% { transform: translateY(-4px); }
   90% { transform: translateY(-2px); }
 }
 
-@keyframes shake {
+@keyframes bitfun-utility-shake {
   0%, 100% { transform: translateX(0); }
   10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
   20%, 40%, 60%, 80% { transform: translateX(2px); }
@@ -96,7 +96,7 @@
 /* ========== Glassmorphism effect animations ========== */
 
 /* Glass shine animation */
-@keyframes glassShine {
+@keyframes bitfun-utility-glass-shine {
   0%, 100% {
     opacity: 0.15;
     transform: translateX(-50%) scaleX(0.8);
@@ -108,13 +108,13 @@
 }
 
 /* Light sweep effect */
-@keyframes sweepGlow {
+@keyframes bitfun-utility-sweep-glow {
   0% { left: -100%; }
   100% { left: 100%; }
 }
 
 /* Mirror reflection shimmer */
-@keyframes shimmer {
+@keyframes bitfun-utility-shimmer {
   0%, 100% {
     left: -100%;
     opacity: 0;
@@ -126,7 +126,7 @@
 }
 
 /* Circle pulse effect - from the prompt box */
-@keyframes questionPulse {
+@keyframes bitfun-utility-question-pulse {
   0%, 100% {
     transform: scale(1);
     opacity: 0.6;
@@ -138,7 +138,7 @@
 }
 
 /* Breathing animation system */
-@keyframes breathingRing1 {
+@keyframes bitfun-utility-breathing-ring-1 {
   0%, 100% {
     transform: scale(1);
     opacity: 0.6;
@@ -149,7 +149,7 @@
   }
 }
 
-@keyframes breathingRing2 {
+@keyframes bitfun-utility-breathing-ring-2 {
   0%, 100% {
     transform: scale(1);
     opacity: 0.4;
@@ -161,7 +161,7 @@
 }
 
 /* Decorative pulse animation */
-@keyframes decorationPulse {
+@keyframes bitfun-utility-decoration-pulse {
   0%, 100% {
     opacity: 0.6;
     transform: scaleY(1);
@@ -175,24 +175,24 @@
 /* ========== Animation utilities ========== */
 
 /* Base animation classes */
-.anim-fade-in { animation: fadeIn var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
-.anim-fade-in-slow { animation: fadeIn var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-fade-in-up { animation: fadeInUp var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-slide-in-up { animation: slideInUp var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-slide-in-left { animation: slideInLeft var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-slide-in-right { animation: slideInRight var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-scale-in { animation: scaleIn var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
+.anim-fade-in { animation: bitfun-utility-fade-in var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
+.anim-fade-in-slow { animation: bitfun-utility-fade-in var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-fade-in-up { animation: bitfun-utility-fade-in-up var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-slide-in-up { animation: bitfun-utility-slide-in-up var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-slide-in-left { animation: bitfun-utility-slide-in-left var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-slide-in-right { animation: bitfun-utility-slide-in-right var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
+.anim-scale-in { animation: bitfun-utility-scale-in var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
 
 /* Interaction animation classes */
-.anim-pulse { animation: pulse 2s ease-in-out infinite; }
-.anim-spin { animation: spin 1s linear infinite; }
-.anim-bounce { animation: bounce 1s ease-in-out infinite; }
-.anim-shake { animation: shake 0.5s ease-in-out infinite; }
+.anim-pulse { animation: bitfun-utility-pulse 2s ease-in-out infinite; }
+.anim-spin { animation: bitfun-utility-spin 1s linear infinite; }
+.anim-bounce { animation: bitfun-utility-bounce 1s ease-in-out infinite; }
+.anim-shake { animation: bitfun-utility-shake 0.5s ease-in-out infinite; }
 
 /* Glass effect animation classes */
-.anim-glass-shine { animation: glassShine 4s ease-in-out infinite; }
-.anim-question-pulse { animation: questionPulse 2s ease-in-out infinite; }
-.anim-decoration-pulse { animation: decorationPulse 3s ease-in-out infinite; }
+.anim-glass-shine { animation: bitfun-utility-glass-shine 4s ease-in-out infinite; }
+.anim-question-pulse { animation: bitfun-utility-question-pulse 2s ease-in-out infinite; }
+.anim-decoration-pulse { animation: bitfun-utility-decoration-pulse 3s ease-in-out infinite; }
 
 /* ========== Hover effect classes ========== */
 
@@ -238,7 +238,7 @@
   z-index: 1;
 }
 .sweep-glow:hover::before {
-  animation: sweepGlow 0.5s ease;
+  animation: bitfun-utility-sweep-glow 0.5s ease;
 }
 
 /* ========== Glassmorphism composite classes ========== */
@@ -255,7 +255,11 @@
 
 /* Enhanced glass effect on hover */
 .glass-hover {
-  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    transform var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
 }
 .glass-hover:hover {
   background: var(--bf-appearance-token-glass-bg-hover);
@@ -290,7 +294,7 @@
     transparent 100%);
   border-radius: 2px;
   opacity: 0.4;
-  animation: glassShine 4s ease-in-out infinite;
+  animation: bitfun-utility-glass-shine 4s ease-in-out infinite;
   pointer-events: none;
   z-index: 1;
 }

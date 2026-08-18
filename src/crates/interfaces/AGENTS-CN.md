@@ -9,6 +9,9 @@
 | Crate | 职责 | 本地文档 |
 |---|---|---|
 | `acp` | 基于已组装产品 runtime 的 Agent Client Protocol 接口 | [AGENTS.md](acp/AGENTS.md) |
+| `app-server-protocol` | behavior-light App Server method、wire DTO、错误、事件和 protocol role | [AGENTS.md](app-server/AGENTS.md) |
+| `app-server-client` | transport-agnostic 类型化 App Server client 和事件分发 | [AGENTS.md](app-server/AGENTS.md) |
+| `app-server` | 生产 App Server handler 注册、生命周期和 owner-to-wire adapter | [AGENTS.md](app-server/AGENTS.md) |
 | `sdk-host` | 版本化的本地 Agent SDK Host 协议与连接用例；进程启动和 stdio framing 仍由 `src/apps/sdk-host` 负责 | — |
 
 ## 放置规则

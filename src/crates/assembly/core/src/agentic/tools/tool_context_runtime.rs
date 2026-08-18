@@ -41,7 +41,9 @@ use bitfun_agent_runtime::permission::{
     AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
-use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use bitfun_agent_runtime::user_questions::{
+    USER_INPUT_AVAILABLE_CONTEXT_KEY, USER_INPUT_MODEL_ROUND_CONTEXT_KEY,
+};
 use bitfun_agent_tools::{
     LoadedDeferredToolSpec, PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind,
 };
@@ -327,6 +329,13 @@ fn core_tool_runtime_handles(
 
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {
     let mut extension_custom_data = HashMap::new();
+    // Blocking interactions retain their exact Runtime owner so a Surface
+    // re-attaching after an event gap can reconstruct the request in the
+    // correct model round.
+    extension_custom_data.insert(
+        USER_INPUT_MODEL_ROUND_CONTEXT_KEY.to_string(),
+        Value::String(context.round_id.clone()),
+    );
     let deep_review_parent = context.subagent_parent_info.as_ref().map(|parent_info| {
         tool_context::DeepReviewToolParentContext {
             tool_call_id: parent_info.tool_call_id.as_str(),
@@ -1465,7 +1474,9 @@ mod task_context_tests {
     use bitfun_agent_runtime::permission::{
         AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
     };
-    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+    use bitfun_agent_runtime::user_questions::{
+        USER_INPUT_AVAILABLE_CONTEXT_KEY, USER_INPUT_MODEL_ROUND_CONTEXT_KEY,
+    };
     use bitfun_agent_tools::LoadedDeferredToolSpec;
     use bitfun_runtime_ports::DelegationPolicy;
     use serde_json::json;
@@ -1589,6 +1600,10 @@ mod task_context_tests {
             .custom_data
             .contains_key("primary_model_supports_image_understanding"));
         assert_eq!(context.custom_data["acp_transport"], json!(true));
+        assert_eq!(
+            context.custom_data[USER_INPUT_MODEL_ROUND_CONTEXT_KEY],
+            json!("round_1")
+        );
         assert_eq!(
             context.custom_data[USER_INPUT_AVAILABLE_CONTEXT_KEY],
             json!(false)

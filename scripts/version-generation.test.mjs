@@ -18,9 +18,23 @@ for (const [buildEnv, isDev] of [['production', false], ['development', true]]) 
     );
     assert.equal(generated.version, expectedVersion);
     assert.equal(generated.buildEnv, buildEnv);
+    assert.equal(generated.releaseChannel, 'stable');
     assert.equal(generated.isDev, isDev);
   });
 }
+
+test('records the immutable release channel in generated metadata', () => {
+  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-version-beta-'));
+  const result = run(
+    ['--build-env', 'production', '--output-root', outputRoot],
+    { BITFUN_RELEASE_CHANNEL: 'beta' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const generated = JSON.parse(
+    fs.readFileSync(path.join(outputRoot, 'src/web-ui/public/version.json'), 'utf8')
+  );
+  assert.equal(generated.releaseChannel, 'beta');
+});
 
 test('fails instead of reusing stale metadata when build environment is missing', () => {
   const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-version-missing-'));
@@ -29,9 +43,10 @@ test('fails instead of reusing stale metadata when build environment is missing'
   assert.match(`${result.stdout}\n${result.stderr}`, /Expected --build-env/);
 });
 
-function run(args) {
+function run(args, extraEnv = {}) {
   return spawnSync(process.execPath, ['scripts/generate-version.cjs', ...args], {
     cwd: root,
     encoding: 'utf8',
+    env: { ...process.env, ...extraEnv },
   });
 }

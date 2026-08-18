@@ -732,6 +732,64 @@ fn default_review_team_rate_limit_status() -> serde_json::Value {
     serde_json::Value::Object(serde_json::Map::new())
 }
 
+/// Model selection for a product-owned AI task.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TaskModelSelection {
+    Inherit,
+    Fixed { model_id: String },
+}
+
+impl TaskModelSelection {
+    pub fn fixed_model_id(&self) -> Option<&str> {
+        match self {
+            Self::Inherit => None,
+            Self::Fixed { model_id } => Some(model_id),
+        }
+    }
+}
+
+fn default_task_model_selection() -> TaskModelSelection {
+    TaskModelSelection::Fixed {
+        model_id: "fast".to_string(),
+    }
+}
+
+fn is_default_task_model_selection(selection: &TaskModelSelection) -> bool {
+    *selection == default_task_model_selection()
+}
+
+/// Model selectors for small product-owned AI tasks.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct TaskModelsConfig {
+    #[serde(
+        default = "default_task_model_selection",
+        skip_serializing_if = "is_default_task_model_selection"
+    )]
+    pub session_title: TaskModelSelection,
+    #[serde(
+        default = "default_task_model_selection",
+        skip_serializing_if = "is_default_task_model_selection"
+    )]
+    pub git_commit: TaskModelSelection,
+}
+
+impl Default for TaskModelsConfig {
+    fn default() -> Self {
+        Self {
+            session_title: default_task_model_selection(),
+            git_commit: default_task_model_selection(),
+        }
+    }
+}
+
+impl TaskModelsConfig {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// AI configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -739,10 +797,9 @@ pub struct AIConfig {
     /// All configured models.
     pub models: Vec<AIModelConfig>,
 
-    /// Model mapping for functional agents (e.g. startchat-func-agent, session-title-func-agent).
-    /// func_agent_name -> model_id
-    #[serde(default)]
-    pub func_agent_models: HashMap<String, String>,
+    /// Model selectors for product-owned AI tasks.
+    #[serde(default, skip_serializing_if = "TaskModelsConfig::is_default")]
+    pub task_models: TaskModelsConfig,
 
     /// Default model configuration.
     #[serde(default)]
@@ -1831,7 +1888,7 @@ impl Default for AIConfig {
     fn default() -> Self {
         Self {
             models: vec![],
-            func_agent_models: std::collections::HashMap::new(),
+            task_models: TaskModelsConfig::default(),
             default_models: DefaultModelsConfig::default(),
             agent_model_defaults: AgentModelDefaultsConfig::default(),
             agent_profiles: std::collections::HashMap::new(),
@@ -2783,7 +2840,6 @@ mod tests {
     fn deserializes_missing_stream_timeouts_as_generous_defaults() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
             "proxy": {
@@ -2805,10 +2861,28 @@ mod tests {
     }
 
     #[test]
+    fn task_models_default_to_fast_and_ignore_removed_mapping() {
+        let removed_key = ["func", "_agent_models"].concat();
+        let mut value = serde_json::json!({});
+        value[&removed_key] = serde_json::json!({ "title": "primary" });
+        let config: AIConfig =
+            serde_json::from_value(value).expect("removed field should be ignored");
+
+        assert_eq!(
+            config.task_models.session_title.fixed_model_id(),
+            Some("fast")
+        );
+        assert_eq!(config.task_models.git_commit.fixed_model_id(), Some("fast"));
+        assert!(serde_json::to_value(config)
+            .expect("config should serialize")
+            .get(&removed_key)
+            .is_none());
+    }
+
+    #[test]
     fn preserves_explicit_disabled_tool_json_repair() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
             "allow_tool_json_repair": false,
@@ -2826,7 +2900,6 @@ mod tests {
     fn deserializes_explicit_null_stream_ttft_timeout_as_none() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
             "proxy": {
@@ -2860,7 +2933,6 @@ mod tests {
     fn deserializes_explicit_subagent_max_concurrency() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
             "subagent_max_concurrency": 9,
@@ -2878,7 +2950,6 @@ mod tests {
     fn deserializes_explicit_subagent_batch_execution_policy() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
             "subagent_batch_execution_policy": "force_parallel",
@@ -2899,7 +2970,6 @@ mod tests {
     fn deserializes_mode_profiles_with_null_entries() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {
                 "Claw": null,
@@ -2930,7 +3000,6 @@ mod tests {
     fn deserializes_explicit_default_review_team_config() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
             "review_teams": {

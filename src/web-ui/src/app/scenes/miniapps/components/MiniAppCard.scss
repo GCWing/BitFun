@@ -120,7 +120,7 @@
   &__run-dot {
     background: var(--bf-appearance-token-color-success);
     box-shadow: 0 0 6px color-mix(in srgb, var(--bf-appearance-token-color-success) 65%, transparent);
-    animation: pulse 2s ease-in-out infinite;
+    animation: miniapp-card-status-pulse 2s ease-in-out infinite;
   }
 
   &__customize-dot {
@@ -293,7 +293,7 @@
   100% { transform: scale(1) rotate(0deg); }
 }
 
-@keyframes pulse {
+@keyframes miniapp-card-status-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }

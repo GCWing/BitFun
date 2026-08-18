@@ -59,6 +59,7 @@
       }
     ],
     "pages": "$profile:main_pages",
+    "easyGo": "$profile:easy_go",
     "abilities": [
       {
         "name": "EntryAbility",

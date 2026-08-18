@@ -121,6 +121,13 @@
     "modelBindingUpdated": "已儲存 Agent 模型綁定並重新整理受影響的 Agent。",
     "mcpUpdated": "已儲存 MCP 伺服器選擇並重新整理狀態。"
   },
+  "bulkActions": {
+    "enablePending": "啟用全部待確認項（{{count}}）",
+    "disableAll": "全部停用",
+    "enableRisk": "僅核准目前顯示的 {{count}} 項；如果探索結果發生變化，BitFun 會要求重新確認。",
+    "enabled": "已啟用選取的待確認項。",
+    "disabled": "已停用選取的項目。"
+  },
   "recoveryActions": {
     "refresh": "重新整理狀態",
     "retry": "重試",
@@ -238,7 +245,8 @@
       "unreadableSource": "BitFun 無法讀取來源中的部分內容。請檢查檔案存取權限後重新整理。",
       "notSupported": "BitFun 暫不支援此類外部內容，因此沒有載入或執行它。",
       "checkFailed": "BitFun 未能檢查一個來源，其他來源仍可使用。請重新整理後重試。",
-      "sourceIssue": "BitFun 在一個來源中發現問題，受影響的內容未啟用。請檢查來源設定後重新整理。"
+      "runtimeUnavailable": "此來源中的一個 MCP 伺服器無法使用。請先停用，修正設定或驗證後再啟用。",
+      "sourceIssue": "BitFun 未能完成一個來源的檢查；現有可用內容保持不變。你可以重新整理或查看技術詳細資料。"
     }
   },
   "sources": {
@@ -414,6 +422,7 @@
     "externalSource": "外部 AI 應用程式",
     "source": "來源：{{source}}",
     "sourceLocation": "設定位置：{{location}}",
+    "sourceLocationLabel": "設定位置",
     "scope": "適用範圍：{{scope}}",
     "command": "命令：{{command}}",
     "url": "位址：{{url}}",
@@ -430,6 +439,27 @@
     "timeoutExecution": "執行 {{duration}}",
     "timeoutMilliseconds": "{{value}} 毫秒",
     "changePolicy": "伺服器設定變更後，BitFun 會在再次載入前請你確認。",
+    "failureReason": "原因：{{reason}}",
+    "failureReasons": {
+      "authentication": "此 MCP 伺服器需要完成身分驗證。",
+      "timeout": "MCP 伺服器未能在啟動逾時前就緒。",
+      "commandUnavailable": "無法啟動設定的 MCP 命令，請檢查命令或執行環境。",
+      "workingDirectoryUnavailable": "設定的 MCP 工作目錄無法使用。",
+      "connectionFailed": "BitFun 無法連線至此 MCP 伺服器。",
+      "protocolFailed": "MCP 伺服器未能完成啟動交握。",
+      "nativeConfigurationUnavailable": "BitFun 無法讀取目前的 MCP 設定。",
+      "hostReadOnly": "目前的主機只能發現 MCP 伺服器，無法執行它們。",
+      "configurationChanged": "MCP 設定在啟用前發生變更，請重新整理後再次確認。",
+      "configurationInvalid": "目前的 MCP 設定無法用於 BitFun 執行階段。",
+      "hostUnavailable": "目前的主機沒有可用的 MCP 執行階段。",
+      "installFailed": "BitFun 無法將此 MCP 伺服器註冊至執行階段。",
+      "preparationFailed": "BitFun 無法準備此 MCP 設定以供啟用。",
+      "serverMissing": "此 MCP 伺服器已不在執行階段中。",
+      "runtimeFailed": "MCP 伺服器執行失敗或意外停止。",
+      "stopped": "MCP 伺服器目前未執行。",
+      "statusUnavailable": "BitFun 無法讀取 MCP 伺服器的目前狀態。",
+      "other": "MCP 伺服器啟動失敗，請檢查來源設定和 BitFun 日誌。"
+    },
     "runtimeUnavailableGuidance": "請先停用此伺服器，修正來源設定或驗證後再啟用，通常不需要重新啟動 BitFun。",
     "unsupportedGuidance": "請在來源應用程式中修改此設定，然後重新整理。",
     "enable": "啟用伺服器",

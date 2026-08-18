@@ -38,6 +38,13 @@ impl ForkAgentContextSnapshot {
                 ))
             })?;
 
+        let mut session_config = parent_session.config.clone();
+        session_config.prompt_cache_lineage_id = Some(
+            parent_session
+                .effective_prompt_cache_lineage_id()
+                .to_string(),
+        );
+
         Ok(Self {
             parent_session_id: parent_session.session_id.clone(),
             parent_agent_type: parent_session.agent_type.clone(),
@@ -45,7 +52,7 @@ impl ForkAgentContextSnapshot {
             remote_connection_id: parent_session.config.remote_connection_id.clone(),
             remote_ssh_host: parent_session.config.remote_ssh_host.clone(),
             session_model_id: parent_session.config.model_id.clone(),
-            session_config: parent_session.config.clone(),
+            session_config,
             last_user_dialog_agent_type: parent_session.last_user_dialog_agent_type.clone(),
             last_submitted_agent_type: parent_session.last_submitted_agent_type.clone(),
             messages,
@@ -116,6 +123,27 @@ mod tests {
         assert_eq!(child_config.remote_ssh_host.as_deref(), Some("prod-box"));
         assert_eq!(child_config.model_id.as_deref(), Some("primary"));
         assert_eq!(child_config.max_turns, 7);
+        assert_eq!(
+            child_config.prompt_cache_lineage_id.as_deref(),
+            Some(parent.session_id.as_str())
+        );
+    }
+
+    #[test]
+    fn snapshot_preserves_an_existing_prompt_cache_lineage() {
+        let mut parent = parent_session();
+        parent.config.prompt_cache_lineage_id = Some("root-lineage".to_string());
+
+        let snapshot =
+            ForkAgentContextSnapshot::from_parent_session(&parent, Vec::new()).expect("snapshot");
+
+        assert_eq!(
+            snapshot
+                .build_child_session_config(None)
+                .prompt_cache_lineage_id
+                .as_deref(),
+            Some("root-lineage")
+        );
     }
 
     #[test]

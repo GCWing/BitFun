@@ -17,7 +17,9 @@
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 6px;
     font-size: 13px;
-    transition: all 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease;
 
     &:hover {
       background: var(--bf-appearance-token-color-bg-secondary);
@@ -105,7 +107,10 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease;
 
     &:hover {
       background: var(--bf-appearance-token-color-bg-primary);
@@ -173,7 +178,9 @@
     padding: 4px;
     border-radius: 3px;
     color: var(--private-web-search-card-identity-color);
-    transition: all 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
 
     &:hover {
       background: color-mix(in srgb, var(--private-web-search-card-identity-color) 10%, transparent);
@@ -223,15 +230,22 @@
   }
 
   &__searching-icon {
-    animation: pulse 2s ease-in-out infinite;
+    animation: bitfun-web-search-card-pulse 2s ease-in-out infinite;
   }
 }
 
-@keyframes pulse {
+@keyframes bitfun-web-search-card-pulse {
   0%, 100% {
     opacity: 1;
   }
   50% {
     opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .web-search-card__searching-icon {
+    animation: none;
+    opacity: 1;
   }
 }

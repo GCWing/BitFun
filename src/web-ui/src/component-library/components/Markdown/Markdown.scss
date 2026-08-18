@@ -62,7 +62,6 @@
   word-wrap: break-word;
   cursor: text;
   user-select: text;
-  animation: fadeIn var(--bf-appearance-token-motion-base) ease-out;
 }
 
 .markdown-renderer > * {
@@ -665,15 +664,4 @@
 :root[data-bf-appearance-mode='dark'] .markdown-renderer {
   --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 94%, var(--bf-appearance-token-color-static-white) 6%);
   --markdown-pre-border: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.09);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }

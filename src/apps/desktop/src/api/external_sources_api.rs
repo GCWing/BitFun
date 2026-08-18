@@ -7,17 +7,18 @@ use bitfun_core::external_sources::{
     external_source_snapshot,
     get_external_source_control_snapshot as core_get_external_source_control_snapshot,
     native_prompt_command_conflicts, set_external_mcp_server_decision,
-    set_external_prompt_command_conflict_choice, set_external_source_enabled,
-    set_external_subagent_activation, set_external_subagent_model_binding,
+    set_external_mcp_servers_enabled, set_external_prompt_command_conflict_choice,
+    set_external_source_enabled, set_external_subagent_activation,
+    set_external_subagent_model_binding, set_external_subagents_enabled,
     set_external_tool_conflict_choice, set_external_tool_target_decision,
-    set_native_prompt_command_conflict_choice, unacknowledged_external_ecosystems,
-    update_external_integration_policy, workspace_reference_snapshot,
-    ExternalIntegrationPolicyMutation, ExternalSourceControlRequestV1,
-    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
-    ExternalSourceOperationResult, ExternalSourcePublicSnapshot, ExternalSourceSurfaceSnapshotV1,
-    ExternalSubagentModelBindingTarget, NativePromptCommandConflictSnapshot,
-    NativePromptCommandDescriptor, PromptCommandInvocationOutcome,
-    PromptCommandShellReviewDecision,
+    set_external_tool_targets_enabled, set_native_prompt_command_conflict_choice,
+    unacknowledged_external_ecosystems, update_external_integration_policy,
+    workspace_reference_snapshot, ExternalIntegrationPolicyMutation,
+    ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
+    ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
+    ExternalSourceSurfaceSnapshotV1, ExternalSubagentModelBindingTarget,
+    NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
+    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::workspace_state::{
@@ -156,6 +157,23 @@ pub struct SetExternalToolTargetDecisionRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalToolDecisionRef {
+    pub approval_key: String,
+    pub decision_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalToolTargetsEnabledRequest {
+    pub workspace_path: Option<String>,
+    pub decisions: Vec<ExternalToolDecisionRef>,
+    pub enabled: bool,
+    pub expected_catalog_generation: u64,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetExternalToolConflictChoiceRequest {
     pub workspace_path: Option<String>,
     pub conflict_key: String,
@@ -172,6 +190,23 @@ pub struct SetExternalSubagentActivationRequest {
     pub expected_subagent_generation: u64,
     pub expected_preference_revision: u64,
     pub decision_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalCandidateDecisionRef {
+    pub candidate_id: String,
+    pub decision_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalSubagentsEnabledRequest {
+    pub workspace_path: Option<String>,
+    pub decisions: Vec<ExternalCandidateDecisionRef>,
+    pub enabled: bool,
+    pub expected_subagent_generation: u64,
+    pub expected_preference_revision: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -203,6 +238,16 @@ pub struct SetExternalMcpServerDecisionRequest {
     pub candidate_id: String,
     pub decision_key: String,
     pub approved: bool,
+    pub expected_mcp_generation: u64,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalMcpServersEnabledRequest {
+    pub workspace_path: Option<String>,
+    pub decisions: Vec<ExternalCandidateDecisionRef>,
+    pub enabled: bool,
     pub expected_mcp_generation: u64,
     pub expected_preference_revision: u64,
 }
@@ -554,6 +599,27 @@ pub async fn set_external_tool_target_decision_command(
 }
 
 #[tauri::command]
+pub async fn set_external_tool_targets_enabled_command(
+    request: SetExternalToolTargetsEnabledRequest,
+) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_tool_targets_enabled(
+        workspace,
+        request
+            .decisions
+            .into_iter()
+            .map(|decision| (decision.approval_key, decision.decision_key))
+            .collect(),
+        request.enabled,
+        request.expected_catalog_generation,
+        request.expected_preference_revision,
+    )
+    .await
+    .map(Into::into)
+    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
 pub async fn set_external_tool_conflict_choice_command(
     request: SetExternalToolConflictChoiceRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
@@ -581,6 +647,27 @@ pub async fn set_external_subagent_activation_command(
         request.expected_subagent_generation,
         request.expected_preference_revision,
         &request.decision_key,
+    )
+    .await
+    .map(Into::into)
+    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn set_external_subagents_enabled_command(
+    request: SetExternalSubagentsEnabledRequest,
+) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_subagents_enabled(
+        workspace,
+        request
+            .decisions
+            .into_iter()
+            .map(|decision| (decision.candidate_id, decision.decision_key))
+            .collect(),
+        request.enabled,
+        request.expected_subagent_generation,
+        request.expected_preference_revision,
     )
     .await
     .map(Into::into)
@@ -632,6 +719,27 @@ pub async fn set_external_mcp_server_decision_command(
         &request.candidate_id,
         &request.decision_key,
         request.approved,
+        request.expected_mcp_generation,
+        request.expected_preference_revision,
+    )
+    .await
+    .map(Into::into)
+    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn set_external_mcp_servers_enabled_command(
+    request: SetExternalMcpServersEnabledRequest,
+) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_mcp_servers_enabled(
+        workspace,
+        request
+            .decisions
+            .into_iter()
+            .map(|decision| (decision.candidate_id, decision.decision_key))
+            .collect(),
+        request.enabled,
         request.expected_mcp_generation,
         request.expected_preference_revision,
     )

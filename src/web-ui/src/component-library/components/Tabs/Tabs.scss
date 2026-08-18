@@ -41,11 +41,6 @@
     border: none;
     white-space: nowrap;
 
-    &:hover:not(&--disabled):not(&--active) {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-subtle);
-    }
-
     &--active {
       color: var(--bf-appearance-token-color-accent-500);
     }
@@ -115,14 +110,14 @@
         transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
       opacity: 1;
 
-      &:hover {
-        background: color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
-        color: var(--bf-appearance-token-color-error);
-      }
     }
   }
 
   &__content {
+    width: 100%;
+  }
+
+  &__content-view {
     width: 100%;
   }
 
@@ -191,9 +186,6 @@
         overflow: hidden;
       }
 
-      &:hover:not(&--disabled):not(&--active) {
-        background: var(--bf-appearance-token-element-bg-medium);
-      }
     }
   }
 

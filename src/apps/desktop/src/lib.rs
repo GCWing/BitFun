@@ -33,11 +33,15 @@ pub mod startup_trace;
 pub mod tray;
 mod webview_recovery;
 
+use bitfun_agent_runtime::sdk::{attach_session_event_cursor, SessionEventJournal};
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
 use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
 use bitfun_core::service::search::get_global_workspace_search_service;
+use bitfun_core::service::session_projection_store::{
+    runtime_event_log_dir, FileSessionProjectionStore,
+};
 use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_events::AgenticEvent;
@@ -81,7 +85,6 @@ use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
 use api::speech_api::*;
-use api::startchat_agent_api::*;
 use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
@@ -644,6 +647,19 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_app_state", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
+    // A Turn that is still executing exists nowhere durable but this log: the
+    // persisted Session record stores a running Turn as idle so a restart never
+    // revives work. Without it, a client returning to this device after the
+    // process restarted is served a Turn frozen at the last checkpoint.
+    let session_event_journal = Arc::new(match try_get_path_manager_arc() {
+        Ok(path_manager) => SessionEventJournal::new().with_store(Arc::new(
+            FileSessionProjectionStore::new(runtime_event_log_dir(&path_manager)),
+        )),
+        Err(error) => {
+            log::warn!("Runtime event log disabled: application paths unavailable: {error}");
+            SessionEventJournal::new()
+        }
+    });
     let step_started = Instant::now();
     let desktop_runtime = match runtime::DesktopRuntimeContext::build(
         coordinator.clone(),
@@ -652,6 +668,7 @@ pub async fn run() {
         app_state.workspace_service.clone(),
         app_state.ssh_manager.clone(),
         app_state.acp_client_service.clone(),
+        session_event_journal.clone(),
     ) {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -1052,7 +1069,12 @@ pub async fn run() {
             let transport = Arc::new(TauriTransportAdapter::new(app_handle.clone()));
 
             let step_started = Instant::now();
-            start_event_loop_with_transport(event_queue, event_router, transport);
+            start_event_loop_with_transport(
+                event_queue,
+                event_router,
+                transport,
+                session_event_journal.clone(),
+            );
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "start_event_loop_with_transport",
@@ -1205,6 +1227,7 @@ pub async fn run() {
             api::agentic_api::update_session_mode,
             api::agentic_api::update_session_model,
             api::agentic_api::update_session_permission_mode,
+            api::agentic_api::update_active_turn_permission_mode,
             api::agentic_api::get_session_permission_mode,
             api::agentic_api::reload_session_context,
             api::agentic_api::update_session_title,
@@ -1219,6 +1242,8 @@ pub async fn run() {
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::run_init_agents_md,
             api::agentic_api::cancel_dialog_turn,
+            api::agentic_api::interrupt_dialog_turn,
+            api::agentic_api::recover_interrupted_dialog_turn,
             api::agentic_api::steer_dialog_turn,
             api::agentic_api::control_deep_review_queue,
             api::agentic_api::cancel_session,
@@ -1230,6 +1255,7 @@ pub async fn run() {
             api::agentic_api::delete_session,
             api::agentic_api::restore_session,
             api::agentic_api::restore_session_view,
+            api::agentic_api::load_session_event_backfill,
             api::agentic_api::load_session_turn_window,
             api::agentic_api::restore_session_with_turns,
             api::agentic_api::reset_memory,
@@ -1277,11 +1303,14 @@ pub async fn run() {
             set_native_prompt_command_conflict_choice_command,
             expand_external_prompt_command_command,
             set_external_tool_target_decision_command,
+            set_external_tool_targets_enabled_command,
             set_external_tool_conflict_choice_command,
             set_external_subagent_activation_command,
+            set_external_subagents_enabled_command,
             set_external_subagent_model_binding_command,
             choose_external_subagent_conflict_command,
             set_external_mcp_server_decision_command,
+            set_external_mcp_servers_enabled_command,
             choose_external_mcp_conflict_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
@@ -1411,6 +1440,8 @@ pub async fn run() {
             add_skill,
             delete_skill,
             git_is_repository,
+            git_get_repository_trust,
+            git_trust_repository,
             git_get_repository_basic,
             git_resolve_revision,
             git_get_repository,
@@ -1460,17 +1491,13 @@ pub async fn run() {
             save_git_repo_history,
             load_git_repo_history,
             preview_commit_message,
-            analyze_work_state,
-            quick_analyze_work_state,
-            generate_greeting_only,
-            get_work_state_summary,
             compute_diff,
             apply_patch,
             save_merged_diff_content,
             initialize_snapshot,
             record_file_change,
             rollback_session,
-            rollback_to_turn,
+            rollback_session_to_turn,
             accept_session,
             accept_file,
             reject_file,
@@ -1505,7 +1532,6 @@ pub async fn run() {
             load_session_turns,
             get_session_usage_report,
             save_session_turn,
-            record_local_command_turn,
             save_session_metadata,
             export_session_transcript,
             delete_persisted_session,
@@ -1822,6 +1848,8 @@ pub async fn run() {
             api::insights_api::load_insights_report,
             api::insights_api::has_insights_data,
             api::insights_api::cancel_insights_generation,
+            // Token usage statistics API
+            api::token_usage_api::get_token_usage_statistics,
             // SSH Remote API
             api::ssh_api::ssh_list_saved_connections,
             api::ssh_api::ssh_save_connection,
@@ -2101,10 +2129,6 @@ async fn init_function_agents(ai_client_factory: Arc<AIClientFactory>) -> anyhow
         ai_client_factory.clone(),
     );
 
-    let _ = bitfun_core::function_agents::startchat_func_agent::StartchatFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-
     Ok(())
 }
 
@@ -2229,18 +2253,29 @@ fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
 /// Deliver one event to the WebView and, when peer controllers are attached,
 /// fan it out to paired devices. Text chunks arrive here already coalesced by
 /// `TextChunkCoalescer`.
-async fn deliver_event_to_webview(transport: &TauriTransportAdapter, event: AgenticEvent) {
-    if let Err(e) = transport.emit_event(event.clone()).await {
+async fn deliver_event_to_webview(
+    transport: &TauriTransportAdapter,
+    event: AgenticEvent,
+    session_event_journal: &SessionEventJournal,
+) {
+    let cursor = session_event_journal.record(&event);
+    let Some(mut projected) = bitfun_events::project_agentic_frontend_event(event) else {
+        log::warn!("Unhandled AgenticEvent type in desktop delivery");
+        return;
+    };
+    if let Some(cursor) = cursor {
+        attach_session_event_cursor(&mut projected.payload, cursor);
+    }
+
+    if let Err(e) = transport
+        .emit_generic(&projected.event_name, projected.payload.clone())
+        .await
+    {
         log::error!("Failed to emit event: {:?}", e);
     }
 
     if !api::peer_host_invoke::attached_controllers().is_empty() {
-        if let Some(projected) = bitfun_events::project_agentic_frontend_event(event) {
-            api::remote_connect_api::fanout_peer_device_event(
-                projected.event_name,
-                projected.payload,
-            );
-        }
+        api::remote_connect_api::fanout_peer_device_event(projected.event_name, projected.payload);
     }
 }
 
@@ -2439,12 +2474,14 @@ fn start_event_loop_with_transport(
     event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
+    session_event_journal: Arc<SessionEventJournal>,
 ) {
     tokio::spawn(async move {
         event_loop_driver(event_queue, event_router, |event| {
             let transport = transport.clone();
+            let session_event_journal = session_event_journal.clone();
             async move {
-                deliver_event_to_webview(&transport, event).await;
+                deliver_event_to_webview(&transport, event, &session_event_journal).await;
             }
         })
         .await;
@@ -2551,7 +2588,7 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
 fn create_event_emitter(
     transport: Arc<TauriTransportAdapter>,
 ) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
-    use bitfun_core::infrastructure::events::TransportEmitter;
+    use bitfun_transport::TransportEmitter;
     let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
         Arc::new(TransportEmitter::new(transport));
     api::remote_connect_api::wrap_peer_aware_emitter(inner)

@@ -129,14 +129,10 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   // One-shot auto-collapse: fires exactly once when the group transitions from
   // tail (wasCutByCritical=false) to cut (wasCutByCritical=true).
   //
-  // IMPORTANT: do NOT use `isExpanded` to guard this effect. When wasCutByCritical
-  // flips to true, the same render also recomputes isExpanded = false (because
-  // defaultExpanded = !wasCutByCritical). So `justGotCut && isExpanded` would
-  // always be false and the collapse-intent would never fire.
-  //
-  // No explicit state means the group was expanded by the live-tail default,
-  // so dispatch the height-contract event before compacting it. An explicit
-  // state is user intent and must not be overwritten by a later auto event.
+  // Do not use `isExpanded` to guard this effect. The render that flips
+  // `wasCutByCritical` also recomputes the default expanded state. No explicit
+  // state means the live-tail default may collapse naturally; an explicit
+  // state is user intent and must not be overwritten.
   useLayoutEffect(() => {
     const justGotCut = wasCutByCritical && !prevWasCutRef.current;
     prevWasCutRef.current = wasCutByCritical;
@@ -147,8 +143,6 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
 
     applyExpandedState(true, false, () => {
       onCollapseGroup?.(groupId);
-    }, {
-      reason: 'auto',
     });
   }, [
     applyExpandedState,

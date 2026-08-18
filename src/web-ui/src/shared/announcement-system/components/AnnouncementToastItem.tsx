@@ -8,6 +8,8 @@ interface Props {
   card: AnnouncementCard;
 }
 
+const ANNOUNCEMENT_TOAST_EXIT_MS = 220;
+
 /**
  * Bottom-left toast: compact fixed-width card.
  * Layout (top → bottom): title row (+ close) → description → action buttons.
@@ -17,6 +19,7 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
   const { openModalFor, dismissToast } = useAnnouncementStore();
   const [exiting, setExiting] = useState(false);
   const autoDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { toast, card_type, modal } = card;
   const hasModal = card_type !== 'tip' && modal !== null;
@@ -25,9 +28,10 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
   const resolve = (key: string) => (key.startsWith('announcements.') ? t(key) : key);
 
   function triggerExit(callback: () => void) {
+    if (exiting) return;
     if (autoDismissTimer.current) clearTimeout(autoDismissTimer.current);
     setExiting(true);
-    setTimeout(callback, 280);
+    exitTimer.current = setTimeout(callback, ANNOUNCEMENT_TOAST_EXIT_MS);
   }
 
   function handleDismiss() {
@@ -48,6 +52,7 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
     }
     return () => {
       if (autoDismissTimer.current) clearTimeout(autoDismissTimer.current);
+      if (exitTimer.current) clearTimeout(exitTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card.id]);
@@ -61,6 +66,8 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
       className={`announcement-toast ${exiting ? 'announcement-toast--exiting' : 'announcement-toast--entering'}`}
       role="alert"
       aria-live="polite"
+      aria-hidden={exiting}
+      {...(exiting ? { inert: '' } : {})}
     >
       {/* Row 1: title + close (with optional countdown ring) */}
       <div className="announcement-toast__header">

@@ -1,8 +1,8 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { DiffEditor } from '../../../tools/editor';
 import './DiffFullscreenViewer.css';
@@ -33,6 +33,23 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
   loading = false
 }) => {
   const { t } = useI18n('components');
+  const retainedContentRef = useRef({
+    filePath,
+    originalContent,
+    modifiedContent,
+    loading,
+  });
+
+  if (isOpen) {
+    retainedContentRef.current = {
+      filePath,
+      originalContent,
+      modifiedContent,
+      loading,
+    };
+  }
+
+  const retainedContent = retainedContentRef.current;
   // Close on Escape
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -59,13 +76,14 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
     }
   }, [onClose]);
 
-  if (!isOpen) return null;
-
-  const fileName = filePath.split(/[/\\]/).pop() || filePath;
+  const fileName = retainedContent.filePath.split(/[/\\]/).pop() || retainedContent.filePath;
 
   const fullscreenContent = (
     <div
       className="diff-fullscreen-overlay"
+      data-state={isOpen ? 'open' : 'closed'}
+      aria-hidden={!isOpen}
+      {...(!isOpen ? { inert: '' } : {})}
       onClick={handleBackdropClick}
       data-bf-component="diff-fullscreen-viewer"
       data-bf-part="overlay"
@@ -82,7 +100,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
             </div>
             <div className="file-details">
               <div className="file-name">{fileName}</div>
-              <div className="file-path-full">{filePath}</div>
+              <div className="file-path-full">{retainedContent.filePath}</div>
             </div>
           </div>
 
@@ -91,7 +109,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
               <button
                 className="header-btn accept-btn"
                 onClick={onAcceptFile}
-                disabled={loading}
+                disabled={retainedContent.loading}
               >
                 <CheckCircle size={16} />
                 <span>{t('diffFullscreen.acceptFile')}</span>
@@ -102,7 +120,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
               <button
                 className="header-btn reject-btn"
                 onClick={onRejectFile}
-                disabled={loading}
+                disabled={retainedContent.loading}
               >
                 <XCircle size={16} />
                 <span>{t('diffFullscreen.rejectFile')}</span>
@@ -125,9 +143,9 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
         {/* Diff content */}
         <div className="diff-fullscreen-content" data-bf-component="diff-fullscreen-viewer" data-bf-part="content">
           <DiffEditor
-            originalContent={originalContent}
-            modifiedContent={modifiedContent}
-            filePath={filePath}
+            originalContent={retainedContent.originalContent}
+            modifiedContent={retainedContent.modifiedContent}
+            filePath={retainedContent.filePath}
             readOnly={false}
             renderSideBySide={true}
             showMinimap={false}
@@ -135,7 +153,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
         </div>
 
         {/* Loading overlay */}
-        {loading && (
+        {retainedContent.loading && (
           <div className="fullscreen-loading-overlay" data-bf-component="diff-fullscreen-viewer" data-bf-part="loading">
             <div className="loading-spinner" />
             <span>{t('diffFullscreen.processing')}</span>
@@ -145,5 +163,10 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
     </div>
   );
 
-  return createPortal(fullscreenContent, getAppearanceOverlayHost());
+  return createPortal(
+    <PresenceBoundary active={isOpen}>
+      {fullscreenContent}
+    </PresenceBoundary>,
+    getAppearanceOverlayHost(),
+  );
 };

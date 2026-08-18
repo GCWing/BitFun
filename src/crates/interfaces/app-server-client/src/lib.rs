@@ -383,14 +383,6 @@ impl AppServerClient {
             .await
     }
 
-    pub async fn record_local_command_turn(
-        &self,
-        request: RecordLocalCommandTurnRequest,
-    ) -> Result<RecordLocalCommandTurnResponse, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
-    }
-
     pub async fn respond_permission(
         &self,
         request: RespondPermissionRequest,

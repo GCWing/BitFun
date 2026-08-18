@@ -13,6 +13,12 @@ export type GitStateLayer = 'basic' | 'status' | 'detailed';
 
 export interface GitState {
   isRepository: boolean;
+  /**
+   * The repository exists but Git refuses to read it because the directory is
+   * owned by another user. Distinct from `error` so surfaces can offer the
+   * trust action instead of rendering a localized message.
+   */
+  repositoryTrustRequired: boolean;
   currentBranch: string | null;
   ahead: number;
   behind: number;
@@ -40,6 +46,7 @@ export interface GitState {
 export function createInitialGitState(): GitState {
   return {
     isRepository: false,
+    repositoryTrustRequired: false,
     currentBranch: null,
     ahead: 0,
     behind: 0,
@@ -155,6 +162,8 @@ export interface UseGitStateReturn {
   refreshDetailed: () => Promise<void>;
   
   isRepository: boolean;
+  /** Git refuses this repository on ownership grounds; offer the trust action. */
+  repositoryTrustRequired: boolean;
   currentBranch: string | null;
   ahead: number;
   behind: number;
@@ -207,7 +216,7 @@ export function compareStates(
   const changedFields: (keyof GitState)[] = [];
 
   const basicFields: (keyof GitState)[] = [
-    'isRepository', 'currentBranch', 'ahead', 'behind', 'hasChanges'
+    'isRepository', 'repositoryTrustRequired', 'currentBranch', 'ahead', 'behind', 'hasChanges'
   ];
   for (const field of basicFields) {
     if (prevState[field] !== newState[field]) {

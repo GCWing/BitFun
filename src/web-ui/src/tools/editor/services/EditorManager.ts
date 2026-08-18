@@ -13,6 +13,7 @@ import {
 import { globalEventBus } from '../../../infrastructure/event-bus';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('EditorManager');
 
@@ -89,6 +90,8 @@ export class EditorManager implements IEditorManager {
   private config: EditorConfig;
   private listeners = new Set<(event: EditorEvent) => void>();
   private autoSaveTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  /** Bumped by `destroy()`; identifies the file list an async edit started on. */
+  private fileSetGeneration = 0;
 
   constructor(initialConfig?: Partial<EditorConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...initialConfig };
@@ -140,12 +143,21 @@ export class EditorManager implements IEditorManager {
     }
 
     const file = this.openFiles[index];
+    const scope = getActiveSurfaceScope();
+    const generation = this.fileSetGeneration;
     
     if (file.isDirty) {
       const shouldSave = await this.promptSave(file);
       if (shouldSave) {
         await this.saveFile(index);
       }
+    }
+
+    // The save prompt is an await window wide enough for a device surface
+    // switch. Indices are positions in a file list that no longer exists, so
+    // splicing one here would close an unrelated file on the new surface.
+    if (this.fileSetGeneration !== generation || !scope.isCurrent()) {
+      return;
     }
 
     this.clearAutoSave(index);
@@ -433,7 +445,14 @@ export class EditorManager implements IEditorManager {
     }
   }
 
+  /**
+   * Drop editor state. Frontend-only, and must stay that way: a device surface
+   * switch calls this before the transport swaps, so flushing dirty buffers or
+   * any other backend write here would land on the device being left.
+   */
   destroy(): void {
+    this.fileSetGeneration += 1;
+
     this.autoSaveTimers.forEach(timer => clearTimeout(timer));
     this.autoSaveTimers.clear();
     

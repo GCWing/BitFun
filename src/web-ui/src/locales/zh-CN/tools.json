@@ -77,7 +77,7 @@
       "copiedMarkdown": "已复制 Markdown",
       "viewModeLabel": "Markdown 与预览模式",
       "notice": {
-        "sourcePreviewFallback": "该文档包含无法在可视化模式中安全编辑的 HTML 片段。请在源码模式中编辑，或切换到预览查看效果。"
+        "sourcePreviewFallback": "该文档包含无法在可视化模式中安全编辑的语法。请在源码模式中编辑，或切换到预览模式查看。"
       }
     },
     "planViewer": {
@@ -119,6 +119,9 @@
       "localImageFailed": "图片加载失败",
       "rawHtml": {
         "inlineLabel": "HTML"
+      },
+      "frontmatter": {
+        "label": "YAML Frontmatter"
       },
       "details": {
         "summaryPlaceholder": "摘要"

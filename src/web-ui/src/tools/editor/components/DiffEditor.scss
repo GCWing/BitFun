@@ -366,7 +366,7 @@ $_diff-error-max-width: 400px;
       background-color: var(--bf-appearance-token-color-overlay-white-04) !important;
       border-left: 1px dashed var(--bf-appearance-token-border-medium) !important;
       border-right: 1px dashed var(--bf-appearance-token-border-medium) !important;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease;
       
       &:hover {
         background-color: var(--bf-appearance-token-color-overlay-white-08) !important;

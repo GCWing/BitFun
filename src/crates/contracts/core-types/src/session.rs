@@ -40,6 +40,16 @@ pub enum SessionAgentRouteOwner {
     External,
 }
 
+/// Custom-metadata key naming the subsystem that drives a persisted Session.
+pub const SESSION_PROVIDER_METADATA_KEY: &str = "provider";
+
+/// `provider` value of a Session driven by an external ACP agent.
+///
+/// The Runtime neither starts nor completes those Turns — the frontend
+/// projection is their only writer — so persistence treats them as projected
+/// history instead of a Runtime history branch.
+pub const SESSION_PROVIDER_ACP: &str = "acp";
+
 pub fn validate_session_id(session_id: &str) -> Result<(), String> {
     if session_id.is_empty() {
         return Err("session_id cannot be empty".to_string());

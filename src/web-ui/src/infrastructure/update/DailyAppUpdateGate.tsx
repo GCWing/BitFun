@@ -4,7 +4,7 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { createLogger } from '@/shared/utils/logger';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
-import { isTauriRuntime } from './tauriEnv';
+import { canCheckForAppUpdates, isTauriRuntime } from './tauriEnv';
 import {
   recordDailyPromptDismissed,
   recordSkipThisVersion,
@@ -32,7 +32,7 @@ export function DailyAppUpdateGate(): ReactElement | null {
   const clearUpdateInstalled = useUpdateInstallStore(state => state.clearInstalled);
 
   useEffect(() => {
-    if (!isTauriRuntime()) {
+    if (!canCheckForAppUpdates()) {
       return;
     }
     let cancelled = false;

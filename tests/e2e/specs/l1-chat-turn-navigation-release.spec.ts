@@ -153,7 +153,7 @@ async function readTurnViewportMetrics(targetTurnId: string): Promise<TurnViewpo
       '.modern-flowchat-container__messages .virtual-message-list',
     );
     const scroller = root?.querySelector<HTMLElement>(
-      '[data-virtuoso-scroller="true"], [data-virtuoso-scroller], .virtual-message-list__static-scroller',
+      '[data-flowchat-scroller], .virtual-message-list__static-scroller',
     ) ?? null;
     const wrappers = Array.from(root?.querySelectorAll<HTMLElement>(
       '.virtual-item-wrapper[data-turn-id]',
@@ -237,7 +237,7 @@ async function waitForSessionHydrated(): Promise<void> {
         '.modern-flowchat-container__messages .virtual-message-list',
       );
       const scroller = root?.querySelector<HTMLElement>(
-        '[data-virtuoso-scroller="true"], [data-virtuoso-scroller], .virtual-message-list__static-scroller',
+        '[data-flowchat-scroller], .virtual-message-list__static-scroller',
       ) ?? null;
       const items = root?.querySelectorAll('.virtual-item-wrapper[data-turn-id]') ?? [];
       return {
@@ -298,8 +298,7 @@ async function readHeaderTurnListTexts(): Promise<string[]> {
 async function scrollToPreviousHistoryBoundary(): Promise<void> {
   await browser.execute(() => {
     const scroller = document.querySelector<HTMLElement>(
-      '.modern-flowchat-container__messages .virtual-message-list [data-virtuoso-scroller="true"], ' +
-      '.modern-flowchat-container__messages .virtual-message-list [data-virtuoso-scroller], ' +
+      '.modern-flowchat-container__messages .virtual-message-list [data-flowchat-scroller], ' +
       '.modern-flowchat-container__messages .virtual-message-list .virtual-message-list__static-scroller',
     );
     if (!scroller) {
@@ -362,8 +361,7 @@ async function revealHistoryUntilTurnListContains(targetTitle: string): Promise<
 async function scrollToLatest(targetTurnId: string): Promise<TurnViewportMetrics> {
   await browser.execute(() => {
     const scroller = document.querySelector<HTMLElement>(
-      '.modern-flowchat-container__messages .virtual-message-list [data-virtuoso-scroller="true"], ' +
-      '.modern-flowchat-container__messages .virtual-message-list [data-virtuoso-scroller], ' +
+      '.modern-flowchat-container__messages .virtual-message-list [data-flowchat-scroller], ' +
       '.modern-flowchat-container__messages .virtual-message-list .virtual-message-list__static-scroller',
     );
     if (!scroller) {

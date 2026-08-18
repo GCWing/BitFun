@@ -1,0 +1,24 @@
+@use '../../../component-library/styles/tokens' as *;
+
+/*
+ * The card was drawn to sit in the transcript: side margins that line it up
+ * with the message column, and a frame that separates it from the messages
+ * around it. Inside a dialog both are wrong — the margins indent it from a
+ * surface that is already inset, and the frame draws a box inside a box.
+ *
+ * Its own `padding` is kept, and becomes the dialog's inset. It is the spacing
+ * the report was drawn with, and it is equal on all four sides, which neither
+ * of the dialog's own options is: `.modal__content` ships `padding: 0`, and
+ * `contentInset` sets `padding-inline` only.
+ *
+ * Everything else inside the card is left exactly as the transcript renders
+ * it, which is the point of reusing the component rather than restyling it.
+ */
+.session-usage-modal__content {
+  .session-usage-report-card {
+    margin: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+  }
+}

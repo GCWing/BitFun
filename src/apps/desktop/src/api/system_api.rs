@@ -16,9 +16,14 @@ const UPDATE_PROGRESS_EVENT: &str = "bitfun-update-progress";
 
 /// Updater origins, in configured (fallback) order. Kept in step with
 /// `scripts/desktop-tauri-build.mjs`, which bakes the same pair into the bundle.
-const GITHUB_UPDATER_ENDPOINT: &str =
-    "https://github.com/GCWing/BitFun/releases/latest/download/latest.json";
-const OPENBITFUN_UPDATER_ENDPOINT: &str = "https://openbitfun.com/release/latest.json";
+const GITHUB_UPDATER_ENDPOINT: &str = match option_env!("BITFUN_UPDATER_PRIMARY_ENDPOINT") {
+    Some(endpoint) => endpoint,
+    None => "https://github.com/GCWing/BitFun/releases/latest/download/latest.json",
+};
+const OPENBITFUN_UPDATER_ENDPOINT: &str = match option_env!("BITFUN_UPDATER_FALLBACK_ENDPOINT") {
+    Some(endpoint) => endpoint,
+    None => "https://openbitfun.com/release/latest.json",
+};
 
 /// Throughput probe settings, matching the CLI updater and the relay deploy
 /// script (`src/apps/cli/src/self_update.rs`,

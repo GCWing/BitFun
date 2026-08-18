@@ -29,6 +29,7 @@ import './PeerDirectoryBrowser.scss';
 const log = createLogger('PeerDirectoryBrowser');
 
 export interface PeerDirectoryBrowserProps {
+  visible?: boolean;
   title: string;
   initialPath?: string;
   onSelect: (path: string) => void;
@@ -67,6 +68,7 @@ async function resolveStartPath(preferred?: string): Promise<string> {
 }
 
 export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
+  visible = true,
   title,
   initialPath,
   onSelect,
@@ -130,6 +132,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
     })();
     return () => {
       cancelled = true;
+      loadSeqRef.current += 1;
     };
   }, [initialPath, loadDirectory]);
 
@@ -183,8 +186,11 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
   return createPortal(
     <div
       className="peer-directory-browser-overlay"
+      data-state={visible ? 'open' : 'closed'}
       role="dialog"
       aria-modal="true"
+      aria-hidden={!visible}
+      {...(!visible ? { inert: '' } : {})}
       data-bf-component="peer-device"
       data-bf-part="overlay"
     >

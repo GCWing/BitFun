@@ -437,9 +437,10 @@ mod tests {
         custom.agent_type = Some("ReviewSecurity".to_string());
         assert!(!review_read_receipts_enabled(&custom));
 
-        custom
-            .custom_data
-            .insert("deep_review_run_manifest".to_string(), serde_json::json!({}));
+        custom.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            serde_json::json!({}),
+        );
         assert!(review_read_receipts_enabled(&custom));
 
         let mut worker = test_context(Some("session-2"), PathBuf::from("/tmp"));

@@ -8,9 +8,6 @@
   position: relative;
   width: 100%;
   
-  transition: all $motion-base $easing-standard;
-  
-  
   pointer-events: auto !important;
   
   
@@ -38,7 +35,6 @@
     
     pointer-events: none;
     
-    animation: bitfun-drop-zone-pulse 1.5s ease-in-out infinite;
   }
   
   &__indicator {
@@ -53,12 +49,10 @@
   &__icon {
     color: var(--bf-appearance-token-color-accent-500);
     filter: drop-shadow(0 0 12px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 60%, transparent));
-    animation: bitfun-drop-zone-scale 1.5s ease-in-out infinite;
     
     &--disabled {
       color: var(--bf-appearance-token-color-text-disabled);
       filter: none;
-      animation: none;
     }
   }
   
@@ -74,29 +68,4 @@
       text-shadow: none;
     }
   }
-  
-  
-  
 }
-
-
-
-@keyframes bitfun-drop-zone-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.85;
-  }
-}
-
-@keyframes bitfun-drop-zone-scale {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-}
-
-

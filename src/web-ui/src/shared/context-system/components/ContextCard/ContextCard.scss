@@ -23,7 +23,12 @@
   backdrop-filter: $blur-base;
   -webkit-backdrop-filter: $blur-base;
   
-  transition: all $motion-base $easing-standard;
+  transition:
+    background-color $motion-base $easing-standard,
+    border-color $motion-base $easing-standard,
+    box-shadow $motion-base $easing-standard,
+    opacity $motion-base $easing-standard,
+    transform $motion-base $easing-standard;
   overflow: hidden;
   
   
@@ -190,7 +195,11 @@
     color: var(--bf-appearance-token-color-text-muted);
     border-radius: $size-radius-sm;
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
     
     &:hover {
       background: var(--bf-appearance-token-element-bg-medium);
@@ -362,3 +371,9 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-context-card__spinner {
+    animation: none;
+    transform: none;
+  }
+}

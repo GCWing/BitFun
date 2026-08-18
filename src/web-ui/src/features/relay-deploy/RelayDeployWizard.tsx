@@ -39,6 +39,7 @@ import {
 import { buildRelayServerSearchState, getRelayConnectionHost } from './serverSearch';
 import { ConnectedTerminal, getTerminalService } from '@/tools/terminal';
 import { createLogger } from '@/shared/utils/logger';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import './RelayDeployWizard.scss';
 
 const log = createLogger('RelayDeployWizard');
@@ -116,7 +117,10 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   const revealConnectForm = useCallback(() => {
     const el = connectFormRef.current;
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.scrollIntoView({
+      behavior: getMotionAwareScrollBehavior('smooth'),
+      block: 'start',
+    });
     setConnectFormHighlighted(true);
     if (connectFormHighlightTimerRef.current != null) {
       window.clearTimeout(connectFormHighlightTimerRef.current);

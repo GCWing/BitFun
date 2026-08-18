@@ -58,7 +58,11 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
       data-bf-state={status || undefined}
     >
       
-      <div className="progress-notification__icon">
+      <div
+        className="progress-notification__icon"
+        data-bf-component="notification"
+        data-bf-part="progressIcon"
+      >
         {getStatusIcon()}
       </div>
 
@@ -83,7 +87,7 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
               className="progress-notification__progress-fill"
               data-bf-component="notification"
               data-bf-part="progressFill"
-              style={{ width: `${progress}%` }}
+              style={{ transform: `scaleX(${Math.max(0, Math.min(100, progress)) / 100})` }}
             />
           </div>
         )}
@@ -102,4 +106,3 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
     </div>
   );
 };
-

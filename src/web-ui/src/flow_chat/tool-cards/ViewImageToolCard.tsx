@@ -69,7 +69,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
   useLayoutEffect(() => {
     if (!source || didAutoExpand.current) return;
     didAutoExpand.current = true;
-    applyExpandedState(isExpanded, true, setIsExpanded, { reason: 'auto' });
+    applyExpandedState(isExpanded, true, setIsExpanded);
   }, [applyExpandedState, isExpanded, source]);
 
   useEffect(() => {

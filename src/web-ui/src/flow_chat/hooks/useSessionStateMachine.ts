@@ -2,7 +2,11 @@
  * Session state machine hook.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import {
+  getActiveSurfaceScope,
+  onSurfaceActivated,
+} from '@/infrastructure/peer-device/deviceSurface';
 import { stateMachineManager } from '../state-machine';
 import {
   SessionStateMachine,
@@ -11,32 +15,49 @@ import {
 } from '../state-machine/types';
 import { deriveSessionState } from '../state-machine/derivedState';
 
+const subscribeToSurfaceActivation = (listener: () => void): (() => void) =>
+  onSurfaceActivated(() => listener());
+
+const currentSurfaceEpoch = (): number => getActiveSurfaceScope().epoch;
+
 /**
  * Access the session state machine.
  */
 export function useSessionStateMachine(sessionId: string | null) {
-  const [snapshot, setSnapshot] = useState<SessionStateMachine | null>(null);
+  const surfaceEpoch = useSyncExternalStore(
+    subscribeToSurfaceActivation,
+    currentSurfaceEpoch,
+    currentSurfaceEpoch,
+  );
+  const identity = `${surfaceEpoch}:${sessionId ?? ''}`;
+  const [snapshotState, setSnapshotState] = useState<{
+    identity: string;
+    snapshot: SessionStateMachine | null;
+  }>({ identity, snapshot: null });
 
   useEffect(() => {
     if (!sessionId) {
-      setSnapshot(null);
+      setSnapshotState({ identity, snapshot: null });
       return;
     }
 
     const machine = stateMachineManager.getOrCreate(sessionId);
-    
-    setSnapshot(machine.getSnapshot());
+
+    setSnapshotState({ identity, snapshot: machine.getSnapshot() });
 
     const unsubscribe = machine.subscribe((newSnapshot) => {
-      setSnapshot(newSnapshot);
+      setSnapshotState({ identity, snapshot: newSnapshot });
     });
 
     return () => {
       unsubscribe();
     };
-  }, [sessionId]);
+  }, [identity, sessionId]);
 
-  return snapshot;
+  // React retains hook state for one render when either the Session or Surface
+  // identity changes. Never pair that previous machine snapshot with the new
+  // Session id while the effect re-subscribes.
+  return snapshotState.identity === identity ? snapshotState.snapshot : null;
 }
 
 /**
@@ -92,4 +113,3 @@ export function useSessionStateMachineActions(sessionId: string | null) {
     updatePlanner,
   };
 }
-

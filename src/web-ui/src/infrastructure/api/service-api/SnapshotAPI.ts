@@ -494,33 +494,6 @@ export class SnapshotAPI {
   }
 
    
-  async rollbackToTurn(
-    sessionId: string,
-    turnIndex: number,
-    deleteTurns: boolean = false,
-    workspacePath?: string,
-  ): Promise<string[]> {
-    try {
-      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
-      return await api.invoke('rollback_to_turn', {
-        request: {
-          session_id: sessionId,
-          turn_index: turnIndex,
-          delete_turns: deleteTurns,
-          ...scope,
-        }
-      });
-    } catch (error) {
-      throw createTauriCommandError('rollback_to_turn', error, {
-        sessionId,
-        turnIndex,
-        deleteTurns,
-        workspacePath,
-      });
-    }
-  }
-
-   
   async rollbackEntireSession(
     sessionId: string,
     deleteSession: boolean = true,

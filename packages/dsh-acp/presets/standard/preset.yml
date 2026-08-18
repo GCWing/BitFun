@@ -1,0 +1,3 @@
+name: 标准模式
+description: 功能完整的编码 Agent：文件读写与检索、沙箱 Shell、后台任务、Skills、目标、子代理与 todo 计划。
+order: 1

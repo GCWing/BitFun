@@ -4,7 +4,12 @@ import {
   externalSourceDiagnosticKey,
   type ExternalSourcePresentationGroup,
 } from '../../externalSourcePresentation';
-import { SOURCE_COUNT_LABELS, sourceDiagnosticCategory, sourceScopeLabel } from './presentation';
+import {
+  SOURCE_COUNT_LABELS,
+  isActionableSourceDiagnostic,
+  sourceDiagnosticCategory,
+  sourceScopeLabel,
+} from './presentation';
 import type { ExternalSectionCommonProps } from './types';
 
 export interface ExternalSourceSectionProps
@@ -28,6 +33,7 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
   return (
     <ConfigPageSection title={t('sources.title')}>
       {groups.map((group) => {
+        const userDiagnostics = group.diagnostics.filter(isActionableSourceDiagnostic);
         return (
           <React.Fragment key={group.key}>
             <ConfigPageRow
@@ -78,7 +84,7 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
             >
               {renderSourceMembers(group)}
             </ConfigPageRow>
-            {group.diagnostics.length > 0 ? (
+            {userDiagnostics.length > 0 ? (
               <details
                 className="bitfun-external-sources-config__notice"
                 data-bf-component="external-sources-config"
@@ -89,11 +95,11 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
                 <summary>
                   {t('diagnostics.sourceSummary', {
                     name: group.displayName,
-                    count: group.diagnostics.length,
+                    count: userDiagnostics.length,
                   })}
                 </summary>
                 <ul className="bitfun-external-sources-config__diagnostics" data-bf-component="external-sources-config" data-bf-part="diagnostics">
-                  {group.diagnostics.map((diagnostic) => (
+                  {userDiagnostics.map((diagnostic) => (
                     <li key={externalSourceDiagnosticKey(diagnostic)}>
                       <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
                     </li>

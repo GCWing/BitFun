@@ -151,10 +151,6 @@ impl ChatMode {
         let Some(effect) = self.pending_local_effect.take() else {
             return Ok(false);
         };
-        debug_assert_eq!(
-            crate::tui_backend::TuiEffect::route(&effect),
-            crate::tui_backend::TuiEffectRoute::Local
-        );
         match effect {
             PendingLocalEffect::EditComposer { command, mut draft } => {
                 let cwd = self.local_cwd.clone();
@@ -474,17 +470,47 @@ impl ChatMode {
                 "{SHARED_TUI_CHAT_STATUS} {SHARED_TUI_EMBEDDED_HANDOFF}"
             )));
         }
-        let agent = self.agent.clone();
         let (initial_external_sources, updates) = tokio::task::block_in_place(|| {
-            let updates = agent.subscribe_external_source_updates().ok();
-            let snapshot = rt_handle.block_on(agent.external_source_snapshot(false));
+            let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+            let updates = if self.agent.is_remote_workspace() {
+                None
+            } else {
+                rt_handle
+                    .block_on(
+                        bitfun_core::external_sources::subscribe_external_source_updates(Some(
+                            &workspace,
+                        )),
+                    )
+                    .ok()
+            };
+            let snapshot = rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    return Err(
+                        bitfun_core::external_sources::sanitize_external_source_operation_error(
+                            "External source management is unavailable for a Remote workspace"
+                                .to_string(),
+                        ),
+                    );
+                }
+                let snapshot = bitfun_core::external_sources::external_source_snapshot(
+                    Some(&workspace),
+                    false,
+                )
+                .await
+                .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
+                let preferences = bitfun_core::external_sources::external_source_conflict_choices()
+                    .await
+                    .map_err(
+                        bitfun_core::external_sources::sanitize_external_source_operation_error,
+                    )?;
+                Ok::<_, ExternalSourceOperationError>((snapshot.into(), preferences.into()))
+            });
             (snapshot, updates)
         });
         let mut external_source_rx = updates;
         match initial_external_sources {
-            Ok(response) => {
-                self.replace_external_conflict_preferences(response.preferences.into());
-                let snapshot = response.snapshot;
+            Ok((snapshot, preferences)) => {
+                self.replace_external_conflict_preferences(preferences);
                 let (available, restricted) = external_command_counts(&snapshot);
                 let pending_conflicts = snapshot
                     .command_conflicts
@@ -750,15 +776,10 @@ impl ChatMode {
 
             let mut external_source_closed = false;
             if let Some(receiver) = external_source_rx.as_mut() {
-                let mut latest = None;
+                let mut latest: Option<ExternalSourceCatalogSnapshot> = None;
                 for _ in 0..4 {
                     match receiver.try_recv() {
-                        Ok((workspace_path, snapshot))
-                            if workspace_path == self.agent.workspace_path_string() =>
-                        {
-                            latest = Some(snapshot)
-                        }
-                        Ok(_) => continue,
+                        Ok(snapshot) => latest = Some(snapshot.into()),
                         Err(TryRecvError::Lagged(_)) => continue,
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Closed) => {
@@ -773,18 +794,24 @@ impl ChatMode {
                         .as_ref()
                         .is_some_and(|previous| previous.discovery_pending)
                         && !snapshot.discovery_pending;
-                    let response = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(self.agent.external_source_snapshot(false))
-                    });
-                    let snapshot = match response {
-                        Ok(response) => {
-                            self.replace_external_conflict_preferences(response.preferences.into());
-                            response.snapshot
+                    let snapshot = match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(async {
+                            let preferences = bitfun_core::external_sources::external_source_conflict_choices()
+                                .await
+                                .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
+                            Ok::<_, ExternalSourceOperationError>(
+                                (snapshot.clone(), preferences.into()),
+                            )
+                        })
+                    }) {
+                        Ok((snapshot, preferences)) => {
+                            self.replace_external_conflict_preferences(preferences);
+                            snapshot
                         }
                         Err(error) => {
                             tracing::warn!(
                                 error_code = error.code.as_str(),
-                                "External source event snapshot recovery failed"
+                                "External source event preference recovery failed"
                             );
                             snapshot
                         }

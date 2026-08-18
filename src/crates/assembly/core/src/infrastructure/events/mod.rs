@@ -4,7 +4,6 @@ pub mod emitter;
 #[cfg(feature = "runtime-services")]
 pub mod event_system;
 
-pub use bitfun_transport::TransportEmitter;
 pub use emitter::EventEmitter;
 #[cfg(feature = "runtime-services")]
 pub use event_system::BackendEventSystem as BackendEventManager;

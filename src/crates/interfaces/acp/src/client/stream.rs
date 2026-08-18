@@ -10,7 +10,7 @@ use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use bitfun_events::ToolEventData;
 
 use super::session_options::{AcpAvailableCommand, AcpPlanEntry, AcpSessionContextUsage};
-use super::tool_card_bridge::{acp_tool_name, normalize_tool_params};
+use super::tool_card_bridge::{acp_tool_name, normalize_tool_params, normalize_tool_result};
 
 #[derive(Debug, Clone)]
 pub enum AcpClientStreamEvent {
@@ -264,13 +264,15 @@ fn acp_tool_call_events(
 
     match tool_call.status {
         ToolCallStatus::Completed => {
+            let result = acp_tool_result_value(
+                &tool_name,
+                tool_call.raw_output,
+                Some(tool_call.content),
+                Some(tool_call.locations),
+            );
             events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Completed {
                 identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
-                result: acp_tool_result_value(
-                    tool_call.raw_output,
-                    Some(tool_call.content),
-                    Some(tool_call.locations),
-                ),
+                result,
                 result_for_assistant: None,
                 image_attachments: None,
                 duration_ms: 0,
@@ -324,13 +326,15 @@ fn acp_tool_call_update_events(
                     timeout_seconds: None,
                 }));
             }
+            let result = acp_tool_result_value(
+                &tool_name,
+                update.fields.raw_output,
+                update.fields.content,
+                update.fields.locations,
+            );
             events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Completed {
                 identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
-                result: acp_tool_result_value(
-                    update.fields.raw_output,
-                    update.fields.content,
-                    update.fields.locations,
-                ),
+                result,
                 result_for_assistant: None,
                 image_attachments: None,
                 duration_ms: 0,
@@ -400,24 +404,27 @@ fn acp_tool_call_update_events(
 }
 
 fn acp_tool_result_value(
+    tool_name: &str,
     raw_output: Option<serde_json::Value>,
     content: Option<Vec<ToolCallContent>>,
     locations: Option<Vec<agent_client_protocol::schema::ToolCallLocation>>,
 ) -> serde_json::Value {
-    if let Some(raw_output) = raw_output {
-        return raw_output;
-    }
+    let value = match raw_output {
+        Some(raw_output) => raw_output,
+        None => {
+            let content = content.unwrap_or_default();
+            let locations = locations.unwrap_or_default();
+            if content.is_empty() && locations.is_empty() {
+                return serde_json::Value::Null;
+            }
+            serde_json::json!({
+                "content": content,
+                "locations": locations,
+            })
+        }
+    };
 
-    let content = content.unwrap_or_default();
-    let locations = locations.unwrap_or_default();
-    if content.is_empty() && locations.is_empty() {
-        return serde_json::Value::Null;
-    }
-
-    serde_json::json!({
-        "content": content,
-        "locations": locations,
-    })
+    normalize_tool_result(tool_name, value)
 }
 
 fn acp_tool_error_text(

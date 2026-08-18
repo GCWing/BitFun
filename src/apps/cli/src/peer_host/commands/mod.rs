@@ -46,11 +46,14 @@ pub(crate) async fn dispatch(
         | "set_external_source_enabled_command"
         | "set_external_source_conflict_choice_command"
         | "set_external_tool_target_decision_command"
+        | "set_external_tool_targets_enabled_command"
         | "set_external_tool_conflict_choice_command"
         | "set_external_subagent_activation_command"
+        | "set_external_subagents_enabled_command"
         | "set_external_subagent_model_binding_command"
         | "choose_external_subagent_conflict_command"
         | "set_external_mcp_server_decision_command"
+        | "set_external_mcp_servers_enabled_command"
         | "choose_external_mcp_conflict_command"
         | "update_external_integration_policy_command" => {
             external_sources::dispatch(command, args, state).await
@@ -74,6 +77,7 @@ pub(crate) async fn dispatch(
         }
         "load_session_turn_window" => session::load_session_turn_window(state, args).await,
         "load_session_turns" => session::load_session_turns(state, args).await,
+        "load_session_event_backfill" => session::load_session_event_backfill(state, args),
         "restore_session_view" => session::restore_session_view(state, args).await,
         "restore_session_with_turns" => session::restore_session_with_turns(state, args).await,
         "restore_session" => session::restore_session(state, args).await,
@@ -91,7 +95,7 @@ pub(crate) async fn dispatch(
         "save_session_turn" => session::save_session_turn(state, args).await,
 
         // Snapshot / rollback
-        "rollback_to_turn" => snapshot::rollback_to_turn(state, args).await,
+        "rollback_session_to_turn" => snapshot::rollback_session_to_turn(state, args).await,
         "get_session_files" => snapshot::get_session_files(state, args).await,
 
         // Dialog / tools
@@ -116,6 +120,7 @@ pub(crate) async fn dispatch(
 
         // Git (local workspace only)
         "git_is_repository" => git::git_is_repository(args).await,
+        "git_get_repository_trust" => git::git_get_repository_trust(args).await,
 
         // Soft empty / no-op for Desktop-only subsystems
         "notify_cron_host_ready" => soft::notify_cron_host_ready().await,
@@ -126,6 +131,7 @@ pub(crate) async fn dispatch(
 
         // System
         "get_system_info" => system::get_system_info().await,
+        "get_token_usage_statistics" => system::get_token_usage_statistics(state, args).await,
 
         other => Err(format!(
             "command '{other}' is not supported on CLI peer host"

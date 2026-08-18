@@ -12,6 +12,7 @@ export const notificationAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'itemActions' },
     { id: 'itemClose' },
     { id: 'progressItem' },
+    { id: 'progressIcon' },
     { id: 'progressBar' },
     { id: 'progressFill' },
     { id: 'loadingItem' },

@@ -1,10 +1,67 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useAnnouncementStore } from '../store/announcementStore';
 import FeatureModalPage from './FeatureModalPage';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
 import '../styles/FeatureModal.scss';
 import type { ModalConfig } from '../types';
+
+const FEATURE_MODAL_EXIT_MS = 180;
+const FEATURE_MODAL_PAGE_MS = 180;
+
+interface FeatureModalPagesProps {
+  pages: NonNullable<ModalConfig['pages']>;
+  currentPage: number;
+}
+
+const FeatureModalPages: React.FC<FeatureModalPagesProps> = ({ pages, currentPage }) => {
+  const [displayedPage, setDisplayedPage] = useState(currentPage);
+  const [leavingPage, setLeavingPage] = useState<number | null>(null);
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
+  const settleTimerRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (currentPage === displayedPage) return;
+    if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
+    setDirection(currentPage > displayedPage ? 'forward' : 'backward');
+    setLeavingPage(displayedPage);
+    setDisplayedPage(currentPage);
+    settleTimerRef.current = window.setTimeout(() => {
+      settleTimerRef.current = null;
+      setLeavingPage(null);
+    }, FEATURE_MODAL_PAGE_MS);
+  }, [currentPage, displayedPage]);
+
+  useEffect(() => () => {
+    if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
+  }, []);
+
+  const renderPage = (pageIndex: number, state: 'active' | 'leaving') => {
+    const page = pages[pageIndex];
+    if (!page) return null;
+    return (
+      <div
+        key={`${state}-${pageIndex}`}
+        className="feature-modal__page"
+        data-state={state}
+        data-direction={direction}
+        aria-hidden={state !== 'active'}
+        {...(state !== 'active' ? { inert: '' } : {})}
+      >
+        <FeatureModalPage page={page} active={state === 'active'} />
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {leavingPage !== null && leavingPage !== displayedPage
+        ? renderPage(leavingPage, 'leaving')
+        : null}
+      {renderPage(displayedPage, 'active')}
+    </>
+  );
+};
 
 /**
  * Centre-screen feature demo modal.
@@ -26,11 +83,16 @@ const FeatureModal: React.FC = () => {
 
   const [exiting, setExiting] = React.useState(false);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
 
   // When modalVisible becomes false trigger the exit animation.
   useEffect(() => {
     if (!modalVisible) setExiting(false);
   }, [modalVisible]);
+
+  useEffect(() => () => {
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+  }, []);
 
   if (!openModal || !modalVisible) return null;
 
@@ -40,8 +102,12 @@ const FeatureModal: React.FC = () => {
   const isLast = currentPage === pages.length - 1;
 
   function triggerClose(neverShow = false) {
+    if (exiting) return;
     setExiting(true);
-    setTimeout(() => closeModal(neverShow), 280);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      closeModal(neverShow);
+    }, FEATURE_MODAL_EXIT_MS);
   }
 
   function handleBackdropClick(e: React.MouseEvent) {
@@ -61,6 +127,8 @@ const FeatureModal: React.FC = () => {
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
+      aria-hidden={exiting}
+      {...(exiting ? { inert: '' } : {})}
     >
       <div className={`feature-modal ${sizeClass}${exiting ? ' feature-modal--exiting' : ''}`} data-bf-component="announcement" data-bf-part="modal">
         {/* Close button */}
@@ -79,14 +147,7 @@ const FeatureModal: React.FC = () => {
 
         {/* Page viewport */}
         <div className="feature-modal__pages" data-bf-component="announcement" data-bf-part="modalPages">
-          {pages.map((page, i) => (
-            <div
-              key={i}
-              style={{ display: i === currentPage ? 'block' : 'none' }}
-            >
-              <FeatureModalPage page={page} active={i === currentPage} />
-            </div>
-          ))}
+          <FeatureModalPages pages={pages} currentPage={currentPage} />
         </div>
 
         {/* Footer navigation */}

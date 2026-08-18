@@ -1680,6 +1680,13 @@ async fn managed_target_path(
                 format!("Failed to resolve the managed worktree root: {io_error}"),
             )
         })?;
+    // `std::fs::canonicalize` (and Tokio's wrapper) returns a verbatim
+    // `\\?\C:\...` path on Windows. Git for Windows does not accept that form
+    // as a `worktree add` target after the Git adapter normalizes separators,
+    // because it becomes `//?/C:/...`. Keep the resolved path used for the
+    // containment checks, but prefer the ordinary drive-letter representation
+    // whenever it can address the same path.
+    let canonical_root = dunce::simplified(&canonical_root).to_path_buf();
     let repository_root = canonical_root.join(repository_id);
     match tokio::fs::symlink_metadata(&repository_root).await {
         Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
@@ -1715,6 +1722,7 @@ async fn managed_target_path(
                     format!("Failed to resolve the repository worktree root: {io_error}"),
                 )
             })?;
+    let canonical_repository_root = dunce::simplified(&canonical_repository_root).to_path_buf();
     if !canonical_repository_root.starts_with(&canonical_root) {
         return Err(error(
             WorktreeErrorCode::InvalidPath,
@@ -1944,6 +1952,13 @@ fn validate_automatic_removal(summary: &WorktreeSummary) -> Result<(), WorktreeE
 }
 
 fn map_base_ref_error(git_error: GitError, base_ref: &str) -> WorktreeError {
+    // A walled repository fails revision resolution the same way a typo does,
+    // and blaming the base ref sends the user hunting for a branch that is
+    // perfectly fine.
+    if matches!(git_error, GitError::RepositoryUntrusted { .. }) {
+        return map_git_error(git_error);
+    }
+
     let text = git_error.to_string();
     if text.to_ascii_lowercase().contains("unborn")
         || text.contains("reference 'HEAD' not found")
@@ -1979,6 +1994,22 @@ fn map_git_error(git_error: GitError) -> WorktreeError {
         GitError::RepositoryNotFound(message) => {
             error(WorktreeErrorCode::NotGitRepository, message)
         }
+        // An ownership rejection is the one Git failure the user can clear
+        // themselves, so it must not disappear into `GitFailed`: a session bound
+        // to a managed worktree would report "Git command failed" for a
+        // repository that is present, intact, and one command away from working.
+        GitError::RepositoryUntrusted {
+            repository_path, ..
+        } => {
+            let remedy = crate::service::git::trust::manual_trust_command(&repository_path);
+            error(
+                WorktreeErrorCode::RepositoryUntrusted,
+                format!(
+                    "Git refuses '{repository_path}': the repository is owned by another user. \
+                     Run `{remedy}` and try again"
+                ),
+            )
+        }
         GitError::InvalidPath(message) => error(WorktreeErrorCode::InvalidPath, message),
         GitError::IoError(io_error) => error(WorktreeErrorCode::IoFailed, io_error.to_string()),
         other => {
@@ -1997,11 +2028,13 @@ fn map_git_error(git_error: GitError) -> WorktreeError {
 mod tests {
     use super::{
         automatic_delete_candidate_ids, managed_target_path, managed_worktree_directory_name,
-        path_is_within_root, repository_id, resolve_managed_root, sanitize_worktree_project_label,
-        validate_automatic_removal, validate_removal, RegisteredWorktree, RepositoryContext,
-        WorktreeOperationReceipt, WorktreeRegistry, WorktreeService, AUTO_DELETE_MIN_AGE_MS,
+        map_base_ref_error, map_branch_error, map_git_error, path_is_within_root, repository_id,
+        resolve_managed_root, sanitize_worktree_project_label, validate_automatic_removal,
+        validate_removal, RegisteredWorktree, RepositoryContext, WorktreeOperationReceipt,
+        WorktreeRegistry, WorktreeService, AUTO_DELETE_MIN_AGE_MS,
     };
     use crate::infrastructure::PathManager;
+    use crate::service::git::GitError;
     use bitfun_core_types::{
         WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings, WorktreeSummary,
     };
@@ -2024,6 +2057,44 @@ mod tests {
             running_session_count: 0,
             sessions: Vec::new(),
         }
+    }
+
+    /// A worktree is how a Review session gets its own checkout, so this is the
+    /// first place the ownership wall is met on that path. Folded into
+    /// `GitFailed` it reads as "Git command failed" — a dead end for a
+    /// repository the user can trust in one command.
+    #[test]
+    fn an_ownership_rejection_keeps_its_own_code_and_the_command_that_clears_it() {
+        let mapped = map_git_error(GitError::RepositoryUntrusted {
+            repository_path: "/srv/shared/repo".to_string(),
+            detail: "detected dubious ownership".to_string(),
+        });
+        assert_eq!(mapped.code, WorktreeErrorCode::RepositoryUntrusted);
+        assert!(
+            mapped
+                .message
+                .contains("git config --global --add safe.directory /srv/shared/repo"),
+            "the remedy has to travel with the refusal: {}",
+            mapped.message
+        );
+
+        // Branch creation and base-ref resolution reach the same wall through
+        // their own mappers. `InvalidBaseRef` would be an accusation against a
+        // branch that is fine.
+        let branch = map_branch_error(GitError::RepositoryUntrusted {
+            repository_path: "/srv/shared/repo".to_string(),
+            detail: "detected dubious ownership".to_string(),
+        });
+        assert_eq!(branch.code, WorktreeErrorCode::RepositoryUntrusted);
+
+        let base_ref = map_base_ref_error(
+            GitError::RepositoryUntrusted {
+                repository_path: "/srv/shared/repo".to_string(),
+                detail: "detected dubious ownership".to_string(),
+            },
+            "main",
+        );
+        assert_eq!(base_ref.code, WorktreeErrorCode::RepositoryUntrusted);
     }
 
     #[test]
@@ -2090,6 +2161,32 @@ mod tests {
             .await
             .expect_err("existing target must be rejected");
         assert_eq!(collision.code, WorktreeErrorCode::InvalidPath);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn managed_target_path_is_compatible_with_git_for_windows() {
+        let root = tempfile::tempdir().expect("temp root");
+        let settings = WorktreeSettings {
+            root_path: root.path().join("managed-worktrees").display().to_string(),
+            ..WorktreeSettings::default()
+        };
+
+        let target = managed_target_path(
+            &settings,
+            "repository-id",
+            &root.path().join("projects/BitFun"),
+            "48e8b457e87649aebf801b408698f46c",
+        )
+        .await
+        .expect("managed target path");
+        let git_argument = target.to_string_lossy().replace('\\', "/");
+
+        assert!(
+            !git_argument.starts_with("//?/"),
+            "managed worktree targets passed to Git must not use a Windows verbatim path: {}",
+            target.display()
+        );
     }
 
     #[test]

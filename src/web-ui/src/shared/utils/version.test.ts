@@ -8,6 +8,7 @@ const productionInfo: VersionInfo = {
   buildDate: '2026-08-06T00:00:00Z',
   buildTimestamp: 0,
   buildEnv: 'production',
+  releaseChannel: 'stable',
   isDev: false,
 };
 

@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@/component-library';
@@ -22,6 +29,13 @@ const GLOBAL_PERMISSION_ACTION_OPTIONS: SelectOption[] = [
 ];
 
 const EFFECTS: PermissionEffect[] = ['allow', 'ask', 'deny'];
+const RULE_EXIT_DURATION_MS = 120;
+const REDUCED_MOTION_RULE_EXIT_DURATION_MS = 60;
+const RULE_MOVE_DURATION_MS = 160;
+const RULE_ENTER_DURATION_MS = 150;
+const REDUCED_MOTION_ENTER_DURATION_MS = 70;
+const RULE_MOTION_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const MIN_RULE_SHIFT_PX = 0.5;
 
 interface DraftRule extends PermissionRule {
   localId: string;
@@ -53,6 +67,10 @@ function rulesEqual(left: PermissionRule[], right: PermissionRule[]): boolean {
   });
 }
 
+function prefersReducedMotion(): boolean {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
 export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogProps> = ({
   isOpen,
   rules,
@@ -63,6 +81,15 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
   const { t } = useTranslation('settings/session-config');
   const [savedRules, setSavedRules] = useState<PermissionRule[]>([]);
   const [draftRules, setDraftRules] = useState<DraftRule[]>([]);
+  const [exitingRuleIds, setExitingRuleIds] = useState<Set<string>>(() => new Set());
+  const dialogRootRef = useRef<HTMLDivElement>(null);
+  const ruleRowsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const rowAnimationsRef = useRef<Map<string, Animation>>(new Map());
+  const removalTimersRef = useRef<Map<string, number>>(new Map());
+  const exitingRuleIdsRef = useRef<Set<string>>(new Set());
+  const pendingLayoutRectsRef = useRef<Map<string, DOMRect> | null>(null);
+  const enteringRuleIdsRef = useRef<Set<string>>(new Set());
+  const dialogSessionRef = useRef(0);
   const effectOptions = useMemo<SelectOption[]>(
     () => EFFECTS.map((effect) => ({
       value: effect,
@@ -71,41 +98,236 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
     [t],
   );
 
+  const cancelRowAnimations = useCallback(() => {
+    rowAnimationsRef.current.forEach((animation) => animation.cancel());
+    rowAnimationsRef.current.clear();
+  }, []);
+
+  const invalidatePendingRuleWork = useCallback(() => {
+    dialogSessionRef.current += 1;
+    removalTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    removalTimersRef.current.clear();
+    pendingLayoutRectsRef.current = null;
+    enteringRuleIdsRef.current.clear();
+    cancelRowAnimations();
+  }, [cancelRowAnimations]);
+
   useEffect(() => {
+    invalidatePendingRuleWork();
     if (!isOpen) {
+      // Keep the last rendered content stable while Modal retains it for exit.
       return;
     }
+    exitingRuleIdsRef.current = new Set();
+    setExitingRuleIds(new Set());
     setSavedRules(rules);
     setDraftRules(rules.map(toDraftRule));
-  }, [isOpen, rules]);
+  }, [invalidatePendingRuleWork, isOpen, rules]);
 
-  const permissionRules = useMemo(() => toPermissionRules(draftRules), [draftRules]);
+  useEffect(() => () => {
+    invalidatePendingRuleWork();
+  }, [invalidatePendingRuleWork]);
+
+  const activeDraftRules = useMemo(
+    () => draftRules.filter((rule) => !exitingRuleIds.has(rule.localId)),
+    [draftRules, exitingRuleIds],
+  );
+
+  const activeRuleIndexes = useMemo(
+    () => new Map(activeDraftRules.map((rule, index) => [rule.localId, index])),
+    [activeDraftRules],
+  );
+
+  const permissionRules = useMemo(() => toPermissionRules(activeDraftRules), [activeDraftRules]);
   const rulesDirty = !rulesEqual(permissionRules, savedRules);
   const rulesValid = permissionRules.every((rule) => rule.action.trim() && rule.resource.trim());
 
   const updateDraftRule = (localId: string, update: Partial<PermissionRule>) => {
+    if (exitingRuleIdsRef.current.has(localId)) {
+      return;
+    }
     setDraftRules((current) => current.map((rule) => (
       rule.localId === localId ? { ...rule, ...update } : rule
     )));
   };
 
-  const moveDraftRule = (index: number, direction: -1 | 1) => {
-    const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= draftRules.length) {
+  const captureLayoutRects = useCallback(() => {
+    const nextRects = new Map<string, DOMRect>();
+    ruleRowsRef.current.forEach((row, localId) => {
+      if (!exitingRuleIdsRef.current.has(localId)) {
+        nextRects.set(localId, row.getBoundingClientRect());
+      }
+    });
+    cancelRowAnimations();
+    pendingLayoutRectsRef.current = nextRects;
+  }, [cancelRowAnimations]);
+
+  const animateRow = useCallback((
+    localId: string,
+    row: HTMLDivElement,
+    keyframes: Keyframe[],
+    duration: number,
+  ) => {
+    if (typeof row.animate !== 'function') {
       return;
     }
+    rowAnimationsRef.current.get(localId)?.cancel();
+    const animation = row.animate(keyframes, {
+      duration,
+      easing: RULE_MOTION_EASING,
+    });
+    rowAnimationsRef.current.set(localId, animation);
+    const forgetAnimation = () => {
+      if (rowAnimationsRef.current.get(localId) === animation) {
+        rowAnimationsRef.current.delete(localId);
+      }
+    };
+    animation.onfinish = forgetAnimation;
+    animation.oncancel = forgetAnimation;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const reduceMotion = prefersReducedMotion();
+    const previousRects = pendingLayoutRectsRef.current;
+    pendingLayoutRectsRef.current = null;
+    if (previousRects && !reduceMotion) {
+      previousRects.forEach((previousRect, localId) => {
+        const row = ruleRowsRef.current.get(localId);
+        if (!row || exitingRuleIdsRef.current.has(localId)) {
+          return;
+        }
+        const nextRect = row.getBoundingClientRect();
+        const deltaX = previousRect.left - nextRect.left;
+        const deltaY = previousRect.top - nextRect.top;
+        if (Math.abs(deltaX) < MIN_RULE_SHIFT_PX && Math.abs(deltaY) < MIN_RULE_SHIFT_PX) {
+          return;
+        }
+        animateRow(localId, row, [
+          { transform: `translate(${deltaX}px, ${deltaY}px)` },
+          { transform: 'translate(0, 0)' },
+        ], RULE_MOVE_DURATION_MS);
+      });
+    }
+
+    enteringRuleIdsRef.current.forEach((localId) => {
+      const row = ruleRowsRef.current.get(localId);
+      if (!row) {
+        return;
+      }
+      animateRow(
+        localId,
+        row,
+        reduceMotion
+          ? [{ opacity: 0 }, { opacity: 1 }]
+          : [
+              { opacity: 0, transform: 'translateY(4px)' },
+              { opacity: 1, transform: 'translateY(0)' },
+            ],
+        reduceMotion ? REDUCED_MOTION_ENTER_DURATION_MS : RULE_ENTER_DURATION_MS,
+      );
+    });
+    enteringRuleIdsRef.current.clear();
+  }, [animateRow, draftRules, isOpen]);
+
+  const moveDraftRule = (localId: string, direction: -1 | 1) => {
+    const currentIndex = activeRuleIndexes.get(localId);
+    if (currentIndex === undefined) {
+      return;
+    }
+    const nextIndex = currentIndex + direction;
+    const targetRule = activeDraftRules[nextIndex];
+    if (!targetRule) {
+      return;
+    }
+    captureLayoutRects();
     setDraftRules((current) => {
       const nextRules = [...current];
-      [nextRules[index], nextRules[nextIndex]] = [nextRules[nextIndex], nextRules[index]];
+      const sourcePosition = nextRules.findIndex((rule) => rule.localId === localId);
+      const targetPosition = nextRules.findIndex((rule) => rule.localId === targetRule.localId);
+      if (sourcePosition < 0 || targetPosition < 0) {
+        return current;
+      }
+      [nextRules[sourcePosition], nextRules[targetPosition]] = [
+        nextRules[targetPosition],
+        nextRules[sourcePosition],
+      ];
       return nextRules;
     });
+  };
+
+  const handleAddRule = () => {
+    const nextRule = toDraftRule({ action: '', resource: '', effect: 'ask' });
+    enteringRuleIdsRef.current.add(nextRule.localId);
+    setDraftRules((current) => [...current, nextRule]);
+  };
+
+  const moveFocusAfterRemoval = (localId: string) => {
+    const removedRow = ruleRowsRef.current.get(localId);
+    if (!removedRow?.contains(document.activeElement)) {
+      return;
+    }
+    const liveIds = activeDraftRules.map((rule) => rule.localId);
+    const removedIndex = liveIds.indexOf(localId);
+    const focusTargetId = liveIds[removedIndex + 1] ?? liveIds[removedIndex - 1];
+    const focusTarget = focusTargetId
+      ? ruleRowsRef.current
+        .get(focusTargetId)
+        ?.querySelector<HTMLButtonElement>('.global-permission-rules-dialog__rule-actions button:last-of-type')
+      : dialogRootRef.current?.querySelector<HTMLButtonElement>(
+        '.global-permission-rules-dialog__section-header button',
+      );
+    focusTarget?.focus();
+  };
+
+  const handleRemoveRule = (localId: string) => {
+    if (isSaving || exitingRuleIdsRef.current.has(localId)) {
+      return;
+    }
+    moveFocusAfterRemoval(localId);
+    rowAnimationsRef.current.get(localId)?.cancel();
+    rowAnimationsRef.current.delete(localId);
+
+    const nextExitingIds = new Set(exitingRuleIdsRef.current);
+    nextExitingIds.add(localId);
+    exitingRuleIdsRef.current = nextExitingIds;
+    setExitingRuleIds(nextExitingIds);
+
+    const session = dialogSessionRef.current;
+    const exitDuration = prefersReducedMotion()
+      ? REDUCED_MOTION_RULE_EXIT_DURATION_MS
+      : RULE_EXIT_DURATION_MS;
+    const timer = window.setTimeout(() => {
+      removalTimersRef.current.delete(localId);
+      if (session !== dialogSessionRef.current || !exitingRuleIdsRef.current.has(localId)) {
+        return;
+      }
+      captureLayoutRects();
+      const remainingExitingIds = new Set(exitingRuleIdsRef.current);
+      remainingExitingIds.delete(localId);
+      exitingRuleIdsRef.current = remainingExitingIds;
+      setExitingRuleIds(remainingExitingIds);
+      setDraftRules((current) => current.filter((rule) => rule.localId !== localId));
+    }, exitDuration);
+    removalTimersRef.current.set(localId, timer);
+  };
+
+  const handleDiscard = () => {
+    invalidatePendingRuleWork();
+    exitingRuleIdsRef.current = new Set();
+    setExitingRuleIds(new Set());
+    setDraftRules(savedRules.map(toDraftRule));
   };
 
   const handleSave = async () => {
     if (!rulesValid || isSaving) {
       return;
     }
-    if (await onSave(permissionRules)) {
+    const session = dialogSessionRef.current;
+    if (await onSave(permissionRules) && session === dialogSessionRef.current) {
       setSavedRules(permissionRules);
     }
   };
@@ -115,6 +337,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
       isOpen={isOpen}
       onClose={() => {
         if (!isSaving) {
+          invalidatePendingRuleWork();
           onClose();
         }
       }}
@@ -124,7 +347,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
       contentClassName="global-permission-rules-dialog__modal"
       overlayClassName="global-permission-rules-dialog-overlay"
     >
-      <div className="global-permission-rules-dialog" data-bf-component="global-permission-rules-dialog" data-bf-part="root">
+      <div ref={dialogRootRef} className="global-permission-rules-dialog" data-bf-component="global-permission-rules-dialog" data-bf-part="root">
         <div data-bf-component="global-permission-rules-dialog" data-bf-part="intro" className="global-permission-rules-dialog__intro">
           <ShieldCheck size={18} aria-hidden="true" />
           <p>{t('permissionPolicy.globalRulesDialogDescription')}</p>
@@ -137,10 +360,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
               size="small"
               variant="secondary"
               disabled={isSaving}
-              onClick={() => setDraftRules((current) => [
-                ...current,
-                toDraftRule({ action: '', resource: '', effect: 'ask' }),
-              ])}
+              onClick={handleAddRule}
             >
               <Plus size={14} />
               {t('permissionPolicy.addGlobalRule')}
@@ -159,74 +379,97 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                 <span>{t('permissionPolicy.globalRulesResource')}</span>
                 <span />
               </div>
-              {draftRules.map((rule, index) => (
-                <div data-bf-component="global-permission-rules-dialog" data-bf-part="rule" key={rule.localId} className="global-permission-rules-dialog__rule-row">
-                  <Select
-                    size="small"
-                    value={rule.effect}
-                    options={effectOptions}
-                    aria-label={t('permissionPolicy.globalRulesEffect')}
-                    disabled={isSaving}
-                    onChange={(value) => updateDraftRule(rule.localId, { effect: value as PermissionEffect })}
-                  />
-                  <Select
-                    size="small"
-                    value={rule.action}
-                    options={GLOBAL_PERMISSION_ACTION_OPTIONS}
-                    placeholder={t('permissionPolicy.globalRulesAction')}
-                    aria-label={t('permissionPolicy.globalRulesAction')}
-                    disabled={isSaving}
-                    error={!rule.action.trim()}
-                    onChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
-                  />
-                  <Input
-                    inputSize="small"
-                    value={rule.resource}
-                    placeholder={t('permissionPolicy.globalRulesResourcePlaceholder')}
-                    aria-label={t('permissionPolicy.globalRulesResource')}
-                    disabled={isSaving}
-                    error={!rule.resource.trim()}
-                    onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
-                  />
-                  <div data-bf-component="global-permission-rules-dialog" data-bf-part="ruleActions" className="global-permission-rules-dialog__rule-actions">
-                    <IconButton
-                      type="button"
+              {draftRules.map((rule) => {
+                const exiting = exitingRuleIds.has(rule.localId);
+                const activeIndex = activeRuleIndexes.get(rule.localId);
+                return (
+                  <div
+                    ref={(row) => {
+                      if (row) {
+                        ruleRowsRef.current.set(rule.localId, row);
+                      } else {
+                        ruleRowsRef.current.delete(rule.localId);
+                      }
+                    }}
+                    data-bf-component="global-permission-rules-dialog"
+                    data-bf-part="rule"
+                    data-rule-id={rule.localId}
+                    data-exiting={exiting ? 'true' : 'false'}
+                    aria-hidden={exiting || undefined}
+                    {...(exiting ? { inert: '' } : {})}
+                    key={rule.localId}
+                    className="global-permission-rules-dialog__rule-row"
+                  >
+                    <Select
                       size="small"
-                      variant="ghost"
-                      aria-label={t('permissionPolicy.moveGlobalRuleUp')}
-                      tooltip={t('permissionPolicy.moveGlobalRuleUp')}
-                      disabled={isSaving || index === 0}
-                      onClick={() => moveDraftRule(index, -1)}
-                    >
-                      <ArrowUp size={14} />
-                    </IconButton>
-                    <IconButton
-                      type="button"
+                      value={rule.effect}
+                      options={effectOptions}
+                      aria-label={t('permissionPolicy.globalRulesEffect')}
+                      disabled={isSaving || exiting}
+                      onChange={(value) => updateDraftRule(rule.localId, { effect: value as PermissionEffect })}
+                    />
+                    <Select
                       size="small"
-                      variant="ghost"
-                      aria-label={t('permissionPolicy.moveGlobalRuleDown')}
-                      tooltip={t('permissionPolicy.moveGlobalRuleDown')}
-                      disabled={isSaving || index === draftRules.length - 1}
-                      onClick={() => moveDraftRule(index, 1)}
-                    >
-                      <ArrowDown size={14} />
-                    </IconButton>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('permissionPolicy.removeGlobalRule')}
-                      tooltip={t('permissionPolicy.removeGlobalRule')}
-                      disabled={isSaving}
-                      onClick={() => setDraftRules((current) => (
-                        current.filter(({ localId }) => localId !== rule.localId)
-                      ))}
-                    >
-                      <Trash2 size={14} />
-                    </IconButton>
+                      value={rule.action}
+                      options={GLOBAL_PERMISSION_ACTION_OPTIONS}
+                      placeholder={t('permissionPolicy.globalRulesAction')}
+                      aria-label={t('permissionPolicy.globalRulesAction')}
+                      disabled={isSaving || exiting}
+                      error={!rule.action.trim()}
+                      onChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
+                    />
+                    <Input
+                      inputSize="small"
+                      value={rule.resource}
+                      placeholder={t('permissionPolicy.globalRulesResourcePlaceholder')}
+                      aria-label={t('permissionPolicy.globalRulesResource')}
+                      disabled={isSaving || exiting}
+                      error={!rule.resource.trim()}
+                      onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
+                    />
+                    <div data-bf-component="global-permission-rules-dialog" data-bf-part="ruleActions" className="global-permission-rules-dialog__rule-actions">
+                      <IconButton
+                        type="button"
+                        size="small"
+                        variant="ghost"
+                        aria-label={t('permissionPolicy.moveGlobalRuleUp')}
+                        tooltip={t('permissionPolicy.moveGlobalRuleUp')}
+                        disabled={isSaving || exiting || activeIndex === 0}
+                        onClick={() => moveDraftRule(rule.localId, -1)}
+                      >
+                        <ArrowUp size={14} />
+                      </IconButton>
+                      <IconButton
+                        type="button"
+                        size="small"
+                        variant="ghost"
+                        aria-label={t('permissionPolicy.moveGlobalRuleDown')}
+                        tooltip={t('permissionPolicy.moveGlobalRuleDown')}
+                        disabled={
+                          isSaving
+                          || exiting
+                          || activeIndex === undefined
+                          || activeIndex === activeDraftRules.length - 1
+                        }
+                        onClick={() => moveDraftRule(rule.localId, 1)}
+                      >
+                        <ArrowDown size={14} />
+                      </IconButton>
+                      <IconButton
+                        type="button"
+                        size="small"
+                        variant="ghost"
+                        aria-label={t('permissionPolicy.removeGlobalRule')}
+                        tooltip={t('permissionPolicy.removeGlobalRule')}
+                        disabled={isSaving || exiting}
+                        onClick={() => handleRemoveRule(rule.localId)}
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -235,7 +478,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setDraftRules(savedRules.map(toDraftRule))}
+                onClick={handleDiscard}
                 disabled={isSaving}
               >
                 {t('permissionPolicy.discardGlobalRules')}

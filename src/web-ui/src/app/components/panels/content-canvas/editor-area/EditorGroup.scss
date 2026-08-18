@@ -29,7 +29,8 @@
     flex-direction: column;
   }
 
-  // Tab content - instant switch, no transition
+  // Cached panes switch immediately; pointer selections receive a short WAAPI
+  // transform/opacity bridge from EditorGroup without delaying keyboard paths.
   &__tab-content {
     width: 100%;
     flex: 1;

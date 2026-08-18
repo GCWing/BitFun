@@ -673,6 +673,10 @@ mod tests {
         let tool_sections = ToolListingSections {
             skill_listing: Some("<available_skills>\n- pdf\n</available_skills>".to_string()),
             agent_listing: Some("<available_agents>\n- Explore\n</available_agents>".to_string()),
+            direct_tool_listing: Some(
+                "<direct_tools>\n- Read\n- GetToolSpec\n- CallDeferredTool\n</direct_tools>"
+                    .to_string(),
+            ),
             deferred_tool_listing: Some(
                 "<deferred_tools>\n- WebFetch\n</deferred_tools>".to_string(),
             ),
@@ -713,7 +717,9 @@ mod tests {
         assert!(agent_listing.contains("<available_agents>"));
         assert!(!agent_listing.contains("# Tool Calling Guide"));
         assert!(deferred_tool_listing.contains("# Tool Calling Guide"));
-        assert!(deferred_tool_listing.contains("## Deferred Tool Listing"));
+        assert!(deferred_tool_listing.contains("## Direct tools"));
+        assert!(deferred_tool_listing.contains("<direct_tools>"));
+        assert!(deferred_tool_listing.contains("## Deferred tools"));
         assert!(deferred_tool_listing.contains("<deferred_tools>"));
         assert!(user_context.contains("# User Context"));
         assert!(user_context.contains("As you answer the user's questions"));

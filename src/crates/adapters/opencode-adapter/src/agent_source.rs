@@ -14,14 +14,16 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
     ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
     ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
-    ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
-    ExternalSubagentToolSelector, SecretText,
+    ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider,
+    ExternalSubagentToolCapability, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
+    SecretText,
 };
 use bitfun_product_domains::tool_permissions::{
     wildcard_matches, PermissionConstraintLayer, PermissionEffect,
     PermissionResourceCaseSensitivity, PermissionRule,
 };
 use bitfun_services_core::{jsonc::strip_jsonc, markdown::FrontMatterMarkdown};
+use bitfun_static_hook_support::common_external_subagent_tool_capability;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -956,17 +958,19 @@ fn tool_request(
         degraded.push("opencode_default_permission_semantics_not_imported".to_string());
         return ExternalSubagentToolRequest {
             selectors: [
-                ("list", "LS"),
-                ("read", "Read"),
-                ("glob", "Glob"),
-                ("grep", "Grep"),
+                ("list", ExternalSubagentToolCapability::DirectoryList),
+                ("read", ExternalSubagentToolCapability::ReadFile),
+                ("glob", ExternalSubagentToolCapability::GlobFiles),
+                ("grep", ExternalSubagentToolCapability::SearchText),
             ]
             .into_iter()
-            .map(|(source_name, canonical)| ExternalSubagentToolSelector {
-                source_name: source_name.to_string(),
-                canonical_host_name: Some(canonical.to_string()),
-                allowed: true,
-            })
+            .map(
+                |(source_name, canonical_capability)| ExternalSubagentToolSelector {
+                    source_name: source_name.to_string(),
+                    canonical_capability: Some(canonical_capability),
+                    allowed: true,
+                },
+            )
             .collect(),
             uses_conservative_default: true,
         };
@@ -999,16 +1003,10 @@ fn tool_request(
             }
             continue;
         }
-        let canonical = match name.to_ascii_lowercase().as_str() {
-            "list" => Some("LS"),
-            "read" => Some("Read"),
-            "glob" => Some("Glob"),
-            "grep" => Some("Grep"),
-            _ => None,
-        };
+        let canonical_capability = common_external_subagent_tool_capability(name);
         selectors.push(ExternalSubagentToolSelector {
             source_name: name.clone(),
-            canonical_host_name: canonical.map(str::to_string),
+            canonical_capability,
             allowed,
         });
     }
@@ -1235,9 +1233,7 @@ fn permission_action_uses_workspace_paths(
         .selectors
         .iter()
         .filter(|selector| selector.allowed)
-        .filter_map(|selector| {
-            permission_action_for_host_tool(selector.canonical_host_name.as_deref())
-        })
+        .filter_map(|selector| permission_action_for_tool_capability(selector.canonical_capability))
         .filter(|host_action| {
             wildcard_matches(
                 host_action,
@@ -1285,7 +1281,7 @@ fn validate_current_permission_action_enforcement(
         if !selector.allowed {
             return false;
         }
-        let host_action = permission_action_for_host_tool(selector.canonical_host_name.as_deref());
+        let host_action = permission_action_for_tool_capability(selector.canonical_capability);
         let rule_reaches_tool = wildcard_matches(
             &selector.source_name,
             source_action,
@@ -1324,11 +1320,10 @@ fn validate_permission_action_enforcement(
         && requested_tools
             .selectors
             .iter()
-            .any(|selector| selector.allowed && selector.canonical_host_name.is_none());
+            .any(|selector| selector.allowed && selector.canonical_capability.is_none());
     let selected_named_tool_is_unenforced = source_action != "*"
         && requested_tools.selectors.iter().any(|selector| {
-            let host_action =
-                permission_action_for_host_tool(selector.canonical_host_name.as_deref());
+            let host_action = permission_action_for_tool_capability(selector.canonical_capability);
             let source_action_matches = wildcard_matches(
                 &selector.source_name,
                 source_action,
@@ -1347,8 +1342,7 @@ fn validate_permission_action_enforcement(
     let wildcard_reaches_unenforced_tool = source_action == "*"
         && requested_tools.selectors.iter().any(|selector| {
             selector.allowed
-                && permission_action_for_host_tool(selector.canonical_host_name.as_deref())
-                    .is_none()
+                && permission_action_for_tool_capability(selector.canonical_capability).is_none()
         });
 
     if effect != PermissionEffect::Allow
@@ -1362,16 +1356,15 @@ fn validate_permission_action_enforcement(
     }
 }
 
-fn permission_action_for_host_tool(host_tool: Option<&str>) -> Option<&'static str> {
-    match host_tool {
-        Some("Read") => Some("read"),
-        Some("Write" | "Edit" | "Delete") => Some("edit"),
-        Some("Bash" | "ExecCommand") => Some("bash"),
-        Some("Task") => Some("task"),
-        Some("Skill") => Some("skill"),
-        Some("WebFetch") => Some("webfetch"),
-        Some("WebSearch") => Some("websearch"),
-        Some("Git") => Some("git"),
+fn permission_action_for_tool_capability(
+    capability: Option<ExternalSubagentToolCapability>,
+) -> Option<&'static str> {
+    match capability {
+        Some(ExternalSubagentToolCapability::ReadFile) => Some("read"),
+        Some(
+            ExternalSubagentToolCapability::WriteFile | ExternalSubagentToolCapability::EditFile,
+        ) => Some("edit"),
+        Some(ExternalSubagentToolCapability::ExecuteCommand) => Some("bash"),
         _ => None,
     }
 }

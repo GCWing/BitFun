@@ -22,5 +22,6 @@ export const btwSessionPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = 
   states: [
     { id: 'hasActionBar', selector: { kind: 'self', suffix: '[data-bf-state~="hasActionBar"]' } },
     { id: 'minimized', selector: { kind: 'self', suffix: '[data-bf-state~="minimized"]' } },
+    { id: 'hidden', selector: { kind: 'self', suffix: '[data-bf-state~="hidden"]' } },
   ],
 };

@@ -252,9 +252,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   // Auto-expand when MCP App UI is ready so user sees the interactive UI immediately
   useLayoutEffect(() => {
     if (mcpAppState?.html && !isExpanded) {
-      applyExpandedState(isExpanded, true, setIsExpanded, {
-        reason: 'auto',
-      });
+      applyExpandedState(isExpanded, true, setIsExpanded);
     }
   }, [applyExpandedState, isExpanded, mcpAppState?.html]);
 

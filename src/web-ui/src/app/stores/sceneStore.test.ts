@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { recordInteractionModality } from '@/shared/utils/motionPreference';
 import { useSceneStore } from './sceneStore';
 
 describe('sceneStore transition snapshots', () => {
   beforeEach(() => {
+    recordInteractionModality('programmatic');
     useSceneStore.getState().resetForPeerSwitch();
   });
 
@@ -22,5 +24,15 @@ describe('sceneStore transition snapshots', () => {
     expect(snapshots[0].activeTabId).toBe('settings');
     expect(snapshots[0].openTabIds).toContain('settings');
     expect(snapshots[0].openTabIds).not.toContain('welcome');
+  });
+
+  it('records pointer scene navigation without animating keyboard activation', () => {
+    recordInteractionModality('pointer');
+    useSceneStore.getState().openScene('settings');
+    expect(useSceneStore.getState().navigationMotion).toBe('pointer');
+
+    recordInteractionModality('keyboard');
+    useSceneStore.getState().openScene('session');
+    expect(useSceneStore.getState().navigationMotion).toBe('instant');
   });
 });

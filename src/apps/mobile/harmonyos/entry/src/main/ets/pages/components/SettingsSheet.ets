@@ -82,8 +82,6 @@ export struct SettingsSheet {
         SymbolGlyph($r('sys.symbol.xmark'))
           .fontSize(21)
           .fontColor([INK])
-          .width(24)
-          .height(24)
       }
       .width(50)
       .height(50)
@@ -92,6 +90,7 @@ export struct SettingsSheet {
       .backgroundColor(CARD)
       .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
       .margin({ top: 22, right: 18 })
+      .accessibilityText(RemoteI18n.t('common.close'))
       .onClick(() => {
         this.onClose();
       })
@@ -120,7 +119,7 @@ export struct SettingsSheet {
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(14).fontColor([MUTED]).width(18).height(18).opacity(0.72)
+        .fontSize(14).fontColor([MUTED]).opacity(0.72)
     }
     .width('100%').height(64).padding({ left: 18, right: 18 })
     .backgroundColor(CARD).borderRadius(8).margin({ bottom: 24 })
@@ -215,8 +214,6 @@ export struct SettingsSheet {
         SymbolGlyph($r('sys.symbol.chevron_right'))
           .fontSize(14)
           .fontColor([MUTED])
-          .width(18)
-          .height(18)
       }
     }
     .width('100%')

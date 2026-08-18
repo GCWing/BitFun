@@ -163,10 +163,6 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
         ai_client_factory.clone(),
     );
-    let _ = bitfun_core::function_agents::startchat_func_agent::StartchatFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-
     // 4. Services
     let workspace_service = Arc::new(workspace::WorkspaceService::new().await?);
     workspace::set_global_workspace_service(workspace_service.clone());

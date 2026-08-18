@@ -1,5 +1,6 @@
 mod builtin_clients;
 mod config;
+mod dsh_profile;
 mod manager;
 mod remote_capability_store;
 mod remote_session;

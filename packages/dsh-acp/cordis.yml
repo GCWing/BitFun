@@ -1,0 +1,195 @@
+# The IDE-facing ACP server composition — the HOST plane.
+#
+# Trimmed from deepseek-harness/examples/acp-agent/cordis.yml: the snapshot
+# harness hooks, the Claude/Codex hook bridges (they need a hooks.json that has
+# no meaning for an IDE launch), and the workflow/ralph/fork tools are dropped.
+#
+# What a session's MODEL sees — its persona, its tools, its prompt sections —
+# is not here. Those rows live in ./presets/<id>/agent.cordis.yml, one
+# composition per mode, and the client picks one per session through the
+# `mode` session config option. A preset layer can only ADD registrations, so anything
+# model-facing left in this file would appear in every mode and make the
+# minimal one a lie. What stays here is what a preset must not own: the model
+# route, the sandbox and approval stack, the registries the preset rows resolve,
+# persistence, and the transport.
+#
+# Stdout carries ACP JSON-RPC, so this tree has no console logger and no HMR.
+#
+# WHICH model runs and WHICH key it uses are not decided here. Both come from
+# the harness the user already installed and configured: `$DSH_HOME/settings.yaml`
+# (what dsh's web Models page writes) and `$DSH_HOME/.credentials.yaml`, read
+# through the two provider rows below. Nothing about an account is stored in
+# this repository, and BitFun never asks for a key of its own.
+
+# User-settings document ($DSH_HOME/settings.yaml, hot-reloaded): its
+# `llm-deepseek:` / `llm-pi-ai:` sections override the adapter rows below
+# without a restart. Same row as the dsh-base bundle mounts.
+- id: settings
+  name: '@deepseek-ai/dsh-settings-file'
+
+# Credential sources: inherited environment over the managed
+# $DSH_HOME/.credentials.yaml, with project and user .env fallbacks. Adapters
+# resolve references per request; nothing is materialized into this process's
+# environment. A user who signed in through dsh is already signed in here.
+- id: credentials
+  name: '@deepseek-ai/dsh-credentials-local'
+
+# The model a session starts on when the client names none. The values here are
+# only the floor: a saved selection in the settings document wins, which is how
+# "pick your model in dsh" carries into an IDE session.
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash
+
+# The DeepSeek adapter: full thinking at max effort on every request, so the
+# bridge has reasoning to publish as agent_thought_chunk. No key, endpoint, or
+# model list is inlined — all three resolve per request from the settings
+# document over this entry, with the key coming from the credential store.
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  config:
+    thinking: enabled
+    reasoningEffort: max
+
+# The pi-ai multi-provider twin, mounted dormant: zero routes until an
+# `llm-pi-ai:` settings section supplies provider profiles, then those routes
+# register live. Composed so that a user who configured a non-DeepSeek provider
+# in dsh finds it here too.
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+
+# Bash AND the filesystem tools are confined to the workspace; anything wider
+# asks. DSH_PERMISSION_MODE overrides the default for a deployment that wants
+# read-only or full access.
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: !!js "process.env.DSH_PERMISSION_MODE ?? 'workspace-write'"
+    workspaceRoot: !!js process.cwd()
+
+# Managed child-process groups for the bash executor and the ripgrep-backed
+# discovery tools.
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+
+- id: bash
+  name: '@deepseek-ai/dsh-bash-sandbox'
+  config:
+    timeoutMs: 60000
+
+# The managed `DSH_*` environment every model shell call inherits. Host-plane
+# because it is injected — resolution happens before any session exists — and
+# because both the standard and minimal shells read the one registry.
+- id: shell-env
+  name: '@deepseek-ai/dsh-shell-env'
+
+# `ask` is the whole point of running over ACP rather than the SDK's JSON-RPC
+# transport: each question travels to the client as session/request_permission,
+# attached to a tool call the client has already been shown.
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+  config:
+    policy: !!js "process.env.DSH_PERMISSION_MODE === 'danger-full-access' ? 'never' : 'ask'"
+
+# The app: agent spine + preset roster + JSONL persistence + the IDE protocol
+# bridge. Loaded from source; the Loader resolves this specifier against this
+# file's directory, and the roster's root against the package directory.
+#
+# Every spine gate below is off because the preset owns that half: the spine
+# keeps its registries (tools, skills, goals, jobs, agents, loop) and hands the
+# model-facing plugins to ./presets. `persona` is likewise absent — each preset
+# carries its own through `@deepseek-ai/dsh-persona`.
+# `provider`/`model` are deliberately absent: each session starts on
+# `agent-default-model`'s live selection, so the model chosen in dsh is the
+# model an IDE session runs. Sessions live under the harness home rather than
+# beside whatever project happens to be open — an ACP client launches this
+# adapter with the USER's workspace as the working directory.
+- id: acp-agent
+  name: './src/app.ts'
+  config:
+    reasoning: true
+    persistenceRoot: !!js "process.env.DSH_ACP_SESSIONS_ROOT ?? dshHomePath('acp-sessions')"
+    defaultPreset: !!js "process.env.DSH_ACP_PRESET ?? 'standard'"
+    workspaceContext: false
+    toolBash: false
+    toolJobs: false
+    goals: false
+    skills:
+      enabled: false
+
+# Replay-aware request pressure; the routed adapter supplies model capacity.
+- id: token-meter
+  name: '@deepseek-ai/dsh-token-meter'
+
+# Summarize an older range after measured pressure or a canonical provider
+# overflow. Ratios scale against the routed model's context window.
+- id: compaction-basic
+  name: '@deepseek-ai/dsh-compaction-basic'
+  config:
+    thresholdRatio: 0.8
+    retainRatio: 0.08
+    maxTokens: 8192
+    compactionRetries: 1
+
+# Projection registry backing the subagent catalog surfaces.
+- id: session-projection
+  name: '@deepseek-ai/dsh-session-projection'
+
+- id: subagent
+  name: '@deepseek-ai/dsh-subagent'
+
+- id: subagent-spawn-in-process
+  name: '@deepseek-ai/dsh-subagent-spawn-in-process'
+  config:
+    providerName: spawn
+
+# Host-plane, unlike the delegation TOOLS in ./presets: this registers a
+# continuable setup on the subagent singleton rather than a tool an agent calls,
+# and the setup list is not scope-aware — one copy per mounted preset would
+# register `report` more than once and throw.
+- id: tool-subagent-report
+  name: '@deepseek-ai/dsh-tool-subagent-report'
+
+# The skill catalog and its local-root discovery. Whether a session's model can
+# CALL them is the preset's choice (`@deepseek-ai/dsh-tool-skill`).
+- id: skills
+  name: '@deepseek-ai/dsh-skill'
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+# Persisted same-session goals: the service and its round driver are host-plane
+# (the driver injects `agents`/`sessions`, which resolve before any session
+# exists); the preset contributes `@deepseek-ai/dsh-tool-goal`.
+- id: goals
+  name: '@deepseek-ai/dsh-goal'
+
+- id: goal-round-driver
+  name: '@deepseek-ai/dsh-goal-round-driver'
+
+# The TypeScript code runtime the `code` preset presents its catalog through.
+# Composed here so that preset fails at mount naming its row, rather than at the
+# model's first `run_code`. The worker-thread plugin IS the `codeRuntime`
+# service (it extends the base class), so composing `dsh-code-runtime` beside it
+# would register the service twice and fail the boot.
+- id: code-runtime
+  name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+# Identical repeat calls trigger advisory context, never a block.
+- id: repeat-tool-reminder
+  name: '@deepseek-ai/dsh-repeat-tool-reminder'
+
+# The filesystem stack rides the SAME sandbox policy as bash; read-before-edit
+# composes orthogonally on top.
+- id: fs-sandbox
+  name: '@deepseek-ai/dsh-fs-sandbox'
+  config:
+    cwd: !!js process.cwd()
+
+- id: fs-observation-policy
+  name: '@deepseek-ai/dsh-fs-observation-policy'

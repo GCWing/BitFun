@@ -124,6 +124,28 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   `runtime-ownership`, every concrete service owner, and every `tools-*` group.
   Do not put those features on the dependency declaration, because Cargo
   feature union would force them into every core consumer.
+- Core's default feature set is empty. `product-full` is an explicit
+  compatibility assembly selected by real product entrypoints, never the
+  library's implicit default. Capability-local utility dependencies remain
+  optional and are activated by their owner features; in particular,
+  `base64`, `futures`, `regex`, `tokio-util`, and `bitfun-agent-tools` belong to
+  the Agent Runtime, local-storage, dispatch-store, or debug-log closures that
+  use them. Core's direct feature-free Tokio edge keeps only filesystem and
+  synchronization support required by config and app-path state; the selected
+  Services Core `json-io` owner separately carries the runtime/time capabilities
+  required for bounded atomic JSON writes.
+- Backend Fluent bundles and mutable translation state are owned by
+  `i18n-runtime`; locale ids, aliases, fallback facts, metadata, and
+  model-facing language copy remain feature-free contracts. Hosts that call
+  `I18nService` must select `i18n-runtime` explicitly.
+- Reusable diagnostic redaction and local Diff implementations remain
+  compatibility facades under the exact `diagnostics` and `diff` features.
+  Agent Runtime selects `bitfun-services-core/workspace-text-runtime` for
+  bounded asynchronous workspace reads; synchronous path normalization stays
+  available to contract-only consumers without Tokio.
+- Platform transport emitters are host adapters. Desktop imports
+  `bitfun_transport::TransportEmitter` directly; Core exposes only the stable
+  `bitfun_events::EventEmitter` contract and must not re-export a host adapter.
 - Keep `cargo check -p bitfun-core --no-default-features` viable. Gate
   product-only modules at their owner feature; if a light facade operation
   cannot safely complete without a product owner, fail closed and preserve any

@@ -1,4 +1,5 @@
 use crate::tool_call_accumulator::ToolCallCompletion;
+use bitfun_core_types::ModelResponseReplayItem;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -13,6 +14,12 @@ pub struct UnifiedToolCall {
     pub arguments: Option<String>,
     #[serde(default)]
     pub arguments_is_snapshot: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelResponseReplayCapture {
+    pub protocol: String,
+    pub items: Vec<ModelResponseReplayItem>,
 }
 
 /// Unified AI response format
@@ -33,6 +40,8 @@ pub struct UnifiedResponse {
     pub finish_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_metadata: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_response_replay: Option<ModelResponseReplayCapture>,
 }
 
 impl fmt::Debug for UnifiedResponse {
@@ -61,6 +70,12 @@ impl fmt::Debug for UnifiedResponse {
             .field("tool_call_completion", &self.tool_call_completion)
             .field("finish_reason", &self.finish_reason)
             .field("provider_metadata", &"<omitted>")
+            .field(
+                "model_response_replay",
+                &self.model_response_replay.as_ref().map(|replay| {
+                    format!("protocol={}, items={}", replay.protocol, replay.items.len())
+                }),
+            )
             .finish()
     }
 }

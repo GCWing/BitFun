@@ -1,4 +1,5 @@
 import { gitAPI, workspaceAPI } from '@/infrastructure/api';
+import { isGitRepositoryUntrustedError } from '@/infrastructure/api/errors/TauriCommandError';
 import type {
   GitChangedFile,
   GitDiffParams,
@@ -39,6 +40,20 @@ export interface ResolvedDeepReviewTarget {
   targetEvidence: ReviewTargetEvidence;
 }
 
+/**
+ * Lets an ownership rejection out of an evidence-gathering catch.
+ *
+ * Every other Git failure here degrades into "evidence unavailable", which is
+ * the right answer for a repository we genuinely cannot read. An untrusted
+ * repository is different: it is readable the moment the user says so, and
+ * collapsing it into "unknown" would hide both the reason and the remedy.
+ */
+function rethrowIfRepositoryUntrusted(error: unknown): void {
+  if (isGitRepositoryUntrustedError(error)) {
+    throw error;
+  }
+}
+
 async function resolveRevision(
   workspacePath: string,
   revision: string,
@@ -46,6 +61,7 @@ async function resolveRevision(
   try {
     return await gitAPI.resolveRevision(workspacePath, revision);
   } catch (error) {
+    rethrowIfRepositoryUntrusted(error);
     log.warn('Failed to resolve Git revision for Review target evidence', {
       workspacePath,
       revision,
@@ -62,6 +78,7 @@ async function resolveDiff(
   try {
     return await gitAPI.getDiff(workspacePath, { ...params, reviewSafe: true });
   } catch (error) {
+    rethrowIfRepositoryUntrusted(error);
     log.warn('Failed to resolve Git diff for Review target evidence', {
       workspacePath,
       params,
@@ -511,6 +528,7 @@ export async function resolveCurrentFileReviewSnapshot(
       targetEvidence,
     };
   } catch (error) {
+    rethrowIfRepositoryUntrusted(error);
     log.warn('Failed to resolve file-scoped Review snapshot', {
       workspacePath,
       targetFiles,
@@ -684,6 +702,7 @@ export async function resolveSlashCommandReviewTarget(
         status,
       );
     } catch (error) {
+      rethrowIfRepositoryUntrusted(error);
       log.warn('Failed to resolve explicit Review file scope', {
         workspacePath,
         explicitFilePaths,
@@ -754,6 +773,7 @@ export async function resolveSlashCommandReviewTarget(
           resolveDiff(workspacePath, immutableTarget),
           resolveRevision(workspacePath, 'HEAD'),
           gitAPI.getStatus(workspacePath, 'deep_review_git_range_binding').catch((error) => {
+            rethrowIfRepositoryUntrusted(error);
             log.warn('Failed to resolve workspace binding for Git range Review', {
               workspacePath,
               error,
@@ -787,6 +807,7 @@ export async function resolveSlashCommandReviewTarget(
         }),
       };
     } catch (error) {
+      rethrowIfRepositoryUntrusted(error);
       log.warn('Failed to resolve Git target for Deep Review target', {
         workspacePath,
         gitTarget,
@@ -835,6 +856,7 @@ export async function resolveSlashCommandReviewTarget(
         targetEvidence: snapshot.targetEvidence,
       };
     } catch (error) {
+      rethrowIfRepositoryUntrusted(error);
       log.warn('Failed to resolve workspace diff for Deep Review target', {
         workspacePath,
         error,

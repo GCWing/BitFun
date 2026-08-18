@@ -1,8 +1,9 @@
 **中文** | [English](AGENTS.md)
 
-# App Server 服务端与接线指南
+# App Server 接口族指南
 
-适用范围：本指南只适用于 `src/crates/interfaces/app-server` 及其服务端生产接线。
+适用范围：本指南适用于相邻的 `app-server-protocol`、`app-server-client`、`app-server`
+三个 crate 及 App Server 生产接线。除非另有说明，服务端专属规则只约束 `app-server`。
 
 App Server 接口由四个 owner 分工：
 
@@ -13,9 +14,12 @@ App Server 接口由四个 owner 分工：
 | `app-server` | server 生命周期、生产 handler 注册、事件转发、Runtime/domain 到 wire 的转换和错误映射 |
 | `src/apps/*` 下的产品 Host | 具体 transport、认证、连接作用域、capability/limit 构造、平台能力、进程监督和关闭流程 |
 
-不要在本 crate 新增 protocol 或 client 所有权。消费者迁移期间可以保留 compatibility
+不要在 `bitfun-app-server` 中新增 protocol 或 client 所有权。消费者迁移期间可以保留 compatibility
 module 和 re-export，但新 method、DTO、wire error 和类型化 client 行为必须放入相邻的
 protocol/client crate。
+
+`bitfun-app-server/ts` 只保留为兼容转发 feature。protocol crate 是唯一的 TypeScript
+schema 导出 owner；不要把 `ts-rs`、Runtime 实现类型或第二条导出命令重新加入本 crate。
 
 ## 护栏
 
@@ -55,7 +59,8 @@ kind 和结构化 data，不泄露 Runtime 内部细节。Host transport/auth/sc
 ## 验证
 
 ```bash
-cargo check -p bitfun-app-server --offline
-cargo test -p bitfun-app-server --offline
+cargo check --locked -p bitfun-app-server --offline
+cargo test --locked -p bitfun-app-server --offline --lib server::wire::tests
+cargo test --locked -p bitfun-app-server-protocol --offline --test legacy_wire_contracts
 pnpm run check:core-boundaries
 ```

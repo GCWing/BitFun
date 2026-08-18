@@ -100,7 +100,10 @@
         color: var(--bf-appearance-token-color-text-muted);
         border-radius: 4px;
         background: var(--bf-appearance-token-color-overlay-white-04);
-        transition: all 0.15s ease;
+        transition:
+          background-color 0.15s ease,
+          color 0.15s ease,
+          opacity 0.15s ease;
 
         svg {
           transition: transform 0.15s ease;
@@ -208,7 +211,11 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      background-color 0.15s ease,
+      box-shadow 0.15s ease,
+      opacity 0.15s ease;
     box-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-12);
 
     &:hover:not(:disabled) {
@@ -493,7 +500,7 @@
 }
 
 // Spin animation
-@keyframes spin {
+@keyframes bitfun-plan-viewer-spin {
   from {
     transform: rotate(0deg);
   }
@@ -503,5 +510,19 @@
 }
 
 .animate-spin {
-  animation: spin 1s linear infinite;
+  animation: bitfun-plan-viewer-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-plan-viewer {
+    .header-expand-indicator,
+    .header-expand-indicator svg,
+    .build-btn {
+      transition: none;
+    }
+
+    .animate-spin {
+      animation: none;
+    }
+  }
 }

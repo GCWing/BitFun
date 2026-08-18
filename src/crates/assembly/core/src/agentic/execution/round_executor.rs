@@ -4,7 +4,7 @@
 
 use super::model_exchange_trace::prepare_model_exchange_trace;
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
-use super::types::{FinishReason, RoundContext, RoundResult};
+use super::types::{coordinator_owns_cancel_lifecycle, FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, ModelRoundAttemptDiagnostic,
@@ -37,10 +37,12 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
+use bitfun_agent_tools::{parse_call_deferred_tool_input, CALL_DEFERRED_TOOL_NAME};
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
 use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
+use bitfun_core_types::ModelResponseReplay;
 use bitfun_runtime_ports::PermissionRule;
 use log::{debug, error, warn};
 use std::sync::Arc;
@@ -53,6 +55,24 @@ pub struct RoundExecutor {
     tool_pipeline: Option<Arc<ToolPipeline>>,
     event_queue: Arc<EventQueue>,
     cancellation_tokens: DialogTurnCancellationTokenStore,
+}
+
+fn normalize_deferred_tool_calls_for_replay(tool_calls: &mut [ToolCall]) {
+    for tool_call in tool_calls {
+        if tool_call.tool_name != CALL_DEFERRED_TOOL_NAME {
+            continue;
+        }
+
+        let Ok(parsed) = parse_call_deferred_tool_input(&tool_call.arguments) else {
+            continue;
+        };
+        let Ok(canonical_raw_arguments) = parsed.canonical_wire_json() else {
+            continue;
+        };
+
+        tool_call.arguments = parsed.canonical_wire_arguments();
+        tool_call.raw_arguments = Some(canonical_raw_arguments);
+    }
 }
 
 /// Mutable lifecycle shared by all provider attempts that belong to one
@@ -198,6 +218,14 @@ impl RoundExecutor {
         parse_bitfun_memory_citation_payloads(payloads)
             .or_else(|| parse_bitfun_memory_citation(&stream_result.full_text))
             .map(Into::into)
+    }
+
+    fn model_response_replay(stream_result: &StreamResult) -> Option<ModelResponseReplay> {
+        let capture = stream_result.model_response_replay.as_ref()?;
+        Some(ModelResponseReplay {
+            protocol: capture.protocol.clone(),
+            items: capture.items.clone(),
+        })
     }
 
     fn map_subagent_batch_execution_policy(
@@ -375,9 +403,10 @@ impl RoundExecutor {
             let request_trace_config = trace_config
                 .clone()
                 .map(|config| config.with_round_attempt(attempt_id.clone(), attempt_number));
-            let send_future = ai_client.send_message_stream_once(
+            let send_future = ai_client.send_message_stream_once_with_request_context(
                 ai_messages.clone(),
                 tool_definitions.clone(),
+                Some(context.model_request_context.clone()),
                 request_trace_config,
             );
             let send_result = tokio::select! {
@@ -507,6 +536,9 @@ impl RoundExecutor {
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
                         allow_normal_tool_json_repair,
+                        suppress_cancel_lifecycle_event: coordinator_owns_cancel_lifecycle(
+                            &context.context_vars,
+                        ),
                         ..Default::default()
                     },
                 )
@@ -941,13 +973,15 @@ impl RoundExecutor {
             };
             let parsed_memory_citation =
                 Self::parsed_memory_citation_from_stream_result(&stream_result);
+            let model_response_replay = Self::model_response_replay(&stream_result);
             let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
             let assistant_message =
                 Message::assistant_with_reasoning(reasoning, clean_text, vec![])
                     .with_turn_id(context.dialog_turn_id.clone())
                     .with_round_id(round_id.clone())
                     .with_thinking_signature(stream_result.thinking_signature.clone())
-                    .with_memory_citation(parsed_memory_citation);
+                    .with_memory_citation(parsed_memory_citation)
+                    .with_model_response_replay(model_response_replay);
 
             debug!("Returning RoundResult: has_more_rounds=false");
             debug!(
@@ -988,7 +1022,8 @@ impl RoundExecutor {
             return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
         }
 
-        let tool_calls = stream_result.tool_calls.clone();
+        let mut tool_calls = stream_result.tool_calls.clone();
+        normalize_deferred_tool_calls_for_replay(&mut tool_calls);
 
         // Execute tool calls
         debug!(
@@ -1169,13 +1204,15 @@ impl RoundExecutor {
         };
         let parsed_memory_citation =
             Self::parsed_memory_citation_from_stream_result(&stream_result);
+        let model_response_replay = Self::model_response_replay(&stream_result);
         let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
         let assistant_message =
             Message::assistant_with_reasoning(reasoning, clean_text, tool_calls.clone())
                 .with_turn_id(context.dialog_turn_id.clone())
                 .with_round_id(round_id.clone())
                 .with_thinking_signature(stream_result.thinking_signature.clone())
-                .with_memory_citation(parsed_memory_citation);
+                .with_memory_citation(parsed_memory_citation)
+                .with_model_response_replay(model_response_replay);
 
         debug!(
             "Tool execution completed, creating message: assistant_msg_len={}, tool_results={}",
@@ -1541,7 +1578,10 @@ fn token_details_from_usage(
 
 #[cfg(test)]
 mod tests {
-    use super::{ModelRoundLifecycle, RoundExecutor, StreamProcessor};
+    use super::{
+        normalize_deferred_tool_calls_for_replay, ModelRoundLifecycle, RoundExecutor,
+        StreamProcessor,
+    };
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig};
     use crate::agentic::execution::stream_processor::StreamResult;
@@ -1585,6 +1625,47 @@ mod tests {
         assert_eq!(lifecycle.begin_attempt(), 2);
         assert_eq!(lifecycle.attempts_started(), 2);
         assert_eq!(lifecycle.round_id, round_id);
+    }
+
+    #[test]
+    fn deferred_tool_replay_uses_canonical_gateway_arguments() {
+        let mut tool_calls = vec![ToolCall {
+            tool_id: "call-1".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            arguments: json!({
+                "tool_name": "CreatePlan",
+                "overview": "outside",
+                "args": {
+                    "overview": "inside",
+                    "plan": "# Plan"
+                }
+            }),
+            raw_arguments: Some(
+                r##"{"tool_name":"CreatePlan","overview":"outside","args":{"overview":"inside","plan":"# Plan"}}"##
+                    .to_string(),
+            ),
+            is_error: false,
+            parse_error: None,
+            recovered_from_truncation: false,
+            repair_kind: Default::default(),
+        }];
+
+        normalize_deferred_tool_calls_for_replay(&mut tool_calls);
+
+        assert_eq!(
+            tool_calls[0].arguments,
+            json!({
+                "tool_name": "CreatePlan",
+                "args": {
+                    "overview": "inside",
+                    "plan": "# Plan"
+                }
+            })
+        );
+        assert_eq!(
+            tool_calls[0].raw_arguments.as_deref(),
+            Some(r##"{"tool_name":"CreatePlan","args":{"overview":"inside","plan":"# Plan"}}"##)
+        );
     }
 
     #[tokio::test]
@@ -1639,6 +1720,7 @@ mod tests {
             loaded_deferred_tool_specs: Vec::new(),
             model_config_id: "model-1".to_string(),
             effective_model_name: "model-1".to_string(),
+            model_request_context: Default::default(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::new(
                 "model-1", "model-1", "openai", true,
             ),
@@ -1999,6 +2081,7 @@ mod tests {
                 cache_creation_token_count: None,
             }),
             provider_metadata: Some(json!({ "finish_reason": "tool_calls" })),
+            model_response_replay: None,
             has_effective_output: false,
             first_chunk_ms: Some(10),
             first_visible_output_ms: None,

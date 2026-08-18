@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
-import { ChatComposerPolicy } from '../main/ets/services/ChatComposerPolicy';
+import { ChatComposerPolicy, ComposerPrimaryAction } from '../main/ets/services/ChatComposerPolicy';
 import { ChatTimelineItem, ChatTimelineProjector } from '../main/ets/services/ChatTimelineProjector';
 import { ChatTimelineStore } from '../main/ets/services/ChatTimelineStore';
 import { ConversationEvent } from '../main/ets/services/ConversationEvent';
@@ -53,6 +53,7 @@ import { ModelProviderSseParser } from '../main/ets/services/general-chat/ModelP
 import { MockGeneralChatAdapter } from '../main/ets/services/general-chat/MockGeneralChatAdapter';
 import { MarkdownParser } from '../main/ets/services/MarkdownParser';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
+import { toRemoteQuestionAnswer } from '../main/ets/pages/state/ConversationUiModels';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
 import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
@@ -91,8 +92,8 @@ import { ConversationViewState } from '../main/ets/pages/state/ConversationViewS
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
-} from '../main/ets/pages/components/ChatComposerCapabilities';
-import { ChatSurface } from '../main/ets/pages/components/ChatSurface';
+} from '../main/ets/pages/state/ChatComposerCapabilities';
+import { ChatSurface } from '../main/ets/pages/state/ChatSurface';
 import { ConversationViewContract } from '../main/ets/pages/components/ConversationViewContract';
 import {
   AppNavigationBackAction,
@@ -265,6 +266,10 @@ class InMemorySettingsConfigStore extends GeneralChatConfigStore {
   async activeSnapshot(): Promise<GeneralChatConfigSnapshot> {
     return this.snapshotResult;
   }
+
+  async activeAccessToken(): Promise<string> {
+    return this.accessTokenResult;
+  }
 }
 
 export default function transportAndGeneralChatUnitTest() {
@@ -355,6 +360,17 @@ export default function transportAndGeneralChatUnitTest() {
         userId: 'harmony-device',
         requiresAccountAuth: false
       })).assertTrue();
+    });
+
+    it('does not prompt for an account password when this phone already has that cloud session', 0, () => {
+      const policy = new RemotePairingPolicy();
+      const descriptor = RemoteDescriptorParser.parse(
+        'https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice'
+      );
+
+      expect(policy.shouldPromptForAccount(descriptor)).assertTrue();
+      expect(policy.shouldPromptForAccount(descriptor, true, 'alice')).assertFalse();
+      expect(policy.shouldPromptForAccount(descriptor, true, 'bob')).assertTrue();
     });
   });
 
@@ -719,6 +735,39 @@ export default function transportAndGeneralChatUnitTest() {
       expect(ChatComposerPolicy.canSend('运行任务', 0, false, true, 'connected')).assertEqual(true);
       expect(ChatComposerPolicy.canSend('运行任务', 0, false, true, 'reconnecting')).assertEqual(true);
     });
+
+    it('lets a draft outrank a running turn where the message can be handed over', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('追加要求', 0, false, false, true, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Send);
+      expect(ChatComposerPolicy.primaryAction('', 0, false, false, true, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+    });
+
+    it('keeps a running turn in front of the draft where nothing queues it', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('追加要求', 0, true, false, true, false, false, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+      expect(ChatComposerPolicy.primaryAction('', 0, true, false, true, false, false, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+    });
+
+    it('keeps dictation in front of the draft it is still writing', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('说到一半', 0, false, true, false, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+      expect(ChatComposerPolicy.primaryAction('说到一半', 0, false, true, true, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+    });
+
+    it('still shows a draft it cannot carry as blocked rather than idle', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('断线时写的', 0, false, false, true, true, true, 'failed', true))
+        .assertEqual(ComposerPrimaryAction.SendBlocked);
+    });
+
+    it('offers dictation only once no turn is running and no draft exists', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('', 0, false, false, false, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Voice);
+      expect(ChatComposerPolicy.primaryAction('', 0, false, false, false, true, true, 'connected', false))
+        .assertEqual(ComposerPrimaryAction.Idle);
+    });
   });
 
   describe('GeneralChatApiClient', () => {
@@ -1015,6 +1064,93 @@ export default function transportAndGeneralChatUnitTest() {
       expect(openAiBody.indexOf('"role":"system"')).assertLarger(-1);
       expect(openAiBody.indexOf('blockchain')).assertLarger(-1);
     });
+
+    it('sends attached images on the Anthropic-compatible local chat path', 0, async () => {
+      const config = new InMemorySettingsConfigStore();
+      config.snapshotResult = {
+        apiUrl: 'https://api.openbitfun.com',
+        modelName: 'vision-model',
+        hasApiKey: true
+      };
+      config.accessTokenResult = 'sk-test-token';
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(
+        200,
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"图里是一只猫"}}\n\n'
+      ));
+      const adapter = new ModelProviderGeneralChatAdapter(config, transport);
+      const image = imageAttachment('cat.png', 'data:image/png;base64,aGVsbG8=');
+
+      const result = await adapter.sendMessage('chat-1', '这是什么', [image]);
+
+      expect(transport.requests.length).assertEqual(1);
+      expect(transport.requests[0].body.indexOf('"type":"image"')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('"media_type":"image/png"')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('"data":"aGVsbG8="')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('data:image/png;base64,aGVsbG8=')).assertEqual(-1);
+      expect(transport.requests[0].body.indexOf('这是什么')).assertLarger(-1);
+      expect((result.userMessage.images || []).length).assertEqual(1);
+      expect(result.assistantMessage.text).assertEqual('图里是一只猫');
+    });
+
+    it('sends attached images on the OpenAI-compatible local chat path', 0, async () => {
+      const config = new InMemorySettingsConfigStore();
+      config.snapshotResult = {
+        apiUrl: 'https://llm.example.com/v1',
+        modelName: 'gpt-vision',
+        hasApiKey: true
+      };
+      config.accessTokenResult = 'sk-openai';
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(
+        200,
+        'data: {"id":"cmpl-1","choices":[{"delta":{"content":"A screenshot"}}]}\n\n'
+      ));
+      const adapter = new ModelProviderGeneralChatAdapter(config, transport);
+
+      await adapter.sendMessage(
+        'chat-1',
+        'describe this',
+        [imageAttachment('ui.jpg', 'data:image/jpeg;base64,dGVzdA==')]
+      );
+
+      expect(transport.requests[0].protocol).assertEqual(ModelProviderProtocol.OpenAi);
+      expect(transport.requests[0].body.indexOf('"type":"image_url"')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('data:image/jpeg;base64,dGVzdA==')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('describe this')).assertLarger(-1);
+    });
+
+    it('replays prior local-chat images when continuing a conversation', 0, async () => {
+      const config = new InMemorySettingsConfigStore();
+      config.snapshotResult = {
+        apiUrl: 'https://api.openbitfun.com',
+        modelName: 'vision-model',
+        hasApiKey: true
+      };
+      config.accessTokenResult = 'sk-test-token';
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(
+        200,
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"还是同一只猫"}}\n\n'
+      ));
+      const adapter = new ModelProviderGeneralChatAdapter(config, transport);
+      const history: ChatMessage[] = [
+        chatMessageWithImage(
+          'user-1',
+          'user',
+          '这是什么',
+          'cat.png',
+          'data:image/png;base64,aGVsbG8='
+        ),
+        chatMessage('assistant-1', 'assistant', '图里是一只猫', 'completed')
+      ];
+
+      await adapter.sendMessage('chat-1', '再看一眼颜色', [], history);
+
+      expect(transport.requests[0].body.indexOf('"data":"aGVsbG8="')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('再看一眼颜色')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('图里是一只猫')).assertLarger(-1);
+    });
   });
 
   describe('ModelProviderSseParser', () => {
@@ -1203,13 +1339,24 @@ export default function transportAndGeneralChatUnitTest() {
 
     it('builds tool and file commands', 0, () => {
       const answers: RemoteQuestionAnswerPayload = { answer: 'yes', '0': 'yes' };
+      const multipleAnswers: RemoteQuestionAnswerPayload = { '0': 'yes', '1': ['tests', 'docs'] };
 
       expectCommandJson(RemoteCommandFactory.confirmTool('tool-1'), '{"cmd":"confirm_tool","tool_id":"tool-1"}');
       expectCommandJson(RemoteCommandFactory.rejectTool('tool-1', 'no'), '{"cmd":"reject_tool","tool_id":"tool-1","reason":"no"}');
       expectCommandJson(RemoteCommandFactory.cancelTool('tool-1', 'stop'), '{"cmd":"cancel_tool","tool_id":"tool-1","reason":"stop"}');
       expectCommandJson(RemoteCommandFactory.answerQuestion('tool-2', answers), '{"cmd":"answer_question","tool_id":"tool-2","answers":{"0":"yes","answer":"yes"}}');
+      expectCommandJson(RemoteCommandFactory.answerQuestion('tool-3', multipleAnswers), '{"cmd":"answer_question","tool_id":"tool-3","answers":{"0":"yes","1":["tests","docs"]}}');
       expectCommandJson(RemoteCommandFactory.getFileInfo('/tmp/a.txt', 's1'), '{"cmd":"get_file_info","path":"/tmp/a.txt","session_id":"s1"}');
       expectCommandJson(RemoteCommandFactory.readFileChunk('/tmp/a.txt', 12, 64, 's1'), '{"cmd":"read_file_chunk","path":"/tmp/a.txt","offset":12,"limit":64,"session_id":"s1"}');
+    });
+
+    it('preserves indexed question answers when dispatching from the UI', 0, () => {
+      const answers = toRemoteQuestionAnswer({ '0': 'tests', '1': ['docs', 'src'] });
+
+      expectCommandJson(
+        RemoteCommandFactory.answerQuestion('tool-4', answers),
+        '{"cmd":"answer_question","tool_id":"tool-4","answers":{"0":"tests","1":["docs","src"]}}'
+      );
     });
   });
 

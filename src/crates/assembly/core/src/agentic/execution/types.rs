@@ -8,6 +8,7 @@ use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 pub use bitfun_agent_runtime::events::FinishReason;
 use bitfun_agent_tools::LoadedDeferredToolSpec;
+use bitfun_core_types::ModelRequestContext;
 use bitfun_runtime_ports::{
     DelegationPolicy, PermissionConstraintLayer, PermissionDelegationContext,
     PermissionRuntimeCeiling, RemoteExecPort, TerminalPort,
@@ -71,6 +72,8 @@ pub struct RoundContext {
     pub model_config_id: String,
     /// Provider model name sent in the request.
     pub effective_model_name: String,
+    /// Provider-neutral request-scoped facts resolved by the runtime owner.
+    pub model_request_context: ModelRequestContext,
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
@@ -128,4 +131,18 @@ pub struct ExecutionResult {
     pub new_messages: Vec<Message>,
     /// Why the execution finished
     pub finish_reason: FinishReason,
+    pub total_tools: usize,
+    pub duration_ms: u64,
+    pub partial_recovery_reason: Option<String>,
+    pub effective_finish_reason: String,
+    pub has_final_response: bool,
+}
+
+pub(crate) const CANCEL_LIFECYCLE_OWNER_CONTEXT_KEY: &str = "cancel_lifecycle_owner";
+
+pub(crate) fn coordinator_owns_cancel_lifecycle(context: &HashMap<String, String>) -> bool {
+    context
+        .get(CANCEL_LIFECYCLE_OWNER_CONTEXT_KEY)
+        .map(String::as_str)
+        == Some("coordinator")
 }

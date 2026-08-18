@@ -226,3 +226,11 @@
     opacity: 0.5;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .cube-logo__particle {
+    animation: none;
+    opacity: 0.4;
+    transform: none;
+  }
+}

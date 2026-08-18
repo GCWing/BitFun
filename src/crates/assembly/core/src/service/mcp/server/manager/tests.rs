@@ -41,6 +41,75 @@ fn superseded_external_start_token_cannot_clean_up_current_instance() {
 }
 
 #[tokio::test]
+async fn failed_external_start_publishes_a_reason_before_runtime_cleanup() {
+    use crate::service::mcp::{ConfigLocation, MCPServerConfig, MCPServerTimeouts, MCPServerType};
+    use std::collections::HashMap;
+
+    let root = tempfile::tempdir().expect("tempdir");
+    let path_manager = Arc::new(
+        crate::infrastructure::PathManager::with_user_root_for_tests(root.path().join("config")),
+    );
+    let config_service = Arc::new(
+        crate::service::config::ConfigService::with_settings(
+            crate::service::config::ConfigManagerSettings {
+                path_manager: Some(path_manager),
+                auto_save: false,
+                backup_count: 0,
+            },
+        )
+        .await
+        .expect("config service"),
+    );
+    let mcp_config_service = Arc::new(
+        crate::service::mcp::config::MCPConfigService::new(config_service)
+            .expect("MCP config service"),
+    );
+    let manager = super::MCPServerManager::assemble(mcp_config_service, None);
+    let server_id = "external-mcp-failed-start";
+
+    manager
+        .install_external_ephemeral_server(
+            MCPServerConfig {
+                id: server_id.to_string(),
+                name: "Unavailable external MCP".to_string(),
+                server_type: MCPServerType::Local,
+                transport: None,
+                command: Some("bitfun-command-that-does-not-exist".to_string()),
+                args: Vec::new(),
+                env: HashMap::new(),
+                working_directory: None,
+                inherit_parent_environment: Some(false),
+                headers: HashMap::new(),
+                url: None,
+                auto_start: true,
+                enabled: true,
+                location: ConfigLocation::User,
+                capabilities: Vec::new(),
+                settings: HashMap::new(),
+                oauth: None,
+                oauth_enabled: None,
+                xaa: None,
+                timeouts: MCPServerTimeouts::default(),
+            },
+            "workspace-a".to_string(),
+        )
+        .await
+        .expect("registration is asynchronous");
+
+    let reason = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(failure) = manager.external_server_start_failure(server_id).await {
+                break failure;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("failed startup should publish a reason");
+    assert_eq!(reason, super::MCPServerStartFailure::CommandUnavailable);
+}
+
+#[tokio::test]
 async fn oauth_credentials_follow_the_manager_injected_data_dir() {
     let root = tempfile::tempdir().expect("tempdir");
     let path_manager = Arc::new(

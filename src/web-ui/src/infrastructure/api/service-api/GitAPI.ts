@@ -3,6 +3,7 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import { createLogger } from '@/shared/utils/logger';
+import { repositoryPathKey } from '@/shared/utils/pathUtils';
 import { startupTrace } from '@/shared/utils/startupTrace';
 
 const log = createLogger('GitAPI');
@@ -183,6 +184,34 @@ export interface GitWorktreeInfo {
   isPrunable: boolean;
 }
 
+/**
+ * Whether Git will operate on a repository, and why not when it refuses.
+ *
+ * `trust_required` means the repository exists but its directory is owned by
+ * another user, so Git blocks it until the path is listed in `safe.directory`.
+ */
+export type GitTrustState = 'trusted' | 'trust_required' | 'not_a_repository';
+
+export interface GitTrustReport {
+  state: GitTrustState;
+  /** Path Git reported, normalized to the shape it compares against. */
+  repositoryPath: string | null;
+  /** Git's own diagnostic, kept for support and for the manual path. */
+  detail: string | null;
+  /** Command the user can run themselves when we cannot apply the change. */
+  manualCommand: string | null;
+}
+
+export interface GitTrustOutcome {
+  state: GitTrustState;
+  repositoryPath: string | null;
+  alreadyTrusted: boolean;
+  /** `safe.directory` entries added by this call; empty when nothing changed. */
+  addedEntries: string[];
+  detail: string | null;
+  manualCommand: string | null;
+}
+
 export class GitAPI {
   private repositoryProbeCache = new Map<string, {
     value: boolean;
@@ -190,15 +219,19 @@ export class GitAPI {
   }>();
   private repositoryProbeInFlight = new Map<string, Promise<boolean>>();
 
-   
+
   async isGitRepository(repositoryPath: string): Promise<boolean> {
+    // Keyed on the canonical spelling, not the caller's: `C:/repo`, `c:\repo`
+    // and `C:/repo/` are one repository to the backend, so a shared probe and a
+    // granted decision must reach all three here too.
+    const key = repositoryPathKey(repositoryPath);
     const now = Date.now();
-    const cached = this.repositoryProbeCache.get(repositoryPath);
+    const cached = this.repositoryProbeCache.get(key);
     if (cached && cached.expiresAt > now) {
       return cached.value;
     }
 
-    const inFlight = this.repositoryProbeInFlight.get(repositoryPath);
+    const inFlight = this.repositoryProbeInFlight.get(key);
     if (inFlight) {
       return inFlight;
     }
@@ -206,7 +239,7 @@ export class GitAPI {
     const request = { repositoryPath };
     const probe = api.invoke<boolean>('git_is_repository', { request })
       .then((value) => {
-        this.repositoryProbeCache.set(repositoryPath, {
+        this.repositoryProbeCache.set(key, {
           value,
           expiresAt: Date.now() + REPOSITORY_PROBE_CACHE_TTL_MS,
         });
@@ -216,14 +249,68 @@ export class GitAPI {
         throw createTauriCommandError('git_is_repository', error, { repositoryPath });
       })
       .finally(() => {
-        this.repositoryProbeInFlight.delete(repositoryPath);
+        this.repositoryProbeInFlight.delete(key);
       });
 
-    this.repositoryProbeInFlight.set(repositoryPath, probe);
+    this.repositoryProbeInFlight.set(key, probe);
     return probe;
   }
 
-   
+  /** Reads whether Git trusts the repository's ownership. Never writes. */
+  async getRepositoryTrust(repositoryPath: string): Promise<GitTrustReport> {
+    try {
+      const report: GitTrustReport = await api.invoke('git_get_repository_trust', {
+        request: { repositoryPath },
+      });
+      // Trust can be granted outside this product — the user runs the manual
+      // command in a terminal, or the repository's owner fixes it. Whoever
+      // learns that first has to drop the `false` the probe cached while the
+      // repository was still refused, or the caller replays against it.
+      if (report.state === 'trusted') {
+        this.dropRepositoryProbe(repositoryPath, report.repositoryPath);
+      }
+      return report;
+    } catch (error) {
+      throw createTauriCommandError('git_get_repository_trust', error, { repositoryPath });
+    }
+  }
+
+  /** Forgets a cached repository probe under every spelling of its path. */
+  private dropRepositoryProbe(repositoryPath: string, reportedPath?: string | null): void {
+    this.repositoryProbeCache.delete(repositoryPathKey(repositoryPath));
+    if (reportedPath) {
+      this.repositoryProbeCache.delete(repositoryPathKey(reportedPath));
+    }
+  }
+
+  /**
+   * Grants ownership trust for a repository. Call this only after the user
+   * confirmed it: it writes a `safe.directory` exception to their global Git
+   * configuration.
+   *
+   * Consent is enforced by the frontend only: this method is reached solely
+   * from the interactive confirmation flow, and the backend carries no
+   * separate consent token. That single-location guard matches the project's
+   * existing convention for write-gated operations, so no backend mechanism
+   * is introduced here.
+   */
+  async trustRepository(repositoryPath: string): Promise<GitTrustOutcome> {
+    try {
+      const outcome = await api.invoke<GitTrustOutcome>('git_trust_repository', {
+        request: { repositoryPath },
+      });
+      // The probe cache may hold the `false` this repository returned while it
+      // was still refused; a granted decision must not wait it out.
+      if (outcome.state === 'trusted') {
+        this.dropRepositoryProbe(repositoryPath, outcome.repositoryPath);
+      }
+      return outcome;
+    } catch (error) {
+      throw createTauriCommandError('git_trust_repository', error, { repositoryPath });
+    }
+  }
+
+
   async getRepository(repositoryPath: string): Promise<GitRepository> {
     try {
       return await api.invoke('git_get_repository', { 

@@ -42,8 +42,8 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentModelBindingOption, ExternalSubagentModelBindingTarget,
     ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
     ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
-    ExternalSubagentProviderSnapshot, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
-    SecretText,
+    ExternalSubagentProviderSnapshot, ExternalSubagentToolCapability, ExternalSubagentToolRequest,
+    ExternalSubagentToolSelector, SecretText,
 };
 use bitfun_product_domains::tool_permissions::{
     PermissionConstraintLayer, PermissionEffect, PermissionRule,
@@ -400,7 +400,7 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
         requested_tools: ExternalSubagentToolRequest {
             selectors: vec![ExternalSubagentToolSelector {
                 source_name: "read".to_string(),
-                canonical_host_name: Some("Read".to_string()),
+                canonical_capability: Some(ExternalSubagentToolCapability::ReadFile),
                 allowed: true,
             }],
             uses_conservative_default: false,
@@ -446,7 +446,7 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
     excessive_tools.requested_tools.selectors = (0..257)
         .map(|index| ExternalSubagentToolSelector {
             source_name: format!("tool-{index}"),
-            canonical_host_name: None,
+            canonical_capability: None,
             allowed: true,
         })
         .collect();

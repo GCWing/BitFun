@@ -440,7 +440,7 @@
 
   svg {
     color: var(--bf-appearance-token-color-text-muted);
-    transition: all 0.2s ease;
+    transition: color 0.2s ease;
   }
 }
 
@@ -686,5 +686,12 @@
 
   .bitfun-about-dialog__footer {
     padding: 12px 24px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-about-dialog__download-fill--indeterminate {
+    animation: none;
+    transform: none;
   }
 }

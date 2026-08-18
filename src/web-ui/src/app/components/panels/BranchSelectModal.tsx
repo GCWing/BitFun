@@ -8,7 +8,14 @@ import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { GitBranch, Plus, X } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
-import { IconButton, Button, Input, Checkbox } from '@/component-library';
+import {
+  IconButton,
+  Button,
+  Input,
+  Checkbox,
+  PresenceBoundary,
+  PRESENCE_BOUNDARY_MIN_EXIT_MS,
+} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitAPI, type GitBranch as GitBranchType } from '../../../infrastructure/api/service-api/GitAPI';
 import './BranchSelectModal.scss';
@@ -60,20 +67,40 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const resolvedTitle = title ?? t('branchSelect.title');
+  const retainedDisplayRef = useRef({
+    title: resolvedTitle,
+    currentBranch,
+    existingWorktreeBranches,
+    showOpenAfterCreate,
+  });
 
+  if (isOpen) {
+    retainedDisplayRef.current = {
+      title: resolvedTitle,
+      currentBranch,
+      existingWorktreeBranches,
+      showOpenAfterCreate,
+    };
+  }
+
+  const retainedDisplay = retainedDisplayRef.current;
 
   useEffect(() => {
     if (!isOpen) {
-      setSearchTerm('');
-      setSelectedBranch(null);
-      setIsNewBranch(false);
-      setOpenAfterCreate(defaultOpenAfterCreate);
-      setError(null);
-    } else {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      const resetTimer = window.setTimeout(() => {
+        setSearchTerm('');
+        setSelectedBranch(null);
+        setIsNewBranch(false);
+        setOpenAfterCreate(defaultOpenAfterCreate);
+        setError(null);
+      }, PRESENCE_BOUNDARY_MIN_EXIT_MS);
+      return () => window.clearTimeout(resetTimer);
     }
+
+    const focusTimer = window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => window.clearTimeout(focusTimer);
   }, [defaultOpenAfterCreate, isOpen]);
 
   useEffect(() => {
@@ -118,10 +145,10 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
 
     const availableBranches: SelectableBranch[] = [];
     const unavailableBranches: SelectableBranch[] = [];
-    const existingWorktreeSet = new Set(existingWorktreeBranches);
+    const existingWorktreeSet = new Set(retainedDisplay.existingWorktreeBranches);
 
     result.forEach(branch => {
-      const isCurrent = branch.name === currentBranch;
+      const isCurrent = branch.name === retainedDisplay.currentBranch;
       const hasWorktree = existingWorktreeSet.has(branch.name);
 
       if (isCurrent || hasWorktree) {
@@ -132,7 +159,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     });
 
     return [...availableBranches, ...unavailableBranches];
-  }, [branches, searchTerm, currentBranch, existingWorktreeBranches]);
+  }, [branches, retainedDisplay.currentBranch, retainedDisplay.existingWorktreeBranches, searchTerm]);
 
   const canCreateNewBranch = useMemo(() => {
     if (!searchTerm.trim()) return false;
@@ -167,10 +194,16 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     onClose();
   }, [onClose, onSelect, openAfterCreate]);
 
-  if (!isOpen) return null;
-
   const modalContent = (
-    <div data-bf-component="branch-select-modal" data-bf-part="overlay" className="branch-select-overlay" onClick={onClose}>
+    <div
+      data-bf-component="branch-select-modal"
+      data-bf-part="overlay"
+      data-state={isOpen ? 'open' : 'closed'}
+      aria-hidden={!isOpen}
+      {...(!isOpen ? { inert: '' } : {})}
+      className="branch-select-overlay"
+      onClick={onClose}
+    >
       <div data-bf-component="branch-select-modal" data-bf-part="root" className="branch-select-dialog" onClick={(e) => e.stopPropagation()}>
         <IconButton 
           className="branch-select-dialog__close"
@@ -185,7 +218,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
         </IconButton>
 
         <div data-bf-component="branch-select-modal" data-bf-part="header" className="branch-select-dialog__header">
-          <h2 className="branch-select-dialog__title">{resolvedTitle}</h2>
+          <h2 className="branch-select-dialog__title">{retainedDisplay.title}</h2>
         </div>
 
         <div data-bf-component="branch-select-modal" data-bf-part="content" className="branch-select-dialog__content">
@@ -282,7 +315,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
         </div>
 
         <div data-bf-component="branch-select-modal" data-bf-part="footer" className="branch-select-dialog__footer">
-          {showOpenAfterCreate ? (
+          {retainedDisplay.showOpenAfterCreate ? (
             <div data-bf-component="branch-select-modal" data-bf-part="options" className="branch-select-dialog__options">
               <Checkbox
                 checked={openAfterCreate}
@@ -312,11 +345,17 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     </div>
   );
 
+  const retainedModal = (
+    <PresenceBoundary active={isOpen}>
+      {modalContent}
+    </PresenceBoundary>
+  );
+
   if (typeof document === 'undefined') {
-    return modalContent;
+    return retainedModal;
   }
 
-  return createPortal(modalContent, getAppearanceOverlayHost());
+  return createPortal(retainedModal, getAppearanceOverlayHost());
 };
 
 export default BranchSelectModal;

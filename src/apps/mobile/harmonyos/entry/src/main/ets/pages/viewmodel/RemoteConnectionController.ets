@@ -11,6 +11,11 @@ import { MobileIdentitySnapshot, MobileIdentityStore } from '../../services/Mobi
 import { RemoteDescriptorParser } from '../../services/RemoteDescriptorParser';
 import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadController';
 import { RemoteModelController } from '../../services/RemoteModelController';
+import {
+  ConnectScanDecisionPolicy,
+  DetectedRemoteUrlResult,
+  DetectedUrlAction
+} from '../../services/ConnectScanDecisionPolicy';
 import { RemotePairingPolicy } from '../../services/RemotePairingPolicy';
 import { RemoteSessionController } from '../../services/RemoteSessionController';
 import { RemoteUiState } from '../../services/RemoteUiState';
@@ -46,6 +51,7 @@ export class RemoteConnectionController {
   private readonly stopHeartbeat: () => void;
   private readonly stopPolling: () => void;
   private readonly loadRecentWorkspaces: () => Promise<void>;
+  private readonly clearCachedRemoteData: () => Promise<void>;
   private readonly replaceRoute: (route: AppRoute) => void;
   private readonly closeConnectSheet: () => void;
   private readonly openConnectSheet: () => void;
@@ -70,6 +76,7 @@ export class RemoteConnectionController {
     stopHeartbeat: () => void,
     stopPolling: () => void,
     loadRecentWorkspaces: () => Promise<void>,
+    clearCachedRemoteData: () => Promise<void>,
     replaceRoute: (route: AppRoute) => void,
     closeConnectSheet: () => void,
     openConnectSheet: () => void
@@ -89,6 +96,7 @@ export class RemoteConnectionController {
     this.stopHeartbeat = stopHeartbeat;
     this.stopPolling = stopPolling;
     this.loadRecentWorkspaces = loadRecentWorkspaces;
+    this.clearCachedRemoteData = clearCachedRemoteData;
     this.replaceRoute = replaceRoute;
     this.closeConnectSheet = closeConnectSheet;
     this.openConnectSheet = openConnectSheet;
@@ -167,7 +175,10 @@ export class RemoteConnectionController {
       this.pageState.setStatusText(RemoteI18n.t('connection.connected'));
       this.closeConnectSheet();
       this.startHeartbeat();
-      await this.loadRecentWorkspaces();
+      // Left running rather than awaited: this scan costs one round trip per
+      // recent workspace, and everything it finds is an addition to a session
+      // list that is already on screen. Its own failures are logged inside.
+      void this.loadRecentWorkspaces();
       this.pageState.setLoadingHome(false);
       RemoteLogger.info('connect success');
     } catch (err) {
@@ -238,6 +249,10 @@ export class RemoteConnectionController {
       this.pageState.setAccountPairing(false, '');
       this.pageState.setRemoteUrlInputVisible(false);
       await this.identity.clearPairingInput();
+      // Unpairing is the user saying they are done with that desktop. Leaving
+      // its sessions on disk would put them back on Remote Home at the next
+      // launch, with nothing behind them to open.
+      await this.clearCachedRemoteData();
     } else {
       this.pageState.setRemoteUrlInputVisible(this.pageState.remoteUrl.trim().length > 0);
     }
@@ -265,39 +280,59 @@ export class RemoteConnectionController {
     }
   }
 
-  async scan(context: Context): Promise<void> {
+  async scan(context: Context): Promise<string> {
     try {
       this.pageState.setStatusText(RemoteI18n.t('status.openScanner'));
       const text = (await this.scanner.scanRemoteUrl(context)).trim();
       if (text.length === 0) {
         this.pageState.setStatusText(RemoteI18n.t('status.scanEmpty'));
-        return;
+        return '';
       }
-      this.handleDetectedUrl(text);
+      return text;
     } catch (err) {
       this.pageState.setRemoteUrlInputVisible(true);
       this.pageState.setStatusText(ConnectionErrorPolicy.errorText(err));
+      return '';
     }
   }
 
-  handleDetectedUrl(remoteUrl: string): boolean {
+  /**
+   * Apply a scanned pair URL and say what should happen next.
+   *
+   * This method must not start a connect and must not close the sheet: the
+   * caller owns both, so a camera callback cannot pair twice and cannot jump
+   * off the progress the sheet is showing.
+   */
+  handleDetectedUrl(
+    remoteUrl: string,
+    hasCloudAccountSession: boolean = false,
+    cloudUsername: string = ''
+  ): DetectedRemoteUrlResult {
     try {
       this.applyRemoteUrl(remoteUrl);
       const descriptor = RemoteDescriptorParser.parse(remoteUrl);
       this.pageState.setStatusText(RemoteI18n.t('status.scannedUrl'));
-      if (this.pairing.shouldPromptForAccount(descriptor)) {
+      const action = ConnectScanDecisionPolicy.decide(
+        descriptor.accountAuth,
+        hasCloudAccountSession,
+        cloudUsername,
+        descriptor.accountUsername,
+        RemoteUiState.desktopIdFromRemoteUrl(remoteUrl)
+      );
+      if (action === DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD) {
         this.pageState.setStatusText(RemoteI18n.t('connect.enterAccountToPair'));
         this.openConnectSheet();
-        return true;
+        return new DetectedRemoteUrlResult(action);
       }
-      this.closeConnectSheet();
-      this.replaceRoute(AppRoute.RemoteHome);
-      void this.connect();
-      return false;
+      return new DetectedRemoteUrlResult(
+        action,
+        action === DetectedUrlAction.USE_CLOUD_DEVICE ?
+          RemoteUiState.desktopIdFromRemoteUrl(remoteUrl) : ''
+      );
     } catch (err) {
       this.pageState.setRemoteUrlInputVisible(true);
       this.pageState.setStatusText(ConnectionErrorPolicy.errorText(err));
-      return true;
+      return new DetectedRemoteUrlResult(DetectedUrlAction.INVALID);
     }
   }
 

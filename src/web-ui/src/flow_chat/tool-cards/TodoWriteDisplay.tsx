@@ -89,7 +89,6 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
       automaticExpanded,
       desiredAutomaticExpanded,
       setAutomaticExpanded,
-      { reason: 'auto' },
     );
   }, [
     applyExpandedState,

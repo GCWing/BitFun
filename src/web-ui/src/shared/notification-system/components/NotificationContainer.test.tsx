@@ -11,10 +11,12 @@ vi.mock('../hooks/useNotificationState', () => ({
   useActiveNotifications: vi.fn(),
 }));
 
-vi.mock('./NotificationItem', () => ({
-  NotificationItem: ({ notification }: { notification: Notification }) => (
-    <div data-variant="toast">{notification.message}</div>
-  ),
+vi.mock('@/infrastructure/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('../services/NotificationService', () => ({
+  notificationService: { dismiss: vi.fn() },
 }));
 
 vi.mock('./ProgressNotification', () => ({
@@ -56,6 +58,7 @@ describe('NotificationContainer', () => {
 
   afterEach(() => {
     act(() => root.unmount());
+    vi.useRealTimers();
     vi.clearAllMocks();
     dom.window.close();
   });
@@ -69,7 +72,7 @@ describe('NotificationContainer', () => {
 
     act(() => root.render(<NotificationContainer />));
 
-    expect(container.querySelector('[data-variant="toast"]')?.textContent).toBe('Saved');
+    expect(container.querySelector('.notification-item')?.textContent).toContain('Saved');
     expect(container.querySelector('[data-variant="progress"]')).toBeNull();
     expect(container.querySelector('[data-variant="loading"]')).toBeNull();
   });
@@ -80,5 +83,45 @@ describe('NotificationContainer', () => {
     act(() => root.render(<NotificationContainer />));
 
     expect(container.querySelector('.notification-container')).toBeNull();
+  });
+
+  it('retains a dismissed toast until its exit motion completes', () => {
+    vi.useFakeTimers();
+    vi.mocked(useActiveNotifications).mockReturnValue([notification('toast', 'Saved')]);
+
+    act(() => root.render(<NotificationContainer />));
+    expect(container.querySelector('.notification-item')?.textContent).toContain('Saved');
+
+    vi.mocked(useActiveNotifications).mockReturnValue([]);
+    act(() => root.render(<NotificationContainer />));
+
+    expect(container.querySelector('.notification-container__presence--exiting')).not.toBeNull();
+    expect(container.querySelector('.notification-item')?.textContent).toContain('Saved');
+
+    act(() => vi.advanceTimersByTime(140));
+    expect(container.querySelector('.notification-container')).toBeNull();
+  });
+
+  it('removes focus before making an exiting real notification item inert', () => {
+    vi.useFakeTimers();
+    vi.mocked(useActiveNotifications).mockReturnValue([{
+      ...notification('toast', 'Action required'),
+      closable: true,
+      actions: [{ label: 'Retry', onClick: vi.fn() }],
+    }]);
+
+    act(() => root.render(<NotificationContainer />));
+    const action = container.querySelector('.notification-item__action') as HTMLButtonElement;
+    action.focus();
+    expect(document.activeElement).toBe(action);
+
+    vi.mocked(useActiveNotifications).mockReturnValue([]);
+    act(() => root.render(<NotificationContainer />));
+
+    const presence = container.querySelector('.notification-container__presence--exiting');
+    expect(document.activeElement).not.toBe(action);
+    expect(presence?.getAttribute('aria-hidden')).toBe('true');
+    expect(presence?.hasAttribute('inert')).toBe(true);
+    expect(presence?.querySelector('.notification-item')).not.toBeNull();
   });
 });

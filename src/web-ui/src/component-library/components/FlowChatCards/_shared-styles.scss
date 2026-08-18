@@ -8,7 +8,12 @@
   background: transparent;
   border: 1px solid var(--bf-appearance-token-color-overlay-white-20);
   border-radius: tokens.$size-radius-lg;
-  transition: all tokens.$motion-base tokens.$easing-standard;
+  transition:
+    background-color tokens.$motion-base tokens.$easing-standard,
+    border-color tokens.$motion-base tokens.$easing-standard,
+    box-shadow tokens.$motion-base tokens.$easing-standard,
+    opacity tokens.$motion-base tokens.$easing-standard,
+    transform tokens.$motion-base tokens.$easing-standard;
   position: relative;
 }
 
@@ -48,11 +53,13 @@
   border: 1px solid var(--bf-appearance-token-color-overlay-white-20);
   border-radius: tokens.$size-radius-base;
   padding: tokens.$size-gap-2;
-  transition: all tokens.$motion-base tokens.$easing-standard;
+  transition:
+    background-color tokens.$motion-base tokens.$easing-standard,
+    border-color tokens.$motion-base tokens.$easing-standard;
 
   svg {
     color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 75%, transparent);
-    transition: all tokens.$motion-base;
+    transition: color tokens.$motion-base tokens.$easing-standard;
   }
 
   &:hover {
@@ -73,7 +80,11 @@
   font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: tokens.$font-weight-medium;
   cursor: pointer;
-  transition: all tokens.$motion-base tokens.$easing-standard;
+  transition:
+    background-color tokens.$motion-base tokens.$easing-standard,
+    border-color tokens.$motion-base tokens.$easing-standard,
+    color tokens.$motion-base tokens.$easing-standard,
+    opacity tokens.$motion-base tokens.$easing-standard;
 
   @if $variant == 'success' {
     background: var(--bf-appearance-token-color-success-bg);

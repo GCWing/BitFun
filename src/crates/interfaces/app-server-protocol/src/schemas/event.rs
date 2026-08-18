@@ -5,6 +5,15 @@ use bitfun_events::AgenticEventEnvelope;
 use bitfun_product_domains::tool_permissions::{PermissionRequest, PermissionRequestEvent};
 use serde::{Deserialize, Serialize};
 
+/// Browser-facing projected runtime or permission event.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[notification(method = "agent/frontendEvent")]
+pub struct FrontendEventNotification {
+    pub event: String,
+    pub payload: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EventStream {
@@ -132,7 +141,7 @@ pub enum ConfigUpdate {
     ModelsReconciled {
         invalidated_model_ids: Vec<String>,
         default_models_changed: bool,
-        func_agent_models_changed: bool,
+        task_models_changed: bool,
         agent_model_defaults_changed: bool,
     },
 }

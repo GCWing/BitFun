@@ -14,11 +14,17 @@
  */
 
 import { create } from 'zustand';
+import {
+  getInteractionMotion,
+  type InteractionMotion,
+} from '@/shared/utils/motionPreference';
 import type { SceneTabId } from '../components/SceneBar/types';
 
 interface NavSceneState {
   showSceneNav: boolean;
   navSceneId: SceneTabId | null;
+  navigationMotion: InteractionMotion;
+  navigationSequence: number;
   openNavScene: (id: SceneTabId) => void;
   closeNavScene: () => void;
   goBack: () => void;
@@ -28,10 +34,30 @@ interface NavSceneState {
 export const useNavSceneStore = create<NavSceneState>((set) => ({
   showSceneNav: false,
   navSceneId: null,
-  openNavScene: (id) => set({ showSceneNav: true, navSceneId: id }),
-  closeNavScene: () => set({ showSceneNav: false, navSceneId: null }),
-  goBack: () => set({ showSceneNav: false }),
-  goForward: () => set({ showSceneNav: true }),
+  navigationMotion: 'instant',
+  navigationSequence: 0,
+  openNavScene: (id) => set(state => ({
+    showSceneNav: true,
+    navSceneId: id,
+    navigationMotion: getInteractionMotion(),
+    navigationSequence: state.navigationSequence + 1,
+  })),
+  closeNavScene: () => set(state => ({
+    showSceneNav: false,
+    navSceneId: null,
+    navigationMotion: getInteractionMotion(),
+    navigationSequence: state.navigationSequence + 1,
+  })),
+  goBack: () => set(state => ({
+    showSceneNav: false,
+    navigationMotion: getInteractionMotion(),
+    navigationSequence: state.navigationSequence + 1,
+  })),
+  goForward: () => set(state => ({
+    showSceneNav: true,
+    navigationMotion: getInteractionMotion(),
+    navigationSequence: state.navigationSequence + 1,
+  })),
 }));
 
 export function selectNavCanGoBack(state: NavSceneState): boolean {

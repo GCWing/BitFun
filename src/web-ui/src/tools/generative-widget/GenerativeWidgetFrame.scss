@@ -13,4 +13,16 @@
   border: 0;
   background: transparent;
   display: block;
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.bitfun-generative-widget-frame__iframe--loaded {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-generative-widget-frame__iframe {
+    transition: none;
+  }
 }

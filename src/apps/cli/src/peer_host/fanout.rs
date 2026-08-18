@@ -1,9 +1,15 @@
 //! DeviceEvent fan-out to attached Peer Mode controllers.
+//!
+//! Every agentic event this host produces is journaled and forwarded, not
+//! only the Turns a controller submitted. Peer ownership is a cancellation
+//! and bookkeeping boundary; it is not a visibility boundary.
 
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use bitfun_agent_runtime::sdk::{AgentEventReceiver, PermissionRequestEvent};
+use bitfun_agent_runtime::sdk::{
+    attach_session_event_cursor, AgentEventReceiver, PermissionRequestEvent,
+};
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
 use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
@@ -70,6 +76,32 @@ fn continuity_is_current(continuity: &Option<(super::state::PeerTurnTracker, u64
         .is_none_or(|(turns, generation)| turns.is_event_stream_generation_current(*generation))
 }
 
+/// Resolve the ownership bookkeeping an event carries, after visibility has
+/// already been decided without it.
+///
+/// Peer ownership answers "may this host release Peer tracking for the Turn and
+/// dedup its terminal delivery", never "may a controller see this". This host is
+/// a Peer of the account, not a remote-execution proxy for one controller: a
+/// Turn started in its own TUI belongs to the same Session an attached
+/// controller renders, so it is journaled and forwarded like any other. Note
+/// the return type — an unowned Turn yields no bookkeeping, and "suppress the
+/// event" is deliberately not expressible through this seam.
+fn owned_terminal_turn(
+    turns: &super::state::PeerTurnTracker,
+    session_id: &str,
+    event_turn: Option<&PeerTurnKey>,
+    terminal_turn: Option<PeerTurnKey>,
+) -> Option<PeerTurnKey> {
+    let peer_owned = turns.owns(session_id, event_turn.map(|turn| turn.turn_id.as_str()));
+    terminal_turn.filter(|_| peer_owned)
+}
+
+fn settle_record_only_event(turns: &super::state::PeerTurnTracker, terminal: Option<&PeerTurnKey>) {
+    if let Some(turn) = terminal {
+        turns.finish_turn(turn);
+    }
+}
+
 static PEER_EVENT_FANOUT_TX: OnceLock<mpsc::Sender<QueuedPeerDeviceEvent>> = OnceLock::new();
 
 fn peer_event_sender() -> &'static mpsc::Sender<QueuedPeerDeviceEvent> {
@@ -84,7 +116,7 @@ fn peer_event_sender() -> &'static mpsc::Sender<QueuedPeerDeviceEvent> {
     })
 }
 
-/// Subscribe to the invocation-scoped event source and forward only Peer-owned turns.
+/// Subscribe to the invocation-scoped event source and forward this host's turns.
 pub(crate) fn start_peer_event_fanout(state: PeerHostState, mut rx: AgentEventReceiver) {
     start_peer_permission_event_fanout(state.clone());
     state.turns.mark_event_stream_ready();
@@ -131,20 +163,22 @@ fn start_peer_permission_event_fanout(state: PeerHostState) {
         return;
     };
     tokio::spawn(async move {
-        let mut owned_request_ids = HashSet::new();
+        // Every pending request on this host is forwarded, not only the ones a
+        // controller's own Turn raised. A controller rendering a Turn this host
+        // started locally would otherwise watch it block forever with nothing
+        // on screen to answer. The Runtime mailbox stays the single arbiter, so
+        // whichever surface answers first settles the request.
+        let mut forwarded_request_ids = HashSet::new();
         loop {
             match receiver.recv().await {
                 Ok(event) => match &event {
                     PermissionRequestEvent::Asked { request } => {
-                        if !state.turns.owns_permission_request(request) {
-                            continue;
-                        }
-                        owned_request_ids.insert(request.request_id.clone());
+                        forwarded_request_ids.insert(request.request_id.clone());
                         fanout_permission_event(event).await;
                     }
                     PermissionRequestEvent::Replied { request_id, .. }
                     | PermissionRequestEvent::Cancelled { request_id, .. } => {
-                        if owned_request_ids.remove(request_id) {
+                        if forwarded_request_ids.remove(request_id) {
                             fanout_permission_event(event).await;
                         }
                     }
@@ -154,15 +188,12 @@ fn start_peer_permission_event_fanout(state: PeerHostState) {
                     let pending = state
                         .agent_runtime
                         .pending_permission_requests()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|request| state.turns.owns_permission_request(request))
-                        .collect::<Vec<_>>();
+                        .unwrap_or_default();
                     let pending_ids = pending
                         .iter()
                         .map(|request| request.request_id.clone())
                         .collect::<HashSet<_>>();
-                    let stale_request_ids = owned_request_ids
+                    let stale_request_ids = forwarded_request_ids
                         .difference(&pending_ids)
                         .cloned()
                         .collect::<Vec<_>>();
@@ -173,7 +204,7 @@ fn start_peer_permission_event_fanout(state: PeerHostState) {
                         })
                         .await;
                     }
-                    owned_request_ids = pending_ids;
+                    forwarded_request_ids = pending_ids;
                     for request in pending {
                         fanout_permission_event(PermissionRequestEvent::Asked { request }).await;
                     }
@@ -289,23 +320,20 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
     }
 
     if matches!(&event, AgenticEvent::DialogTurnStarted { .. }) {
-        let Some(turn) = event_turn.as_ref() else {
-            return Ok(());
-        };
-        if !state.turns.mark_started(turn) {
-            return Ok(());
+        if let Some(turn) = event_turn.as_ref() {
+            // Only a Peer-registered root enters `started`. A Turn this host
+            // started on its own has no Peer ownership to record, and that is
+            // not a reason to hide it.
+            state.turns.mark_started(turn);
         }
     }
 
     let Some(session_id) = event.session_id() else {
         return Ok(());
     };
-    if !state.turns.owns(
-        session_id,
-        event_turn.as_ref().map(|turn| turn.turn_id.as_str()),
-    ) {
-        return Ok(());
-    }
+
+    let terminal_turn =
+        owned_terminal_turn(&state.turns, session_id, event_turn.as_ref(), terminal_turn);
     if let Some(turn) = terminal_turn.as_ref() {
         if !state.turns.claim_terminal_delivery(turn)? {
             return Ok(());
@@ -397,15 +425,23 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
         }
     }
 
-    let Some(projected) = project_agentic_frontend_event(event) else {
+    let cursor = state.session_event_journal.record(&event);
+    let Some(mut projected) = project_agentic_frontend_event(event) else {
         if let Some(turn) = terminal_turn {
             state.turns.finish_turn(&turn);
         }
         return Ok(());
     };
+    if let Some(cursor) = cursor {
+        attach_session_event_cursor(&mut projected.payload, cursor);
+    }
     let targets = attached_controllers();
     if targets.is_empty() {
-        return Err("no attached Peer controller can receive Agent events".to_string());
+        // Controller presence is not Runtime ownership. Keep recording the
+        // materialized Turn while every controller is between devices, and
+        // release Peer ownership normally if this was the terminal event.
+        settle_record_only_event(&state.turns, terminal_turn.as_ref());
+        return Ok(());
     }
     let generation = state.turns.current_event_stream_generation()?;
     let owner = state
@@ -729,7 +765,8 @@ mod tests {
     use super::{
         continuity_is_current, drain_broadcast_receiver, enqueue_inherited_peer_device_event,
         enqueue_peer_device_event, event_turn_key, interrupted_turn_failure_projection,
-        retained_delivery_targets, QueuedPeerDeviceEvent, TerminalDeliveryGuard,
+        owned_terminal_turn, retained_delivery_targets, settle_record_only_event,
+        QueuedPeerDeviceEvent, TerminalDeliveryGuard,
     };
     use crate::peer_host::state::{PeerTurnKey, PeerTurnTracker};
 
@@ -762,6 +799,35 @@ mod tests {
             vec!["controller-2"]
         );
         assert!(retained_delivery_targets(&queued_targets, &[]).is_empty());
+    }
+
+    #[test]
+    fn record_only_gap_keeps_running_turn_owned_until_reattach() {
+        let tracker = PeerTurnTracker::new();
+        tracker.mark_event_stream_ready();
+        let turn = PeerTurnKey::new("session-1", "turn-1");
+        tracker.register_root(turn.clone()).expect("register root");
+        assert!(tracker.mark_started(&turn));
+
+        settle_record_only_event(&tracker, None);
+
+        assert!(tracker.owns("session-1", Some("turn-1")));
+    }
+
+    #[test]
+    fn record_only_terminal_releases_peer_turn_ownership() {
+        let tracker = PeerTurnTracker::new();
+        tracker.mark_event_stream_ready();
+        let turn = PeerTurnKey::new("session-1", "turn-1");
+        tracker.register_root(turn.clone()).expect("register root");
+        assert!(tracker.mark_started(&turn));
+        assert!(tracker
+            .claim_terminal_delivery(&turn)
+            .expect("claim terminal"));
+
+        settle_record_only_event(&tracker, Some(&turn));
+
+        assert!(!tracker.owns("session-1", Some("turn-1")));
     }
 
     #[test]
@@ -935,5 +1001,42 @@ mod tests {
 
         assert!(!drain_broadcast_receiver(&mut rx));
         assert!(turns.register_root(turn).is_err());
+    }
+
+    #[test]
+    fn a_locally_started_turn_carries_no_peer_bookkeeping_and_is_still_forwarded() {
+        let tracker = PeerTurnTracker::new();
+        tracker.mark_event_stream_ready();
+        let peer_turn = PeerTurnKey::new("session-1", "peer-turn");
+        tracker
+            .register_root(peer_turn.clone())
+            .expect("register Peer-owned turn");
+        let local_turn = PeerTurnKey::new("session-1", "local-turn");
+
+        // A Turn the controller submitted still settles Peer tracking on its
+        // terminal event.
+        assert_eq!(
+            owned_terminal_turn(
+                &tracker,
+                "session-1",
+                Some(&peer_turn),
+                Some(peer_turn.clone()),
+            ),
+            Some(peer_turn),
+        );
+
+        // A Turn this host started on its own has no Peer tracking to settle.
+        // The caller keeps journaling and forwarding it regardless: there is no
+        // value of this function that means "drop the event".
+        assert_eq!(
+            owned_terminal_turn(
+                &tracker,
+                "session-1",
+                Some(&local_turn),
+                Some(local_turn.clone()),
+            ),
+            None,
+        );
+        assert!(!tracker.owns("session-1", Some("local-turn")));
     }
 }

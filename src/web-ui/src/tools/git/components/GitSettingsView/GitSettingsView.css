@@ -46,7 +46,10 @@
   border-radius: 4px;
   color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .refresh-btn:hover:not(:disabled) {
@@ -71,7 +74,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .save-btn:hover:not(:disabled) {
@@ -133,7 +139,10 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-bottom-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .tab-btn:hover {
@@ -211,7 +220,10 @@
   border-radius: 4px;
   color: var(--bf-appearance-token-color-text-primary);
   font-size: 12px;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .form-group input:focus,
@@ -310,11 +322,11 @@
 }
 
 .loading-spinner {
-  animation: spin 1s linear infinite;
+  animation: bitfun-git-settings-legacy-spin 1s linear infinite;
   margin-bottom: 12px;
 }
 
-@keyframes spin {
+@keyframes bitfun-git-settings-legacy-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
@@ -344,7 +356,13 @@
   color: white;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation: none;
+  }
 }
 
 .retry-btn:hover {

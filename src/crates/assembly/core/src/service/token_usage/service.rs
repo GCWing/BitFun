@@ -1,11 +1,16 @@
 //! Compatibility wrapper for token usage persistence.
 
+use super::statistics::UsageAttributionResolver;
 use super::types::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
     TokenUsageSummary,
 };
 use crate::infrastructure::PathManager;
+use crate::service::config::types::AIModelConfig;
 use anyhow::Result;
+use bitfun_services_core::token_usage::{
+    TokenUsageStatisticsRequest, UsageGranularity, UsageStatistics, UsageStatisticsFilter,
+};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -110,6 +115,62 @@ impl TokenUsageService {
             .map_err(anyhow::Error::msg)
     }
 
+    /// Aggregate persisted records into dashboard statistics.
+    ///
+    /// Attribution resolves the current model configuration for each record's
+    /// `model_config_id`. Records whose configuration was deleted remain in
+    /// isolated unresolved buckets rather than being guessed by model name.
+    pub async fn get_statistics(
+        &self,
+        query: TokenUsageQuery,
+        granularity: UsageGranularity,
+        filter: Option<UsageStatisticsFilter>,
+    ) -> Result<UsageStatistics> {
+        let time_zone = query.time_zone.clone();
+        let mut records = self
+            .inner
+            .query_records(query)
+            .await
+            .map_err(anyhow::Error::msg)?;
+
+        let configs = crate::service::config::get_global_config_service()
+            .await
+            .map_err(anyhow::Error::msg)?
+            .get_config::<Vec<AIModelConfig>>(Some("ai.models"))
+            .await
+            .unwrap_or_default();
+        let resolver = UsageAttributionResolver::new(&configs);
+        if let Some(filter) = filter {
+            let normalized_query = filter.query.trim().to_lowercase();
+            if !normalized_query.is_empty() {
+                records.retain(|record| {
+                    resolver.matches_filter(record, filter.kind, &normalized_query)
+                });
+            }
+        }
+
+        Ok(
+            bitfun_services_core::token_usage::aggregate_statistics_with_time_zone(
+                &records,
+                granularity,
+                time_zone.as_deref(),
+                |record| resolver.attribute(record),
+            ),
+        )
+    }
+
+    /// Resolve a surface request and aggregate this BitFun host's persisted
+    /// usage. The request is intentionally workspace-agnostic: Peer transport
+    /// selects the host, while SSH workspace routing does not change it.
+    pub async fn get_statistics_for_request(
+        &self,
+        request: TokenUsageStatisticsRequest,
+    ) -> Result<UsageStatistics> {
+        let resolved = request.resolve().map_err(anyhow::Error::msg)?;
+        self.get_statistics(resolved.query, resolved.granularity, resolved.filter)
+            .await
+    }
+
     pub async fn clear_model_stats(&self, model_id: &str) -> Result<()> {
         self.inner
             .clear_model_stats(model_id)
@@ -123,4 +184,23 @@ impl TokenUsageService {
             .await
             .map_err(anyhow::Error::msg)
     }
+}
+
+static GLOBAL_TOKEN_USAGE_SERVICE: std::sync::OnceLock<Arc<TokenUsageService>> =
+    std::sync::OnceLock::new();
+
+/// Install the process-wide token usage service. Called once by the desktop
+/// runtime after the service is constructed; tools that call the model outside
+/// the round executor (e.g. `analyze_image`) use it to persist usage that would
+/// otherwise never reach the token usage store.
+pub fn set_global_token_usage_service(service: Arc<TokenUsageService>) {
+    match GLOBAL_TOKEN_USAGE_SERVICE.set(service) {
+        Ok(_) => log::info!("Global token usage service set"),
+        Err(_) => log::info!("Global token usage service already exists, skipping set"),
+    }
+}
+
+/// Access the process-wide token usage service, if installed.
+pub fn get_global_token_usage_service() -> Option<Arc<TokenUsageService>> {
+    GLOBAL_TOKEN_USAGE_SERVICE.get().cloned()
 }

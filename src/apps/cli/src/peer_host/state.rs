@@ -3,10 +3,10 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
-use bitfun_agent_runtime::sdk::PermissionRequest;
+use bitfun_agent_runtime::sdk::{AgentRuntime, SessionEventJournal};
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::filesystem::FileSystemService;
+use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
 
@@ -404,14 +404,6 @@ impl PeerTurnTracker {
             .unwrap_or(false)
     }
 
-    pub(crate) fn owns_permission_request(&self, request: &PermissionRequest) -> bool {
-        self.owns(&request.session_id, None)
-            || request
-                .delegation
-                .as_ref()
-                .is_some_and(|delegation| self.owns(&delegation.parent_session_id, None))
-    }
-
     pub(crate) fn mark_started(&self, key: &PeerTurnKey) -> bool {
         self.inner
             .lock()
@@ -444,18 +436,6 @@ impl PeerTurnTracker {
                 merge_completed_background_subagents(&inner, &mut drain, Some(session_id));
                 remove_completed_background_sources_for_session(&mut inner, session_id);
                 remove_tracked_turns(&mut inner, &removed);
-                drain
-            })
-            .unwrap_or_default()
-    }
-
-    pub(crate) fn session_turns_for_cancellation(&self, session_id: &str) -> PeerTurnDrain {
-        self.inner
-            .lock()
-            .map(|inner| {
-                let keys = session_tree_keys(&inner, session_id);
-                let mut drain = peer_turn_drain_for_keys(&inner, &keys);
-                merge_completed_background_subagents(&inner, &mut drain, Some(session_id));
                 drain
             })
             .unwrap_or_default()
@@ -899,6 +879,7 @@ fn prune_idle_tree(inner: &mut PeerTurnTrackerInner, key: &PeerTurnKey) {
 #[derive(Clone)]
 pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
+    pub(crate) session_event_journal: Arc<SessionEventJournal>,
     pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
     pub(crate) account_runtime:
@@ -907,6 +888,7 @@ pub(crate) struct PeerHostState {
     pub(crate) turns: PeerTurnTracker,
     pub(crate) workspace_service: Arc<WorkspaceService>,
     pub(crate) filesystem_service: Arc<FileSystemService>,
+    pub(crate) token_usage_service: Arc<TokenUsageService>,
 }
 
 impl PeerHostState {
@@ -1091,11 +1073,6 @@ pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
 mod tests {
     use std::collections::HashSet;
 
-    use bitfun_agent_runtime::sdk::{
-        PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
-        PermissionRequestSourceKind,
-    };
-
     use super::{aggregate_cancellation_results, PeerTurnKey, PeerTurnTracker};
 
     fn register_background_child(
@@ -1168,23 +1145,6 @@ mod tests {
             vec![turn.clone()]
         );
         assert!(tracker.register_root(turn).is_err());
-    }
-
-    #[test]
-    fn permission_ownership_includes_delegated_child_requests_without_leaking_unrelated_sessions() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        let root = PeerTurnKey::new("parent-session", "parent-turn");
-        tracker.register_root(root.clone()).expect("register root");
-        assert!(tracker.mark_started(&root));
-
-        assert!(tracker.owns_permission_request(&permission_request("parent-session", None)));
-        assert!(tracker
-            .owns_permission_request(
-                &permission_request("child-session", Some("parent-session"),)
-            ));
-        assert!(!tracker
-            .owns_permission_request(&permission_request("other-child", Some("other-parent"),)));
     }
 
     #[test]

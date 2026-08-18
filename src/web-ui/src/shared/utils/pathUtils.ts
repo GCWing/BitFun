@@ -152,6 +152,32 @@ export function pathsEquivalentFs(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * Canonical map key for one repository, collapsing the spellings it arrives
+ * under: `C:\work\repo`, `c:/work/repo`, `C:/work/repo/`.
+ *
+ * Mirrors the backend's `normalize_trust_path` (forward slashes, no trailing
+ * separator) and `safe_directory_entry_matches` (whole-path case folding on
+ * Windows, where Git itself compares that way). Callers that key caches or
+ * in-flight requests by repository must share this, or the same folder becomes
+ * two entries here while the backend treats it as one. UNC paths count: a share
+ * mounted from another machine is one of the commonest ways to own nothing in
+ * your own workspace. POSIX paths are case-sensitive and stay untouched.
+ */
+export function repositoryPathKey(repositoryPath: string): string {
+  // Backslash is only a separator on a Windows-shaped path; on POSIX it is an
+  // ordinary filename character, and rewriting it would collapse the distinct
+  // directories `/srv/we\ird` and `/srv/we/ird` onto one key — one prompt
+  // dismissal, or one cached probe, answering for both. The backend gates the
+  // same rewrite the same way.
+  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(repositoryPath) || /^[\\/]{2}/.test(repositoryPath);
+  let normalized = isWindowsPath ? repositoryPath.replace(/\\/g, '/') : repositoryPath;
+  while (normalized.length > 1 && normalized.endsWith('/') && !normalized.endsWith(':/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return isWindowsPath ? normalized.toLowerCase() : normalized;
+}
+
 /** Whether `path` is expanded when the set may mix separators or drive letter case (Windows). */
 export function expandedFoldersContains(expandedFolders: Set<string>, path: string): boolean {
   if (expandedFolders.has(path)) return true;

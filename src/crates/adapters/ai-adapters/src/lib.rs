@@ -24,6 +24,6 @@ pub use trace::{
 };
 pub use types::{
     resolve_request_url, AIConfig, ConnectionTestMessageCode, ConnectionTestResult, GeminiResponse,
-    GeminiUsage, Message, ProxyConfig, ReasoningPresetAction, ReasoningPresetDescriptor,
-    RemoteModelInfo, ToolCall, ToolDefinition, ToolImageAttachment,
+    GeminiUsage, Message, ModelRequestContext, ProxyConfig, ReasoningPresetAction,
+    ReasoningPresetDescriptor, RemoteModelInfo, ToolCall, ToolDefinition, ToolImageAttachment,
 };

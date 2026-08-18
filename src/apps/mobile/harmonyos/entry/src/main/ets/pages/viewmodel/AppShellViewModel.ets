@@ -48,8 +48,20 @@ export class AppShellViewModel {
     this.syncActiveRoute();
   }
 
+  /**
+   * Makes [route] the whole stack, or does nothing if it already is.
+   *
+   * The guard deliberately ignores [sessionId]. A route names a screen, not the
+   * conversation on it — which session is open is read from page state, and no
+   * component ever reads the path param back. Treating a session switch as a
+   * navigation meant clearing the stack and pushing a fresh `NavDestination`,
+   * and on the wide layout the master pane lives inside that destination: every
+   * tap on a row tore down and rebuilt the whole sidebar. Measured on tablet,
+   * that rebuild was ~2.1s of the ~3.5s the main thread spent blocked before
+   * the transcript appeared.
+   */
   replaceRouteWithoutAnimation(route: AppRoute, sessionId: string = ''): void {
-    if (this.currentRoute() === route && sessionId.length === 0) {
+    if (this.currentRoute() === route) {
       return;
     }
     this.navigationStack.clear(false);

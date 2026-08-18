@@ -72,7 +72,13 @@
   -webkit-backdrop-filter: var(--bf-appearance-token-blur-subtle);
   box-shadow: var(--bf-appearance-token-shadow-sm);
   
-  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    opacity var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    transform var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
   outline: none;
 }
 
@@ -354,7 +360,10 @@
   border-radius: var(--bf-appearance-token-size-radius-base);
   color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
-  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
 }
 
 .form-file:hover .form-file-label {
@@ -383,7 +392,9 @@
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 2px 8px var(--bf-appearance-token-border-accent-soft);
-  transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+  transition:
+    box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 }
 
 .form-range::-webkit-slider-thumb:hover {

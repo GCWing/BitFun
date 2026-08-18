@@ -10,10 +10,10 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: backdropIn 0.2s ease both;
+  animation: bitfun-feature-modal-backdrop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
   &--exiting {
-    animation: backdropOut 0.2s ease both;
+    animation: bitfun-feature-modal-backdrop-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
   }
 }
 
@@ -27,10 +27,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: modalIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: bitfun-feature-modal-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
   &--exiting {
-    animation: modalOut 0.22s ease-in both;
+    animation: bitfun-feature-modal-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
   }
 
   // Fixed portrait sizes
@@ -56,13 +56,20 @@
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     z-index: 1;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      color $motion-base $easing-standard,
+      opacity $motion-base $easing-standard,
+      transform $motion-base $easing-standard;
 
     svg { flex-shrink: 0; }
 
-    &:hover {
-      background: var(--bf-appearance-token-color-bg-tertiary);
-      color: var(--bf-appearance-token-color-text-primary);
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background: var(--bf-appearance-token-color-bg-tertiary);
+        color: var(--bf-appearance-token-color-text-primary);
+      }
     }
   }
 
@@ -70,7 +77,7 @@
   &__pages {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
     position: relative;
 
     // Thin scrollbar
@@ -81,6 +88,31 @@
     &::-webkit-scrollbar-thumb {
       background: var(--bf-appearance-token-border-base);
       border-radius: 2px;
+    }
+  }
+
+  &__page {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    will-change: opacity, transform;
+
+    &[data-state='active'][data-direction='forward'] {
+      animation: bitfun-feature-page-forward-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &[data-state='active'][data-direction='backward'] {
+      animation: bitfun-feature-page-backward-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &[data-state='leaving'][data-direction='forward'] {
+      animation: bitfun-feature-page-forward-out 140ms ease both;
+      pointer-events: none;
+    }
+
+    &[data-state='leaving'][data-direction='backward'] {
+      animation: bitfun-feature-page-backward-out 140ms ease both;
+      pointer-events: none;
     }
   }
 
@@ -108,7 +140,10 @@
     background: var(--bf-appearance-token-color-bg-tertiary);
     border: 1px solid var(--bf-appearance-token-border-base);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      width $motion-base $easing-standard;
 
     &--active {
       width: 18px;
@@ -117,8 +152,10 @@
       border-color: var(--bf-appearance-token-color-accent-500);
     }
 
-    &:hover:not(&--active) {
-      background: var(--bf-appearance-token-color-text-muted);
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(&--active) {
+        background: var(--bf-appearance-token-color-text-muted);
+      }
     }
   }
 
@@ -135,16 +172,23 @@
     font-weight: $font-weight-medium;
     border: none;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      color $motion-base $easing-standard,
+      opacity $motion-base $easing-standard,
+      transform $motion-base $easing-standard;
 
     &--prev {
       background: transparent;
       color: var(--bf-appearance-token-color-text-secondary);
       border: 1px solid var(--bf-appearance-token-border-base);
 
-      &:hover {
-        background: var(--bf-appearance-token-color-bg-secondary);
-        color: var(--bf-appearance-token-color-text-primary);
+      @media (hover: hover) and (pointer: fine) {
+        &:hover {
+          background: var(--bf-appearance-token-color-bg-secondary);
+          color: var(--bf-appearance-token-color-text-primary);
+        }
       }
     }
 
@@ -154,7 +198,9 @@
       color: var(--bf-appearance-token-color-static-white);
       padding: 6px 22px;
 
-      &:hover { opacity: 0.9; }
+      @media (hover: hover) and (pointer: fine) {
+        &:hover { opacity: 0.9; }
+      }
       &:active { transform: scale(0.97); }
     }
   }
@@ -171,7 +217,9 @@
     text-decoration: underline;
     text-underline-offset: 2px;
 
-    &:hover { color: var(--bf-appearance-token-color-text-secondary); }
+    @media (hover: hover) and (pointer: fine) {
+      &:hover { color: var(--bf-appearance-token-color-text-secondary); }
+    }
   }
 }
 
@@ -361,15 +409,49 @@
 }
 
 // ─── Keyframes ────────────────────────────────────────────────────────────────
-@keyframes backdropIn  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes backdropOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bitfun-feature-modal-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bitfun-feature-modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
 
-@keyframes modalIn {
-  from { opacity: 0; transform: scale(0.9) translateY(16px); }
+@keyframes bitfun-feature-modal-in {
+  from { opacity: 0; transform: scale(0.985) translateY(8px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-@keyframes modalOut {
+@keyframes bitfun-feature-modal-out {
   from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.93); }
+  to   { opacity: 0; transform: scale(0.985); }
+}
+
+@keyframes bitfun-feature-page-forward-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bitfun-feature-page-forward-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-6px); }
+}
+
+@keyframes bitfun-feature-page-backward-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bitfun-feature-page-backward-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-modal-backdrop,
+  .feature-modal,
+  .feature-modal__page {
+    animation: none;
+    transform: none;
+  }
+
+  .feature-modal-backdrop--exiting,
+  .feature-modal--exiting {
+    opacity: 0;
+  }
 }

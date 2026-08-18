@@ -23,6 +23,7 @@ use bitfun_runtime_ports::{
 use bitfun_sdk_host::host::{ConnectionControl, HostOutput, SdkHostConfig, SdkHostConnection};
 use bitfun_sdk_host::protocol::{JsonRpcRequest, PROTOCOL_VERSION};
 use tokio::sync::{mpsc, Notify};
+use tokio::time::timeout;
 
 #[derive(Default)]
 struct FakeOwner {
@@ -38,6 +39,7 @@ struct FakeOwner {
     fail_settlement: bool,
     queue_dialog: bool,
     dialog_session_override: Option<String>,
+    output_text: Option<String>,
     block_dialog_submit: bool,
     block_agent_resolution: bool,
     block_first_cancel: bool,
@@ -89,6 +91,15 @@ impl FakeOwner {
         Self {
             queue: Mutex::new(Some(queue)),
             emit_terminal: false,
+            ..Self::default()
+        }
+    }
+
+    fn with_output(queue: Arc<EventQueue>, output_text: String) -> Self {
+        Self {
+            queue: Mutex::new(Some(queue)),
+            emit_terminal: true,
+            output_text: Some(output_text),
             ..Self::default()
         }
     }
@@ -309,7 +320,10 @@ impl AgentDialogTurnPort for FakeOwner {
                     round_id: "round-fixture".to_string(),
                     attempt_id: Some("attempt-fixture".to_string()),
                     attempt_index: Some(0),
-                    text: "fixture result".to_string(),
+                    text: self
+                        .output_text
+                        .clone()
+                        .unwrap_or_else(|| "fixture result".to_string()),
                 },
                 None,
             )
@@ -773,14 +787,185 @@ async fn query_streams_existing_events_and_one_terminal_result() {
     let event = output.recv().await.unwrap();
     assert_eq!(event["method"], "query/event");
     assert_eq!(event["params"]["queryId"], query_id);
+    let operation_id = accepted["result"]["operationId"]
+        .as_str()
+        .expect("accepted Query operation id")
+        .to_string();
+    assert_ne!(operation_id, query_id);
+    assert_eq!(event["params"]["operationId"], operation_id);
     assert_eq!(event["params"]["event"]["type"], "assistant_text_delta");
     assert_eq!(event["params"]["event"]["text"], "fixture result");
 
     let result = output.recv().await.unwrap();
     assert_eq!(result["method"], "query/result");
     assert_eq!(result["params"]["queryId"], query_id);
+    assert_eq!(result["params"]["operationId"], operation_id);
     assert_eq!(result["params"]["status"], "completed");
+    assert_eq!(result["params"]["output"]["text"], "fixture result");
     assert!(output.try_recv().is_err(), "terminal result must be unique");
+}
+
+#[tokio::test]
+async fn escaped_query_output_fails_before_exceeding_the_wire_budget() {
+    let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    let owner = Arc::new(FakeOwner::with_output(
+        queue.clone(),
+        "\\".repeat(384 * 1024 + 1),
+    ));
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(owner.clone())
+        .with_dialog_turn_port(owner.clone())
+        .with_cancellation_port(owner.clone())
+        .with_turn_settlement_port(owner.clone())
+        .with_session_management_port(owner.clone())
+        .with_session_close_port(owner.clone())
+        .with_permission_request_manager(permission_manager())
+        .with_event_source(AgentEventSource::new(queue))
+        .build()
+        .unwrap();
+    let (sender, mut output) = mpsc::channel(16);
+    let host = SdkHostConnection::new(
+        runtime,
+        "D:/workspace/project",
+        sender,
+        SdkHostConfig::default(),
+    );
+    initialize(&host, &mut output).await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-output-limit",
+        "method": "query/start",
+        "params": { "prompt": "produce excessive output" }
+    })))
+    .await;
+
+    assert_eq!(output.recv().await.unwrap()["id"], "query-output-limit");
+    let result = output.recv().await.unwrap();
+    assert_eq!(result["method"], "query/result");
+    assert_eq!(result["params"]["status"], "failed");
+    assert_eq!(result["params"]["error"]["data"]["code"], "overloaded");
+    assert_eq!(result["params"]["output"]["text"], "");
+}
+
+#[tokio::test]
+async fn cancellation_after_terminal_result_is_idempotent_with_full_query_identity() {
+    let (host, _, mut output) = host().await;
+    initialize(&host, &mut output).await;
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-before-late-cancel",
+        "method": "query/start",
+        "params": { "prompt": "hello" }
+    })))
+    .await;
+    let accepted = output.recv().await.unwrap();
+    let query_id = accepted["result"]["queryId"].as_str().unwrap().to_string();
+    let session_id = accepted["result"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let turn_id = accepted["result"]["turnId"].as_str().unwrap().to_string();
+    let operation_id = accepted["result"]["operationId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    while output.recv().await.unwrap()["method"] != "query/result" {}
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "late-cancel",
+        "method": "query/cancel",
+        "params": {
+            "queryId": query_id,
+            "sessionId": session_id,
+            "turnId": turn_id,
+            "operationId": operation_id
+        }
+    })))
+    .await;
+    let cancelled = output.recv().await.unwrap();
+    assert_eq!(cancelled["id"], "late-cancel");
+    assert_eq!(cancelled["result"]["queryId"], query_id);
+    assert_eq!(cancelled["result"]["operationId"], operation_id);
+    assert_eq!(cancelled["result"]["requested"], false);
+}
+
+#[tokio::test]
+async fn cancellation_timeout_reports_unknown_outcome_for_the_exact_operation() {
+    let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    let owner = Arc::new(FakeOwner::blocking_first_cancel(queue.clone()));
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(owner.clone())
+        .with_dialog_turn_port(owner.clone())
+        .with_cancellation_port(owner.clone())
+        .with_turn_settlement_port(owner.clone())
+        .with_session_management_port(owner.clone())
+        .with_session_close_port(owner.clone())
+        .with_permission_request_manager(permission_manager())
+        .with_event_source(AgentEventSource::new(queue))
+        .build()
+        .unwrap();
+    let (sender, mut output) = mpsc::channel(16);
+    let host = SdkHostConnection::new(
+        runtime,
+        "D:/workspace/project",
+        sender,
+        SdkHostConfig::default(),
+    );
+    initialize(&host, &mut output).await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-before-cancel-timeout",
+        "method": "query/start",
+        "params": { "prompt": "hello" }
+    })))
+    .await;
+    let accepted = output.recv().await.unwrap();
+    let query_id = accepted["result"]["queryId"].as_str().unwrap().to_string();
+    let session_id = accepted["result"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let turn_id = accepted["result"]["turnId"].as_str().unwrap().to_string();
+    let operation_id = accepted["result"]["operationId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let expected_operation_id = operation_id.clone();
+
+    let cancel_host = host.clone();
+    let cancel = tokio::spawn(async move {
+        cancel_host
+            .handle_request(request(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "cancel-timeout",
+                "method": "query/cancel",
+                "params": {
+                    "queryId": query_id,
+                    "sessionId": session_id,
+                    "turnId": turn_id,
+                    "operationId": operation_id
+                }
+            })))
+            .await
+    });
+    owner.first_cancel_started.notified().await;
+    let cancellation = loop {
+        let message = output.recv().await.unwrap();
+        if message["id"] == "cancel-timeout" {
+            break message;
+        }
+    };
+    assert_eq!(cancellation["error"]["data"]["code"], "timeout");
+    assert_eq!(cancellation["error"]["data"]["outcomeCertainty"], "unknown");
+    assert_eq!(
+        cancellation["error"]["data"]["operationId"],
+        expected_operation_id
+    );
+    assert_eq!(cancel.await.unwrap(), ConnectionControl::Continue);
+    host.shutdown_connection().await;
 }
 
 #[tokio::test]
@@ -892,12 +1077,19 @@ async fn cancel_close_and_shutdown_use_existing_runtime_owners() {
         .as_str()
         .unwrap()
         .to_string();
+    let turn_id = accepted["result"]["turnId"].as_str().unwrap();
+    let operation_id = accepted["result"]["operationId"].as_str().unwrap();
 
     host.handle_request(request(serde_json::json!({
         "jsonrpc": "2.0",
         "id": "cancel-1",
         "method": "query/cancel",
-        "params": { "queryId": query_id }
+        "params": {
+            "queryId": query_id,
+            "sessionId": session_id,
+            "turnId": turn_id,
+            "operationId": operation_id
+        }
     })))
     .await;
     while output.recv().await.unwrap()["id"] != "cancel-1" {}
@@ -973,6 +1165,7 @@ async fn uncertain_session_close_cleanup_requires_host_restart() {
     let close_error = output.recv().await.unwrap();
     assert_eq!(close_error["error"]["data"]["code"], "cleanup_required");
     assert_eq!(close_error["error"]["data"]["retryable"], false);
+    assert_eq!(close_error["error"]["data"]["outcomeCertainty"], "unknown");
     assert_eq!(close_error["error"]["data"]["recovery"], "restart_host");
 
     host.handle_request(request(serde_json::json!({
@@ -1064,12 +1257,18 @@ async fn cancellation_remains_available_when_data_request_capacity_is_exhausted(
         "jsonrpc": "2.0",
         "id": "cancel-while-data-busy",
         "method": "query/cancel",
-        "params": { "queryId": "missing-query" }
+        "params": {
+            "queryId": "missing-query",
+            "sessionId": "missing-session",
+            "turnId": "missing-turn",
+            "operationId": "missing-operation"
+        }
     })))
     .await;
     let cancellation = output.recv().await.unwrap();
     assert_eq!(cancellation["id"], "cancel-while-data-busy");
-    assert_eq!(cancellation["error"]["data"]["code"], "not_found");
+    assert_eq!(cancellation["result"]["requested"], false);
+    assert_eq!(cancellation["result"]["operationId"], "missing-operation");
 
     owner.release_session_create.notify_one();
     assert_eq!(create.await.unwrap(), ConnectionControl::Continue);
@@ -1681,7 +1880,7 @@ async fn terminal_failure_is_typed_and_emitted_after_settlement() {
 }
 
 #[tokio::test]
-async fn uncertain_turn_settlement_poisons_the_session_against_retry() {
+async fn uncertain_turn_settlement_fails_the_connection_without_a_result() {
     let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     let owner = Arc::new(FakeOwner::failing_settlement(queue.clone()));
     let runtime = AgentRuntimeBuilder::new()
@@ -1702,6 +1901,7 @@ async fn uncertain_turn_settlement_poisons_the_session_against_retry() {
         sender,
         SdkHostConfig::default(),
     );
+    let connection_failed = host.connection_failed_token();
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
         "jsonrpc": "2.0",
@@ -1711,25 +1911,13 @@ async fn uncertain_turn_settlement_poisons_the_session_against_retry() {
     })))
     .await;
     let accepted = output.recv().await.unwrap();
-    let session_id = accepted["result"]["sessionId"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let result = loop {
-        let value = output.recv().await.unwrap();
-        if value["method"] == "query/result" {
-            break value;
-        }
-    };
-    assert_eq!(
-        result["params"]["error"]["data"]["code"],
-        "cleanup_required"
-    );
-    assert_eq!(result["params"]["error"]["data"]["retryable"], false);
-    assert_eq!(
-        result["params"]["error"]["data"]["recovery"],
-        "restart_host"
-    );
+    let session_id = accepted["result"]["sessionId"].as_str().unwrap();
+    timeout(Duration::from_secs(1), connection_failed.cancelled())
+        .await
+        .expect("uncertain Turn settlement must fail the connection");
+    while let Ok(Some(value)) = timeout(Duration::from_millis(50), output.recv()).await {
+        assert_ne!(value["method"], "query/result");
+    }
 
     host.handle_request(request(serde_json::json!({
         "jsonrpc": "2.0",

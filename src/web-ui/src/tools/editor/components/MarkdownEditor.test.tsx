@@ -53,6 +53,7 @@ vi.mock('../meditor/utils/tiptapMarkdown', () => ({
 const messages: Record<string, string> = {
   'editor.markdownEditor.copiedMarkdown': 'Copied Markdown',
   'editor.markdownEditor.copyMarkdown': 'Copy Markdown',
+  'editor.markdownEditor.notice.sourcePreviewFallback': 'IR fallback warning',
 };
 
 vi.mock('@/infrastructure/i18n', () => ({
@@ -104,5 +105,13 @@ describe('MarkdownEditor', () => {
     );
 
     expect(html).toContain('data-mode="preview"');
+  });
+
+  it('does not show the IR fallback warning in the preview/source file UI', () => {
+    const html = renderToStaticMarkup(
+      <MarkdownEditor initialContent="# Ordinary Markdown" />,
+    );
+
+    expect(html).not.toContain('IR fallback warning');
   });
 });

@@ -60,10 +60,6 @@
         "displayName": "Git 功能",
         "description": "提交資訊、代碼審核"
       },
-      "startchat-func-agent": {
-        "displayName": "會話啟動",
-        "description": "工作狀態分析、歡迎資訊"
-      },
       "arc-func-agent": {
         "displayName": "架構分析",
         "description": "依賴圖、Mermaid 圖表"

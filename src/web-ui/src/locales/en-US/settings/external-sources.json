@@ -121,6 +121,13 @@
     "modelBindingUpdated": "Saved the agent model binding and refreshed affected agents.",
     "mcpUpdated": "Saved the MCP server choice and refreshed its status."
   },
+  "bulkActions": {
+    "enablePending": "Enable all pending ({{count}})",
+    "disableAll": "Disable all",
+    "enableRisk": "This approves exactly the {{count}} items currently shown. If discovery changes, BitFun will ask you to review again.",
+    "enabled": "Enabled the selected pending items.",
+    "disabled": "Disabled the selected items."
+  },
   "recoveryActions": {
     "refresh": "Refresh status",
     "retry": "Retry",
@@ -238,7 +245,8 @@
       "unreadableSource": "BitFun could not read part of a source. Check file access, then refresh.",
       "notSupported": "This type of external content is not supported yet, so BitFun did not load or run it.",
       "checkFailed": "BitFun could not check one source. Other sources remain available; refresh to retry.",
-      "sourceIssue": "BitFun found an issue in one source. The affected content was not enabled. Check the source configuration, then refresh."
+      "runtimeUnavailable": "An MCP server from this source is unavailable. Disable it, fix its configuration or authentication, then enable it again.",
+      "sourceIssue": "BitFun could not finish checking one source. Existing usable content remains available; refresh or review the technical details."
     }
   },
   "sources": {
@@ -414,6 +422,7 @@
     "externalSource": "External AI application",
     "source": "Source: {{source}}",
     "sourceLocation": "Configuration: {{location}}",
+    "sourceLocationLabel": "Configuration",
     "scope": "Applies to: {{scope}}",
     "command": "Command: {{command}}",
     "url": "Address: {{url}}",
@@ -430,6 +439,27 @@
     "timeoutExecution": "execution {{duration}}",
     "timeoutMilliseconds": "{{value}} ms",
     "changePolicy": "BitFun asks again before loading a changed server configuration.",
+    "failureReason": "Reason: {{reason}}",
+    "failureReasons": {
+      "authentication": "Authentication is required for this MCP server.",
+      "timeout": "The MCP server did not finish starting before its timeout.",
+      "commandUnavailable": "The configured MCP command could not be started.",
+      "workingDirectoryUnavailable": "The configured MCP working directory is unavailable.",
+      "connectionFailed": "BitFun could not connect to the MCP server.",
+      "protocolFailed": "The MCP server did not complete the MCP startup handshake.",
+      "nativeConfigurationUnavailable": "BitFun could not read the current MCP configuration.",
+      "hostReadOnly": "This host can discover MCP servers but cannot run them.",
+      "configurationChanged": "The MCP configuration changed before activation. Refresh and confirm it again.",
+      "configurationInvalid": "The MCP configuration cannot be used by the BitFun runtime.",
+      "hostUnavailable": "The MCP runtime is not available in this host.",
+      "installFailed": "BitFun could not register this MCP server with the runtime.",
+      "preparationFailed": "BitFun could not prepare this MCP configuration for activation.",
+      "serverMissing": "The MCP server is no longer registered with the runtime.",
+      "runtimeFailed": "The MCP server failed or stopped unexpectedly.",
+      "stopped": "The MCP server is not currently running.",
+      "statusUnavailable": "BitFun could not read the current MCP server status.",
+      "other": "The MCP server failed to start. Check its source configuration and BitFun logs."
+    },
     "runtimeUnavailableGuidance": "Disable this server, fix the source configuration or authentication, then enable it again. Restarting BitFun is usually not required.",
     "unsupportedGuidance": "Change this setting in the source application, then refresh.",
     "enable": "Enable server",

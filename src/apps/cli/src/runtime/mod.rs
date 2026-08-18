@@ -11,6 +11,7 @@ use bitfun_core::product_runtime::{
 };
 use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 use bitfun_core::service::remote_connect::account_runtime::AccountRuntime;
+use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
 use bitfun_runtime_services::RuntimeServices;
 
@@ -57,6 +58,7 @@ pub(crate) struct CliRuntimeContext {
     compatibility: CoreAgentRuntimeCompatibility,
     account_runtime: Arc<AccountRuntime>,
     account_routing: Arc<CliAccountRoutingHost>,
+    token_usage_service: Arc<TokenUsageService>,
     _agent_event_queue_owner: CoreProductEventQueueOwner,
     services: RuntimeServices,
     product: CliProductRuntimeState,
@@ -103,6 +105,7 @@ impl CliRuntimeContext {
             CoreAgentRuntimeCompatibility::build(agentic_system.coordinator.clone(), scheduler);
         let account = build_account_runtime(compatibility.clone());
         let local_workspace_snapshot = CoreLocalWorkspaceSnapshot::build();
+        let token_usage_service = agentic_system.token_usage_service.clone();
 
         debug_assert_eq!(
             agent_runtime.harness_provider_ids(),
@@ -121,6 +124,7 @@ impl CliRuntimeContext {
             compatibility,
             account_runtime: account.runtime,
             account_routing: account.routing,
+            token_usage_service,
             services,
             product,
             approval_policy,
@@ -149,6 +153,10 @@ impl CliRuntimeContext {
 
     pub(crate) fn account_routing(&self) -> &Arc<CliAccountRoutingHost> {
         &self.account_routing
+    }
+
+    pub(crate) fn token_usage_service(&self) -> &Arc<TokenUsageService> {
+        &self.token_usage_service
     }
 
     pub(crate) fn local_workspace_snapshot(&self) -> &Arc<dyn LocalWorkspaceSnapshotPort> {

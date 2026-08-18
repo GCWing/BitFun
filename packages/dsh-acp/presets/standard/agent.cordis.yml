@@ -1,0 +1,97 @@
+# The `standard` agent preset: the full IDE coding agent.
+#
+# Adapted from deepseek-harness/apps/cli/config/agent-presets/standard (MIT,
+# Copyright (c) DeepSeek — see ../../NOTICE.md). The CLI's rows for surfaces an
+# IDE launch does not compose are dropped: pwsh, plan mode, the ask-user and web
+# tools, workflows/ralph, and the codex/claude-code subagent products.
+#
+# This file is an AGENT-PLANE composition. `dsh-agent-presets` mounts it ONCE
+# per process under a standing scope, and every session naming this preset joins
+# it by scope parentage. The host composition (../../cordis.yml) keeps what a
+# preset must not own: the registries themselves, the model route, the sandbox
+# and approval stack, persistence, and the ACP transport.
+#
+# A row that PROVIDES a service must sit inside a group carrying an `isolate`
+# realm, or it publishes into the process-global root realm where a second
+# preset registering the same name collides. Every row below only registers into
+# host registries (tools, prompt sections, skills), so none needs a realm.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+# `{{model}}` and `{{cwd}}` resolve from the agent's own route and the cwd the
+# ACP client supplied at session/new.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
+
+      Verify your work by running the code or tests. Keep answers brief and factual.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+# The model-facing tool only. Its executor (`bash-sandbox`) and the environment
+# registry (`shell-env`) are host-plane.
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+# Both register into the host `tools` registry and provide nothing. The `fs`
+# service and its observation policy stay in the host composition.
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: true
+
+# ── background jobs ─────────────────────────────────────────────────────────
+
+# Only the model-facing controls; the task registry is host-plane because
+# `tool-bash` above resolves it with `ctx.get` and would not see a realm here.
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills and goals ────────────────────────────────────────────────────────
+
+# The skill registry, its filesystem provider, and the goal service all live in
+# the host composition; these rows are the model-facing halves.
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── delegation ──────────────────────────────────────────────────────────────
+
+# The `subagents` registry, the spawn backend, and `tool-subagent-report` are
+# host-plane singletons; this preset contributes the tools that resolve them.
+- id: tool-subagent-control
+  name: '@deepseek-ai/dsh-tool-subagent-control'
+
+- id: tool-subagent-list-agents
+  name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    backgroundMode: continuable
+    maxDepth: 1
+
+# ── planning ────────────────────────────────────────────────────────────────
+
+# `todo_write` replaces the logged whole list for later model requests; the ACP
+# bridge republishes each write as a plan update.
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true

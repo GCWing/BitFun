@@ -1013,7 +1013,7 @@ async function readLongSessionViewportState(expectedLatestTurnId?: string | null
       '.modern-flowchat-container__messages .virtual-message-list',
     );
     const scroller = root?.querySelector<HTMLElement>(
-      '[data-virtuoso-scroller="true"], [data-virtuoso-scroller]',
+      '[data-flowchat-scroller]',
     ) ?? null;
     const staticScroller = root?.querySelector<HTMLElement>('.virtual-message-list__static-scroller') ?? null;
     const staticItems = root?.querySelector<HTMLElement>('.virtual-message-list__static-items') ?? null;
@@ -1642,7 +1642,7 @@ async function startLongSessionViewportTimelineRecorder(
         };
       }
 
-      if (element.closest('[data-virtuoso-scroller], .virtual-message-list')) {
+      if (element.closest('[data-flowchat-scroller], .virtual-message-list')) {
         return {
           category: 'list-blank',
           itemType: null,
@@ -1839,7 +1839,7 @@ async function startLongSessionViewportTimelineRecorder(
         messages?.querySelectorAll<HTMLElement>('.virtual-message-list') ?? []
       );
       const scroller = messages?.querySelector<HTMLElement>(
-        '[data-virtuoso-scroller="true"], [data-virtuoso-scroller]',
+        '[data-flowchat-scroller]',
       ) ?? null;
       const virtualItems = Array.from(
         scroller?.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-turn-id]') ?? []
@@ -1946,7 +1946,7 @@ async function startLongSessionViewportTimelineRecorder(
         '.modern-flowchat-container__messages .virtual-message-list',
       );
       const scroller = root?.querySelector<HTMLElement>(
-        '[data-virtuoso-scroller="true"], [data-virtuoso-scroller]',
+        '[data-flowchat-scroller]',
       ) ?? null;
       const footer = scroller?.querySelector<HTMLElement>('.message-list-footer') ?? null;
       const footerRect = footer?.getBoundingClientRect() ?? null;
@@ -2351,7 +2351,7 @@ async function startLongSessionViewportTimelineRecorder(
         '.modern-flowchat-container__messages .virtual-message-list',
       );
       const scroller = root?.querySelector<HTMLElement>(
-        '[data-virtuoso-scroller="true"], [data-virtuoso-scroller]',
+        '[data-flowchat-scroller]',
       ) ?? null;
       const inputOverlay = document.querySelector<HTMLElement>('.bitfun-chat-input-drop-zone');
       const scrollerRect = scroller?.getBoundingClientRect() ?? null;
@@ -3809,8 +3809,7 @@ async function readLongSessionScrollerMetrics(): Promise<{
 }> {
   return browser.execute(() => {
     const scroller = document.querySelector<HTMLElement>(
-      '.modern-flowchat-container__messages [data-virtuoso-scroller="true"], ' +
-      '.modern-flowchat-container__messages [data-virtuoso-scroller]',
+      '.modern-flowchat-container__messages [data-flowchat-scroller]',
     );
     if (!scroller) {
       throw new Error('Could not find long-session scroller for post-visible interaction');
@@ -3882,8 +3881,7 @@ async function performLongSessionPostVisibleInteraction(
 
   return browser.execute((interactionType) => {
     const scroller = document.querySelector<HTMLElement>(
-      '.modern-flowchat-container__messages [data-virtuoso-scroller="true"], ' +
-      '.modern-flowchat-container__messages [data-virtuoso-scroller]',
+      '.modern-flowchat-container__messages [data-flowchat-scroller]',
     );
     if (!scroller) {
       throw new Error('Could not find long-session scroller for first-scroll interaction');

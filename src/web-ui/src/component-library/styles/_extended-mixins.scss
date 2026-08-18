@@ -126,15 +126,25 @@
 
 // ==================== Interaction mixins ====================
 
-@mixin transition($properties: all, $duration: $motion-base, $easing: $easing-standard) {
+@mixin transition($properties: transform, $duration: $motion-base, $easing: $easing-standard) {
   transition: $properties $duration $easing;
 }
 
 @mixin hover-lift($offset: -2px, $scale: 1.02) {
-  transition: all $motion-base $easing-standard;
-  
-  &:hover {
-    transform: translateY($offset) scale($scale);
+  transition: transform $motion-base $easing-standard;
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      transform: translateY($offset) scale($scale);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
   }
 }
 
@@ -179,7 +189,7 @@
     stroke: currentColor;
     fill: none;
     stroke-width: $stroke-width-default;
-    transition: all 0.3s $easing-smooth;
+    transition: stroke-width 0.3s $easing-smooth;
   }
 
   &:hover:not(:disabled) {
@@ -193,6 +203,12 @@
   &[data-active="true"] {
     svg {
       stroke-width: $stroke-width-active;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    svg {
+      transition: none;
     }
   }
 }

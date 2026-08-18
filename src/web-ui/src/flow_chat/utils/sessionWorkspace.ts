@@ -25,7 +25,7 @@ export function isRemoteWorkspaceSession(
 export function sessionExecutionWorkspacePath(
   session: SessionWorkspaceBinding,
 ): string | undefined {
-  return session.workspacePath || session.config.workspacePath;
+  return session.workspacePath || session.config?.workspacePath;
 }
 
 /** Main-project root that owns session persistence and orchestration state. */
@@ -34,7 +34,7 @@ export function sessionProjectWorkspacePath(
 ): string | undefined {
   return (
     session.projectWorkspacePath
-    || session.config.projectWorkspacePath
+    || session.config?.projectWorkspacePath
     || sessionExecutionWorkspacePath(session)
   );
 }

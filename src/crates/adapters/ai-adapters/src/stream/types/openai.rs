@@ -221,6 +221,7 @@ impl OpenAISSEData {
                 tool_call_completion: None,
                 finish_reason: None,
                 provider_metadata: None,
+                model_response_replay: None,
             });
         }
 
@@ -236,6 +237,7 @@ impl OpenAISSEData {
                     tool_call_completion: None,
                     finish_reason: None,
                     provider_metadata: None,
+                    model_response_replay: None,
                 });
             }
         }
@@ -256,6 +258,7 @@ impl OpenAISSEData {
                 tool_call_completion: Some(map_openai_finish_reason(&finish_reason)),
                 finish_reason: Some(finish_reason),
                 provider_metadata: None,
+                model_response_replay: None,
             });
             return responses;
         }
@@ -270,6 +273,7 @@ impl OpenAISSEData {
                 tool_call_completion: None,
                 finish_reason,
                 provider_metadata: None,
+                model_response_replay: None,
             });
         }
 

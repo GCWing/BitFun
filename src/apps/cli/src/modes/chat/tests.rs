@@ -41,11 +41,6 @@ mod tests {
     use crate::ui::chat::ChatView;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use crate::ui::theme::Theme;
-    use bitfun_app_server_protocol::hook::{
-        NativeHookFileSummary as NativeHookFileView,
-        NativeHookHandlerSummary as NativeHookHandlerView, NativeHookOverview,
-        NativeHookRuleSummary as NativeHookRuleView,
-    };
     use bitfun_events::{AgenticEvent, ToolEventData};
     use bitfun_product_domains::external_hook_catalog::{
         ExternalHookCatalogEntry, ExternalHookCatalogSnapshotV1, ExternalHookHandlerKind,
@@ -62,6 +57,11 @@ mod tests {
     };
     use bitfun_product_domains::external_subagents::{
         ExternalSubagentActivationState, ExternalSubagentModelBindingTarget,
+    };
+    use bitfun_product_domains::native_hooks::{
+        NativeHookFileSummary as NativeHookFileView,
+        NativeHookHandlerSummary as NativeHookHandlerView, NativeHookOverview,
+        NativeHookRuleSummary as NativeHookRuleView,
     };
     use bitfun_runtime_ports::AgentContextReloadTarget;
     use crossterm::event::Event;

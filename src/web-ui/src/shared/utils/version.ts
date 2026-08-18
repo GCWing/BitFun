@@ -10,7 +10,8 @@ const DEFAULT_VERSION_INFO: VersionInfo = {
   buildDate: new Date(0).toISOString(),
   buildTimestamp: 0,
   isDev: import.meta.env.DEV,
-  buildEnv: import.meta.env.MODE as VersionInfo['buildEnv']
+  buildEnv: import.meta.env.MODE as VersionInfo['buildEnv'],
+  releaseChannel: 'stable'
 };
 
 

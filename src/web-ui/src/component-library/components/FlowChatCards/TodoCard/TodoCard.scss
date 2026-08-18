@@ -17,7 +17,9 @@
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: 6px;
     font-size: 13px;
-    transition: all 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease;
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-hover);
@@ -132,7 +134,7 @@
 
     &--in-progress {
       color: var(--bf-appearance-token-color-warning);
-      animation: pulse 2s ease-in-out infinite;
+      animation: bitfun-todo-card-status-pulse 2s ease-in-out infinite;
     }
 
     &--completed {
@@ -165,11 +167,18 @@
   }
 }
 
-@keyframes pulse {
+@keyframes bitfun-todo-card-status-pulse {
   0%, 100% {
     opacity: 1;
   }
   50% {
     opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-card__status-icon--in-progress {
+    animation: none;
+    opacity: 1;
   }
 }

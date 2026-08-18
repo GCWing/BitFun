@@ -12,12 +12,54 @@
     background: var(--bf-appearance-token-element-bg-soft);
     backdrop-filter: blur(8px);
   }
+
+  &-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: 1.45;
+
+    &__icon {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      color: var(--bf-appearance-token-color-warning);
+    }
+  }
   
   &-content {
     flex: 1;
     display: flex;
     overflow: hidden;
     border-radius: 0;
+  }
+
+  &-source-fallback {
+    width: 100%;
+    // Grow to fill a container with a definite height; fall back to the
+    // content-sized `rows` when the host passes `height="auto"` (PlanViewer),
+    // where a percentage height would resolve to the default two rows.
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+    border: 0;
+    outline: 0;
+    padding: $size-gap-3;
+    box-sizing: border-box;
+    background: var(--bf-appearance-token-color-bg-scene);
+    color: var(--bf-appearance-token-color-text-primary);
+    font: inherit;
+    font-family: var(--bf-appearance-token-font-family-mono);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow: auto;
   }
   
   &-edit-panel,

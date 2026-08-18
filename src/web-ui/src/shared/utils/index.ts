@@ -7,6 +7,7 @@ export * from './validation';
 
 export * from './logger';
 export * from './timing';
+export * from './motionPreference';
 export * from './debugProbe';
 
 

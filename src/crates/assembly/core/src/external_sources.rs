@@ -44,7 +44,8 @@ use crate::agentic::workspace::workspace_route_key;
 use crate::external_mcp::{
     reconcile_external_mcp_catalog, BitFunExternalMcpRuntime, ExternalMcpDecision,
     ExternalMcpDecisions, ExternalMcpProductState, ExternalMcpRuntimePort,
-    ExternalMcpRuntimeStatus, NativeMcpCandidate,
+    ExternalMcpRuntimeStatus, NativeMcpCandidate, EXTERNAL_MCP_RUNTIME_FAILED,
+    EXTERNAL_MCP_RUNTIME_PREPARATION_FAILED, EXTERNAL_MCP_RUNTIME_STATUS_UNAVAILABLE,
 };
 use crate::external_subagents::{
     project_external_subagents_read_only, reconcile_external_subagents, ExternalSubagentDecisions,
@@ -1999,7 +2000,7 @@ impl WorkspaceExternalSourceService {
                     conflict_choices: &preferences.mcp_conflict_choices,
                 },
             ),
-            Err(error) => {
+            Err(_) => {
                 let mut state = reconcile_external_mcp_catalog(
                     self.execution_domain_id.as_str(),
                     &mcp_workspace_key,
@@ -2014,7 +2015,7 @@ impl WorkspaceExternalSourceService {
                 for entry in &mut state.entries {
                     entry.runtime_id = None;
                     entry.activation_state = ExternalMcpActivationState::RuntimeUnavailable {
-                        reason: error.clone(),
+                        reason: "external_mcp.native_configuration_unavailable".to_string(),
                     };
                 }
                 state.active.clear();
@@ -2253,7 +2254,7 @@ impl WorkspaceExternalSourceService {
                 ExternalMcpActivationState::Active | ExternalMcpActivationState::Starting
             ) {
                 entry.activation_state = ExternalMcpActivationState::RuntimeUnavailable {
-                    reason: "This Host exposes discovery only; use Desktop or an authenticated Peer Host to run external MCP servers".to_string(),
+                    reason: "external_mcp.runtime.host_read_only".to_string(),
                 };
             }
         }
@@ -2390,9 +2391,7 @@ impl WorkspaceExternalSourceService {
                 let status = managed_statuses
                     .get(&candidate.runtime_id)
                     .cloned()
-                    .unwrap_or_else(|| {
-                        Err("The external MCP server status is unavailable".to_string())
-                    });
+                    .unwrap_or_else(|| Err(EXTERNAL_MCP_RUNTIME_STATUS_UNAVAILABLE.to_string()));
                 // Keep failed registrations managed until the user disables
                 // them. Re-installing from a status error would turn a
                 // persistent startup failure into an unbounded retry loop.
@@ -2408,8 +2407,10 @@ impl WorkspaceExternalSourceService {
                     .prepare_server_guarded(&server_id, &behavior_version)
             })
             .await
-            .map_err(|_| "The external MCP configuration could not be prepared".to_string())
-            .and_then(|result| result.map_err(|error| error.message));
+            .map_err(|_| EXTERNAL_MCP_RUNTIME_PREPARATION_FAILED.to_string())
+            .and_then(|result| {
+                result.map_err(|_| EXTERNAL_MCP_RUNTIME_PREPARATION_FAILED.to_string())
+            });
 
             let activation = match prepared {
                 Ok(prepared) => {
@@ -3344,6 +3345,149 @@ impl WorkspaceExternalSourceService {
         )
         .await?;
         propagate_tool_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.control_plane).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn set_tool_targets_enabled(
+        &self,
+        decisions: Vec<(String, String)>,
+        enabled: bool,
+        expected_catalog_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.generation != expected_catalog_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(stale_operation_error(
+                "External tool catalog changed; refresh before retrying",
+            ));
+        }
+        for (approval_key, decision_key) in &decisions {
+            let source = snapshot
+                .tools
+                .iter()
+                .find(|tool| {
+                    tool.approval_key == *approval_key && tool.decision_key == *decision_key
+                })
+                .map(|tool| &tool.definition.id.target.source)
+                .ok_or_else(|| {
+                    missing_candidate_error("External tool decision is no longer available")
+                })?;
+            if enabled {
+                ensure_source_capability_active(&snapshot, source, EXTERNAL_CAPABILITY_TOOL)?;
+            }
+        }
+        let preferences = persist_capability_bulk_decisions(
+            ExternalCapabilityBulkDecisionSet::Tool(decisions),
+            enabled,
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_tool_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.control_plane).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn set_subagents_enabled(
+        &self,
+        decisions: Vec<(String, String)>,
+        enabled: bool,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.subagent_generation != expected_subagent_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(stale_operation_error(
+                "External subagent catalog changed; refresh before retrying",
+            ));
+        }
+        for (candidate_id, decision_key) in &decisions {
+            let summary = snapshot
+                .subagents
+                .iter()
+                .find(|summary| {
+                    summary.candidate_id.as_str() == candidate_id
+                        && summary.decision_key == *decision_key
+                })
+                .ok_or_else(|| {
+                    missing_candidate_error("External subagent decision is no longer available")
+                })?;
+            if enabled {
+                ensure_source_set_capability_active(
+                    &snapshot,
+                    &summary.source_keys,
+                    EXTERNAL_CAPABILITY_SUBAGENT,
+                )?;
+            }
+        }
+        let preferences = persist_capability_bulk_decisions(
+            ExternalCapabilityBulkDecisionSet::Subagent(
+                decisions
+                    .into_iter()
+                    .map(|(_, decision_key)| decision_key)
+                    .collect(),
+            ),
+            enabled,
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_subagent_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.control_plane).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn set_mcp_servers_enabled(
+        &self,
+        decisions: Vec<(String, String)>,
+        enabled: bool,
+        expected_mcp_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.mcp_generation != expected_mcp_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(stale_operation_error(
+                "External MCP catalog changed; refresh before retrying",
+            ));
+        }
+        for (candidate_id, decision_key) in &decisions {
+            let server = snapshot
+                .mcp_servers
+                .iter()
+                .find(|server| {
+                    server.candidate_id == *candidate_id && server.decision_key == *decision_key
+                })
+                .ok_or_else(|| {
+                    missing_candidate_error("External MCP decision is no longer available")
+                })?;
+            if enabled {
+                ensure_source_capability_active(
+                    &snapshot,
+                    &server.definition.id.source,
+                    EXTERNAL_CAPABILITY_MCP,
+                )?;
+            }
+        }
+        let preferences = persist_capability_bulk_decisions(
+            ExternalCapabilityBulkDecisionSet::Mcp(
+                decisions
+                    .into_iter()
+                    .map(|(_, decision_key)| decision_key)
+                    .collect(),
+            ),
+            enabled,
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_mcp_preferences(&preferences);
         let command_snapshot = lock_coordinator(&self.control_plane).snapshot();
         self.rebuild_product_snapshot(command_snapshot).await
     }
@@ -4490,6 +4634,7 @@ fn mark_external_mcp_runtime_unavailable(
     candidate: &crate::external_mcp::ActiveExternalMcpCandidate,
     reason: String,
 ) {
+    let reason = stable_external_mcp_runtime_reason(&reason).to_string();
     if let Some(entry) = state
         .entries
         .iter_mut()
@@ -4507,6 +4652,31 @@ fn mark_external_mcp_runtime_unavailable(
         )
         .with_asset_kind(ExternalSourceAssetKind::Mcp),
     );
+}
+
+fn stable_external_mcp_runtime_reason(reason: &str) -> &str {
+    match reason {
+        "external_mcp.start.authentication"
+        | "external_mcp.start.timeout"
+        | "external_mcp.start.command_unavailable"
+        | "external_mcp.start.working_directory_unavailable"
+        | "external_mcp.start.connection_failed"
+        | "external_mcp.start.protocol_failed"
+        | "external_mcp.start.other"
+        | "external_mcp.native_configuration_unavailable"
+        | "external_mcp.runtime.host_read_only"
+        | "external_mcp.runtime.configuration_changed"
+        | "external_mcp.runtime.configuration_invalid"
+        | "external_mcp.runtime.host_unavailable"
+        | "external_mcp.runtime.install_failed"
+        | "external_mcp.runtime.preparation_failed"
+        | "external_mcp.runtime.retire_failed"
+        | "external_mcp.runtime.server_missing"
+        | "external_mcp.runtime.failed"
+        | "external_mcp.runtime.stopped"
+        | "external_mcp.runtime.status_unavailable" => reason,
+        _ => EXTERNAL_MCP_RUNTIME_FAILED,
+    }
 }
 
 fn merge_mcp_state(
@@ -5077,6 +5247,88 @@ async fn persist_tool_target_decision(
         .and_then(|(applied, config)| {
             applied.then_some(config).ok_or_else(|| {
                 stale_operation_error("External tool preferences changed; refresh before retrying")
+            })
+        })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ExternalCapabilityBulkDecisionSet {
+    Tool(Vec<(String, String)>),
+    Subagent(Vec<String>),
+    Mcp(Vec<String>),
+}
+
+fn apply_capability_bulk_decisions(
+    config: &mut ExternalSourcesConfig,
+    decisions: ExternalCapabilityBulkDecisionSet,
+    enabled: bool,
+) -> bool {
+    let changed = match decisions {
+        ExternalCapabilityBulkDecisionSet::Tool(decisions) => {
+            let previous_approved = config.approved_tool_targets.clone();
+            let previous_declined = config.declined_tool_decisions.clone();
+            for (approval_key, decision_key) in decisions {
+                reconcile_tool_target_decision(config, approval_key, decision_key, enabled);
+            }
+            config.approved_tool_targets != previous_approved
+                || config.declined_tool_decisions != previous_declined
+        }
+        ExternalCapabilityBulkDecisionSet::Subagent(decisions) => {
+            let previous_approved = config.approved_subagent_envelopes.clone();
+            let previous_declined = config.declined_subagent_decisions.clone();
+            for decision_key in decisions {
+                if enabled {
+                    config
+                        .approved_subagent_envelopes
+                        .insert(decision_key.clone());
+                    config.declined_subagent_decisions.remove(&decision_key);
+                } else {
+                    config.approved_subagent_envelopes.remove(&decision_key);
+                    config
+                        .declined_subagent_decisions
+                        .insert(decision_key.clone(), decision_key);
+                }
+            }
+            config.approved_subagent_envelopes != previous_approved
+                || config.declined_subagent_decisions != previous_declined
+        }
+        ExternalCapabilityBulkDecisionSet::Mcp(decisions) => {
+            let previous = config.mcp_server_decisions.clone();
+            for decision_key in decisions {
+                reconcile_versioned_mcp_server_decision(
+                    &mut config.mcp_server_decisions,
+                    decision_key,
+                    enabled,
+                );
+            }
+            config.mcp_server_decisions != previous
+        }
+    };
+    if changed {
+        config.preference_revision = config.preference_revision.saturating_add(1);
+    }
+    changed
+}
+
+async fn persist_capability_bulk_decisions(
+    decisions: ExternalCapabilityBulkDecisionSet,
+    enabled: bool,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            apply_capability_bulk_decisions(config, decisions, enabled);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External capability preferences changed; refresh before retrying",
+                )
             })
         })
 }
@@ -6472,6 +6724,24 @@ pub async fn set_external_tool_target_decision(
         .await
 }
 
+pub async fn set_external_tool_targets_enabled(
+    workspace_root: Option<&Path>,
+    decisions: Vec<(String, String)>,
+    enabled: bool,
+    expected_catalog_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_tool_targets_enabled(
+            decisions,
+            enabled,
+            expected_catalog_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
 pub async fn set_external_tool_conflict_choice(
     workspace_root: Option<&Path>,
     conflict_key: &str,
@@ -6498,6 +6768,24 @@ pub async fn set_external_mcp_server_decision(
             candidate_id,
             decision_key,
             approved,
+            expected_mcp_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
+pub async fn set_external_mcp_servers_enabled(
+    workspace_root: Option<&Path>,
+    decisions: Vec<(String, String)>,
+    enabled: bool,
+    expected_mcp_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_mcp_servers_enabled(
+            decisions,
+            enabled,
             expected_mcp_generation,
             expected_preference_revision,
         )
@@ -6540,6 +6828,24 @@ pub async fn set_external_subagent_activation(
             expected_subagent_generation,
             expected_preference_revision,
             decision_key,
+        )
+        .await
+}
+
+pub async fn set_external_subagents_enabled(
+    workspace_root: Option<&Path>,
+    decisions: Vec<(String, String)>,
+    enabled: bool,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_subagents_enabled(
+            decisions,
+            enabled,
+            expected_subagent_generation,
+            expected_preference_revision,
         )
         .await
 }
@@ -7085,6 +7391,24 @@ mod tests {
     };
     use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceDefinition;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn runtime_reason_projection_preserves_known_codes_and_hides_raw_errors() {
+        for reason in [
+            "external_mcp.start.authentication",
+            "external_mcp.start.timeout",
+            "external_mcp.runtime.host_unavailable",
+            "external_mcp.runtime.server_missing",
+            "external_mcp.runtime.failed",
+            "external_mcp.runtime.stopped",
+        ] {
+            assert_eq!(stable_external_mcp_runtime_reason(reason), reason);
+        }
+        assert_eq!(
+            stable_external_mcp_runtime_reason("failed to read D:/private/mcp.json: access denied"),
+            EXTERNAL_MCP_RUNTIME_FAILED
+        );
+    }
 
     fn native_mcp_config_with_pin(pin: &str) -> MCPServerConfig {
         MCPServerConfig {
@@ -9767,6 +10091,115 @@ mod tests {
             config.approved_tool_targets,
             BTreeSet::from(["approval-a".to_string()])
         );
+    }
+
+    #[test]
+    fn capability_bulk_decisions_update_multiple_items_with_one_revision() {
+        let mut config = ExternalSourcesConfig {
+            preference_revision: 7,
+            ..Default::default()
+        };
+
+        assert!(apply_capability_bulk_decisions(
+            &mut config,
+            ExternalCapabilityBulkDecisionSet::Tool(vec![
+                ("tool-approval-a".to_string(), "tool-decision-a".to_string()),
+                ("tool-approval-b".to_string(), "tool-decision-b".to_string()),
+            ]),
+            true,
+        ));
+        assert_eq!(config.preference_revision, 8);
+        assert_eq!(
+            config.approved_tool_targets,
+            BTreeSet::from(["tool-approval-a".to_string(), "tool-approval-b".to_string(),])
+        );
+
+        assert!(!apply_capability_bulk_decisions(
+            &mut config,
+            ExternalCapabilityBulkDecisionSet::Tool(vec![
+                ("tool-approval-a".to_string(), "tool-decision-a".to_string()),
+                ("tool-approval-b".to_string(), "tool-decision-b".to_string()),
+            ]),
+            true,
+        ));
+        assert_eq!(config.preference_revision, 8);
+
+        assert!(apply_capability_bulk_decisions(
+            &mut config,
+            ExternalCapabilityBulkDecisionSet::Mcp(vec![
+                "external_mcp_approval:local-user:workspace:docs:v1".to_string(),
+                "external_mcp_approval:local-user:workspace:search:v1".to_string(),
+            ]),
+            false,
+        ));
+        assert_eq!(config.preference_revision, 9);
+        assert!(config
+            .mcp_server_decisions
+            .values()
+            .all(|decision| !decision.approved));
+
+        assert!(apply_capability_bulk_decisions(
+            &mut config,
+            ExternalCapabilityBulkDecisionSet::Subagent(vec![
+                "agent-decision-a".to_string(),
+                "agent-decision-b".to_string(),
+            ]),
+            true,
+        ));
+        assert_eq!(config.preference_revision, 10);
+        assert_eq!(
+            config.approved_subagent_envelopes,
+            BTreeSet::from([
+                "agent-decision-a".to_string(),
+                "agent-decision-b".to_string(),
+            ])
+        );
+        assert!(apply_capability_bulk_decisions(
+            &mut config,
+            ExternalCapabilityBulkDecisionSet::Subagent(vec![
+                "agent-decision-a".to_string(),
+                "agent-decision-b".to_string(),
+            ]),
+            false,
+        ));
+        assert_eq!(config.preference_revision, 11);
+        assert!(config.approved_subagent_envelopes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn capability_bulk_actions_reject_catalog_drift_without_expanding_the_decision_set() {
+        let service = test_service(Vec::new());
+        {
+            let mut snapshot = lock_snapshot(&service.snapshot);
+            snapshot.generation = 12;
+            snapshot.subagent_generation = 13;
+            snapshot.mcp_generation = 14;
+            snapshot.preference_revision = 7;
+        }
+
+        let errors = [
+            service
+                .set_tool_targets_enabled(Vec::new(), true, 11, 7)
+                .await
+                .expect_err("tool catalog drift must require a new review"),
+            service
+                .set_subagents_enabled(Vec::new(), true, 12, 7)
+                .await
+                .expect_err("subagent catalog drift must require a new review"),
+            service
+                .set_mcp_servers_enabled(Vec::new(), true, 13, 7)
+                .await
+                .expect_err("MCP catalog drift must require a new review"),
+        ];
+
+        for error in errors {
+            assert_eq!(
+                ExternalSourceOperationError::decode(&error)
+                    .expect("bulk catalog drift uses the typed error contract")
+                    .code,
+                ExternalSourceOperationErrorCode::StaleRevision
+            );
+        }
     }
 
     #[tokio::test]

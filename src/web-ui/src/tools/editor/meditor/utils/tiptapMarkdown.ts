@@ -5,6 +5,7 @@ import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
 import type { JSONContent } from '@tiptap/core';
 import { createBlockId } from './blockId';
+import { serializeMarkdownFrontmatter, splitMarkdownFrontmatter } from './markdownFrontmatter';
 
 type MdastNode = {
   type?: string;
@@ -108,6 +109,7 @@ const TOP_LEVEL_BLOCK_TYPES = new Set([
   'horizontalRule',
   'markdownTable',
   'details',
+  'frontmatter',
   'renderOnlyBlock',
   'rawHtmlBlock',
 ]);
@@ -194,6 +196,45 @@ function createRenderOnlyBlock(markdown: string, kind: string): JSONContent {
       kind,
     },
   };
+}
+
+function createFrontmatterBlock(
+  frontmatter: NonNullable<ReturnType<typeof splitMarkdownFrontmatter>>,
+  bodyPrefix: string,
+): JSONContent {
+  return {
+    type: 'frontmatter',
+    attrs: {
+      yaml: frontmatter.yaml,
+      delimiter: frontmatter.delimiter,
+      openingLineEnding: frontmatter.openingLineEnding,
+      contentLineEnding: frontmatter.contentLineEnding,
+      closingLineEnding: frontmatter.closingLineEnding,
+      bodyPrefix,
+    },
+  };
+}
+
+function getLeadingBlankLines(markdown: string): string {
+  return markdown.match(/^(?:[\t ]*\r?\n)+/)?.[0] ?? '';
+}
+
+function serializeFrontmatterNode(node: JSONContent): string {
+  return serializeMarkdownFrontmatter({
+    delimiter: node.attrs?.delimiter === '+++' ? '+++' : '---',
+    yaml: String(node.attrs?.yaml ?? ''),
+    openingLineEnding: node.attrs?.openingLineEnding === '\r\n' ? '\r\n' : '\n',
+    contentLineEnding: node.attrs?.contentLineEnding === '\r\n'
+      ? '\r\n'
+      : node.attrs?.contentLineEnding === '\n'
+        ? '\n'
+        : '',
+    closingLineEnding: node.attrs?.closingLineEnding === '\r\n'
+      ? '\r\n'
+      : node.attrs?.closingLineEnding === '\n'
+        ? '\n'
+        : '',
+  });
 }
 
 function withBlockAttrs(node: JSONContent, align: string | null, alignGroup: number | null): JSONContent {
@@ -708,10 +749,6 @@ function parseMarkdownTree(markdown: string): MdastNode {
     .parse(markdown) as MdastNode;
 }
 
-function hasMarkdownFrontmatter(markdown: string): boolean {
-  return /^(---|\+\+\+)\r?\n[\s\S]*?\r?\n\1(?:\r?\n|$)/.test(markdown);
-}
-
 function normalizeComparableJson(
   value: ComparableJsonValue,
   keysToStrip: Set<string>,
@@ -1224,11 +1261,8 @@ export function analyzeMarkdownEditability(markdown: string): MarkdownEditabilit
     softIssues.add('multipleTrailingBlankLines');
   }
 
-  if (hasMarkdownFrontmatter(markdown)) {
-    hardIssues.add('frontmatter');
-  }
-
-  const tree = parseMarkdownTree(markdown);
+  const frontmatter = splitMarkdownFrontmatter(markdown);
+  const tree = parseMarkdownTree(frontmatter?.body ?? markdown);
 
   walkMdast(tree, (node) => {
     if (node.type === 'footnoteDefinition' || node.type === 'footnoteReference') {
@@ -1614,6 +1648,8 @@ function renderBlock(node: JSONContent, depth = 0): string {
     }
     case 'horizontalRule':
       return '---';
+    case 'frontmatter':
+      return serializeFrontmatterNode(node);
     case 'details': {
       const summaryNode = getDetailsChild(node, 'detailsSummary');
       const detailsContentNode = getDetailsChild(node, 'detailsContent');
@@ -1673,9 +1709,16 @@ function wrapAlignedMarkdownBlocks(markdownBlocks: string[], align: string | nul
 }
 
 export function markdownToTiptapDoc(markdown: string): JSONContent {
-  const tree = parseMarkdownTree(markdown);
+  const frontmatter = splitMarkdownFrontmatter(markdown);
+  const bodyPrefix = frontmatter ? getLeadingBlankLines(frontmatter.body) : '';
+  const markdownBody = frontmatter ? frontmatter.body.slice(bodyPrefix.length) : markdown;
+  const tree = parseMarkdownTree(markdownBody);
 
-  const content = withTopLevelBlockIds(convertRootMarkdownChildren(tree.children ?? [], markdown));
+  const bodyContent = convertRootMarkdownChildren(tree.children ?? [], markdownBody);
+  const content = withTopLevelBlockIds([
+    ...(frontmatter ? [createFrontmatterBlock(frontmatter, bodyPrefix)] : []),
+    ...bodyContent,
+  ]);
 
   return {
     type: 'doc',
@@ -1688,6 +1731,8 @@ export function tiptapDocToMarkdown(
   options: TiptapMarkdownOptions = {},
 ): string {
   const content = doc?.content ?? [];
+  const frontmatterNode = content[0]?.type === 'frontmatter' ? content[0] : null;
+  const renderableContent = frontmatterNode ? content.slice(1) : content;
   const chunks: string[] = [];
   let group: string[] = [];
   let groupAlign: string | null = null;
@@ -1704,7 +1749,7 @@ export function tiptapDocToMarkdown(
     groupAlignId = null;
   };
 
-  content.forEach((node: JSONContent) => {
+  renderableContent.forEach((node: JSONContent) => {
     const rendered = renderBlock(node);
     if (!rendered) {
       return;
@@ -1742,18 +1787,31 @@ export function tiptapDocToMarkdown(
     .join('\n\n')
     .replace(/<\/div>\n\n<div\b/g, '</div>\n<div');
 
+  const frontmatterRaw = frontmatterNode ? serializeFrontmatterNode(frontmatterNode) : '';
+  const frontmatterBodyPrefix = frontmatterNode ? String(frontmatterNode.attrs?.bodyPrefix ?? '') : '';
+  const frontmatterEnvelope = `${frontmatterRaw}${frontmatterBodyPrefix}`;
   if (!markdown) {
-    return '';
+    if (!frontmatterEnvelope) {
+      return '';
+    }
+    return options.preserveTrailingNewline && !frontmatterEnvelope.endsWith('\n')
+      ? `${frontmatterEnvelope}\n`
+      : frontmatterEnvelope;
   }
 
-  return options.preserveTrailingNewline ? `${markdown}\n` : markdown;
+  const combinedMarkdown = `${frontmatterEnvelope}${markdown}`;
+  return options.preserveTrailingNewline && !combinedMarkdown.endsWith('\n')
+    ? `${combinedMarkdown}\n`
+    : combinedMarkdown;
 }
 
 export function tiptapDocToTopLevelMarkdownBlocks(
   doc: JSONContent | null | undefined,
 ): TiptapTopLevelMarkdownBlock[] {
-  return (doc?.content ?? []).map((node: JSONContent) => ({
-    blockId: typeof node.attrs?.blockId === 'string' ? node.attrs.blockId : undefined,
-    markdown: renderBlock(node).trim(),
-  }));
+  return (doc?.content ?? [])
+    .filter((node: JSONContent) => node.type !== 'frontmatter')
+    .map((node: JSONContent) => ({
+      blockId: typeof node.attrs?.blockId === 'string' ? node.attrs.blockId : undefined,
+      markdown: renderBlock(node).trim(),
+    }));
 }

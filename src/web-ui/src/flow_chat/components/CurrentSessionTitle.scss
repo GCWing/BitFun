@@ -42,7 +42,11 @@
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     opacity: 1;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard;
     flex-shrink: 0;
 
     &:hover {

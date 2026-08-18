@@ -671,6 +671,17 @@ $opacity-high: 0.8 !default;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-git-diff-view__loading-spinner,
+  .bitfun-git-diff-view__ai-spinner,
+  .bitfun-git-diff-view__commit-dialog-overlay,
+  .bitfun-git-diff-view__commit-dialog,
+  .bitfun-git-diff-view__ai-error,
+  .bitfun-git-diff-view__ai-info {
+    animation: none;
+  }
+}
+
 @media (max-width: 768px) {
   .bitfun-git-diff-view {
     &__header {

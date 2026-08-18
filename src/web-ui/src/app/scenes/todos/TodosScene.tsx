@@ -1,0 +1,566 @@
+/**
+ * TodosScene — one place for every scheduled task across all workspaces.
+ *
+ * Two tiers, as the panel's contract:
+ *   - anything due within 24 hours is listed, soonest first;
+ *   - the month calendar carries the whole remaining agenda, near-term runs
+ *     included, so a day cell is never mysteriously empty.
+ *
+ * Todos are scheduled jobs, so this reads and writes the same cron service the
+ * agent's own scheduling tool and the per-workspace editors use. Changes here
+ * broadcast on the shared change event so those views stay in step.
+ */
+
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { CalendarClock, Plus, RefreshCw } from 'lucide-react';
+import { Button, IconButton, PresenceBoundary, confirmDanger } from '@/component-library';
+import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
+import { useI18n } from '@/infrastructure/i18n';
+import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { notificationService } from '@/shared/notification-system';
+import { createLogger } from '@/shared/utils/logger';
+import { normalizePath } from '@/shared/utils/pathUtils';
+import { WorkspaceKind } from '@/shared/types';
+import {
+  ASSISTANT_WORKSPACE_AGENT_TYPE,
+  DEFAULT_AGENT_TYPE,
+  EMPTY_VALIDATION_ERRORS,
+  SCHEDULED_JOBS_CHANGED_EVENT,
+  buildScheduleFromDraft,
+  buildTargetFromDraft,
+  buildWorkspaceRef,
+  createEmptyDraft,
+  hasValidationErrors,
+  jobToDraft,
+  notifyScheduledJobsChanged,
+  validateDraft,
+  type JobDraft,
+  type JobDraftValidationErrors,
+} from '@/app/components/scheduled-jobs/scheduledJobDraft';
+import TodoCalendar from './components/TodoCalendar';
+import TodoEditor from './components/TodoEditor';
+import TodoItemRow from './components/TodoItemRow';
+import {
+  buildTodoBuckets,
+  groupOccurrencesByDay,
+  monthRangeMs,
+  type InactiveReason,
+} from './todoOccurrences';
+import { buildWorkspaceOptions, formatDateTime } from './todoPresentation';
+import './TodosScene.scss';
+
+const log = createLogger('TodosScene');
+
+/** Keeps countdowns honest without re-rendering more than once a minute. */
+const CLOCK_TICK_MS = 30_000;
+
+function startOfCurrentMonthMs(nowMs: number): number {
+  const now = new Date(nowMs);
+  return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+}
+
+const TodosScene: React.FC = () => {
+  const { t, formatDate } = useI18n(['scenes/todos', 'common', 'shared']);
+  const instanceIdRef = useRef(`todos-scene-${Math.random().toString(36).slice(2)}`);
+
+  const { openedWorkspacesList, currentWorkspace, primaryAssistantWorkspaceId } = useWorkspaceContext();
+
+  const [jobs, setJobs] = useState<CronJob[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [monthAnchorMs, setMonthAnchorMs] = useState(() => startOfCurrentMonthMs(Date.now()));
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  // The whole job, not just its id: saving has to preserve the target kind a
+  // job was created with, so editing a session-bound job here never silently
+  // turns it into one that launches a fresh session.
+  const [editingJob, setEditingJob] = useState<CronJob | null>(null);
+  const [draft, setDraft] = useState<JobDraft>(() => createEmptyDraft());
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('');
+  const [validationErrors, setValidationErrors] = useState<JobDraftValidationErrors>(
+    EMPTY_VALIDATION_ERRORS,
+  );
+
+  const workspaceOptions = useMemo(
+    () => buildWorkspaceOptions(openedWorkspacesList),
+    [openedWorkspacesList],
+  );
+  const liveEditorSnapshot = {
+    editingJob,
+    draft,
+    validationErrors,
+    workspaceOptions,
+    selectedWorkspaceId,
+    saving,
+  };
+  const retainedEditorSnapshotRef = useRef(liveEditorSnapshot);
+  useLayoutEffect(() => {
+    if (editorOpen) {
+      retainedEditorSnapshotRef.current = {
+        editingJob,
+        draft,
+        validationErrors,
+        workspaceOptions,
+        selectedWorkspaceId,
+        saving,
+      };
+    }
+  }, [
+    draft,
+    editingJob,
+    editorOpen,
+    saving,
+    selectedWorkspaceId,
+    validationErrors,
+    workspaceOptions,
+  ]);
+  const renderedEditor = editorOpen ? liveEditorSnapshot : retainedEditorSnapshotRef.current;
+
+  /** Where a new Todo lands by default: current workspace, else the assistant. */
+  const defaultWorkspaceId = useMemo(() => {
+    if (currentWorkspace && workspaceOptions.some((o) => o.value === currentWorkspace.id)) {
+      return currentWorkspace.id;
+    }
+    if (
+      primaryAssistantWorkspaceId
+      && workspaceOptions.some((o) => o.value === primaryAssistantWorkspaceId)
+    ) {
+      return primaryAssistantWorkspaceId;
+    }
+    return workspaceOptions[0]?.value ?? '';
+  }, [currentWorkspace, primaryAssistantWorkspaceId, workspaceOptions]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), CLOCK_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const loadJobs = useCallback(async () => {
+    setLoading(true);
+    try {
+      // No filters: the Todos panel is the cross-workspace view.
+      const result = await cronAPI.listJobs({});
+      setJobs(result);
+    } catch (error) {
+      log.error('Failed to load scheduled jobs for the Todos scene', { error });
+      notificationService.error(
+        t('messages.loadFailed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => { void loadJobs(); }, [loadJobs]);
+
+  // Another view (a workspace editor, or the agent's own scheduling tool)
+  // changed a job — reload so the panel is never stale.
+  useEffect(() => {
+    const handleChanged = (event: Event) => {
+      const sourceId = (event as CustomEvent<{ sourceId?: string }>).detail?.sourceId;
+      if (sourceId === instanceIdRef.current) return;
+      void loadJobs();
+    };
+    window.addEventListener(SCHEDULED_JOBS_CHANGED_EVENT, handleChanged);
+    return () => window.removeEventListener(SCHEDULED_JOBS_CHANGED_EVENT, handleChanged);
+  }, [loadJobs]);
+
+  const calendarRange = useMemo(() => monthRangeMs(monthAnchorMs), [monthAnchorMs]);
+
+  const buckets = useMemo(
+    () => buildTodoBuckets(jobs, { nowMs, rangeEndMs: calendarRange.endMs }),
+    [calendarRange.endMs, jobs, nowMs],
+  );
+
+  const selectedDayOccurrences = useMemo(() => {
+    if (!selectedDayKey) return [];
+    return groupOccurrencesByDay(buckets.calendar).get(selectedDayKey) ?? [];
+  }, [buckets.calendar, selectedDayKey]);
+  const retainedSelectedDayOccurrencesRef = useRef(selectedDayOccurrences);
+  useLayoutEffect(() => {
+    if (selectedDayKey) retainedSelectedDayOccurrencesRef.current = selectedDayOccurrences;
+  }, [selectedDayKey, selectedDayOccurrences]);
+  const renderedSelectedDayOccurrences = selectedDayKey
+    ? selectedDayOccurrences
+    : retainedSelectedDayOccurrencesRef.current;
+
+  const resetEditor = useCallback(() => {
+    setEditorOpen(false);
+    setEditingJob(null);
+    setValidationErrors(EMPTY_VALIDATION_ERRORS);
+    setDraft(createEmptyDraft());
+  }, []);
+
+  const handleCreateNew = useCallback(() => {
+    const workspace = workspaceOptions.find((option) => option.value === defaultWorkspaceId);
+    const agentType = workspace?.workspace.workspaceKind === WorkspaceKind.Assistant
+      ? ASSISTANT_WORKSPACE_AGENT_TYPE
+      : DEFAULT_AGENT_TYPE;
+
+    setEditingJob(null);
+    setValidationErrors(EMPTY_VALIDATION_ERRORS);
+    setDraft(createEmptyDraft('', agentType));
+    setSelectedWorkspaceId(defaultWorkspaceId);
+    setEditorOpen(true);
+  }, [defaultWorkspaceId, workspaceOptions]);
+
+  const handleEdit = useCallback((job: CronJob) => {
+    // Toggle the editor shut when the same Todo is clicked twice.
+    if (editorOpen && editingJob?.id === job.id) {
+      resetEditor();
+      return;
+    }
+
+    // Stored refs are normalized, so normalize both sides before comparing.
+    const ref = job.target.workspace;
+    const normalizedJobPath = normalizePath(ref.workspacePath);
+    const matchedOption = workspaceOptions.find((option) => (
+      (ref.workspaceId && option.workspace.id === ref.workspaceId)
+      || normalizePath(option.workspace.rootPath) === normalizedJobPath
+    ));
+
+    setEditingJob(job);
+    setValidationErrors(EMPTY_VALIDATION_ERRORS);
+    setDraft(jobToDraft(job, DEFAULT_AGENT_TYPE));
+    setSelectedWorkspaceId(matchedOption?.value ?? defaultWorkspaceId);
+    setEditorOpen(true);
+  }, [defaultWorkspaceId, editingJob, editorOpen, resetEditor, workspaceOptions]);
+
+  const handleToggleEnabled = useCallback(async (job: CronJob, enabled: boolean) => {
+    try {
+      await cronAPI.updateJob(job.id, { enabled });
+      await loadJobs();
+      notifyScheduledJobsChanged(instanceIdRef.current);
+    } catch (error) {
+      log.error('Failed to toggle Todo', { jobId: job.id, error });
+      notificationService.error(
+        t('messages.updateFailed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }, [loadJobs, t]);
+
+  const handleDelete = useCallback(async (job: CronJob) => {
+    const confirmed = await confirmDanger(t('deleteDialog.title', { name: job.name }), null);
+    if (!confirmed) return;
+
+    try {
+      await cronAPI.deleteJob(job.id);
+      if (editingJob?.id === job.id) resetEditor();
+      await loadJobs();
+      notifyScheduledJobsChanged(instanceIdRef.current);
+    } catch (error) {
+      log.error('Failed to delete Todo', { jobId: job.id, error });
+      notificationService.error(
+        t('messages.deleteFailed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }, [editingJob, loadJobs, resetEditor, t]);
+
+  const handleSave = useCallback(async () => {
+    // New Todos always launch their own session; an existing job keeps whatever
+    // target it was created with, including a binding to a specific session.
+    const targetKind = editingJob?.target.kind ?? 'workspace';
+
+    const nextErrors = validateDraft(targetKind, draft);
+    setValidationErrors(nextErrors);
+    if (hasValidationErrors(nextErrors)) return;
+
+    const option = workspaceOptions.find((entry) => entry.value === selectedWorkspaceId);
+    if (!option) {
+      notificationService.warning(t('messages.workspaceRequired'));
+      return;
+    }
+
+    const workspaceRef = buildWorkspaceRef(
+      option.workspace.rootPath,
+      option.workspace.id,
+      option.remoteConnectionId,
+      option.remoteSshHost,
+    );
+    if (!workspaceRef) {
+      notificationService.warning(t('messages.workspaceRequired'));
+      return;
+    }
+
+    const schedule = buildScheduleFromDraft(draft);
+    const target = buildTargetFromDraft(targetKind, draft, workspaceRef);
+
+    setSaving(true);
+    try {
+      if (editingJob) {
+        const request: UpdateCronJobRequest = {
+          name: draft.name.trim(),
+          payload: { text: draft.text.trim() },
+          enabled: draft.enabled,
+          schedule,
+          target,
+        };
+        await cronAPI.updateJob(editingJob.id, request);
+      } else {
+        const request: CreateCronJobRequest = {
+          name: draft.name.trim(),
+          payload: { text: draft.text.trim() },
+          enabled: draft.enabled,
+          schedule,
+          target,
+        };
+        await cronAPI.createJob(request);
+      }
+      resetEditor();
+      await loadJobs();
+      notifyScheduledJobsChanged(instanceIdRef.current);
+    } catch (error) {
+      log.error('Failed to save Todo', { error });
+      notificationService.error(
+        t('messages.saveFailed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, editingJob, loadJobs, resetEditor, selectedWorkspaceId, t, workspaceOptions]);
+
+  const inactiveStatusLabel = useCallback((reason: InactiveReason) => {
+    switch (reason) {
+      case 'disabled':
+        return t('inactive.disabled');
+      case 'completed':
+        return t('shared:statuses.done');
+      default:
+        return t('inactive.invalid');
+    }
+  }, [t]);
+
+  const summaryLabel = t('header.summary', {
+    total: jobs.length,
+    dueSoon: buckets.upcoming.length,
+  });
+
+  return (
+    <div
+      className="bf-todos"
+      data-bf-scene="todos"
+      data-bf-part="root"
+      data-testid="todos-scene"
+    >
+      <header className="bf-todos__head" data-bf-scene="todos" data-bf-part="header">
+        <div className="bf-todos__head-main">
+          <span className="bf-todos__head-icon" aria-hidden="true"><CalendarClock size={16} /></span>
+          <div className="bf-todos__head-text">
+            <h2 className="bf-todos__title">{t('title')}</h2>
+            <p className="bf-todos__subtitle">{summaryLabel}</p>
+          </div>
+        </div>
+        <div className="bf-todos__head-actions" data-bf-scene="todos" data-bf-part="headerActions">
+          <IconButton
+            type="button"
+            size="xs"
+            aria-label={t('actions.refresh')}
+            tooltip={t('actions.refresh')}
+            onClick={() => { void loadJobs(); }}
+            data-testid="todos-refresh"
+          >
+            <RefreshCw size={14} className={loading ? 'bf-todos__spin' : undefined} />
+          </IconButton>
+          <Button
+            size="small"
+            variant="primary"
+            onClick={handleCreateNew}
+            disabled={workspaceOptions.length === 0}
+            data-testid="todos-new"
+          >
+            <Plus size={13} />
+            <span>{t('actions.newTodo')}</span>
+          </Button>
+        </div>
+      </header>
+
+      <PresenceBoundary
+        active={editorOpen}
+        exitDurationMs={160}
+        minimumExitDurationMs={160}
+      >
+        <div
+          className="bf-todos__editor-presence"
+          data-open={editorOpen ? 'true' : 'false'}
+          aria-hidden={!editorOpen}
+          {...(!editorOpen ? { inert: '' } : {})}
+        >
+          <TodoEditor
+            draft={renderedEditor.draft}
+            onDraftChange={setDraft}
+            validationErrors={renderedEditor.validationErrors}
+            onValidationErrorsChange={setValidationErrors}
+            workspaceOptions={renderedEditor.workspaceOptions}
+            selectedWorkspaceId={renderedEditor.selectedWorkspaceId}
+            onSelectedWorkspaceIdChange={setSelectedWorkspaceId}
+            isEditing={Boolean(renderedEditor.editingJob)}
+            boundSessionId={
+              renderedEditor.editingJob?.target.kind === 'session'
+                ? renderedEditor.editingJob.target.sessionId
+                : null
+            }
+            saving={renderedEditor.saving}
+            onSave={() => { void handleSave(); }}
+            onCancel={resetEditor}
+          />
+        </div>
+      </PresenceBoundary>
+
+      <div className="bf-todos__panes" data-bf-scene="todos" data-bf-part="panes">
+        {/* ── Tier 1: due within 24 hours ───────────────────── */}
+        <section
+          className="bf-todos__pane bf-todos__pane--list"
+          aria-label={t('list.title')}
+          data-bf-scene="todos"
+          data-bf-part="listPane"
+          data-testid="todos-list-pane"
+        >
+          <header className="bf-todos__pane-head">
+            <h3 className="bf-todos__pane-title">{t('list.title')}</h3>
+            <p className="bf-todos__pane-hint">{t('list.hint')}</p>
+          </header>
+
+          {buckets.upcoming.length === 0 ? (
+            <p className="bf-todos__empty" data-bf-scene="todos" data-bf-part="empty">
+              {t('list.empty')}
+            </p>
+          ) : (
+            <div className="bf-todos__rows" data-bf-scene="todos" data-bf-part="rows">
+              {buckets.upcoming.map((occurrence) => (
+                <TodoItemRow
+                  key={`${occurrence.job.id}-${occurrence.atMs}`}
+                  job={occurrence.job}
+                  atMs={occurrence.atMs}
+                  isOverdue={occurrence.isOverdue}
+                  isNextRun={occurrence.isNextRun}
+                  isRunning={occurrence.isRunning}
+                  nowMs={nowMs}
+                  workspaces={openedWorkspacesList}
+                  isSelected={editingJob?.id === occurrence.job.id}
+                  onEdit={handleEdit}
+                  onDelete={(job) => { void handleDelete(job); }}
+                  onToggleEnabled={(job, enabled) => { void handleToggleEnabled(job, enabled); }}
+                />
+              ))}
+            </div>
+          )}
+
+          {buckets.inactive.length > 0 ? (
+            <div className="bf-todos__inactive" data-bf-scene="todos" data-bf-part="inactive">
+              <h4 className="bf-todos__inactive-title">
+                {t('inactive.title', { total: buckets.inactive.length })}
+              </h4>
+              <div className="bf-todos__rows">
+                {buckets.inactive.map((entry) => (
+                  <TodoItemRow
+                    key={entry.job.id}
+                    job={entry.job}
+                    atMs={null}
+                    nowMs={nowMs}
+                    workspaces={openedWorkspacesList}
+                    statusLabel={inactiveStatusLabel(entry.reason)}
+                    isSelected={editingJob?.id === entry.job.id}
+                    onEdit={handleEdit}
+                    onDelete={(job) => { void handleDelete(job); }}
+                    onToggleEnabled={(job, enabled) => { void handleToggleEnabled(job, enabled); }}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        {/* ── Tier 2: more than 24 hours out ────────────────── */}
+        <div
+          className="bf-todos__pane bf-todos__pane--calendar"
+          data-bf-scene="todos"
+          data-bf-part="calendarPane"
+        >
+          <TodoCalendar
+            occurrences={buckets.calendar}
+            monthAnchorMs={monthAnchorMs}
+            selectedDayKey={selectedDayKey}
+            nowMs={nowMs}
+            onMonthChange={(nextMonthMs) => {
+              setMonthAnchorMs(nextMonthMs);
+              setSelectedDayKey(null);
+            }}
+            onSelectDay={setSelectedDayKey}
+          />
+
+          <PresenceBoundary
+            active={selectedDayKey != null}
+            exitDurationMs={160}
+            minimumExitDurationMs={160}
+          >
+            <div
+              className="bf-todos__day-detail-presence"
+              data-open={selectedDayKey ? 'true' : 'false'}
+              aria-hidden={!selectedDayKey}
+              {...(!selectedDayKey ? { inert: '' } : {})}
+            >
+              <section
+                className="bf-todos__day-detail"
+                aria-label={t('calendar.dayDetailTitle')}
+                data-bf-scene="todos"
+                data-bf-part="dayDetail"
+                data-testid="todos-day-detail"
+              >
+                <header className="bf-todos__day-detail-head">
+                  <h4 className="bf-todos__day-detail-title">
+                    {renderedSelectedDayOccurrences[0]
+                      ? formatDateTime(renderedSelectedDayOccurrences[0].atMs, formatDate)
+                      : t('calendar.dayDetailTitle')}
+                  </h4>
+                  <Button size="small" variant="ghost" onClick={() => setSelectedDayKey(null)}>
+                    {t('calendar.clearDay')}
+                  </Button>
+                </header>
+                {renderedSelectedDayOccurrences.length === 0 ? (
+                  <p className="bf-todos__empty">{t('calendar.dayEmpty')}</p>
+                ) : (
+                  <div className="bf-todos__rows">
+                    {renderedSelectedDayOccurrences.map((occurrence) => (
+                      <TodoItemRow
+                        key={`${occurrence.job.id}-${occurrence.atMs}`}
+                        job={occurrence.job}
+                        atMs={occurrence.atMs}
+                        isNextRun={occurrence.isNextRun}
+                        isRunning={occurrence.isRunning}
+                        nowMs={nowMs}
+                        workspaces={openedWorkspacesList}
+                        isSelected={editingJob?.id === occurrence.job.id}
+                        onEdit={handleEdit}
+                        onDelete={(job) => { void handleDelete(job); }}
+                        onToggleEnabled={(job, enabled) => { void handleToggleEnabled(job, enabled); }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </PresenceBoundary>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TodosScene;

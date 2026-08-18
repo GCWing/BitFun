@@ -2,6 +2,145 @@ const MAX_TUI_NATIVE_HOOK_RULES: usize = 100;
 const MAX_TUI_NATIVE_HOOK_HANDLERS_PER_RULE: usize = 20;
 const MAX_TUI_NATIVE_HOOK_ISSUES: usize = 20;
 const MAX_TUI_NATIVE_HOOK_COMMAND_CHARS: usize = 200;
+const MAX_TUI_NATIVE_HOOK_STATUS_CHARS: usize = 200;
+
+fn bounded_native_hook_text(value: &str, max_chars: usize) -> (String, bool) {
+    let value = value.trim();
+    let truncated = value.chars().count() > max_chars;
+    let mut summary = value
+        .chars()
+        .take(max_chars)
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+    if truncated {
+        summary.push_str("...");
+    }
+    (summary, truncated)
+}
+
+fn native_hook_location(
+    path: &std::path::Path,
+    workspace: &std::path::Path,
+    user_hooks_file: Option<&std::path::Path>,
+) -> String {
+    if user_hooks_file.is_some_and(|user| user == path) {
+        return "<user-config>/config/hooks.json".to_string();
+    }
+    if let Ok(relative) = path.strip_prefix(workspace) {
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        return if relative.is_empty() {
+            "<workspace>".to_string()
+        } else {
+            format!("<workspace>/{relative}")
+        };
+    }
+    let import_id = path
+        .parent()
+        .and_then(std::path::Path::parent)
+        .and_then(std::path::Path::file_name)
+        .map(|value| value.to_string_lossy())
+        .map(|value| {
+            value
+                .chars()
+                .map(|character| {
+                    if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                        character
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>()
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "import".to_string());
+    format!("<managed-hooks>/{import_id}/hooks.json")
+}
+
+fn project_native_hook_overview(
+    overview: bitfun_core::native_hooks::NativeHookOverview,
+    workspace: &std::path::Path,
+) -> NativeHookOverview {
+    let user_hooks_file = bitfun_core::infrastructure::try_get_path_manager_arc()
+        .ok()
+        .map(|manager| manager.user_hooks_file());
+    let path_labels = overview
+        .files
+        .iter()
+        .map(|file| {
+            (
+                file.path.clone(),
+                native_hook_location(&file.path, workspace, user_hooks_file.as_deref()),
+            )
+        })
+        .collect::<Vec<_>>();
+    let sanitize_issue = |issue: String| {
+        path_labels.iter().fold(issue, |sanitized, (path, label)| {
+            let native = path.to_string_lossy();
+            let sanitized = sanitized.replace(native.as_ref(), label);
+            sanitized.replace(&native.replace('\\', "/"), label)
+        })
+    };
+
+    NativeHookOverview {
+        enabled: overview.enabled,
+        project_hooks_enabled: overview.project_hooks_enabled,
+        files: overview
+            .files
+            .into_iter()
+            .zip(path_labels.iter())
+            .map(|(file, (_, location))| {
+                bitfun_product_domains::native_hooks::NativeHookFileSummary {
+                    scope: file.scope.to_string(),
+                    location: location.clone(),
+                    exists: file.exists,
+                    loaded: file.loaded,
+                }
+            })
+            .collect(),
+        rules: overview
+            .rules
+            .into_iter()
+            .map(
+                |rule| bitfun_product_domains::native_hooks::NativeHookRuleSummary {
+                    event: rule.event.to_string(),
+                    matcher: rule.matcher,
+                    matcher_is_valid: rule.matcher_is_valid,
+                    scope: rule.scope.to_string(),
+                    handlers: rule
+                        .handlers
+                        .into_iter()
+                        .map(|handler| {
+                            let (command_summary, command_truncated) = bounded_native_hook_text(
+                                &handler.command,
+                                MAX_TUI_NATIVE_HOOK_COMMAND_CHARS,
+                            );
+                            bitfun_product_domains::native_hooks::NativeHookHandlerSummary {
+                                command_summary,
+                                command_truncated,
+                                timeout_seconds: handler.timeout_seconds,
+                                status_message: handler.status_message.map(|message| {
+                                    bounded_native_hook_text(
+                                        &message,
+                                        MAX_TUI_NATIVE_HOOK_STATUS_CHARS,
+                                    )
+                                    .0
+                                }),
+                            }
+                        })
+                        .collect(),
+                },
+            )
+            .collect(),
+        total_handlers: overview.total_handlers,
+        issues: overview.issues.into_iter().map(sanitize_issue).collect(),
+    }
+}
 
 fn native_hook_help_text() -> String {
     [

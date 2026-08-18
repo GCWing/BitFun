@@ -318,6 +318,33 @@ async fn remote_workspace_registry_preserves_ambiguous_root_resolution_contract(
 }
 
 #[tokio::test]
+async fn remote_workspace_registry_treats_explicit_connection_as_exact_identity() {
+    let registry = RemoteWorkspaceRegistry::new();
+    registry
+        .register_remote_workspace(
+            "/workspace".to_string(),
+            "conn-a".to_string(),
+            "Server A".to_string(),
+            "host-a".to_string(),
+        )
+        .await;
+
+    assert!(
+        registry
+            .lookup_scoped_connection("/workspace/project", "conn-b")
+            .await
+            .is_none(),
+        "an explicit connection must never route to a different registered host"
+    );
+
+    let legacy_hint = registry
+        .lookup_connection("/workspace/project", Some("conn-b"))
+        .await
+        .expect("the compatibility lookup keeps its unique-path hint behavior");
+    assert_eq!(legacy_hint.connection_id, "conn-a");
+}
+
+#[tokio::test]
 async fn remote_workspace_registry_preserves_legacy_state_and_clear_contract() {
     let registry = RemoteWorkspaceRegistry::new();
     assert!(!registry.has_any().await);

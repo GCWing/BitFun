@@ -1,0 +1,393 @@
+// Usage statistics config page — settings > usage statistics.
+
+.bitfun-usage-stats {
+  --usage-statistics-table-body-max-height: 190px;
+  --usage-statistics-table-header-height: 23px;
+
+  // ---------------------------------------------------------------------
+  // Filters
+  // ---------------------------------------------------------------------
+  &__filters-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 10px;
+    background: var(--bf-appearance-token-color-bg-elevated);
+  }
+
+  &__filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__filter-query {
+    display: flex;
+    flex: 1 1 320px;
+    align-items: center;
+    gap: 6px;
+    min-width: min(260px, 100%);
+  }
+
+  &__filter-select {
+    flex: 0 0 128px;
+    width: 128px;
+  }
+
+  &__filter-input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  // ---------------------------------------------------------------------
+  // Summary cards
+  // ---------------------------------------------------------------------
+  &__summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  &__summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 10px;
+    background: var(--bf-appearance-token-color-bg-elevated);
+  }
+
+  &__summary-label {
+    font-size: 12px;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__summary-value {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-variant-numeric: tabular-nums;
+
+    &--highlight {
+      color: var(--bf-appearance-token-color-purple-500);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Distribution panels (donut + table) and trend
+  // ---------------------------------------------------------------------
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  &__panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 10px;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    min-width: 0;
+
+    &--full {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &__panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__panel-body {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  &__donut {
+    flex: 0 0 auto;
+    width: 124px;
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+  }
+
+  &__donut-total {
+    font-size: 15px;
+    font-weight: 600;
+    fill: var(--bf-appearance-token-color-text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__donut-unit {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    fill: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__table {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__table-head,
+  &__table-row {
+    display: grid;
+    grid-template-columns: minmax(76px, 1fr) 44px 62px;
+    gap: 8px;
+    align-items: center;
+  }
+
+  &__table-head {
+    min-height: var(--usage-statistics-table-header-height);
+    box-sizing: border-box;
+    line-height: 16px;
+    color: var(--bf-appearance-token-color-text-muted);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+
+    > span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &__table-body {
+    display: flex;
+    flex-direction: column;
+    max-height: var(--usage-statistics-table-body-max-height);
+    overflow-y: auto;
+  }
+
+  &__table-row {
+    min-height: 38px;
+    padding: 6px 0;
+    color: var(--bf-appearance-token-color-text-secondary);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    > span {
+      white-space: nowrap;
+    }
+  }
+
+  &__table-name {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__table-swatch {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    margin-top: 3px;
+    border-radius: 2px;
+  }
+
+  &__entry-copy {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__entry-primary,
+  &__entry-secondary {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  &__entry-primary {
+    line-height: 16px;
+  }
+
+  &__entry-secondary {
+    font-size: 11px;
+    line-height: 14px;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  // ---------------------------------------------------------------------
+  // Per-model cache hit rate panel
+  // ---------------------------------------------------------------------
+  &__hit-rate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: calc(
+      var(--usage-statistics-table-body-max-height)
+      + var(--usage-statistics-table-header-height)
+    );
+    overflow-y: auto;
+  }
+
+  &__hit-rate-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 88px 56px;
+    gap: 10px;
+    align-items: center;
+    min-height: 32px;
+    font-size: 12px;
+  }
+
+  &__hit-rate-name {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__hit-rate-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bf-appearance-token-element-bg-soft);
+    overflow: hidden;
+  }
+
+  &__hit-rate-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  &__hit-rate-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--bf-appearance-token-color-success);
+  }
+
+  // ---------------------------------------------------------------------
+  // Trend chart
+  // ---------------------------------------------------------------------
+  &__trend {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  &__trend-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  &__trend-grid {
+    stroke: var(--bf-appearance-token-border-subtle);
+    stroke-width: 1;
+  }
+
+  &__trend-axis {
+    font-size: 10px;
+    fill: var(--bf-appearance-token-color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__trend-cursor {
+    stroke: var(--bf-appearance-token-color-text-muted);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    opacity: 0.6;
+  }
+
+  &__trend-tooltip {
+    rect {
+      fill: var(--bf-appearance-token-color-bg-workbench);
+      stroke: var(--bf-appearance-token-border-medium);
+      stroke-width: 1;
+    }
+  }
+
+  &__trend-tooltip-title {
+    font-size: 10px;
+    font-weight: 600;
+    fill: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__trend-tooltip-row {
+    font-size: 10px;
+    fill: var(--bf-appearance-token-color-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__trend-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  &__trend-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__trend-legend-swatch {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+  }
+
+  // ---------------------------------------------------------------------
+  // Empty state
+  // ---------------------------------------------------------------------
+  &__empty {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 32px 20px;
+    border: 1px dashed var(--bf-appearance-token-border-medium);
+    border-radius: 10px;
+    color: var(--bf-appearance-token-color-text-muted);
+
+    h4 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
+    p {
+      margin: 0;
+      font-size: 12px;
+    }
+  }
+}

@@ -29,26 +29,42 @@
   }
   
   
-  // Ensure the Virtuoso container has correct sizing.
-  > div:first-child {
+  /*
+   * The scroller. It spans the full panel width even though message content
+   * inside it is max-width constrained, and `overflow-anchor: none` keeps the
+   * browser from adding a second opinion about where the viewport belongs —
+   * the viewport anchor is the only one.
+   */
+  &__scroller {
     width: 100%;
     height: 100%;
     position: relative;
     z-index: 1; // Keep scroll content below overlays.
-    overflow-x: hidden; // Disable horizontal scrolling.
-  }
-
-  // Ensure the real scroller always spans the full panel width,
-  // even when inner message content is max-width constrained.
-  [data-virtuoso-scroller='true'],
-  [data-virtuoso-scroller] {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
+    overflow-y: auto;
+    overflow-x: hidden;
     overflow-anchor: none;
     scrollbar-gutter: stable;
   }
+
+  /*
+   * The rendered window. Everything outside it stands in as padding, so this
+   * element's height is the whole transcript's and it is what the resize
+   * observer watches for a content change.
+   */
+  &__items {
+    width: 100%;
+    overflow-anchor: none;
+  }
   
+  /*
+   * The opening viewport settles over several frames as items measure and
+   * history pages in. Keep it laid out and measurable but unpainted until then;
+   * see the opening-reveal effect in VirtualMessageList.tsx.
+   */
+  &[data-open-viewport-settled='false'] {
+    visibility: hidden;
+  }
+
   &--empty {
     display: flex;
     align-items: center;
@@ -62,11 +78,16 @@
     padding: 2rem;
   }
   
-  // Reserve space for the floating FlowChatHeader.
-  // Header height (36px) + border (1px) + blur area (16px) + extra gap (4px) = 57px.
+  // FlowChatHeader sits above the list in normal flow, so only a small
+  // breathing gap is needed before the first item. Its height is supplied
+  // inline from `FLOWCHAT_TURN_TOP_GAP_PX`, which every top-aligned Turn also
+  // scrolls to — the gap must be one number, not two that happen to match.
+  .message-list-header-block {
+    flex-shrink: 0;
+    overflow-anchor: none;
+  }
+
   .message-list-header {
-    height: 57px;
-    min-height: 57px;
     flex-shrink: 0;
   }
 
@@ -112,42 +133,20 @@
   }
   
   .message-list-footer {
-    /* Inline height from VirtualMessageList (measured drop-zone + bottom inset + tail clearance). */
-    height: 120px;
-    min-height: 72px;
+    /* Current input-stack inset is supplied inline by VirtualMessageList. */
     overflow-anchor: none;
   }
 
-  &__projection-handoff-items {
+  /*
+   * Resident tail reservation (~1 viewport, supplied inline). It exists so the
+   * browser cannot clamp scrollTop when content shrinks; see
+   * `flowChatTailFollow.ts`. Height must stay a function of the viewport only.
+   */
+  .message-list-tail-spacer {
     width: 100%;
-  }
-
-  &__projection-handoff-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    overflow: hidden;
-    scrollbar-gutter: stable;
+    flex-shrink: 0;
     pointer-events: none;
-    background: var(--bf-appearance-token-color-bg-scene);
-    contain: paint;
-  }
-
-  &__projection-handoff-content {
-    width: 100%;
-    will-change: transform;
-
-    &--bottom {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      min-height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      transform: none;
-    }
+    overflow-anchor: none;
   }
 
 }
@@ -155,4 +154,10 @@
 @keyframes history-paging-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .virtual-message-list__history-paging-spinner {
+    animation: none;
+  }
 }

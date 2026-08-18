@@ -64,7 +64,10 @@
   background: transparent;
   color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms ease,
+    color 160ms ease;
   flex-shrink: 0;
 
   &:hover {
@@ -544,7 +547,9 @@
     padding: 10px;
     font-size: var(--bf-appearance-token-tool-card-action-font-size);
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
-    transition: all 0.2s ease;
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease;
     position: relative;
     overflow: hidden;
 
@@ -768,7 +773,9 @@
         padding: 10px;
         font-size: var(--bf-appearance-token-tool-card-action-font-size);
         line-height: var(--bf-appearance-token-flowchat-support-line-height);
-        transition: all 0.2s ease;
+        transition:
+          background-color 160ms ease,
+          border-color 160ms ease;
         position: relative;
         overflow: hidden;
 

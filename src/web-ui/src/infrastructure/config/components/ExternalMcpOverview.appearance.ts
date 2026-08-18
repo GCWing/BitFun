@@ -12,5 +12,6 @@ export const externalMcpOverviewAppearanceDescriptor: AppearanceSurfaceDescripto
     { id: 'pending', selector: { kind: 'self', suffix: '[data-bf-state~="pending"]' } },
     { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
     { id: 'muted', selector: { kind: 'self', suffix: '[data-bf-state~="muted"]' } },
+    { id: 'stale', selector: { kind: 'self', suffix: '[data-bf-state~="stale"]' } },
   ],
 };

@@ -24,7 +24,9 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
-pub use unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+pub use unified::{
+    ModelResponseReplayCapture, UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall,
+};
 
 /// Minimal tool-call value emitted by the stream processor.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -259,6 +261,8 @@ pub struct StreamResult {
     pub usage: Option<UnifiedTokenUsage>,
     /// Provider-specific metadata captured from the stream tail.
     pub provider_metadata: Option<Value>,
+    /// Complete provider response layout and opaque state eligible for replay.
+    pub model_response_replay: Option<ModelResponseReplayCapture>,
     /// Whether this stream produced any user-visible output (text/thinking/tool events)
     pub has_effective_output: bool,
     /// Milliseconds from stream processing start to the first upstream response item.
@@ -290,6 +294,9 @@ impl StreamProcessError {
 #[derive(Debug, Clone, Default)]
 pub struct StreamProcessOptions {
     pub recover_partial_on_cancel: bool,
+    /// Suppress the stream-owned terminal cancellation event when a higher
+    /// layer owns the authoritative cancellation lifecycle.
+    pub suppress_cancel_lifecycle_event: bool,
     /// Allow broad JSON repair for non-Write tools, but only after a provider
     /// confirms a normal tool-use completion.
     pub allow_normal_tool_json_repair: bool,
@@ -315,6 +322,7 @@ struct StreamContext {
     tool_calls: Vec<ToolCall>,
     usage: Option<UnifiedTokenUsage>,
     provider_metadata: Option<Value>,
+    model_response_replay: Option<ModelResponseReplayCapture>,
 
     // Current tool call state
     pending_tool_calls: PendingToolCalls,
@@ -333,6 +341,7 @@ struct StreamContext {
     /// output token limit (e.g. "length", "max_tokens", "MAX_TOKENS").
     token_limit_finish_reason: Option<String>,
     allow_normal_tool_json_repair: bool,
+    suppress_cancel_lifecycle_event: bool,
 }
 
 impl StreamContext {
@@ -359,6 +368,7 @@ impl StreamContext {
             tool_calls: Vec::new(),
             usage: None,
             provider_metadata: None,
+            model_response_replay: None,
             pending_tool_calls: PendingToolCalls::new(),
             finalized_tool_call_ids: HashSet::new(),
             stream_started_at: Instant::now(),
@@ -371,6 +381,7 @@ impl StreamContext {
             partial_recovery_reason: None,
             token_limit_finish_reason: None,
             allow_normal_tool_json_repair: options.allow_normal_tool_json_repair,
+            suppress_cancel_lifecycle_event: options.suppress_cancel_lifecycle_event,
         }
     }
 
@@ -384,6 +395,7 @@ impl StreamContext {
             tool_calls: self.tool_calls,
             usage: self.usage,
             provider_metadata: self.provider_metadata,
+            model_response_replay: self.model_response_replay,
             has_effective_output: self.has_effective_output,
             first_chunk_ms: self.first_chunk_ms,
             first_visible_output_ms: self.first_visible_output_ms,
@@ -512,6 +524,7 @@ struct GracefulShutdownInput {
     attempt_index: u32,
     tool_calls: Vec<ToolCall>,
     reason: String,
+    suppress_cancel_lifecycle_event: bool,
 }
 
 impl StreamProcessor {
@@ -607,6 +620,7 @@ impl StreamProcessor {
             attempt_index: ctx.attempt_index,
             tool_calls: ctx.tool_calls.clone(),
             reason,
+            suppress_cancel_lifecycle_event: ctx.suppress_cancel_lifecycle_event,
         })
         .await;
     }
@@ -621,6 +635,7 @@ impl StreamProcessor {
             attempt_index,
             tool_calls,
             reason,
+            suppress_cancel_lifecycle_event,
         } = input;
         debug!(
             "Starting graceful shutdown: session_id={}, reason={}",
@@ -679,7 +694,7 @@ impl StreamProcessor {
         }
 
         // 2. Send dialog turn status update (if tools were cleaned up)
-        if tool_call_count > 0 {
+        if tool_call_count > 0 && !(is_user_cancellation && suppress_cancel_lifecycle_event) {
             let event = if is_user_cancellation {
                 AgenticEvent::DialogTurnCancelled {
                     session_id: session_id.clone(),
@@ -1114,6 +1129,7 @@ impl StreamProcessor {
                         tool_call_completion,
                         finish_reason,
                         provider_metadata,
+                        model_response_replay,
                     } = response;
                     ctx.mark_first_stream_chunk();
 
@@ -1166,6 +1182,10 @@ impl StreamProcessor {
                             Some(existing) => Self::merge_json_value(existing, provider_metadata),
                             None => ctx.provider_metadata = Some(provider_metadata),
                         }
+                    }
+
+                    if let Some(model_response_replay) = model_response_replay {
+                        ctx.model_response_replay = Some(model_response_replay);
                     }
 
                     if let Some(reason) = finish_reason {
@@ -1223,12 +1243,14 @@ impl StreamProcessor {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_token_limit_finish_reason, GracefulShutdownInput, HiddenTextTag, SseLogCollector,
-        SseLogConfig, StreamEventSink, StreamProcessOptions, StreamProcessor, StreamProcessorError,
-        ToolArgumentRepairKind, ToolCall, ToolCallCompletion,
+        is_token_limit_finish_reason, GracefulShutdownInput, HiddenTextTag,
+        ModelResponseReplayCapture, SseLogCollector, SseLogConfig, StreamEventSink,
+        StreamProcessOptions, StreamProcessor, StreamProcessorError, ToolArgumentRepairKind,
+        ToolCall, ToolCallCompletion,
     };
     use super::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
     use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
+    use bitfun_core_types::ModelResponseReplayItem;
     use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
     use futures::StreamExt;
     use serde_json::json;
@@ -1324,6 +1346,7 @@ mod tests {
                     repair_kind: Default::default(),
                 }],
                 reason: "User cancelled stream processing".to_string(),
+                suppress_cancel_lifecycle_event: false,
             })
             .await;
 
@@ -1340,6 +1363,44 @@ mod tests {
             &events[1],
             AgenticEvent::DialogTurnCancelled { session_id, turn_id }
                 if session_id == "session_1" && turn_id == "turn_1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn graceful_shutdown_suppresses_turn_cancellation_for_coordinator_owned_lifecycle() {
+        let sink = Arc::new(RecordingEventSink::default());
+        let processor = StreamProcessor::new(sink.clone());
+
+        processor
+            .graceful_shutdown(GracefulShutdownInput {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                round_id: "round_1".to_string(),
+                attempt_id: "attempt_1".to_string(),
+                attempt_index: 1,
+                tool_calls: vec![ToolCall {
+                    tool_id: "tool_1".to_string(),
+                    tool_name: "Read".to_string(),
+                    arguments: json!({}),
+                    raw_arguments: None,
+                    is_error: false,
+                    parse_error: None,
+                    recovered_from_truncation: false,
+                    repair_kind: Default::default(),
+                }],
+                reason: "User cancelled stream processing".to_string(),
+                suppress_cancel_lifecycle_event: true,
+            })
+            .await;
+
+        let events = sink.events.lock().await;
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            &events[0],
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::Cancelled { identity, .. },
+                ..
+            } if identity.tool_id == "tool_1"
         ));
     }
 
@@ -2117,5 +2178,51 @@ mod tests {
         assert!(result.reasoning_content_present);
         assert!(result.full_thinking.is_empty());
         assert!(!result.has_effective_output);
+    }
+
+    #[tokio::test]
+    async fn carries_complete_model_response_replay_to_stream_result() {
+        let processor = build_processor();
+        let stream = iter(vec![
+            Ok(UnifiedResponse {
+                text: Some("done".to_string()),
+                ..Default::default()
+            }),
+            Ok(UnifiedResponse {
+                model_response_replay: Some(ModelResponseReplayCapture {
+                    protocol: "openai_responses".to_string(),
+                    items: vec![
+                        ModelResponseReplayItem::OpaqueReasoning {
+                            item_id: Some("rs_1".to_string()),
+                            summary: vec![],
+                            opaque_state: "opaque".to_string(),
+                        },
+                        ModelResponseReplayItem::AssistantMessage,
+                    ],
+                }),
+                finish_reason: Some("stop".to_string()),
+                ..Default::default()
+            }),
+        ])
+        .boxed();
+
+        let result = processor
+            .process_stream(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("stream result");
+
+        let replay = result.model_response_replay.expect("replay capture");
+        assert_eq!(replay.protocol, "openai_responses");
+        assert_eq!(replay.items.len(), 2);
     }
 }

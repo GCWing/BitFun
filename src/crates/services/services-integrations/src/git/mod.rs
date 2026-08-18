@@ -11,6 +11,7 @@ pub mod name_status;
 mod runtime_port;
 pub mod service;
 pub mod text;
+pub mod trust;
 pub mod types;
 pub mod utils;
 pub mod worktree;
@@ -22,6 +23,10 @@ pub use name_status::parse_name_status_output;
 pub use runtime_port::GitWorkspaceDiffPort;
 pub use service::GitService;
 pub use text::{parse_branch_line, parse_git_log_line};
+pub use trust::{
+    is_untrusted_repository_message, manual_trust_command, untrusted_repository_path_from_message,
+    GitTrustOutcome, GitTrustReport, GitTrustState,
+};
 pub use types::*;
 pub use utils::*;
 pub use worktree::parse_worktree_list;

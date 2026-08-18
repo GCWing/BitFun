@@ -49,6 +49,7 @@ the Verification section below.
 ```bash
 pnpm run desktop:dev
 pnpm run desktop:preview:debug
+pnpm run prepare:dsh-profile   # optional: local DeepSeek Harness sessions
 ```
 
 ## Fast builds

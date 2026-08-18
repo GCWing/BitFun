@@ -6,6 +6,7 @@ import {
 } from '../model/RemoteModels';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from './ConnectionErrorPolicy';
+import { RemoteLogger } from './RemoteLogger';
 import { RemoteUiState } from './RemoteUiState';
 
 export interface RemoteSessionClient {
@@ -34,6 +35,7 @@ export class RemoteSessionController {
   private sessions: RemoteSession[] = [];
   private hasMore: boolean = false;
   private offset: number = 0;
+  private openGeneration: number = 0;
 
   constructor(
     client: RemoteSessionClient,
@@ -43,6 +45,13 @@ export class RemoteSessionController {
     this.client = client;
     this.pageSize = pageSize;
     this.callbacks = callbacks;
+  }
+
+  private static shortId(value: string): string {
+    if (value.length <= 10) {
+      return value;
+    }
+    return `${value.slice(0, 6)}...${value.slice(-4)}`;
   }
 
   setSessions(sessions: RemoteSession[], hasMore: boolean): void {
@@ -132,9 +141,9 @@ export class RemoteSessionController {
     onCreated: (session: SessionSummary) => Promise<void>,
     instruction: string = '',
     modelId: string = ''
-  ): Promise<void> {
+  ): Promise<SessionSummary | undefined> {
     if (isBusy || !remoteAvailable) {
-      return;
+      return undefined;
     }
     try {
       this.callbacks.onBusy(true);
@@ -148,8 +157,10 @@ export class RemoteSessionController {
       this.callbacks.onActiveSession(session);
       this.callbacks.onStatusText(RemoteI18n.t('status.sessionCreated'));
       await onCreated(session);
+      return session;
     } catch (err) {
       this.callbacks.onStatusText(ConnectionErrorPolicy.errorText(err));
+      return undefined;
     } finally {
       this.callbacks.onBusy(false);
     }
@@ -163,8 +174,15 @@ export class RemoteSessionController {
     onOpened: (session: SessionSummary) => Promise<void>
   ): Promise<void> {
     if (isBusy || item.id.length === 0 || !remoteAvailable) {
+      RemoteLogger.info(`open session dropped session=${RemoteSessionController.shortId(item.id)} busy=${isBusy ? '1' : '0'} available=${remoteAvailable ? '1' : '0'}`);
       return;
     }
+    // Opens supersede each other, so the one that finishes first is not
+    // necessarily the one still on screen. Lowering the busy flag from that one
+    // would tell the composer the session it is attached to had finished
+    // loading while the newer open was still fetching.
+    this.openGeneration += 1;
+    const generation = this.openGeneration;
     try {
       this.callbacks.onBusy(true);
       this.callbacks.onStatusText(RemoteI18n.t('status.loadMessages'));
@@ -177,7 +195,9 @@ export class RemoteSessionController {
       this.callbacks.onActiveSession(session);
       await onOpened(session);
     } finally {
-      this.callbacks.onBusy(false);
+      if (generation === this.openGeneration) {
+        this.callbacks.onBusy(false);
+      }
     }
   }
 

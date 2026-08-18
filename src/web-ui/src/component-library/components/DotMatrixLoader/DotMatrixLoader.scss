@@ -100,3 +100,10 @@ $matrix-epsilon: 0.0001%;
     animation-name: dot-matrix-choreo-#{$cell};
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-matrix-loader__dot {
+    animation: none;
+    opacity: $matrix-lit;
+  }
+}

@@ -157,7 +157,12 @@
     font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease,
+      opacity 160ms ease;
   }
 
   .default-tool-card__button:disabled {
@@ -200,5 +205,11 @@
     .compact-card-right-icon {
       color: var(--bf-appearance-token-color-warning);
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .default-tool-card.requires-confirmation .compact-tool-card {
+    animation: none;
   }
 }

@@ -688,7 +688,7 @@ describe('startup performance contract', () => {
     expect(appLayoutSource).not.toMatch(/import\s+\{\s*NewProjectDialog\s*\}\s+from/);
     expect(appLayoutSource).toContain('const NewProjectDialog = lazy');
     expect(appLayoutSource).toContain("import('../components/NewProjectDialog')");
-    expect(appLayoutSource).toContain('{showNewProjectDialog && (');
+    expect(appLayoutSource).toContain('<PresenceBoundary active={showNewProjectDialog}>');
 
     expect(workspaceItemSource).not.toMatch(/import\s+WorkspaceRelatedPathsDialog\s+from/);
     expect(workspaceItemSource).not.toMatch(/import\s+WorkspaceSessionBatchModal\s+from/);
@@ -696,17 +696,17 @@ describe('startup performance contract', () => {
     expect(workspaceItemSource).toContain("lazy(() => import('./WorkspaceRelatedPathsDialog'))");
     expect(workspaceItemSource).toContain("lazy(() => import('./WorkspaceSessionBatchModal'))");
     expect(workspaceItemSource).toContain("lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'))");
-    expect(workspaceItemSource).toContain('{relatedPathsDialogOpen && (');
-    expect(workspaceItemSource).toContain('{sessionBatchModalOpen && (');
-    expect(workspaceItemSource).toContain('{scheduledJobsModalOpen && (');
+    expect(workspaceItemSource).toContain('<PresenceBoundary active={relatedPathsDialogOpen}>');
+    expect(workspaceItemSource).toContain('<PresenceBoundary active={sessionBatchModalOpen}>');
+    expect(workspaceItemSource).toContain('<PresenceBoundary active={scheduledJobsModalOpen}>');
 
     expect(sessionsSectionSource).not.toMatch(/import\s+ScheduledJobsModal\s+from/);
     expect(sessionsSectionSource).toContain("lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'))");
-    expect(sessionsSectionSource).toContain('{scheduledJobsSession && (');
+    expect(sessionsSectionSource).toContain('<PresenceBoundary active={scheduledJobsSession != null}>');
 
     expect(footerActionsSource).not.toMatch(/import\s+\{\s*RemoteConnectDialog\s*\}\s+from/);
     expect(footerActionsSource).toContain("lazy(() => import('../../RemoteConnectDialog'))");
-    expect(footerActionsSource).toContain('{showRemoteConnect && (');
+    expect(footerActionsSource).toContain('<PresenceBoundary active={showRemoteConnect}>');
 
     expect(newProjectDialogSource).not.toMatch(/from\s+['"]@tauri-apps\/plugin-dialog['"]/);
     expect(newProjectDialogSource).not.toContain("await import('@tauri-apps/plugin-dialog')");

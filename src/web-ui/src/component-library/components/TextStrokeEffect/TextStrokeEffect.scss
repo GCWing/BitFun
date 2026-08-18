@@ -55,3 +55,11 @@
     stroke-dashoffset: -46;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .text-stroke-effect__animated,
+  .text-stroke-effect__gradient {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

@@ -423,6 +423,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
           id={tooltipId}
           role="tooltip"
           className={tooltipClass}
+          data-motion="presence"
           data-instant={instantRef.current || undefined}
           onMouseEnter={interactive ? () => {
             if (hideTimeoutRef.current) {

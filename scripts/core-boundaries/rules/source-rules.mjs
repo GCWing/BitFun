@@ -5,5 +5,9 @@ export {
   forbiddenContentRules,
   forbiddenContentUnderRules,
 } from './source/forbidden-rules.mjs';
-export { publicApiAllowlistRules, publicApiContractSlices } from './source/public-api-rules.mjs';
+export {
+  agentRuntimeRootPublicModules,
+  publicApiAllowlistRules,
+  publicApiContractSlices,
+} from './source/public-api-rules.mjs';
 export { requiredContentRules } from './source/required-rules.mjs';

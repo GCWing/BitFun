@@ -55,16 +55,20 @@
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-sm;
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
-    
-    &:hover {
-      background: var(--bf-appearance-token-color-error-bg);
-      border-color: var(--bf-appearance-token-color-error-border);
-      color: var(--bf-appearance-token-color-error);
-    }
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
     
     &:active {
       transform: scale(0.98);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.45;
     }
   }
   
@@ -73,7 +77,7 @@
   &__items {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0 $size-gap-2;
@@ -81,8 +85,40 @@
   }
   
   &__item {
-    
+    display: grid;
+    grid-template-rows: 1fr;
     width: 100%;
+    opacity: 1;
+    transform: translateX(0);
+    transition:
+      grid-template-rows 160ms $easing-decelerate,
+      opacity 110ms $easing-standard,
+      transform 140ms $easing-decelerate;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+
+    &[data-exiting='true'] {
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transform: translateX(6px);
+      pointer-events: none;
+    }
+  }
+
+  &__item-inner {
+    min-height: 0;
+    overflow: hidden;
+
+    .bitfun-context-list__item[data-exiting='true'] & {
+      pointer-events: none;
+    }
+
+    > .bitfun-context-card {
+      margin-bottom: $size-gap-2;
+    }
   }
   
   
@@ -121,3 +157,21 @@
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-context-list__clear-btn:not(:disabled):hover {
+    background: var(--bf-appearance-token-color-error-bg);
+    border-color: var(--bf-appearance-token-color-error-border);
+    color: var(--bf-appearance-token-color-error);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-context-list__item {
+    transition: none;
+
+    @starting-style {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

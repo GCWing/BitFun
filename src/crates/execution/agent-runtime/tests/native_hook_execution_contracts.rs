@@ -7,6 +7,7 @@
 //!
 //! Unix-only: the fixtures are `sh` one-liners.
 #![cfg(unix)]
+#![cfg(feature = "native-hook-runtime")]
 
 use bitfun_agent_runtime::native_hooks::{
     AgentHookEngine, AgentHookEventPayload, AgentHookOutcome, AgentHookPayload,

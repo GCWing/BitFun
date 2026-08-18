@@ -194,6 +194,7 @@ export const dispatchApi = {
     displayContent?: string,
     messageId: string = globalThis.crypto?.randomUUID?.()
       ?? `dispatch-message-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    attachments?: DispatchInlineAttachment[],
   ): Promise<{ accepted: boolean; messageId: string }> {
     return api.invoke<{ accepted: boolean; messageId: string }>('dispatch_append', {
       request: {
@@ -201,6 +202,7 @@ export const dispatchApi = {
         messageId,
         content,
         ...(displayContent?.trim() ? { displayContent } : {}),
+        ...(attachments?.length ? { attachments } : {}),
       },
     });
   },

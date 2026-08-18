@@ -7,6 +7,7 @@
  *   data-motion="interactive"  press / hover feedback
  *   data-motion="view"         page or panel entrance
  *   data-motion="popup"        menu, popover, or floating surface entrance
+ *   data-motion="presence"     component owns its complete enter/exit lifecycle
  *   data-motion="overlay"      backdrop entrance
  *   data-motion="none"         disable motion for this subtree
  *
@@ -38,8 +39,8 @@
 @keyframes bitfun-motion-popup-enter {
   from {
     opacity: 0;
-    translate: 0 -2px;
-    scale: 0.992;
+    translate: 0 -4px;
+    scale: 0.97;
   }
 
   to {
@@ -52,8 +53,8 @@
 @keyframes bitfun-motion-dialog-enter {
   from {
     opacity: 0;
-    translate: 0 6px;
-    scale: 0.992;
+    translate: 0 8px;
+    scale: 0.985;
   }
 
   to {
@@ -114,25 +115,6 @@
       opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    :where(
-      button,
-      input[type='button'],
-      input[type='submit'],
-      input[type='reset'],
-      summary,
-      [role='button'],
-      [role='checkbox'],
-      [role='radio'],
-      [role='switch'],
-      [data-motion='interactive']
-    ):where(
-      :not(:disabled):not([aria-disabled='true']):not([data-motion='none'])
-    ):hover {
-      translate: 0 -1px;
-    }
-  }
-
   :where(
     button,
     input[type='button'],
@@ -148,7 +130,7 @@
     :not(:disabled):not([aria-disabled='true']):not([data-motion='none'])
   ):active {
     translate: 0 0;
-    scale: 0.985;
+    scale: 0.97;
   }
 
   /**
@@ -157,14 +139,14 @@
    * the component already owns a transition or a Suspense fallback.
    */
   :where([data-motion='view']):where(:not([data-motion='none'])) {
-    animation: bitfun-motion-view-enter 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: bitfun-motion-view-enter 140ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   :where(
     [data-scene-transition='exit'],
     [data-motion='view-exit']
   ):where(:not([data-motion='none'])) {
-    animation: bitfun-motion-view-exit 140ms cubic-bezier(0.4, 0, 1, 1) both;
+    animation: bitfun-motion-view-exit 120ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   /**
@@ -188,9 +170,9 @@
     [class*='__context-menu '],
     [class$='-context-menu'],
     [class*='-context-menu ']
-  ):where(:not([data-motion='none'])) {
+  ):where(:not([data-motion='none']):not([data-motion='presence'])) {
     transform-origin: center top;
-    animation: bitfun-motion-popup-enter 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: bitfun-motion-popup-enter 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   /**
@@ -210,7 +192,7 @@
     )
   ) {
     transform-origin: center;
-    animation: bitfun-motion-dialog-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: bitfun-motion-dialog-enter 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   :where(

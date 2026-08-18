@@ -40,6 +40,8 @@ export interface ChatInputRegistration {
    * explicit isolated workspace and must not fall back to the active project.
    */
   workspacePath?: string;
+  /** Remote connection that owns `workspacePath`; paths alone are ambiguous across hosts. */
+  remoteConnectionId?: string;
   draft?: ChatInputDraftRegistration;
   onDraftConsumed?: (id: number) => void;
   onSubmit?: (submission: ChatInputSubmission) => void | Promise<void>;

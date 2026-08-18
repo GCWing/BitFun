@@ -286,7 +286,13 @@
   backdrop-filter: blur(8px) saturate(1.1);
   -webkit-backdrop-filter: blur(8px) saturate(1.1);
   box-shadow: var(--bf-appearance-token-shadow-base);
-  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    opacity var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    transform var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
 }
 
 .glass-input {
@@ -296,7 +302,13 @@
   backdrop-filter: var(--bf-appearance-token-blur-subtle);
   -webkit-backdrop-filter: var(--bf-appearance-token-blur-subtle);
   box-shadow: var(--bf-appearance-token-shadow-sm);
-  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    opacity var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+    transform var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
 }
 
 /* ========== Responsive utilities ========== */

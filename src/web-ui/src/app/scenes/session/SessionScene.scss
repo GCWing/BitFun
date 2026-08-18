@@ -325,9 +325,10 @@
   user-select: none;
   z-index: $z-sticky;
   background: var(--bf-appearance-token-border-subtle);
-  transition: all $motion-base $easing-standard,
-              height $motion-base $easing-standard,
-              opacity $motion-base $easing-standard;
+  transition:
+    background-color $motion-base $easing-standard,
+    height $motion-base $easing-standard,
+    opacity $motion-base $easing-standard;
 
   &::before {
     content: '';

@@ -498,7 +498,12 @@
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      color $motion-base $easing-standard,
+      opacity $motion-base $easing-standard,
+      transform $motion-base $easing-standard;
     font-size: var(--bf-appearance-token-font-size-xs);
 
     &:hover {
@@ -674,5 +679,15 @@
       padding: $size-gap-2 $size-gap-4;
       font-size: var(--bf-appearance-token-font-size-sm);
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-files-panel__sync-indicator,
+  .bitfun-files-panel__search-spinner,
+  .bitfun-files-panel__transfer-track--indeterminate .bitfun-files-panel__transfer-fill,
+  .bitfun-files-panel__loading-spinner {
+    animation: none;
+    transform: none;
   }
 }

@@ -17,6 +17,22 @@
     pointer-events: auto;
   }
 
+  &__presence {
+    display: grid;
+    grid-template-rows: 1fr;
+    overflow: hidden;
+    transition: grid-template-rows 140ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    > * {
+      min-height: 0;
+    }
+
+    &--exiting {
+      grid-template-rows: 0fr;
+      pointer-events: none;
+    }
+  }
+
   
   max-height: calc(100vh - 120px); 
   overflow-y: auto;
@@ -43,4 +59,3 @@
     }
   }
 }
-

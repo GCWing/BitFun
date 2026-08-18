@@ -32,6 +32,21 @@ fn source_ref() -> PluginSourceRef {
     }
 }
 
+#[test]
+fn deep_seek_harness_source_kind_has_a_stable_wire_name() {
+    let mut source = source_ref();
+    source.source_kind = PluginSourceKind::DeepSeekHarnessCompatible;
+
+    let json = serde_json::to_value(&source).expect("serialize dsh source");
+    assert_eq!(json["sourceKind"], "deep_seek_harness_compatible");
+
+    let roundtrip: PluginSourceRef = serde_json::from_value(json).expect("deserialize dsh source");
+    assert_eq!(
+        roundtrip.source_kind,
+        PluginSourceKind::DeepSeekHarnessCompatible
+    );
+}
+
 fn capability_ref() -> PluginCapabilityRef {
     PluginCapabilityRef {
         capability_id: "tools.provider".to_string(),

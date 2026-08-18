@@ -1,12 +1,14 @@
-//! Host-injected management service and capability boundary.
+//! App Server-owned management capability boundary.
 
 use bitfun_app_server_protocol::app::{CapabilityAvailability, CapabilityDescriptor};
 
-mod service;
+mod owner;
 mod worktree;
 
-pub use service::AppManagementService;
+pub use owner::AppManagementService;
 
+// These are existing wire IDs. App Server now owns their implementation, but
+// changing the values would break capability negotiation with older clients.
 pub const MODES_CAPABILITY: &str = "tui.modes";
 pub const MODELS_CAPABILITY: &str = "tui.models";
 pub const SKILLS_CAPABILITY: &str = "tui.skills";
@@ -247,102 +249,3 @@ impl AppManagementError {
 }
 
 pub type AppManagementResult<T> = Result<T, AppManagementError>;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn descriptors_follow_host_reported_availability() {
-        let reason = "owner unavailable";
-        let capabilities = AppManagementCapabilities::unavailable(reason);
-        let descriptors = capabilities.descriptors();
-
-        assert_eq!(descriptors.len(), 11);
-        for descriptor in descriptors {
-            assert!(matches!(
-                descriptor.availability,
-                CapabilityAvailability::Unavailable { ref reason } if reason == "owner unavailable"
-            ));
-        }
-    }
-
-    #[test]
-    fn hook_capabilities_are_separate_and_exclude_compiled_in_hooks() {
-        let capabilities = AppManagementCapabilities::available();
-        let native = capabilities
-            .descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.id == NATIVE_HOOKS_CAPABILITY)
-            .expect("native Hook capability");
-        assert_eq!(native.methods, ["nativeHook/overview"]);
-
-        let external = capabilities
-            .descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.id == EXTERNAL_HOOKS_CAPABILITY)
-            .expect("external Hook capability");
-        assert_eq!(
-            external.methods,
-            [
-                "externalHook/snapshot",
-                "externalHook/plan",
-                "externalHook/apply",
-                "externalHook/mutate",
-            ]
-        );
-        assert!(native
-            .methods
-            .iter()
-            .chain(external.methods.iter())
-            .all(|method| !method.to_ascii_lowercase().contains("postcall")));
-    }
-
-    #[test]
-    fn account_and_settings_sync_have_separate_capabilities() {
-        let capabilities = AppManagementCapabilities::available().descriptors();
-        let account = capabilities
-            .iter()
-            .find(|descriptor| descriptor.id == ACCOUNT_CAPABILITY)
-            .expect("account capability");
-        assert_eq!(
-            account.methods,
-            [
-                "account/snapshot",
-                "account/login",
-                "account/finalizeLogin",
-                "account/logout",
-            ]
-        );
-        let sync = capabilities
-            .iter()
-            .find(|descriptor| descriptor.id == SETTINGS_SYNC_CAPABILITY)
-            .expect("settings sync capability");
-        assert_eq!(
-            sync.methods,
-            [
-                "settingsSync/start",
-                "settingsSync/snapshot",
-                "settingsSync/cancel",
-                "settingsSync/localChanged",
-            ]
-        );
-    }
-
-    #[test]
-    fn worktree_capability_exposes_only_typed_session_operations() {
-        let capabilities = AppManagementCapabilities::available().descriptors();
-        let worktrees = capabilities
-            .iter()
-            .find(|descriptor| descriptor.id == WORKTREES_CAPABILITY)
-            .expect("worktree capability");
-        assert_eq!(
-            worktrees.methods,
-            [
-                "worktree/repositoryStatus",
-                "worktree/bindSession",
-                "worktree/releaseSession",
-            ]
-        );
-    }
-}

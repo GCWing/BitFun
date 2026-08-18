@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionAPI } from './SessionAPI';
-import type { DialogTurnData } from '@/shared/types/session-history';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -183,58 +182,6 @@ describe('SessionAPI paged metadata reads', () => {
         session_id: 'session-1',
         workspace_path: '/repo',
         include_hidden_subagents: false,
-      },
-    });
-  });
-
-  it('records local command turns through the authoritative catalog command', async () => {
-    const turnData: DialogTurnData = {
-      turnId: 'local-usage-1',
-      turnIndex: 0,
-      sessionId: 'session-1',
-      timestamp: 10,
-      kind: 'local_command',
-      userMessage: {
-        id: 'local-usage-user-1',
-        content: '# Session Usage Report',
-        timestamp: 10,
-        metadata: { localCommandKind: 'usage_report', modelVisible: false },
-      },
-      modelRounds: [],
-      startTime: 10,
-      endTime: 10,
-      status: 'completed',
-    };
-    const response = {
-      turnId: 'local-usage-1',
-      storageTurnIndex: 7,
-      totalTurnCount: 8,
-      turnCatalog: {
-        schemaVersion: 1,
-        sessionId: 'session-1',
-        revision: 'catalog-8',
-        totalTurnCount: 8,
-        complete: true,
-        entries: [{
-          ordinal: 7,
-          storageTurnIndex: 7,
-          turnId: 'local-usage-1',
-          previewTruncated: false,
-        }],
-      },
-    };
-    invokeMock.mockResolvedValueOnce(response);
-
-    await expect(
-      sessionAPI.recordLocalCommandTurn(turnData, '/repo', 'remote-1', 'host'),
-    ).resolves.toBe(response);
-
-    expect(invokeMock).toHaveBeenCalledWith('record_local_command_turn', {
-      request: {
-        turn_data: turnData,
-        workspace_path: '/repo',
-        remote_connection_id: 'remote-1',
-        remote_ssh_host: 'host',
       },
     });
   });

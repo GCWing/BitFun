@@ -9,6 +9,7 @@ import {
   getModelHelp,
   getModelLabel,
   getSlowSpanHelp,
+  getDisplayTurnIndex,
   getSlowSpanLabel,
   getTopFiles,
 } from './usageReportUtils';
@@ -26,6 +27,8 @@ const t = (key: string, options?: Record<string, unknown>): string => {
   if (key === 'usage.help.slowestModelCall') return `Model call: ${options?.model}`;
   if (key === 'usage.slowestLabels.modelCall') return `Turn ${options?.turn} model call`;
   if (key === 'usage.slowestLabels.modelCallUnknown') return 'Model call';
+  if (key === 'usage.slowestLabels.turn') return `Turn ${options?.turn}`;
+  if (key === 'usage.slowestLabels.turnUnknown') return 'Turn';
   if (key === 'usage.redacted') return 'Redacted';
   return key;
 };
@@ -164,7 +167,46 @@ describe('usageReportUtils', () => {
       redacted: false,
       turnIndex: 3,
       modelIdSource: 'inferred_session_model',
-    }, t)).toBe('Turn 3 model call');
+    }, t)).toBe('Turn 4 model call');
+  });
+
+  it('numbers a slow span the way its own jump does', () => {
+    /*
+     * The report indexes Turns from zero and every reader adds one. This label
+     * did not, so a row read "Turn 7" while clicking it asked for Turn 8 — the
+     * Turn the rail, numbering the same way, also calls 8. Label and
+     * destination have to come from the same function, so here they do.
+     */
+    for (const rawTurnIndex of [0, 3, 7]) {
+      expect(getSlowSpanLabel({
+        label: 'gpt-5.4',
+        kind: 'model',
+        durationMs: 100,
+        redacted: false,
+        turnIndex: rawTurnIndex,
+      }, t)).toBe(`Turn ${getDisplayTurnIndex(rawTurnIndex)} model call`);
+    }
+    // And the offset itself: zero-based in, one-based out, never negative.
+    expect(getDisplayTurnIndex(0)).toBe(1);
+    expect(getDisplayTurnIndex(7)).toBe(8);
+    expect(getDisplayTurnIndex(-4)).toBe(1);
+  });
+
+  it('builds a Turn span label rather than rendering the report\'s own', () => {
+    /*
+     * The report synthesises this one itself — `format!("turn {}", turn_index)`
+     * — so it arrives hard-coded in English and numbered from zero. Rendered
+     * verbatim it read "turn 7" next to a row this file had numbered 8.
+     */
+    const span = {
+      label: 'turn 7',
+      kind: 'turn' as const,
+      durationMs: 100,
+      redacted: false,
+      turnIndex: 7,
+    };
+    expect(getSlowSpanLabel(span, t)).toBe('Turn 8');
+    expect(getSlowSpanLabel({ ...span, turnIndex: undefined }, t)).toBe('Turn');
   });
 
   it('returns model identity tooltip copy when the source is inferred or legacy', () => {

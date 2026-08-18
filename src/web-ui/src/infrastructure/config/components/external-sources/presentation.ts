@@ -39,11 +39,16 @@ export const SOURCE_COUNT_LABELS = [
   ['mcps', 'sources.mcpCount'],
 ] as const;
 
+type SourceDiagnostic = NonNullable<
+  ExternalSourceCatalogSnapshot['diagnostics']
+>[number];
+
 /**
  * Maps a raw diagnostic code to a user-facing category. Codes stay in the
  * collapsed technical details; the category is what the user reads first.
  */
 export function sourceDiagnosticCategory(code: string): string {
+  if (code.includes('external_mcp.runtime_unavailable')) return 'runtimeUnavailable';
   if (code.includes('preference_read_failed')) return 'confirmationStateUnavailable';
   if (code.includes('conflict_history_write_failed')) return 'conflictHistoryUnavailable';
   if (code.includes('discovery_in_progress')) return 'checkInProgress';
@@ -66,4 +71,8 @@ export function sourceDiagnosticCategory(code: string): string {
   }
   if (code.includes('failed')) return 'checkFailed';
   return 'sourceIssue';
+}
+
+export function isActionableSourceDiagnostic(diagnostic: SourceDiagnostic): boolean {
+  return diagnostic.severity.toLowerCase() !== 'info';
 }

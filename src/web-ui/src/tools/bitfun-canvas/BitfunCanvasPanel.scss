@@ -62,6 +62,12 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-canvas-panel__toolbar-icon--spin {
+    animation: none;
+  }
+}
+
 .bitfun-canvas-panel--empty {
   flex-direction: column;
   gap: var(--bf-appearance-token-size-gap-4);

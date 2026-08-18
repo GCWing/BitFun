@@ -2,6 +2,7 @@ export type { ExternalHostCapabilities, ExternalSectionCommonProps } from './typ
 export {
   SOURCE_COUNT_LABELS,
   abbreviatedLocation,
+  isActionableSourceDiagnostic,
   sourceDiagnosticCategory,
   sourceScopeLabel,
 } from './presentation';

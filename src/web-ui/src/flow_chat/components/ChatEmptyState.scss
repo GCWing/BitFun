@@ -85,7 +85,9 @@
     border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard;
     
     &:hover {
       background: var(--bf-appearance-token-element-bg-hover);
@@ -105,7 +107,9 @@
     border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard;
     
     &:hover {
       background: var(--bf-appearance-token-element-bg-hover);
@@ -175,7 +179,9 @@
       background: var(--bf-appearance-token-element-bg-subtle);
       border-left: 2px solid var(--bf-appearance-token-border-strong);
       border-radius: 0 $size-radius-sm $size-radius-sm 0;
-      transition: all $motion-base $easing-standard;
+      transition:
+        background-color $motion-base $easing-standard,
+        border-left-color $motion-base $easing-standard;
       
       &:hover {
         background: var(--bf-appearance-token-element-bg-soft);
@@ -223,5 +229,4 @@
     }
   }
 }
-
 

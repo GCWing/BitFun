@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS devices (
   device_id    TEXT NOT NULL,
   user_id      TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   device_name  TEXT,
+  device_kind  TEXT,
   public_key   TEXT,
   last_seen_at INTEGER,
   online       INTEGER NOT NULL DEFAULT 0,
@@ -141,6 +142,10 @@ const MIGRATE_AUTH_TOKEN_REQUEST_ID: &str = r#"
 ALTER TABLE auth_tokens ADD COLUMN request_id TEXT;
 "#;
 
+const MIGRATE_DEVICE_KIND: &str = r#"
+ALTER TABLE devices ADD COLUMN device_kind TEXT;
+"#;
+
 /// Open (or create) the SQLite database and ensure the schema exists.
 pub async fn connect(db_path: &str) -> Result<DbPool> {
     connect_with_presence_reset(db_path, true).await
@@ -216,6 +221,15 @@ async fn connect_with_presence_reset(db_path: &str, reset_presence: bool) -> Res
         }
     }
     migrate_account_scoped_devices(&pool).await?;
+    // Runs after the account-scoping migration because that path rebuilds
+    // `devices` from the legacy schema; adding the column last covers both the
+    // rebuilt table and databases that never needed rebuilding. A NULL kind
+    // means "registered before clients reported one" and is read as a desktop.
+    if let Err(error) = sqlx::query(MIGRATE_DEVICE_KIND).execute(&pool).await {
+        if !error.to_string().contains("duplicate column name") {
+            return Err(anyhow!("migrate device kinds: {error}"));
+        }
+    }
     sqlx::query(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_tokens_request_id \
          ON auth_tokens(request_id) WHERE request_id IS NOT NULL",
@@ -615,11 +629,36 @@ fn lockout_until(attempts: i64, now: i64) -> i64 {
 
 // ── Devices ─────────────────────────────────────────────────────────────
 
+/// Only desktops can host a remote-control session, so the device list is
+/// filtered on this. Phones and watches still register — they need a device
+/// row to hold their auth token — they just aren't offered as control targets.
+pub const DEVICE_KIND_DESKTOP: &str = "desktop";
+pub const DEVICE_KIND_MOBILE: &str = "mobile";
+pub const DEVICE_KIND_WATCH: &str = "watch";
+
+pub const DEVICE_KINDS: [&str; 3] = [
+    DEVICE_KIND_DESKTOP,
+    DEVICE_KIND_MOBILE,
+    DEVICE_KIND_WATCH,
+];
+
+pub fn is_valid_device_kind(kind: &str) -> bool {
+    DEVICE_KINDS.contains(&kind)
+}
+
+/// A missing kind predates client-side reporting, and is read as a desktop:
+/// hiding a real desktop would break remote control outright, while a stale
+/// phone row corrects itself the next time that phone logs in.
+pub fn device_kind_is_desktop(kind: Option<&str>) -> bool {
+    matches!(kind, None | Some(DEVICE_KIND_DESKTOP))
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct DeviceRow {
     pub device_id: String,
     pub user_id: String,
     pub device_name: Option<String>,
+    pub device_kind: Option<String>,
     pub public_key: Option<String>,
     pub last_seen_at: Option<i64>,
     pub online: i64,
@@ -631,20 +670,27 @@ impl DeviceRow {
         device_id: &str,
         user_id: &str,
         device_name: &str,
+        device_kind: Option<&str>,
         public_key: Option<&str>,
     ) -> Result<()> {
         let now = Utc::now().timestamp();
+        // `device_kind` is only overwritten when the caller actually reported
+        // one. A client build that predates the field would otherwise erase a
+        // known kind on every login and put the device back in the list.
         sqlx::query(
-            "INSERT INTO devices (device_id, user_id, device_name, public_key, last_seen_at, online) \
-             VALUES (?, ?, ?, ?, ?, 0) \
+            "INSERT INTO devices \
+               (device_id, user_id, device_name, device_kind, public_key, last_seen_at, online) \
+             VALUES (?, ?, ?, ?, ?, ?, 0) \
              ON CONFLICT(user_id, device_id) DO UPDATE SET \
                device_name = excluded.device_name, \
+               device_kind = COALESCE(excluded.device_kind, devices.device_kind), \
                public_key = excluded.public_key, \
                last_seen_at = excluded.last_seen_at",
         )
         .bind(device_id)
         .bind(user_id)
         .bind(device_name)
+        .bind(device_kind)
         .bind(public_key)
         .bind(now)
         .execute(pool)
@@ -675,7 +721,7 @@ impl DeviceRow {
 
     pub async fn list_by_user(pool: &DbPool, user_id: &str) -> Result<Vec<DeviceRow>> {
         let rows = sqlx::query_as::<_, DeviceRow>(
-            "SELECT device_id, user_id, device_name, public_key, last_seen_at, online \
+            "SELECT device_id, user_id, device_name, device_kind, public_key, last_seen_at, online \
              FROM devices WHERE user_id = ?",
         )
         .bind(user_id)
@@ -756,6 +802,7 @@ impl AuthToken {
         user_id: &str,
         device_id: &str,
         device_name: &str,
+        device_kind: Option<&str>,
         request_id: &str,
     ) -> Result<Option<AuthToken>> {
         let mut tx = pool
@@ -801,12 +848,13 @@ impl AuthToken {
 
         let inserted = sqlx::query(
             "INSERT OR IGNORE INTO devices \
-             (device_id, user_id, device_name, public_key, last_seen_at, online) \
-             VALUES (?, ?, ?, NULL, ?, 0)",
+             (device_id, user_id, device_name, device_kind, public_key, last_seen_at, online) \
+             VALUES (?, ?, ?, ?, NULL, ?, 0)",
         )
         .bind(device_id)
         .bind(user_id)
         .bind(device_name)
+        .bind(device_kind)
         .bind(now)
         .execute(&mut *tx)
         .await
@@ -2361,7 +2409,7 @@ mod tests {
         UserRow::create(&runtime_pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&runtime_pool, "d1", "u1", "Laptop", None)
+        DeviceRow::upsert(&runtime_pool, "d1", "u1", "Laptop", None, None)
             .await
             .unwrap();
         DeviceRow::set_online(&runtime_pool, "u1", "d1", true)
@@ -2418,7 +2466,7 @@ mod tests {
         UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&pool, "d1", "u1", "Laptop", None)
+        DeviceRow::upsert(&pool, "d1", "u1", "Laptop", None, None)
             .await
             .unwrap();
         let tok = AuthToken::create(&pool, "u1", "d1").await.unwrap();
@@ -2452,10 +2500,10 @@ mod tests {
             .await
             .unwrap();
 
-        DeviceRow::upsert(&pool, "shared-install", "u1", "Alice laptop", None)
+        DeviceRow::upsert(&pool, "shared-install", "u1", "Alice laptop", None, None)
             .await
             .unwrap();
-        DeviceRow::upsert(&pool, "shared-install", "u2", "Bob laptop", None)
+        DeviceRow::upsert(&pool, "shared-install", "u2", "Bob laptop", None, None)
             .await
             .unwrap();
         let token_u1 = AuthToken::create(&pool, "u1", "shared-install")
@@ -2652,7 +2700,7 @@ mod tests {
             .await
             .unwrap()
             .is_none());
-        DeviceRow::upsert(&migrated, "shared-install", "u1", "Alice laptop", None)
+        DeviceRow::upsert(&migrated, "shared-install", "u1", "Alice laptop", None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -2670,6 +2718,34 @@ mod tests {
             1
         );
         migrated.close().await;
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
+    async fn reopening_a_database_keeps_the_device_kind_column_and_its_values() {
+        let db_path = std::env::temp_dir().join(format!(
+            "bitfun-relay-device-kind-migration-{}-{}.db",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        let db_path_text = db_path.to_string_lossy().to_string();
+
+        let first = connect(&db_path_text).await.unwrap();
+        UserRow::create(&first, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&first, "phone", "u1", "Phone", Some(DEVICE_KIND_MOBILE), None)
+            .await
+            .unwrap();
+        first.close().await;
+
+        // The ALTER runs on every startup and must tolerate the column already
+        // being there, rather than failing the whole boot.
+        let second = connect(&db_path_text).await.unwrap();
+        let rows = DeviceRow::list_by_user(&second, "u1").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].device_kind.as_deref(), Some(DEVICE_KIND_MOBILE));
+        second.close().await;
         let _ = std::fs::remove_file(db_path);
     }
 

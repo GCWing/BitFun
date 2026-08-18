@@ -1,0 +1,116 @@
+{
+  "name": "@bitfun/dsh-acp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "IDE-oriented Agent Client Protocol server for DeepSeek Harness: publishes tool calls, reasoning, and plans that the automation-only @deepseek-ai/dsh-acp deliberately withholds",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/app.js",
+  "types": "lib/types/app.d.ts",
+  "bin": {
+    "dsh-acp-ide": "lib/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/types/app.d.ts",
+      "default": "./lib/app.js"
+    },
+    "./bridge": {
+      "types": "./lib/types/bridge.d.ts",
+      "default": "./lib/bridge.js"
+    },
+    "./bin": {
+      "types": "./lib/types/bin.d.ts",
+      "default": "./lib/bin.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/types/**/*.d.ts",
+    "cordis.yml",
+    "presets/**/*.yml"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "link:dsh": "node scripts/link-local-dsh.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --import tsx src/bin.ts --config ./cordis.yml",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "0.25.1",
+    "@deepseek-ai/dsh-agent-spine-demo": "0.1.0-rc.6"
+  },
+  "comment:dependencies": [
+    "Every @deepseek-ai/* below is pinned to the 0.1.0-rc.6 train, the set npm dist-tag `next` points at.",
+    "(`latest` still points at 0.0.1-rc.1 for half of them, which is why a mixed install disagrees with itself.)",
+    "devDependencies are compile-time only: at runtime the profile resolves them out of the user own dsh",
+    "installation, which symlinks its whole closure into $DSH_HOME/profiles/node_modules on every launch.",
+    "This package is deliberately NOT a pnpm workspace member and carries its own package-lock.json, so that",
+    "installing the harness is the desktop bundle build cost alone rather than every contributor install."
+  ],
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.2",
+    "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent-default-model": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent-instructions": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent-loop": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent-loop-testkit": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent-tool-presentation": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-app-boot": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-bash-sandbox": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-code-runtime": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-code-runtime-worker-thread": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-compaction-basic": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-credentials-local": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-fs-observation-policy": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-fs-sandbox": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-goal": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-goal-round-driver": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm-deepseek": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm-pi-ai": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-persona": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-repeat-tool-reminder": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-sandbox-local": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-sandbox-policy": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-session": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-session-checkpoint-policy": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-session-projection": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-session-query-sqlite": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings-file": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-shell-env": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-skill": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-skill-filesystem": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-subagent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-subagent-spawn-in-process": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-subprocess-local": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-terminal": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-terminal-bash": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-token-meter": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-bash": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-bash-persistent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-fs": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-fs-search": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-goal": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-jobs": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-skill": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-str-replace-editor": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-subagent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-subagent-control": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-subagent-report": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-todo": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-user-approval": "0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "3.18.1",
+    "tsx": "4.20.3",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

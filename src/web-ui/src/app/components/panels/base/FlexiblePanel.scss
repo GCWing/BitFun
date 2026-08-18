@@ -610,3 +610,11 @@
     height: 100%;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-flexible-panel__loading::before,
+  .bitfun-flexible-panel .needs-fix {
+    animation: none;
+    transform: none;
+  }
+}

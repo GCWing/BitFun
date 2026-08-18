@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 
 const globalStateMocks = vi.hoisted(() => ({
   initializeWorkspaceStartupState: vi.fn(),
@@ -59,10 +60,20 @@ function configureGlobalState(): void {
 }
 
 async function getFreshWorkspaceManager() {
+  const { manager } = await getFreshWorkspaceHarness();
+  return manager;
+}
+
+async function getFreshWorkspaceHarness() {
   vi.resetModules();
+  const deviceSurface = await import('@/infrastructure/peer-device/deviceSurface');
+  deviceSurface.resetDeviceSurfaceForTest();
   const { WorkspaceManager } = await import('./workspaceManager');
   (WorkspaceManager as unknown as { instance: unknown }).instance = null;
-  return WorkspaceManager.getInstance();
+  return {
+    manager: WorkspaceManager.getInstance(),
+    deviceSurface,
+  };
 }
 
 async function flushAsyncWork(): Promise<void> {
@@ -333,6 +344,224 @@ describe('WorkspaceManager startup initialization', () => {
       available: false,
       workspace: null,
     });
+  });
+});
+
+describe('WorkspaceManager device surface switching', () => {
+  const workspaceA = {
+    id: 'workspace-a',
+    name: 'Device A repo',
+    rootPath: '/repo',
+    workspaceKind: 'normal',
+    identity: null,
+  };
+  const workspaceB = {
+    ...workspaceA,
+    id: 'workspace-b',
+    name: 'Device B repo',
+  };
+
+  function startupSnapshot(workspace: typeof workspaceA) {
+    return {
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [workspace],
+      openedWorkspaces: [workspace],
+      currentWorkspace: workspace,
+      primaryAssistantWorkspaceId: null,
+      legacyRemoteWorkspace: null,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    configureGlobalState();
+    listenMock.mockResolvedValue(() => undefined);
+  });
+
+  it('lets a later switch supersede an in-flight rebootstrap instead of running two', async () => {
+    const startupResolvers: Array<(snapshot: ReturnType<typeof startupSnapshot>) => void> = [];
+    globalStateMocks.initializeWorkspaceStartupState.mockImplementation(
+      () => new Promise(resolve => {
+        startupResolvers.push(resolve);
+      }),
+    );
+
+    const manager = await getFreshWorkspaceManager();
+
+    const first = manager.reinitializeForPeerModeSwitch().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await flushAsyncWork();
+    const second = manager.reinitializeForPeerModeSwitch().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await flushAsyncWork();
+
+    expect(startupResolvers).toHaveLength(2);
+
+    // The switch that superseded the first one lands first; the abandoned load
+    // then answers late, which is exactly when it used to overwrite state.
+    startupResolvers[1](startupSnapshot(workspaceB));
+    await flushAsyncWork();
+    startupResolvers[0](startupSnapshot(workspaceA));
+
+    expect(isSurfaceChangedError(await first)).toBe(true);
+    expect(await second).toBeNull();
+
+    const state = manager.getState();
+    expect(state.currentWorkspace?.id).toBe('workspace-b');
+    expect(Array.from(state.openedWorkspaces.keys())).toEqual(['workspace-b']);
+    expect(state.error).toBeNull();
+    expect(state.loading).toBe(false);
+  });
+
+  it('makes a concurrent initialize join the in-flight load instead of resolving early', async () => {
+    let resolveStartup: ((snapshot: ReturnType<typeof startupSnapshot>) => void) | null = null;
+    globalStateMocks.initializeWorkspaceStartupState.mockReturnValue(
+      new Promise(resolve => {
+        resolveStartup = resolve;
+      }),
+    );
+
+    const manager = await getFreshWorkspaceManager();
+
+    const first = manager.initialize();
+    let joinedSettled = false;
+    const joined = manager.initialize().then(() => {
+      joinedSettled = true;
+    });
+    await flushAsyncWork();
+
+    expect(globalStateMocks.initializeWorkspaceStartupState).toHaveBeenCalledTimes(1);
+    expect(joinedSettled).toBe(false);
+
+    resolveStartup?.(startupSnapshot(workspaceA));
+    await Promise.all([first, joined]);
+
+    expect(joinedSettled).toBe(true);
+    expect(manager.getState().currentWorkspace?.id).toBe('workspace-a');
+  });
+
+  it('keeps a superseded load from reporting its failure onto the new surface', async () => {
+    const startupOutcomes: Array<{
+      resolve: (snapshot: ReturnType<typeof startupSnapshot>) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    globalStateMocks.initializeWorkspaceStartupState.mockImplementation(
+      () => new Promise((resolve, reject) => {
+        startupOutcomes.push({ resolve, reject });
+      }),
+    );
+
+    const manager = await getFreshWorkspaceManager();
+
+    const first = manager.reinitializeForPeerModeSwitch().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await flushAsyncWork();
+    const second = manager.reinitializeForPeerModeSwitch().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await flushAsyncWork();
+
+    startupOutcomes[1].resolve(startupSnapshot(workspaceB));
+    await flushAsyncWork();
+    startupOutcomes[0].reject(new Error('peer request timed out'));
+
+    expect(isSurfaceChangedError(await first)).toBe(true);
+    expect(await second).toBeNull();
+    expect(manager.getState().error).toBeNull();
+    expect(manager.getState().currentWorkspace?.id).toBe('workspace-b');
+  });
+
+  it('selects each device cached workspace state before its refresh completes', async () => {
+    globalStateMocks.initializeWorkspaceStartupState
+      .mockResolvedValueOnce(startupSnapshot(workspaceA))
+      .mockResolvedValueOnce(startupSnapshot(workspaceB));
+    const { manager, deviceSurface } = await getFreshWorkspaceHarness();
+
+    await manager.initialize();
+    expect(manager.getState().currentWorkspace?.id).toBe('workspace-a');
+
+    deviceSurface.activateSurface('peer-b');
+    expect(manager.getState().currentWorkspace).toBeNull();
+    await manager.reinitializeForPeerModeSwitch();
+    expect(manager.getState().currentWorkspace?.id).toBe('workspace-b');
+
+    deviceSurface.activateSurface(deviceSurface.LOCAL_SURFACE_ID);
+    expect(manager.getState().currentWorkspace?.id).toBe('workspace-a');
+    deviceSurface.activateSurface('peer-b');
+    expect(manager.getState().currentWorkspace?.id).toBe('workspace-b');
+  });
+
+  it('keeps a cached surface visible when its refresh fails', async () => {
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue(
+      startupSnapshot(workspaceA),
+    );
+    const manager = await getFreshWorkspaceManager();
+    await manager.initialize();
+
+    globalStateMocks.initializeWorkspaceStartupState.mockRejectedValue(
+      new Error('relay unavailable'),
+    );
+    await expect(manager.reinitializeForPeerModeSwitch()).rejects.toThrow('relay unavailable');
+
+    expect(manager.getState()).toMatchObject({
+      currentWorkspace: workspaceA,
+      loading: false,
+      error: 'relay unavailable',
+    });
+  });
+
+  it('keeps local identity events out of a rendered peer with equal workspace ids', async () => {
+    const localWorkspace = {
+      id: 'shared-workspace-id',
+      name: 'Local repo',
+      rootPath: '/repo',
+      workspaceKind: 'normal',
+      identity: null,
+    };
+    const peerWorkspace = {
+      ...localWorkspace,
+      name: 'Peer repo',
+    };
+    globalStateMocks.initializeWorkspaceStartupState
+      .mockResolvedValueOnce(startupSnapshot(localWorkspace))
+      .mockResolvedValueOnce(startupSnapshot(peerWorkspace));
+    let identityHandler: ((event: { payload: {
+      workspaceId: string;
+      workspacePath: string;
+      name: string;
+      identity: { name: string };
+      changedFields: string[];
+    } }) => void) | null = null;
+    listenMock.mockImplementation((_eventName, handler) => {
+      identityHandler = handler;
+      return Promise.resolve(() => undefined);
+    });
+    const { manager, deviceSurface } = await getFreshWorkspaceHarness();
+
+    await manager.initialize();
+    deviceSurface.activateSurface('peer-b');
+    await manager.reinitializeForPeerModeSwitch();
+
+    identityHandler?.({
+      payload: {
+        workspaceId: 'shared-workspace-id',
+        workspacePath: '/repo',
+        name: 'Local repo renamed',
+        identity: { name: 'Local repo renamed' },
+        changedFields: ['name'],
+      },
+    });
+
+    expect(manager.getState().currentWorkspace?.name).toBe('Peer repo');
+    deviceSurface.activateSurface(deviceSurface.LOCAL_SURFACE_ID);
+    expect(manager.getState().currentWorkspace?.name).toBe('Local repo renamed');
   });
 });
 

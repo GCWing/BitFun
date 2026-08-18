@@ -2,9 +2,8 @@ use crate::agent::BitfunAppRuntime;
 use crate::management::AppManagementService;
 use crate::role::AppClient;
 use crate::schema::{
-    config_update_from_owner, ConfigEventNotification, EventStream, EventStreamState,
-    EventStreamStateNotification, PermissionEventNotification, ResyncDirective,
-    SessionEventNotification,
+    ConfigEventNotification, EventStream, EventStreamState, EventStreamStateNotification,
+    PermissionEventNotification, ResyncDirective, SessionEventNotification,
 };
 use agent_client_protocol::{ConnectionTo, Result};
 use bitfun_agent_runtime::sdk::PermissionRequestEvent;
@@ -111,7 +110,7 @@ pub(super) async fn run(
                 Some(Ok(event)) => {
                     if let Err(error) = cx.send_notification(ConfigEventNotification {
                         cursor: event_state.next_cursor(EventStream::Config),
-                        event: config_update_from_owner(event),
+                        event: crate::server::wire::config_update(event),
                     }) {
                         log::warn!("App-server config event forwarder failed to send a notification: {:?} -- skipping this event", error);
                     }

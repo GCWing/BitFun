@@ -158,19 +158,22 @@ impl Default for I18nConfig {
     }
 }
 
-/// Translation arguments
+/// Translation arguments passed to backend Fluent messages.
+#[cfg(feature = "i18n-runtime")]
 #[derive(Debug, Clone, Default)]
 pub struct TranslationArgs {
     args: std::collections::HashMap<String, FluentValue>,
 }
 
-/// Fluent value type
+/// Fluent-compatible backend value type.
+#[cfg(feature = "i18n-runtime")]
 #[derive(Debug, Clone)]
 pub enum FluentValue {
     String(String),
     Number(f64),
 }
 
+#[cfg(feature = "i18n-runtime")]
 impl TranslationArgs {
     pub fn new() -> Self {
         Self::default()

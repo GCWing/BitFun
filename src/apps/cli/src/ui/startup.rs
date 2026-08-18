@@ -29,12 +29,9 @@ use crate::config::CliConfig;
 /// - Slash command menu with real execution
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
-use anyhow::Result;
-use bitfun_app_server_protocol::model::{
-    AddModelRequest, ModelDefaultSlot, SetModelDefaultRequest, UpdateModelRequest,
-};
-use bitfun_app_server_protocol::skill::SkillSummary;
-use bitfun_app_server_protocol::subagent::SubagentSummary;
+use anyhow::{anyhow, Result};
+use bitfun_core_types::model::ModelMutation;
+use bitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     backend::Backend,
@@ -47,7 +44,15 @@ use ratatui::{
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::tui_client::{TuiAgentClient, TuiAgentMode};
+use crate::account::{
+    account_login_status_message, account_snapshot_projection, redact_login_error,
+    settings_sync_progress,
+};
+use crate::agent::runtime_client::{CliAgentMode as TuiAgentMode, CliAgentRuntimeClient};
+use crate::model_selection::{
+    model_catalog_projection, model_edit_projection, model_from_mutation, model_list_projection,
+};
+use bitfun_core::service::remote_connect::account_runtime::AccountRuntime;
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
@@ -196,7 +201,8 @@ pub(crate) struct StartupPage {
     theme_preview_original: Option<Theme>,
 
     // ── System context ──
-    agent: Arc<TuiAgentClient>,
+    agent: Arc<CliAgentRuntimeClient>,
+    account_runtime: Option<Arc<AccountRuntime>>,
 
     // ── State ──
     /// Selected agent type (can be changed via /agent or Tab)
@@ -220,7 +226,8 @@ pub(crate) struct StartupPage {
 impl StartupPage {
     pub(crate) fn new(
         config: CliConfig,
-        agent: Arc<TuiAgentClient>,
+        agent: Arc<CliAgentRuntimeClient>,
+        account_runtime: Option<Arc<AccountRuntime>>,
         default_agent: String,
         workspace: Option<String>,
     ) -> Self {
@@ -282,6 +289,7 @@ impl StartupPage {
             login_form: LoginFormState::new(),
             theme_preview_original: None,
             agent,
+            account_runtime,
             agent_type: default_agent,
             model_display_name: String::new(),
             selected_model_id: None,
@@ -1031,9 +1039,13 @@ impl StartupPage {
             ActionHandler::SelectModel => self.show_model_selector(),
             ActionHandler::SelectTheme => self.show_theme_selector(),
             ActionHandler::AddModel => {
-                let agent = self.agent.clone();
                 let catalog = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(agent.model_catalog())
+                    tokio::runtime::Handle::current().block_on(async {
+                        let catalog = bitfun_core::get_ai_model_catalog()
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                        Ok::<_, anyhow::Error>(model_catalog_projection(catalog))
+                    })
                 });
                 match catalog {
                     Ok(catalog) => {
@@ -1292,7 +1304,16 @@ impl StartupPage {
     fn logout(&mut self) {
         self.status = Some(
             match tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                tokio::runtime::Handle::current().block_on(async {
+                    let account = self.account_runtime.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                    })?;
+                    account.logout().await?;
+                    account
+                        .mark_sync_cancelled(format!("tui-account-{}", uuid::Uuid::new_v4()))
+                        .await;
+                    Ok::<(), anyhow::Error>(())
+                })
             }) {
                 Ok(_) => "Logged out.".to_string(),
                 Err(error) => format!("Logout failed: {error}"),
@@ -1360,7 +1381,12 @@ impl StartupPage {
     fn show_login_form(&mut self) {
         self.close_all_popups();
         let logged_in = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.agent.account_snapshot())
+            tokio::runtime::Handle::current().block_on(async {
+                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                })?;
+                Ok::<_, anyhow::Error>(account_snapshot_projection(account.snapshot().await))
+            })
         });
         match logged_in {
             Ok(snapshot) if snapshot.logged_in => self.open_account_panel(snapshot),
@@ -1375,7 +1401,7 @@ impl StartupPage {
 
     fn open_account_panel(
         &mut self,
-        snapshot: bitfun_app_server_protocol::account::AccountSnapshotResponse,
+        snapshot: bitfun_product_domains::account::AccountSnapshotProjection,
     ) {
         let Some(info) = snapshot.info else {
             self.login_form.show();
@@ -1390,22 +1416,29 @@ impl StartupPage {
             return;
         }
         let Ok(progress) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.agent.settings_sync_snapshot())
+            tokio::runtime::Handle::current().block_on(async {
+                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                })?;
+                Ok::<_, anyhow::Error>(settings_sync_progress(
+                    account.current_sync_progress().await,
+                ))
+            })
         }) else {
             return;
         };
-        let progress = progress.progress;
+        let progress = progress;
         // Refresh devices occasionally while syncing / after done.
         let devices = if matches!(
             progress.status,
-            bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing
-                | bitfun_app_server_protocol::account::SettingsSyncStatus::Done
+            bitfun_product_domains::account::SettingsSyncStatus::Syncing
+                | bitfun_product_domains::account::SettingsSyncStatus::Done
         ) {
             tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(self.agent.account_snapshot())
-                    .ok()
-                    .map(|snapshot| snapshot.devices)
+                tokio::runtime::Handle::current().block_on(async {
+                    let account = self.account_runtime.as_ref()?;
+                    Some(account_snapshot_projection(account.snapshot().await).devices)
+                })
             })
         } else {
             None
@@ -1415,15 +1448,37 @@ impl StartupPage {
 
     fn start_sync_and_show_account(&mut self, is_first_login: bool) {
         let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.agent.settings_sync_start(is_first_login))
+            tokio::runtime::Handle::current().block_on(async {
+                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                })?;
+                if !account.is_logged_in().await {
+                    anyhow::bail!("Account login must be finalized before settings sync starts")
+                }
+                if !account
+                    .start_auto_sync_background(
+                        format!("tui-account-{}", uuid::Uuid::new_v4()),
+                        is_first_login,
+                        std::path::PathBuf::from(self.agent.workspace_path_string()),
+                    )
+                    .await
+                {
+                    anyhow::bail!("Account settings sync is already in progress")
+                }
+                Ok::<(), anyhow::Error>(())
+            })
         });
         if let Err(error) = result {
             self.status = Some(format!("Account settings sync failed: {error}"));
             return;
         }
         if let Ok(snapshot) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.agent.account_snapshot())
+            tokio::runtime::Handle::current().block_on(async {
+                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                })?;
+                Ok::<_, anyhow::Error>(account_snapshot_projection(account.snapshot().await))
+            })
         }) {
             self.open_account_panel(snapshot);
         }
@@ -1438,11 +1493,29 @@ impl StartupPage {
         match action {
             LoginFormAction::Submit(creds) => {
                 let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(self.agent.account_login(
-                        creds.relay_url,
-                        creds.username,
-                        creds.password,
-                    ))
+                    tokio::runtime::Handle::current().block_on(async {
+                        let account = self.account_runtime.as_ref().ok_or_else(|| {
+                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                        })?;
+                        let relay_url = creds.relay_url;
+                        let username = creds.username;
+                        let password = creds.password;
+                        let result = account
+                            .login_with_credentials(&relay_url, &username, &password)
+                            .await
+                            .map_err(|error| {
+                                redact_login_error(error, [&relay_url, &username, &password])
+                            })?;
+                        let status_message = account_login_status_message(&result);
+                        Ok::<_, anyhow::Error>(
+                            bitfun_product_domains::account::AccountLoginProjection {
+                                user_id: result.user_id,
+                                relay_url: result.relay_url,
+                                has_cloud_settings: result.has_cloud_settings,
+                                status_message,
+                            },
+                        )
+                    })
                 });
                 match result {
                     Ok(login) => {
@@ -1461,9 +1534,25 @@ impl StartupPage {
             }
             LoginFormAction::SyncUseLocal => {
                 let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
-                        bitfun_app_server_protocol::account::AccountSyncChoice::Local,
-                    ))
+                    tokio::runtime::Handle::current().block_on(async {
+                        let account = self.account_runtime.as_ref().ok_or_else(|| {
+                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                        })?;
+                        account.finalize_login_after_sync_choice().await?;
+                        if !account
+                            .start_auto_sync_background(
+                                format!("tui-account-{}", uuid::Uuid::new_v4()),
+                                true,
+                                std::path::PathBuf::from(self.agent.workspace_path_string()),
+                            )
+                            .await
+                        {
+                            anyhow::bail!("Account settings sync is already in progress")
+                        }
+                        Ok::<_, anyhow::Error>(account_snapshot_projection(
+                            account.snapshot().await,
+                        ))
+                    })
                 });
                 match result {
                     Ok(snapshot) => {
@@ -1475,7 +1564,21 @@ impl StartupPage {
                         self.login_form
                             .set_error(format!("Finalize login failed: {error}"));
                         let _ = tokio::task::block_in_place(|| {
-                            tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                            tokio::runtime::Handle::current().block_on(async {
+                                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "Account management is unavailable for this TUI Host"
+                                    )
+                                })?;
+                                account.logout().await?;
+                                account
+                                    .mark_sync_cancelled(format!(
+                                        "tui-account-{}",
+                                        uuid::Uuid::new_v4()
+                                    ))
+                                    .await;
+                                Ok::<(), anyhow::Error>(())
+                            })
                         });
                         self.login_form.show();
                     }
@@ -1483,9 +1586,25 @@ impl StartupPage {
             }
             LoginFormAction::SyncUseCloud => {
                 let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
-                        bitfun_app_server_protocol::account::AccountSyncChoice::Cloud,
-                    ))
+                    tokio::runtime::Handle::current().block_on(async {
+                        let account = self.account_runtime.as_ref().ok_or_else(|| {
+                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                        })?;
+                        account.finalize_login_after_sync_choice().await?;
+                        if !account
+                            .start_auto_sync_background(
+                                format!("tui-account-{}", uuid::Uuid::new_v4()),
+                                false,
+                                std::path::PathBuf::from(self.agent.workspace_path_string()),
+                            )
+                            .await
+                        {
+                            anyhow::bail!("Account settings sync is already in progress")
+                        }
+                        Ok::<_, anyhow::Error>(account_snapshot_projection(
+                            account.snapshot().await,
+                        ))
+                    })
                 });
                 match result {
                     Ok(snapshot) => {
@@ -1497,7 +1616,21 @@ impl StartupPage {
                         self.login_form
                             .set_error(format!("Finalize login failed: {error}"));
                         let _ = tokio::task::block_in_place(|| {
-                            tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                            tokio::runtime::Handle::current().block_on(async {
+                                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "Account management is unavailable for this TUI Host"
+                                    )
+                                })?;
+                                account.logout().await?;
+                                account
+                                    .mark_sync_cancelled(format!(
+                                        "tui-account-{}",
+                                        uuid::Uuid::new_v4()
+                                    ))
+                                    .await;
+                                Ok::<(), anyhow::Error>(())
+                            })
                         });
                         self.login_form.show();
                     }
@@ -1505,14 +1638,34 @@ impl StartupPage {
             }
             LoginFormAction::SyncCancel => {
                 let _ = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(self.agent.settings_sync_cancel())
+                    tokio::runtime::Handle::current().block_on(async {
+                        let account = self.account_runtime.as_ref().ok_or_else(|| {
+                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                        })?;
+                        Ok::<_, anyhow::Error>(settings_sync_progress(
+                            account
+                                .cancel_sync(format!("tui-account-{}", uuid::Uuid::new_v4()))
+                                .await?,
+                        ))
+                    })
                 });
                 self.login_form.show();
                 self.status = Some("Sync cancelled; logged out.".to_string());
             }
             LoginFormAction::Logout => {
                 match tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(self.agent.account_logout())
+                    tokio::runtime::Handle::current().block_on(async {
+                        let account = self.account_runtime.as_ref().ok_or_else(|| {
+                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
+                        })?;
+                        account.logout().await?;
+                        account
+                            .mark_sync_cancelled(format!("tui-account-{}", uuid::Uuid::new_v4()))
+                            .await;
+                        Ok::<_, anyhow::Error>(account_snapshot_projection(
+                            account.snapshot().await,
+                        ))
+                    })
                 }) {
                     Ok(_) => {
                         self.login_form.show();
@@ -1606,7 +1759,12 @@ impl StartupPage {
 
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let catalog = self.agent.list_models().await.ok()?;
+                let config_service = bitfun_core::service::config::get_global_config_service()
+                    .await
+                    .ok()?;
+                let models = config_service.get_ai_models().await.ok()?;
+                let config = config_service.get_config(None).await.ok()?;
+                let catalog = model_list_projection(&models, &config);
                 let current_model_id = resolve_startup_model_id(
                     explicitly_selected_model_id,
                     profile_model_id,
@@ -1650,12 +1808,16 @@ impl StartupPage {
                 if !persist_shared_default {
                     return true;
                 }
-                if let Err(error) = self
-                    .agent
-                    .set_model_default(SetModelDefaultRequest {
-                        slot: ModelDefaultSlot::Mode,
-                        model_id: Some(selected_id.clone()),
-                    })
+                let config_service =
+                    match bitfun_core::service::config::get_global_config_service().await {
+                        Ok(service) => service,
+                        Err(error) => {
+                            tracing::error!("Failed to load model configuration: {error}");
+                            return false;
+                        }
+                    };
+                if let Err(error) = config_service
+                    .set_config("ai.agent_model_defaults.mode", &selected_id)
                     .await
                 {
                     tracing::error!("Failed to set future mode model: {error}");
@@ -1672,8 +1834,13 @@ impl StartupPage {
             self.status = Some(format!("Model switched to: {}", selected_display_name));
             if persist_shared_default {
                 let _ = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current()
-                        .block_on(self.agent.settings_sync_local_changed())
+                    tokio::runtime::Handle::current().block_on(async {
+                        let Some(account) = self.account_runtime.as_ref() else {
+                            return Ok(());
+                        };
+                        account.notify_local_settings_changed();
+                        Ok::<_, anyhow::Error>(())
+                    })
                 });
             }
         } else {
@@ -1711,14 +1878,19 @@ impl StartupPage {
 
         let result_name = result.name.clone();
         let result_model_display = format!("{} / {}", result.model_name, result.name);
-        let request = AddModelRequest {
-            model: result.to_mutation(model_id.clone()),
-            make_primary_if_empty: true,
-        };
+        let mutation = result.to_mutation(model_id.clone());
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current()
-                .block_on(self.agent.add_model(request))
+                .block_on(async {
+                    let config_service =
+                        bitfun_core::service::config::get_global_config_service().await?;
+                    let model = model_from_mutation(mutation, None)?;
+                    config_service
+                        .add_ai_model(model)
+                        .await
+                        .map_err(anyhow::Error::msg)
+                })
                 .map_err(|error| tracing::error!("Failed to add AI model: {error}"))
                 .is_ok()
         });
@@ -1728,7 +1900,12 @@ impl StartupPage {
             self.status = Some(format!("Model added: {}", result_name));
             tracing::info!("Added new AI model: {}", model_id);
             let _ = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(self.agent.settings_sync_local_changed())
+                tokio::runtime::Handle::current().block_on(async {
+                    if let Some(account) = self.account_runtime.as_ref() {
+                        account.notify_local_settings_changed();
+                    }
+                    Ok::<_, anyhow::Error>(())
+                })
             });
             // Reload model name display
             self.load_current_model_name();
@@ -1741,12 +1918,23 @@ impl StartupPage {
     fn edit_model(&mut self, selected: &ModelItem) {
         let model_id = selected.id.clone();
         let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.agent.get_model(model_id.clone()))
+            tokio::runtime::Handle::current().block_on(async {
+                let config_service =
+                    bitfun_core::service::config::get_global_config_service().await?;
+                let model = config_service
+                    .get_ai_models()
+                    .await
+                    .map_err(anyhow::Error::msg)?
+                    .into_iter()
+                    .find(|model| model.id == model_id)
+                    .ok_or_else(|| anyhow!("AI model '{model_id}' was not found"))?;
+                Ok::<_, anyhow::Error>(model_edit_projection(&model))
+            })
         });
 
         match result {
-            Ok(response) => {
-                let form_data = ModelFormResult::from_projection(response.model);
+            Ok(projection) => {
+                let form_data = ModelFormResult::from_projection(projection);
                 self.model_config_form.show_for_edit(&model_id, &form_data);
             }
             Err(error) => {
@@ -1764,14 +1952,29 @@ impl StartupPage {
 
         let result_name = result.name.clone();
         let result_model_display = format!("{} / {}", result.model_name, result.name);
-        let request = UpdateModelRequest {
-            model_id: model_id.clone(),
-            model: result.to_mutation(model_id.clone()),
-        };
+        let mutation = result.to_mutation(model_id.clone());
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current()
-                .block_on(self.agent.update_model(request))
+                .block_on(async {
+                    if mutation.id != model_id {
+                        anyhow::bail!("Model update identity does not match the request target")
+                    }
+                    let config_service =
+                        bitfun_core::service::config::get_global_config_service().await?;
+                    let existing = config_service
+                        .get_ai_models()
+                        .await
+                        .map_err(anyhow::Error::msg)?
+                        .into_iter()
+                        .find(|model| model.id == model_id)
+                        .ok_or_else(|| anyhow!("AI model '{model_id}' was not found"))?;
+                    let model = model_from_mutation(mutation, Some(existing))?;
+                    config_service
+                        .update_ai_model(&model_id, model)
+                        .await
+                        .map_err(anyhow::Error::msg)
+                })
                 .map_err(|error| tracing::error!("Failed to update AI model: {error}"))
                 .is_ok()
         });
@@ -1781,7 +1984,12 @@ impl StartupPage {
             self.status = Some(format!("Model updated: {}", result_name));
             tracing::info!("Updated AI model: {}", model_id);
             let _ = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(self.agent.settings_sync_local_changed())
+                tokio::runtime::Handle::current().block_on(async {
+                    if let Some(account) = self.account_runtime.as_ref() {
+                        account.notify_local_settings_changed();
+                    }
+                    Ok::<_, anyhow::Error>(())
+                })
             });
             self.load_current_model_name();
         } else {
@@ -1956,11 +2164,28 @@ impl StartupPage {
 
     fn show_available_skill_list(&mut self) {
         let skills = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.agent.list_skills(self.agent_type.clone(), false))
+            tokio::runtime::Handle::current().block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Skill management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let values =
+                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry()
+                        .get_user_invocable_skills_for_workspace(
+                            Some(&workspace),
+                            Some(&self.agent_type),
+                        )
+                        .await;
+                Ok::<_, anyhow::Error>(
+                    values
+                        .into_iter()
+                        .map(startup_skill_summary)
+                        .collect::<Vec<_>>(),
+                )
+            })
         });
         let skills = match skills {
-            Ok(response) => response.skills,
+            Ok(skills) => skills,
             Err(error) => {
                 self.status = Some(format!("Could not load skills: {error}"));
                 return;
@@ -1990,11 +2215,25 @@ impl StartupPage {
 
     fn show_skill_config_selector(&mut self) {
         let skills = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.agent.list_skills(self.agent_type.clone(), true))
+            tokio::runtime::Handle::current().block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Skill management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let values =
+                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry()
+                        .get_mode_skill_infos_for_workspace(Some(&workspace), &self.agent_type)
+                        .await;
+                Ok::<_, anyhow::Error>(
+                    values
+                        .into_iter()
+                        .map(startup_mode_skill_summary)
+                        .collect::<Vec<_>>(),
+                )
+            })
         });
         let skills = match skills {
-            Ok(response) => response.skills,
+            Ok(skills) => skills,
             Err(error) => {
                 self.status = Some(format!("Could not load skills: {error}"));
                 return;
@@ -2034,13 +2273,24 @@ impl StartupPage {
         let skill = selected.clone();
 
         let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.agent.set_skill_enabled(
-                mode_id,
-                skill.key,
-                enabled,
-                skill.default_enabled,
-                skill.level,
-            ))
+            tokio::runtime::Handle::current().block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Skill management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                match skill.level.as_str() {
+                    "user" => {
+                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(&mode_id, &skill.key, enabled, skill.default_enabled).await.map_err(anyhow::Error::msg)?;
+                    }
+                    "project" => {
+                        let mut document = bitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace).await.map_err(anyhow::Error::msg)?;
+                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(&mut document, &mode_id, &skill.key, !enabled).map_err(anyhow::Error::msg)?;
+                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(&workspace, &document).await.map_err(anyhow::Error::msg)?;
+                    }
+                    level => anyhow::bail!("Unsupported skill level '{level}'"),
+                }
+                Ok::<_, anyhow::Error>(())
+            })
         });
 
         self.status = Some(match result {
@@ -2078,11 +2328,30 @@ impl StartupPage {
 
     fn show_available_subagent_list(&mut self) {
         let subagents = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.agent.list_subagents(self.agent_type.clone(), false))
+            tokio::runtime::Handle::current().block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Subagent management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let values = bitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+                        parent_agent_type: Some(&self.agent_type),
+                        workspace_root: Some(&workspace),
+                        list_scope: bitfun_core::agentic::agents::SubagentListScope::TaskVisible,
+                        include_disabled: false,
+                        external_sources_supported: true,
+                    })
+                    .await;
+                Ok::<_, anyhow::Error>(
+                    values
+                        .into_iter()
+                        .map(startup_subagent_summary)
+                        .collect::<Vec<_>>(),
+                )
+            })
         });
         let subagents = match subagents {
-            Ok(response) => response.subagents,
+            Ok(response) => response,
             Err(error) => {
                 self.status = Some(format!("Could not load subagents: {error}"));
                 return;
@@ -2112,18 +2381,46 @@ impl StartupPage {
 
     fn show_subagent_config_selector(&mut self) {
         let subagents = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.agent.list_subagents(self.agent_type.clone(), true))
+            tokio::runtime::Handle::current().block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Subagent management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let values = bitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+                        parent_agent_type: Some(&self.agent_type),
+                        workspace_root: Some(&workspace),
+                        list_scope:
+                            bitfun_core::agentic::agents::SubagentListScope::RegistryManagement,
+                        include_disabled: true,
+                        external_sources_supported: true,
+                    })
+                    .await;
+                let has_external = values.iter().any(|info| {
+                    info.subagent_source
+                        == Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                });
+                Ok::<_, anyhow::Error>((
+                    values
+                        .into_iter()
+                        .filter(|info| {
+                            info.subagent_source
+                                != Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                        })
+                        .map(startup_subagent_summary)
+                        .collect::<Vec<_>>(),
+                    has_external,
+                ))
+            })
         });
-        let response = match subagents {
+        let (subagents, _has_external) = match subagents {
             Ok(response) => response,
             Err(error) => {
                 self.status = Some(format!("Could not load subagents: {error}"));
                 return;
             }
         };
-        let subagent_items: Vec<SubagentItem> = response
-            .subagents
+        let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
             .map(Self::subagent_item_from_summary)
             .collect();
@@ -2159,11 +2456,16 @@ impl StartupPage {
         let subagent = selected.clone();
 
         let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.agent.set_subagent_enabled(
-                mode_id,
-                subagent.id,
-                enabled,
-            ))
+            tokio::runtime::Handle::current().block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Subagent management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                bitfun_core::agentic::agents::get_agent_registry()
+                    .update_subagent_override(&mode_id, &subagent.id, enabled, Some(&workspace))
+                    .await
+                    .map_err(anyhow::Error::msg)
+            })
         });
 
         self.status = Some(match result {
@@ -2291,7 +2593,12 @@ impl StartupPage {
         let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let catalog = self.agent.list_models().await.ok()?;
+                let config_service = bitfun_core::service::config::get_global_config_service()
+                    .await
+                    .ok()?;
+                let models = config_service.get_ai_models().await.ok()?;
+                let config = config_service.get_config(None).await.ok()?;
+                let catalog = model_list_projection(&models, &config);
                 let model_id = resolve_startup_model_id(
                     explicitly_selected_model_id,
                     profile_model_id,
@@ -2316,6 +2623,64 @@ impl StartupPage {
     fn refresh_command_menu(&mut self) {
         self.command_menu
             .update(&self.text_input.input, self.text_input.cursor);
+    }
+}
+
+fn startup_skill_summary(
+    info: bitfun_core::agentic::tools::implementations::skills::SkillInfo,
+) -> SkillSummary {
+    SkillSummary {
+        key: info.key,
+        name: info.name,
+        description: info.description,
+        level: info.level.as_str().to_string(),
+        source_slot: Some(info.source_slot),
+        source_label: Some(info.source_label),
+        enabled: true,
+        selected_for_runtime: true,
+        default_enabled: true,
+        is_shadowed: info.is_shadowed,
+        shadowed_by_key: info.shadowed_by_key,
+        argument_hint: info.argument_hint,
+    }
+}
+
+fn startup_mode_skill_summary(
+    info: bitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
+) -> SkillSummary {
+    let skill = info.skill;
+    SkillSummary {
+        key: skill.key,
+        name: skill.name,
+        description: skill.description,
+        level: skill.level.as_str().to_string(),
+        source_slot: Some(skill.source_slot),
+        source_label: Some(skill.source_label),
+        enabled: info.effective_enabled,
+        selected_for_runtime: info.selected_for_runtime,
+        default_enabled: info.default_enabled,
+        is_shadowed: skill.is_shadowed,
+        shadowed_by_key: skill.shadowed_by_key,
+        argument_hint: skill.argument_hint,
+    }
+}
+
+fn startup_subagent_summary(info: bitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
+    SubagentSummary {
+        key: info.key,
+        id: info.id,
+        name: info.name,
+        description: info.description,
+        source: format!(
+            "{:?}",
+            info.subagent_source
+                .unwrap_or(bitfun_core::agentic::agents::SubAgentSource::Builtin)
+        )
+        .to_ascii_lowercase(),
+        enabled: info.effective_enabled,
+        is_external: info.subagent_source
+            == Some(bitfun_core::agentic::agents::SubAgentSource::External),
+        supports_follow_up: info.supports_follow_up,
     }
 }
 

@@ -183,6 +183,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat input editable region | `chat-input-textarea` | Rich text editable region. |
 | Chat send button | `chat-input-send-btn` | Send action when input is valid. |
 | Chat cancel button | `chat-input-cancel-btn` | Cancels in-progress send/generation when present. |
+| Chat continue interrupted button | `chat-input-continue-interrupted-btn` | Resumes the latest recoverably interrupted turn when the composer is empty. |
 | Chat input workspace strip | `chat-input-workspace-strip` | Active workspace strip above composer. |
 | Chat input target switcher | `chat-input-target-switcher` | Target/mode switcher. |
 | Chat input image strip | `chat-input-image-strip` | Attached image strip. |

@@ -6,9 +6,9 @@ import type { Session } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
 import {
   dismissResumePrompt,
-  isResumePromptDismissed,
+  resumePromptKey,
+  shouldOpenResumePrompt,
   threadGoalActionsForStatus,
-  threadGoalStatusNeedsResumePrompt,
   type ThreadGoalUiAction,
 } from '../services/threadGoalActions';
 import { parseGoalCommand } from '../services/goalCommandParser';
@@ -105,12 +105,13 @@ function useStableThreadGoalSnapshot(sessionId: string | undefined): ThreadGoalS
 
 export function useThreadGoalController(
   session: Session | undefined,
-  options?: { isBtwSession?: boolean; disabled?: boolean }
+  options?: { isBtwSession?: boolean; disabled?: boolean; sceneActive?: boolean }
 ): ThreadGoalController {
   const { t } = useTranslation('flow-chat');
   const sessionId = session?.sessionId;
   const isBtwSession = Boolean(options?.isBtwSession);
   const disabled = isBtwSession || Boolean(options?.disabled);
+  const sceneActive = options?.sceneActive ?? true;
 
   const storeGoal = useStableThreadGoalSnapshot(sessionId);
 
@@ -161,30 +162,36 @@ export function useThreadGoalController(
     void refreshGoal();
   }, [session?.isHistorical, sessionId, disabled, refreshGoal]);
 
-  const goalId = goal?.goalId;
-  const goalStatus = goal?.status;
-  const goalUpdatedAt = goal?.updatedAt;
+  /** Which session the user is actually looking at through this controller. */
+  const visitKey = sceneActive && sessionId ? sessionId : null;
+
+  /**
+   * Every scene stays mounted, so a paused goal must not raise its modal over
+   * whatever scene is in front. Leaving this session — or opening another one —
+   * retracts the prompt and re-arms the gate, which brings the prompt back when
+   * the user opens the paused session again. Declared before the effect below
+   * so a new visit re-arms first and can then re-open in the same commit.
+   */
+  useEffect(() => {
+    lastResumePromptKey.current = null;
+    setResumeOpen(false);
+  }, [visitKey]);
 
   useEffect(() => {
     if (
-      disabled
-      || !sessionId
-      || !goalId
-      || !goalStatus
-      || !threadGoalStatusNeedsResumePrompt(goalStatus)
+      !shouldOpenResumePrompt({
+        sessionId,
+        goal,
+        sceneActive,
+        disabled,
+        lastPromptedKey: lastResumePromptKey.current,
+      })
     ) {
       return;
     }
-    if (!goal || isResumePromptDismissed(sessionId, goal)) {
-      return;
-    }
-    const key = `${goalId}:${goalUpdatedAt ?? 0}:${goalStatus}`;
-    if (lastResumePromptKey.current === key) {
-      return;
-    }
-    lastResumePromptKey.current = key;
+    lastResumePromptKey.current = resumePromptKey(goal);
     setResumeOpen(true);
-  }, [disabled, goal, goalId, goalStatus, goalUpdatedAt, sessionId]);
+  }, [disabled, goal, sceneActive, sessionId]);
 
   const openMenu = useCallback(() => {
     setMenuOpen(true);

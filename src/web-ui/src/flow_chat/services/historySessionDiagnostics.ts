@@ -1,7 +1,11 @@
 import { createLogger } from '@/shared/utils/logger';
 import { elapsedMs, nowMs, roundDurationMs } from '@/shared/utils/timing';
+import { flowChatDiagnostics } from '@/infrastructure/diagnostics/flowChatDiagnostics';
 
 const log = createLogger('HistorySessionDiagnostics');
+
+/** Probe tag for the older-history paging handshake in `flowchat.log`. */
+const HISTORY_PAGING_PROBE = 'history-paging';
 
 const RECENT_EVENT_LIMIT = 30;
 const WARN_EVENT_LIMIT = 15;
@@ -32,6 +36,7 @@ interface HistorySessionDiagnosticState {
   pendingHydrateStartedAtMs?: number;
   pendingHydrateData?: HistorySessionDiagnosticData;
   stalledWarned: boolean;
+  pagingRefusalWarned: boolean;
 }
 
 export interface HistorySessionLoadingStallSnapshot extends HistorySessionDiagnosticData {
@@ -42,6 +47,26 @@ export interface HistorySessionLoadingStallSnapshot extends HistorySessionDiagno
   activeSessionIdMatches?: boolean;
   hasRenderableContent?: boolean;
   dialogTurnCount?: number;
+}
+
+/**
+ * State captured when the transcript declines to page older Turns even though
+ * the session still reports unloaded ones.
+ *
+ * Every way this can fail — a precondition miss, a cancelled viewport
+ * preparation, a spurious `exhausted` that latches the direction off — looks
+ * identical in the UI to "there is no more history": the boundary status
+ * returns to idle and no indicator is shown. The trail is the only way to tell
+ * them apart after the fact, which matters because the failure is intermittent.
+ */
+export interface HistoryPagingRefusalSnapshot extends HistorySessionDiagnosticData {
+  direction: string;
+  reason: string;
+  isPartial?: boolean;
+  latchedExhausted?: boolean;
+  loadedTurnCount?: number;
+  totalTurnCount?: number;
+  targetOrdinal?: number;
 }
 
 const diagnosticsBySession = new Map<string, HistorySessionDiagnosticState>();
@@ -75,6 +100,7 @@ function getOrCreateDiagnostic(sessionId: string): HistorySessionDiagnosticState
     startedAtMs: nowMs(),
     events: [],
     stalledWarned: false,
+    pagingRefusalWarned: false,
   };
   diagnosticsBySession.set(sessionId, created);
   trimOldDiagnostics();
@@ -141,6 +167,7 @@ export function beginHistorySessionDiagnostics(
     startedAtMs: nowMs(),
     events: [],
     stalledWarned: false,
+    pagingRefusalWarned: false,
   };
   diagnosticsBySession.set(sessionId, state);
   trimOldDiagnostics();
@@ -229,4 +256,79 @@ export function warnHistorySessionLoadingLayerStalled(
 export function resetHistorySessionDiagnosticsForTests(): void {
   diagnosticsBySession.clear();
   diagnosticSequence = 0;
+}
+
+/**
+ * Record one step of the older-history paging handshake.
+ *
+ * The in-memory trail is always kept — it is what makes the refusal warning
+ * self-sufficient without asking the user to reproduce with a flag on. The full
+ * uncapped stream goes to `flowchat.log` through the FlowChat diagnostics
+ * channel, which is opt-in via `app.logging.flow_chat_diagnostics`, so it stays
+ * out of `webview.log`.
+ */
+export function recordHistoryPagingEvent(
+  sessionId: string,
+  event: string,
+  data?: HistorySessionDiagnosticData,
+): void {
+  const state = getOrCreateDiagnostic(sessionId);
+  pushEvent(state, `history_paging_${event}`, data, { logEvent: false });
+  flowChatDiagnostics.trace({
+    hypothesis: HISTORY_PAGING_PROBE,
+    location: `historySessionDiagnostics.${event}`,
+    message: `history paging ${event}`,
+    data: () => ({
+      diagnosticId: state.diagnosticId,
+      sessionId,
+      ...(data ?? {}),
+    }),
+  });
+}
+
+/**
+ * Report that older Turns were not loaded although the session still has some,
+ * together with the trail that led there. Warns once per session so a user
+ * scrolling repeatedly against a dead boundary does not flood the log.
+ */
+export function warnHistoryPagingRefusedWithPendingTurns(
+  sessionId: string,
+  snapshot: HistoryPagingRefusalSnapshot,
+): void {
+  const state = getOrCreateDiagnostic(sessionId);
+  if (state.pagingRefusalWarned) {
+    return;
+  }
+
+  state.pagingRefusalWarned = true;
+  pushEvent(state, 'history_paging_refused_with_pending_turns', snapshot, { logEvent: false });
+
+  const lastOutcome = findLastEvent(state, event => event.event.startsWith('history_paging_outcome'));
+  const lastRequest = findLastEvent(state, event => event.event.startsWith('history_paging_requested'));
+
+  log.warn('FlowChat declined to page older Turns while the session reports more', {
+    diagnosticId: state.diagnosticId,
+    sessionId,
+    ...snapshot,
+    lastOutcome: lastOutcome?.event,
+    lastOutcomeData: lastOutcome?.data,
+    lastRequestData: lastRequest?.data,
+  });
+  log.warn('FlowChat history paging trail', {
+    diagnosticId: state.diagnosticId,
+    sessionId,
+    events: summarizeEvents(state),
+  });
+  // Mirror the alarm into flowchat.log so that stream is self-contained when
+  // FlowChat diagnostics are on.
+  flowChatDiagnostics.trace({
+    hypothesis: HISTORY_PAGING_PROBE,
+    location: 'historySessionDiagnostics.refusedWithPendingTurns',
+    message: 'declined to page older Turns while the session reports more',
+    data: () => ({
+      diagnosticId: state.diagnosticId,
+      sessionId,
+      ...snapshot,
+    }),
+  });
 }

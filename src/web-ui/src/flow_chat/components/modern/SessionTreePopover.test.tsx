@@ -137,4 +137,48 @@ describe('SessionTreePopover', () => {
       isRoot: false,
     }));
   });
+
+  it('closes a sibling action-menu portal and restores focus with the parent', async () => {
+    const t = (key: string) => key;
+    await act(async () => {
+      root.render(
+        <SessionTreePopover
+          sessionId="root"
+          fallbackWorkspacePath="/workspace"
+          onCancelSession={vi.fn().mockResolvedValue(true)}
+          t={t}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-session-tree"]',
+    );
+    await act(async () => {
+      trigger?.click();
+      await Promise.resolve();
+    });
+
+    const panel = document.querySelector<HTMLElement>('.session-tree-popover__panel');
+    const actionButton = panel?.querySelector<HTMLButtonElement>(
+      '[aria-label="flowChatHeader.agentTreeActions"]',
+    );
+    await act(async () => {
+      actionButton?.click();
+    });
+
+    const actionMenuItem = document.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-session-tree-menu"] [role="menuitem"]',
+    );
+    actionMenuItem?.focus();
+    expect(document.activeElement).toBe(actionMenuItem);
+
+    await act(async () => {
+      trigger?.click();
+    });
+
+    expect(document.querySelector('[data-testid="flowchat-header-session-tree-menu"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(panel?.getAttribute('aria-hidden')).toBe('true');
+  });
 });

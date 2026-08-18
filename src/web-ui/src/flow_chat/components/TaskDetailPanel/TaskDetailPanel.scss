@@ -135,7 +135,9 @@
       color: var(--bf-appearance-token-color-text-secondary);
       cursor: pointer;
       user-select: none;
-      transition: all 0.15s ease;
+      transition:
+        color 150ms ease,
+        border-color 150ms ease;
       border: 1px dashed var(--bf-appearance-token-border-base);
       border-radius: 6px;
 
@@ -200,7 +202,9 @@
       color: var(--bf-appearance-token-color-text-secondary);
       cursor: pointer;
       user-select: none;
-      transition: all 0.15s ease;
+      transition:
+        color 150ms ease,
+        border-color 150ms ease;
       border: 1px dashed var(--bf-appearance-token-border-base);
       border-radius: 6px;
 
@@ -325,4 +329,3 @@
     }
   }
 }
-

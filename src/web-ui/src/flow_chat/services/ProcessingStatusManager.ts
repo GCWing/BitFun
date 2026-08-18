@@ -4,6 +4,11 @@
  */
 
 import { createLogger } from '@/shared/utils/logger';
+import {
+  getActiveSurfaceId,
+  onSurfaceActivated,
+  type DeviceSurfaceId,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('ProcessingStatusManager');
 
@@ -21,18 +26,27 @@ export interface ProcessingStatusListener {
   (statuses: ProcessingStatus[]): void;
 }
 
+interface SurfaceProcessingStatus extends ProcessingStatus {
+  surfaceId: DeviceSurfaceId;
+}
+
 export class ProcessingStatusManager {
-  private statuses: Map<string, ProcessingStatus> = new Map();
-  private completedStatuses: ProcessingStatus[] = [];
+  private statuses: Map<string, SurfaceProcessingStatus> = new Map();
+  private completedStatusesBySurface = new Map<DeviceSurfaceId, ProcessingStatus[]>();
   private listeners: Set<ProcessingStatusListener> = new Set();
   private cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 
+  constructor() {
+    onSurfaceActivated(() => this.notifyListeners());
+  }
+
   registerStatus(status: Omit<ProcessingStatus, 'id' | 'startTime'>): string {
     const id = this.generateId();
-    const fullStatus: ProcessingStatus = {
+    const fullStatus: SurfaceProcessingStatus = {
       ...status,
       id,
-      startTime: Date.now()
+      startTime: Date.now(),
+      surfaceId: getActiveSurfaceId(),
     };
 
     this.statuses.set(id, fullStatus);
@@ -48,9 +62,14 @@ export class ProcessingStatusManager {
       return;
     }
 
-    const updated = { ...existing, ...updates };
+    const updated: SurfaceProcessingStatus = {
+      ...existing,
+      ...updates,
+      // Identity is immutable even if an overly broad patch is supplied.
+      surfaceId: existing.surfaceId,
+    };
     this.statuses.set(id, updated);
-    this.notifyListeners();
+    this.notifySurfaceListeners(existing.surfaceId);
   }
 
   removeStatus(id: string): void {
@@ -64,10 +83,12 @@ export class ProcessingStatusManager {
         status.message.includes('completed') || 
         status.message.includes('success') ||
         status.metadata?.isCompleted === true) {
-      this.completedStatuses.unshift(status);
-      if (this.completedStatuses.length > 10) {
-        this.completedStatuses = this.completedStatuses.slice(0, 10);
+      const completed = this.completedStatusesBySurface.get(status.surfaceId) ?? [];
+      completed.unshift(this.publicStatus(status));
+      if (completed.length > 10) {
+        completed.length = 10;
       }
+      this.completedStatusesBySurface.set(status.surfaceId, completed);
     }
 
     const minDisplayTime = this.getMinDisplayTime(status);
@@ -79,31 +100,40 @@ export class ProcessingStatusManager {
       setTimeout(() => {
         if (this.statuses.has(id)) {
           this.statuses.delete(id);
-          this.notifyListeners();
+          this.notifySurfaceListeners(status.surfaceId);
         }
       }, delay);
     } else {
       this.statuses.delete(id);
-      this.notifyListeners();
+      this.notifySurfaceListeners(status.surfaceId);
     }
   }
 
   clearSessionStatus(sessionId: string): void {
+    this.clearSessionStatusForSurface(getActiveSurfaceId(), sessionId);
+  }
+
+  /** Clear a submission stranded on a surface that is no longer rendered. */
+  clearSessionStatusForSurface(surfaceId: DeviceSurfaceId, sessionId: string): void {
     let hasChanges = false;
     for (const [id, status] of this.statuses.entries()) {
-      if (status.sessionId === sessionId) {
+      if (status.surfaceId === surfaceId && status.sessionId === sessionId) {
         this.statuses.delete(id);
         hasChanges = true;
       }
     }
     
-    if (hasChanges) {
+    if (hasChanges && surfaceId === getActiveSurfaceId()) {
       this.notifyListeners();
     }
   }
 
   getAllStatuses(): ProcessingStatus[] {
-    return Array.from(this.statuses.values()).sort((a, b) => a.startTime - b.startTime);
+    const surfaceId = getActiveSurfaceId();
+    return Array.from(this.statuses.values())
+      .filter(status => status.surfaceId === surfaceId)
+      .map(status => this.publicStatus(status))
+      .sort((a, b) => a.startTime - b.startTime);
   }
 
   getSessionStatuses(sessionId: string): ProcessingStatus[] {
@@ -111,7 +141,7 @@ export class ProcessingStatusManager {
   }
 
   hasActiveStatus(): boolean {
-    return this.statuses.size > 0;
+    return this.getAllStatuses().length > 0;
   }
 
   getCurrentMainStatus(): ProcessingStatus | null {
@@ -138,21 +168,48 @@ export class ProcessingStatusManager {
     });
   }
 
+  private notifySurfaceListeners(surfaceId: DeviceSurfaceId): void {
+    if (surfaceId === getActiveSurfaceId()) {
+      this.notifyListeners();
+    }
+  }
+
+  private publicStatus(status: SurfaceProcessingStatus): ProcessingStatus {
+    const { surfaceId: _surfaceId, ...result } = status;
+    return result;
+  }
+
   private generateId(): string {
     return `status_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   clearAll(): void {
     this.statuses.clear();
+    this.completedStatusesBySurface.clear();
     this.notifyListeners();
   }
 
+  /** Permanently forget status owned by one detached device. */
+  clearSurface(surfaceId: DeviceSurfaceId): void {
+    let activeChanged = false;
+    for (const [id, status] of this.statuses) {
+      if (status.surfaceId === surfaceId) {
+        this.statuses.delete(id);
+        activeChanged ||= surfaceId === getActiveSurfaceId();
+      }
+    }
+    this.completedStatusesBySurface.delete(surfaceId);
+    if (activeChanged) {
+      this.notifyListeners();
+    }
+  }
+
   getCompletedSteps(): ProcessingStatus[] {
-    return [...this.completedStatuses];
+    return [...(this.completedStatusesBySurface.get(getActiveSurfaceId()) ?? [])];
   }
 
   clearCompletedHistory(): void {
-    this.completedStatuses = [];
+    this.completedStatusesBySurface.delete(getActiveSurfaceId());
   }
 
   startCleanupTimer(): void {
@@ -192,15 +249,16 @@ export class ProcessingStatusManager {
     const now = Date.now();
     const timeout = 5 * 60 * 1000;
     
-    let hasChanges = false;
+    let activeChanged = false;
+    const activeSurfaceId = getActiveSurfaceId();
     for (const [id, status] of this.statuses.entries()) {
       if (now - status.startTime > timeout) {
         this.statuses.delete(id);
-        hasChanges = true;
+        activeChanged ||= status.surfaceId === activeSurfaceId;
       }
     }
-    
-    if (hasChanges) {
+
+    if (activeChanged) {
       this.notifyListeners();
     }
   }

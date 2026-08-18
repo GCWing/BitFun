@@ -13,17 +13,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: fadeIn 0.2s ease-out;
+  opacity: 1;
+  transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
   pointer-events: auto;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.diff-fullscreen-overlay[data-state='closed'] {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: 120ms;
 }
 
 .diff-fullscreen-container {
@@ -33,19 +31,30 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  animation: slideInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
   pointer-events: auto;
   z-index: 1;
 }
 
-@keyframes slideInUp {
-  from {
+.diff-fullscreen-overlay[data-state='closed'] .diff-fullscreen-container {
+  opacity: 0;
+  transform: translateY(4px) scale(0.985);
+  transition-duration: 120ms;
+}
+
+@starting-style {
+  .diff-fullscreen-overlay {
     opacity: 0;
-    transform: translateY(20px);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .diff-fullscreen-container {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
   }
 }
 
@@ -115,7 +124,13 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
   background: var(--bf-appearance-token-color-overlay-white-08);
   color: var(--bf-appearance-token-color-overlay-white-80);
   border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
@@ -239,12 +254,28 @@
   border: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-static-white) 30%, transparent);
   border-top: 2px solid var(--bf-appearance-token-color-overlay-white-90);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: bitfun-diff-fullscreen-spin 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes bitfun-diff-fullscreen-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fullscreen-loading-overlay .loading-spinner {
+    animation: none;
+  }
+
+  .diff-fullscreen-container {
+    transform: none;
+    transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .diff-fullscreen-overlay[data-state='closed'] .diff-fullscreen-container {
+    transform: none;
+    transition-duration: 120ms;
+  }
 }
 
 /* Responsive layout */

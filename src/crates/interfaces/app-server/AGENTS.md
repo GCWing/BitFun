@@ -1,9 +1,10 @@
 [中文](AGENTS-CN.md) | **English**
 
-# App Server Server and Wiring Guide
+# App Server Interface Family Guide
 
-Scope: this guide applies only to `src/crates/interfaces/app-server` and its
-server-side production wiring.
+Scope: this guide applies to the adjacent `app-server-protocol`,
+`app-server-client`, and `app-server` crates, plus App Server production wiring.
+Server-specific rules apply to `app-server` unless stated otherwise.
 
 The App Server surface is split across four owners:
 
@@ -14,10 +15,14 @@ The App Server surface is split across four owners:
 | `app-server` | Server lifecycle, production handler registration, event forwarding, Runtime/domain-to-wire conversion, and error mapping |
 | Product Host under `src/apps/*` | Concrete transport, authentication, connection scope, capability/limit construction, platform capabilities, process supervision, and shutdown |
 
-Do not add new protocol or client ownership to this crate. Compatibility
+Do not add new protocol or client ownership to `bitfun-app-server`. Compatibility
 modules and re-exports may remain while consumers migrate, but new methods,
 DTOs, wire errors, and typed client behavior belong in the adjacent protocol
 and client crates.
+
+The `bitfun-app-server/ts` feature is a compatibility forwarder only. The
+protocol crate is the sole TypeScript schema exporter; do not add `ts-rs`,
+runtime implementation types, or a second export command back to this crate.
 
 ## Guardrails
 
@@ -71,7 +76,8 @@ failures use helpers such as `BitfunAppRuntime::runtime_error` and
 ## Verification
 
 ```bash
-cargo check -p bitfun-app-server --offline
-cargo test -p bitfun-app-server --offline
+cargo check --locked -p bitfun-app-server --offline
+cargo test --locked -p bitfun-app-server --offline --lib server::wire::tests
+cargo test --locked -p bitfun-app-server-protocol --offline --test legacy_wire_contracts
 pnpm run check:core-boundaries
 ```

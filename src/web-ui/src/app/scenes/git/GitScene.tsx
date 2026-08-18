@@ -5,13 +5,14 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GitBranch, Plus, RefreshCw } from 'lucide-react';
+import { GitBranch, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useGitSceneStore } from './gitSceneStore';
 import { WorkingCopyView, BranchesView, GraphView } from './views';
 import { useGitState } from '@/tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { IconButton, CubeLoading } from '@/component-library';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { requestGitRepositoryTrust } from '@/shared/services/gitTrustService';
 import './GitScene.scss';
 
 interface GitSceneProps {
@@ -33,6 +34,7 @@ const GitScene: React.FC<GitSceneProps> = ({
 
   const {
     isRepository,
+    repositoryTrustRequired,
     isLoading: statusLoading,
     refresh,
   } = useGitState({
@@ -41,6 +43,8 @@ const GitScene: React.FC<GitSceneProps> = ({
     refreshOnMount: true,
     layers: ['basic', 'status'],
   });
+
+  const [isTrusting, setIsTrusting] = useState(false);
 
   const repoLoading = statusLoading && !isRepository;
   const handleRefresh = useCallback(
@@ -72,6 +76,21 @@ const GitScene: React.FC<GitSceneProps> = ({
     globalEventBus.emit('fill-chat-input', { content: t('init.chatPrompt') });
   }, [t]);
 
+  // The service owns the confirmation, the grant, and every failure
+  // notification; a granted decision only needs the repository state rebuilt.
+  const handleTrustRepository = useCallback(async () => {
+    if (!workspacePath || isTrusting) return;
+    setIsTrusting(true);
+    try {
+      const trusted = await requestGitRepositoryTrust(workspacePath, { userInitiated: true });
+      if (trusted) {
+        await refresh({ force: true, layers: ['basic', 'status'], reason: 'manual' });
+      }
+    } finally {
+      setIsTrusting(false);
+    }
+  }, [workspacePath, isTrusting, refresh]);
+
   const renderView = useCallback(() => {
     switch (activeView) {
       case 'branches':
@@ -86,6 +105,33 @@ const GitScene: React.FC<GitSceneProps> = ({
 
   if (!isActive) {
     return <div className="bitfun-git-scene" aria-hidden="true" data-bf-scene="git" data-bf-part="root" data-bf-view="hidden" />;
+  }
+
+  // Ownership trust outranks `isRepository`. A repository Git refuses on
+  // ownership grounds still *is* one, so the probe reports it as such; gating
+  // this view on `!isRepository` made it unreachable exactly where it matters.
+  if (!repoLoading && repositoryTrustRequired) {
+    return (
+      <div className="bitfun-git-scene bitfun-git-scene--not-repository" data-bf-scene="git" data-bf-part="root" data-bf-view="trust-required">
+        <div className="bitfun-git-scene__content" data-bf-scene="git" data-bf-part="content">
+          <div className="bitfun-git-scene__init-container" data-bf-scene="git" data-bf-part="empty">
+            <div className="bitfun-git-scene__init-card">
+              <div className="bitfun-git-scene__init-icon">
+                <ShieldAlert size={24} />
+              </div>
+              <div className="bitfun-git-scene__init-text">
+                <h3>{t('trust.title')}</h3>
+                <p>{t('trust.required', { path: workspacePath })}</p>
+              </div>
+              <button type="button" className="bitfun-git-scene__init-button" onClick={handleTrustRepository} disabled={isTrusting}>
+                <ShieldAlert size={14} />
+                <span>{t('trust.confirm')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!repoLoading && !isRepository) {

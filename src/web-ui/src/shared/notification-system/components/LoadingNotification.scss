@@ -43,7 +43,7 @@
   
   &__spinner {
     color: var(--bf-appearance-token-color-warning);
-    animation: bitfun-spin 1s linear infinite;
+    animation: bitfun-loading-notification-spin 1s linear infinite;
   }
 
   
@@ -101,7 +101,10 @@
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      color $motion-base $easing-standard,
+      transform $motion-base $easing-standard;
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-base);
@@ -115,7 +118,7 @@
 }
 
 
-@keyframes bitfun-spin {
+@keyframes bitfun-loading-notification-spin {
   from {
     transform: rotate(0deg);
   }
@@ -136,3 +139,10 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .loading-notification,
+  .loading-notification__spinner {
+    animation: none;
+    transform: none;
+  }
+}

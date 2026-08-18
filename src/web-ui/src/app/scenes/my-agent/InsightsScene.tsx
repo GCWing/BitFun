@@ -14,6 +14,7 @@ import { getProviderDisplayName } from '@/infrastructure/config/services/modelCo
 import type { AIModelConfig } from '@/infrastructure/config/types';
 import { useInsightsStore } from './insightsStore';
 import { createLogger } from '@/shared/utils/logger';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { notificationService } from '@/shared/notification-system';
 import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import '@/app/components/GalleryLayout/GalleryLayout.scss';
@@ -517,7 +518,10 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
     if (!element) return;
     const containerTop = container.getBoundingClientRect().top;
     const elTop = element.getBoundingClientRect().top - containerTop;
-    container.scrollBy({ top: elTop - 16, behavior: 'smooth' });
+    container.scrollBy({
+      top: elTop - 16,
+      behavior: getMotionAwareScrollBehavior('smooth'),
+    });
   };
 
   return (

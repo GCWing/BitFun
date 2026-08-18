@@ -24,6 +24,7 @@ import type {
   DeepReviewQueueStateChangedEvent,
   AcpContextUsageUpdatedEvent,
   OpenBuiltInBrowserEvent,
+  InterruptedDialogTurnEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -48,6 +49,8 @@ export interface AgenticEventCallbacks {
   onDialogTurnCompleted?: (event: AgenticEvent) => void;
   onDialogTurnFailed?: (event: AgenticEvent) => void;
   onDialogTurnCancelled?: (event: AgenticEvent) => void;
+  onDialogTurnInterrupted?: (event: InterruptedDialogTurnEvent) => void;
+  onDialogTurnRecovered?: (event: InterruptedDialogTurnEvent) => void;
   onTokenUsageUpdated?: (event: AgenticEvent) => void;
   onAcpContextUsageUpdated?: (event: AcpContextUsageUpdatedEvent) => void;
   onContextCompressionStarted?: (event: AgenticEvent) => void;
@@ -200,6 +203,22 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onDialogTurnCancelled((event) => {
           logger.debug('Dialog turn cancelled:', event);
           callbacks.onDialogTurnCancelled?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onDialogTurnInterrupted) {
+        const unlisten = agentAPI.onDialogTurnInterrupted((event) => {
+          logger.debug('Dialog turn interrupted:', event);
+          callbacks.onDialogTurnInterrupted?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onDialogTurnRecovered) {
+        const unlisten = agentAPI.onDialogTurnRecovered((event) => {
+          logger.debug('Dialog turn recovered:', event);
+          callbacks.onDialogTurnRecovered?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }
@@ -367,6 +386,12 @@ export class AgenticEventListener {
         break;
       case 'agentic://dialog-turn-cancelled':
         callbacks.onDialogTurnCancelled?.(payload as AgenticEvent);
+        break;
+      case 'agentic://dialog-turn-interrupted':
+        callbacks.onDialogTurnInterrupted?.(payload as unknown as InterruptedDialogTurnEvent);
+        break;
+      case 'agentic://dialog-turn-recovered':
+        callbacks.onDialogTurnRecovered?.(payload as unknown as InterruptedDialogTurnEvent);
         break;
       case 'agentic://token-usage-updated':
         callbacks.onTokenUsageUpdated?.(payload as AgenticEvent);

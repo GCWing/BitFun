@@ -97,6 +97,18 @@ impl GitService {
             .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
+    /// Reports whether Git accepts the repository's ownership for the current
+    /// user. Read-only: nothing is configured.
+    pub async fn inspect_trust<P: AsRef<Path>>(path: P) -> Result<GitTrustReport, GitError> {
+        trust::inspect_repository_trust(&path.as_ref().to_string_lossy()).await
+    }
+
+    /// Grants ownership trust for the repository after the caller obtained an
+    /// explicit user confirmation. See [`trust::trust_repository`].
+    pub async fn trust_repository<P: AsRef<Path>>(path: P) -> Result<GitTrustOutcome, GitError> {
+        trust::trust_repository(&path.as_ref().to_string_lossy()).await
+    }
+
     /// Resolves the stable repository identity shared by all worktrees without
     /// spawning the Git CLI.
     pub async fn resolve_worktree_repository<P: AsRef<Path>>(
@@ -104,8 +116,7 @@ impl GitService {
     ) -> Result<GitWorktreeRepositoryInfo, GitError> {
         let requested_path = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repository = Repository::discover(&requested_path)
-                .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+            let repository = discover_repository(&requested_path)?;
             let query_path = repository
                 .workdir()
                 .map(Path::to_path_buf)
@@ -148,8 +159,7 @@ impl GitService {
         }
 
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
             let object = repo
                 .revparse_single(&revision)
                 .map_err(|e| GitError::CommandFailed(format!("Failed to resolve revision: {e}")))?;
@@ -216,8 +226,7 @@ impl GitService {
     pub async fn get_repository<P: AsRef<Path>>(path: P) -> Result<GitRepository, GitError> {
         let path_buf = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
 
             let current_branch = get_current_branch(&repo)?;
             let is_bare = repo.is_bare();
@@ -254,8 +263,7 @@ impl GitService {
     pub async fn get_repository_basic<P: AsRef<Path>>(path: P) -> Result<GitRepository, GitError> {
         let path_buf = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
 
             let current_branch = get_current_branch(&repo)?;
             let is_bare = repo.is_bare();
@@ -286,8 +294,7 @@ impl GitService {
         timeout(
             Duration::from_secs(10),
             task::spawn_blocking(move || {
-                let repo = Repository::open(&path_buf)
-                    .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+                let repo = open_repository(&path_buf)?;
 
                 let current_branch = get_current_branch(&repo)?;
                 let file_statuses = get_file_statuses(&repo)?;
@@ -340,8 +347,7 @@ impl GitService {
     ) -> Result<Vec<GitBranch>, GitError> {
         let path_buf = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
 
             let mut branches = Vec::new();
             let current_branch = get_current_branch(&repo)?;
@@ -476,8 +482,7 @@ impl GitService {
 
         let path_buf = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
             let current_branch = get_current_branch(&repo)?;
 
             for branch in &mut branches {
@@ -667,8 +672,7 @@ impl GitService {
     ) -> Result<Vec<GitCommit>, GitError> {
         let path_buf = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
             let since_timestamp = params
                 .since
                 .as_deref()
@@ -1228,8 +1232,7 @@ impl GitService {
     ) -> Result<GitGraph, GitError> {
         let path_buf = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
             build_git_graph(&repo, max_count).map_err(|e| GitError::CommandFailed(e.to_string()))
         })
         .await
@@ -1244,8 +1247,7 @@ impl GitService {
     ) -> Result<GitGraph, GitError> {
         let path_buf = path.as_ref().to_path_buf();
         task::spawn_blocking(move || {
-            let repo = Repository::open(&path_buf)
-                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let repo = open_repository(&path_buf)?;
             build_git_graph_for_branch(&repo, max_count, branch_name.as_deref())
                 .map_err(|e| GitError::CommandFailed(e.to_string()))
         })
@@ -1380,8 +1382,7 @@ impl GitService {
         let repository_info = Self::resolve_worktree_repository(path.as_ref()).await?;
 
         task::spawn_blocking(move || {
-            let repository = Repository::discover(&repository_path)
-                .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+            let repository = discover_repository(&repository_path)?;
             match repository.head() {
                 Ok(head) if head.target().is_some() => {}
                 Err(error) if error.code() == ErrorCode::UnbornBranch => {

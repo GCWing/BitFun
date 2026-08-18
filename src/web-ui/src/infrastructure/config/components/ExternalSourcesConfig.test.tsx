@@ -13,11 +13,14 @@ const setSourceEnabledMock = vi.hoisted(() => vi.fn());
 const setSafeModeMock = vi.hoisted(() => vi.fn());
 const setConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setToolTargetDecisionMock = vi.hoisted(() => vi.fn());
+const setToolTargetsEnabledMock = vi.hoisted(() => vi.fn());
 const setToolConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setSubagentActivationMock = vi.hoisted(() => vi.fn());
+const setSubagentsEnabledMock = vi.hoisted(() => vi.fn());
 const setSubagentModelBindingMock = vi.hoisted(() => vi.fn());
 const chooseSubagentConflictMock = vi.hoisted(() => vi.fn());
 const setMcpServerDecisionMock = vi.hoisted(() => vi.fn());
+const setMcpServersEnabledMock = vi.hoisted(() => vi.fn());
 const chooseMcpConflictMock = vi.hoisted(() => vi.fn());
 const updateIntegrationPolicyMock = vi.hoisted(() => vi.fn());
 const revealSourceLocationMock = vi.hoisted(() => vi.fn());
@@ -75,11 +78,14 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     setSafeMode: setSafeModeMock,
     setConflictChoice: setConflictChoiceMock,
     setToolTargetDecision: setToolTargetDecisionMock,
+    setToolTargetsEnabled: setToolTargetsEnabledMock,
     setToolConflictChoice: setToolConflictChoiceMock,
     setSubagentActivation: setSubagentActivationMock,
+    setSubagentsEnabled: setSubagentsEnabledMock,
     setSubagentModelBinding: setSubagentModelBindingMock,
     chooseSubagentConflict: chooseSubagentConflictMock,
     setMcpServerDecision: setMcpServerDecisionMock,
+    setMcpServersEnabled: setMcpServersEnabledMock,
     chooseMcpConflict: chooseMcpConflictMock,
     updateIntegrationPolicy: updateIntegrationPolicyMock,
     revealSourceLocation: revealSourceLocationMock,
@@ -262,11 +268,14 @@ describe('ExternalSourcesConfig', () => {
       }],
     });
     setToolTargetDecisionMock.mockResolvedValue(snapshot);
+    setToolTargetsEnabledMock.mockResolvedValue(snapshot);
     setToolConflictChoiceMock.mockResolvedValue(snapshot);
     setSubagentActivationMock.mockResolvedValue(snapshot);
+    setSubagentsEnabledMock.mockResolvedValue(snapshot);
     setSubagentModelBindingMock.mockResolvedValue(snapshot);
     chooseSubagentConflictMock.mockResolvedValue(snapshot);
     setMcpServerDecisionMock.mockResolvedValue(snapshot);
+    setMcpServersEnabledMock.mockResolvedValue(snapshot);
     chooseMcpConflictMock.mockResolvedValue(snapshot);
     updateIntegrationPolicyMock.mockResolvedValue(snapshot);
     revealSourceLocationMock.mockResolvedValue(undefined);
@@ -1234,6 +1243,7 @@ describe('ExternalSourcesConfig', () => {
         selectedCandidateId: 'native-mcp-github',
       }],
     });
+    setMcpServersEnabledMock.mockResolvedValue(mcpSnapshot);
 
     await act(async () => {
       root.render(<ExternalSourcesConfig />);
@@ -1251,6 +1261,19 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('mcp.timeoutStartup');
     expect(container.textContent).toContain('mcp.timeoutCatalog');
     expect(container.textContent).toContain('mcp.timeoutExecution');
+
+    const mcpBulkEnable = container.querySelector<HTMLButtonElement>(
+      '[data-bf-bulk-capability="mcp"] button',
+    );
+    await act(async () => mcpBulkEnable?.click());
+    expect(setMcpServersEnabledMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      [{ candidateId: 'external-mcp-github', decisionKey: 'mcp-decision-v1' },
+        { candidateId: 'external-mcp-docs', decisionKey: 'mcp-decision-v2' }],
+      true,
+      5,
+      9,
+    );
 
     const approvalCard = Array.from(container.querySelectorAll(
       '.bitfun-external-sources-config__tool-card',
@@ -1330,6 +1353,74 @@ describe('ExternalSourcesConfig', () => {
       5,
       9,
     );
+  });
+
+  it('keeps polling through a transient read failure and beyond the old startup limit', async () => {
+    const server = {
+      candidateId: 'external-mcp-docs',
+      decisionKey: 'mcp-decision-v1',
+      definition: {
+        id: {
+          source: { providerId: 'opencode.mcp', sourceId: 'project' },
+          localId: 'docs',
+        },
+        provenance: [{ providerId: 'opencode.mcp', sourceId: 'project' }],
+        name: 'docs',
+        transport: 'local_stdio',
+        commandPreview: 'missing-docs-command',
+        argumentCount: 0,
+        environmentKeys: [],
+        environmentReferenceNames: [],
+        headerNames: [],
+        sourceEnabled: true,
+        behaviorVersion: 'behavior-v1',
+        staticStatus: { state: 'ready' },
+      },
+      activationState: { state: 'starting' },
+    };
+    const startingSnapshot = {
+      ...snapshot,
+      commandConflicts: [],
+      preferenceRevision: 3,
+      mcpGeneration: 4,
+      mcpServers: [server],
+      mcpApprovalRequests: [],
+      mcpConflicts: [],
+    };
+    let acceptedPolls = 0;
+    getSnapshotMock
+      .mockResolvedValueOnce(startingSnapshot)
+      .mockRejectedValueOnce(new Error('temporary snapshot read failure'))
+      .mockImplementation(async () => {
+        acceptedPolls += 1;
+        if (acceptedPolls <= 11) return startingSnapshot;
+        return {
+        ...startingSnapshot,
+        mcpServers: [{
+          ...server,
+          activationState: {
+            state: 'runtime_unavailable',
+            reason: 'provider.internal D:/private/config.json',
+          },
+        }],
+        };
+      });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain('mcpState.starting');
+
+    await act(async () => vi.advanceTimersByTimeAsync(55_250));
+
+    expect(getSnapshotMock).toHaveBeenCalledTimes(14);
+    expect(container.textContent).toContain('mcp.failureReasons.other');
+    expect(container.textContent).not.toContain('D:/private/config.json');
+    const details = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('common.details'));
+    await act(async () => details?.click());
+    expect(container.textContent).toContain('mcp.runtimeUnavailableGuidance');
   });
 
   it('keeps remembered command, tool, and agent choices visible and changeable', async () => {
@@ -1851,7 +1942,9 @@ describe('ExternalSourcesConfig', () => {
     };
     getSnapshotMock
       .mockResolvedValueOnce(agentSnapshot)
+      .mockResolvedValueOnce(agentSnapshot)
       .mockResolvedValue(activatedAgentSnapshot);
+    setSubagentsEnabledMock.mockResolvedValue(agentSnapshot);
     setSubagentActivationMock.mockResolvedValue(activatedAgentSnapshot);
     chooseSubagentConflictMock.mockResolvedValue({
       ...agentSnapshot,
@@ -1865,6 +1958,18 @@ describe('ExternalSourcesConfig', () => {
       root.render(<ExternalSourcesConfig />);
       await Promise.resolve();
     });
+
+    const agentBulkEnable = container.querySelector<HTMLButtonElement>(
+      '[data-bf-bulk-capability="subagent"] button',
+    );
+    await act(async () => agentBulkEnable?.click());
+    expect(setSubagentsEnabledMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      [{ candidateId: 'external-agent-review-v1', decisionKey: 'agent-decision-v1' }],
+      true,
+      4,
+      7,
+    );
 
     const details = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('common.details'));
@@ -2257,6 +2362,7 @@ describe('ExternalSourcesConfig', () => {
       ...approvalSnapshot,
       toolApprovalRequests: [],
     });
+    setToolTargetsEnabledMock.mockResolvedValue(approvalSnapshot);
 
     await act(async () => {
       root.render(<ExternalSourcesConfig />);
@@ -2271,6 +2377,17 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('toolApprovals.workingDirectory');
     expect(container.textContent).toContain('capability.file_system');
     expect(container.textContent).toContain('capability.environment');
+    const toolBulkEnable = container.querySelector<HTMLButtonElement>(
+      '[data-bf-bulk-capability="tool"] button',
+    );
+    await act(async () => toolBulkEnable?.click());
+    expect(setToolTargetsEnabledMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      [{ approvalKey: 'approval-1', decisionKey: 'decision-1' }],
+      true,
+      1,
+      0,
+    );
     const enable = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('toolApprovals.enable'));
     enable?.focus();

@@ -22,6 +22,10 @@ export interface ChatSessionSnapshot {
   activeTurn?: ChatMessage;
   modelCatalog?: RemoteModelCatalog;
   shouldSyncAfterTurnEnded: boolean;
+  // The desktop now holds fewer messages than this session had counted, so the
+  // transcript it was handing out tails of is no longer the one on screen.
+  // Nothing below can resume from an offset into a list that shrank.
+  historyRewritten: boolean;
 }
 
 export interface ChatSessionControllerCallbacks {
@@ -182,6 +186,8 @@ export class ChatSessionController {
     const hasAssistantMessage = incomingMessages.some((message: ChatMessage) => {
       return message.role === 'assistant';
     });
+    const historyRewritten = result.totalMessageCount > 0 &&
+      result.totalMessageCount < this.cursor.knownMessageCount;
 
     if (result.changed) {
       this.cursor = {
@@ -215,7 +221,8 @@ export class ChatSessionController {
       result.changed || activeTurnChanged,
       result,
       incomingMessages,
-      turnEndedNow || (isSettlingEndedTurn && !isRunningNow)
+      turnEndedNow || (isSettlingEndedTurn && !isRunningNow),
+      historyRewritten
     );
   }
 
@@ -232,7 +239,8 @@ export class ChatSessionController {
     changed: boolean,
     result: PollSessionResult,
     newMessages: ChatMessage[],
-    shouldSyncAfterTurnEnded: boolean
+    shouldSyncAfterTurnEnded: boolean,
+    historyRewritten: boolean
   ): void {
     this.callbacks.onSnapshot({
       sessionId: this.sessionId,
@@ -247,7 +255,8 @@ export class ChatSessionController {
       newMessages,
       activeTurn: this.activeTurn,
       modelCatalog: result.modelCatalog,
-      shouldSyncAfterTurnEnded
+      shouldSyncAfterTurnEnded,
+      historyRewritten
     });
   }
 

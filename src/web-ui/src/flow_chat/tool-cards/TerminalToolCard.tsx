@@ -22,7 +22,7 @@ import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { DotMatrixLoader, IconButton } from '../../component-library';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
-import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
+import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePeriod';
 import { getTerminalViewState, type TerminalViewState } from './terminalToolCardState';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
@@ -303,23 +303,17 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       isExpanded &&
       !userToggledRef.current,
   });
-  const applyTerminalExpandedState = useCallback((
-    nextExpanded: boolean,
-    options?: { reason?: ToolCardCollapseReason },
-  ) => {
+  const applyTerminalExpandedState = useCallback((nextExpanded: boolean) => {
     if (nextExpanded === isExpanded) {
       return;
     }
 
-    applyExpandedState(isExpanded, nextExpanded, setIsExpandedState, {
-      reason: options?.reason ?? 'manual',
-      onExpand,
-    });
+    applyExpandedState(isExpanded, nextExpanded, setIsExpandedState, { onExpand });
   }, [applyExpandedState, isExpanded, onExpand]);
 
   const toggleExpanded = useCallback(() => {
     userToggledRef.current = true;
-    applyTerminalExpandedState(!isExpanded, { reason: 'manual' });
+    applyTerminalExpandedState(!isExpanded);
   }, [applyTerminalExpandedState, isExpanded]);
 
   const [interruptRequested, setInterruptRequested] = useState(false);
@@ -340,7 +334,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     const keepTailPreview = isCollapsedTerminalStatus(status) && beginCompletionPreview();
     const nextExpanded = getAutoExpandedStateForTerminalStatus(status, isLastItem, keepTailPreview);
     if (nextExpanded !== null) {
-      applyTerminalExpandedState(nextExpanded, { reason: 'auto' });
+      applyTerminalExpandedState(nextExpanded);
     }
   }, [
     applyTerminalExpandedState,

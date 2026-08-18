@@ -3,6 +3,10 @@
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
+pub use bitfun_product_domains::account::{
+    AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus,
+};
+
 #[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "account/snapshot", response = AccountSnapshotResponse)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -29,23 +33,6 @@ pub struct AccountSnapshotResponse {
     #[serde(default)]
     pub devices: Vec<AccountDevice>,
     pub sync: SettingsSyncProgress,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountInfo {
-    pub user_id: String,
-    pub relay_url: String,
-    pub device_id: String,
-    pub device_name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountDevice {
-    pub device_id: String,
-    pub device_name: String,
-    pub online: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
@@ -200,37 +187,6 @@ impl std::fmt::Debug for SettingsSyncLocalChangedRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsSyncResponse {
     pub progress: SettingsSyncProgress,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum SettingsSyncStatus {
-    #[default]
-    Idle,
-    Syncing,
-    Done,
-    Failed,
-    Cancelled,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SettingsSyncProgress {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub operation_id: Option<String>,
-    pub status: SettingsSyncStatus,
-    pub phase: String,
-    pub percent: u8,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub current: Option<usize>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub total: Option<usize>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    pub settings_synced: bool,
-    pub sessions_exported: usize,
 }
 
 #[cfg(test)]

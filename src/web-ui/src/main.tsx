@@ -18,6 +18,7 @@ import { bootstrapLogger, createLogger, initLogger } from './shared/utils/logger
 import { elapsedMs, logElapsed, measureAsyncAndLog, nowMs } from './shared/utils/timing';
 import { startupTrace } from './shared/utils/startupTrace';
 import { scheduleAfterStartupSignal } from './shared/utils/startupTaskScheduling';
+import { installInteractionModalityTracking } from './shared/utils/motionPreference';
 import {
   buildReactCrashLogPayload,
   isMinifiedReactErrorMessage,
@@ -188,6 +189,7 @@ function registerGlobalErrorHandlers() {
 }
 
 registerGlobalErrorHandlers();
+installInteractionModalityTracking();
 
 // Disable Tab-key focus traversal globally (IDE-style chrome).
 // Allow Tab where it has semantic meaning: Monaco, xterm, and modal/dialog forms

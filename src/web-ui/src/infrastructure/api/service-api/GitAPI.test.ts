@@ -51,4 +51,100 @@ describe('GitAPI repository probe cache', () => {
 
     expect(invokeMock).toHaveBeenCalledTimes(1);
   });
+
+  it('drops a cached probe result once ownership trust is granted', async () => {
+    invokeMock.mockResolvedValueOnce(false);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(false);
+
+    invokeMock.mockResolvedValueOnce({
+      state: 'trusted',
+      repositoryPath: 'D:/workspace/BitFun',
+      alreadyTrusted: false,
+      addedEntries: ['D:/workspace/BitFun'],
+      detail: null,
+      manualCommand: null,
+    });
+    await gitAPI.trustRepository('D:/workspace/BitFun');
+
+    invokeMock.mockResolvedValueOnce(true);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(true);
+  });
+
+  // One folder reaches this API under several spellings — a tree node hands in
+  // `D:\workspace\BitFun`, the backend hands back `D:/workspace/BitFun`. The
+  // backend treats them as one repository, so a cache keyed on the raw string
+  // probes twice and, worse, leaves a stale entry a granted decision misses.
+  it('treats the spellings of one repository as one cache entry', async () => {
+    invokeMock.mockResolvedValueOnce(false);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(false);
+    await expect(gitAPI.isGitRepository('d:\\workspace\\bitfun\\')).resolves.toBe(false);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    invokeMock.mockResolvedValueOnce({
+      state: 'trusted',
+      repositoryPath: 'D:/workspace/BitFun',
+      alreadyTrusted: false,
+      addedEntries: ['D:/workspace/BitFun'],
+      detail: null,
+      manualCommand: null,
+    });
+    await gitAPI.trustRepository('d:\\workspace\\bitfun');
+
+    invokeMock.mockResolvedValueOnce(true);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(true);
+  });
+
+  // The user runs the manual command in a terminal, or the repository's owner
+  // fixes ownership. Nothing in this process granted anything, so the read-only
+  // probe is the only place that learns — and the stale `false` it leaves behind
+  // fails the very retry the recovery just decided was worth making.
+  it('drops a cached probe result once the read-only probe reports trust', async () => {
+    invokeMock.mockResolvedValueOnce(false);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(false);
+
+    invokeMock.mockResolvedValueOnce({
+      state: 'trusted',
+      repositoryPath: 'D:/workspace/BitFun',
+      detail: null,
+      manualCommand: null,
+    });
+    await gitAPI.getRepositoryTrust('d:\\workspace\\bitfun');
+
+    invokeMock.mockResolvedValueOnce(true);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(true);
+  });
+
+  it('keeps the cached probe result while the probe still reports the wall', async () => {
+    invokeMock.mockResolvedValueOnce(false);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(false);
+
+    invokeMock.mockResolvedValueOnce({
+      state: 'trust_required',
+      repositoryPath: 'D:/workspace/BitFun',
+      detail: 'detected dubious ownership',
+      manualCommand: "git config --global --add safe.directory 'D:/workspace/BitFun'",
+    });
+    await gitAPI.getRepositoryTrust('D:/workspace/BitFun');
+
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(false);
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the cached probe result when trust was not granted', async () => {
+    invokeMock.mockResolvedValueOnce(false);
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(false);
+
+    invokeMock.mockResolvedValueOnce({
+      state: 'trust_required',
+      repositoryPath: 'D:/workspace/BitFun',
+      alreadyTrusted: false,
+      addedEntries: [],
+      detail: 'detected dubious ownership',
+      manualCommand: 'git config --global --add safe.directory "D:/workspace/BitFun"',
+    });
+    await gitAPI.trustRepository('D:/workspace/BitFun');
+
+    await expect(gitAPI.isGitRepository('D:/workspace/BitFun')).resolves.toBe(false);
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+  });
 });

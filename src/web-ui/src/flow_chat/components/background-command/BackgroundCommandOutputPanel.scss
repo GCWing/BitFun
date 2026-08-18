@@ -288,3 +288,9 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .background-command-output-panel__loading svg {
+    animation: none;
+  }
+}

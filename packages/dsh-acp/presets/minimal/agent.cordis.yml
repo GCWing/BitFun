@@ -1,0 +1,58 @@
+# The `minimal` agent preset: a fixed-prompt, two-tool coding-agent composition.
+#
+# Adapted from deepseek-harness/apps/cli/config/agent-presets/minimal (MIT,
+# Copyright (c) DeepSeek — see ../../NOTICE.md). One deliberate change: the
+# upstream preset shadows the host filesystem with a bare `dsh-fs-local`, which
+# would put the editor outside the sandbox this deployment answers permission
+# requests from. Here the editor resolves the HOST's sandboxed `fs`, so a write
+# beyond the workspace still reaches the ACP client as a permission request.
+#
+# The persona is the complete system prompt, so global identity, tool guidance,
+# and later assembly listeners cannot add prompt text. Runtime context snapshots
+# are suppressed, and the model composes only persistent `bash` and
+# `str_replace_editor`. Context compaction still runs — it is host-plane here.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: You are a helpful software engineer assistant.
+    complete: true
+    includeRuntimeContext: false
+
+# The PTY registry is an agent-owned service, so it lives in an entry-local
+# realm. The backend still consumes the host sandbox policy and subprocess
+# implementation, while the tool registers into the host tool catalog.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * You don't have access to the internet via this tool.
+          * You do have access to a mirror of common linux and python packages via apt and pip.
+          * State is persistent across command calls and discussions with the user.
+          * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+# Registers into the host `tools` registry and provides nothing, so it needs no
+# realm. It requires absolute paths and reads the host's sandboxed `fs`.
+- id: str-replace-editor
+  name: '@deepseek-ai/dsh-tool-str-replace-editor'
+  config:
+    maxOutputChars: 16000

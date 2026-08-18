@@ -1,6 +1,6 @@
 use crate::agentic::agents::{
-    get_agent_registry, PromptBuilder, SubagentListScope, SubagentQueryContext,
-    ToolListingSections, UserContextPolicy,
+    get_agent_registry, render_direct_tool_listing_body, PromptBuilder, SubagentListScope,
+    SubagentQueryContext, ToolListingSections, UserContextPolicy,
 };
 use crate::agentic::tools::implementations::skills::{get_skill_registry, SkillInfo};
 use crate::agentic::tools::manifest_resolver::{resolve_tool_manifest, ResolvedToolManifest};
@@ -126,6 +126,14 @@ fn build_tool_listing_sections(
         agent_listing: has_tool("Task")
             .then(|| render_full_agent_listing_body(&snapshot.subagents))
             .filter(|body| !body.is_empty()),
+        direct_tool_listing: (!manifest.deferred_tool_names.is_empty()).then(|| {
+            render_direct_tool_listing_body(
+                manifest
+                    .tool_definitions
+                    .iter()
+                    .map(|definition| definition.name.as_str()),
+            )
+        }),
         deferred_tool_listing: if has_tool("GetToolSpec") {
             GetToolSpecTool::build_deferred_tools_context_section(&manifest.deferred_tool_summaries)
         } else {
@@ -243,8 +251,45 @@ pub async fn build_embedded_user_context_reminder(
 
 #[cfg(test)]
 mod tests {
-    use super::load_subagent_entries;
+    use super::{build_tool_listing_sections, load_subagent_entries};
+    use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
+    use crate::agentic::tools::manifest_resolver::ResolvedToolManifest;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::util::types::ToolDefinition;
+    use bitfun_agent_tools::GetToolSpecDeferredToolSummary;
+    use serde_json::json;
+
+    #[test]
+    fn direct_tool_listing_uses_prompt_visible_manifest_definitions() {
+        let manifest = ResolvedToolManifest {
+            allowed_tool_names: vec!["AllowedButNotVisible".to_string()],
+            tool_definitions: ["Read", "GetToolSpec", "CallDeferredTool"]
+                .into_iter()
+                .map(|name| ToolDefinition {
+                    name: name.to_string(),
+                    description: String::new(),
+                    parameters: json!({ "type": "object" }),
+                })
+                .collect(),
+            deferred_tool_names: vec!["WebFetch".to_string()],
+            deferred_tool_summaries: vec![GetToolSpecDeferredToolSummary {
+                name: "WebFetch".to_string(),
+                short_description: Some("Fetch a web page".to_string()),
+            }],
+            catalog_generation: 7,
+        };
+
+        let sections = build_tool_listing_sections(&manifest, &TurnSkillAgentSnapshot::default());
+        let direct_tools = sections
+            .direct_tool_listing
+            .expect("deferred manifests should include the direct tool listing");
+
+        assert_eq!(
+            direct_tools,
+            "<direct_tools>\n- Read\n- GetToolSpec\n- CallDeferredTool\n</direct_tools>"
+        );
+        assert!(!direct_tools.contains("AllowedButNotVisible"));
+    }
 
     #[tokio::test]
     async fn subagent_projection_hides_runtime_denied_tools() {

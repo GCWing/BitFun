@@ -6,6 +6,7 @@ import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTarge
 
 type SourceBackedBlockOptions = {
   basePath?: string;
+  label?: string;
 };
 
 type RawHtmlInlineOptions = {
@@ -205,8 +206,9 @@ function executeTextareaAction(
 
 function createSourceBackedBlock(
   name: string,
-  valueAttr: 'html' | 'markdown',
+  valueAttr: 'html' | 'markdown' | 'yaml',
   className: string,
+  metadataAttrs: readonly string[] = [],
 ) {
   return Node.create<SourceBackedBlockOptions>({
     name,
@@ -220,6 +222,7 @@ function createSourceBackedBlock(
     addOptions() {
       return {
         basePath: undefined,
+        label: undefined,
       };
     },
 
@@ -228,6 +231,7 @@ function createSourceBackedBlock(
         [valueAttr]: {
           default: '',
         },
+        ...Object.fromEntries(metadataAttrs.map(attr => [attr, { default: '' }])),
         kind: {
           default: null,
         },
@@ -239,6 +243,10 @@ function createSourceBackedBlock(
         tag: `div[data-type="${name}"]`,
         getAttrs: element => ({
           [valueAttr]: element.getAttribute(`data-${valueAttr}`) ?? '',
+          ...Object.fromEntries(metadataAttrs.map(attr => [
+            attr,
+            element.getAttribute(`data-${attr.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`) ?? '',
+          ])),
           kind: element.getAttribute('data-kind'),
         }),
       }];
@@ -255,6 +263,10 @@ function createSourceBackedBlock(
         {
           'data-type': name,
           [`data-${valueAttr}`]: value,
+          ...Object.fromEntries(metadataAttrs.map(attr => [
+            `data-${attr.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`,
+            String(node.attrs[attr] ?? ''),
+          ])),
           ...(kind ? { 'data-kind': kind } : {}),
         },
       ];
@@ -268,6 +280,7 @@ function createSourceBackedBlock(
         let lastEditableState = editor.isEditable;
         let previewRoot: Root | null = null;
         let previewCheckTimer: number | null = null;
+        let frontmatterEditingMinHeight = 0;
         const textareaTargetId = `${name}-textarea-${++sourceBackedBlockTextareaTargetCounter}`;
         let unbindEditTarget: (() => void) | null = null;
 
@@ -291,6 +304,15 @@ function createSourceBackedBlock(
         textarea.draggable = false;
         textarea.setAttribute('draggable', 'false');
 
+        const syncFrontmatterTextareaHeight = () => {
+          if (name !== 'frontmatter' || !isEditing) {
+            return;
+          }
+
+          textarea.style.height = '0px';
+          textarea.style.height = `${Math.max(textarea.scrollHeight, frontmatterEditingMinHeight)}px`;
+        };
+
         editorPane.append(textarea);
 
         const previewPane = document.createElement('div');
@@ -308,6 +330,19 @@ function createSourceBackedBlock(
 
         previewPane.append(preview, sourceFallback);
         body.append(editorPane, previewPane);
+
+        if (this.options.label) {
+          const header = document.createElement('div');
+          header.className = `${className}__header`;
+
+          const label = document.createElement('span');
+          label.className = `${className}__label`;
+          label.textContent = this.options.label;
+
+          header.append(label);
+          dom.append(header);
+        }
+
         dom.append(body);
 
         const applyAttrs = (attrs: Record<string, unknown>) => {
@@ -338,11 +373,24 @@ function createSourceBackedBlock(
             return;
           }
 
+          if (name === 'frontmatter' && resolvedEditing) {
+            frontmatterEditingMinHeight = previewPane.getBoundingClientRect().height;
+          }
+
           isEditing = resolvedEditing;
           syncEditingState();
 
+          // Measure only after the editor pane has become visible. Measuring
+          // while CSS still hides it returns an incomplete scroll height.
+          syncFrontmatterTextareaHeight();
+
           if (resolvedEditing && options?.focus) {
             focusElementWithoutScroll(textarea);
+          }
+
+          if (!resolvedEditing) {
+            frontmatterEditingMinHeight = 0;
+            textarea.style.height = '';
           }
         };
 
@@ -351,6 +399,19 @@ function createSourceBackedBlock(
         };
 
         const renderPreview = (markdown: string) => {
+          if (name === 'frontmatter') {
+            previewRoot?.render(
+              React.createElement(
+                'pre',
+                { className: `${className}__source` },
+                React.createElement('code', null, markdown),
+              ),
+            );
+            sourceFallback.textContent = markdown;
+            dom.setAttribute('data-preview-empty', 'false');
+            return;
+          }
+
           const kind = typeof currentNode.attrs.kind === 'string' ? currentNode.attrs.kind : null;
           const detailsSource = kind === 'details' ? parseDetailsSource(markdown) : null;
           const shouldCheckPreviewVisibility = name === 'rawHtmlBlock' || kind === 'details';
@@ -455,6 +516,8 @@ function createSourceBackedBlock(
           if (valueChanged && textarea.value !== value) {
             textarea.value = value;
           }
+
+          syncFrontmatterTextareaHeight();
 
           textarea.readOnly = !editable;
           if (!editable && isEditing) {
@@ -574,6 +637,7 @@ function createSourceBackedBlock(
         textarea.addEventListener('input', () => {
           const nextValue = textarea.value;
           lastSyncedValue = nextValue;
+          syncFrontmatterTextareaHeight();
           applyAttrs({ [valueAttr]: nextValue });
           void renderPreview(nextValue);
         });
@@ -652,6 +716,19 @@ export const RawHtmlBlock = createSourceBackedBlock(
   'rawHtmlBlock',
   'html',
   'm-editor-raw-html-block',
+);
+
+export const Frontmatter = createSourceBackedBlock(
+  'frontmatter',
+  'yaml',
+  'm-editor-frontmatter',
+  [
+    'delimiter',
+    'openingLineEnding',
+    'contentLineEnding',
+    'closingLineEnding',
+    'bodyPrefix',
+  ],
 );
 
 export const RawHtmlInline = Node.create<RawHtmlInlineOptions>({

@@ -10,6 +10,11 @@ import { ChatTimelineItem, ChatTimelineProjector } from './ChatTimelineProjector
 import { RemoteUiState } from './RemoteUiState';
 import { ConversationEvent } from './ConversationEvent';
 
+// Marks the placeholder turn shown between sending a message and hearing back
+// which turn the desktop opened for it. Everything after the prefix is a local
+// message id, so it must never be mistaken for a server-issued turn id.
+export const PENDING_ACTIVE_TURN_ID_PREFIX: string = 'active-pending-';
+
 export type ChatSyncPhase =
   | 'idle'
   | 'loading'
@@ -32,9 +37,15 @@ export interface ChatTimelineState {
 
 export class ChatTimelineStore {
   private state: ChatTimelineState = ChatTimelineStore.emptyState('');
+  // The optimistic message the active turn is replying to. Kept out of
+  // `ChatTimelineState` because nothing but the projection needs it: it exists
+  // so a message sent mid-run renders below the running reply instead of
+  // jumping up beside the message that started it.
+  private activeTurnAnchor: string = '';
 
   reset(sessionId: string = ''): void {
     this.state = ChatTimelineStore.emptyState(sessionId);
+    this.activeTurnAnchor = '';
   }
 
   snapshot(): ChatTimelineState {
@@ -206,6 +217,11 @@ export class ChatTimelineStore {
       !ChatTimelineStore.isLocalPendingActiveTurn(this.state.activeTurn)) {
       return;
     }
+    // Promoting the placeholder keeps the message it was opened for; a turn
+    // that appears without one belongs to the newest thing the user sent.
+    if (!this.state.activeTurn || !ChatTimelineStore.isLocalPendingActiveTurn(this.state.activeTurn)) {
+      this.activeTurnAnchor = this.lastOptimisticMessageId();
+    }
     const activeTurn: ChatMessage = {
       id: activeId,
       turnId: normalizedTurnId,
@@ -231,12 +247,13 @@ export class ChatTimelineStore {
     if (normalizedLocalId.length === 0) {
       return '';
     }
-    const activeId = `active-pending-${normalizedLocalId}`;
+    const activeId = `${PENDING_ACTIVE_TURN_ID_PREFIX}${normalizedLocalId}`;
     if (this.state.activeTurn && this.state.activeTurn.id.length > 0 &&
       this.state.activeTurn.id !== activeId &&
       !ChatTimelineStore.isLocalPendingActiveTurn(this.state.activeTurn)) {
       return '';
     }
+    this.activeTurnAnchor = normalizedLocalId;
     const activeTurn: ChatMessage = {
       id: activeId,
       role: 'assistant',
@@ -262,6 +279,7 @@ export class ChatTimelineStore {
       !ChatTimelineStore.isLocalPendingActiveTurn(this.state.activeTurn)) {
       return;
     }
+    this.activeTurnAnchor = '';
     this.state = {
       sessionId: this.state.sessionId,
       persistedMessages: this.state.persistedMessages,
@@ -291,6 +309,7 @@ export class ChatTimelineStore {
   }
 
   clearActiveTurn(): void {
+    this.activeTurnAnchor = '';
     this.state = {
       sessionId: this.state.sessionId,
       persistedMessages: this.state.persistedMessages,
@@ -398,8 +417,19 @@ export class ChatTimelineStore {
       this.state.persistedMessages,
       this.state.optimisticMessages,
       this.activeTurnOrEmpty(),
-      hasMoreMessages
+      hasMoreMessages,
+      this.activeTurnAnchor
     );
+  }
+
+  /** The optimistic message the running turn answers, or '' once it persisted. */
+  activeTurnAnchorId(): string {
+    return this.activeTurnAnchor;
+  }
+
+  private lastOptimisticMessageId(): string {
+    const messages = this.state.optimisticMessages;
+    return messages.length > 0 ? messages[messages.length - 1].id : '';
   }
 
   private acceptsSession(sessionId: string): boolean {
@@ -494,8 +524,23 @@ export class ChatTimelineStore {
     return undefined;
   }
 
+  // The turn id to ask the desktop to cancel, or '' for "whatever is running
+  // now". A placeholder turn carries a local message id rather than a turn id,
+  // and offering that as one gets the cancel rejected as stale while the task
+  // keeps going — so the placeholder window has to fall through to no id.
+  static cancelableTurnId(activeTurn: ChatMessage): string {
+    if (activeTurn.turnId && activeTurn.turnId.length > 0) {
+      return activeTurn.turnId;
+    }
+    if (activeTurn.id.indexOf(PENDING_ACTIVE_TURN_ID_PREFIX) === 0) {
+      return '';
+    }
+    return activeTurn.id.indexOf('active-') === 0 ? activeTurn.id.slice('active-'.length) : '';
+  }
+
   private static isLocalPendingActiveTurn(activeTurn: ChatMessage): boolean {
-    return activeTurn.id.indexOf('active-pending-') === 0 && (!activeTurn.turnId || activeTurn.turnId.length === 0);
+    return activeTurn.id.indexOf(PENDING_ACTIVE_TURN_ID_PREFIX) === 0 &&
+      (!activeTurn.turnId || activeTurn.turnId.length === 0);
   }
 
   private static emptyState(sessionId: string): ChatTimelineState {

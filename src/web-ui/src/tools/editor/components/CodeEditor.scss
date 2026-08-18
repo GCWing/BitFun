@@ -266,6 +266,18 @@ $_editor-padding-desktop: 32px;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .code-editor-tool {
+    &__loading-spinner,
+    &__loading-text,
+    &__loading-overlay,
+    &__error-overlay,
+    &__saving-indicator {
+      animation: none;
+    }
+  }
+}
+
 // Responsive
 @media (max-width: 768px) {
   .code-editor-tool {

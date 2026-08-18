@@ -11,6 +11,7 @@ use git2::{
     Delta, DiffFindOptions, DiffFlags, DiffOptions, Patch, Repository, Status, StatusOptions,
 };
 
+use super::utils::discover_repository;
 use super::GitError;
 
 const MAX_WORKSPACE_DIFF_FILES: usize = 256;
@@ -48,8 +49,7 @@ impl GitPort for GitWorkspaceDiffPort {
 }
 
 fn collect_workspace_diff(workspace_root: &Path) -> Result<WorkspaceDiffSnapshot, GitError> {
-    let repository = Repository::discover(workspace_root)
-        .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+    let repository = discover_repository(workspace_root)?;
     let repository_root = repository
         .workdir()
         .ok_or_else(|| GitError::InvalidPath("Repository has no working directory".to_string()))?
@@ -322,6 +322,9 @@ fn unstaged_statuses() -> Status {
 fn map_git_error(error: GitError) -> PortError {
     let kind = match &error {
         GitError::RepositoryNotFound(_) => PortErrorKind::NotFound,
+        // The repository is reachable; Git refuses it until the user grants
+        // ownership trust, so this is a permission decision, not a lookup miss.
+        GitError::RepositoryUntrusted { .. } => PortErrorKind::PermissionDenied,
         GitError::InvalidPath(_) => PortErrorKind::InvalidRequest,
         GitError::CommandFailed(message) if message.contains("timed out") => PortErrorKind::Timeout,
         _ => PortErrorKind::Backend,

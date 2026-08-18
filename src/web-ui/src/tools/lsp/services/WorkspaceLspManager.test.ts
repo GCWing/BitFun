@@ -28,6 +28,11 @@ vi.mock('@/infrastructure/i18n', () => ({
 }));
 
 import { WorkspaceLspManager } from './WorkspaceLspManager';
+import {
+  activateSurface,
+  isSurfaceChangedError,
+  resetDeviceSurfaceForTest,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 function serverState(status: 'stopped' | 'starting' | 'running' | 'failed' | 'restarting') {
   return {
@@ -48,6 +53,7 @@ describe('WorkspaceLspManager', () => {
     (WorkspaceLspManager as unknown as {
       instances: Map<string, WorkspaceLspManager>;
     }).instances.clear();
+    resetDeviceSurfaceForTest();
   });
 
   it('skips didOpen when the language server is stopped', async () => {
@@ -144,5 +150,99 @@ describe('WorkspaceLspManager', () => {
       }
     });
     expect(invokeMock).not.toHaveBeenCalledWith('lsp_open_document', expect.anything());
+  });
+});
+
+describe('WorkspaceLspManager device surface scoping', () => {
+  afterEach(() => {
+    invokeMock.mockReset();
+    listenMock.mockReset();
+    listenMock.mockReturnValue(() => {});
+    (WorkspaceLspManager as unknown as {
+      instances: Map<string, WorkspaceLspManager>;
+    }).instances.clear();
+    resetDeviceSurfaceForTest();
+  });
+
+  it('does not share a manager for the same workspace path across devices', () => {
+    const localManager = WorkspaceLspManager.getOrCreate('/Users/dev/BitFun');
+
+    activateSurface('peer-device-b');
+    const peerManager = WorkspaceLspManager.getOrCreate('/Users/dev/BitFun');
+
+    expect(peerManager).not.toBe(localManager);
+    expect(peerManager.getSurfaceId()).toBe('peer-device-b');
+    expect(WorkspaceLspManager.get('/Users/dev/BitFun')).toBe(peerManager);
+  });
+
+  it('detaches for a surface switch without sending anything to the device being left', async () => {
+    const unlisten = vi.fn();
+    listenMock.mockReturnValue(unlisten);
+    invokeMock.mockResolvedValue(undefined);
+
+    const manager = WorkspaceLspManager.getOrCreate('/Users/dev/BitFun');
+    await manager.initialize();
+    invokeMock.mockClear();
+
+    WorkspaceLspManager.detachAllForSurfaceSwitch();
+
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to re-open a detached workspace on the device switched to', async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    const manager = WorkspaceLspManager.getOrCreate('/Users/dev/BitFun');
+    await manager.initialize();
+    WorkspaceLspManager.detachAllForSurfaceSwitch();
+    activateSurface('peer-device-b');
+    invokeMock.mockClear();
+
+    const error = await manager.initialize().then(() => null, (reason: unknown) => reason);
+
+    expect(isSurfaceChangedError(error)).toBe(true);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('prevents every detached manager operation from reaching the next device', async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    const manager = WorkspaceLspManager.getOrCreate('/Users/dev/BitFun');
+    await manager.initialize();
+    WorkspaceLspManager.detachAllForSurfaceSwitch();
+    activateSurface('peer-device-b');
+    invokeMock.mockClear();
+
+    await manager.changeDocument('file:///Users/dev/BitFun/src/main.rs', 'fn main() {}');
+
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('drops events that reach a manager after its surface was left', async () => {
+    let emitLspEvent: ((payload: unknown) => void) | null = null;
+    listenMock.mockImplementation((_event: string, callback: (payload: unknown) => void) => {
+      emitLspEvent = callback;
+      return () => {};
+    });
+    invokeMock.mockResolvedValue(undefined);
+
+    const manager = WorkspaceLspManager.getOrCreate('/Users/dev/BitFun');
+    await manager.initialize();
+
+    const diagnostics = vi.fn();
+    manager.onDiagnostics('file:///Users/dev/BitFun/src/main.rs', diagnostics);
+    manager.detachForSurfaceSwitch();
+
+    emitLspEvent?.({
+      type: 'Diagnostics',
+      data: {
+        workspace_path: '/Users/dev/BitFun',
+        uri: 'file:///Users/dev/BitFun/src/main.rs',
+        diagnostics: [{ message: 'from the device we left' }],
+      },
+    });
+
+    expect(diagnostics).not.toHaveBeenCalled();
   });
 });

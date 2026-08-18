@@ -113,7 +113,6 @@ fn registered_capabilities(
                 "session/sync",
                 "session/readTranscript",
                 "session/resolveWorkspace",
-                "session/recordLocalCommandTurn",
                 "session/rename",
                 "session/setArchived",
                 "session/updateModel",
@@ -156,7 +155,12 @@ fn registered_capabilities(
         ),
         (
             "git",
-            vec!["git/isRepository", "git/getStatus", "git/getBranches"],
+            vec![
+                "git/isRepository",
+                "git/getStatus",
+                "git/getBranches",
+                "git/getRepositoryTrust",
+            ],
         ),
         (
             "config",

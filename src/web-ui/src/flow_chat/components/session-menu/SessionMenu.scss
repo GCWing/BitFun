@@ -24,7 +24,11 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--bf-appearance-token-color-text-muted);
   border-radius: var(--bf-appearance-token-size-radius-sm);
   cursor: pointer;
-  transition: all 0.2s $session-menu-timing;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
 
   &:hover:not(:disabled) {
     background: var(--bf-appearance-token-color-accent-200);

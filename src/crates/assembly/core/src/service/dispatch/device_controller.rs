@@ -465,6 +465,7 @@ pub async fn append_device(
     request: DispatchAppendRequest,
 ) -> anyhow::Result<Value> {
     validate_append_request(&request)?;
+    validate_device_attachment_budget(&request.attachments)?;
     let record = load_device_record(store, &request.job_id).await?;
     let DispatchTarget::Device { device_id, .. } = &record.target else {
         unreachable!("load_device_record validates target kind")

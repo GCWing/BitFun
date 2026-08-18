@@ -9,7 +9,7 @@ pub mod page;
 pub mod types;
 mod write_lock;
 
-pub use bitfun_core_types::SessionKind;
+pub use bitfun_core_types::{SessionKind, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 pub use layout::SessionStorageLayout;
 pub use lineage::{
     apply_session_lineage, build_branched_session_metadata, build_session_lineage_snapshot,

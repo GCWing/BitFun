@@ -113,6 +113,16 @@ pub fn runtime_call<T>(result: std::result::Result<T, RuntimeError>) -> Result<T
 /// `data`. Used by the `git/*` schema handlers.
 pub fn git_service_error(error: GitError) -> Error {
     match error {
+        // The repository exists and the request was well formed; Git refuses it
+        // because this user does not own the directory. Carry the same stable
+        // code the desktop boundary uses, so a client can name the folder and
+        // offer remediation instead of rendering "internal error".
+        GitError::RepositoryUntrusted {
+            ref repository_path,
+            ..
+        } => Error::invalid_params().data(serde_json::json!(
+            bitfun_core::service::git::trust::untrusted_repository_error_message(repository_path)
+        )),
         GitError::RepositoryNotFound(_)
         | GitError::InvalidPath(_)
         | GitError::BranchNotFound(_) => {
@@ -162,6 +172,29 @@ pub fn config_get_error(error: bitfun_core::BitFunError) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Web-mode clients read the stable code out of JSON-RPC error `data`. An
+    /// ownership rejection must arrive with the same prefix and path the
+    /// desktop boundary produces; otherwise the Git surface degrades to an
+    /// opaque "internal error" the user cannot act on.
+    #[test]
+    fn untrusted_repository_keeps_its_stable_code_over_json_rpc() {
+        let mapped = git_service_error(GitError::RepositoryUntrusted {
+            repository_path: "/srv/shared/repo".to_string(),
+            detail: "detected dubious ownership".to_string(),
+        });
+
+        let data = mapped
+            .data
+            .as_ref()
+            .and_then(serde_json::Value::as_str)
+            .expect("ownership rejections carry their code in data");
+        assert!(
+            data.starts_with(bitfun_core::service::git::trust::REPOSITORY_UNTRUSTED_ERROR_PREFIX)
+        );
+        assert!(data.contains("/srv/shared/repo"));
+        assert_eq!(mapped.code, Error::invalid_params().code);
+    }
 
     /// The frontend `ConfigAPI.getConfig` swallows the error into `undefined`
     /// only when `error.message` (lowercased) contains `not found:`, `config

@@ -67,6 +67,12 @@ export interface DispatchWorkspaceProbe {
   exists: boolean;
   isDirectory: boolean;
   isGitRepository: boolean;
+  /**
+   * Git found the repository but refuses to read it until the target host's
+   * user trusts the path. Only then is `branch`/`dirty` absence a permission
+   * problem rather than a plain unborn branch or clean tree.
+   */
+  trustRequired?: boolean;
   branch?: string;
   dirty?: boolean;
   ahead?: number;

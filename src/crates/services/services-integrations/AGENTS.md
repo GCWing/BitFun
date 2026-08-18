@@ -91,8 +91,11 @@ slices that are outside pure product logic but still platform-neutral.
   new session/process group are outside the managed boundary.
 - Announcement remote fetch/cache lives here; product assembly supplies config
   values such as endpoint, locale, version, platform, and cache path.
-- DeepResearch report IO here may own report/citation sidecar filesystem work;
-  provider-neutral citation numbering stays in `bitfun-agent-runtime`.
+- DeepResearch report IO here owns report/citation sidecar filesystem work;
+  provider-neutral citation numbering stays in `bitfun-agent-runtime`. The IO
+  path must use the injected `WorkspaceFileSystem` for both local and remote
+  workspaces; never probe or fall back to the host filesystem for a remote
+  workspace path.
 
 ## Verification
 
@@ -107,6 +110,7 @@ cargo check -p bitfun-services-integrations --no-default-features
 cargo test -p bitfun-services-integrations --no-default-features --features mcp --test mcp_contracts
 cargo test -p bitfun-services-integrations --no-default-features --features remote-ssh --test remote_ssh_contracts remote_ssh_disabled_contracts::
 cargo test -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
+cargo test --locked -p bitfun-services-integrations --no-default-features --features deep-research --lib deep_research::tests::
 pnpm run check:core-boundaries
 ```
 

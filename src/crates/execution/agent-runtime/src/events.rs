@@ -47,6 +47,7 @@ pub const fn turn_outcome_status_kind(status: TurnOutcomeStatus) -> DialogTurnOu
     match status {
         TurnOutcomeStatus::Completed => DialogTurnOutcomeKind::Completed,
         TurnOutcomeStatus::Cancelled => DialogTurnOutcomeKind::Cancelled,
+        TurnOutcomeStatus::Interrupted => DialogTurnOutcomeKind::Interrupted,
         TurnOutcomeStatus::Failed => DialogTurnOutcomeKind::Failed,
     }
 }

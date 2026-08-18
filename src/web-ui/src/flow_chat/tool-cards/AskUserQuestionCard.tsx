@@ -125,8 +125,6 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     if (shouldCompactCompleted) {
       applyExpandedState(true, false, (nextExpanded) => {
         setShowCompletedSummary(!nextExpanded);
-      }, {
-        reason: 'auto',
       });
       return;
     }

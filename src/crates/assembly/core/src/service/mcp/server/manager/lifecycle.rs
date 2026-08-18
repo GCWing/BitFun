@@ -323,6 +323,38 @@ impl MCPServerManager {
         Ok(stop_result?)
     }
 
+    /// Schedules a best-effort asynchronous stop with bounded retries.
+    ///
+    /// Entrypoints that delete an MCP server from the config use this owner
+    /// method instead of duplicating the retry and timeout policy in their own
+    /// process layer.
+    pub fn schedule_stop_server(&self, server_id: impl Into<String>) {
+        let manager = MCPServerManager::clone(self);
+        let server_id = server_id.into();
+        tokio::spawn(async move {
+            for attempt in 1..=20 {
+                let result = tokio::time::timeout(
+                    Duration::from_millis(250),
+                    manager.stop_server(&server_id),
+                )
+                .await;
+                match result {
+                    Ok(Ok(())) | Ok(Err(BitFunError::NotFound(_))) => return,
+                    Ok(Err(error)) => debug!(
+                        "Best-effort MCP stop failed: id={} attempt={} error={}",
+                        server_id, attempt, error
+                    ),
+                    Err(_) => debug!(
+                        "Best-effort MCP stop timed out: id={} attempt={}",
+                        server_id, attempt
+                    ),
+                }
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+            warn!("Best-effort MCP stop exhausted retries: id={}", server_id);
+        });
+    }
+
     /// Restarts a server.
     pub async fn restart_server(&self, server_id: &str) -> BitFunResult<()> {
         info!("Restarting MCP server: id={}", server_id);

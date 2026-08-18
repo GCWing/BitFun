@@ -7,7 +7,7 @@ use bitfun_product_domains::external_sources::{
 use bitfun_product_domains::external_subagents::{
     ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput, ExternalSubagentMode,
     ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
-    ExternalSubagentSourceProvider,
+    ExternalSubagentSourceProvider, ExternalSubagentToolCapability,
 };
 use bitfun_product_domains::tool_permissions::{
     PermissionEffect, PermissionEvaluator, PermissionRule,
@@ -49,6 +49,57 @@ fn discover(
             suppressed_sources,
         })
         .expect("discover OpenCode agents")
+}
+
+#[test]
+fn opencode_builtin_tools_map_to_provider_neutral_capabilities() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "worker": {
+              "prompt": "Make the requested change",
+              "mode": "subagent",
+              "tools": {
+                "bash": true,
+                "edit": true,
+                "write": true
+              }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    let definition = snapshot
+        .definitions
+        .iter()
+        .find(|definition| definition.logical_id == "worker")
+        .unwrap();
+    let mappings = definition
+        .requested_tools
+        .selectors
+        .iter()
+        .map(|selector| (selector.source_name.as_str(), selector.canonical_capability))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        mappings,
+        vec![
+            ("bash", Some(ExternalSubagentToolCapability::ExecuteCommand)),
+            ("edit", Some(ExternalSubagentToolCapability::EditFile)),
+            ("write", Some(ExternalSubagentToolCapability::WriteFile)),
+        ]
+    );
+    assert_eq!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Ready
+    );
 }
 
 #[test]
@@ -1258,9 +1309,14 @@ fn safe_subset_is_fail_closed_and_default_tools_are_explicit() {
             .requested_tools
             .selectors
             .iter()
-            .map(|item| item.canonical_host_name.as_deref().unwrap())
+            .map(|item| item.canonical_capability.unwrap())
             .collect::<Vec<_>>(),
-        vec!["LS", "Read", "Glob", "Grep"]
+        vec![
+            ExternalSubagentToolCapability::DirectoryList,
+            ExternalSubagentToolCapability::ReadFile,
+            ExternalSubagentToolCapability::GlobFiles,
+            ExternalSubagentToolCapability::SearchText,
+        ]
     );
     assert!(defaulted.requested_tools.uses_conservative_default);
     assert_eq!(

@@ -18,7 +18,6 @@ mod config;
 mod daemon;
 mod diagnostics;
 mod dispatch;
-mod embedded_app_server;
 mod hook_import;
 mod logging;
 mod management;
@@ -34,9 +33,7 @@ mod root_handlers;
 mod runtime;
 mod self_update;
 mod shared_runtime;
-mod shared_tui_backend;
 mod terminal_attention;
-mod tui_backend;
 mod ui;
 
 use anyhow::{anyhow, Result};
@@ -45,7 +42,7 @@ use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use agent::tui_client::TuiAgentClient;
+use agent::runtime_client::CliAgentRuntimeClient;
 use config::CliConfig;
 use hook_import::HookAction;
 use mcp_import::{McpImportCommand, McpImportOutputFormat};
@@ -89,7 +86,7 @@ pub fn get_mcp_service() -> Option<&'static std::sync::Arc<bitfun_core::service:
     MCP_SERVICE.get()
 }
 
-fn ensure_cli_mcp_service(
+pub(crate) fn ensure_cli_mcp_service(
     config_service: Arc<bitfun_core::service::config::ConfigService>,
 ) -> Option<Arc<bitfun_core::service::mcp::MCPService>> {
     if let Some(service) = get_mcp_service() {
@@ -936,52 +933,25 @@ async fn run_interactive(
             .await?,
         )
     };
-    let embedded_app_server = if let Some(runtime) = &runtime {
-        Some(embedded_app_server::EmbeddedAppServerHost::start(runtime).await?)
-    } else {
-        None
-    };
     let agent = if let Some(runtime) = &runtime {
-        let backend = embedded_app_server
-            .as_ref()
-            .expect("Embedded App Server should be started with the Runtime")
-            .backend();
-        Arc::new(TuiAgentClient::new(
-            backend,
+        Arc::new(agent::runtime_client::CliAgentRuntimeClient::new(
+            runtime,
             Some(workspace_path.clone()),
-            false,
-            runtime.approval_policy(),
         ))
     } else {
         let client = shared_runtime::connect_or_start(&workspace_path).await?;
-        let config_service = bitfun_core::service::config::get_global_config_service()
-            .await
-            .map_err(|error| anyhow!("Failed to load Shared TUI management config: {error}"))?;
-        ensure_cli_mcp_service(config_service);
-        let management = Arc::new(bitfun_app_server::AppManagementService::load().await?);
-        let backend: Arc<dyn tui_backend::TuiBackend> = Arc::new(
-            shared_tui_backend::SharedTuiBackend::new(client, management),
-        );
-        let backend_initialized = backend
-            .initialize(bitfun_app_server_protocol::app::InitializeRequest {
-                protocol_version: bitfun_app_server_protocol::PROTOCOL_VERSION,
-                client: bitfun_app_server_protocol::app::ClientInfo {
-                    name: "bitfun-tui".to_string(),
-                    version: env!("CARGO_PKG_VERSION").to_string(),
-                },
-            })
-            .await?;
-        if backend_initialized.protocol_version != bitfun_app_server_protocol::PROTOCOL_VERSION {
-            anyhow::bail!("Shared TUI Host negotiated an incompatible protocol");
+        client.health().await?;
+        if !client.capabilities().interactive_tui {
+            anyhow::bail!("Shared Runtime does not advertise interactive TUI support");
         }
-        backend.health().await?;
-        Arc::new(TuiAgentClient::new(
-            backend,
+        Arc::new(agent::runtime_client::CliAgentRuntimeClient::new_shared(
+            client,
             Some(workspace_path.clone()),
-            true,
-            runtime::approval::CliApprovalPolicy::Ask,
         ))
     };
+    let account_runtime = runtime
+        .as_ref()
+        .map(|runtime| runtime.account_runtime().clone());
     // 3.5 Restore persisted account session (if any)
     if !shared {
         let runtime = runtime
@@ -1017,14 +987,21 @@ async fn run_interactive(
             .start_settings_sync_loop();
     }
 
-    // Resolve agent override: validate against the agent registry AFTER core services init
+    // Resolve the agent override against the execution owner's mode catalog.
+    // Embedded and Shared both report the catalog through the same client
+    // boundary, so a Shared controller never falls back to its local registry.
     let effective_agent = if let Some(ref override_val) = agent_override {
-        match resolve_agent_override(override_val).await {
-            Ok(valid_id) => valid_id,
-            Err(warning) => {
-                eprintln!("{warning}");
-                default_agent.clone()
-            }
+        let modes = agent.available_agent_modes().await.map_err(|error| {
+            anyhow::anyhow!("Failed to read the execution owner's agent mode catalog: {error}")
+        })?;
+        if modes.iter().any(|mode| mode.id == *override_val) {
+            override_val.clone()
+        } else {
+            let available: Vec<&str> = modes.iter().map(|mode| mode.id.as_str()).collect();
+            anyhow::bail!(
+                "Agent '{override_val}' was not found in the execution owner's mode catalog. Available: {}",
+                available.join(", ")
+            );
         }
     } else {
         default_agent.clone()
@@ -1035,8 +1012,14 @@ async fn run_interactive(
     if let Some(ref session_spec) = session_override {
         let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
 
-        let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent)
-            .with_restore_session(restore_session_id);
+        let mut chat_mode = ChatMode::new(
+            config,
+            effective_agent,
+            workspace,
+            Arc::clone(&agent),
+            account_runtime.clone(),
+        )
+        .with_restore_session(restore_session_id);
         if let Some(mid) = model_id {
             chat_mode = chat_mode.with_model(mid);
         }
@@ -1054,6 +1037,7 @@ async fn run_interactive(
     let mut startup_page = StartupPage::new(
         config,
         Arc::clone(&agent),
+        account_runtime.clone(),
         effective_agent,
         workspace.clone(),
     );
@@ -1085,7 +1069,7 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent);
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent, account_runtime);
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
@@ -1108,7 +1092,7 @@ async fn run_interactive(
 /// Resolve a `--session` / `--continue` override to a concrete session ID.
 /// "last" (or empty for --continue) resolves to the most recent session.
 async fn resolve_startup_session_override(
-    agent: &Arc<TuiAgentClient>,
+    agent: &Arc<CliAgentRuntimeClient>,
     session_spec: &str,
 ) -> Result<String> {
     if session_spec == "last" || session_spec.is_empty() {
@@ -1121,22 +1105,6 @@ async fn resolve_startup_session_override(
     bitfun_agent_runtime::session_control::validate_session_id(session_spec)
         .map_err(anyhow::Error::msg)?;
     Ok(session_spec.to_string())
-}
-
-/// Validate an agent override against the agent registry.
-/// Returns the valid agent ID, or an error with a warning message.
-async fn resolve_agent_override(agent_override: &str) -> std::result::Result<String, String> {
-    let registry = bitfun_core::agentic::get_agent_registry();
-    let modes = registry.get_modes_info().await;
-    if modes.iter().any(|m| m.id == agent_override) {
-        Ok(agent_override.to_string())
-    } else {
-        let available: Vec<&str> = modes.iter().map(|m| m.id.as_str()).collect();
-        Err(format!(
-            "Warning: Agent '{agent_override}' not found. Available: {}. Using default.",
-            available.join(", ")
-        ))
-    }
 }
 
 // ======================== Main ========================
@@ -1566,12 +1534,9 @@ async fn run_interactive_with_session(
 
     let workspace_path = runtime.workspace_root().to_path_buf();
     let workspace = Some(workspace_path.to_string_lossy().to_string());
-    let embedded_app_server = embedded_app_server::EmbeddedAppServerHost::start(&runtime).await?;
-    let agent = Arc::new(TuiAgentClient::new(
-        embedded_app_server.backend(),
+    let agent = Arc::new(agent::runtime_client::CliAgentRuntimeClient::new(
+        &runtime,
         Some(workspace_path),
-        false,
-        runtime.approval_policy(),
     ));
     let sessions = agent.list_sessions().await?;
     let agent_type = sessions
@@ -1585,8 +1550,14 @@ async fn run_interactive_with_session(
             )
         })?;
 
-    let mut chat_mode =
-        ChatMode::new(config, agent_type, workspace, agent).with_restore_session(session_id);
+    let mut chat_mode = ChatMode::new(
+        config,
+        agent_type,
+        workspace,
+        agent,
+        Some(runtime.account_runtime().clone()),
+    )
+    .with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
     shutdown_mcp_servers().await;

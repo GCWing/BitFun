@@ -11,7 +11,7 @@ name = "bitfun_external_sources"
 crate-type = ["rlib"]
 
 [dependencies]
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
+bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
 futures = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "time"] }

@@ -359,7 +359,12 @@ ${createWidgetAppearanceStaticShellCss()}
       color: var(--bf-appearance-token-color-text-secondary);
       text-decoration: none;
       white-space: nowrap;
-      transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      transition:
+        transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+        background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+        border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+        color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+        box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     }
     .bf-button:hover {
       background: var(--bf-appearance-token-element-bg-medium);
@@ -388,7 +393,11 @@ ${createWidgetAppearanceStaticShellCss()}
       border: 1px solid var(--bf-appearance-token-border-base);
       background: var(--bf-appearance-token-element-bg-subtle);
       color: var(--bf-appearance-token-color-text-primary);
-      transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      transition:
+        background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+        border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+        color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+        box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     }
     .bf-input,
     .bf-select {
@@ -508,9 +517,15 @@ ${createWidgetAppearanceStaticShellCss()}
         font-size: var(--bf-appearance-token-font-size-base);
       }
     }
-    @keyframes bitfunWidgetFadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+    @media (prefers-reduced-motion: reduce) {
+      .bf-button,
+      .bf-input,
+      .bf-textarea,
+      .bf-select,
+      [data-bitfun-prompt-selected="true"],
+      [data-bitfun-context-selected="true"] {
+        transition: none;
+      }
     }
   </style>
   <script>${morphdomRuntime}</script>
@@ -709,17 +724,6 @@ ${createWidgetAppearanceStaticShellCss()}
                 return false;
               }
               return true;
-            },
-            onNodeAdded: function (node) {
-              if (
-                node &&
-                node.nodeType === 1 &&
-                node.tagName !== 'SCRIPT' &&
-                node.tagName !== 'STYLE'
-              ) {
-                node.style.animation = 'bitfunWidgetFadeIn 0.18s ease both';
-              }
-              return node;
             }
           });
         } else {
@@ -1044,7 +1048,7 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
       <iframe
         ref={iframeRef}
         title={title || 'Generative widget'}
-        className="bitfun-generative-widget-frame__iframe"
+        className={`bitfun-generative-widget-frame__iframe${isLoaded ? ' bitfun-generative-widget-frame__iframe--loaded' : ''}`}
         data-bf-component="generative-widget"
         data-bf-part="iframe"
         style={{ width: '100%', minWidth: '100%' }}

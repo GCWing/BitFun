@@ -224,6 +224,7 @@ impl From<bitfun_agent_runtime::event_bus::EventBusError> for BitFunError {
     }
 }
 
+#[cfg(feature = "agent-runtime")]
 impl From<bitfun_agent_tools::computer_use::ComputerUseContractError> for BitFunError {
     fn from(error: bitfun_agent_tools::computer_use::ComputerUseContractError) -> Self {
         Self::Tool(error.to_string())
