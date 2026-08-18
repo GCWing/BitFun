@@ -74,6 +74,52 @@ describe('model selection', () => {
     ])
   })
 
+  it('lists a model shared by two routes once, under the route in force', async () => {
+    // Two provider ids serving the same catalog is a real deployment, not a
+    // mistake: a second route to the same vendor, mounted under its own id so
+    // it can carry its own key. Listed per provider, every model appeared
+    // twice, with only the value prefix telling the rows apart.
+    harness = await makeBridgeHarness({
+      catalog: {
+        mock: {
+          name: 'Mock',
+          models: [
+            { id: 'mock', name: 'Mock' },
+            { id: 'mock-pro', name: 'Mock Pro', description: 'the bigger one' },
+          ],
+        },
+        mirror: {
+          name: 'Mirror',
+          models: [
+            { id: 'mock', name: 'Mock' },
+            { id: 'mock-pro', name: 'Mock Pro', description: 'the bigger one' },
+            { id: 'mirror-only', name: 'Mirror Only' },
+          ],
+        },
+      },
+      config: { provider: 'mirror', model: 'mock' },
+    })
+    await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
+    const session = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
+
+    const option = selectOption(session.configOptions, 'model')
+    // The session runs on `mirror`, so `mirror` owns every id it shares — the
+    // checked row keeps the route that actually answers, and `mock` is left
+    // with nothing of its own to list.
+    expect(option.currentValue).toBe('mirror/mock')
+    expect(option.options).toEqual([
+      {
+        group: 'mirror',
+        name: 'Mirror',
+        options: [
+          { value: 'mirror/mock', name: 'Mock' },
+          { value: 'mirror/mock-pro', name: 'Mock Pro', description: 'the bigger one' },
+          { value: 'mirror/mirror-only', name: 'Mirror Only' },
+        ],
+      },
+    ])
+  })
+
   it('routes the next turn to the model the client picked', async () => {
     harness = await makeBridgeHarness({
       catalog: CATALOG,
