@@ -30,6 +30,23 @@ Cargo feature、第三方依赖 owner、测试目标和本地/CI 验证分工见
 
 本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
+## 仓库级分解规则（原 AGENTS 产品架构护栏）
+
+对任何 `bitfun-core` 拆解、feature 边界、依赖边界或 Rust 构建加速重构，先读本文件与
+[`rust-build-dependency-boundaries.md`](rust-build-dependency-boundaries.md)。
+本文件与构建边界文是入口；模块级 ownership 细则放在就近模块 `AGENTS.md`。
+
+仓库级分解规则：
+
+- 不要把 DTO / contract 抽取误当成 runtime owner 的迁移。
+- 产品面允许存在差异；只共享稳定 facts 与 ports，不要共享 UI、protocol、lifecycle 或平台实现。
+- 迁移 runtime owner 必须先有经评审的 port/provider 设计、旧路径兼容、行为等价测试；若可能改变行为边界，还需明确确认。
+
+涉及 Agent Runtime 部署、多 GUI/TUI/Remote 实例、共享 Session 控制或进程拓扑时，另读
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
+Rust Runtime 与 Node/Bun Plugin Host 进程不要默认按 Client、workspace、session 或 plugin 拆进程；
+进程边界应由负责状态 owner、execution/security domain、可计量的安全条件与容量需求共同决定。
+
 ## 1. 架构目标
 
 BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和插件生态。架构目标是降低后端实现高频变更对稳定接口的影响，同时保持插件生态和 OpenCode-compatible 能力可以按受控路径扩展。

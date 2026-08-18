@@ -6,7 +6,7 @@ This README is the Web UI runtime entry point. The cross-surface contract,
 resource ownership, key policy, and verification rules live in:
 
 - `docs/architecture/i18n.md`
-- `docs/development/i18n.md`
+- `docs/guideline/i18n.md`
 
 Keep this file small so local runtime examples do not drift from the shared
 project rules.
