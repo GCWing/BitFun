@@ -11,6 +11,108 @@ import { sanitizeErrorForLog } from '../logSanitizer';
 
 const log = createLogger('TauriAdapter');
 
+interface SharedTauriEventListener {
+  subscriptions: Set<TauriEventSubscription>;
+  unlistenFn: UnlistenFn | null;
+  registrationPromise: Promise<void> | null;
+  closed: boolean;
+}
+
+interface TauriEventSubscription {
+  owner: TauriTransportAdapter;
+  event: string;
+  callback: (data: unknown) => void;
+  listener: SharedTauriEventListener;
+  active: boolean;
+}
+
+// The Tauri event bus is window-wide, while Peer Device Mode keeps multiple
+// transport adapters alive. Route each native event once before fan-out so a
+// positioned Session event cannot consume its cursor once per adapter.
+const sharedTauriEventListeners = new Map<string, SharedTauriEventListener>();
+
+function closeSharedTauriEventListener(
+  event: string,
+  shared: SharedTauriEventListener,
+): void {
+  if (shared.closed) {
+    return;
+  }
+  shared.closed = true;
+  if (sharedTauriEventListeners.get(event) === shared) {
+    sharedTauriEventListeners.delete(event);
+  }
+  if (shared.unlistenFn) {
+    try {
+      shared.unlistenFn();
+    } catch (error) {
+      log.error('Error while unlistening', sanitizeErrorForLog(error));
+    }
+    shared.unlistenFn = null;
+  }
+}
+
+function registerSharedTauriEventListener(
+  event: string,
+  shared: SharedTauriEventListener,
+): Promise<void> {
+  const registration = listen<unknown>(event, (e) => {
+    if (shared.closed) {
+      return;
+    }
+
+    // Capture the logical listeners that owned the event when it arrived. A
+    // Session read may hold delivery after accepting the write; those owners
+    // must still paint it when released, while later subscribers must not
+    // receive the native event retroactively.
+    const subscriptions = [...shared.subscriptions];
+
+    // Peer devices stay attached while the UI renders another device, so
+    // several product event streams share this bus. Only the rendered device
+    // surface may reach product listeners.
+    const route = routeSurfaceEvent(event, e.payload);
+    if (!route.deliver) {
+      return;
+    }
+
+    routeRuntimeSessionEvent(
+      surfaceIdForDevice(route.sourceDeviceId),
+      event,
+      route.payload,
+      payload => {
+        for (const subscription of subscriptions) {
+          try {
+            subscription.callback(payload);
+          } catch (error) {
+            log.error('Error in event listener callback', {
+              event,
+              error: sanitizeErrorForLog(error),
+            });
+          }
+        }
+      },
+    );
+  }).then(fn => {
+    if (shared.closed || sharedTauriEventListeners.get(event) !== shared) {
+      fn();
+    } else {
+      shared.unlistenFn = fn;
+    }
+  }).catch(error => {
+    log.error('Failed to listen event', { event, error: sanitizeErrorForLog(error) });
+    if (sharedTauriEventListeners.get(event) === shared) {
+      sharedTauriEventListeners.delete(event);
+    }
+    shared.closed = true;
+  }).finally(() => {
+    if (shared.registrationPromise === registration) {
+      shared.registrationPromise = null;
+    }
+  });
+  shared.registrationPromise = registration;
+  return registration;
+}
+
 export function isExpectedTauriRequestError(action: string, params: unknown, error: unknown): boolean {
   if (action !== 'get_config') {
     return false;
@@ -31,11 +133,11 @@ export function isExpectedTauriRequestError(action: string, params: unknown, err
 }
 
 export class TauriTransportAdapter implements ITransportAdapter {
-  private unlistenFunctions: UnlistenFn[] = [];
   private connected: boolean = false;
   private invokeFn: ((action: string, params?: any) => Promise<any>) | null = null;
   private initPromise: Promise<void> | null = null;
   private listenerRegistrationPromises = new Set<Promise<void>>();
+  private eventSubscriptions = new Set<TauriEventSubscription>();
 
   supportsSearchStreamEvents(): boolean {
     return true;
@@ -125,69 +227,62 @@ export class TauriTransportAdapter implements ITransportAdapter {
   }
 
   listen<T>(event: string, callback: (data: T) => void): () => void {
-    let unlistenFn: UnlistenFn | null = null;
-    let isUnlistened = false;
+    let shared = sharedTauriEventListeners.get(event);
+    let needsRegistration = false;
+    if (!shared) {
+      shared = {
+        subscriptions: new Set(),
+        unlistenFn: null,
+        registrationPromise: null,
+        closed: false,
+      };
+      sharedTauriEventListeners.set(event, shared);
+      needsRegistration = true;
+    }
 
-    const registration = listen<T>(event, (e) => {
-      if (!isUnlistened) {
-        // Peer devices stay attached while the UI renders another device, so
-        // several product event streams share this bus. Only the rendered
-        // device surface may reach product listeners.
-        const route = routeSurfaceEvent(event, e.payload);
-        if (!route.deliver) {
-          return;
-        }
-        routeRuntimeSessionEvent(
-          surfaceIdForDevice(route.sourceDeviceId),
-          event,
-          route.payload,
-          payload => {
-            try {
-              callback(payload);
-            } catch (error) {
-              log.error('Error in event listener callback', {
-                event,
-                error: sanitizeErrorForLog(error),
-              });
-            }
-          },
-        );
-      }
-    }).then(fn => {
-      if (isUnlistened) {
-        fn();
-      } else {
-        unlistenFn = fn;
-        this.unlistenFunctions.push(fn);
-      }
-    }).catch(error => {
-      log.error('Failed to listen event', { event, error: sanitizeErrorForLog(error) });
-    }).finally(() => {
+    const subscription: TauriEventSubscription = {
+      owner: this,
+      event,
+      callback: callback as (data: unknown) => void,
+      listener: shared,
+      active: true,
+    };
+    shared.subscriptions.add(subscription);
+    this.eventSubscriptions.add(subscription);
+
+    const registration = needsRegistration
+      ? registerSharedTauriEventListener(event, shared)
+      : shared.registrationPromise;
+    if (registration) {
+      this.trackListenerRegistration(registration);
+    }
+
+    return () => this.removeEventSubscription(subscription);
+  }
+
+  private trackListenerRegistration(registration: Promise<void>): void {
+    this.listenerRegistrationPromises.add(registration);
+    void registration.finally(() => {
       this.listenerRegistrationPromises.delete(registration);
     });
-    this.listenerRegistrationPromises.add(registration);
+  }
 
-    return () => {
-      isUnlistened = true;
-      if (unlistenFn) {
-        unlistenFn();
-        const index = this.unlistenFunctions.indexOf(unlistenFn);
-        if (index > -1) {
-          this.unlistenFunctions.splice(index, 1);
-        }
-      }
-    };
+  private removeEventSubscription(subscription: TauriEventSubscription): void {
+    if (!subscription.active || subscription.owner !== this) {
+      return;
+    }
+    subscription.active = false;
+    subscription.listener.subscriptions.delete(subscription);
+    this.eventSubscriptions.delete(subscription);
+    if (subscription.listener.subscriptions.size === 0) {
+      closeSharedTauriEventListener(subscription.event, subscription.listener);
+    }
   }
 
   async disconnect(): Promise<void> {
-    this.unlistenFunctions.forEach(fn => {
-      try {
-        fn();
-      } catch (error) {
-        log.error('Error while unlistening', sanitizeErrorForLog(error));
-      }
-    });
-    this.unlistenFunctions = [];
+    for (const subscription of [...this.eventSubscriptions]) {
+      this.removeEventSubscription(subscription);
+    }
     this.connected = false;
   }
 
