@@ -7,7 +7,7 @@
  * Optional action (e.g. new session) shown inside __content when onActionClick is provided.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import type { SceneTab as SceneTabType, SceneTabDef } from './types';
@@ -36,6 +36,26 @@ const SceneTab: React.FC<SceneTabProps> = ({
   onClose,
 }) => {
   const { Icon, label, pinned } = def;
+  const tabRef = useRef<HTMLDivElement>(null);
+
+  // Expose the close button's scale drift as a CSS var so SceneBar.scss can
+  // counter it while the tab's 120ms press scale is playing. The close button
+  // is absolutely positioned (right: 6px, 18px wide → center 15px from the
+  // right edge); scaling the whole tab 0.985 around its center drifts that
+  // point left by 0.015 × (width/2 − 15) px, which would make the mouseup
+  // miss the button. Without this the click bubbles to the tab and activates
+  // it instead of closing.
+  useEffect(() => {
+    const el = tabRef.current;
+    if (!el) return;
+    const updateShift = () => {
+      el.style.setProperty('--bitfun-scene-tab-close-shift', `${0.015 * (el.offsetWidth / 2 - 15)}px`);
+    };
+    updateShift();
+    const observer = new ResizeObserver(updateShift);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -80,6 +100,7 @@ const SceneTab: React.FC<SceneTabProps> = ({
 
   return (
     <div
+      ref={tabRef}
       role="tab"
       aria-selected={isActive}
       tabIndex={isActive ? 0 : -1}
