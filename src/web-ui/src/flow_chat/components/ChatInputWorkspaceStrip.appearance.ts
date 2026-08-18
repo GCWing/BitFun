@@ -6,7 +6,8 @@ export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescr
   // `harness` / `runtime` / `actions` grouping went with the conditional grid.
   parts: [
     { id: 'root' }, { id: 'context' }, { id: 'next' },
-    { id: 'workspace' }, { id: 'branch' },
+    { id: 'workspace' }, { id: 'workspaceMenu' },
+    { id: 'workspaceOption' }, { id: 'branch' }, { id: 'divider' },
     { id: 'permission' }, { id: 'permissionMenu' },
     { id: 'permissionOptions' }, { id: 'permissionOptionRow' },
     { id: 'permissionOption' }, { id: 'permissionOptionTrailing' },
@@ -15,6 +16,7 @@ export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescr
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
     { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
     { id: 'armed', selector: { kind: 'self', suffix: '[data-bf-state~="armed"]' } },
   ],
 };
