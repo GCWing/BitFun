@@ -26,7 +26,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import {
+  observeElementRect as observeTanStackElementRect,
+  useVirtualizer,
+  type Rect,
+  type Virtualizer,
+} from '@tanstack/react-virtual';
 import {
   roundViewportPx,
   traceViewport,
@@ -81,6 +86,36 @@ export interface FlowChatItemBounds {
   endPx: number;
 }
 
+/** A viewport box that can describe what the reader can actually see. */
+export function isUsableFlowChatViewportRect(rect: Rect): boolean {
+  return Number.isFinite(rect.width)
+    && Number.isFinite(rect.height)
+    && rect.width > 0
+    && rect.height > 0;
+}
+
+/**
+ * Keep transient minimized-window geometry out of TanStack's viewport state.
+ *
+ * WebView2 reports a zero-height scroller while the native window is minimized.
+ * Publishing that sample makes the rendered window empty and throws away the
+ * last reader position even though the React tree never left the screen. The
+ * next positive sample is an ordinary reflow from the last usable rectangle.
+ */
+export function observeFlowChatViewportRect<
+  TScrollElement extends Element,
+  TItemElement extends Element,
+>(
+  instance: Virtualizer<TScrollElement, TItemElement>,
+  callback: (rect: Rect) => void,
+): void | (() => void) {
+  return observeTanStackElementRect(instance, rect => {
+    if (isUsableFlowChatViewportRect(rect)) {
+      callback(rect);
+    }
+  });
+}
+
 /** A resize can shift the reader only when the whole row is above it. */
 export function isItemFullyAboveViewport(itemEndPx: number, scrollTopPx: number): boolean {
   return itemEndPx <= scrollTopPx;
@@ -126,6 +161,8 @@ export interface UseFlowChatVirtualizerOptions<T> {
   estimateContext?: VirtualItemHeightEstimateContext;
   /** Stable identity for data that changes an unmeasured row's estimate. */
   estimateContextRevision?: string | number;
+  /** The host has temporarily withdrawn the scroller, such as window minimization. */
+  isViewportSuspended?: () => boolean;
   /**
    * Gap kept above a Turn that has been scrolled to the top of the viewport.
    * Applied by the virtualizer itself so that its re-aim, which runs while
@@ -288,6 +325,7 @@ export function useFlowChatVirtualizer<T>({
   estimateItemHeightPx,
   estimateContext,
   estimateContextRevision,
+  isViewportSuspended = () => false,
   scrollPaddingStartPx,
   writeViewport,
   shiftViewport = () => false,
@@ -330,6 +368,8 @@ export function useFlowChatVirtualizer<T>({
   estimateItemHeightRef.current = estimateItemHeightPx;
   const estimateContextRef = useRef(estimateContext);
   estimateContextRef.current = estimateContext;
+  const isViewportSuspendedRef = useRef(isViewportSuspended);
+  isViewportSuspendedRef.current = isViewportSuspended;
 
   const [contentStartPx, setContentStartPx] = useState(0);
   useEffect(() => {
@@ -367,6 +407,7 @@ export function useFlowChatVirtualizer<T>({
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollerRef.current,
+    observeElementRect: observeFlowChatViewportRect,
     estimateSize,
     getItemKey: resolveItemKey,
     // Items carry their own index attribute already; measuring reads it back.
@@ -381,6 +422,7 @@ export function useFlowChatVirtualizer<T>({
      * by whatever outranks the aim it came from.
      */
     scrollToFn: (offsetPx, { behavior }) => {
+      if (isViewportSuspendedRef.current()) return;
       writeViewportRef.current({
         owner: aimOwnerRef.current,
         topPx: offsetPx,
@@ -394,6 +436,7 @@ export function useFlowChatVirtualizer<T>({
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta) => {
     const scroller = scrollerRef.current;
     if (!scroller) return false;
+    if (isViewportSuspendedRef.current()) return false;
     const beforeScrollTopPx = scroller.scrollTop;
     const beforeScrollHeightPx = scroller.scrollHeight;
     // A row that merely starts above the viewport may still be visible. Its
@@ -506,7 +549,7 @@ export function useFlowChatVirtualizer<T>({
    */
   const measureRenderedItems = useCallback(() => {
     const scroller = scrollerRef.current;
-    if (!scroller) return;
+    if (!scroller || isViewportSuspendedRef.current()) return;
     const elements = scroller.querySelectorAll<HTMLElement>('[data-virtual-index]');
     for (const element of elements) {
       const index = Number(element.getAttribute('data-virtual-index'));

@@ -68,6 +68,8 @@ interface UseFlowChatFollowOutputOptions {
   virtualItemCount: number;
   isStreaming: boolean;
   isViewportActive: boolean;
+  /** The native host has temporarily withdrawn the scroller from layout. */
+  isViewportSuspended?: () => boolean;
   scrollerRef: RefObject<HTMLElement | null>;
   /** Height of the resident tail spacer currently rendered below the content. */
   getTailSpacerPx: () => number;
@@ -205,6 +207,7 @@ export function useFlowChatFollowOutput({
   virtualItemCount,
   isStreaming,
   isViewportActive,
+  isViewportSuspended = () => false,
   scrollerRef,
   getTailSpacerPx,
   scrollToContentEnd,
@@ -219,6 +222,8 @@ export function useFlowChatFollowOutput({
   const isStreamingRef = useRef(isStreaming);
   const isViewportActiveRef = useRef(isViewportActive);
   const latestTurnIdRef = useRef(latestTurnId);
+  const isViewportSuspendedRef = useRef(isViewportSuspended);
+  isViewportSuspendedRef.current = isViewportSuspended;
   const followFrameRef = useRef<number | null>(null);
   const previousSessionIdRef = useRef(activeSessionId);
   const previousLatestTurnIdRef = useRef<string | null>(latestTurnId);
@@ -619,7 +624,7 @@ export function useFlowChatFollowOutput({
   /** Move the viewport to whatever the follow state currently owns. */
   const applyFollowTarget = useCallback(() => {
     const scroller = scrollerRef.current;
-    if (!scroller) {
+    if (!scroller || isViewportSuspendedRef.current()) {
       return;
     }
 
@@ -811,6 +816,8 @@ export function useFlowChatFollowOutput({
       ? 'not-following'
       : !isViewportActiveRef.current
         ? 'viewport-inactive'
+        : isViewportSuspendedRef.current()
+          ? 'viewport-suspended'
         : document.hidden
           ? 'document-hidden'
           : (!isStreamingRef.current && settleFramesRef.current <= 0)
@@ -846,6 +853,7 @@ export function useFlowChatFollowOutput({
     if (
       followFrameRef.current === null &&
       isFollowingOutputRef.current &&
+      !isViewportSuspendedRef.current() &&
       (isStreamingRef.current || settleFramesRef.current > 0)
     ) {
       followFrameRef.current = requestAnimationFrame(runFollowFrame);
@@ -1110,7 +1118,7 @@ export function useFlowChatFollowOutput({
     const watch = tailWatchRef.current;
     if (!watch) return;
     const scroller = scrollerRef.current;
-    if (!scroller) return;
+    if (!scroller || isViewportSuspendedRef.current()) return;
 
     const scrollTopPx = scroller.scrollTop;
     const contentEndPx = readContentEndScrollTop(scroller);
@@ -1201,6 +1209,7 @@ export function useFlowChatFollowOutput({
    * down.
    */
   const scheduleFollowToLatest = useCallback(() => {
+    if (isViewportSuspendedRef.current()) return;
     if (!isFollowingOutputRef.current || !isViewportActiveRef.current) {
       /*
        * This is the transcript's content-change signal — the resize observer
@@ -1250,6 +1259,7 @@ export function useFlowChatFollowOutput({
   }, [enterFollowOutput]);
 
   const handleScroll = useCallback(() => {
+    if (isViewportSuspendedRef.current()) return;
     // Scroll events describe the resulting viewport position, but do not prove user intent.
     // Layout growth and virtualizer remeasurement can emit them while output follow still owns
     // the viewport. Explicit wheel, touch, and keyboard handlers release that ownership instead.
@@ -1311,7 +1321,7 @@ export function useFlowChatFollowOutput({
    */
   const handleViewportResize = useCallback((input: ViewportResizeInput) => {
     const scroller = scrollerRef.current;
-    if (!scroller || isFollowingOutputRef.current) {
+    if (!scroller || isViewportSuspendedRef.current() || isFollowingOutputRef.current) {
       // Follow re-asserts its own target through `scheduleFollowToLatest`.
       return;
     }
