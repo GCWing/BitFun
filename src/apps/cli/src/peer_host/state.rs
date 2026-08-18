@@ -1073,6 +1073,11 @@ pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
 mod tests {
     use std::collections::HashSet;
 
+    use bitfun_agent_runtime::sdk::{
+        PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
+        PermissionRequestSourceKind,
+    };
+
     use super::{aggregate_cancellation_results, PeerTurnKey, PeerTurnTracker};
 
     fn register_background_child(
