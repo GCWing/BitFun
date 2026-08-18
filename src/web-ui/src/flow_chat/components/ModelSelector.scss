@@ -122,6 +122,38 @@
     }
   }
 
+  &__tooltip {
+    display: grid;
+    gap: 4px;
+    min-width: min(220px, calc(100vw - 48px));
+  }
+
+  &__tooltip-row {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  &__tooltip-label {
+    color: var(--bf-appearance-token-color-text-muted);
+    white-space: nowrap;
+  }
+
+  &__tooltip-value {
+    min-width: 0;
+    color: var(--bf-appearance-token-color-text-primary);
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  &__tooltip-warning {
+    margin-top: 3px;
+    padding-top: 6px;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-appearance-token-color-warning);
+  }
+
   &__chevron {
     color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
