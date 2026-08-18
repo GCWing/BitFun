@@ -41,8 +41,15 @@ export class AccountDeviceCommandTransport implements RemoteCommandTransport {
     this.targetDeviceId = targetDeviceId;
   }
 
-  async send<T extends CommandStatusResponse>(command: RemoteCommand, _timeoutMs: number = 120000): Promise<T> {
-    return this.client.deviceRpc<T>(this.relayUrl, this.session, this.targetDeviceId, command);
+  /**
+   * The default is the relay's read timeout, not the room transport's 30 s: an
+   * account command crosses one more hop and the desktop may be waking a cold
+   * process. It was previously ignored outright, so a caller asking for a
+   * shorter deadline silently got two minutes — which is the whole wait a
+   * failed device switch used to cost.
+   */
+  async send<T extends CommandStatusResponse>(command: RemoteCommand, timeoutMs: number = 130000): Promise<T> {
+    return this.client.deviceRpc<T>(this.relayUrl, this.session, this.targetDeviceId, command, timeoutMs);
   }
 
   reset(): void {

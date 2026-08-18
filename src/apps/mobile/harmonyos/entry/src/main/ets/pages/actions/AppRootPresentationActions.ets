@@ -46,7 +46,7 @@ export interface RemoteHomePresentationActions {
   readonly refresh: () => void;
   readonly showWorkspaces: () => void;
   readonly showAssistants: () => void;
-  readonly selectWorkspace: (path: string) => void;
+  readonly selectWorkspace: (path: string, deviceId?: string) => void;
   readonly selectAssistant: (path: string) => void;
   readonly cancelWorkspace: () => void;
   readonly cancelAssistant: () => void;
@@ -59,8 +59,10 @@ export interface RemoteHomePresentationActions {
   readonly create: (agentType: string) => void;
   readonly createInPlace: (agentType: string) => void;
   readonly createAssistant: () => void;
-  readonly createInWorkspace: (path: string, agentType: string) => void;
-  readonly createInWorkspaceInPlace: (path: string, agentType: string) => void;
+  readonly createInWorkspace: (path: string, agentType: string, deviceId?: string) => void;
+  readonly createInWorkspaceInPlace: (path: string, agentType: string, deviceId?: string) => void;
+  readonly toggleDirectoryDevice: (deviceId: string) => void;
+  readonly retryDirectoryDevice: (deviceId: string) => void;
   readonly openSession: (session: RemoteSession) => void;
   readonly openSessionInPlace: (session: RemoteSession) => void;
   readonly deleteSession: (session: RemoteSession) => void;
@@ -127,7 +129,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       selectAssistant: () => {}, cancelWorkspace: () => {}, cancelAssistant: () => {}, queryChanged: () => {},
       search: () => {}, loadMore: () => {}, reconnect: () => {}, disconnect: () => {}, clearPairing: () => {},
       create: () => {}, createInPlace: () => {}, createAssistant: () => {}, createInWorkspace: () => {},
-      createInWorkspaceInPlace: () => {}, openSession: () => {}, openSessionInPlace: () => {}, deleteSession: () => {}
+      createInWorkspaceInPlace: () => {}, toggleDirectoryDevice: () => {}, retryDirectoryDevice: () => {},
+      openSession: () => {}, openSessionInPlace: () => {}, deleteSession: () => {}
     },
     onRemoteCreate: {
       back: () => {}, toggleDevices: () => {}, toggleWorkspaces: () => {}, selectDevice: () => {},

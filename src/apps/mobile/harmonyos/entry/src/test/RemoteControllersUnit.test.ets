@@ -1298,13 +1298,43 @@ export default function remoteControllersUnitTest() {
           openedSessions.push(session);
         });
 
-      expect(client.createRequests[0]).assertEqual('code::');
+      expect(client.createRequests[0]).assertEqual('code:::');
       expect(created?.sessionId || '').assertEqual('created-session');
       expect(activeSessions.length).assertEqual(2);
       expect(activeSessions[0].sessionId).assertEqual('created-session');
       expect(activeSessions[1].sessionId).assertEqual('opened-session');
       expect(activeSessions[1].workspacePath).assertEqual('/workspace');
       expect(openedSessions.length).assertEqual(2);
+    });
+
+    it('forwards an explicit workspace path without switching the host workspace', 0, async () => {
+      const client = new FakeRemoteSessionClient();
+      client.createdSession = {
+        sessionId: 'created-in-other',
+        title: 'Created Session',
+        workspacePath: '/other',
+        agentType: 'code'
+      };
+      const controller = new RemoteSessionController(client, 8, {
+        onSessions: (_sessions: RemoteSession[], _hasMore: boolean) => {},
+        onActiveSession: (_session: SessionSummary) => {},
+        onStatusText: (_statusText: string) => {},
+        onBusy: (_isBusy: boolean) => {},
+        onLoading: (_isLoading: boolean) => {},
+        onSessionError: (_errorText: string) => {},
+        onReconnecting: () => {},
+        onConnected: () => {},
+        onConnectionFailed: (_err: Object) => {},
+        onStartHeartbeat: () => {}
+      });
+
+      const created = await controller.create(
+        'code', false, true, async (_session: SessionSummary): Promise<void> => {},
+        '', '', '/other'
+      );
+
+      expect(client.createRequests[0]).assertEqual('code:::/other');
+      expect(created?.workspacePath || '').assertEqual('/other');
     });
 
     it('returns no created session when the remote create command fails', 0, async () => {
@@ -2365,6 +2395,29 @@ export default function remoteControllersUnitTest() {
       session('chat-2', 'Assistant workspace', 'code', '/workspace/notes'),
       session('gone-1', 'Archived', 'code', '/workspace/bitfun', 'archived')
     ];
+
+    it('does not invent a workspace group from a name without a path', 0, () => {
+      const named = inputs([]);
+      named.workspaceName = 'BitFun';
+      named.workspacePath = '';
+      named.recentWorkspaces = [];
+      const projection = SessionListProjector.project(named);
+      expect(projection.projects.length).assertEqual(0);
+    });
+
+    it('does not turn a disconnected placeholder into a workspace group', 0, () => {
+      const disconnected = inputs([
+        session('code-1', 'Cached', 'code', '/workspace/bitfun')
+      ]);
+      disconnected.workspaceName = '未连接';
+      disconnected.workspacePath = '';
+      disconnected.recentWorkspaces = [
+        { path: '/workspace/bitfun', name: 'BitFun', lastOpened: '', workspaceKind: 'normal' }
+      ];
+      const projection = SessionListProjector.project(disconnected);
+      expect(projection.projects.map((item: RecentWorkspaceEntry) => item.name).join(','))
+        .assertEqual('BitFun');
+    });
 
     it('splits chats from project sessions in one pass', 0, () => {
       const projection = SessionListProjector.project(inputs(all));

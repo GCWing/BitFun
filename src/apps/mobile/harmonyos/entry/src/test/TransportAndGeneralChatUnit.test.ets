@@ -86,7 +86,20 @@ import {
 import { VoiceInputCallbacks, VoiceInputService } from '../main/ets/services/VoiceInputService';
 import { AppShellState } from '../main/ets/pages/state/AppShellState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
-import { SettingsController } from '../main/ets/pages/viewmodel/SettingsController';
+import {
+  CloudAccountSettingsDependencies,
+  CloudAccountSettingsHooks,
+  SettingsController
+} from '../main/ets/pages/viewmodel/SettingsController';
+import {
+  CloudAccountClient,
+  CloudAccountDevice,
+  CloudAccountSession
+} from '../main/ets/services/CloudAccountClient';
+import {
+  CloudAccountSessionStore,
+  PersistedCloudAccountSession
+} from '../main/ets/services/CloudAccountSessionStore';
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import {
@@ -113,6 +126,7 @@ import {
   CreateSessionOptions,
   RemoteImageContext,
   RemoteQuestionAnswerPayload,
+  InitialSyncResult,
   RemoteModelCatalog,
   ReadFileResult,
   RemoteSession,
@@ -269,6 +283,110 @@ class InMemorySettingsConfigStore extends GeneralChatConfigStore {
 
   async activeAccessToken(): Promise<string> {
     return this.accessTokenResult;
+  }
+}
+
+/** Answers the handshake for every device except the ones named unreachable. */
+class ScriptedAccountSessionManager extends RemoteSessionManager {
+  readonly unreachable: Set<string> = new Set<string>();
+  readonly dialled: string[] = [];
+  resets: number = 0;
+
+  async connectAccountDevice(
+    _accountClient: CloudAccountClient,
+    _relayUrl: string,
+    session: CloudAccountSession,
+    targetDeviceId: string
+  ): Promise<InitialSyncResult> {
+    this.dialled.push(targetDeviceId);
+    if (this.unreachable.has(targetDeviceId)) {
+      throw new Error('目标桌面暂时不可用，请刷新设备列表后重试。');
+    }
+    return {
+      workspace: {
+        path: `/w/${targetDeviceId}`,
+        name: targetDeviceId,
+        hasWorkspace: true,
+        gitBranch: 'main',
+        workspaceKind: 'normal'
+      },
+      sessions: [],
+      hasMoreSessions: false,
+      authenticatedUserId: session.userId
+    };
+  }
+
+  reset(): void {
+    this.resets += 1;
+    super.reset();
+  }
+}
+
+/** HUKS and preferences are not reachable from a local unit run. */
+class InMemoryCloudAccountSessionStore extends CloudAccountSessionStore {
+  readonly saved: PersistedCloudAccountSession[] = [];
+
+  async save(session: PersistedCloudAccountSession): Promise<void> {
+    this.saved.push(session);
+  }
+}
+
+class AccountDeviceSwitchHarness {
+  readonly remoteState: RemotePageState = new RemotePageState();
+  readonly sessionManager: ScriptedAccountSessionManager = new ScriptedAccountSessionManager();
+  readonly sessionStore: InMemoryCloudAccountSessionStore = new InMemoryCloudAccountSessionStore();
+  heartbeatStarts: number = 0;
+  heartbeatStops: number = 0;
+  settingsClosings: number = 0;
+  readonly controller: SettingsController;
+
+  constructor() {
+    const hooks: CloudAccountSettingsHooks = {
+      deviceId: (): string => 'phone',
+      remoteAvailable: (): boolean => true,
+      invalidatePreview: (): void => {},
+      invalidateRemoteActivity: (): void => {},
+      invalidateRemoteConnection: (): void => {},
+      stopPolling: (): void => {},
+      stopHeartbeat: (): void => { this.heartbeatStops += 1; },
+      startHeartbeat: (): void => { this.heartbeatStarts += 1; },
+      resetTimeline: (): void => {},
+      resetKnownRemoteState: (): void => {},
+      clearCachedRemoteData: async (): Promise<void> => {},
+      closeSettings: (): void => { this.settingsClosings += 1; },
+      closeConnectSheet: (): void => {},
+      navigateRemoteHome: (): void => {},
+      loadRecentWorkspaces: async (): Promise<void> => {},
+      onAccountDevices: (_devices: CloudAccountDevice[]): void => {},
+      onBeforeControlTargetChange: (): void => {},
+      onControlTargetChanged: (): void => {}
+    };
+    const cloud: CloudAccountSettingsDependencies = {
+      client: new CloudAccountClient(),
+      sessionStore: this.sessionStore,
+      sessionManager: this.sessionManager,
+      remoteState: this.remoteState,
+      hooks
+    };
+    this.controller = new SettingsController(
+      new InMemorySettingsConfigStore(),
+      new GeneralChatPageState(),
+      {
+        probeConfiguration: async (
+          _apiUrl: string, _apiKey: string, _modelName: string
+        ): Promise<void> => {}
+      },
+      cloud
+    );
+    this.controller.applyCloudAccountSession(
+      { token: 't', userId: 'u', masterKey: new Uint8Array(32) },
+      'https://relay.example.com',
+      'someone'
+    );
+  }
+
+  device(deviceId: string): CloudAccountDevice {
+    return { deviceId, deviceName: deviceId, online: true };
   }
 }
 
@@ -904,6 +1022,57 @@ export default function transportAndGeneralChatUnitTest() {
       expect(state.apiUrl).assertEqual('https://chat.example.com');
       expect(state.conversation.selectedModelId).assertEqual('local-general-chat');
       expect(state.serviceState).assertEqual(GeneralChatServiceState.Ready);
+    });
+
+    it('puts the phone back on the previous desktop when a device switch fails', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      harness.sessionManager.unreachable.add('desk-b');
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
+      const heartbeatsAfterFirst = harness.heartbeatStarts;
+
+      let reported = '';
+      try {
+        await harness.controller.selectCloudAccountDevice(harness.device('desk-b'), false);
+      } catch (err) {
+        reported = err instanceof Error ? err.message : String(err);
+      }
+
+      // The failure is still the failure — restoring does not turn a switch
+      // that did not happen into a success.
+      expect(reported).assertEqual('目标桌面暂时不可用，请刷新设备列表后重试。');
+      expect(harness.remoteState.controlTargetDeviceId).assertEqual('desk-a');
+      expect(harness.remoteState.controlTargetType).assertEqual('account_device');
+      expect(harness.remoteState.connectionState).assertEqual('connected');
+      expect(harness.heartbeatStarts).assertEqual(heartbeatsAfterFirst + 1);
+      expect(harness.sessionManager.dialled.join(',')).assertEqual('desk-a,desk-b,desk-a');
+    });
+
+    it('gives up rather than looping when the desktop to restore is gone too', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
+      // Both machines are unreachable by the time the second tap lands.
+      harness.sessionManager.unreachable.add('desk-a');
+      harness.sessionManager.unreachable.add('desk-b');
+
+      let reported = '';
+      try {
+        await harness.controller.selectCloudAccountDevice(harness.device('desk-b'), false);
+      } catch (err) {
+        reported = err instanceof Error ? err.message : String(err);
+      }
+
+      expect(reported).assertEqual('目标桌面暂时不可用，请刷新设备列表后重试。');
+      expect(harness.remoteState.connectionState).assertEqual('failed');
+      // One restore attempt, not a chain of them.
+      expect(harness.sessionManager.dialled.join(',')).assertEqual('desk-a,desk-b,desk-a');
+    });
+
+    it('leaves the picker open when the switch was not made from one', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
+
+      expect(harness.settingsClosings).assertEqual(0);
     });
   });
 

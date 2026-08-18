@@ -16,6 +16,7 @@ import {
   ConversationLayoutRect
 } from '../policy/ConversationLayoutPolicy';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
+import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
 import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
 import { FilePreviewState } from '../state/FilePreviewState';
@@ -39,11 +40,7 @@ import {
 } from './remote/RemoteSurfaceHost';
 
 function safeFoldStatus(): display.FoldStatus {
-  try {
-    return display.getFoldStatus();
-  } catch (_err) {
-    return display.FoldStatus.FOLD_STATUS_UNKNOWN;
-  }
+  try { return display.getFoldStatus(); } catch (_err) { return display.FoldStatus.FOLD_STATUS_UNKNOWN; }
 }
 
 @ComponentV2
@@ -51,6 +48,7 @@ export struct AppRootPresentation {
   @Param shellState: AppShellState = new AppShellState();
   @Param navigationStack: NavPathStack = new NavPathStack();
   @Param remotePageState: RemotePageState = new RemotePageState();
+  @Param deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
   @Param remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
   @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
   @Param filePreviewState: FilePreviewState = new FilePreviewState();
@@ -180,6 +178,7 @@ export struct AppRootPresentation {
       route: this.shellState.activeRoute,
       shellState: this.shellState,
       remotePageState: this.remotePageState,
+      deviceDirectoryState: this.deviceDirectoryState,
       remoteCreateState: this.remoteCreateState,
       generalPageState: this.generalPageState,
       filePreviewState: this.filePreviewState,
@@ -472,6 +471,7 @@ export struct AppRootPresentation {
     AppSidebarSurface({
       shellState: this.shellState,
       remotePageState: this.remotePageState,
+      deviceDirectoryState: this.deviceDirectoryState,
       generalPageState: this.generalPageState,
       remoteSurfaceState: this.remoteSurfaceState,
       actions: this.actions,

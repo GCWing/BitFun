@@ -3,6 +3,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemoteLogger } from '../../services/RemoteLogger';
+import { stampRemoteSessionsDevice } from '../../services/RemoteSessionIdentity';
 import { RemoteUiState } from '../../services/RemoteUiState';
 import { AppRootHostPort } from '../host/AppRootHostAdapter';
 import { CONNECT_INTENT_SCAN } from '../state/AppShellState';
@@ -16,6 +17,14 @@ import {
   ConnectionState
 } from './AppRootRuntimeComposition';
 
+/**
+ * How stale an account device presence answer may be before returning to the
+ * foreground, or opening the sidebar, refetches it. Short enough that a
+ * desktop coming online is noticed in the same sitting, long enough that the
+ * two events firing together on a cold start cost one request, not three.
+ */
+const DEVICE_PRESENCE_MAX_AGE_MS: number = 15000;
+
 export class AppRootRuntime extends AppRootRuntimeComposition {
   constructor(host: AppRootHostPort) {
     super(host);
@@ -28,6 +37,14 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     await this.restoreCachedRemoteSessions();
     await this.generalChatBootstrapController.restore(this.host.context());
     await this.settingsController.initializeCloudAccount(this.host.context());
+    if (this.settingsController.hasCloudAccountSession()) {
+      try {
+        await this.settingsController.listCloudAccountDevices();
+        await this.deviceDirectoryViewModel.hydrateKnownDevices();
+      } catch (err) {
+        RemoteLogger.warn(`device directory restore failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     await this.settingsController.refreshModelCatalog();
     await this.restoreIdentity();
     await this.startWatchProvisioning();
@@ -54,10 +71,13 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     this.remoteActivityViewModel.resume();
     // Idempotent: covers the pairing that happened after the last cold start.
     void this.startWatchProvisioning();
+    void this.settingsController.refreshAccountDevicesIfStale(DEVICE_PRESENCE_MAX_AGE_MS);
+    this.settingsController.startPresencePolling(DEVICE_PRESENCE_MAX_AGE_MS);
   }
 
   onPageHide(): void {
     RemoteLogger.info(`page hide state=${(this.remotePageState.connectionState as ConnectionState)} route=${this.appShellViewModel.currentRoute()}`);
+    this.settingsController.stopPresencePolling();
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
     this.remotePageState.setBusy(false);
@@ -65,6 +85,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   aboutToDisappear(): void {
+    this.settingsController.stopPresencePolling();
     this.watchProvisionController.stop();
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
@@ -198,6 +219,11 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     await this.remoteWorkspaceViewModel.selectWorkspace(path);
   }
 
+  async selectWorkspaceOnDevice(path: string, deviceId?: string): Promise<void> {
+    await this.conversationController.ensureRemoteControlTarget(deviceId);
+    await this.selectWorkspace(path);
+  }
+
   async selectAssistant(path: string): Promise<void> {
     this.filePreviewController.close();
     await this.remoteWorkspaceViewModel.selectAssistant(path);
@@ -207,6 +233,9 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     this.host.animate(230, () => {
       this.appShellState.setSidebarVisible(true);
     });
+    // The device rows are only on screen from here, and a desktop that came
+    // online since the last look would otherwise stay grey.
+    void this.settingsController.refreshAccountDevicesIfStale(DEVICE_PRESENCE_MAX_AGE_MS);
   }
 
   closeAppSidebar(): void {
@@ -310,8 +339,12 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   applyDiscoveredWorkspaceSessions(all: RemoteSession[]): void {
     this.remoteWorkspaceSessions = all;
-    const current = this.remotePageState.sessions;
-    const extras = all.filter((item: RemoteSession) => item.workspacePath !== this.remotePageState.workspacePath);
+    const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
+    const current = stampRemoteSessionsDevice(this.remotePageState.sessions, deviceId);
+    const extras = stampRemoteSessionsDevice(
+      all.filter((item: RemoteSession) => item.workspacePath !== this.remotePageState.workspacePath),
+      deviceId
+    );
     this.publishRemoteSessions(this.mergeSessions(current, extras), this.remotePageState.hasMoreSessions);
   }
 
@@ -324,8 +357,15 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
    * app feel slower than it did without it.
    */
   publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void {
-    this.remotePageState.setSessions(sessions, hasMore);
-    this.remoteSessionListCache.save(sessions, hasMore);
+    const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
+    const stamped = stampRemoteSessionsDevice(sessions, deviceId);
+    this.remotePageState.setSessions(stamped, hasMore);
+    this.remoteSessionListCache.save(stamped, hasMore);
+    this.deviceDirectoryViewModel.captureLive(
+      deviceId,
+      this.remotePageState.recentWorkspaces,
+      stamped
+    );
   }
 
   /**
@@ -351,13 +391,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   mergeSessions(primary: RemoteSession[], extras: RemoteSession[]): RemoteSession[] {
-    const merged = primary.slice();
-    extras.forEach((item: RemoteSession) => {
-      if (!merged.some((existing: RemoteSession) => existing.id === item.id)) {
-        merged.push(item);
-      }
-    });
-    return merged;
+    return RemoteUiState.mergeSessions(primary, extras);
   }
 
   async toggleVoiceInput(): Promise<void> {
