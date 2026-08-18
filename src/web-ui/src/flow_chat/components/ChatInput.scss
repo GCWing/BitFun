@@ -414,7 +414,7 @@
           padding: 0 10px 0 8px;
           border-radius: 15px;
           background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
-          font-size: flow-type.$body-size;
+          font-size: flow-type.$control-size;
 
           &:hover,
           &[data-bf-state='open'] {
@@ -444,7 +444,7 @@
           max-height: 20px !important;
           overflow: hidden;
           line-height: var(--bf-appearance-token-flowchat-support-line-height);
-          font-size: flow-type.$body-size;
+          font-size: flow-type.$control-size;
           padding: 0 !important;
           width: 100%;
           // Allow clicks to reach the contenteditable in capsule mode
@@ -515,15 +515,15 @@
         // The pill owns the interaction boundary and background; the trigger
         // inside it is a plain segment so the pair does not read as two stacked
         // controls. Its resting boundary stays transparent. The label takes the
-        // input's own size: every line of text in the capsule speaks at one
-        // size, and body is the role the placeholder already claims.
+        // input's control size so every line of text in the capsule speaks at
+        // one size.
         .bitfun-model-selector__trigger {
           height: 28px;
           padding: 0 6px 0 11px;
           border: 0;
           border-radius: 14px;
           background: transparent;
-          font-size: flow-type.$body-size;
+          font-size: flow-type.$control-size;
           opacity: 1;
         }
 
@@ -575,7 +575,7 @@
     right: 0;
     pointer-events: none;
     color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 52%, transparent);
-    font-size: flow-type.$body-size;
+    font-size: flow-type.$control-size;
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
     white-space: nowrap;
     overflow: hidden;
@@ -810,7 +810,7 @@
     }
 
     &--multi-line {
-      // Max ~5 lines: 5 × (14px × 1.45) ≈ 101px + padding + action bar ≈ 160px
+      // Max ~5 lines: 5 × (13px × 1.5) ≈ 98px + padding + action bar ≈ 160px
       .bitfun-chat-input__input-area {
         min-height: 48px;
 
@@ -917,6 +917,10 @@
     overflow: visible;
     // Last line descenders + clearance above the action row (send is 28px tall in a short bar)
     padding-bottom: 4px;
+
+    .rich-text-input {
+      font-size: flow-type.$control-size;
+    }
   }
 
   &__image-strip {

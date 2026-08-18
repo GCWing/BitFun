@@ -581,7 +581,7 @@
 
 .session-usage-report-card__compact-overview {
   display: grid;
-  grid-template-columns: minmax(0, 0.97fr) minmax(0, 1.03fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   min-height: 145px;
   margin-top: 26px;
 }
@@ -624,13 +624,16 @@
 }
 
 .session-usage-report-card__compact-token-value {
+  max-width: 100%;
   margin-top: 15px;
+  overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
   font-size: 39px;
   font-variant-numeric: tabular-nums;
   font-weight: 670;
   letter-spacing: 0.01em;
   line-height: 0.98;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -697,7 +700,7 @@
 
 .session-usage-report-card__compact-metric {
   min-width: 0;
-  padding: 8px 12px 10px 29px;
+  padding: 8px 8px 10px 24px;
 }
 
 .session-usage-report-card__compact-metric:nth-child(odd) {
@@ -732,35 +735,38 @@
 .session-usage-report-card__compact-metric > .session-usage-report-card__metric-value {
   display: block;
   width: fit-content;
-  max-width: none;
+  max-width: calc(100% - 28px);
   margin: 5px 0 0 28px;
-  overflow: visible;
+  overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 21px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   line-height: 1.15;
   text-decoration: none;
+  text-overflow: ellipsis;
 }
 
 .session-usage-report-card__compact-metric > [data-tooltip] {
   display: block;
   width: fit-content;
-  max-width: none;
+  max-width: calc(100% - 28px);
   margin: 5px 0 0 28px;
+  overflow: hidden;
 }
 
 .session-usage-report-card__compact-metric > [data-tooltip] .session-usage-report-card__metric-value {
   display: block;
-  max-width: none;
+  max-width: 100%;
   margin: 0;
-  overflow: visible;
+  overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 21px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   line-height: 1.15;
   text-decoration: none;
+  text-overflow: ellipsis;
 }
 
 .session-usage-report-card__compact-metric--warning .session-usage-report-card__compact-metric-label svg,

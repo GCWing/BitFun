@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { act } from 'react';
+import { act, cloneElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,7 +51,15 @@ vi.mock('@/component-library', () => ({
   } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...rest}>{children}</button>
   ),
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Tooltip: ({
+    children,
+    content,
+  }: {
+    children: React.ReactElement;
+    content: React.ReactNode;
+  }) => cloneElement(children, {
+    'data-tooltip': typeof content === 'string' ? content : undefined,
+  } as React.HTMLAttributes<HTMLElement>),
 }));
 
 vi.mock('@/tools/git/hooks/useGitState', () => ({
@@ -214,7 +222,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
           workspaceLabel="BitFun"
           worktreeControl={{ enabled: false, locked: false, onChange: vi.fn() }}
           permissionControl={{ mode: 'auto', onChange: vi.fn() }}
-          usageReport={{ visible: true, percentage: 12, onOpen: vi.fn() }}
+          usageReport={{ visible: true, currentTokens: 480, maxTokens: 4000, onOpen: vi.fn() }}
         />
       );
     });
@@ -238,6 +246,8 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     // The ring carries the reading on its own; the number is not repeated.
     expect(next?.querySelector('[data-bf-part="usageAction"]')).not.toBeNull();
     expect(next?.querySelector('.bitfun-chat-input-workspace-strip__usage-ring')).not.toBeNull();
+    expect(next?.querySelector('[data-bf-part="usageAction"]')?.getAttribute('data-tooltip'))
+      .toBe('480/4K 12%');
     expect(container.textContent).not.toContain('12%');
 
     // The harness and the reasoning strength live in the capsule now, so the
@@ -648,7 +658,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
           repositoryPath="D:/workspace/BitFun"
           workspaceLabel="BitFun"
           permissionControl={{ mode: 'acp' }}
-          usageReport={{ visible: true, percentage: 42, onOpen: vi.fn() }}
+          usageReport={{ visible: true, currentTokens: 1680, maxTokens: 4000, onOpen: vi.fn() }}
         />
       );
     });

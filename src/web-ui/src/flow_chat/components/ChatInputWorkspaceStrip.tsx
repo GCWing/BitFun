@@ -39,6 +39,7 @@ import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPos
 import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
 import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
+import { formatCompactTokenCount } from '../utils/tokenUsageDisplay';
 import './ChatInputWorkspaceStrip.scss';
 
 export interface ChatInputWorkspaceStripProps {
@@ -49,7 +50,8 @@ export interface ChatInputWorkspaceStripProps {
   /** Session usage report (/usage) — context ring on the right rail. */
   usageReport?: {
     visible: boolean;
-    percentage?: number;
+    currentTokens: number;
+    maxTokens: number;
     onOpen: () => void;
   };
   /** Native-tool permission mode for this session, exposed as a compact strip control. */
@@ -388,7 +390,16 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         ? t('chatInput.permissionMode.currentSessionOverride', { mode: permissionModeLabel })
       : t('chatInput.permissionMode.current', { mode: permissionModeLabel });
   const PermissionIcon = PERMISSION_MODE_ICONS[permissionDisplayMode];
-  const usagePercentage = Math.min(100, Math.max(0, usageReport?.percentage ?? 0));
+  const usageCurrentTokens = Number.isFinite(usageReport?.currentTokens)
+    ? Math.max(0, Math.round(usageReport?.currentTokens ?? 0))
+    : 0;
+  const usageMaxTokens = Number.isFinite(usageReport?.maxTokens)
+    ? Math.max(0, Math.round(usageReport?.maxTokens ?? 0))
+    : 0;
+  const usagePercentage = usageMaxTokens > 0
+    ? Math.min(100, Math.max(0, Math.round((usageCurrentTokens / usageMaxTokens) * 100)))
+    : 0;
+  const usageTooltip = `${formatCompactTokenCount(usageCurrentTokens)}/${formatCompactTokenCount(usageMaxTokens)} ${usagePercentage}%`;
   const usageDash = `${((usagePercentage / 100) * 62.83).toFixed(2)} 62.83`;
 
   const handleWorktreeToggle = () => {
@@ -877,7 +888,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           </div>
         ) : null}
         {showUsage ? (
-          <Tooltip content={t('usage.runtime.tooltip')}>
+          <Tooltip content={usageTooltip}>
             <button
               data-bf-component="chat-input-workspace-strip"
               data-bf-part="usageAction"

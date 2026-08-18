@@ -6629,9 +6629,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           effectiveTargetSessionId && effectiveTargetSession && caps.usageReport
             ? {
                 visible: true,
-                percentage: tokenUsage.max > 0
-                  ? Math.min(100, Math.max(0, Math.round((tokenUsage.current / tokenUsage.max) * 100)))
-                  : 0,
+                currentTokens: tokenUsage.current,
+                maxTokens: tokenUsage.max,
                 onOpen: handleToolbarUsageReport,
               }
             : undefined
