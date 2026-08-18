@@ -1501,6 +1501,12 @@ where
         Ok(messages) => messages,
         Err(message) => return RemoteResponse::Error { message },
     };
+    // A history invalidation has no active projection to append against. Send
+    // a replacement snapshot so an equal-count message whose content grew at
+    // completion is repaired on remote controllers.
+    let message_snapshot = tracker
+        .is_history_snapshot_required()
+        .then(|| all_chat_messages.clone());
     let total_msg_count = all_chat_messages.len();
     let new_messages = all_chat_messages
         .into_iter()
@@ -1512,6 +1518,7 @@ where
         current_version,
         new_messages,
         total_msg_count,
+        message_snapshot,
         model_catalog_delta.catalog,
     )
 }
@@ -2425,6 +2432,8 @@ pub enum RemoteResponse {
         #[serde(skip_serializing_if = "Option::is_none")]
         total_msg_count: Option<usize>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        message_snapshot: Option<Vec<ChatMessage>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         active_turn: Option<ActiveTurnSnapshot>,
         #[serde(skip_serializing_if = "Option::is_none")]
         model_catalog: Box<Option<RemoteModelCatalog>>,
@@ -2687,6 +2696,7 @@ struct TrackerState {
     round_index: usize,
     active_items: Vec<ChatMessageItem>,
     persistence_dirty: bool,
+    history_snapshot_required: bool,
     linked_subagent_sessions: HashMap<String, String>,
 }
 
@@ -2744,6 +2754,7 @@ impl RemoteSessionStateTracker {
                 round_index: 0,
                 active_items: Vec::new(),
                 persistence_dirty: true,
+                history_snapshot_required: false,
                 linked_subagent_sessions: HashMap::new(),
             }),
             event_tx,
@@ -2880,7 +2891,23 @@ impl RemoteSessionStateTracker {
     }
 
     pub fn mark_persistence_clean(&self) {
-        self.state.write().unwrap().persistence_dirty = false;
+        let mut state = self.state.write().unwrap();
+        state.persistence_dirty = false;
+        state.history_snapshot_required = false;
+    }
+
+    fn mark_persistence_clean_if_version(&self, observed_version: u64) -> bool {
+        let mut state = self.state.write().unwrap();
+        if self.version() != observed_version {
+            return false;
+        }
+        state.persistence_dirty = false;
+        state.history_snapshot_required = false;
+        true
+    }
+
+    pub fn is_history_snapshot_required(&self) -> bool {
+        self.state.read().unwrap().history_snapshot_required
     }
 
     fn invalidate_history_projection(&self) {
@@ -2893,6 +2920,25 @@ impl RemoteSessionStateTracker {
         state.active_items.clear();
         state.session_state = "idle".to_string();
         state.persistence_dirty = true;
+        state.history_snapshot_required = true;
+        self.bump_version();
+    }
+
+    /// Handle the per-Turn durable fence. Unlike a full history invalidation,
+    /// this must not drop the live projection: the fence can land after the
+    /// next Turn already started (queued sends, slow persistence), and wiping
+    /// that Turn's stream would blank remote controllers until the next
+    /// direct event. Only the settled Turn's persisted repair is requested.
+    fn require_settled_history_snapshot(&self, settled_turn_id: &str) {
+        let mut state = self.state.write().unwrap();
+        if state.turn_id.as_deref() == Some(settled_turn_id) {
+            // The tracker missed this Turn's terminal event (fences exist
+            // because terminal chunks can be lost); settle it from the fence.
+            state.turn_status = "completed".to_string();
+            state.session_state = "idle".to_string();
+        }
+        state.persistence_dirty = true;
+        state.history_snapshot_required = true;
         drop(state);
         self.bump_version();
     }
@@ -3290,7 +3336,6 @@ impl RemoteSessionStateTracker {
                 state.round_index = 0;
                 state.session_state = "running".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
             }
             AE::DialogTurnCompleted { turn_id, .. } if is_direct => {
@@ -3298,7 +3343,6 @@ impl RemoteSessionStateTracker {
                 state.turn_status = "completed".to_string();
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
                 let _ = self.event_tx.send(TrackerEvent::TurnCompleted {
                     turn_id: turn_id.clone(),
@@ -3309,7 +3353,6 @@ impl RemoteSessionStateTracker {
                 state.turn_status = "failed".to_string();
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
                 let _ = self.event_tx.send(TrackerEvent::TurnFailed {
                     turn_id: turn_id.clone(),
@@ -3321,7 +3364,6 @@ impl RemoteSessionStateTracker {
                 state.turn_status = "cancelled".to_string();
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
-                drop(state);
                 self.bump_version();
                 let _ = self.event_tx.send(TrackerEvent::TurnCancelled {
                     turn_id: turn_id.clone(),
@@ -3339,9 +3381,12 @@ impl RemoteSessionStateTracker {
                 drop(state);
                 self.bump_version();
             }
-            AE::SessionHistoryChanged { .. } if is_direct => {
-                self.invalidate_history_projection();
-            }
+            AE::SessionHistoryChanged {
+                settled_turn_id, ..
+            } if is_direct => match settled_turn_id {
+                Some(turn_id) => self.require_settled_history_snapshot(turn_id),
+                None => self.invalidate_history_projection(),
+            },
             AE::SessionTitleGenerated { title, .. } if is_direct => {
                 let mut state = self.state.write().unwrap();
                 state.title = title.clone();
@@ -3449,6 +3494,7 @@ pub fn remote_no_change_poll_response(version: u64) -> RemoteResponse {
         title: None,
         new_messages: None,
         total_msg_count: None,
+        message_snapshot: None,
         active_turn: None,
         model_catalog: Box::new(None),
     }
@@ -3469,6 +3515,7 @@ pub fn remote_snapshot_poll_response(
         title: non_empty_title(title),
         new_messages: None,
         total_msg_count: None,
+        message_snapshot: None,
         active_turn,
         model_catalog: Box::new(model_catalog),
     }
@@ -3479,6 +3526,7 @@ pub fn remote_persisted_poll_response(
     version: u64,
     new_messages: Vec<ChatMessage>,
     total_msg_count: usize,
+    message_snapshot: Option<Vec<ChatMessage>>,
     model_catalog: Option<RemoteModelCatalog>,
 ) -> RemoteResponse {
     let turn_finished = tracker.is_turn_finished();
@@ -3495,20 +3543,25 @@ pub fn remote_persisted_poll_response(
             tracker.snapshot_active_turn()
         } else {
             tracker.finalize_completed_turn();
-            tracker.mark_persistence_clean();
+            tracker.mark_persistence_clean_if_version(version);
             None
         }
     } else {
         tracker.snapshot_active_turn()
     };
 
-    let (send_messages, send_total) = if turn_finished && !has_assistant_msg {
-        (None, None)
+    let (send_messages, send_total, send_snapshot) = if let Some(snapshot) = message_snapshot {
+        tracker.mark_persistence_clean_if_version(version);
+        // Keep the additive delta for older clients that do not know the
+        // optional replacement field yet.
+        (Some(new_messages), Some(total_msg_count), Some(snapshot))
+    } else if turn_finished && !has_assistant_msg {
+        (None, None, None)
     } else {
         if !new_messages.is_empty() || active_turn.is_none() {
-            tracker.mark_persistence_clean();
+            tracker.mark_persistence_clean_if_version(version);
         }
-        (Some(new_messages), Some(total_msg_count))
+        (Some(new_messages), Some(total_msg_count), None)
     };
 
     let session_state = tracker.session_state();
@@ -3520,6 +3573,7 @@ pub fn remote_persisted_poll_response(
         title: non_empty_title(title),
         new_messages: send_messages,
         total_msg_count: send_total,
+        message_snapshot: send_snapshot,
         active_turn,
         model_catalog: Box::new(model_catalog),
     }
@@ -3995,6 +4049,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn initial_remote_poll_remains_an_additive_delta() {
+        let message = ChatMessage {
+            id: "message-visible".to_string(),
+            role: "user".to_string(),
+            content: "visible".to_string(),
+            timestamp: "1".to_string(),
+            metadata: None,
+            tools: None,
+            thinking: None,
+            items: None,
+            images: None,
+        };
+        let host = FakePollHost {
+            tracker: Arc::new(RemoteSessionStateTracker::new("session-a".to_string())),
+            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            messages: vec![message.clone()],
+            history_read_count: Arc::new(AtomicUsize::new(0)),
+        };
+
+        let response = handle_remote_poll_command(
+            &host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: 0,
+                known_msg_count: 0,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::SessionPoll {
+                version: 0,
+                changed: true,
+                session_state: Some("idle".to_string()),
+                title: None,
+                new_messages: Some(vec![message]),
+                total_msg_count: Some(1),
+                message_snapshot: None,
+                active_turn: None,
+                model_catalog: Box::new(None),
+            }
+        );
+    }
+
+    #[tokio::test]
     async fn history_change_invalidates_clean_poll_cache_and_reports_a_shorter_projection() {
         let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
         tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
@@ -4027,9 +4128,13 @@ mod tests {
 
         tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
             session_id: "session-a".to_string(),
+            settled_turn_id: None,
         });
 
         assert_eq!(tracker.version(), previous_version + 1);
+        assert!(tracker.is_persistence_dirty());
+        assert!(tracker.is_history_snapshot_required());
+        assert!(!tracker.mark_persistence_clean_if_version(previous_version));
         assert!(tracker.is_persistence_dirty());
         assert!(tracker.snapshot_active_turn().is_none());
         let response = handle_remote_poll_command(
@@ -4053,11 +4158,72 @@ mod tests {
                 title: None,
                 new_messages: Some(Vec::new()),
                 total_msg_count: Some(1),
+                message_snapshot: Some(vec![ChatMessage {
+                    id: "message-visible".to_string(),
+                    role: "user".to_string(),
+                    content: "visible".to_string(),
+                    timestamp: "1".to_string(),
+                    metadata: None,
+                    tools: None,
+                    thinking: None,
+                    items: None,
+                    images: None,
+                }]),
                 active_turn: None,
                 model_catalog: Box::new(None),
             }
         );
         assert!(!tracker.is_persistence_dirty());
+        assert!(!tracker.is_history_snapshot_required());
+    }
+
+    #[tokio::test]
+    async fn per_turn_durable_fence_requests_a_snapshot_without_dropping_a_newer_live_turn() {
+        let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-next".to_string(),
+            turn_index: 2,
+            user_input: "queued follow-up".to_string(),
+            original_user_input: None,
+            user_message_metadata: None,
+        });
+        tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-next".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "live".to_string(),
+        });
+        tracker.mark_persistence_clean();
+        let previous_version = tracker.version();
+
+        // The previous turn's durable fence lands after the next turn already
+        // started streaming: the live projection must survive.
+        tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session-a".to_string(),
+            settled_turn_id: Some("turn-previous".to_string()),
+        });
+
+        assert_eq!(tracker.version(), previous_version + 1);
+        assert!(tracker.is_persistence_dirty());
+        assert!(tracker.is_history_snapshot_required());
+        assert_eq!(tracker.session_state(), "running");
+        let live_turn = tracker
+            .snapshot_active_turn()
+            .expect("live turn projection must survive the previous turn's fence");
+        assert_eq!(live_turn.turn_id, "turn-next");
+
+        // A fence for the tracked turn itself means the terminal event was
+        // lost; the fence settles the projection instead of leaving a phantom
+        // running turn.
+        tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session-a".to_string(),
+            settled_turn_id: Some("turn-next".to_string()),
+        });
+        assert_eq!(tracker.session_state(), "idle");
+        assert!(tracker.is_history_snapshot_required());
     }
 
     #[derive(Default)]

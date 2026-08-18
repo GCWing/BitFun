@@ -2731,17 +2731,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await
     }
 
-    /// Ensure the completed/failed/cancelled turn is persisted to the workspace
-    /// session storage. If the frontend already saved a richer version
-    /// during streaming, we only update the final status; otherwise we create
-    /// a minimal record with the user message so the turn is never lost.
-    /// Safety-net persistence: only creates a minimal record when the frontend
-    /// has not saved anything yet.  The frontend's PersistenceModule is the
-    /// authoritative writer for turn content (model rounds, text, tools, etc.)
-    /// and final status.  This function must NOT overwrite frontend-managed
-    /// data, because the spawned task always runs before the frontend receives
-    /// the DialogTurnCompleted event via the transport layer, and the existing
-    /// disk data from debounced saves may have incomplete model rounds.
+    /// Safety-net persistence for a Turn that has no record at all. Rich native
+    /// completion is committed separately from the Runtime generation journal;
+    /// streaming frontend checkpoints may add display metadata but are not the
+    /// authority for terminal text. This fallback therefore never overwrites
+    /// an existing record, which could be either a projected checkpoint or the
+    /// completed Runtime record.
     async fn finalize_turn_in_workspace(
         session_id: &str,
         turn_id: &str,
@@ -2919,6 +2914,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .await
             }
         };
+        let persistence_succeeded = persistence_result.is_ok();
         if let Err(error) = persistence_result {
             error!(
                 "Failed to complete dialog turn: session_id={}, turn_id={}, error={}",
@@ -2963,6 +2959,29 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             {
                 error!(
                     "Failed to emit recovered DialogTurnCompleted event: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+        }
+
+        if persistence_succeeded && session_manager.should_persist_session_id(session_id) {
+            // Terminal chunks are a low-latency projection; this later event
+            // is the durable fence. Remote controllers use it to replace an
+            // equal-count partial assistant message with the completed
+            // persisted transcript instead of assuming message count is a
+            // content revision.
+            if let Err(error) = event_queue
+                .enqueue(
+                    AgenticEvent::SessionHistoryChanged {
+                        session_id: session_id.to_string(),
+                        settled_turn_id: Some(turn_id.to_string()),
+                    },
+                    Some(EventPriority::Normal),
+                )
+                .await
+            {
+                error!(
+                    "Failed to emit completed session history change: session_id={}, turn_id={}, error={}",
                     session_id, turn_id, error
                 );
             }
@@ -14205,8 +14224,8 @@ mod tests {
     };
     use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
-        restrict_recovered_permission_mode, ExecutionEngine, ExecutionEngineConfig, RoundExecutor,
-        StreamProcessor,
+        restrict_recovered_permission_mode, ExecutionEngine, ExecutionEngineConfig,
+        ExecutionResult, FinishReason, RoundExecutor, StreamProcessor,
     };
     use crate::agentic::goal_mode::thread_goal_patch;
     use crate::agentic::persistence::PersistenceManager;
@@ -15747,6 +15766,72 @@ mod tests {
 
     fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
         test_coordinator_with_max_active_sessions(100)
+    }
+
+    #[tokio::test]
+    async fn completed_persisted_turn_emits_a_durable_history_fence() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let session = session_manager
+            .create_session(
+                "Durable completion".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish".to_string(),
+                Some("turn-durable-fence".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start turn");
+        let message = Message::assistant("complete response".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-final".to_string());
+
+        ConversationCoordinator::persist_completed_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &turn_id,
+            &ExecutionResult {
+                final_message: message.clone(),
+                total_rounds: 1,
+                success: true,
+                new_messages: vec![message],
+                finish_reason: FinishReason::Complete,
+                total_tools: 0,
+                duration_ms: 1,
+                partial_recovery_reason: None,
+                effective_finish_reason: "complete".to_string(),
+                has_final_response: true,
+            },
+            None,
+        )
+        .await;
+
+        let events = coordinator.event_queue.dequeue_batch(10).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            AgenticEvent::SessionHistoryChanged {
+                session_id,
+                settled_turn_id: Some(settled_turn_id),
+            } if session_id == &session.session_id && settled_turn_id == &turn_id
+        )));
+        session_manager
+            .delete_session_by_id(&session.session_id)
+            .await
+            .expect("clean up persisted test session");
     }
 
     async fn create_two_turn_session(

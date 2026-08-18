@@ -61,12 +61,28 @@ invariant 2.
   checkpoint, or snapshot of that Turn may write it.
 - A **settled** Turn is owned by the persisted record. No live event may
   write it.
-- Ownership transfers **once**, on the Turn's terminal event, driven by
-  position — never by inspecting what is on screen.
+- A terminal event starts client settlement, but it is not proof that the
+  terminal record is durable. Ownership transfers **once**, at the Runtime's
+  post-persistence history fence, driven by position — never by inspecting
+  what is on screen.
 
 This is why history and live events cannot race: they are never both
 authoritative for the same Turn. The persisted checkpoint of an executing Turn
 is identity only; it names the Turn and carries none of its content.
+
+Native Runtime completion is rebuilt from the complete generation journal under
+the same per-Session mutation lock used by projected saves. A projected
+checkpoint may contribute additive display metadata, but it cannot shorten
+canonical text or thinking, remove a round or tool result, or turn a settled
+record back into an executing one. Externally projected sessions such as ACP
+remain owned by their external projection.
+
+After the terminal record is committed, `SessionHistoryChanged` is the durable
+fence. Local and Peer Device surfaces re-read the affected tail Turn. Remote
+Connect polling sends an optional authoritative `message_snapshot`, because an
+already-counted assistant message can grow from a streamed prefix to its full
+persisted content without changing message count. New clients accept the
+snapshot; older clients continue to use the existing additive fields.
 
 ### 3. Identity is `(surface, session)` by construction
 
@@ -129,7 +145,8 @@ They are why `snapshotDropsProjectedTurnContent` and
   its work. Such a read holds no position for the content it omitted, so
   writing the Turn from it is lossy rather than advancing. Closing this needs
   the read to report its own completeness; until then "would this write lose
-  content" is the only question available.
+  content" is the only question available. The comparison includes content
+  prefix progress and completed tool results, not only round or item counts.
 
 Deleting either guard without first closing its gap reintroduces a real defect,
 not just a test failure.
