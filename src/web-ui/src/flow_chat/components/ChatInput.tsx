@@ -1067,10 +1067,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const harnessProfilePolicy = useMemo(
     () => resolveChatInputHarnessProfilePolicy({
       isAssistantWorkspace,
+      sessionMode: effectiveTargetSession?.mode ?? effectiveTargetSession?.config.agentType,
       isAcpTargetSession,
       isSubagentInputTarget,
     }),
-    [isAcpTargetSession, isAssistantWorkspace, isSubagentInputTarget],
+    [
+      effectiveTargetSession?.config.agentType,
+      effectiveTargetSession?.mode,
+      isAcpTargetSession,
+      isAssistantWorkspace,
+      isSubagentInputTarget,
+    ],
   );
   const globalPermissionMode = permissionModeFromConfig(toolPermissionConfig);
   // Session selection wins over the user-level default, matching how the

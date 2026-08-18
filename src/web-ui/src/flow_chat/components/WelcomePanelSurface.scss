@@ -1,0 +1,5 @@
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
+
+.welcome-panel__dropdown {
+  @include surfaces.floating-surface;
+}

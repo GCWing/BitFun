@@ -1,15 +1,11 @@
 @use '@/component-library/styles/tokens.scss' as *;
 
 .bitfun-create-branch-dialog {
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: $size-radius-base;
   padding: $size-gap-5;
   min-width: 520px;
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 8px 16px var(--bf-appearance-token-color-overlay-black-30);
 
   &__header {
     display: flex;

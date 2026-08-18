@@ -17,6 +17,7 @@ import { useAgentIdentityDocument } from '@/app/scenes/my-agent/useAgentIdentity
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './WelcomePanel.css';
+import './WelcomePanelSurface.scss';
 
 const log = createLogger('WelcomePanel');
 

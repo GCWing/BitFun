@@ -50,6 +50,12 @@ interface SessionTreePopoverProps {
   hasActiveDescendants?: boolean;
   onSelectSession?: (selection: SessionTreeSelection) => void;
   onCancelSession?: (selection: SessionTreeSelection) => Promise<boolean>;
+  /** Render the tree inside a parent-owned popover instead of creating another trigger and surface. */
+  embedded?: boolean;
+  /** Whether an embedded tree is active and should load live data. */
+  open?: boolean;
+  /** Ask the parent-owned popover to close after a selection or keyboard dismissal. */
+  onRequestClose?: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
@@ -86,9 +92,12 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   hasActiveDescendants = false,
   onSelectSession,
   onCancelSession,
+  embedded = false,
+  open = false,
+  onRequestClose,
   t,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [keyboardNavigationOpen, setKeyboardNavigationOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<SessionLineageSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,6 +116,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const requestGenerationRef = useRef(0);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const isOpen = embedded ? open : internalIsOpen;
 
   const refreshSnapshot = useCallback(async () => {
     if (!sessionId) return;
@@ -144,7 +154,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
 
   useEffect(() => {
     requestGenerationRef.current += 1;
-    setIsOpen(false);
+    setInternalIsOpen(false);
     setKeyboardNavigationOpen(false);
     setSnapshot(null);
     setLoadFailed(false);
@@ -168,14 +178,18 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
     if (source === 'pointer') {
       setKeyboardNavigationOpen(false);
     }
-    if (source === 'keyboard' || source === 'selection' || focusIsInside) {
+    if (!embedded && (source === 'keyboard' || source === 'selection' || focusIsInside)) {
       triggerRef.current?.focus();
     }
 
-    setIsOpen(false);
+    if (embedded) {
+      onRequestClose?.();
+    } else {
+      setInternalIsOpen(false);
+    }
     setOpenActionSessionId(null);
     setActionMenuPosition(null);
-  }, []);
+  }, [embedded, onRequestClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -197,6 +211,21 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    if (embedded) {
+      const handleEmbeddedPointerDown = (event: MouseEvent) => {
+        const target = event.target as Node;
+        if (
+          openActionSessionId &&
+          !actionMenuRef.current?.contains(target) &&
+          !actionMenuAnchorRef.current?.contains(target)
+        ) {
+          setOpenActionSessionId(null);
+          setActionMenuPosition(null);
+        }
+      };
+      document.addEventListener('mousedown', handleEmbeddedPointerDown);
+      return () => document.removeEventListener('mousedown', handleEmbeddedPointerDown);
+    }
     const handlePointerDown = (event: MouseEvent) => {
       if (
         !containerRef.current?.contains(event.target as Node) &&
@@ -218,7 +247,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [closePopover, isOpen]);
+  }, [closePopover, embedded, isOpen, openActionSessionId]);
 
   const updateActionMenuPosition = useCallback(() => {
     const anchor = actionMenuAnchorRef.current;
@@ -267,7 +296,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
 
   const descendantCount = countSessionLineageDescendants(tree);
   const panelLayout = useAnchoredPopoverPosition({
-    open: isOpen,
+    open: isOpen && !embedded,
     anchorRef: triggerRef,
     popoverRef: panelRef,
     preferredPlacement: 'bottom',
@@ -450,7 +479,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                     <SubagentAvatar
                       identity={identity}
                       name={identityName}
-                      size={28}
+                      size={embedded ? 24 : 28}
                       status={node.lifecycle}
                     />
                   )
@@ -527,6 +556,76 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   };
 
   const panelLabel = t('flowChatHeader.agentTree');
+  const renderedTreeNodes = tree
+    ? embedded
+      ? tree.children.map(child => renderNode(child, 0))
+      : renderNode(tree, 0)
+    : null;
+
+  const treeBody = (
+    <div
+      className="session-tree-popover__body"
+      data-bf-component="flow-chat-header"
+      data-bf-part="sessionTreeBody"
+    >
+      {tree ? <div role="tree">{renderedTreeNodes}</div> : null}
+      {isLoading && !tree ? (
+        <div
+          className="session-tree-popover__state"
+          data-bf-component="flow-chat-header"
+          data-bf-part="sessionTreeState"
+          data-bf-state="loading"
+          aria-live="polite"
+        >
+          <DotMatrixLoader size="small" />
+          <span>{t('flowChatHeader.agentTreeLoading')}</span>
+        </div>
+      ) : null}
+      {!isLoading && !loadFailed && tree && descendantCount === 0 ? (
+        <div
+          className="session-tree-popover__state"
+          data-bf-component="flow-chat-header"
+          data-bf-part="sessionTreeState"
+          data-bf-state="empty"
+        >
+          {t('flowChatHeader.agentTreeEmpty')}
+        </div>
+      ) : null}
+      {loadFailed ? (
+        <div
+          className="session-tree-popover__state session-tree-popover__state--error"
+          data-bf-component="flow-chat-header"
+          data-bf-part="sessionTreeState"
+          data-bf-state="error"
+        >
+          <span>{t('flowChatHeader.agentTreeLoadFailed')}</span>
+          <IconButton
+            variant="ghost"
+            size="xs"
+            onClick={() => void refreshSnapshot()}
+            tooltip={t('flowChatHeader.agentTreeRetry')}
+            aria-label={t('flowChatHeader.agentTreeRetry')}
+          >
+            <RefreshCw size={13} />
+          </IconButton>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div
+        className="session-tree-popover session-tree-popover--embedded"
+        ref={containerRef}
+        data-bf-component="flow-chat-header"
+        data-bf-part="sessionTree"
+        data-testid="flowchat-header-session-tree-content"
+      >
+        {treeBody}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -554,7 +653,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           const nextOpen = !isOpen;
           if (nextOpen) {
             setKeyboardNavigationOpen(event.detail === 0);
-            setIsOpen(true);
+            setInternalIsOpen(true);
           } else {
             if (event.detail !== 0) {
               setKeyboardNavigationOpen(false);
@@ -605,54 +704,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
             <span>{panelLabel}</span>
             <span>{descendantCount + (tree ? 1 : 0)}</span>
           </div>
-          <div
-            className="session-tree-popover__body"
-            data-bf-component="flow-chat-header"
-            data-bf-part="sessionTreeBody"
-          >
-            {tree ? <div role="tree">{renderNode(tree, 0)}</div> : null}
-            {isLoading && !tree ? (
-              <div
-                className="session-tree-popover__state"
-                data-bf-component="flow-chat-header"
-                data-bf-part="sessionTreeState"
-                data-bf-state="loading"
-                aria-live="polite"
-              >
-                <DotMatrixLoader size="small" />
-                <span>{t('flowChatHeader.agentTreeLoading')}</span>
-              </div>
-            ) : null}
-            {!isLoading && !loadFailed && tree && descendantCount === 0 ? (
-              <div
-                className="session-tree-popover__state"
-                data-bf-component="flow-chat-header"
-                data-bf-part="sessionTreeState"
-                data-bf-state="empty"
-              >
-                {t('flowChatHeader.agentTreeEmpty')}
-              </div>
-            ) : null}
-            {loadFailed ? (
-              <div
-                className="session-tree-popover__state session-tree-popover__state--error"
-                data-bf-component="flow-chat-header"
-                data-bf-part="sessionTreeState"
-                data-bf-state="error"
-              >
-                <span>{t('flowChatHeader.agentTreeLoadFailed')}</span>
-                <IconButton
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => void refreshSnapshot()}
-                  tooltip={t('flowChatHeader.agentTreeRetry')}
-                  aria-label={t('flowChatHeader.agentTreeRetry')}
-                >
-                  <RefreshCw size={13} />
-                </IconButton>
-              </div>
-            ) : null}
-          </div>
+          {treeBody}
           </div>,
           getAppearanceOverlayHost(),
         )}

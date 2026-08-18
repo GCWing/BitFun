@@ -1,0 +1,43 @@
+/**
+ * Shared overlay-surface chrome.
+ *
+ * Choose the surface from interaction semantics, not its dimensions. The two
+ * public surface mixins share one private chrome owner so product styles cannot
+ * drift on border, radius, or shadow. Floating cards use a translucent elevated
+ * background; dialogs use the opaque elevated background:
+ * - floating-surface: non-modal transient cards, including anchored menus,
+ *   popovers, notifications, and status hints
+ * - dialog-surface: modal or focus-trapping large surfaces
+ *
+ * Content cards, tooltips, and fullscreen surfaces intentionally do not
+ * consume these contracts.
+ */
+@use './tokens' as tokens;
+
+@mixin -popup-card-chrome($background, $backdrop-blur: false) {
+  border: 1px solid var(--bf-appearance-token-border-base);
+  border-radius: tokens.$size-radius-lg;
+  background: $background;
+  box-shadow: var(--bf-appearance-token-shadow-lg);
+  @if $backdrop-blur {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
+@mixin floating-surface($backdrop-blur: true) {
+  @include -popup-card-chrome(
+    $background: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-bg-elevated) 94%,
+      transparent
+    ),
+    $backdrop-blur: $backdrop-blur
+  );
+}
+
+@mixin dialog-surface {
+  @include -popup-card-chrome(
+    $background: var(--bf-appearance-token-color-bg-elevated)
+  );
+}

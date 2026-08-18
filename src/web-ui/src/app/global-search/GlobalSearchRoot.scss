@@ -14,14 +14,6 @@
     max-width: min(760px, calc(100vw - 48px));
     height: min(640px, calc(100vh - 48px));
     max-height: min(640px, calc(100vh - 48px));
-    border-color: var(--bf-appearance-token-border-subtle);
-    border-radius: 10px;
-    background: color-mix(
-      in srgb,
-      var(--bf-appearance-token-color-bg-primary) 50%,
-      var(--bf-appearance-token-color-bg-scene)
-    );
-    box-shadow: 0 18px 48px var(--bf-appearance-token-color-overlay-black-30);
     animation: none;
   }
 
@@ -610,7 +602,6 @@
       max-width: calc(100vw - 16px);
       height: calc(100vh - 16px);
       max-height: calc(100vh - 16px);
-      border-radius: 14px;
     }
   }
 

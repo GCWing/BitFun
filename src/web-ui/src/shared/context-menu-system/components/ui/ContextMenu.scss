@@ -1,22 +1,20 @@
  
 
 @use '@/component-library/styles/tokens.scss' as *;
+@use '@/component-library/styles/overlay-surfaces' as surfaces;
 
 
 
 // Surface + motion aligned with .bitfun-nav-panel__workspace-menu / __workspace-item-menu-popover
 .context-menu {
+  @include surfaces.floating-surface;
+
   --context-menu-transform-origin: top left;
 
   position: fixed;
   z-index: $z-context-menu;
   min-width: 180px;
   max-width: min(320px, calc(100vw - 24px));
-
-  background: var(--bf-appearance-token-color-bg-elevated);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: $size-radius-base;
-  box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
 
   padding: $size-gap-1 0;
   box-sizing: border-box;
@@ -32,18 +30,6 @@
   font-family: var(--bf-appearance-token-font-family-sans);
   font-size: var(--bf-appearance-token-font-size-sm);
   line-height: 1.4;
-
-  :root[data-bf-appearance-mode='light'] & {
-    box-shadow:
-      0 1px 2px var(--bf-appearance-token-color-overlay-slate-08),
-      0 10px 28px -8px var(--bf-appearance-token-color-overlay-slate-12);
-  }
-
-  :root[data-bf-appearance-mode='dark'] & {
-    box-shadow:
-      0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 4%, transparent),
-      0 10px 28px -8px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.55);
-  }
 
   &[data-state='entered'] {
     opacity: 1;
@@ -263,7 +249,6 @@
   .context-menu {
     border-width: 2px;
     border-color: var(--bf-appearance-token-border-strong);
-    box-shadow: var(--bf-appearance-token-shadow-xl);
   }
 
   .context-menu-item:hover:not(.disabled) {

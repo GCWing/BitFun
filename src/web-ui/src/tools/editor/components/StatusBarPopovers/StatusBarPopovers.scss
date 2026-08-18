@@ -4,21 +4,17 @@
  */
 
  @use '@/component-library/styles/tokens' as *;
+ @use '@/component-library/styles/overlay-surfaces' as surfaces;
 
  $popover-z: 360;
  $popover-gap: 4px;
- $popover-radius: 6px;
- $popover-shadow: 0 4px 16px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35);
-
  .status-bar-popover {
+   @include surfaces.floating-surface;
+
    position: fixed;
    z-index: $popover-z;
    min-width: 200px;
    max-width: 320px;
-   background: var(--bf-appearance-token-color-bg-elevated);
-   border: 1px solid var(--bf-appearance-token-border-subtle);
-   border-radius: $popover-radius;
-   box-shadow: $popover-shadow;
    font-size: 12px;
    font-family: $font-family-sans;
    color: var(--bf-appearance-token-color-text-primary);

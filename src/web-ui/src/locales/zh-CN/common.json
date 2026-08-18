@@ -518,7 +518,6 @@
       "emptyProjects": "暂无项目",
       "emptyAssistants": "暂无个人助理",
       "emptySessionGroups": "暂无项目或助理",
-      "primaryAssistant": "主助理",
       "closeFailed": "关闭工作区失败",
       "createAssistantFailed": "新建个人助理失败",
       "deleteAssistantFailed": "删除个人助理失败",

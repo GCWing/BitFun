@@ -201,10 +201,6 @@
   min-width: 210px;
   max-width: min(300px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
-  background: var(--bf-appearance-token-color-bg-elevated);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: calc(var(--bf-appearance-token-flowchat-card-radius) + 2px);
-  box-shadow: 0 8px 24px var(--bf-appearance-token-color-overlay-black-15);
   overflow-y: auto;
   color: var(--bf-appearance-token-color-text-primary);
   font-family: var(--bf-appearance-token-font-family-sans);

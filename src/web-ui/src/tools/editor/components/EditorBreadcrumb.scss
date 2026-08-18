@@ -4,6 +4,7 @@
  */
 
 @use '@/component-library/styles/tokens' as *;
+@use '@/component-library/styles/overlay-surfaces' as surfaces;
 
 // Variables
 $_breadcrumb-height: 24px;
@@ -85,12 +86,10 @@ $_dropdown-width: 220px;
 
 // Dropdown Menu (Portal rendered)
 .editor-breadcrumb-dropdown {
+  @include surfaces.floating-surface;
+
   width: $_dropdown-width;
   max-height: $_dropdown-max-height;
-  background: var(--bf-appearance-token-color-bg-elevated);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 6px;
-  box-shadow: var(--bf-appearance-token-shadow-base);
   z-index: 10000;
   overflow: hidden;
   animation: breadcrumb-dropdown-in 0.12s ease-out;

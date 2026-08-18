@@ -1,4 +1,5 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
+@use '../../../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../../../../component-library/styles/flowchat-markdown-code-vars' as markdownCode;
 @use '../../../../component-library/styles/flowchat-markdown-table-vars' as markdownTable;
 @use '../../styles/markdown-editor-layout' as markdownLayout;
@@ -473,47 +474,10 @@
   }
 
   .m-editor-inline-ai__panel {
+    @include surfaces.floating-surface;
+
     width: min(26rem, calc(100vw - #{$size-gap-8}));
     padding: 10px 10px 8px;
-    border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-    border-radius: 12px;
-    background: var(--bf-appearance-token-color-bg-tertiary);
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    box-shadow:
-      0 8px 24px color-mix(in srgb, var(--bf-appearance-token-color-static-black) 35%, transparent),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08),
-      inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-04);
-    transition:
-      transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-      box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .m-editor-inline-ai:hover .m-editor-inline-ai__panel {
-    transform: translateY(-4px);
-    box-shadow:
-      0 16px 40px color-mix(in srgb, var(--bf-appearance-token-color-static-black) 45%, transparent),
-      0 0 28px var(--bf-appearance-token-color-accent-100),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12),
-      inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-04);
-  }
-
-  :root[data-bf-appearance-mode='light'] &,
-  :root[data-bf-appearance-mode='light'] &,
-  .light & {
-    .m-editor-inline-ai__panel {
-      border-color: var(--bf-appearance-token-color-overlay-slate-12);
-      box-shadow:
-        0 8px 24px var(--bf-appearance-token-color-overlay-slate-08),
-        inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 85%, transparent);
-    }
-
-    .m-editor-inline-ai:hover .m-editor-inline-ai__panel {
-      box-shadow:
-        0 14px 36px var(--bf-appearance-token-color-overlay-slate-12),
-        0 0 24px var(--bf-appearance-token-glass-blue-subtle),
-        inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-95);
-    }
   }
 
   .m-editor-inline-ai__composer {

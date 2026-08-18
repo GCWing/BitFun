@@ -4,7 +4,6 @@ import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
 import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
 import { useI18n } from '@/infrastructure/i18n';
-import { DEFAULT_CARD_GRADIENT } from '@/shared/utils/cardGradients';
 import './MiniAppCard.scss';
 
 interface MiniAppCardProps {
@@ -24,9 +23,6 @@ interface MiniAppCardProps {
   onDelete: (id: string) => void;
   onStop?: (id: string) => void;
 }
-
-const MINIAPP_CARD_GRADIENT_RUNNING =
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, transparent) 0%, color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent) 100%)';
 
 const MiniAppCard: React.FC<MiniAppCardProps> = ({
   app,
@@ -73,7 +69,6 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
         .join(' ')}
       style={{
         '--surface-stagger-index': index,
-        '--miniapp-card-gradient': isRunning ? MINIAPP_CARD_GRADIENT_RUNNING : DEFAULT_CARD_GRADIENT,
       } as React.CSSProperties}
       onClick={handleOpenDetails}
       role="button"

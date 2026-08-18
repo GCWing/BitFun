@@ -1,5 +1,6 @@
 export { bitfunDarkPalette } from './dark';
 export { bitfunLightPalette } from './light';
+export { bitfunMonochromePalette } from './monochrome';
 export { bitfunMidnightPalette } from './midnight';
 export { bitfunChinaStylePalette } from './chinaStyle';
 export { bitfunChinaNightPalette } from './chinaNight';
@@ -9,6 +10,7 @@ export { bitfunTokyoNightPalette } from './tokyoNight';
 
 import { bitfunDarkPalette } from './dark';
 import { bitfunLightPalette } from './light';
+import { bitfunMonochromePalette } from './monochrome';
 import { bitfunMidnightPalette } from './midnight';
 import { bitfunChinaStylePalette } from './chinaStyle';
 import { bitfunChinaNightPalette } from './chinaNight';
@@ -22,6 +24,7 @@ export const DEFAULT_DARK_APPEARANCE_ID: AppearancePaletteId = 'bitfun-dark';
 
 export const builtinAppearancePalettes: readonly AppearancePalette[] = Object.freeze([
   bitfunLightPalette,
+  bitfunMonochromePalette,
   bitfunSlatePalette,
   bitfunDarkPalette,
   bitfunMidnightPalette,

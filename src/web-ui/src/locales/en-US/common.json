@@ -518,7 +518,6 @@
       "emptyProjects": "No projects yet",
       "emptyAssistants": "No personal assistants",
       "emptySessionGroups": "No projects or assistants yet",
-      "primaryAssistant": "Primary",
       "closeFailed": "Failed to close workspace",
       "createAssistantFailed": "Failed to create personal assistant",
       "deleteAssistantFailed": "Failed to delete personal assistant",

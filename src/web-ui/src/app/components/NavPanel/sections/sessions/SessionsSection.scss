@@ -6,6 +6,7 @@
  */
 
 @use '../../../../../component-library/styles/tokens.scss' as *;
+@use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
 
 .bitfun-nav-panel {
@@ -200,7 +201,7 @@
       }
 
       &.is-active {
-        background: transparent;
+        background: var(--bf-appearance-token-element-bg-soft);
       }
     }
   }
@@ -474,6 +475,7 @@
 
   &__inline-item-menu-popover {
     @include nav-font.nav-panel-font-token-scope;
+    @include surfaces.floating-surface;
 
     position: fixed;
     width: max-content;
@@ -483,10 +485,6 @@
     overflow-x: hidden;
     overflow-y: auto;
     padding: $size-gap-1 0;
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
     z-index: 10000;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -796,7 +794,7 @@
     }
 
     &.is-active {
-      background: transparent;
+      background: var(--bf-appearance-token-element-bg-soft);
       box-shadow: none;
     }
   }
@@ -822,9 +820,6 @@
   }
 
   &__inline-item-menu-popover {
-    border-color: var(--bf-appearance-token-border-medium);
-    border-radius: $size-radius-lg;
-    box-shadow: 0 14px 42px -12px var(--bf-appearance-token-color-overlay-black-30);
     transform-origin: top right;
     animation: bitfun-session-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
@@ -900,6 +895,11 @@
   &__inline-item-label {
     font-weight: 400;
     line-height: 1.25;
+  }
+
+  &__inline-item.is-active &__inline-item-label {
+    color: var(--bf-appearance-token-color-text-primary);
+    font-weight: 600;
   }
 
   &__inline-item-assistant-name,

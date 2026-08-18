@@ -1,4 +1,6 @@
 @use '../../component-library/styles/tokens' as tokens;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '../typography' as flow-type;
 
 .bitfun-harness-selector {
   position: relative;
@@ -24,7 +26,7 @@
   background: transparent;
   color: var(--bf-appearance-token-color-text-secondary);
   font: inherit;
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-size: flow-type.$control-size;
   font-weight: 500;
   white-space: nowrap;
   text-align: left;
@@ -89,6 +91,8 @@
 // A plain three-row list: density mark, name plus the promise the gear makes,
 // and a trailing state.
 .bitfun-harness-selector__menu {
+  @include surfaces.floating-surface;
+
   position: fixed;
   z-index: tokens.$z-popover;
   box-sizing: border-box;
@@ -99,13 +103,9 @@
   min-width: 252px;
   max-width: min(320px, calc(100vw - 16px));
   padding: 5px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: var(--bf-appearance-token-size-radius-base);
-  background: var(--bf-appearance-token-color-bg-elevated);
-  box-shadow: var(--bf-appearance-token-shadow-lg);
   color: var(--bf-appearance-token-color-text-primary);
   font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-size: flow-type.$control-size;
   user-select: none;
 }
 
@@ -160,7 +160,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-size: flow-type.$support-size;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -170,7 +170,7 @@
   display: inline-flex;
   align-items: center;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-size: flow-type.$meta-size;
 
   svg {
     color: var(--bf-appearance-token-color-accent-500);

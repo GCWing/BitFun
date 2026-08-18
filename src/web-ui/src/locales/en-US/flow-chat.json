@@ -1310,6 +1310,14 @@
     "searchClose": "Close search",
     "searchOpen": "Search messages",
     "jumpToCurrentTurn": "Jump to Turn {{turn}}",
+    "sessionOverview": "Session overview",
+    "sessionOverviewActive": "Session overview, activity in progress",
+    "sessionOverviewAgentsUnavailable": "No active session",
+    "sessionOverviewAgentsActive": "Agent work in progress",
+    "sessionOverviewAgentsIdle": "View the Agent session tree",
+    "sessionOverviewBackgroundRunning": "{{count}} running",
+    "sessionOverviewBackgroundFinished": "{{count}} recently finished",
+    "sessionOverviewPullRequests": "Open workspace pull requests",
     "agentTree": "Agents",
     "agentTreeLoading": "Loading Agent tree...",
     "agentTreeEmpty": "No subagents in this session",
@@ -1330,8 +1338,10 @@
       "error": "$t(shared:statuses.failed)",
       "idle": "Idle"
     },
+    "backgroundCommandOverview": "Background terminals",
     "backgroundCommands": "Background commands ({{count}})",
     "backgroundCommandEmpty": "No background commands",
+    "backgroundTerminalEmpty": "No background terminals",
     "backgroundCommandUntitled": "Background command",
     "backgroundCommandSession": "Session #{{id}}",
     "backgroundCommandStatusRunning": "Active",
@@ -1342,7 +1352,13 @@
     "backgroundCommandStopping": "Stopping command",
     "backgroundCommandStopAll": "Stop all",
     "backgroundCommandStopFailed": "Failed to stop background command.",
-    "pullRequests": "Pull requests"
+    "pullRequests": "Pull requests",
+    "pullRequestCount": "{{count}} pull requests",
+    "pullRequestEmpty": "No pull requests",
+    "pullRequestLoading": "Loading pull requests...",
+    "pullRequestNotGitRepository": "This workspace is not a Git repository",
+    "pullRequestWorkspaceUnavailable": "No active workspace",
+    "pullRequestLoadFailed": "Unable to load pull requests. Select to retry."
   },
   "subagentIdentity": {
     "names": {

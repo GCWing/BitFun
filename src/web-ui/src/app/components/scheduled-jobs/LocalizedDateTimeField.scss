@@ -1,4 +1,5 @@
 @use '../../../component-library/styles/tokens.scss' as *;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .bf-datetime-field {
   position: relative;
@@ -14,6 +15,8 @@
 }
 
 .bf-datetime-picker {
+  @include surfaces.floating-surface;
+
   position: fixed;
   z-index: 9999;
   width: 268px;
@@ -22,12 +25,6 @@
   flex-direction: column;
   gap: $size-gap-2;
   padding: $size-gap-3;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: $size-radius-lg;
-  // Opaque elevated surface, matching the nav workspace menu. A translucent
-  // element background let the form behind it read through the grid.
-  background: var(--bf-appearance-token-color-bg-elevated);
-  box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
 
   &__head {
     display: flex;

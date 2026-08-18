@@ -38,17 +38,19 @@ describe('status track layout', () => {
     expect(stylesheet).toMatch(/&__next \{[\s\S]*?flex: 0 0 auto;/);
   });
 
-  it('keeps one text size across both rails', () => {
+  it('keeps passive context aligned and promotes consequential controls', () => {
     const stylesheet = readWorkspaceStripStylesheet();
 
     expect(stylesheet).toContain(
-      'font-size: var(--bf-appearance-token-flowchat-font-size-xs);\n  line-height:',
+      'font-size: flow-type.$support-size;\n  line-height:',
     );
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(/&__branch \{[\s\S]*?font-size: inherit;/);
-    expect(stylesheet).toMatch(/&__permission-trigger \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(
-      /&__usage-btn \{[\s\S]*?font-size: var\(--bf-appearance-token-flowchat-font-size-xs\);/,
+      /&__permission-trigger \{[\s\S]*?font-size: flow-type\.\$control-size;/,
+    );
+    expect(stylesheet).toMatch(
+      /&__usage-btn \{[\s\S]*?font-size: flow-type\.\$support-size;/,
     );
   });
 
@@ -108,6 +110,14 @@ describe('status track layout', () => {
     expect(stylesheet).toContain('.bitfun-model-selector__ctx-usage {');
     expect(stylesheet).toContain('.bitfun-reasoning-preset-selector__trigger {');
     expect(stylesheet).toContain('padding-bottom: 30px;');
+  });
+
+  it('keeps the model pair borderless at rest and reveals its boundary on interaction', () => {
+    const stylesheet = readChatInputStylesheet();
+
+    expect(stylesheet).toMatch(
+      /\.bitfun-model-selector \{[\s\S]*?border: 1px solid transparent;[\s\S]*?&:hover,[\s\S]*?border-color: var\(--bf-appearance-token-border-medium\);/,
+    );
   });
 
   it('expresses Harness intensity by shape so the gauge survives a narrow composer', () => {

@@ -21,6 +21,7 @@ const ALLOWED_THEMES = new Set([
   'system',
   'bitfun-dark',
   'bitfun-light',
+  'bitfun-monochrome',
   'bitfun-midnight',
   'bitfun-china-style',
   'bitfun-china-night',

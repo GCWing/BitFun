@@ -4,6 +4,7 @@
  */
 
 @use '../../../component-library/styles/tokens' as tokens;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -53,6 +54,8 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-session-menu__dropdown {
+  @include surfaces.floating-surface;
+
   --session-menu-entry-y: -4px;
   position: fixed;
   box-sizing: border-box;
@@ -61,10 +64,6 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-medium);
-  border-radius: var(--bf-appearance-token-size-radius-base);
-  box-shadow: var(--bf-appearance-token-shadow-xl);
   z-index: tokens.$z-popover;
   animation: session-menu-appear 0.2s $session-menu-timing;
   transform-origin: top left;

@@ -2,6 +2,7 @@
  * Select dropdown component styles
  */
 @use '../../styles/tokens.scss' as tokens;
+@use '../../styles/overlay-surfaces' as surfaces;
 
 .select {
   position: relative;
@@ -50,14 +51,10 @@
     background: var(--bf-appearance-token-color-bg-secondary);
     border-style: solid;
     border-color: var(--bf-appearance-token-border-medium);
-    border-bottom-color: transparent;
-    border-radius: var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm) 0 0;
   }
 
   &--open.select--placement-top &__trigger {
-    border-bottom-color: var(--bf-appearance-token-border-medium);
-    border-top-color: transparent;
-    border-radius: 0 0 var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm);
+    border-color: var(--bf-appearance-token-border-medium);
   }
 
   &--disabled {
@@ -241,18 +238,15 @@
   }
 
   &__dropdown {
+    @include surfaces.floating-surface;
+
     --select-motion-y: -2px;
     position: fixed;
     box-sizing: border-box;
     max-width: calc(100vw - 16px);
     max-height: min(240px, calc(100vh - 16px));
-    background: var(--bf-appearance-token-color-bg-secondary);
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
-    border: 1px solid var(--bf-appearance-token-border-medium);
-    border-top: none;
-    border-radius: 0 0 var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm);
-    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-40);
     z-index: tokens.$z-popover;
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -295,11 +289,6 @@
     &--top {
       --select-motion-y: 2px;
       transform-origin: center bottom;
-      border-top: 1px solid var(--bf-appearance-token-border-medium);
-      border-bottom: none;
-      border-radius: var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm) 0 0;
-      box-shadow: 0 -4px 12px var(--bf-appearance-token-color-overlay-black-40);
-
       &::before {
         top: auto;
         bottom: 0;

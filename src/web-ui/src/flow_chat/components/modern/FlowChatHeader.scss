@@ -1,6 +1,8 @@
 /* FlowChat header styling aligned with side panel headers. */
 
 @use '../../../component-library/styles/tokens' as *;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '../../typography' as flow-type;
 
 .flowchat-header {
   display: flex;
@@ -31,13 +33,13 @@
     }
   }
 
-  &__background-command-nav {
+  &__session-overview {
     position: relative;
     display: flex;
     align-items: center;
   }
 
-  &__background-command-nav-button {
+  &__session-overview-trigger {
     flex: 0 0 auto;
 
     &:not(:disabled):hover,
@@ -45,25 +47,34 @@
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
     }
 
-    &--has-commands {
+    &--has-activity {
       color: color-mix(in srgb, var(--bf-appearance-token-color-success) 86%, var(--bf-appearance-token-color-text-primary));
 
       &:not(:disabled):hover,
-      &.flowchat-header__background-command-nav-button--active {
+      &.flowchat-header__session-overview-trigger--active {
         color: var(--bf-appearance-token-color-success);
         background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
       }
     }
   }
 
-  &__background-command-nav-button-inner {
+  &__right-panel-trigger {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover,
+    &--active {
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+    }
+  }
+
+  &__session-overview-trigger-inner {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
-  &__background-command-status-dot {
+  &__session-overview-status-dot {
     position: absolute;
     right: -2px;
     bottom: -1px;
@@ -74,10 +85,10 @@
     box-shadow:
       0 0 0 1px var(--bf-appearance-token-color-bg-elevated),
       0 0 0 0 color-mix(in srgb, var(--bf-appearance-token-color-success) 42%, transparent);
-    animation: flowchat-header-background-command-pulse 1.45s ease-out infinite;
+    animation: flowchat-header-session-overview-pulse 1.45s ease-out infinite;
   }
 
-  @keyframes flowchat-header-background-command-pulse {
+  @keyframes flowchat-header-session-overview-pulse {
     0%,
     100% {
       transform: scale(1);
@@ -97,13 +108,12 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    &__background-command-status-dot {
+    &__session-overview-status-dot {
       animation: none;
     }
   }
 
   &__search-btn,
-  &__review-platform-btn,
   &__search-close {
     flex: 0 0 auto;
 
@@ -158,7 +168,7 @@
     flex-shrink: 0;
     padding: 0 3px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$support-size;
     white-space: nowrap;
 
     &:empty {
@@ -200,60 +210,222 @@
     }
   }
 
-  &__background-command-panel {
+  &__session-overview-panel {
+    @include surfaces.floating-surface;
+
     position: fixed;
-    width: min(340px, calc(100vw - 16px));
-    max-height: min(360px, calc(100vh - 16px));
+    width: min(360px, calc(100vw - 16px));
+    max-height: min(480px, calc(100vh - 16px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-lg;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, transparent);
-    box-shadow: var(--bf-appearance-token-shadow-lg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     z-index: $z-popover;
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
   }
 
-  &__background-command-panel-header {
+  &__session-overview-panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
     border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
-  &__background-command-panel-header-actions {
+  &__session-overview-panel-heading {
     display: flex;
     align-items: center;
     gap: $size-gap-1;
+    min-width: 0;
+  }
+
+  &__session-overview-panel-heading {
+    flex: 1;
+
+    > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__session-overview-list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 2px $size-gap-2 $size-gap-1;
+    scrollbar-gutter: stable;
+  }
+
+  &__session-overview-section {
+    min-width: 0;
+    padding: 2px 0 $size-gap-1;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  &__session-overview-section-header {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    min-height: 28px;
+    padding: 2px $size-gap-1;
+
+    &--action {
+      width: 100%;
+      border: 0;
+      border-radius: $size-radius-base;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background $motion-base $easing-standard;
+
+      &:hover:not(:disabled),
+      &:focus-visible {
+        outline: none;
+        background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      }
+
+      &:focus-visible {
+        box-shadow: 0 0 0 1.5px var(--bf-appearance-token-border-strong);
+      }
+
+      &:disabled {
+        cursor: default;
+      }
+    }
+  }
+
+  &__session-overview-section-title {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    flex: 1;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: flow-type.$control-size;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__session-overview-section-count {
     flex: 0 0 auto;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: flow-type.$support-size;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__session-overview-section-status {
+    width: 5px;
+    height: 5px;
+    flex: 0 0 5px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-success);
+  }
+
+  &__session-overview-section-actions {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+
+  &__session-overview-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-1;
+    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: $size-gap-2 $size-gap-3;
+    border: 0;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: flow-type.$support-size;
+    text-align: center;
+
+    &--action {
+      border-radius: $size-radius-base;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background $motion-base $easing-standard;
+
+      &:hover,
+      &:focus-visible {
+        outline: none;
+        background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      }
+    }
+
+    &--error {
+      color: var(--bf-appearance-token-color-error);
+    }
+  }
+
+  &__pull-request-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0 $size-gap-1;
+  }
+
+  &__pull-request-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    width: 100%;
+    min-height: 30px;
+    padding: 4px $size-gap-2;
+    border: 0;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: inherit;
+    font-size: flow-type.$control-size;
+    text-align: left;
+    cursor: pointer;
+    transition: background $motion-base $easing-standard;
+
+    > span {
+      min-width: 0;
+      flex: 1;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > svg {
+      flex: 0 0 auto;
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 1.5px var(--bf-appearance-token-border-strong);
+    }
   }
 
   &__background-command-list {
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    padding: $size-gap-1;
-    max-height: calc(6 * 48px);
-    scrollbar-gutter: stable;
-  }
-
-  &__background-command-empty-state {
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: $size-gap-3;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    text-align: center;
+    padding: 0 $size-gap-1;
   }
 
   &__background-command-list-item-button {
@@ -328,6 +500,8 @@
   }
 
   &__background-command-menu {
+    @include surfaces.floating-surface;
+
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
@@ -338,10 +512,6 @@
     flex-direction: column;
     gap: 2px;
     padding: 4px;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 98%, transparent);
-    box-shadow: var(--bf-appearance-token-shadow-base);
     z-index: 40;
 
     &--compact {
@@ -370,7 +540,7 @@
     border-radius: calc($size-radius-base - 2px);
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$control-size;
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
@@ -404,7 +574,7 @@
     align-items: center;
     gap: $size-gap-1;
     width: 100%;
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: flow-type.$control-size;
     color: inherit;
     white-space: nowrap;
     overflow: hidden;
@@ -425,7 +595,7 @@
 
   &__background-command-list-meta {
     width: 100%;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -468,14 +638,14 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$support-size;
     line-height: 1;
     white-space: nowrap;
   }
 
   &__message-text {
     min-width: 0;
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: flow-type.$control-size;
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;

@@ -13,6 +13,7 @@ $scene-gutter: clamp(28px, 4vw, 64px);
   min-height: 0;
   height: 100%;
   overflow: hidden;
+  background: var(--bf-appearance-token-color-bg-scene);
 
   // Layout glue: make the component-library Tabs fill the scene so each
   // pane's GalleryLayout keeps its own internal scroll.
@@ -22,9 +23,29 @@ $scene-gutter: clamp(28px, 4vw, 64px);
 
     > .bitfun-tabs__nav {
       flex: 0 0 auto;
-      padding: $size-gap-1 $scene-gutter 0;
-      background: var(--bf-appearance-token-color-bg-primary);
+      padding: $size-gap-3 $scene-gutter;
+      background: var(--bf-appearance-token-color-bg-scene);
       border-bottom-color: var(--bf-appearance-token-border-subtle);
+    }
+
+    > .bitfun-tabs__nav .bitfun-tabs__nav-list {
+      gap: $size-gap-2;
+    }
+
+    > .bitfun-tabs__nav .bitfun-tabs__tab {
+      margin-bottom: 0;
+      border-bottom: 0;
+      border-radius: $size-radius-base;
+      color: var(--bf-appearance-token-color-text-secondary);
+
+      &--active {
+        background: var(--bf-appearance-token-element-bg-soft);
+        color: var(--bf-appearance-token-color-text-primary);
+      }
+    }
+
+    > .bitfun-tabs__nav .bitfun-tabs__tab-button {
+      padding: $size-gap-2 $size-gap-3;
     }
 
     > .bitfun-tabs__content {

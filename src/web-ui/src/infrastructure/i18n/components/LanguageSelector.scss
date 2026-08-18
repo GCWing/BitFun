@@ -1,4 +1,4 @@
- 
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .language-selector {
   position: relative;
@@ -133,16 +133,14 @@
     }
     
     .language-selector__dropdown {
+      @include surfaces.floating-surface;
+
       position: absolute;
       top: 100%;
       right: 0;
       margin-top: 4px;
       min-width: 150px;
       padding: 4px;
-      background: var(--bf-appearance-token-color-bg-elevated);
-      border: 1px solid var(--bf-appearance-token-border-base);
-      border-radius: var(--bf-appearance-token-size-radius-md);
-      box-shadow: var(--bf-appearance-token-shadow-lg);
       opacity: 0;
       visibility: hidden;
       transform: translateY(-4px);

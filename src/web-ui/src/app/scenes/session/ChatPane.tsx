@@ -30,6 +30,10 @@ interface ChatPaneProps {
   workspacePath?: string;
   isDragging?: boolean;
   showChatInput?: boolean;
+  /** Whether the host-owned session right panel is open. */
+  isRightPanelOpen?: boolean;
+  /** Toggle the host-owned session right panel. */
+  onToggleRightPanel?: () => void;
   /** Optional host-owned replacement for the empty-session welcome surface. */
   emptyState?: React.ReactNode;
   /**
@@ -46,6 +50,8 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   workspacePath,
   isDragging: _isDragging = false,
   showChatInput = false,
+  isRightPanelOpen = false,
+  onToggleRightPanel,
   emptyState,
   chatInputRegistration,
 }) => {
@@ -159,6 +165,8 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
       <FlowChatContainer
         className="bitfun-chat-pane__chat-container"
         isViewportActive={isSceneActive}
+        isRightPanelOpen={isRightPanelOpen}
+        onToggleRightPanel={onToggleRightPanel}
         emptyState={emptyState}
         onOpenVisualization={(type, data) => {
           log.info('Opening visualization', { type, data });

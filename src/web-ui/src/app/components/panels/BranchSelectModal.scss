@@ -4,6 +4,7 @@
  */
 
 @use '../../../component-library/styles/tokens' as *;
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 // ==================== Overlay ====================
 
@@ -32,13 +33,11 @@
 // ==================== Dialog Body ====================
 
 .branch-select-dialog {
+  @include surfaces.dialog-surface;
+
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 12px;
-  box-shadow: 0 16px 48px var(--bf-appearance-token-color-overlay-black-40);
   width: 380px;
   max-width: calc(100vw - 48px);
   max-height: min(520px, calc(100vh - 48px));

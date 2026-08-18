@@ -7,9 +7,9 @@
       "owner": "src/web-ui/src/app/layout; src/web-ui/src/app/components/NavPanel",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system"],
+      "themes": ["dark", "light", "system", "bitfun-monochrome"],
       "states": ["default", "hover", "focus", "selected", "disabled"],
-      "tokenFamilies": ["--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*", "--bf-appearance-token-element-bg-*", "--bf-appearance-token-border-*", "--bitfun-nav-*"],
+      "tokenFamilies": ["--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*", "--bf-appearance-token-chrome-*", "--bf-appearance-token-element-bg-*", "--bf-appearance-token-border-*", "--bitfun-nav-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -31,7 +31,7 @@
       "owner": "src/web-ui/src/flow_chat; src/web-ui/src/app/scenes/session",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system"],
+      "themes": ["dark", "light", "system", "bitfun-monochrome"],
       "states": ["default", "streaming", "hover", "focus", "selected", "error", "empty"],
       "tokenFamilies": ["--bf-appearance-token-flowchat-*", "--bf-appearance-token-tool-card-*", "--bf-appearance-token-color-bg-scene", "--bf-appearance-token-color-text-*", "--bf-appearance-token-color-accent-*"],
       "evidence": [
@@ -175,9 +175,9 @@
       "owner": "src/web-ui/src/app/scenes/settings; src/web-ui/src/infrastructure/appearance",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system"],
+      "themes": ["dark", "light", "system", "bitfun-monochrome"],
       "states": ["default", "selected", "hover", "focus", "imported-appearance", "system-appearance"],
-      "tokenFamilies": ["--bf-appearance-token-color-accent-*", "--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*"],
+      "tokenFamilies": ["--bf-appearance-token-color-accent-*", "--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*", "--bf-appearance-token-border-*", "--bf-appearance-token-element-bg-*", "--bf-appearance-token-config-page-*"],
       "evidence": [
         {
           "type": "theme-color-audit",

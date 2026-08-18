@@ -1310,6 +1310,14 @@
     "searchClose": "关闭搜索",
     "searchOpen": "搜索消息",
     "jumpToCurrentTurn": "跳转到第 {{turn}} 轮",
+    "sessionOverview": "会话概览",
+    "sessionOverviewActive": "会话概览，有活动正在进行",
+    "sessionOverviewAgentsUnavailable": "当前没有可用会话",
+    "sessionOverviewAgentsActive": "有 Agent 正在运行",
+    "sessionOverviewAgentsIdle": "查看 Agent 会话树",
+    "sessionOverviewBackgroundRunning": "{{count}} 个正在运行",
+    "sessionOverviewBackgroundFinished": "{{count}} 个最近已结束",
+    "sessionOverviewPullRequests": "打开工作区拉取请求",
     "agentTree": "Agents",
     "agentTreeLoading": "正在加载 Agent 会话树...",
     "agentTreeEmpty": "当前会话没有子 Agent",
@@ -1330,8 +1338,10 @@
       "error": "$t(shared:statuses.failed)",
       "idle": "空闲"
     },
+    "backgroundCommandOverview": "后台终端",
     "backgroundCommands": "后台命令（{{count}}）",
     "backgroundCommandEmpty": "暂无后台命令",
+    "backgroundTerminalEmpty": "暂无后台终端",
     "backgroundCommandUntitled": "后台命令",
     "backgroundCommandSession": "会话 #{{id}}",
     "backgroundCommandStatusRunning": "进行中",
@@ -1342,7 +1352,13 @@
     "backgroundCommandStopping": "正在终止命令",
     "backgroundCommandStopAll": "全部终止",
     "backgroundCommandStopFailed": "终止后台命令失败。",
-    "pullRequests": "拉取请求"
+    "pullRequests": "拉取请求",
+    "pullRequestCount": "{{count}} 个拉取请求",
+    "pullRequestEmpty": "暂无拉取请求",
+    "pullRequestLoading": "正在加载拉取请求...",
+    "pullRequestNotGitRepository": "当前工作区不是 Git 仓库",
+    "pullRequestWorkspaceUnavailable": "当前没有可用工作区",
+    "pullRequestLoadFailed": "无法加载拉取请求，点击重试。"
   },
   "subagentIdentity": {
     "names": {

@@ -1,4 +1,5 @@
 @use '../../component-library/styles/tokens' as *;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .dispatch-target-picker {
   position: relative;
@@ -64,6 +65,8 @@
   }
 
   &__menu {
+    @include surfaces.floating-surface;
+
     position: fixed;
     z-index: $z-popover;
     box-sizing: border-box;
@@ -75,10 +78,6 @@
     padding: 6px;
     overflow-x: hidden;
     overflow-y: auto;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    box-shadow: var(--bf-appearance-token-shadow-lg);
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
     font-size: var(--bf-appearance-token-flowchat-font-size-xxs);

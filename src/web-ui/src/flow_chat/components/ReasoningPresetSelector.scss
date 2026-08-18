@@ -1,4 +1,6 @@
 @use '../../component-library/styles/tokens' as *;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '../typography' as flow-type;
 
 .bitfun-reasoning-preset-selector {
   position: relative;
@@ -16,7 +18,7 @@
     border-radius: var(--bf-appearance-token-size-radius-base);
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$support-size;
     cursor: pointer;
     outline: none;
 
@@ -73,15 +75,13 @@
   }
 
   &__menu {
+    @include surfaces.floating-surface;
+
     --reasoning-preset-menu-offset: -4px;
 
     width: min(232px, calc(100vw - 16px));
     padding: 5px;
     overflow: hidden;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: 6px;
-    box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-50);
     z-index: $z-popover;
     transform-origin: center top;
     transition:
@@ -121,7 +121,7 @@
 
   &__title {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: flow-type.$control-size;
     font-weight: 600;
     line-height: 1.25;
   }
@@ -137,7 +137,7 @@
     border-radius: var(--bf-appearance-token-size-radius-base);
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: flow-type.$support-size;
     cursor: pointer;
 
     &:hover,
@@ -224,14 +224,14 @@
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: flow-type.$control-size;
       font-weight: 500;
       line-height: 1.25;
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+      font-size: flow-type.$support-size;
       line-height: 1.25;
     }
   }

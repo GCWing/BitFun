@@ -65,6 +65,16 @@ Token 只按职责分四层：
 兼容别名不是第五层。它只服务已确认的迁移调用方，必须声明 canonical 目标、owner 和移除条件；新代码不得继续
 读取历史别名。
 
+应用结构层可以使用 `--bf-appearance-token-chrome-*` 这一窄化的 component token 家族，表达导航、标签栏和
+工作台外壳相对于内容面的稳定反相关系。它由 Web UI builtin Appearance 投影拥有，只能在结构层 scope 内重绑定
+普通 semantic token；未声明独立 chrome palette 的内置或导入外观沿用所属 light/dark 基础外观的内容色，不能让
+组件按 Appearance ID 硬编码颜色特例。
+
+共享设置页可以使用 `--bf-appearance-token-config-page-*` 这一窄化的 component token 家族，分别表达 section
+块面、section 边界、行分隔线与 hover 填充。它只由 `ConfigPageLayout` 消费，默认映射回普通 element/border
+semantic token；仅当某个 Appearance 需要让“信息块面”和“表单控件边界”采用不同层级时才覆写，不能扩散成
+通用卡片色板或按 Appearance ID 编写 CSS 特例。
+
 新增颜色按以下顺序判断：
 
 1. 语义相同：复用现有 Token。

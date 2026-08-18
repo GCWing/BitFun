@@ -31,6 +31,15 @@ function extractBlock(stylesheet: string, selector: string): string {
 }
 
 describe('WorkspaceListSection layout styles', () => {
+  it('keeps peer session groups airier than rows inside one group', () => {
+    const stylesheet = readWorkspaceListStylesheet();
+    const workspaceList = extractBlock(stylesheet, '&__workspace-list');
+    const workspaceDropTarget = extractBlock(stylesheet, '&__workspace-drop-target');
+
+    expect(workspaceList).toContain('gap: $size-gap-2;');
+    expect(workspaceDropTarget).toContain('gap: 0;');
+  });
+
   it('keeps workspace rows constrained while only visible row actions reserve title space', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const workspaceList = extractBlock(stylesheet, '&__workspace-list');
@@ -104,18 +113,28 @@ describe('WorkspaceListSection layout styles', () => {
     expect(assistantMenu).toContain('position: absolute;');
     expect(assistantMenu).toContain('right: 4px;');
     expect(assistantMenu).toContain('gap: 4px;');
-    expect(stylesheet).toContain('padding-left: 2px;');
+    expect(stylesheet).toContain('padding-left: 30px;');
     expect(stylesheet).toContain('padding-right: 0;');
   });
 
-  it('aligns nested session titles with workspace and assistant labels', () => {
+  it('keeps nested selection surfaces full-width while aligning their titles', () => {
     const stylesheet = readWorkspaceListStylesheet();
-    const alignedSessionLists = stylesheet.match(
-      /\.bitfun-nav-panel__inline-list \{\n\s+\/\/[^\n]+\n\s+margin-left: 22px;/g,
+    const fullWidthSessionLists = stylesheet.match(
+      /\.bitfun-nav-panel__inline-list \{\n\s+\/\/[^\n]+\n\s+margin-left: 0;/g,
+    );
+    const indentedSessionRows = stylesheet.match(
+      /\.bitfun-nav-panel__inline-item \{\n\s+height: 28px;\n\s+padding-left: 30px;/g,
     );
 
-    expect(alignedSessionLists).toHaveLength(2);
-    expect(stylesheet).not.toContain('.bitfun-nav-panel__inline-list {\n      margin-left: 8px;');
+    expect(fullWidthSessionLists).toHaveLength(2);
+    expect(indentedSessionRows).toHaveLength(2);
+    expect(stylesheet).not.toContain('margin-left: 22px;');
+    expect(stylesheet).toContain(
+      '&__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active)',
+    );
+    expect(stylesheet).toContain(
+      '&__assistant-item.is-active:has(&__assistant-item-sessions &__inline-item.is-active)',
+    );
   });
 
   it('keeps workspace and assistant menu triggers at the compact row size', () => {

@@ -2,10 +2,6 @@
   padding: 0;
 }
 
-.modal:has(.deep-review-consent) {
-  border-radius: 6px;
-}
-
 .deep-review-consent {
   --deep-review-accent: var(--bf-appearance-token-color-accent-600);
   --deep-review-accent-strong: var(--bf-appearance-token-color-accent-600);

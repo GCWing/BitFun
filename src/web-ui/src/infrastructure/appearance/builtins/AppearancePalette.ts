@@ -77,6 +77,19 @@ export interface ScrollbarColors {
   thumbHover: ColorValue;
 }
 
+/**
+ * Structural application chrome can deliberately contrast with the content
+ * palette. Builtins that omit this slice keep today's single-surface behavior.
+ */
+export interface ChromeColors {
+  background: BackgroundColors;
+  text: TextColors;
+  accent: AccentColors;
+  border: BorderColors;
+  element: ElementBackgrounds;
+  scrollbar?: ScrollbarColors;
+}
+
 export interface ShadowConfig {
   xs: string;
   sm: string;
@@ -128,6 +141,22 @@ export interface ButtonConfig {
     default: { color: ColorValue };
     hover: { background: ColorValue; color: ColorValue; border: ColorValue };
   };
+}
+
+/**
+ * Shared settings pages need a stable surface role that can vary independently
+ * from form controls. In particular, a filled section card must not force every
+ * input, divider, and focus ring to inherit the same treatment.
+ */
+export interface ConfigPageConfig {
+  section: {
+    background: ColorValue;
+    border: ColorValue;
+    borderWidth: string;
+    shadow: string;
+  };
+  divider: ColorValue;
+  rowHover: ColorValue;
 }
 
 export interface MotionConfig {
@@ -211,6 +240,7 @@ export interface AppearancePalette {
     element: ElementBackgrounds;
     git: GitColors;
     scrollbar?: ScrollbarColors;
+    chrome?: ChromeColors;
   };
   effects: {
     shadow: ShadowConfig;
@@ -229,7 +259,10 @@ export interface AppearancePalette {
     size: FontSizeConfig;
     lineHeight: LineHeightConfig;
   };
-  components?: { button?: ButtonConfig };
+  components?: {
+    button?: ButtonConfig;
+    configPage?: ConfigPageConfig;
+  };
   monaco?: MonacoAppearancePaletteConfig;
   layout?: { sceneViewportBorder?: boolean };
 }

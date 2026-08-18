@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { builtinAppearancePalettes } from './palettes';
+import { getBuiltinAppearanceCssTokens } from './catalog';
 import {
   PLUGIN_APPEARANCE_COLOR_KEYS,
   createPluginAppearanceColorProjection,
@@ -112,12 +113,170 @@ describe('builtin appearance preset output', () => {
     const serializedAppearances = JSON.stringify(builtinAppearancePalettes).toLowerCase();
     const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'bitfun-light');
 
-    expect(lightAppearance?.colors.background.primary).toBe('#fafafa');
-    expect(lightAppearance?.monaco?.colors.background).toBe('#fafafa');
-    expect(lightAppearance?.monaco?.colors.lineHighlight).toBe('#f3f3f5');
-    expect(serializedAppearances.match(/#fafafa/g)).toHaveLength(2);
+    expect(lightAppearance?.colors.background.primary).toBe('#fdfdfd');
+    expect(lightAppearance?.monaco?.colors.background).toBe('#ffffff');
+    expect(lightAppearance?.monaco?.colors.lineHighlight).toBe('rgba(16, 26, 39, 0.03)');
+    expect(serializedAppearances.match(/#fdfdfd/g)).toHaveLength(1);
     expect(serializedAppearances).not.toContain('#e2e6eb');
     expect(serializedAppearances).not.toContain('#f0f2f5');
+  });
+
+  it('keeps the default light appearance on the neutral, navy, and restrained semantic palette', () => {
+    const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'bitfun-light');
+    const tokens = getBuiltinAppearanceCssTokens('bitfun-light');
+
+    expect(lightAppearance).toMatchObject({
+      description: 'Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions',
+      version: '2.4.0',
+      colors: {
+        background: {
+          primary: '#fdfdfd',
+          secondary: '#ffffff',
+          tertiary: '#f3f3f5',
+          elevated: '#ffffff',
+          workbench: '#f3f3f5',
+          scene: '#ffffff',
+        },
+        text: {
+          primary: '#1c1c1f',
+          secondary: '#555555',
+          muted: '#6a6a6a',
+          disabled: '#9a9a9a',
+        },
+        accent: {
+          50: 'rgba(16, 26, 39, 0.03)',
+          100: '#f3f3f5',
+          500: '#101a27',
+          600: '#1c1c1f',
+          700: '#000000',
+        },
+        semantic: {
+          success: '#247344',
+          successBg: '#e1fbe9',
+          successBorder: '#247344',
+          error: '#a74352',
+          errorBg: 'rgba(167, 67, 82, 0.12)',
+          info: '#555555',
+          infoBg: '#f3f3f5',
+          infoBorder: 'rgba(16, 26, 39, 0.15)',
+        },
+        border: {
+          base: 'rgba(16, 26, 39, 0.15)',
+        },
+        element: {
+          subtle: 'rgba(16, 26, 39, 0.03)',
+          soft: '#f3f3f5',
+        },
+      },
+      components: {
+        button: {
+          primary: {
+            default: { background: '#101a27', color: '#ffffff' },
+            hover: { background: '#1c1c1f', color: '#ffffff' },
+            active: { background: '#000000', color: '#ffffff' },
+          },
+        },
+      },
+      monaco: {
+        colors: {
+          background: '#ffffff',
+          lineHighlight: 'rgba(16, 26, 39, 0.03)',
+        },
+      },
+    });
+    expect(tokens).toMatchObject({
+      '--bf-appearance-token-config-page-section-bg': 'rgba(16, 26, 39, 0.03)',
+      '--bf-appearance-token-config-page-section-border': 'rgba(16, 26, 39, 0.08)',
+      '--bf-appearance-token-config-page-section-border-width': '1px',
+      '--bf-appearance-token-config-page-divider': 'rgba(16, 26, 39, 0.08)',
+    });
+  });
+
+  it('keeps monochrome content readable while projecting inverse structural chrome', () => {
+    const monochrome = builtinAppearancePalettes.find(
+      appearance => appearance.id === 'bitfun-monochrome',
+    );
+    const tokens = getBuiltinAppearanceCssTokens('bitfun-monochrome');
+
+    expect(monochrome).toMatchObject({
+      type: 'light',
+      description: 'Black-and-white contrast appearance - Deep black chrome, bright white workspace, soft neutral blocks',
+      colors: {
+        background: {
+          primary: '#ffffff',
+          scene: '#ffffff',
+        },
+        text: {
+          primary: '#1c1c1f',
+          secondary: '#555555',
+          muted: '#6a6a6a',
+        },
+        border: {
+          subtle: 'rgba(16, 26, 39, 0.08)',
+          base: 'rgba(16, 26, 39, 0.15)',
+          prominent: 'rgba(16, 26, 39, 0.48)',
+        },
+        element: {
+          subtle: 'rgba(16, 26, 39, 0.03)',
+          soft: '#f3f3f5',
+          strong: 'rgba(16, 26, 39, 0.18)',
+        },
+        accent: {
+          500: '#1c1c1f',
+          600: '#000000',
+        },
+        chrome: {
+          background: {
+            primary: '#1c1c1f',
+            secondary: '#262626',
+          },
+          text: {
+            primary: '#f3f3f5',
+            secondary: '#b0b0b0',
+          },
+          accent: {
+            500: '#f3f3f5',
+            600: '#ffffff',
+          },
+        },
+      },
+      components: {
+        button: {
+          primary: {
+            default: { background: '#1c1c1f', color: '#ffffff' },
+            hover: { background: '#000000', color: '#ffffff' },
+          },
+        },
+        configPage: {
+          section: {
+            background: '#f3f3f5',
+            border: 'transparent',
+            borderWidth: '0',
+            shadow: 'none',
+          },
+          divider: 'rgba(16, 26, 39, 0.08)',
+          rowHover: 'rgba(16, 26, 39, 0.03)',
+        },
+      },
+    });
+    expect(tokens).toMatchObject({
+      '--bf-appearance-token-color-bg-primary': '#ffffff',
+      '--bf-appearance-token-color-text-primary': '#1c1c1f',
+      '--bf-appearance-token-color-text-secondary': '#555555',
+      '--bf-appearance-token-border-subtle': 'rgba(16, 26, 39, 0.08)',
+      '--bf-appearance-token-border-base': 'rgba(16, 26, 39, 0.15)',
+      '--bf-appearance-token-element-bg-subtle': 'rgba(16, 26, 39, 0.03)',
+      '--bf-appearance-token-element-bg-soft': '#f3f3f5',
+      '--bf-appearance-token-scrollbar-thumb': 'rgba(16, 26, 39, 0.15)',
+      '--bf-appearance-token-config-page-section-bg': '#f3f3f5',
+      '--bf-appearance-token-config-page-section-border': 'transparent',
+      '--bf-appearance-token-config-page-section-border-width': '0',
+      '--bf-appearance-token-config-page-section-shadow': 'none',
+      '--bf-appearance-token-config-page-divider': 'rgba(16, 26, 39, 0.08)',
+      '--bf-appearance-token-chrome-bg-primary': '#1c1c1f',
+      '--bf-appearance-token-chrome-text-primary': '#f3f3f5',
+      '--bf-appearance-token-chrome-element-bg-soft': 'rgba(255, 255, 255, 0.06)',
+    });
   });
 
   it('projects builtin appearances to a compact OpenCode-compatible plugin color key set', () => {
@@ -153,8 +312,13 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "1d420a9266664694a5668328d2df91309bc263098ad5e7d5a07c106cad760cc3",
+          "hash": "e9bcb4147d483930dae32099a5af094e494e7dbd5d970db3bb1e7e13cf43551f",
           "id": "bitfun-light",
+          "type": "light",
+        },
+        {
+          "hash": "f14b9ef8e30626fc271d6ee54d9b8a47f4afbb2a8fa83f245eca92823b1c4aa2",
+          "id": "bitfun-monochrome",
           "type": "light",
         },
         {

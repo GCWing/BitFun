@@ -12,7 +12,6 @@
   padding: 12px 14px;
   border: 1px dashed var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
-  background: transparent;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -314,7 +313,6 @@
 
 .bitfun-about-dialog__info-card {
   padding: 10px 14px;
-  background: transparent;
   border: 1px dashed var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
 }
@@ -378,8 +376,7 @@
     transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
     background-color 150ms ease,
     border-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease;
+    color 150ms ease;
   display: flex;
   align-items: center;
   
@@ -391,205 +388,6 @@
   
   &:active {
     transform: scale(0.9);
-  }
-}
-
-// ==================== Dependencies section ====================
-
-.bitfun-about-dialog__dependencies-section {
-  margin-bottom: 16px;
-  animation: about-section-enter 0.4s ease-out 0.25s both;
-}
-
-.bitfun-about-dialog__dependencies-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: transparent;
-  border: 1px dashed var(--bf-appearance-token-border-subtle);
-  border-radius: 8px;
-  color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease;
-  
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-color: var(--bf-appearance-token-border-base);
-    border-style: solid;
-    color: var(--bf-appearance-token-color-text-primary);
-    
-    svg {
-      color: var(--bf-appearance-token-color-accent-500);
-    }
-  }
-  
-  span {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  svg {
-    color: var(--bf-appearance-token-color-text-muted);
-    transition: color 0.2s ease;
-  }
-}
-
-.bitfun-about-dialog__dependencies-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
-  color: var(--bf-appearance-token-color-accent-400);
-  font-size: 10px;
-  font-weight: 600;
-  border-radius: 9px;
-}
-
-.bitfun-about-dialog__dependencies-list {
-  margin-top: 8px;
-  padding: 4px;
-  background: transparent;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 8px;
-  animation: about-list-expand 0.25s ease-out;
-}
-
-@keyframes about-list-expand {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.bitfun-about-dialog__dependencies-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 4px;
-}
-
-.bitfun-about-dialog__dependency-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  transition:
-    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease;
-  min-width: 0;
-  
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-color: var(--bf-appearance-token-border-subtle);
-    
-    .bitfun-about-dialog__dependency-icon {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
-      
-      svg {
-        color: var(--bf-appearance-token-color-accent-500);
-      }
-    }
-  }
-}
-
-.bitfun-about-dialog__dependency-icon {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bf-appearance-token-element-bg-subtle);
-  border-radius: 6px;
-  transition:
-    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease;
-
-  svg {
-    width: 12px;
-    height: 12px;
-    color: var(--bf-appearance-token-color-text-secondary);
-    transition: color 0.2s ease;
-  }
-}
-
-.bitfun-about-dialog__dependency-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.bitfun-about-dialog__dependency-name {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--bf-appearance-token-color-text-primary);
-  font-family: 'Consolas', 'Monaco', monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bitfun-about-dialog__dependency-license {
-  font-size: 9px;
-  color: var(--bf-appearance-token-color-text-muted);
-}
-
-.bitfun-about-dialog__dependency-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 5px;
-  font-size: 8px;
-  font-weight: 600;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  margin-left: auto;
-  flex-shrink: 0;
-  
-  // Frontend tag - blue
-  &--frontend {
-    background: var(--bf-appearance-token-color-accent-100);
-    color: var(--bf-appearance-token-color-accent-500);
-    border: 1px solid var(--bf-appearance-token-color-accent-200);
-  }
-
-  // Backend tag - green
-  &--backend {
-    background: var(--bf-appearance-token-color-success-bg);
-    color: var(--bf-appearance-token-color-success);
-    border: 1px solid var(--bf-appearance-token-color-success-border);
-  }
-
-  // General tag - purple
-  &--general {
-    background: var(--bf-appearance-token-color-purple-100);
-    color: var(--bf-appearance-token-color-purple-500);
-    border: 1px solid var(--bf-appearance-token-color-purple-200);
   }
 }
 
@@ -646,10 +444,6 @@
 
   .bitfun-about-dialog__scrollable {
     padding: 0 16px;
-  }
-
-  .bitfun-about-dialog__dependencies-grid {
-    grid-template-columns: 1fr;
   }
 
   .bitfun-about-dialog__footer {

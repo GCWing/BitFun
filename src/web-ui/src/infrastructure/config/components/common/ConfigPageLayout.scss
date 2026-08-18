@@ -114,11 +114,11 @@
 
 .bitfun-config-page-section__body {
   min-width: 0;
-  background: var(--bf-appearance-token-element-bg-subtle);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-config-page-section-bg);
+  border: var(--bf-appearance-token-config-page-section-border-width) solid var(--bf-appearance-token-config-page-section-border);
   border-radius: var(--bf-appearance-token-size-radius-md);
   overflow: visible;
-  box-shadow: inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
+  box-shadow: var(--bf-appearance-token-config-page-section-shadow);
 }
 
 // Sections whose children own their own cards. Every visual boundary has to go,
@@ -139,12 +139,12 @@
 }
 
 .bitfun-config-page-row + .bitfun-config-page-row {
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-config-page-divider);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .bitfun-config-page-row:hover {
-    background: var(--bf-appearance-token-color-overlay-white-04);
+    background: var(--bf-appearance-token-config-page-row-hover-bg);
   }
 }
 

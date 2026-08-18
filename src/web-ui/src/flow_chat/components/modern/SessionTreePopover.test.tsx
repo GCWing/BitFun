@@ -210,4 +210,41 @@ describe('SessionTreePopover', () => {
     expect(document.activeElement).toBe(trigger);
     expect(panel?.getAttribute('aria-hidden')).toBe('true');
   });
+
+  it('renders as parent-owned content and closes the parent after selecting an Agent session', async () => {
+    const onSelectSession = vi.fn();
+    const onRequestClose = vi.fn();
+    const t = (key: string) => key;
+
+    await act(async () => {
+      root.render(
+        <SessionTreePopover
+          sessionId="root"
+          fallbackWorkspacePath="/workspace"
+          onSelectSession={onSelectSession}
+          embedded
+          open
+          onRequestClose={onRequestClose}
+          t={t}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="flowchat-header-session-tree"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-session-tree-content"]')).not.toBeNull();
+    expect(document.querySelector('.session-tree-popover__panel')).toBeNull();
+
+    const childNode = Array.from(container.querySelectorAll<HTMLElement>('[role="treeitem"]'))
+      .find(node => node.textContent?.includes('Running child'));
+    await act(async () => {
+      childNode?.querySelector<HTMLButtonElement>('.session-tree-popover__node-main')?.click();
+    });
+
+    expect(onSelectSession).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'child',
+      isRoot: false,
+    }));
+    expect(onRequestClose).toHaveBeenCalledTimes(1);
+  });
 });
