@@ -116,7 +116,10 @@ export struct AppRootPresentation {
       if (this.filePreviewPlacement() === FilePreviewPlacement.CompactFullPage) {
         this.FilePreviewPane()
       }
-    }.width('100%').height('100%')
+    }
+    .width('100%')
+    .height('100%')
+    .id(`app-root-locale-${this.shellState.localeRevision}`)
     .bindSheet($$this.showRemoteViewSettings, this.RemoteViewSettingsSheet(), this.remoteViewSettingsSheetOptions())
     .onAreaChange((_oldArea: Area, newArea: Area) => {
       const areaWidth = this.areaWidth(newArea.width);

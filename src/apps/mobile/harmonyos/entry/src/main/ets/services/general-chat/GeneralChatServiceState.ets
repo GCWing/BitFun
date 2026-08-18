@@ -18,7 +18,7 @@ export class GeneralChatServiceStatus {
 
   static fromError(message: string): GeneralChatServiceState {
     const normalized = message.trim().toLowerCase();
-    if (message === RemoteI18n.t('generalChat.authenticationFailed') ||
+    if (RemoteI18n.textEquals('generalChat.authenticationFailed', message) ||
       normalized.indexOf('authentication') >= 0 || normalized.indexOf('api key') >= 0) {
       return GeneralChatServiceState.AuthExpired;
     }

@@ -100,6 +100,7 @@ export interface SettingsPresentationActions {
   readonly setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode>;
   readonly testGeneral: (url: string, key: string, model: string, clear: boolean) => Promise<string>;
   readonly saveGeneral: (url: string, key: string, model: string, clear: boolean) => Promise<string>;
+  readonly setLanguage: (language: string) => Promise<void>;
 }
 
 export interface ConnectPresentationActions {
@@ -147,7 +148,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       cloudListDevices: async () => [], cloudSelectDevice: async () => {},
       getPermissionMode: async () => 'ask',
       setPermissionMode: async (mode: RemotePermissionMode) => mode,
-      testGeneral: async () => '', saveGeneral: async () => ''
+      testGeneral: async () => '', saveGeneral: async () => '',
+      setLanguage: async () => {}
     },
     onConnect: {
       back: () => {}, connect: () => {}, clearPairing: () => {}, urlChanged: () => {}, userChanged: () => {},
