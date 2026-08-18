@@ -6636,19 +6636,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               }
             : undefined
         }
-        threadGoal={
-          effectiveTargetSessionId &&
-          effectiveTargetSession &&
-          caps.threadGoal
-            ? {
-                visible: true,
-                goal: threadGoalController.goal,
-                onOpen: () => {
-                  void threadGoalController.openGoalEntry();
-                },
-              }
-            : undefined
-        }
       />
       {effectiveTargetSession && caps.threadGoal ? (
         <ThreadGoalDialogs

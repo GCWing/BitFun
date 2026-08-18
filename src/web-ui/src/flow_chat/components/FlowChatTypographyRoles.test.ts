@@ -29,7 +29,19 @@ function extractBlock(source: string, selector: string): string {
 }
 
 function expectRole(source: string, selector: string, role: string): void {
-  expect(extractBlock(source, selector)).toContain(`font-size: flow-type.$${role}-size;`);
+  const block = extractBlock(source, selector);
+  const declaration = `font-size: flow-type.$${role}-size;`;
+  if (block.includes(declaration)) return;
+
+  // A surface may take its role from a shared mixin instead of restating the
+  // size. The contract is the role it renders at, not where it is written, and
+  // a surface that names its own size is how a track drifts off the ladder.
+  const included = block.match(/@include\s+([\w-]+);/)?.[1];
+  expect(included, `Missing ${role} role on: ${selector}`).toBeTruthy();
+  expect(
+    extractBlock(source, `@mixin ${included} {`),
+    `Mixin ${included} does not carry the ${role} role for: ${selector}`,
+  ).toContain(declaration);
 }
 
 describe('FlowChat semantic typography roles', () => {

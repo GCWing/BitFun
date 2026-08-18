@@ -351,12 +351,14 @@
     .bitfun-chat-input__box--capsule {
       flex-direction: row;
       align-items: center;
-      min-height: 44px;
-      max-height: 44px;
-      // The reference is intentionally downscaled for BitFun's desktop density:
-      // 44px capsule, 32px controls, and compact 8px horizontal insets.
+      min-height: 48px;
+      max-height: 48px;
+      // 48px capsule, 30px controls, 1px border: a control centered in the
+      // 46px content box clears its inner edge by 8px, so an 8px side inset
+      // puts the plus and the send button the same distance from every edge
+      // they touch. Change any one of the three and the other two follow.
       padding: 0 8px;
-      border-radius: 22px;
+      border-radius: 24px;
       overflow: visible;
 
       // Dissolve the actions wrapper so its children become direct flex items
@@ -376,9 +378,9 @@
 
         // Enlarge the Plus button to match the capsule height
         .bitfun-chat-input__agent-boost-add {
-          width: 32px !important;
-          height: 32px !important;
-          min-width: 32px !important;
+          width: 30px !important;
+          height: 30px !important;
+          min-width: 30px !important;
           padding: 0 !important;
           border: 1px solid var(--bf-appearance-token-border-subtle) !important;
           border-radius: 50% !important;
@@ -435,8 +437,8 @@
 
         // Enlarge send/stop button to match the capsule height
         .bitfun-chat-input__send-button {
-          width: 32px !important;
-          height: 32px !important;
+          width: 30px !important;
+          height: 30px !important;
           border-radius: 50% !important;
           display: inline-flex !important;
           align-items: center !important;
@@ -449,8 +451,8 @@
         }
 
         .bitfun-chat-input__breathing-circle {
-          width: 32px !important;
-          height: 32px !important;
+          width: 30px !important;
+          height: 30px !important;
         }
 
         .bitfun-chat-input__model-usage-group {
@@ -480,7 +482,6 @@
 
           &:hover,
           &[data-bf-state='open'] {
-            border-color: var(--bf-appearance-token-border-medium);
             background: var(--bf-appearance-token-element-bg-soft);
           }
         }
@@ -510,10 +511,10 @@
         }
 
         .bitfun-chat-input__voice-control.icon-btn {
-          width: 32px;
-          height: 32px;
-          min-width: 32px;
-          min-height: 32px;
+          width: 30px;
+          height: 30px;
+          min-width: 30px;
+          min-height: 30px;
           border: none;
           background: transparent;
 
@@ -729,9 +730,9 @@
 
     // Capsule (single-line) mode appearance
     &--capsule {
-      border-radius: 22px;
-      min-height: 44px;
-      max-height: 44px;
+      border-radius: 24px;
+      min-height: 48px;
+      max-height: 48px;
       padding: 0 8px;
       background: rgba(var(--private-chat-input-capsule-bg-rgb), 0.22);
       border: 1px solid var(--bf-appearance-token-color-overlay-white-08);

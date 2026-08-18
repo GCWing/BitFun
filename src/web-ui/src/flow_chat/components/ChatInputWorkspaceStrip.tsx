@@ -2,10 +2,11 @@
  * Two fixed rails under the composer capsule.
  *
  * The left rail is the situation the session is in — where it runs, on which
- * branch, and what long-horizon goal it is chasing. The right rail is the
- * contract for the next turn — how much confirmation it asks for and how much
- * context is left. Nothing is centered and no column template is conditional,
- * so a control appearing or disappearing cannot move the rest of the track.
+ * branch, and whether that branch is isolated in a worktree. The right rail is
+ * the contract for the next turn — how much confirmation it asks for and how
+ * much context is left. Nothing is centered and no column template is
+ * conditional, so a control appearing or disappearing cannot move the rest of
+ * the track.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -15,16 +16,15 @@ import {
   Check,
   Circle,
   EyeOff,
-  FolderPen,
   GitBranch,
   RefreshCw,
   Settings,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Square,
+  SquareCheck,
 } from 'lucide-react';
-import { ThreadGoalStripButton } from './thread-goal/ThreadGoalStripButton';
-import type { ThreadGoalSnapshot } from '../services/goalService';
 import { Tooltip } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
@@ -45,12 +45,6 @@ export interface ChatInputWorkspaceStripProps {
   usageReport?: {
     visible: boolean;
     percentage?: number;
-    onOpen: () => void;
-  };
-  /** Thread goal entry (/goal) — what the session is chasing, on the left rail. */
-  threadGoal?: {
-    visible: boolean;
-    goal: ThreadGoalSnapshot | null;
     onOpen: () => void;
   };
   /** Native-tool permission mode for this session, exposed as a compact strip control. */
@@ -145,7 +139,6 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   repositoryPath,
   workspaceLabel,
   usageReport,
-  threadGoal,
   permissionControl,
   deferPassiveGitRefresh = false,
   executionTarget,
@@ -194,7 +187,6 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   }, [refreshBasic, trimmedPath]);
 
   const showUsage = usageReport?.visible && !!usageReport.onOpen;
-  const showGoal = threadGoal?.visible && !!threadGoal.onOpen;
   const showPermission = !!permissionControl;
   const showDispatchResult = !!dispatchControl?.syncableJobId;
   const isWorktree = !!executionTarget?.worktreeId;
@@ -291,7 +283,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     [currentBranch, dispatchBranch, isRepository, repositoryTrustRequired, t],
   );
 
-  const hasContextRail = !!label || showDispatchPicker || showGoal;
+  const hasContextRail = !!label || showDispatchPicker;
   const hasNextRail = showPermission || showUsage || showDispatchResult;
   if (!hasContextRail && !hasNextRail) {
     return null;
@@ -361,7 +353,24 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     worktreeControl.onChange(nextEnabled);
   };
 
-  const renderBranchChip = () => (showWorktreeToggle ? (
+  // The branch reports where the session sits; it is a fact, not a control.
+  // Isolation is the control, and it says so with a checkbox of its own rather
+  // than hiding a switch under a label that reads as a breadcrumb.
+  const renderBranchChip = () => (
+    <Tooltip content={branchTooltipContent} placement="top">
+      <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
+        <GitBranch
+          className="bitfun-chat-input-workspace-strip__branch-icon"
+          size={12}
+          strokeWidth={1.8}
+          aria-hidden
+        />
+        <span data-bf-component="chat-input-workspace-strip" data-bf-part="branch" className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
+      </span>
+    </Tooltip>
+  );
+
+  const renderWorktreeToggle = () => (showWorktreeToggle ? (
     <Tooltip content={worktreeTooltip} placement="top">
       <button
         type="button"
@@ -369,10 +378,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         aria-checked={worktreeEnabled}
         aria-label={tWorktrees('strip.toggleLabel')}
         className={[
-          'bitfun-chat-input-workspace-strip__chip',
-          'bitfun-chat-input-workspace-strip__chip--branch',
-          'bitfun-chat-input-workspace-strip__chip--branch-toggle',
-          worktreeEnabled && 'bitfun-chat-input-workspace-strip__chip--worktree-on',
+          'bitfun-chat-input-workspace-strip__worktree-toggle',
+          worktreeEnabled && 'bitfun-chat-input-workspace-strip__worktree-toggle--on',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -382,28 +389,17 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         data-worktree-materialized={isWorktree ? 'true' : 'false'}
         onClick={handleWorktreeToggle}
       >
-        <GitBranch
-          className="bitfun-chat-input-workspace-strip__branch-icon"
-          size={12}
-          strokeWidth={1.9}
-          aria-hidden
-        />
-        <span data-bf-component="chat-input-workspace-strip" data-bf-part="branch" className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
+        {worktreeEnabled ? (
+          <SquareCheck size={12} strokeWidth={1.8} aria-hidden />
+        ) : (
+          <Square size={12} strokeWidth={1.8} aria-hidden />
+        )}
+        <span className="bitfun-chat-input-workspace-strip__worktree-label">
+          {tWorktrees('strip.toggleLabel')}
+        </span>
       </button>
     </Tooltip>
-  ) : (
-    <Tooltip content={branchTooltipContent} placement="top">
-      <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
-        <GitBranch
-          className="bitfun-chat-input-workspace-strip__branch-icon"
-          size={12}
-          strokeWidth={1.9}
-          aria-hidden
-        />
-        <span data-bf-component="chat-input-workspace-strip" data-bf-part="branch" className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
-      </span>
-    </Tooltip>
-  ));
+  ) : null);
 
   return (
     <div data-bf-component="chat-input-workspace-strip" data-bf-part="root"
@@ -424,34 +420,17 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               onSelectLocal={dispatchControl.onSelectLocal}
               onSelectTarget={dispatchControl.onSelectTarget}
             />
-            {label ? (
-              <span className="bitfun-chat-input-workspace-strip__breadcrumb-separator" aria-hidden>/</span>
-            ) : null}
           </>
         ) : null}
         {label ? (
           <>
-            <span className="bitfun-chat-input-workspace-strip__visual" aria-hidden>
-              <FolderPen size={14} strokeWidth={1.8} />
+            <span className="bitfun-chat-input-workspace-strip__location">
+              <Tooltip content={workspaceTooltipContent} placement="top">
+                <span data-bf-component="chat-input-workspace-strip" data-bf-part="workspace" className="bitfun-chat-input-workspace-strip__workspace">{label}</span>
+              </Tooltip>
+              {renderBranchChip()}
             </span>
-            <Tooltip content={workspaceTooltipContent} placement="top">
-              <span data-bf-component="chat-input-workspace-strip" data-bf-part="workspace" className="bitfun-chat-input-workspace-strip__workspace">{label}</span>
-            </Tooltip>
-            <span className="bitfun-chat-input-workspace-strip__breadcrumb-separator" aria-hidden>/</span>
-            {renderBranchChip()}
-          </>
-        ) : null}
-        {showGoal ? (
-          <>
-            {/* The goal is a different kind of fact from the path, so it is
-                joined by a dot rather than continuing the breadcrumb. */}
-            {label || showDispatchPicker ? (
-              <span className="bitfun-chat-input-workspace-strip__rail-separator" aria-hidden>·</span>
-            ) : null}
-            <ThreadGoalStripButton
-              goal={threadGoal.goal}
-              onOpen={threadGoal.onOpen}
-            />
+            {renderWorktreeToggle()}
           </>
         ) : null}
       </div>
@@ -470,7 +449,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 onClick={() => setResultDialogOpen(true)}
                 data-testid="dispatch-sync-trigger"
               >
-                <RefreshCw size={11} strokeWidth={2} aria-hidden />
+                <RefreshCw size={12} strokeWidth={1.8} aria-hidden />
                 <span>{tCommon('dispatch.syncAction')}</span>
               </button>
             </Tooltip>
@@ -523,8 +502,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               >
                 <PermissionIcon
                   className="bitfun-chat-input-workspace-strip__permission-overview-icon"
-                  size={13}
-                  strokeWidth={2}
+                  size={12}
+                  strokeWidth={1.8}
                   aria-hidden
                 />
                 <span className="bitfun-chat-input-workspace-strip__permission-label">
@@ -760,14 +739,13 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 usageReport.onOpen();
               }}
             >
-              <span>{usagePercentage}%</span>
               <span className="bitfun-chat-input-workspace-strip__usage-ring" aria-hidden>
-                <Circle className="is-track" size={14} strokeWidth={2.8} />
+                <Circle className="is-track" size={12} strokeWidth={3.2} />
                 {usagePercentage > 0 ? (
                   <Circle
                     className="is-value"
-                    size={14}
-                    strokeWidth={2.8}
+                    size={12}
+                    strokeWidth={3.2}
                     strokeDasharray={usageDash}
                   />
                 ) : null}

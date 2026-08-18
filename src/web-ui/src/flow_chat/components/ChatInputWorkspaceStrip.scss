@@ -5,11 +5,98 @@
  * situation and the right rail holds the next turn's contract. A control that
  * appears or disappears grows or shrinks its own rail and cannot reflow the
  * other one.
+ *
+ * The track has exactly two species and shape tells them apart. A *fact* — the
+ * workspace name, the branch — is bare text at the track's support size with a
+ * muted 12px glyph and no body, so it never invites a click it cannot answer.
+ * A *control* is the pill below: one height, one radius, one hover fill, one
+ * glyph size and the control type role, for every item on the track that does
+ * something. State is carried by color, never by an outline, because one
+ * bordered item in a borderless row reads as an error rather than a mode.
+ *
+ * Nothing punctuates the segments. Each one already opens with a glyph that
+ * says what it is, so a separator between them would only repeat the boundary
+ * the glyph has drawn — and a slash in particular claimed a path that does not
+ * exist: a host, a workspace and a branch are three coordinates, not three
+ * directories. Grouping is spacing alone, at a fixed 2.5:1 — $track-item-gap
+ * between segments, $track-part-gap inside one.
  */
 
 @use '../../component-library/styles/tokens' as *;
 @use '../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../typography' as flow-type;
+
+// The only two spacings on the track. Their ratio is what replaces the
+// separators: parts of one segment sit close, segments sit apart.
+$track-part-gap: 4px;
+$track-item-gap: 10px;
+
+// Where the capsule's own first and last control sit, measured from the same
+// origin the track starts from: the drop zone's 8px inset, plus the capsule's
+// 1px border and 8px pad. The track lines its *ink* up with that, so the two
+// rows share a left and a right edge instead of staggering by ~2px.
+$track-edge: 17px;
+// A rail's outermost item hides some of that inset inside its own transparent
+// padding: 7px for a label pill on the left, 3px for the ring centred in its
+// square target on the right.
+$track-pad-left: $track-edge - 7px;
+$track-pad-right: $track-edge - 3px;
+
+// The single control shape. Full radius rather than a corner value: the
+// composer capsule directly above is a pill, and the track reads as its
+// footnote when the two agree.
+@mixin strip-control {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: $track-part-gap;
+  height: 18px;
+  min-width: 0;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font: inherit;
+  // Not the rail's own support size: a control's label is interactive text and
+  // takes the control role, which is the ladder's next step up. The facts
+  // around it keep the support size they inherit from the track.
+  font-size: flow-type.$control-size;
+  line-height: 1;
+  letter-spacing: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
+
+  &:hover:not(:disabled),
+  &[aria-expanded='true']:not(:disabled) {
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+
+  // One glyph size for the whole track, enforced here so a component that
+  // ships its own `size` prop (the dispatch picker's chevron) still lands on
+  // it without the strip reaching into that component.
+  > svg {
+    flex: none;
+    width: 12px;
+    height: 12px;
+  }
+}
 
 .bitfun-chat-input-workspace-strip {
   position: absolute;
@@ -21,7 +108,7 @@
   justify-content: space-between;
   column-gap: 12px;
   min-height: 20px;
-  padding: 0 12px;
+  padding: 0 $track-pad-right 0 $track-pad-left;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -48,23 +135,31 @@
     flex: 1 1 auto;
     align-items: center;
     justify-content: flex-start;
-    gap: 4px;
+    gap: $track-item-gap;
     min-width: 0;
     height: 18px;
 
-    // Breadcrumb controls read as one continuous path in the reference, not
-    // as a row of independent filled chips.
+    // The picker ships a standalone accent-outlined look for use elsewhere.
+    // On the track it is one control among several, so it drops the outline
+    // and takes the shared pill like the rest of them.
     .dispatch-target-picker__trigger {
-      height: 18px;
-      padding: 0 2px;
-      border-color: transparent;
-      background: transparent;
-      font-size: inherit;
+      @include strip-control;
 
-      &:hover:not(:disabled),
-      &[aria-expanded='true'] {
-        border-color: transparent;
-        background: var(--bf-appearance-token-element-bg-soft);
+      max-width: 142px;
+
+      > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      // The chevron is punctuation, not one of the track's semantic glyphs.
+      // At the shared 12px it outweighed the mark that says which host this
+      // is, which is the thing worth reading.
+      .dispatch-target-picker__chevron {
+        width: 10px;
+        height: 10px;
+        opacity: 0.55;
       }
     }
   }
@@ -75,45 +170,9 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
+    gap: $track-item-gap;
     min-width: 0;
     height: 18px;
-  }
-
-  &__visual {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 14px;
-    width: 14px;
-    height: 14px;
-    color: var(--bf-appearance-token-color-text-secondary);
-
-    svg {
-      width: 14px;
-      height: 14px;
-    }
-  }
-
-  &__breadcrumb-separator {
-    flex: none;
-    margin: 0 -1px;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: flow-type.$meta-size;
-    font-weight: 400;
-    line-height: 1;
-    opacity: 0.62;
-  }
-
-  // Joins two different kinds of fact rather than continuing a path, so it is
-  // a dot instead of a slash.
-  &__rail-separator {
-    flex: none;
-    margin: 0 1px;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: flow-type.$support-size;
-    line-height: 1;
-    opacity: 0.5;
   }
 
   &__permission {
@@ -126,88 +185,38 @@
   // One-click branch sync is a primary recovery/review path for remote work,
   // so it gets accent treatment rather than the muted default of other controls.
   &__dispatch-result {
-    box-sizing: border-box;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    height: 18px;
+    @include strip-control;
+
     max-width: 140px;
-    padding: 0 5px;
-    border: 0;
-    border-radius: $size-radius-sm;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
     color: var(--bf-appearance-token-color-accent-500);
-    font: inherit;
-    font-size: flow-type.$control-size;
-    line-height: 1;
-    cursor: pointer;
-    transition:
-      background-color $motion-fast $easing-standard;
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 22%, transparent);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: 1px;
+      color: var(--bf-appearance-token-color-accent-500);
     }
 
     > span {
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
     }
   }
 
   &__permission-trigger {
-    position: relative;
-    box-sizing: border-box;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    height: 18px;
-    min-width: 0;
-    max-width: 100%;
-    padding: 0 6px;
-    border: 0;
-    border-radius: $size-radius-base;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font: inherit;
-    font-size: flow-type.$control-size;
-    line-height: 1;
-    letter-spacing: 0;
-    cursor: pointer;
-    transition:
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+    @include strip-control;
 
-    &:hover:not(:disabled),
+    position: relative;
+    max-width: 100%;
+    color: var(--bf-appearance-token-color-text-primary);
+
     &--open:not(:disabled) {
       background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: 1px;
-    }
-
-    &:disabled {
-      cursor: default;
-      opacity: 0.62;
-    }
-
-    svg {
-      flex: none;
     }
 
     // Full access is the one mode whose risk must stay visible after the label
     // is dropped on a narrow composer, so it keeps a tinted body of its own.
+    // It is the track's only coloured body, which is the point.
     &--full_access {
       background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
 
@@ -539,111 +548,25 @@
     }
   }
 
-  // The goal is the only control on the strip that can be silently stuck, so
-  // color reports its state: a parked or blocked goal must not look like the
-  // absence of one.
-  &__goal-btn.icon-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    min-width: 0;
-    width: auto;
-    max-width: min(180px, 40%);
-    height: 18px;
-    padding: 0 4px;
-    border-radius: $size-radius-base;
-    color: var(--bf-appearance-token-color-text-primary);
-    opacity: 1;
-
-    svg {
-      flex: none;
-      width: 15px;
-      height: 15px;
-      color: currentColor;
-    }
-
-    span {
-      min-width: 0;
-      overflow: hidden;
-      font-size: flow-type.$support-size;
-      font-weight: 500;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    &:hover:not(:disabled) {
-      transform: none;
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: inherit;
-      opacity: 1;
-    }
-  }
-
-  &__goal-btn--none.icon-btn,
-  &__goal-btn--complete.icon-btn {
-    color: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.58;
-
-    &:hover:not(:disabled) {
-      color: var(--bf-appearance-token-color-text-muted);
-      opacity: 0.72;
-    }
-  }
-
-  &__goal-btn--active.icon-btn {
-    color: var(--bf-appearance-token-color-text-primary);
-
-    svg {
-      color: var(--bf-appearance-token-color-accent-500);
-    }
-  }
-
-  &__goal-btn--paused.icon-btn {
-    color: var(--bf-appearance-token-color-warning);
-  }
-
-  &__goal-btn--blocked.icon-btn {
-    color: var(--bf-appearance-token-color-error);
-  }
-
   &__usage-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    min-width: 0;
-    height: 18px;
-    padding: 0 5px;
-    border: 0;
-    border-radius: $size-radius-base;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font: inherit;
-    font-size: flow-type.$support-size;
-    font-weight: 500;
-    cursor: pointer;
+    @include strip-control;
 
-    &:hover,
-    &:focus-visible {
-      outline: none;
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-accent-500);
-    }
-
+    width: 18px;
+    padding: 0;
   }
 
   &__usage-ring {
     position: relative;
     display: inline-flex;
-    flex: 0 0 14px;
-    width: 14px;
-    height: 14px;
+    flex: 0 0 12px;
+    width: 12px;
+    height: 12px;
 
     svg {
       position: absolute;
       inset: 0;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
     }
 
     .is-track {
@@ -657,82 +580,88 @@
     }
   }
 
-  &__chip {
+  // One coordinate, two parts. Held at the inner gap they read as a single
+  // phrase — "BitFun on 1.0.0-explore" — instead of two facts that happen to
+  // be adjacent, and the branch glyph joins them the way the slash used to,
+  // except this joiner says what the second part is.
+  &__location {
     display: inline-flex;
+    align-items: center;
+    gap: $track-part-gap;
+    flex: 0 1 auto;
     min-width: 0;
+  }
+
+  &__chip {
     box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: $track-part-gap;
+    min-width: 0;
+    padding: 0;
     border: 0;
-    border-radius: $size-radius-sm;
-    padding: 1px 5px;
-    margin: 0 -2px;
     background: transparent;
     color: inherit;
     font: inherit;
-    transition: background-color $motion-fast $easing-standard;
     cursor: default;
 
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-    }
-
     &--branch {
-      align-items: center;
       flex: 0 1 auto;
       max-width: 112px;
-      gap: 4px;
-      margin: 0;
-      padding: 1px 4px;
-      background: transparent;
     }
+  }
 
-    &--branch-toggle {
-      cursor: pointer;
+  // Isolation switch. The rail gap already steps it away from the path; it is
+  // a control, not another segment.
+  &__worktree-toggle {
+    @include strip-control;
 
-      &:hover:not(:disabled) {
-        background: var(--bf-appearance-token-element-bg-soft);
-        color: var(--bf-appearance-token-color-text-primary);
-      }
+    color: var(--bf-appearance-token-color-text-muted);
 
-      &:focus-visible {
-        outline: 2px solid var(--bf-appearance-token-color-accent-500);
-        outline-offset: 1px;
-      }
-
-      &:disabled {
-        cursor: default;
-        opacity: 0.55;
-      }
-    }
-
-    &--worktree-on {
-      background: transparent;
+    &--on {
       color: var(--bf-appearance-token-color-accent-500);
 
       &:hover:not(:disabled) {
         color: var(--bf-appearance-token-color-accent-500);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
       }
     }
   }
 
+  /*
+   * The UI font (Noto Sans SC) has CJK vertical metrics — 1.16em ascent against
+   * 0.32em descent — so `align-items: center` centers a line box whose glyphs sit
+   * ~0.06em below its middle. Beside a glyph that centers exactly, a label reads
+   * as low. The 1px bottom pad lifts it by half of that, and every text span on
+   * the track carries the same one so they share a baseline.
+   */
+  &__worktree-label {
+    padding-bottom: 1px;
+  }
+
+  // The one thing on the track that is a subject rather than a qualifier, so
+  // it is the only text carrying full weight and full contrast.
   &__workspace {
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 180px;
     white-space: nowrap;
     font-family: inherit;
     font-size: inherit;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding-bottom: 0;
-    max-width: 45%;
+    padding-bottom: 1px;
     color: var(--bf-appearance-token-color-text-primary);
   }
 
+  // The track's one remaining fact glyph. It says "branch", which is exactly
+  // what "1.0.0-explore" cannot say on its own.
   &__branch-icon {
-    flex-shrink: 0;
+    flex: none;
     width: 12px;
     height: 12px;
     color: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.9;
   }
 
   &__branch {
@@ -757,10 +686,6 @@
     &__workspace {
       max-width: 112px;
     }
-
-    &__goal-btn.icon-btn {
-      max-width: 118px;
-    }
   }
 }
 
@@ -768,6 +693,14 @@
   .bitfun-chat-input-workspace-strip {
     &__permission-label {
       display: none;
+    }
+
+    // A control that loses its label collapses to the same square target the
+    // context ring already is, so the row keeps one rhythm as it narrows
+    // instead of leaving lopsided pills behind.
+    &__permission-trigger {
+      width: 18px;
+      padding: 0;
     }
 
     &__chip--branch {
@@ -778,13 +711,18 @@
 
 @media (max-width: 460px) {
   .bitfun-chat-input-workspace-strip {
-    // The objective goes, its status color does not.
-    &__goal-btn.icon-btn span {
+    &__branch {
       display: none;
     }
 
-    &__branch {
+    // The word goes, the checkbox and its state color do not.
+    &__worktree-label {
       display: none;
+    }
+
+    &__worktree-toggle {
+      width: 18px;
+      padding: 0;
     }
   }
 }

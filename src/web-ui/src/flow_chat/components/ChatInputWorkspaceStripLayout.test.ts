@@ -41,17 +41,94 @@ describe('status track layout', () => {
   it('keeps passive context aligned and promotes consequential controls', () => {
     const stylesheet = readWorkspaceStripStylesheet();
 
+    // Two roles, each declared once. The track sets the support size and its
+    // facts inherit it; every control takes the ladder's control step instead,
+    // so interactive labels cannot drift down to metadata size.
     expect(stylesheet).toContain(
       'font-size: flow-type.$support-size;\n  line-height:',
     );
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(/&__branch \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(
-      /&__permission-trigger \{[\s\S]*?font-size: flow-type\.\$control-size;/,
+      /@mixin strip-control \{[\s\S]*?font-size: flow-type\.\$control-size;/,
     );
-    expect(stylesheet).toMatch(
-      /&__usage-btn \{[\s\S]*?font-size: flow-type\.\$support-size;/,
+    // No control names a size of its own — that is how the track drifted into
+    // four of them before.
+    const rails = stylesheet.slice(0, stylesheet.indexOf('  &__permission-option-row {'));
+    expect(rails.match(/font-size:/g)?.length).toBe(2);
+    // The rails end where the permission popover begins; that menu is its own
+    // surface and is allowed a denser scale than the track.
+    expect(rails).not.toContain('$micro-size');
+  });
+
+  it('gives every control on the track the same pill, and facts no pill at all', () => {
+    const stylesheet = readWorkspaceStripStylesheet();
+
+    // One shape, declared once. Four heights, three radii and two hover fills
+    // across five neighbouring controls is what "unified" is the fix for.
+    const mixin = stylesheet.slice(
+      stylesheet.indexOf('@mixin strip-control {'),
+      stylesheet.indexOf('.bitfun-chat-input-workspace-strip {'),
     );
+    expect(mixin).toContain('height: 18px;');
+    expect(mixin).toContain('border-radius: 999px;');
+    expect(mixin).toContain('background: transparent;');
+    expect(mixin).toMatch(/> svg \{[\s\S]*?width: 12px;/);
+
+    for (const control of [
+      '    .dispatch-target-picker__trigger {\n      @include strip-control;',
+      '  &__dispatch-result {\n    @include strip-control;',
+      '  &__permission-trigger {\n    @include strip-control;',
+      '  &__usage-btn {\n    @include strip-control;',
+      '  &__worktree-toggle {\n    @include strip-control;',
+    ]) {
+      expect(stylesheet).toContain(control);
+    }
+
+    // A fact carries no body and no hover, so nothing on the track offers a
+    // click it cannot answer.
+    const chip = stylesheet.slice(
+      stylesheet.indexOf('  &__chip {'),
+      stylesheet.indexOf('  // Isolation switch.'),
+    );
+    expect(chip).toContain('cursor: default;');
+    expect(chip).not.toContain(':hover');
+
+    // With no separators, spacing is the only thing grouping the row, so the
+    // two gaps are named and must stay far enough apart to read as a ratio.
+    expect(stylesheet).toContain('$track-part-gap: 4px;');
+    expect(stylesheet).toContain('$track-item-gap: 10px;');
+    expect(stylesheet).toMatch(/&__context \{[\s\S]*?gap: \$track-item-gap;/);
+    expect(stylesheet).toMatch(/&__next \{[\s\S]*?gap: \$track-item-gap;/);
+    expect(stylesheet).toMatch(/&__chip \{[\s\S]*?gap: \$track-part-gap;/);
+    expect(mixin).toContain('gap: $track-part-gap;');
+
+    // Workspace and branch are one coordinate held at the inner gap, so they
+    // read as one phrase rather than as two adjacent facts.
+    expect(stylesheet).toMatch(/&__location \{[\s\S]*?gap: \$track-part-gap;/);
+  });
+
+  it('lines the track up with the capsule it belongs to, ink to ink', () => {
+    const stylesheet = readWorkspaceStripStylesheet();
+    const chatInput = readChatInputStylesheet();
+
+    // The two rows share an origin, so the track can only look attached if it
+    // accounts for the capsule's border and pad — and for the transparent
+    // padding its own outermost items carry.
+    const capsule = chatInput.slice(
+      chatInput.indexOf('    // Capsule (single-line) mode appearance'),
+      chatInput.indexOf('    &--multi-line {'),
+    );
+    expect(capsule).toContain('padding: 0 8px;');
+    expect(capsule).toContain('border: 1px solid');
+    // …and the drop zone's own inset, the third term in the 17px.
+    expect(chatInput).toMatch(
+      /\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 \$size-gap-2;/,
+    );
+    expect(stylesheet).toContain('$track-edge: 17px;');
+    expect(stylesheet).toContain('$track-pad-left: $track-edge - 7px;');
+    expect(stylesheet).toContain('$track-pad-right: $track-edge - 3px;');
+    expect(stylesheet).toContain('padding: 0 $track-pad-right 0 $track-pad-left;');
   });
 
   it('orders the left rail as situation and the right rail as the next turn', () => {
@@ -61,16 +138,21 @@ describe('status track layout', () => {
 
     expect(contextIndex).toBeGreaterThan(-1);
     expect(nextIndex).toBeGreaterThan(contextIndex);
-    // Situation: destination, workspace, branch, and the goal being chased.
+    // Situation: destination, workspace, branch, and whether it is isolated.
     expect(component).toContain('<DispatchTargetPicker');
-    expect(component).toContain('<FolderPen size={14}');
-    expect(component).toContain('bitfun-chat-input-workspace-strip__breadcrumb-separator');
-    expect(component).toContain('aria-hidden>/</span>');
-    expect(component).toContain('bitfun-chat-input-workspace-strip__rail-separator');
-    expect(component).toContain('<ThreadGoalStripButton');
+    expect(component).toContain('__location');
+    expect(component).toContain('__chip--branch');
+    expect(component).toContain('data-testid="chat-input-worktree-toggle"');
+    // Each segment opens with its own glyph, so punctuation between them only
+    // repeats a boundary that is already drawn — and a slash claimed a path
+    // that a host, a workspace and a branch do not form.
+    expect(component).not.toContain('breadcrumb-separator');
+    expect(component).not.toContain('>/</span>');
     // Next turn: how much confirmation it asks for, and how much room is left.
     expect(component).toContain('data-testid="chat-input-permission-trigger"');
-    expect(component).toContain('<span>{usagePercentage}%</span>');
+    // The ring is the whole reading. A number beside it only said the same
+    // thing twice, in the rail with the least room to say anything.
+    expect(component).not.toContain('{usagePercentage}%');
     expect(component).toContain('bitfun-chat-input-workspace-strip__usage-ring');
     expect(component).toContain('data-testid="dispatch-sync-trigger"');
   });
@@ -105,7 +187,8 @@ describe('status track layout', () => {
     expect(chatInput).toContain('<HarnessProfileSelector');
     expect(chatInput).not.toContain('harnessControl');
     // Reasoning belongs beside the model it configures, so the capsule no
-    // longer hides it; only the context percentage stays on the status track.
+    // longer hides it; the context reading stays on the status track, as a
+    // ring rather than a number.
     expect(stylesheet).not.toContain('.bitfun-reasoning-preset-selector,');
     expect(stylesheet).toContain('.bitfun-model-selector__ctx-usage {');
     expect(stylesheet).toContain('.bitfun-reasoning-preset-selector__trigger {');
@@ -178,20 +261,32 @@ describe('status track layout', () => {
       /@media \(max-width: 560px\)[\s\S]*?__permission-label \{\n {6}display: none;/,
     );
     expect(stylesheet).toMatch(
-      /@media \(max-width: 460px\)[\s\S]*?__goal-btn\.icon-btn span \{\n {6}display: none;/,
+      /@media \(max-width: 460px\)[\s\S]*?__worktree-label \{\n {6}display: none;/,
     );
-    // …while the goal's tone, the permission shield, and the context ring stay.
+    // …while the isolation checkbox, the permission shield, and the context
+    // ring stay.
+    expect(stylesheet).not.toMatch(/@media[\s\S]*?__worktree-toggle \{\n {6}display: none;/);
     expect(stylesheet).not.toMatch(/@media[\s\S]*?__usage-ring \{\n {6}display: none;/);
     expect(stylesheet).not.toMatch(/@media[\s\S]*?__permission-overview-icon \{\n {6}display: none;/);
   });
 
-  it('gives every goal state a tone of its own so a stuck goal is not read as none', () => {
+  it('states worktree isolation as a checkbox rather than hiding it on the branch', () => {
+    const component = readWorkspaceStripComponent();
     const stylesheet = readWorkspaceStripStylesheet();
 
-    expect(stylesheet).toContain('&__goal-btn--active.icon-btn');
-    expect(stylesheet).toContain('&__goal-btn--paused.icon-btn');
-    expect(stylesheet).toContain('&__goal-btn--blocked.icon-btn');
-    expect(stylesheet).toContain('&__goal-btn--complete.icon-btn');
+    // The branch is a fact and the isolation is a control. Folding the switch
+    // into the branch label left the composer with no visible way to say the
+    // session can run somewhere else.
+    expect(component).toContain('role="switch"');
+    expect(component).toContain('__worktree-toggle');
+    expect(component).not.toContain('__chip--branch-toggle');
+    expect(stylesheet).toMatch(/&__worktree-toggle \{\n\s*@include strip-control;/);
+    // On/off is a colour, not an outline: one bordered item in a borderless
+    // row reads as an error state rather than a mode.
+    expect(stylesheet).toMatch(
+      /&--on \{\n\s*color: var\(--bf-appearance-token-color-accent-500\);/,
+    );
+    expect(stylesheet).not.toMatch(/&__worktree-toggle \{[\s\S]*?border: 1px/);
   });
 
   it('answers a blocked turn from the composer stack, not from over the transcript', () => {

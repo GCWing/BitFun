@@ -7,7 +7,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
-import type { ThreadGoalSnapshot } from '../services/goalService';
 
 const mocks = vi.hoisted(() => ({
   refreshBasic: vi.fn(async () => undefined),
@@ -133,7 +132,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
         <ChatInputWorkspaceStrip
           repositoryPath="D:/workspace/BitFun"
           workspaceLabel="BitFun"
-          threadGoal={{ visible: true, goal: null, onOpen: vi.fn() }}
+          worktreeControl={{ enabled: false, locked: false, onChange: vi.fn() }}
           permissionControl={{ mode: 'auto', onChange: vi.fn() }}
           usageReport={{ visible: true, percentage: 12, onOpen: vi.fn() }}
         />
@@ -145,59 +144,27 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(context).not.toBeNull();
     expect(next).not.toBeNull();
 
-    // Where the session runs and what it is chasing read as one situation.
+    // Where the session runs, and whether it runs there in isolation, read as
+    // one situation.
     expect(context?.querySelector('[data-bf-part="workspace"]')).not.toBeNull();
     expect(context?.querySelector('[data-bf-part="branch"]')).not.toBeNull();
-    expect(context?.querySelector('[data-testid="thread-goal-strip-button"]')).not.toBeNull();
+    expect(context?.querySelector('[data-testid="chat-input-worktree-toggle"]')).not.toBeNull();
 
     // What the next submission runs with reads as one contract.
     const permissionTrigger = next?.querySelector<HTMLElement>(
       '[data-testid="chat-input-permission-trigger"]',
     );
     expect(permissionTrigger?.textContent).toContain('chatInput.permissionMode.auto.label');
+    // The ring carries the reading on its own; the number is not repeated.
     expect(next?.querySelector('[data-bf-part="usageAction"]')).not.toBeNull();
-    expect(container.textContent).toContain('12%');
+    expect(next?.querySelector('.bitfun-chat-input-workspace-strip__usage-ring')).not.toBeNull();
+    expect(container.textContent).not.toContain('12%');
 
     // The harness and the reasoning strength live in the capsule now, so the
     // strip must not grow a second home for either.
     expect(container.querySelector('[data-testid="harness-profile-selector"]')).toBeNull();
     expect(container.querySelector('[data-bf-part="harness"]')).toBeNull();
     expect(container.querySelector('[data-bf-part="runtime"]')).toBeNull();
-  });
-
-  it('names the goal only once it is worth reading, and keeps its state visible', async () => {
-    const renderGoal = async (goal: ThreadGoalSnapshot | null) => {
-      await act(async () => {
-        root.render(
-          <ChatInputWorkspaceStrip
-            repositoryPath="D:/workspace/BitFun"
-            workspaceLabel="BitFun"
-            threadGoal={{ visible: true, goal, onOpen: vi.fn() }}
-          />
-        );
-      });
-      return container.querySelector<HTMLElement>('[data-testid="thread-goal-strip-button"]');
-    };
-
-    // No goal: the crosshair is an invitation, not a status.
-    let goalButton = await renderGoal(null);
-    expect(goalButton?.textContent).toBe('');
-    expect(goalButton?.dataset.goalTone).toBe('none');
-
-    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'active' });
-    expect(goalButton?.textContent).toBe('Optimize input interaction');
-    expect(goalButton?.dataset.goalTone).toBe('active');
-
-    // A goal that stopped on its own must not read like a running one.
-    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'paused' });
-    expect(goalButton?.dataset.goalTone).toBe('paused');
-    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'blocked' });
-    expect(goalButton?.dataset.goalTone).toBe('blocked');
-
-    // A finished goal keeps the entry but stops competing for attention.
-    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'complete' });
-    expect(goalButton?.dataset.goalTone).toBe('complete');
-    expect(goalButton?.textContent).toBe('');
   });
 
   it('keeps an ask-mode permission entry visible and switches from its menu', async () => {
