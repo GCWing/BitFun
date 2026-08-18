@@ -112,6 +112,7 @@ export class FlowChatManager {
       deferredStorageIdentitySaves: new Set(),
       runtimeStatusTimers: new Map(),
       userCancelledSessionIds: new Set(),
+      pendingHistoryFenceSessions: new Set(),
       handledTerminalTurnEvents: new Set(),
       currentWorkspacePath: null,
       ensureLiveSubscription: () => this.ensureEventListeners(),

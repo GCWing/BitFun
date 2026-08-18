@@ -457,6 +457,17 @@ fn snapshot_managers() -> &'static StdRwLock<HashMap<PathBuf, Arc<SnapshotManage
     SNAPSHOT_MANAGERS.get_or_init(|| StdRwLock::new(HashMap::new()))
 }
 
+/// Read-only view managers, cached separately from writers. Loading the
+/// snapshot index is expensive (it reads every persisted metadata file), so a
+/// view is built once per workspace and reused until a writer supersedes it.
+/// Views never see writes anyway: in-process writers register in
+/// `snapshot_managers` (checked first), and that registration evicts the view.
+fn snapshot_view_managers() -> &'static StdRwLock<HashMap<PathBuf, Arc<SnapshotManager>>> {
+    static SNAPSHOT_VIEW_MANAGERS: OnceLock<StdRwLock<HashMap<PathBuf, Arc<SnapshotManager>>>> =
+        OnceLock::new();
+    SNAPSHOT_VIEW_MANAGERS.get_or_init(|| StdRwLock::new(HashMap::new()))
+}
+
 fn snapshot_manager_init_locks() -> &'static AsyncMutex<HashMap<PathBuf, Arc<AsyncMutex<()>>>> {
     static SNAPSHOT_MANAGER_INIT_LOCKS: OnceLock<
         AsyncMutex<HashMap<PathBuf, Arc<AsyncMutex<()>>>>,
@@ -532,6 +543,9 @@ fn set_snapshot_manager_new_delay_for_test(delay: Duration) {
 pub(crate) fn clear_snapshot_manager_for_test(workspace_dir: &Path) {
     if let Ok(mut managers) = snapshot_managers().write() {
         managers.remove(&snapshot_workspace_key(workspace_dir));
+    }
+    if let Ok(mut views) = snapshot_view_managers().write() {
+        views.remove(&snapshot_workspace_key(workspace_dir));
     }
 }
 
@@ -1003,7 +1017,12 @@ pub async fn get_or_create_snapshot_manager(
         if let Some(existing) = managers.get(&workspace_key) {
             return Ok(existing.clone());
         }
-        managers.insert(workspace_key, manager.clone());
+        managers.insert(workspace_key.clone(), manager.clone());
+    }
+    // The writer now owns live state for this workspace; a cached read-only
+    // view would keep serving the pre-writer index, so drop it.
+    if let Ok(mut views) = snapshot_view_managers().write() {
+        views.remove(&workspace_key);
     }
     info!(
         "Snapshot manager cold initialization completed: duration_ms={}",
@@ -1030,20 +1049,43 @@ pub async fn open_snapshot_manager_for_view(
     if let Some(manager) = get_snapshot_manager_for_workspace(&workspace_key) {
         return Ok(manager);
     }
+    if let Some(view) = get_snapshot_view_manager_for_workspace(&workspace_key) {
+        return Ok(view);
+    }
 
     let init_lock = snapshot_manager_init_lock(&workspace_key).await;
     let _init_guard = init_lock.lock().await;
     if let Some(manager) = get_snapshot_manager_for_workspace(&workspace_key) {
         return Ok(manager);
     }
+    if let Some(view) = get_snapshot_view_manager_for_workspace(&workspace_key) {
+        return Ok(view);
+    }
 
+    let started_at = Instant::now();
     let runtime_context =
         get_workspace_runtime_service_arc().context_for_local_workspace(&workspace_key);
-    let mut snapshot_service = SnapshotService::new(workspace_key, runtime_context, None);
+    let mut snapshot_service = SnapshotService::new(workspace_key.clone(), runtime_context, None);
     snapshot_service.initialize_for_view().await?;
-    Ok(Arc::new(SnapshotManager {
+    let view = Arc::new(SnapshotManager {
         snapshot_service: Arc::new(RwLock::new(snapshot_service)),
-    }))
+    });
+    if let Ok(mut views) = snapshot_view_managers().write() {
+        views.insert(workspace_key, view.clone());
+    }
+    info!(
+        "Snapshot view initialized and cached: workspace={} duration_ms={}",
+        workspace_dir.display(),
+        started_at.elapsed().as_millis()
+    );
+    Ok(view)
+}
+
+fn get_snapshot_view_manager_for_workspace(workspace_key: &Path) -> Option<Arc<SnapshotManager>> {
+    snapshot_view_managers()
+        .read()
+        .ok()
+        .and_then(|views| views.get(workspace_key).cloned())
 }
 
 pub fn ensure_snapshot_manager_for_workspace(
@@ -1296,6 +1338,43 @@ mod tests {
             .await
             .expect_err("read-only view must reject mutations");
         assert!(error.to_string().contains("read-only"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn view_manager_is_cached_and_superseded_by_a_later_writer() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
+        clear_snapshot_manager_for_test(workspace.path());
+
+        let first_view = open_snapshot_manager_for_view(workspace.path())
+            .await
+            .expect("first view");
+        let second_view = open_snapshot_manager_for_view(workspace.path())
+            .await
+            .expect("second view");
+        assert!(
+            Arc::ptr_eq(&first_view, &second_view),
+            "repeated view opens must reuse the cached view instead of reloading the index"
+        );
+
+        let writer = get_or_create_snapshot_manager(workspace.path().to_path_buf(), None)
+            .await
+            .expect("writer manager");
+        let view_after_writer = open_snapshot_manager_for_view(workspace.path())
+            .await
+            .expect("view after writer");
+        assert!(
+            Arc::ptr_eq(&view_after_writer, &writer),
+            "a registered writer must supersede the cached read-only view"
+        );
+        assert!(
+            !Arc::ptr_eq(&view_after_writer, &first_view),
+            "the stale pre-writer view must not be served once a writer owns live state"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

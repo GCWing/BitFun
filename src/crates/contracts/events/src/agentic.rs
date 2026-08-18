@@ -108,6 +108,14 @@ pub enum AgenticEvent {
     /// session and reload them from the owning runtime.
     SessionHistoryChanged {
         session_id: String,
+        /// Present when this event is the per-Turn durable fence emitted after
+        /// a settled Turn's terminal record was committed. Consumers may then
+        /// repair only the settled tail instead of dropping a live projection
+        /// of a newer executing Turn. Absent for out-of-lifecycle history
+        /// edits such as undo/redo, which still require full invalidation.
+        /// Optional so payloads from older hosts keep deserializing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        settled_turn_id: Option<String>,
     },
 
     SessionDeleted {
@@ -628,7 +636,7 @@ impl AgenticEvent {
         match self {
             Self::SessionCreated { session_id, .. }
             | Self::SessionStateChanged { session_id, .. }
-            | Self::SessionHistoryChanged { session_id }
+            | Self::SessionHistoryChanged { session_id, .. }
             | Self::SessionDeleted { session_id }
             | Self::SessionTitleGenerated { session_id, .. }
             | Self::ImageAnalysisStarted { session_id, .. }

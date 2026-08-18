@@ -2975,6 +2975,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .enqueue(
                     AgenticEvent::SessionHistoryChanged {
                         session_id: session_id.to_string(),
+                        settled_turn_id: Some(turn_id.to_string()),
                     },
                     Some(EventPriority::Normal),
                 )
@@ -15893,8 +15894,10 @@ mod tests {
         let events = coordinator.event_queue.dequeue_batch(10).await;
         assert!(events.iter().any(|envelope| matches!(
             &envelope.event,
-            AgenticEvent::SessionHistoryChanged { session_id }
-                if session_id == &session.session_id
+            AgenticEvent::SessionHistoryChanged {
+                session_id,
+                settled_turn_id: Some(settled_turn_id),
+            } if session_id == &session.session_id && settled_turn_id == &turn_id
         )));
         session_manager
             .delete_session_by_id(&session.session_id)

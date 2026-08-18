@@ -622,6 +622,7 @@ impl ScheduledSessionManagementPort {
             self.coordinator
                 .emit_event(AgenticEvent::SessionHistoryChanged {
                     session_id: request.session_id.clone(),
+                    settled_turn_id: None,
                 })
                 .await;
         }
@@ -775,6 +776,7 @@ impl AgentSessionRevertPort for ScheduledSessionManagementPort {
         self.coordinator
             .emit_event(AgenticEvent::SessionHistoryChanged {
                 session_id: request.session_id.clone(),
+                settled_turn_id: None,
             })
             .await;
         let mut retired_turn_ids = maintenance.retired_turn_ids().to_vec();

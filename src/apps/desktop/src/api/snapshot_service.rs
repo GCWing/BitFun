@@ -406,6 +406,17 @@ async fn begin_snapshot_history_read(
     workspace_path: &str,
     session_id: &str,
 ) -> Result<CoreSessionReadPermit, String> {
+    // Warm the snapshot view before taking the exclusive session read permit.
+    // The first view open for a workspace loads the entire snapshot index from
+    // disk; holding the session mutation lock across that load stalls every
+    // waiter on the same session, including the next dialog-turn start. After
+    // warming, the caller's in-permit view lookup is a cache hit.
+    if !is_remote_path(workspace_path).await {
+        let workspace_dir = resolve_workspace_dir(workspace_path).await?;
+        open_snapshot_manager_for_view(&workspace_dir)
+            .await
+            .map_err(|error| format!("Failed to open snapshot view: {error}"))?;
+    }
     let compatibility = runtime.session_application().compatibility();
     let storage_path = compatibility
         .resolve_persisted_session_storage_path(SessionStoragePathRequest {
