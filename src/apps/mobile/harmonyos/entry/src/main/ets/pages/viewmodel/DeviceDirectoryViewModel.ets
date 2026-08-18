@@ -18,6 +18,8 @@ import {
 export interface DeviceDirectoryViewModelHooks {
   readonly credentials: () => CloudAccountBinding | undefined;
   readonly activeDeviceId: () => string;
+  /** Whether the conversation link to [activeDeviceId] is currently live. */
+  readonly activeDeviceConnected: () => boolean;
 }
 
 /** Expand / collapse / retry for the sidebar's per-device directory. */
@@ -94,21 +96,34 @@ export class DeviceDirectoryViewModel {
 
   syncDevices(devices: CloudAccountDevice[]): void {
     const activeId = this.hooks.activeDeviceId();
+    const activeConnected = this.hooks.activeDeviceConnected();
     const next: DeviceDirectoryEntry[] = devices.map((device: CloudAccountDevice): DeviceDirectoryEntry => {
+      // The relay's presence flag is hearsay: it is a projection of a socket
+      // registry that can lag or lose an entry. A live conversation link is
+      // first-hand proof, so it wins. Without this the desktop we are pinging
+      // every fifteen seconds can render as a greyed-out offline row.
+      const online = device.online ||
+        (device.deviceId === activeId && activeId.length > 0 && activeConnected);
+      if (online !== device.online) {
+        // Only the disagreement is worth a line. It is rare, it is the whole
+        // reason this branch exists, and it is what the next person chasing a
+        // wrongly-greyed row will grep for.
+        RemoteLogger.info(`device presence override device=${device.deviceId} relay=offline link=live`);
+      }
       const existing = this.state.find(device.deviceId);
       if (existing) {
         existing.deviceName = device.deviceName || existing.deviceName;
-        if (existing.online && !device.online) {
+        if (existing.online && !online) {
           existing.expanded = false;
         }
-        existing.online = device.online;
+        existing.online = online;
         return existing;
       }
-      const isActive = device.deviceId === activeId && device.online;
+      const isActive = device.deviceId === activeId && online;
       const created = emptyDeviceDirectoryEntry(
         device.deviceId,
         device.deviceName || device.deviceId,
-        device.online
+        online
       );
       created.expanded = isActive;
       return created;

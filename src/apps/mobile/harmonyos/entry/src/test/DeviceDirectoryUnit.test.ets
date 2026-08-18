@@ -180,7 +180,8 @@ export default function deviceDirectoryUnitTest() {
           credentialCalls += 1;
           throw new Error('offline devices must not build a directory');
         },
-        activeDeviceId: () => 'desk-active'
+        activeDeviceId: () => 'desk-active',
+        activeDeviceConnected: () => false
       });
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
@@ -196,7 +197,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-offline'
+        activeDeviceId: () => 'desk-offline',
+        activeDeviceConnected: () => false
       });
       viewModel.syncDevices([
         { deviceId: 'desk-offline', deviceName: 'Studio', online: false }
@@ -209,7 +211,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-studio'
+        activeDeviceId: () => 'desk-studio',
+        activeDeviceConnected: () => false
       });
       viewModel.syncDevices([
         { deviceId: 'desk-studio', deviceName: 'Studio', online: true }
@@ -222,11 +225,39 @@ export default function deviceDirectoryUnitTest() {
       expect(state.find('desk-studio')?.expanded).assertFalse();
     });
 
+    it('keeps the live conversation device online when the relay says otherwise', 0, () => {
+      const state = new DeviceDirectoryState();
+      let connected = true;
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => 'desk-live',
+        activeDeviceConnected: () => connected
+      });
+      // The relay's registry can lag or lose an entry while the desktop answers
+      // every RPC we send it. First-hand evidence outranks that projection.
+      viewModel.syncDevices([
+        { deviceId: 'desk-live', deviceName: 'Studio', online: false },
+        { deviceId: 'desk-other', deviceName: 'Other', online: false }
+      ]);
+      expect(state.find('desk-live')?.online).assertTrue();
+      expect(state.find('desk-live')?.expanded).assertTrue();
+      // The override must not outlive the link it is based on, or a device that
+      // really did go away keeps a lit row forever.
+      expect(state.find('desk-other')?.online).assertFalse();
+      connected = false;
+      viewModel.syncDevices([
+        { deviceId: 'desk-live', deviceName: 'Studio', online: false }
+      ]);
+      expect(state.find('desk-live')?.online).assertFalse();
+      expect(state.find('desk-live')?.expanded).assertFalse();
+    });
+
     it('keeps a collapsed active device collapsed across syncDevices', 0, async () => {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-active'
+        activeDeviceId: () => 'desk-active',
+        activeDeviceConnected: () => false
       });
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
@@ -248,7 +279,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-active'
+        activeDeviceId: () => 'desk-active',
+        activeDeviceConnected: () => false
       });
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
@@ -270,7 +302,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-active'
+        activeDeviceId: () => 'desk-active',
+        activeDeviceConnected: () => false
       }, undefined, source);
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
@@ -295,7 +328,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-active'
+        activeDeviceId: () => 'desk-active',
+        activeDeviceConnected: () => false
       }, undefined, source);
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
@@ -322,7 +356,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-active'
+        activeDeviceId: () => 'desk-active',
+        activeDeviceConnected: () => false
       }, store, source);
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
@@ -344,7 +379,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-active'
+        activeDeviceId: () => 'desk-active',
+        activeDeviceConnected: () => false
       }, store, source);
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
@@ -369,7 +405,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => activeId
+        activeDeviceId: () => activeId,
+        activeDeviceConnected: () => false
       }, undefined, source);
       viewModel.syncDevices([
         { deviceId: 'desk-a', deviceName: 'Alpha', online: true },
@@ -396,7 +433,8 @@ export default function deviceDirectoryUnitTest() {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
-        activeDeviceId: () => 'desk-a'
+        activeDeviceId: () => 'desk-a',
+        activeDeviceConnected: () => false
       });
       viewModel.syncDevices([
         { deviceId: 'desk-a', deviceName: 'Alpha', online: true }

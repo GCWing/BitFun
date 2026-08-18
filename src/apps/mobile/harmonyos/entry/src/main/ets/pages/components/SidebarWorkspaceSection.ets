@@ -82,7 +82,7 @@ export struct SidebarWorkspaceSection {
               this.onOpenWorkspace(entry.deviceId, path);
             }
           })
-        }, (entry: DeviceDirectoryEntry): string => entry.deviceId)
+        }, (entry: DeviceDirectoryEntry): string => this.deviceKey(entry))
         if (this.visibleDeviceCount < this.deviceEntries().length) {
           this.MoreDevicesRow()
         }
@@ -194,6 +194,19 @@ export struct SidebarWorkspaceSection {
     }
     return entries.length <= this.visibleDeviceCount ?
       entries : entries.slice(0, this.visibleDeviceCount);
+  }
+
+  /**
+   * ForEach binds a child to the item it was created with and only re-reads
+   * that item when the key changes. The unpaired placeholder carries the
+   * control target's own deviceId, so an unprefixed key collides with the real
+   * row for that same desktop: the child built during the flatten phase keeps
+   * rendering the frozen placeholder after the account device list lands —
+   * greyed out and unresponsive to its own toggle, because every field it
+   * paints belongs to an object nothing updates any more.
+   */
+  private deviceKey(entry: DeviceDirectoryEntry): string {
+    return this.directoryState.devices.length > 0 ? entry.deviceId : `unpaired:${entry.deviceId}`;
   }
 
   private showsDeviceHeader(): boolean {

@@ -19,6 +19,7 @@ import {
 } from '../../services/general-chat/GeneralChatConfigStore';
 import { GeneralChatCloudConfigPolicy } from '../../services/general-chat/GeneralChatCloudConfigPolicy';
 import { GeneralChatServiceStatus } from '../../services/general-chat/GeneralChatServiceState';
+import { RemoteHeartbeatController } from '../../services/RemoteHeartbeatController';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteSessionManager } from '../../services/RemoteSessionManager';
 import { WatchProvisionOutcome } from '../../services/WatchProvisionController';
@@ -61,6 +62,9 @@ export interface CloudAccountSettingsDependencies {
   readonly hooks: CloudAccountSettingsHooks;
 }
 
+/** How often presence is refetched while device rows are on screen. */
+const PRESENCE_POLL_INTERVAL_MS: number = 20000;
+
 /** Owns general-chat model service settings and their presentation projection. */
 export class SettingsController {
   private readonly store: GeneralChatConfigStore;
@@ -71,6 +75,8 @@ export class SettingsController {
   private cloudRelayUrl: string = '';
   private accountDevices: CloudAccountDevice[] = [];
   private lastAccountDevicesAt: number = 0;
+  private presenceTicker?: RemoteHeartbeatController;
+  private restoringControlTarget: boolean = false;
 
   constructor(
     store: GeneralChatConfigStore,
@@ -308,6 +314,31 @@ export class SettingsController {
   }
 
   /**
+   * Polls presence for as long as device rows are on screen.
+   *
+   * Events alone do not cover the screen where this matters most: the wide
+   * layout keeps the sidebar mounted in its master pane, so the drawer open
+   * that carries a refresh never fires there and a desktop coming online is
+   * never noticed. The relay cannot push presence, so the rows have to ask.
+   * The ticker reuses the heartbeat's drop-overlapping-ticks semantics, and
+   * [maxAgeMs] still gates the request, so a tick that lands right after an
+   * event-driven refresh costs nothing.
+   */
+  startPresencePolling(maxAgeMs: number): void {
+    if (!this.presenceTicker) {
+      this.presenceTicker = new RemoteHeartbeatController(async (): Promise<void> => {
+        await this.refreshAccountDevicesIfStale(maxAgeMs);
+      }, PRESENCE_POLL_INTERVAL_MS);
+    }
+    this.presenceTicker.start();
+  }
+
+  /** Stops the presence poll. Nothing is on screen to go stale. */
+  stopPresencePolling(): void {
+    this.presenceTicker?.stop();
+  }
+
+  /**
    * Refetches account device presence when the last answer is older than
    * [maxAgeMs].
    *
@@ -332,6 +363,25 @@ export class SettingsController {
     } catch (err) {
       RemoteLogger.warn(`account device presence refresh failed: ${String(err)}`);
     }
+  }
+
+  /**
+   * Re-publishes the cached device list so presence can be re-derived.
+   *
+   * Presence is not purely the relay's to decide: a device we hold a live link
+   * to is online whatever the socket registry last projected. That override is
+   * evaluated when the list is published, so a link going live has to republish
+   * or the desktop we just connected to keeps whatever the last fetch claimed —
+   * on a cold start that fetch happens before the reconnect lands, and the
+   * answer it brought back is "offline".
+   *
+   * No request goes out: this is the same list, read again.
+   */
+  resyncAccountDevicePresence(): void {
+    if (this.accountDevices.length === 0) {
+      return;
+    }
+    this.requireCloud().hooks.onAccountDevices(this.accountDevices);
   }
 
   async listCloudAccountDevices(): Promise<CloudAccountDevice[]> {
@@ -472,6 +522,9 @@ export class SettingsController {
       }
       return;
     }
+    // Taken before the teardown, which is the last moment the outgoing device
+    // is still readable off the page state.
+    const previousTarget = this.restorableControlTarget();
     this.prepareAccountDeviceConnection();
     try {
       const initialSync = await cloud.sessionManager.connectAccountDevice(
@@ -496,10 +549,15 @@ export class SettingsController {
       cloud.hooks.onControlTargetChanged();
       cloud.remoteState.setAuthenticatedUserId(initialSync.authenticatedUserId);
       cloud.remoteState.setConnectionState('connected');
+      this.resyncAccountDevicePresence();
       cloud.remoteState.setStatusText(RemoteI18n.t('connection.connected'));
-      cloud.hooks.closeSettings();
-      cloud.hooks.closeConnectSheet();
+      // Dismissing the picker and going home are the same event: the switch the
+      // user asked for from a sheet is done. A switch nobody asked for — the
+      // one behind opening a session on another desktop, or the restore after a
+      // failed one — must not take their place in the UI away from them.
       if (navigateHome) {
+        cloud.hooks.closeSettings();
+        cloud.hooks.closeConnectSheet();
         cloud.hooks.navigateRemoteHome();
       }
       await cloud.sessionStore.save({
@@ -524,10 +582,63 @@ export class SettingsController {
       const message = ConnectionErrorPolicy.errorText(err);
       cloud.remoteState.setStatusText(message);
       cloud.sessionManager.reset();
+      await this.restoreControlTarget(previousTarget);
       throw new Error(message);
     } finally {
       cloud.remoteState.setLoadingHome(false);
       cloud.remoteState.setBusy(false);
+    }
+  }
+
+  /**
+   * The device to fall back to if the switch about to start fails, or nothing.
+   *
+   * Only an account device qualifies. A QR-paired room is re-established by
+   * `RemoteConnectionController`, not from here, so offering to restore it
+   * would be a promise this method cannot keep. `online: true` is not a guess:
+   * it is what the live connection just proved, and it is what
+   * `selectCloudAccountDevice` refuses to dial without.
+   */
+  private restorableControlTarget(): CloudAccountDevice | undefined {
+    const state = this.requireCloud().remoteState;
+    if (state.controlTargetType !== 'account_device' || state.connectionState !== 'connected') {
+      return undefined;
+    }
+    const deviceId = state.controlTargetDeviceId.trim();
+    if (deviceId.length === 0) {
+      return undefined;
+    }
+    return {
+      deviceId,
+      deviceName: state.controlTargetDeviceName || deviceId,
+      online: true
+    };
+  }
+
+  /**
+   * Puts the phone back on the desktop it was talking to before a failed switch.
+   *
+   * There is one transport, so `prepareAccountDeviceConnection` has to tear the
+   * old link down before dialling the new one. When the dial fails, what is
+   * left is no device at all, with polling and the heartbeat stopped — tapping
+   * a session on a machine that has gone away costs the user the machine they
+   * were actually using. The restore is best effort and deliberately silent:
+   * the original failure is still what gets reported, because the thing the
+   * user asked for did not happen either way. The re-entry guard is what stops
+   * a restore that fails from trying to restore itself.
+   */
+  private async restoreControlTarget(previous?: CloudAccountDevice): Promise<void> {
+    if (!previous || this.restoringControlTarget) {
+      return;
+    }
+    this.restoringControlTarget = true;
+    try {
+      await this.selectCloudAccountDevice(previous, false);
+      RemoteLogger.info(`control target restored device=${previous.deviceId}`);
+    } catch (err) {
+      RemoteLogger.warn(`control target restore failed device=${previous.deviceId}: ${String(err)}`);
+    } finally {
+      this.restoringControlTarget = false;
     }
   }
 
