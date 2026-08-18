@@ -889,11 +889,12 @@ describe('FileOperationToolCard', () => {
     });
 
     expect(container.querySelector('[data-testid="chat-file-change-preview"]')).not.toBeNull();
-    expect(mocks.codePreviewProps).toHaveLength(1);
-    expect(mocks.codePreviewProps[0]).toMatchObject({
+    expect(mocks.codePreviewProps).toHaveLength(2);
+    expect(mocks.codePreviewProps.at(-1)).toMatchObject({
       isStreaming: false,
       maxHeight: 88,
     });
+    expect(mocks.inlineDiffPreviewProps).toHaveLength(0);
 
     await act(async () => {
       root.render(
@@ -908,6 +909,7 @@ describe('FileOperationToolCard', () => {
 
     // Auto-collapse animates closed; wait for SmoothHeightCollapse to unmount children.
     expect(container.querySelector('[data-testid="chat-file-change-card"]')?.getAttribute('data-expanded')).toBe('false');
+    expect(mocks.inlineDiffPreviewProps).toHaveLength(0);
     await act(async () => {
       await new Promise((resolve) => {
         window.setTimeout(resolve, 350);
