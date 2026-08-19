@@ -25,6 +25,16 @@ export function canSwitchAgentExecutionTier(params: {
   return !params.sessionStarted
     || agentExecutionTier(params.currentAgentType) === agentExecutionTier(params.nextAgentType);
 }
+
+const THREAD_GOAL_TOOL_IDS = ['get_goal', 'create_goal', 'update_goal'] as const;
+
+/** Whether an agent tool set exposes the complete thread-goal lifecycle. */
+export function hasCompleteThreadGoalTools(tools: Iterable<string> | null | undefined): boolean {
+  const normalized = new Set(
+    Array.from(tools ?? [], tool => tool.trim().toLowerCase()),
+  );
+  return THREAD_GOAL_TOOL_IDS.every(tool => normalized.has(tool));
+}
 const SUBAGENT_HIDDEN_CHAT_INPUT_ACTION_IDS = new Set(['goal', 'review', 'deepreview', 'init']);
 
 type WorkspaceResolutionInfo = Pick<

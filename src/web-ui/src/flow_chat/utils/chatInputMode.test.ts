@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentExecutionTier,
   canSwitchAgentExecutionTier,
+  hasCompleteThreadGoalTools,
   isChatInputActionVisibleForTarget,
   isPrimarySlashActionVisible,
   normalizeUserDefaultChatInputModeId,
@@ -36,6 +37,14 @@ describe('normalizeUserDefaultChatInputModeId', () => {
     expect(normalizeUserDefaultChatInputModeId(' PlannerPlus ')).toBe('PlannerPlus');
     expect(normalizeUserDefaultChatInputModeId('   ')).toBeNull();
     expect(normalizeUserDefaultChatInputModeId(null)).toBeNull();
+  });
+});
+
+describe('hasCompleteThreadGoalTools', () => {
+  it('requires all three goal lifecycle tools', () => {
+    expect(hasCompleteThreadGoalTools(['get_goal', 'create_goal', 'update_goal'])).toBe(true);
+    expect(hasCompleteThreadGoalTools(['get_goal', 'create_goal'])).toBe(false);
+    expect(hasCompleteThreadGoalTools(['GET_GOAL', 'Create_Goal', ' update_goal '])).toBe(true);
   });
 });
 

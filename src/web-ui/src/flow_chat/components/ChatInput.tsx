@@ -126,6 +126,7 @@ import {
   isPrimarySlashActionVisible,
   resolveSessionAssistantWorkspace,
   resolveSwitchableChatInputModes,
+  hasCompleteThreadGoalTools,
 } from '../utils/chatInputMode';
 import {
   isUltraAgentType,
@@ -607,11 +608,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   });
   const canReloadContext = reloadContextSupported && Boolean(effectiveTargetSessionId);
   const { entries: acpPlanEntries } = useAcpPlan(acpSessionForInput?.sessionId ?? null);
-  const threadGoalController = useThreadGoalController(effectiveTargetSession, {
-    isBtwSession,
-    disabled: !caps.threadGoal,
-    sceneActive: isSceneActive,
-  });
   const currentSessionTitle = currentSession?.title?.trim() || t('session.untitled');
   const activeBtwSession = activeBtwSessionId
     ? flowChatState.sessions.get(activeBtwSessionId)
@@ -1131,6 +1127,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [resolvedModeSkillsLoading, setResolvedModeSkillsLoading] = useState(false);
   const [subagentToolInfo, setSubagentToolInfo] = useState<SubagentInfo | null>(null);
   const [targetModeEnabledTools, setTargetModeEnabledTools] = useState<string[] | null>(null);
+  const [targetModeToolsResolved, setTargetModeToolsResolved] = useState(false);
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
   const [defaultModeSavingId, setDefaultModeSavingId] = useState<string | null>(null);
   const { computerUseEnabled } = useComputerUseEnabled();
@@ -1333,25 +1330,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   useEffect(() => {
     if (isSubagentInputTarget) {
       setTargetModeEnabledTools(null);
+      setTargetModeToolsResolved(false);
       return;
     }
 
     if (!targetModeInfo) {
       setTargetModeEnabledTools(null);
+      setTargetModeToolsResolved(false);
       return;
     }
     if (targetModeInfo.source === 'external') {
       setTargetModeEnabledTools(targetModeInfo.defaultTools ?? null);
+      setTargetModeToolsResolved(true);
       return;
     }
 
     let cancelled = false;
     setTargetModeEnabledTools(null);
+    setTargetModeToolsResolved(false);
     (async () => {
       try {
         const config = await configAPI.getAgentProfileConfig(targetModeInfo.id);
         if (!cancelled) {
           setTargetModeEnabledTools(config.enabled_tools ?? null);
+          setTargetModeToolsResolved(true);
         }
       } catch (err) {
         log.error('Failed to load mode tool config for chat input', {
@@ -1360,6 +1362,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         });
         if (!cancelled) {
           setTargetModeEnabledTools(null);
+          setTargetModeToolsResolved(false);
         }
       }
     })();
@@ -1368,6 +1371,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       cancelled = true;
     };
   }, [isSubagentInputTarget, targetModeInfo]);
+
+  const canUseThreadGoal =
+    caps.threadGoal &&
+    targetModeToolsResolved &&
+    hasCompleteThreadGoalTools(targetModeEnabledTools);
+
+  const threadGoalController = useThreadGoalController(effectiveTargetSession, {
+    isBtwSession,
+    disabled: !canUseThreadGoal,
+    sceneActive: isSceneActive,
+  });
 
   const targetSkillToolAgents = useMemo(() => {
     const normalizedTargetAgentType = effectiveSendAgentType.trim().toLowerCase();
@@ -3023,12 +3037,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             label: t('chatInput.reviewAction'),
           }]
         : []),
-      {
-        kind: 'action',
-        id: 'goal' as const,
-        command: '/goal',
-        label: t('chatInput.goalAction'),
-      },
+      ...(canUseThreadGoal
+        ? [{
+            kind: 'action' as const,
+            id: 'goal' as const,
+            command: '/goal',
+            label: t('chatInput.goalAction'),
+          }]
+        : []),
       {
         kind: 'action',
         id: 'usage' as const,
@@ -3076,7 +3092,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const cmd = i.command.slice(1).toLowerCase();
       return cmd.includes(q) || i.label.toLowerCase().includes(q);
     });
-  }, [canLaunchReview, canReloadContext, caps.ops, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
+  }, [canLaunchReview, canReloadContext, canUseThreadGoal, caps.ops, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
 
   const getFilteredMcpPromptCommands = useCallback((): SlashMcpPromptItem[] => {
     if (isAcpInputSession) {
@@ -3262,7 +3278,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const isCompactCommand =
       promptSlashCommandsEnabled && caps.ops.has('compact') && isSlashCommand(trimmed, '/compact');
     const isGoalCommand =
-      promptSlashCommandsEnabled && caps.ops.has('goal') && isGoalSlashCommand(text);
+      promptSlashCommandsEnabled && canUseThreadGoal && isGoalSlashCommand(text);
     const isUsageCommand =
       promptSlashCommandsEnabled && caps.ops.has('usage') && isSlashCommand(trimmed, '/usage');
     const isReviewCommand =
@@ -3338,7 +3354,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, caps.localSlashCommands, caps.ops]);
+  }, [canUseThreadGoal, contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, caps.localSlashCommands, caps.ops]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -3622,6 +3638,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ]);
 
   const submitGoalFromInput = useCallback(async () => {
+    if (!canUseThreadGoal) {
+      return;
+    }
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
         t('chatInput.goalNoSession')
@@ -3665,6 +3684,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSessionId,
     inputState.value,
     isBtwSession,
+    canUseThreadGoal,
     setQueuedInput,
     t,
     threadGoalController,
@@ -4456,7 +4476,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (promptSlashCommandsEnabled && caps.ops.has('goal') && isGoalSlashCommand(message)) {
+    if (promptSlashCommandsEnabled && canUseThreadGoal && isGoalSlashCommand(message)) {
       await submitGoalFromInput();
       return;
     }
@@ -4638,6 +4658,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     submitExternalPromptCommandFromInput,
     caps.localSlashCommands,
     caps.ops,
+    canUseThreadGoal,
     composerMutationRevision,
   ]);
   
@@ -5313,7 +5334,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         return;
       }
 
-      if (isGoalSlashCommand(inputState.value.trim())) {
+      if (canUseThreadGoal && isGoalSlashCommand(inputState.value.trim())) {
         void submitGoalFromInput();
         return;
       }
@@ -5331,7 +5352,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, showStandardExecutionOptions, t]);
+  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, showStandardExecutionOptions, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -6598,7 +6619,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             : undefined
         }
       />
-      {effectiveTargetSession && caps.threadGoal ? (
+      {effectiveTargetSession && canUseThreadGoal ? (
         <ThreadGoalDialogs
           controller={threadGoalController}
           disabled={!effectiveTargetSession.workspacePath}
