@@ -8112,8 +8112,12 @@ export const requiredContentRules = [
       'core Task execution must continue owning background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
     patterns: [
       {
-        regex: /delegation_policy\(\)\.spawn_child\(\)/,
-        message: 'missing child delegation policy propagation',
+        regex: /\blet\s+delegation_policy\s*=\s*child_delegation_policy\(/,
+        message: 'missing policy-aware child delegation for background launches',
+      },
+      {
+        regex: /delegation_policy:\s*child_delegation_policy\(/,
+        message: 'missing policy-aware child delegation for foreground execution',
       },
       {
         regex: /\bstart_background_subagent\b/,

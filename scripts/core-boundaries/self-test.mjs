@@ -4248,7 +4248,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
       contracts: [
-        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
+        'child_delegation_policy',
         'start_background_subagent',
         'bg_task_id',
       ],

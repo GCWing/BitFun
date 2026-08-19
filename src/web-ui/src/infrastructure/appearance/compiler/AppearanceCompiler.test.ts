@@ -478,7 +478,7 @@ describe('AppearanceCompiler', () => {
         },
         'session-config': {
           parts: {
-            templateCard: { states: { expanded: { borderColor: accent } } },
+            petTrigger: { states: { expanded: { borderColor: accent } } },
           },
         },
         'mcp-tools-config': {
@@ -768,7 +768,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="external-sources-config"][data-bf-part="conflict"]');
     expect(snapshot.cssText).toContain('[data-bf-component="review-platform"][data-bf-part="listItem"][data-bf-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-bf-component="modern-flow-chat"][data-bf-part="historyOpenIntent"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="session-config"][data-bf-part="templateCard"][data-bf-state~="expanded"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="session-config"][data-bf-part="petTrigger"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="mcp-tools-config"][data-bf-part="root"][data-bf-view="json"]');
     expect(snapshot.cssText).toContain('[data-bf-component="mcp-tools-config"][data-bf-part="authEditor"]');
     expect(snapshot.cssText).toContain('[data-bf-component="sessions-section"][data-bf-part="row"][data-bf-state~="active"]');
