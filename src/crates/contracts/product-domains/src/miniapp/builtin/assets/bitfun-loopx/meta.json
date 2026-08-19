@@ -1,8 +1,8 @@
 {
   "id": "builtin-bitfun-loopx",
-  "name": "LoopX Console",
-  "description": "LoopX 长任务智能体控制台：粘贴 GitHub Issue 链接，由 BitFun 宿主 Agent 驱动本机 loopx 持续修复，心跳调度、人工审批、中途插话。",
-  "icon": "🛰️",
+  "name": "bitfun-loopx",
+  "description": "bitfun-loopx：粘贴 GitHub Issue 链接，由 BitFun 宿主 Agent 驱动本机 LoopX 引擎持续修复，心跳调度、人工审批、中途插话。",
+  "icon": "rocket",
   "category": "developer",
   "tags": ["loopx", "agent", "scheduler", "monitor"],
   "version": 1,
@@ -32,13 +32,13 @@
   "i18n": {
     "locales": {
       "zh-CN": {
-        "name": "LoopX 控制台",
-        "description": "LoopX 长任务智能体控制台：粘贴 GitHub Issue 链接，由 BitFun 宿主 Agent 驱动本机 loopx 持续修复，心跳调度、人工审批、中途插话。",
+        "name": "bitfun-loopx",
+        "description": "bitfun-loopx：粘贴 GitHub Issue 链接，由 BitFun 宿主 Agent 驱动本机 LoopX 引擎持续修复，心跳调度、人工审批、中途插话。",
         "tags": ["loopx", "智能体", "调度", "监控"]
       },
       "en-US": {
-        "name": "LoopX Console",
-        "description": "Control-plane console for long-running LoopX agents: paste a GitHub issue link and the BitFun host agent drives the local loopx CLI to fix it, with heartbeat scheduling, human approval gates and mid-task guidance.",
+        "name": "bitfun-loopx",
+        "description": "bitfun-loopx: paste a GitHub issue link and the BitFun host agent drives the local LoopX engine to fix it, with heartbeat scheduling, human approval gates and mid-task guidance.",
         "tags": ["loopx", "agent", "scheduler", "monitor"]
       }
     }
