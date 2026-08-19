@@ -96,7 +96,6 @@ const SAMPLE_STATS: UsageStatistics = {
   totalInputTokens: 4_400_000,
   totalOutputTokens: 400_000,
   totalCachedTokens: 4_200_000,
-  totalCacheWriteTokens: 0,
   totalCacheReportedInputTokens: 4_400_000,
   byModel: [
     {
@@ -137,7 +136,6 @@ const SAMPLE_STATS: UsageStatistics = {
       inputTokens: 1_000_000,
       outputTokens: 100_000,
       cacheReadTokens: 900_000,
-      cacheWriteTokens: 0,
       cacheHitRate: 0.9,
     },
     {
@@ -145,7 +143,6 @@ const SAMPLE_STATS: UsageStatistics = {
       inputTokens: 2_000_000,
       outputTokens: 200_000,
       cacheReadTokens: 1_900_000,
-      cacheWriteTokens: 0,
       cacheHitRate: 0.95,
     },
   ],
