@@ -5,7 +5,9 @@
   "main": "",
   "author": "",
   "license": "",
-  "dependencies": {},
+  "dependencies": {
+    "libbitfun_crypto.so": "file:./src/main/cpp/types/libbitfun_crypto"
+  },
   "devDependencies": {},
   "dynamicDependencies": {}
 }

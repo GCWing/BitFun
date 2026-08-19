@@ -1,6 +1,7 @@
 import distributedKVStore from '@ohos.data.distributedKVStore';
 import { common } from '@kit.AbilityKit';
 import { distributedDeviceManager } from '@kit.DistributedServiceKit';
+import { OhosError } from './OhosError';
 import { RemoteLogger } from './RemoteLogger';
 import {
   WATCH_PROVISION_REQUEST_KEY,
@@ -58,7 +59,11 @@ export class WatchHandoffStore {
         }
       });
     };
-    store.on('dataChange', distributedKVStore.SubscribeType.SUBSCRIBE_TYPE_ALL, this.listener);
+    try {
+      store.on('dataChange', distributedKVStore.SubscribeType.SUBSCRIBE_TYPE_ALL, this.listener);
+    } catch (err) {
+      throw OhosError.wrap('watch handoff subscribe', err);
+    }
     // A watch that asked while the phone app was closed gets picked up here;
     // the request's own age decides whether it is still worth acting on. The
     // pull first: the watch pushes on write, but a write that happened while
@@ -77,7 +82,11 @@ export class WatchHandoffStore {
 
   async writeResponse(payload: string): Promise<void> {
     const store = await this.getStore();
-    await store.put(WATCH_PROVISION_RESPONSE_KEY, payload);
+    try {
+      await store.put(WATCH_PROVISION_RESPONSE_KEY, payload);
+    } catch (err) {
+      throw OhosError.wrap('watch handoff write response', err);
+    }
     // The watch is waiting on a foreground screen that blanks after nine
     // seconds; `autoSync`'s own schedule is far too slack to catch that window.
     this.sync(store, distributedKVStore.SyncMode.PUSH_ONLY);
@@ -147,7 +156,11 @@ export class WatchHandoffStore {
     this.listener = undefined;
     this.syncListener = undefined;
     if (this.deviceManager) {
-      distributedDeviceManager.releaseDeviceManager(this.deviceManager);
+      try {
+        distributedDeviceManager.releaseDeviceManager(this.deviceManager);
+      } catch (err) {
+        RemoteLogger.warn(`watch handoff release device manager failed: ${WatchHandoffStore.errorText(err)}`);
+      }
       this.deviceManager = undefined;
     }
   }
@@ -181,8 +194,12 @@ export class WatchHandoffStore {
       // needed to cross, the answer would be a second store, not a lower label.
       securityLevel: distributedKVStore.SecurityLevel.S1
     };
-    this.kvStore = await this.kvManager.getKVStore<distributedKVStore.SingleKVStore>(STORE_ID, options);
-    await this.kvStore.enableSync(true);
+    try {
+      this.kvStore = await this.kvManager.getKVStore<distributedKVStore.SingleKVStore>(STORE_ID, options);
+      await this.kvStore.enableSync(true);
+    } catch (err) {
+      throw OhosError.wrap('watch handoff open store', err);
+    }
     // The only place a refused or failed replication reports itself. Without it
     // a sync the platform dropped is indistinguishable from a watch that never
     // asked.

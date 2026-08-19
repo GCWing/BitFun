@@ -258,10 +258,10 @@ export class RemoteConnectionController {
     }
   }
 
-  async paste(): Promise<void> {
+  async paste(context: Context): Promise<void> {
     try {
       this.pageState.setStatusText(RemoteI18n.t('status.readClipboard'));
-      const text = (await this.clipboard.readText()).trim();
+      const text = (await this.clipboard.readText(context)).trim();
       if (text.length === 0) {
         this.pageState.setRemoteUrlInputVisible(true);
         this.pageState.setStatusText(RemoteI18n.t('status.clipboardEmpty'));

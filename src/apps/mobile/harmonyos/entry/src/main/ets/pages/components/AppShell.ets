@@ -1,26 +1,30 @@
 import { AppShellState } from '../state/AppShellState';
 import { ConversationLayoutPolicy } from '../policy/ConversationLayoutPolicy';
+import {
+  SettingsPlacement,
+  SettingsPlacementMode,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
+import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
 import { PAGE_BG } from './Theme';
 
-const WIDE_SETTINGS_SHEET_MAX_WIDTH: number = 680;
-const WIDE_CONNECT_SHEET_MAX_WIDTH: number = 620;
-const WIDE_SHEET_MIN_WIDTH: number = 540;
-const WIDE_SHEET_MAX_HEIGHT: number = 760;
-const WIDE_SHEET_MIN_HEIGHT: number = 560;
-const WIDE_SHEET_VERTICAL_MARGIN: number = 80;
 const WIDE_SHEET_RADIUS: number = 30;
 
 @ComponentV2
 export struct AppShell {
   @Param shellState: AppShellState = new AppShellState();
   @Param useWideLayout: boolean = false;
+  @Param settingsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.Settings);
+  @Param connectPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.Connect);
   @BuilderParam content: () => void = this.EmptyBuilder;
   @BuilderParam sidebar: () => void = this.EmptyBuilder;
   @BuilderParam settings: () => void = this.EmptyBuilder;
   @BuilderParam connect: () => void = this.EmptyBuilder;
   @Event onCloseSidebar: () => void = () => {};
   @Local shellWidth: number = 440;
-  @Local shellHeight: number = 0;
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
@@ -93,7 +97,6 @@ export struct AppShell {
     .height('100%')
     .onAreaChange((_oldArea: Area, newArea: Area) => {
       this.shellWidth = this.areaLength(newArea.width);
-      this.shellHeight = this.areaLength(newArea.height);
     })
     .bindSheet($$this.shellState.showSettings, this.SettingsSheetContent(), this.settingsSheetOptions())
   }
@@ -105,12 +108,12 @@ export struct AppShell {
     }
     .width('100%')
     .height('100%')
-    .borderRadius(this.shouldUseWideSheetLayout() ? WIDE_SHEET_RADIUS : 0)
-    .clip(this.shouldUseWideSheetLayout())
+    .borderRadius(this.usesWideSheetChrome(this.settingsPlacement) ? WIDE_SHEET_RADIUS : 0)
+    .clip(this.usesWideSheetChrome(this.settingsPlacement))
     .shadow({
-      radius: this.shouldUseWideSheetLayout() ? 30 : 0,
-      color: this.shouldUseWideSheetLayout() ? '#22000000' : '#00000000',
-      offsetY: this.shouldUseWideSheetLayout() ? 12 : 0
+      radius: this.usesWideSheetChrome(this.settingsPlacement) ? 30 : 0,
+      color: this.usesWideSheetChrome(this.settingsPlacement) ? '#22000000' : '#00000000',
+      offsetY: this.usesWideSheetChrome(this.settingsPlacement) ? 12 : 0
     })
   }
 
@@ -121,12 +124,12 @@ export struct AppShell {
     }
     .width('100%')
     .height('100%')
-    .borderRadius(this.shouldUseWideSheetLayout() ? WIDE_SHEET_RADIUS : 0)
-    .clip(this.shouldUseWideSheetLayout())
+    .borderRadius(this.usesWideSheetChrome(this.connectPlacement) ? WIDE_SHEET_RADIUS : 0)
+    .clip(this.usesWideSheetChrome(this.connectPlacement))
     .shadow({
-      radius: this.shouldUseWideSheetLayout() ? 30 : 0,
-      color: this.shouldUseWideSheetLayout() ? '#22000000' : '#00000000',
-      offsetY: this.shouldUseWideSheetLayout() ? 12 : 0
+      radius: this.usesWideSheetChrome(this.connectPlacement) ? 30 : 0,
+      color: this.usesWideSheetChrome(this.connectPlacement) ? '#22000000' : '#00000000',
+      offsetY: this.usesWideSheetChrome(this.connectPlacement) ? 12 : 0
     })
   }
 
@@ -141,67 +144,15 @@ export struct AppShell {
   }
 
   private settingsSheetOptions(): SheetOptions {
-    if (!this.shouldUseWideSheetLayout()) {
-      return this.bottomSheetOptions();
-    }
-    return this.wideCenterSheetOptions(this.settingsSheetWidth());
+    return AdaptiveSheetOptions.fromPlacement(this.settingsPlacement);
   }
 
   private connectSheetOptions(): SheetOptions {
-    if (!this.shouldUseWideSheetLayout()) {
-      return this.bottomSheetOptions();
-    }
-    return this.wideCenterSheetOptions(this.connectSheetWidth());
+    return AdaptiveSheetOptions.fromPlacement(this.connectPlacement);
   }
 
-  private bottomSheetOptions(): SheetOptions {
-    return {
-      height: SheetSize.LARGE,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
-      showClose: false,
-      dragBar: false
-    };
-  }
-
-  private wideCenterSheetOptions(width: number): SheetOptions {
-    return {
-      height: this.wideSheetHeight(),
-      width,
-      preferType: SheetType.CENTER,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
-      showClose: false,
-      dragBar: false
-    };
-  }
-
-  private settingsSheetWidth(): number {
-    return Math.min(
-      WIDE_SETTINGS_SHEET_MAX_WIDTH,
-      Math.max(WIDE_SHEET_MIN_WIDTH, Math.round(this.shellWidth * 0.48))
-    );
-  }
-
-  private connectSheetWidth(): number {
-    return Math.min(
-      WIDE_CONNECT_SHEET_MAX_WIDTH,
-      Math.max(WIDE_SHEET_MIN_WIDTH, Math.round(this.shellWidth * 0.46))
-    );
-  }
-
-  private wideSheetHeight(): number {
-    if (this.shellHeight <= 0) {
-      return WIDE_SHEET_MAX_HEIGHT;
-    }
-    return Math.min(
-      WIDE_SHEET_MAX_HEIGHT,
-      Math.max(WIDE_SHEET_MIN_HEIGHT, Math.round(this.shellHeight - WIDE_SHEET_VERTICAL_MARGIN))
-    );
-  }
-
-  private shouldUseWideSheetLayout(): boolean {
-    return this.useWideLayout;
+  private usesWideSheetChrome(placement: SettingsPlacement): boolean {
+    return placement.mode === SettingsPlacementMode.Side;
   }
 
   private areaLength(value: Object): number {

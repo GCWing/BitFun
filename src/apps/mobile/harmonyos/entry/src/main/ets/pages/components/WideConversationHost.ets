@@ -6,10 +6,16 @@ import {
 import { WideLayoutGeometry } from '../layout/WideLayoutGeometry';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { FilePreviewLayout, FilePreviewPlacement } from '../policy/FilePreviewPlacementPolicy';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
 import { AppShellState } from '../state/AppShellState';
 import { FilePreviewState } from '../state/FilePreviewState';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
+import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
 import { AppSidebar } from './AppSidebar';
 import { ConversationRouteSurface } from './ConversationRouteSurface';
@@ -30,12 +36,15 @@ export struct WideConversationHost {
   @Param route: AppRoute = AppRoute.ChatHome;
   @Param shellState: AppShellState = new AppShellState();
   @Param remotePageState: RemotePageState = new RemotePageState();
+  @Param deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
   @Param remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
   @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
   @Param filePreviewState: FilePreviewState = new FilePreviewState();
   @Param remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
   @Param actions: AppRootPresentationActions = emptyAppRootPresentationActions();
   @Param filePreviewLayout: FilePreviewLayout = new FilePreviewLayout(FilePreviewPlacement.Hidden);
+  @Param sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Param wideMasterPaneWidth: number = 0;
   @Param wideMasterDetailGap: number = 0;
   @Param wideDetailContentOffset: number = 0;
@@ -101,6 +110,7 @@ export struct WideConversationHost {
             presentationState: this.remoteSurfaceState,
             actions: this.actions,
             wideMasterPaneCollapsed: false,
+            sessionDetailsPlacement: this.sessionDetailsPlacement,
             onRestoreSidebar: this.onRestoreMasterPane
           })
         }
@@ -139,6 +149,7 @@ export struct WideConversationHost {
       Column() {
         AppSidebar({
           sessions: this.generalPageState.recentSessions(),
+          sessionDetailsPlacement: this.sessionDetailsPlacement,
           pinnedSessionId: this.generalPageState.pinnedSessionId(),
           selectedSessionId: AppRouteContract.isGeneralComposerRoute(this.route) ?
             this.generalPageState.conversation.activeSession.sessionId : '',
@@ -180,23 +191,28 @@ export struct WideConversationHost {
   @Builder
   private WorkspaceMasterContent() {
     SidebarWorkspaceSection({
+      directoryState: this.deviceDirectoryState,
       sessions: this.remotePageState.visibleSessions(),
       recentWorkspaces: this.remotePageState.recentWorkspaces,
       workspaceName: this.remotePageState.workspaceName,
       workspacePath: this.remotePageState.workspacePath,
       workspaceKind: this.remotePageState.workspaceKind,
       connectionState: this.remotePageState.connectionState,
-      selectedSessionId: AppRouteContract.isRemoteRoute(this.route) ?
-        this.remotePageState.activeSession.sessionId : '',
+      controlTargetDeviceId: this.remotePageState.controlTargetDeviceId,
+      controlTargetDeviceName: this.remotePageState.controlTargetDeviceName ||
+        this.remotePageState.desktopName,
+      selectedSessionId: this.wideSelectedSessionId(),
       runningSessionId: this.remotePageState.hasRunningActiveTurn() ?
         this.remotePageState.activeSession.sessionId : '',
       onOpenSession: this.actions.onRemoteHome.openSessionInPlace,
-      onCreateInWorkspace: (path: string) => {
-        this.actions.onRemoteHome.createInWorkspaceInPlace(path, 'code');
+      onCreateInWorkspace: (deviceId: string, path: string) => {
+        this.actions.onRemoteHome.createInWorkspaceInPlace(path, 'code', deviceId);
       },
-      onOpenWorkspace: (path: string) => {
-        this.actions.onRemoteHome.selectWorkspace(path);
+      onOpenWorkspace: (deviceId: string, path: string) => {
+        this.actions.onRemoteHome.selectWorkspace(path, deviceId);
       },
+      onToggleDevice: this.actions.onRemoteHome.toggleDirectoryDevice,
+      onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
       onConnect: this.actions.onSidebar.connectDesktop
     })
   }
@@ -312,7 +328,9 @@ export struct WideConversationHost {
   @Builder
   private MasterDetailGap() {
     if (this.wideMasterDetailGap > 0) {
-      Row() {}.width(this.wideMasterDetailGap).height('100%').backgroundColor(LINE)
+      // Reserve the physical crease so rows do not sit on the hinge, but do
+      // not paint it as a divider. The device already has that hinge.
+      Row() {}.width(this.wideMasterDetailGap).height('100%').backgroundColor(PAGE_BG)
     }
   }
 
@@ -321,6 +339,14 @@ export struct WideConversationHost {
     if (width > 0) {
       Row() {}.width(width).height('100%').backgroundColor(LINE)
     }
+  }
+
+  private wideSelectedSessionId(): string {
+    if (this.remotePageState.pendingSessionId.length > 0) {
+      return this.remotePageState.pendingSessionId;
+    }
+    return AppRouteContract.isRemoteRoute(this.route) ?
+      this.remotePageState.activeSession.sessionId : '';
   }
 
   private showsRemoteConversation(): boolean {

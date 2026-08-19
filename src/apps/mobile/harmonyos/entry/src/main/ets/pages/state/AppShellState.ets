@@ -1,4 +1,5 @@
 import { AppRoute } from '../navigation/AppRouteContract';
+import { SettingsSheetState } from './SettingsSheetState';
 
 /** The connect sheet decides for itself where to open. */
 export const CONNECT_INTENT_AUTO: string = 'auto';
@@ -30,6 +31,12 @@ export class AppShellState {
    * versus wide reads it from here.
    */
   @Trace wideLayout: boolean = false;
+  /**
+   * Bumped when the in-app locale changes so shell consumers that already
+   * observe this object rebuild even if they do not call RemoteI18n.t().
+   */
+  @Trace localeRevision: number = 0;
+  readonly settingsSheet: SettingsSheetState = new SettingsSheetState();
   private accountReturnMode: string = '';
 
   setSidebarVisible(visible: boolean): void {
@@ -40,10 +47,15 @@ export class AppShellState {
     this.wideLayout = wide;
   }
 
+  setLocaleRevision(revision: number): void {
+    this.localeRevision = revision;
+  }
+
   setSettingsVisible(visible: boolean): void {
     this.showSettings = visible;
     if (!visible) {
       this.accountReturnMode = '';
+      this.settingsSheet.resetOnClose();
     }
   }
 
@@ -52,6 +64,9 @@ export class AppShellState {
       this.accountReturnMode = this.showSettings ? this.settingsMode : '';
     } else {
       this.accountReturnMode = '';
+      if (mode === 'general' && !this.showSettings) {
+        this.settingsSheet.resetOnClose();
+      }
     }
     this.settingsMode = mode;
     this.showSettings = true;
@@ -83,6 +98,7 @@ export class AppShellState {
     this.showSidebar = false;
     this.showSettings = false;
     this.accountReturnMode = '';
+    this.settingsSheet.resetOnClose();
     this.showConnectSheet = false;
   }
 }

@@ -190,6 +190,31 @@ export default function lifecycleUnitTest() {
       expect(state.showConnectSheet).assertFalse();
     });
 
+    it('keeps settings page and editor drafts until the sheet is closed', 0, () => {
+      const state = new AppShellState();
+      state.settingsSheet.hydrateEditorDraft('https://api.example.com', 'chat-model');
+      state.settingsSheet.syncSaved('https://api.example.com', 'chat-model', true);
+      state.settingsSheet.setPage('local');
+      expect(state.settingsSheet.draftApiUrl).assertEqual('https://api.example.com');
+      expect(state.settingsSheet.savedGeneralChatHasApiKey).assertTrue();
+      state.settingsSheet.hydrateEditorDraft('https://other.example', 'other');
+      expect(state.settingsSheet.draftApiUrl).assertEqual('https://api.example.com');
+      state.setSettingsVisible(true);
+      expect(state.settingsSheet.page).assertEqual('local');
+      state.setSettingsVisible(false);
+      expect(state.settingsSheet.page).assertEqual('main');
+      expect(state.settingsSheet.draftApiUrl).assertEqual('');
+      expect(state.settingsSheet.editorDraftHydrated).assertFalse();
+      state.settingsSheet.setPage('overview');
+      state.openSettings('general');
+      expect(state.settingsSheet.page).assertEqual('main');
+      state.settingsSheet.setPage('overview');
+      state.openSettings('general');
+      expect(state.settingsSheet.page).assertEqual('overview');
+      state.closeGlobalSurfaces();
+      expect(state.settingsSheet.page).assertEqual('main');
+    });
+
     it('mirrors the resolved layout mode for runtime branching', 0, () => {
       const state = new AppShellState();
 

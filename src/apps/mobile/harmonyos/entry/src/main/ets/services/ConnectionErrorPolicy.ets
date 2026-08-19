@@ -35,8 +35,8 @@ export class ConnectionErrorPolicy {
       message.indexOf('Invalid username or password') >= 0 ||
       message.indexOf('Missing password') >= 0 ||
       message.indexOf('Missing username') >= 0 ||
-      message.indexOf(RemoteI18n.t('errors.accountPasswordRequired')) >= 0 ||
-      message.indexOf(RemoteI18n.t('errors.accountUsernameRequired')) >= 0;
+      RemoteI18n.textContains('errors.accountPasswordRequired', message) ||
+      RemoteI18n.textContains('errors.accountUsernameRequired', message);
   }
 
   static async connectionErrorResult(
@@ -73,25 +73,25 @@ export class ConnectionErrorPolicy {
   static failureKindFor(message: string): string {
     const text = message.toLowerCase();
     if (ConnectionErrorPolicy.protectedUserIdError(message) ||
-      message.indexOf(RemoteI18n.t('errors.tooManyAttempts').split('{0}')[0]) >= 0 ||
+      RemoteI18n.textHasTemplatePrefix('errors.tooManyAttempts', message) ||
       (message.indexOf('user id') >= 0 && message.indexOf('protected') >= 0)) {
       return 'protected_user';
     }
-    if (message === RemoteI18n.t('errors.roomNotFound') ||
-      message === RemoteI18n.t('errors.pairRejected') ||
+    if (RemoteI18n.textEquals('errors.roomNotFound', message) ||
+      RemoteI18n.textEquals('errors.pairRejected', message) ||
       text.indexOf('room') >= 0 ||
       text.indexOf('qr') >= 0) {
       return 'expired_room';
     }
-    if (message === RemoteI18n.t('errors.remoteUrlInvalid') ||
-      message === RemoteI18n.t('errors.remoteUrlMissingParams') ||
+    if (RemoteI18n.textEquals('errors.remoteUrlInvalid', message) ||
+      RemoteI18n.textEquals('errors.remoteUrlMissingParams', message) ||
       text.indexOf('malformed') >= 0 ||
       text.indexOf('invalid') >= 0) {
       return 'invalid_link';
     }
-    if (message === RemoteI18n.t('errors.relayNetwork') ||
-      message === RemoteI18n.t('errors.relayTimeout') ||
-      message === RemoteI18n.t('errors.relayTimeoutDetail') ||
+    if (RemoteI18n.textEquals('errors.relayNetwork', message) ||
+      RemoteI18n.textEquals('errors.relayTimeout', message) ||
+      RemoteI18n.textEquals('errors.relayTimeoutDetail', message) ||
       text.indexOf('network') >= 0 || text.indexOf('dns') >= 0 || text.indexOf('timeout') >= 0) {
       return 'network';
     }
@@ -101,11 +101,11 @@ export class ConnectionErrorPolicy {
   static errorText(err: Object): string {
     const raw = err instanceof Error ? err.message : JSON.stringify(err);
     const text = raw.toLowerCase();
-    if (raw === RemoteI18n.t('errors.remoteUrlRequired') ||
-      raw === RemoteI18n.t('errors.remoteUrlMissingParams') ||
-      raw === RemoteI18n.t('errors.accountPasswordRequired') ||
-      raw === RemoteI18n.t('errors.accountUsernameRequired') ||
-      raw === RemoteI18n.t('errors.userIdRequired')) {
+    if (RemoteI18n.textEquals('errors.remoteUrlRequired', raw) ||
+      RemoteI18n.textEquals('errors.remoteUrlMissingParams', raw) ||
+      RemoteI18n.textEquals('errors.accountPasswordRequired', raw) ||
+      RemoteI18n.textEquals('errors.accountUsernameRequired', raw) ||
+      RemoteI18n.textEquals('errors.userIdRequired', raw)) {
       return raw;
     }
     if (text.indexOf('uri malformed') >= 0 || text.indexOf('malformed') >= 0 || text.indexOf('invalid') >= 0) {

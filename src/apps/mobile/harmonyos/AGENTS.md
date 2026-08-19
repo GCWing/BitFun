@@ -35,6 +35,13 @@ The following constraints are enforced incrementally by
 7. General Chat and Remote Chat shared observable fields belong to
    `pages/state/ConversationCoreState.ets`. Page-specific state objects compose
    that core and must not redeclare the shared `@Trace` fields.
+8. Keep files focused by ownership, not by a hard line count. When a file
+   starts mixing unrelated concerns, extract the new owner. Do not cram or
+   flatten structure just to stay under a number.
+
+User-facing copy lives in `entry/src/main/ets/i18n`. Keep `zh-CN` and `en-US`
+catalogs in key lockstep, use canonical locale ids, and route language changes
+through `LocaleController`. Do not import Web UI or mobile-web locale catalogs.
 
 The current local HarmonyOS verification loop is:
 

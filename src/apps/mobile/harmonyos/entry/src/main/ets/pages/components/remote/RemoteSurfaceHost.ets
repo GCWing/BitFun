@@ -14,6 +14,11 @@ import { RemoteSessionList } from '../RemoteSessionList';
 import { RemoteSessionLoadingView } from '../RemoteSessionLoadingView';
 import { SidebarToggleButton } from '../SidebarToggleButton';
 import { SessionActionPresentation } from '../SessionActionSurface';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../../policy/SettingsPlacementPolicy';
 import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED } from '../Theme';
 
 export enum RemoteSurfaceMode {
@@ -52,6 +57,8 @@ export struct RemoteSurfaceHost {
   @Param showSelectedSession: boolean = false;
   @Param compact: boolean = false;
   @Param wideMasterPaneCollapsed: boolean = false;
+  @Param sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Event onOpenSidebar: () => void = () => {};
   @Event onRestoreSidebar: () => void = () => {};
   @Event onCloseSettings: () => void = () => {};
@@ -97,6 +104,7 @@ export struct RemoteSurfaceHost {
           workspaceKind: this.remotePageState.workspaceKind,
           recentWorkspaces: this.remotePageState.recentWorkspaces,
           actionPresentation: SessionActionPresentation.Popover,
+          sessionDetailsPlacement: this.sessionDetailsPlacement,
           showWorkspaceMetadata: this.presentationState.showWorkspaceMetadata,
           showUpdatedMetadata: this.presentationState.showUpdatedMetadata,
           showStatusMetadata: this.presentationState.showStatusMetadata,
