@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { Simulate } from 'react-dom/test-utils';
 import { JSDOM } from 'jsdom';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import type { ComposerPresentation } from '../../utils/composerPresentation';
@@ -36,6 +37,47 @@ describe('UserMessageEditComposer', () => {
   let container: HTMLDivElement;
   let root: Root;
 
+  const renderComposer = async (options: { rich?: boolean } = {}) => {
+    const onChange = vi.fn();
+    const onSubmit = vi.fn();
+    const onCancel = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <UserMessageEditComposer
+          value={options.rich
+            ? '[session: Delete all files] Continue the investigation.'
+            : 'Continue the investigation.'}
+          submitLabel="Save"
+          cancelLabel="Cancel"
+          onChange={onChange}
+          onSubmit={onSubmit}
+          onCancel={onCancel}
+          presentation={options.rich ? presentation : undefined}
+        />,
+      );
+    });
+
+    return { onChange, onSubmit, onCancel };
+  };
+
+  const dispatchKey = async (
+    target: Element,
+    key: string,
+    init: KeyboardEventInit = {},
+  ) => {
+    const event = new dom.window.KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    await act(async () => {
+      target.dispatchEvent(event);
+    });
+    return event;
+  };
+
   beforeEach(() => {
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
@@ -70,6 +112,92 @@ describe('UserMessageEditComposer', () => {
     act(() => root.unmount());
     dom.window.close();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps Enter with the IME during tracked composition and submits afterward', async () => {
+    const { onSubmit } = await renderComposer();
+    const textarea = container.querySelector('textarea');
+    expect(textarea).toBeTruthy();
+
+    await act(async () => {
+      Simulate.compositionStart(textarea!);
+    });
+    const imeEnter = await dispatchKey(textarea!, 'Enter');
+
+    expect(imeEnter.defaultPrevented).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await act(async () => {
+      Simulate.compositionEnd(textarea!);
+    });
+    const submitEnter = await dispatchKey(textarea!, 'Enter');
+
+    expect(submitEnter.defaultPrevented).toBe(true);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['native isComposing', { isComposing: true }],
+    ['native keyCode 229', { keyCode: 229 }],
+  ] as const)('keeps Enter with the IME for %s', async (_label, init) => {
+    const { onSubmit } = await renderComposer();
+    const textarea = container.querySelector('textarea');
+    expect(textarea).toBeTruthy();
+
+    const event = await dispatchKey(textarea!, 'Enter', init);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps Escape with the IME during tracked composition and cancels afterward', async () => {
+    const { onCancel } = await renderComposer();
+    const textarea = container.querySelector('textarea');
+    expect(textarea).toBeTruthy();
+
+    await act(async () => {
+      Simulate.compositionStart(textarea!);
+    });
+    const imeEscape = await dispatchKey(textarea!, 'Escape');
+
+    expect(imeEscape.defaultPrevented).toBe(false);
+    expect(onCancel).not.toHaveBeenCalled();
+
+    await act(async () => {
+      Simulate.compositionEnd(textarea!);
+    });
+    const cancelEscape = await dispatchKey(textarea!, 'Escape');
+
+    expect(cancelEscape.defaultPrevented).toBe(true);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['native isComposing', { isComposing: true }],
+    ['native keyCode 229', { keyCode: 229 }],
+  ] as const)('keeps Escape with the IME for %s', async (_label, init) => {
+    const { onCancel } = await renderComposer();
+    const textarea = container.querySelector('textarea');
+    expect(textarea).toBeTruthy();
+
+    const event = await dispatchKey(textarea!, 'Escape', init);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('keeps rich editor Enter and Escape handling inside its IME boundary', async () => {
+    const { onSubmit, onCancel } = await renderComposer({ rich: true });
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeTruthy();
+
+    const enter = await dispatchKey(editor!, 'Enter', { keyCode: 229 });
+    const escape = await dispatchKey(editor!, 'Escape', { keyCode: 229 });
+
+    expect(enter.defaultPrevented).toBe(false);
+    expect(escape.defaultPrevented).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   it('restores and removes reference capsules atomically', async () => {
