@@ -357,6 +357,8 @@ export type LoadSessionTurnWindowResponse =
 
 export interface RollbackSessionToTurnRequest {
   workspacePath: string;
+  workspaceId?: string;
+  workspaceHostname?: string;
   sessionId: string;
   targetTurnId: string;
   expectedStorageTurnIndex?: number;

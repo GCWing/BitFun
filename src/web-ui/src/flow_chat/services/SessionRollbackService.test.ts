@@ -39,6 +39,8 @@ describe('SessionRollbackService', () => {
     sessions.set('session-1', {
       sessionId: 'session-1',
       workspacePath: 'E:/workspace',
+      workspaceId: 'local_workspace-1',
+      workspaceHostname: 'localhost',
       config: {},
       isPartial: true,
       dialogTurns: [{ id: 'turn-7', storageTurnIndex: 7 }],
@@ -66,6 +68,8 @@ describe('SessionRollbackService', () => {
 
     expect(agentApiMock.rollbackSessionToTurn).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-1',
+      workspaceId: 'local_workspace-1',
+      workspaceHostname: 'localhost',
       targetTurnId: 'turn-7',
       expectedStorageTurnIndex: 7,
       expectedCatalogRevision: 'catalog-3',
