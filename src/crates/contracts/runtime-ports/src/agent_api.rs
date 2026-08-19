@@ -1603,6 +1603,14 @@ pub struct AgentSessionRevertRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionRollbackToTurnRequest {
     pub workspace_path: String,
+    /// Stable workspace identity supplied by newer product surfaces. This is
+    /// optional so older clients keep using the path-based compatibility path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    /// Persisted workspace host identity. `localhost` is the local sentinel;
+    /// any other non-empty value identifies a remote workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_hostname: Option<String>,
     pub session_id: String,
     pub target_turn_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1613,6 +1621,52 @@ pub struct AgentSessionRollbackToTurnRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentSessionWorkspaceLocation {
+    Local,
+    Remote,
+}
+
+impl AgentSessionRollbackToTurnRequest {
+    /// Returns the structured workspace location when the request declares one.
+    /// Explicit remote facts win over conflicting local facts so malformed
+    /// requests cannot bypass remote snapshot restrictions.
+    pub fn explicit_workspace_location(&self) -> Option<AgentSessionWorkspaceLocation> {
+        let workspace_id = self
+            .workspace_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let workspace_hostname = self
+            .workspace_hostname
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+
+        if self
+            .remote_connection_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+            || self
+                .remote_ssh_host
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            || workspace_id.is_some_and(|value| value.starts_with("remote_"))
+            || workspace_hostname.is_some_and(|value| !value.eq_ignore_ascii_case("localhost"))
+        {
+            return Some(AgentSessionWorkspaceLocation::Remote);
+        }
+
+        if workspace_id.is_some_and(|value| value.starts_with("local_"))
+            || workspace_hostname.is_some_and(|value| value.eq_ignore_ascii_case("localhost"))
+        {
+            return Some(AgentSessionWorkspaceLocation::Local);
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2024,6 +2078,8 @@ mod tests {
     fn targeted_session_rollback_contract_uses_camel_case_and_typed_outcomes() {
         let request = AgentSessionRollbackToTurnRequest {
             workspace_path: "E:/workspace".to_string(),
+            workspace_id: Some("local_workspace-1".to_string()),
+            workspace_hostname: Some("localhost".to_string()),
             session_id: "session-1".to_string(),
             target_turn_id: "turn-7".to_string(),
             expected_storage_turn_index: Some(7),
@@ -2033,6 +2089,8 @@ mod tests {
         };
         let request_json = serde_json::to_value(&request).expect("serialize rollback request");
         assert_eq!(request_json["workspacePath"], "E:/workspace");
+        assert_eq!(request_json["workspaceId"], "local_workspace-1");
+        assert_eq!(request_json["workspaceHostname"], "localhost");
         assert_eq!(request_json["targetTurnId"], "turn-7");
         assert_eq!(request_json["expectedStorageTurnIndex"], 7);
         assert_eq!(request_json["expectedCatalogRevision"], "catalog-3");
@@ -2040,6 +2098,35 @@ mod tests {
             serde_json::from_value::<AgentSessionRollbackToTurnRequest>(request_json)
                 .expect("deserialize rollback request"),
             request
+        );
+
+        let legacy_request =
+            serde_json::from_value::<AgentSessionRollbackToTurnRequest>(serde_json::json!({
+                "workspacePath": "E:/workspace",
+                "sessionId": "session-1",
+                "targetTurnId": "turn-7"
+            }))
+            .expect("deserialize pre-workspace-identity rollback request");
+        assert_eq!(legacy_request.workspace_id, None);
+        assert_eq!(legacy_request.workspace_hostname, None);
+        assert_eq!(legacy_request.explicit_workspace_location(), None);
+
+        let local_request = AgentSessionRollbackToTurnRequest {
+            workspace_id: Some("local_workspace-1".to_string()),
+            workspace_hostname: None,
+            ..legacy_request.clone()
+        };
+        assert_eq!(
+            local_request.explicit_workspace_location(),
+            Some(AgentSessionWorkspaceLocation::Local)
+        );
+        let conflicting_request = AgentSessionRollbackToTurnRequest {
+            remote_connection_id: Some("connection-1".to_string()),
+            ..local_request
+        };
+        assert_eq!(
+            conflicting_request.explicit_workspace_location(),
+            Some(AgentSessionWorkspaceLocation::Remote)
         );
 
         let completed = AgentSessionRollbackToTurnOutcome::Completed {

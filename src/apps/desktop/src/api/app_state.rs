@@ -249,10 +249,14 @@ impl AppState {
         }
 
         // Initialize SSH Remote services synchronously so they're ready before app starts
-        let ssh_data_dir = dirs::data_local_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("BitFun")
-            .join("ssh");
+        let ssh_data_dir = if crate::e2e_storage_guard_enabled() {
+            workspace_service.path_manager().user_data_dir().join("ssh")
+        } else {
+            dirs::data_local_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("BitFun")
+                .join("ssh")
+        };
         let ssh_manager = Arc::new(RwLock::new(None));
         let ssh_manager_clone = ssh_manager.clone();
         let remote_file_service = Arc::new(RwLock::new(None));

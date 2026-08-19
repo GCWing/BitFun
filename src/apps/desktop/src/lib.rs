@@ -315,6 +315,12 @@ fn handle_secondary_launch(app: &tauri::AppHandle) {
     }
 }
 
+pub(crate) fn e2e_storage_guard_enabled() -> bool {
+    std::env::var("BITFUN_E2E_STORAGE_GUARD")
+        .ok()
+        .is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+}
+
 fn main_window_state_flags() -> StateFlags {
     main_window_geometry_state_flags() | StateFlags::MAXIMIZED
 }
