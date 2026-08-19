@@ -40,10 +40,12 @@ export default function i18nUnitTest() {
     it('switches in-app copy between Chinese and English', 0, () => {
       restoreZhCn();
       expect(RemoteI18n.t('settings.title')).assertEqual('设置');
+      expect(RemoteI18n.t('settings.modelService.section')).assertEqual('通用');
       expect(RemoteI18n.t('remote.title')).assertEqual('远程');
       RemoteI18n.setLanguage(APP_LOCALE_EN_US);
       expect(RemoteI18n.language()).assertEqual(APP_LOCALE_EN_US);
       expect(RemoteI18n.t('settings.title')).assertEqual('Settings');
+      expect(RemoteI18n.t('settings.modelService.section')).assertEqual('General');
       expect(RemoteI18n.t('remote.title')).assertEqual('Remote');
       expect(RemoteI18n.f('sidebar.moreSessions', '3')).assertEqual('3 more sessions');
       restoreZhCn();

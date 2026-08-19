@@ -10,6 +10,53 @@ import { ChatMessage } from '../main/ets/model/RemoteModels';
 import { AppShellViewModel } from '../main/ets/pages/viewmodel/AppShellViewModel';
 import { AppNavigationBackAction } from '../main/ets/pages/navigation/AppRouteContract';
 import { WideLayoutGeometry } from '../main/ets/pages/layout/WideLayoutGeometry';
+import { SidebarDirectoryPreviewPolicy } from '../main/ets/pages/policy/SidebarDirectoryPreviewPolicy';
+import { AdaptiveLayoutInput } from '../main/ets/pages/policy/AdaptiveLayoutInput';
+import {
+  ConversationLayoutCrease,
+  ConversationLayoutHorizontalCrease
+} from '../main/ets/pages/policy/ConversationLayoutPolicy';
+import {
+  SettingsPlacement,
+  SettingsPlacementMode,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../main/ets/pages/policy/SettingsPlacementPolicy';
+
+function placementInput(
+  viewportWidth: number,
+  viewportHeight: number,
+  isFolded: boolean,
+  isHoverOperate: boolean,
+  wideLayoutMatched: boolean,
+  verticalCreases: ConversationLayoutCrease[],
+  horizontalCreases: ConversationLayoutHorizontalCrease[],
+  isExpandedFoldable: boolean = false,
+  foldStatus: number = 0
+): AdaptiveLayoutInput {
+  return new AdaptiveLayoutInput(
+    viewportWidth,
+    viewportHeight,
+    foldStatus,
+    isFolded,
+    isExpandedFoldable,
+    isHoverOperate,
+    wideLayoutMatched,
+    verticalCreases,
+    horizontalCreases
+  );
+}
+
+function assertSheetMissesCreases(
+  placement: SettingsPlacement,
+  creases: ConversationLayoutCrease[],
+  viewportWidth: number
+): void {
+  creases.forEach((crease: ConversationLayoutCrease): void => {
+    expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(placement, crease, viewportWidth))
+      .assertFalse();
+  });
+}
 
 export default function architectureUnitTest() {
   describe('MobileArchitecture', () => {
@@ -114,6 +161,240 @@ export default function architectureUnitTest() {
       expect(WideLayoutGeometry.collapsedVisualBias(false, 0, 1100, 920, 72)).assertEqual(0);
       expect(WideLayoutGeometry.areaLength('1080')).assertEqual(1080);
       expect(WideLayoutGeometry.areaLength('invalid')).assertEqual(0);
+    });
+
+    it('reveals three more children per tap instead of the whole remainder', 0, () => {
+      const workspaces = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+      expect(SidebarDirectoryPreviewPolicy.visibleSlice(workspaces, 3).join(','))
+        .assertEqual('a,b,c');
+      expect(SidebarDirectoryPreviewPolicy.hiddenCount(workspaces.length, 3)).assertEqual(5);
+      expect(SidebarDirectoryPreviewPolicy.nextVisibleCount(3, 8)).assertEqual(6);
+      expect(SidebarDirectoryPreviewPolicy.visibleSlice(workspaces, 6).join(','))
+        .assertEqual('a,b,c,d,e,f');
+      expect(SidebarDirectoryPreviewPolicy.nextVisibleCount(6, 8)).assertEqual(8);
+      expect(SidebarDirectoryPreviewPolicy.nextVisibleCount(8, 8)).assertEqual(8);
+      expect(SidebarDirectoryPreviewPolicy.hiddenCount(2, 3)).assertEqual(0);
+      expect(SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(true)).assertFalse();
+      expect(SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(false)).assertTrue();
+    });
+  });
+
+  describe('SettingsPlacementPolicy', () => {
+    it('keeps a portrait phone and a folded cover on a large bottom sheet', 0, () => {
+      const phone = SettingsPlacementPolicy.resolve(
+        placementInput(390, 844, false, false, false, [], []),
+        SettingsSheetKind.Settings
+      );
+      const folded = SettingsPlacementPolicy.resolve(
+        placementInput(390, 844, true, false, false, [], [], false, 2),
+        SettingsSheetKind.Connect
+      );
+      const empty = SettingsPlacementPolicy.resolve(
+        AdaptiveLayoutInput.empty(),
+        SettingsSheetKind.Settings
+      );
+      expect(phone.mode).assertEqual(SettingsPlacementMode.Bottom);
+      expect(phone.width).assertEqual(0);
+      expect(phone.height).assertEqual(0);
+      expect(folded.mode).assertEqual(SettingsPlacementMode.Bottom);
+      expect(empty.mode).assertEqual(SettingsPlacementMode.Bottom);
+      expect(SettingsPlacementPolicy.compactBottom().mode).assertEqual(SettingsPlacementMode.Bottom);
+      expect(SettingsPlacementPolicy.compactBottom(SettingsSheetKind.RemoteViewSettings).height)
+        .assertEqual(SettingsPlacementPolicy.REMOTE_VIEW_SETTINGS_HEIGHT);
+      assertSheetMissesCreases(phone, [], 390);
+    });
+
+    it('uses a 45 percent side sheet when a narrow window is landscape', 0, () => {
+      const placement = SettingsPlacementPolicy.resolve(
+        placementInput(844, 390, false, false, false, [], []),
+        SettingsSheetKind.Settings
+      );
+      expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
+      expect(placement.width).assertEqual(Math.round(844 * 0.45));
+      expect(placement.height).assertEqual(SettingsPlacementPolicy.SIDE_MIN_HEIGHT);
+      assertSheetMissesCreases(placement, [], 844);
+    });
+
+    it('clamps a crease-free tablet sheet between 400 and 520', 0, () => {
+      const pad = SettingsPlacementPolicy.resolve(
+        placementInput(1440, 960, false, false, true, [], [], false, 0),
+        SettingsSheetKind.Settings
+      );
+      const narrowWide = SettingsPlacementPolicy.resolve(
+        placementInput(1000, 800, false, false, true, [], []),
+        SettingsSheetKind.Connect
+      );
+      const huge = SettingsPlacementPolicy.resolve(
+        placementInput(2000, 1200, false, false, true, [], []),
+        SettingsSheetKind.Settings
+      );
+      expect(pad.mode).assertEqual(SettingsPlacementMode.Side);
+      expect(pad.width).assertEqual(461);
+      expect(pad.height).assertEqual(SettingsPlacementPolicy.SIDE_MAX_HEIGHT);
+      expect(narrowWide.width).assertEqual(SettingsPlacementPolicy.TABLET_MIN_WIDTH);
+      expect(huge.width).assertEqual(SettingsPlacementPolicy.TABLET_MAX_WIDTH);
+      expect(SettingsPlacementPolicy.resolve(
+        placementInput(700, 900, false, false, false, [], []),
+        SettingsSheetKind.Settings
+      ).mode).assertEqual(SettingsPlacementMode.Side);
+      expect(SettingsPlacementPolicy.resolve(
+        placementInput(0, 0, false, false, true, [], []),
+        SettingsSheetKind.Settings
+      ).height).assertEqual(SettingsPlacementPolicy.SIDE_MAX_HEIGHT);
+      assertSheetMissesCreases(pad, [], 1440);
+    });
+
+    it('sizes a dual-fold sheet to the pane after the only vertical crease', 0, () => {
+      const crease = new ConversationLayoutCrease(352, 16);
+      const placement = SettingsPlacementPolicy.resolve(
+        placementInput(680, 740, false, false, true, [crease], [], true, 1),
+        SettingsSheetKind.Settings
+      );
+      expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
+      expect(placement.width).assertEqual(312);
+      expect(placement.height).assertEqual(660);
+      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(placement, crease, 680))
+        .assertFalse();
+      assertSheetMissesCreases(placement, [crease], 680);
+    });
+
+    it('sizes a tri-fold sheet to the pane after the last vertical crease', 0, () => {
+      const creases = [
+        new ConversationLayoutCrease(351, 44),
+        new ConversationLayoutCrease(773, 44)
+      ];
+      const placement = SettingsPlacementPolicy.resolve(
+        placementInput(1107, 776, false, false, true, creases, [], true, 11),
+        SettingsSheetKind.SessionDetails
+      );
+      expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
+      expect(placement.width).assertEqual(290);
+      expect(placement.height).assertEqual(SettingsPlacementPolicy.SESSION_DETAILS_HEIGHT);
+      assertSheetMissesCreases(placement, creases, 1107);
+    });
+
+    it('keeps an extremely narrow crease pane instead of applying a width floor', 0, () => {
+      const crease = new ConversationLayoutCrease(590, 8);
+      const placement = SettingsPlacementPolicy.resolve(
+        placementInput(630, 700, false, false, true, [crease], [], true, 1),
+        SettingsSheetKind.Settings
+      );
+      expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
+      expect(placement.width).assertEqual(32);
+      expect(placement.width < SettingsPlacementPolicy.TABLET_MIN_WIDTH).assertTrue();
+      assertSheetMissesCreases(placement, [crease], 630);
+    });
+
+    it('falls back to the crease-free wide band when crease data is illegal', 0, () => {
+      const illegal = [
+        new ConversationLayoutCrease(-12, 8),
+        new ConversationLayoutCrease(420, -2),
+        new ConversationLayoutCrease(910, 8)
+      ];
+      const placement = SettingsPlacementPolicy.resolve(
+        placementInput(900, 800, false, false, true, illegal, [], true, 1),
+        SettingsSheetKind.RemoteViewSettings
+      );
+      expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
+      expect(placement.width).assertEqual(SettingsPlacementPolicy.TABLET_MIN_WIDTH);
+      expect(placement.height).assertEqual(SettingsPlacementPolicy.REMOTE_VIEW_SETTINGS_HEIGHT);
+      assertSheetMissesCreases(placement, illegal, 900);
+      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(
+        new SettingsPlacement(SettingsPlacementMode.Bottom, 0, 0, 0),
+        new ConversationLayoutCrease(200, 8),
+        900
+      )).assertFalse();
+      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(
+        new SettingsPlacement(SettingsPlacementMode.Side, 0, 560, 0),
+        new ConversationLayoutCrease(200, 8),
+        900
+      )).assertFalse();
+      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(
+        new SettingsPlacement(SettingsPlacementMode.Side, 400, 560, 0),
+        new ConversationLayoutCrease(200, 8),
+        0
+      )).assertFalse();
+      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(
+        new SettingsPlacement(SettingsPlacementMode.Side, 500, 560, 0),
+        new ConversationLayoutCrease(352, 16),
+        680
+      )).assertTrue();
+    });
+
+    it('caps a hover sheet to the operate pane below the horizontal crease', 0, () => {
+      const hover = SettingsPlacementPolicy.resolve(
+        placementInput(
+          390,
+          844,
+          false,
+          true,
+          false,
+          [],
+          [new ConversationLayoutHorizontalCrease(400, 16)],
+          true,
+          3
+        ),
+        SettingsSheetKind.Settings
+      );
+      const missing = SettingsPlacementPolicy.resolve(
+        placementInput(390, 844, false, true, false, [], [], true, 3),
+        SettingsSheetKind.Connect
+      );
+      const invalid = SettingsPlacementPolicy.resolve(
+        placementInput(
+          390,
+          844,
+          false,
+          true,
+          false,
+          [],
+          [new ConversationLayoutHorizontalCrease(0, 16), new ConversationLayoutHorizontalCrease(840, 20)],
+          true,
+          3
+        ),
+        SettingsSheetKind.SessionDetails
+      );
+      const remote = SettingsPlacementPolicy.resolve(
+        placementInput(
+          390,
+          844,
+          false,
+          true,
+          false,
+          [],
+          [new ConversationLayoutHorizontalCrease(200, 16)],
+          true,
+          3
+        ),
+        SettingsSheetKind.RemoteViewSettings
+      );
+      const details = SettingsPlacementPolicy.resolve(
+        placementInput(
+          390,
+          844,
+          false,
+          true,
+          false,
+          [],
+          [
+            new ConversationLayoutHorizontalCrease(80, 16),
+            new ConversationLayoutHorizontalCrease(200, 16)
+          ],
+          true,
+          3
+        ),
+        SettingsSheetKind.SessionDetails
+      );
+      expect(hover.mode).assertEqual(SettingsPlacementMode.FoldOperate);
+      expect(hover.maxHeight).assertEqual(428);
+      expect(hover.height).assertEqual(428);
+      expect(missing.maxHeight).assertEqual(422);
+      expect(invalid.maxHeight).assertEqual(422);
+      expect(invalid.height).assertEqual(422);
+      expect(remote.height).assertEqual(SettingsPlacementPolicy.REMOTE_VIEW_SETTINGS_HEIGHT);
+      expect(details.maxHeight).assertEqual(748);
+      expect(details.height).assertEqual(SettingsPlacementPolicy.SESSION_DETAILS_HEIGHT);
+      assertSheetMissesCreases(hover, [], 390);
     });
   });
 }

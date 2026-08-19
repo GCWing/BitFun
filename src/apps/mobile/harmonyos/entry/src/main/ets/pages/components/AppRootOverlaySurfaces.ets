@@ -4,6 +4,11 @@ import {
 } from '../actions/AppRootPresentationActions';
 import { AppRouteContract } from '../navigation/AppRouteContract';
 import { AppShellState, CONNECT_INTENT_AUTO } from '../state/AppShellState';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
@@ -17,6 +22,8 @@ import { SidebarWorkspaceSection } from './SidebarWorkspaceSection';
 @ComponentV2
 export struct AppSidebarSurface {
   @Param shellState: AppShellState = new AppShellState();
+  @Param sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Param remotePageState: RemotePageState = new RemotePageState();
   @Param deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
   @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
@@ -27,6 +34,7 @@ export struct AppSidebarSurface {
   build() {
     AppSidebar({
       sessions: this.generalPageState.recentSessions(),
+      sessionDetailsPlacement: this.sessionDetailsPlacement,
       pinnedSessionId: this.generalPageState.pinnedSessionId(),
       selectedSessionId: AppRouteContract.isGeneralComposerRoute(this.shellState.activeRoute) ?
         this.generalPageState.conversation.activeSession.sessionId : '',
@@ -134,6 +142,7 @@ export struct AppSettingsSurface {
       })
     } else {
       SettingsSheet({
+        sheetState: this.shellState.settingsSheet,
         generalChatApiUrl: this.generalPageState.apiUrl,
         generalChatModelName: this.generalPageState.modelName,
         hasGeneralChatApiKey: this.generalPageState.hasApiKey,
@@ -145,6 +154,7 @@ export struct AppSettingsSurface {
         onOpenAccount: this.actions.onSettings.openAccount,
         onTestGeneralChatConfig: this.actions.onSettings.testGeneral,
         onSaveGeneralChatConfig: this.actions.onSettings.saveGeneral,
+        onSelectGeneralChatModel: this.actions.onSettings.selectGeneralModel,
         onSetLanguage: this.actions.onSettings.setLanguage,
         onClose: this.actions.onSettings.close
       })

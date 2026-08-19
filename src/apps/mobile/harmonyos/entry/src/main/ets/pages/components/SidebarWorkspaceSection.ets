@@ -6,9 +6,8 @@ import {
   emptyDeviceDirectoryEntry
 } from '../state/DeviceDirectoryState';
 import { INK, MUTED, SUBTLE } from './Theme';
+import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
-
-const DEVICE_BATCH: number = 3;
 
 /**
  * The workspace half of the unified sidebar.
@@ -39,7 +38,7 @@ export struct SidebarWorkspaceSection {
   @Event onToggleDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onRetryDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onConnect: () => void = () => {};
-  @Local visibleDeviceCount: number = DEVICE_BATCH;
+  @Local visibleDeviceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
   private readonly unpairedEntry: DeviceDirectoryEntry = emptyDeviceDirectoryEntry('', '', false);
 
   build() {
@@ -166,7 +165,7 @@ export struct SidebarWorkspaceSection {
     .padding({ left: 10 })
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
-      this.visibleDeviceCount += DEVICE_BATCH;
+      this.visibleDeviceCount += SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
     })
   }
 

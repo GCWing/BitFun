@@ -100,6 +100,7 @@ export interface SettingsPresentationActions {
   readonly setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode>;
   readonly testGeneral: (url: string, key: string, model: string, clear: boolean) => Promise<string>;
   readonly saveGeneral: (url: string, key: string, model: string, clear: boolean) => Promise<string>;
+  readonly selectGeneralModel: (modelId: string) => Promise<boolean>;
   readonly setLanguage: (language: string) => Promise<void>;
 }
 
@@ -149,6 +150,7 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       getPermissionMode: async () => 'ask',
       setPermissionMode: async (mode: RemotePermissionMode) => mode,
       testGeneral: async () => '', saveGeneral: async () => '',
+      selectGeneralModel: async () => false,
       setLanguage: async () => {}
     },
     onConnect: {

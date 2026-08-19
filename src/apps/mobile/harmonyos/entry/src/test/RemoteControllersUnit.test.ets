@@ -115,6 +115,7 @@ import {
 } from '../main/ets/pages/policy/FilePreviewPlacementPolicy';
 import {
   ConversationLayoutCrease,
+  ConversationLayoutHorizontalCrease,
   ConversationLayoutPolicy,
   ConversationLayoutRect
 } from '../main/ets/pages/policy/ConversationLayoutPolicy';
@@ -2759,13 +2760,13 @@ export default function remoteControllersUnitTest() {
       expect(geometry.collapsedDetailContentWidth).assertEqual(2210);
     });
 
-    it('keeps collapsed tri-fold content on the dominant hinge-free band', 0, () => {
+    it('keeps collapsed tri-fold content full-width so restore stays at the window origin', 0, () => {
       const geometry = ConversationLayoutPolicy.resolveWideGeometry(
         1107,
         [new ConversationLayoutCrease(351, 44)]
       );
-      expect(geometry.collapsedDetailContentOffset).assertEqual(395);
-      expect(geometry.collapsedDetailContentWidth).assertEqual(712);
+      expect(geometry.collapsedDetailContentOffset).assertEqual(0);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(1107);
     });
 
     it('treats dual-axis expanded fold status as an unfolded foldable', 0, () => {
@@ -2803,6 +2804,44 @@ export default function remoteControllersUnitTest() {
       expect(creases[0].width).assertEqual(44);
     });
 
+    it('keeps a true horizontal crease on its own axis', 0, () => {
+      const creases = ConversationLayoutPolicy.horizontalCreasesFromRects(
+        390,
+        844,
+        [
+          new ConversationLayoutRect(0, 400, 390, 16),
+          new ConversationLayoutRect(0, 120, 390, -2),
+          new ConversationLayoutRect(-4, 80, -8, 12),
+          new ConversationLayoutRect(10, 200, 40, 80),
+          new ConversationLayoutRect(0, 90, 200, 12),
+          new ConversationLayoutRect(0, 0, 390, 20),
+          new ConversationLayoutRect(0, 830, 390, 20)
+        ]
+      );
+      expect(creases.length).assertEqual(1);
+      expect(creases[0].top).assertEqual(400);
+      expect(creases[0].height).assertEqual(16);
+      const emptyViewport = ConversationLayoutPolicy.horizontalCreasesFromRects(
+        0,
+        844,
+        [new ConversationLayoutRect(0, 220, 200, 12)]
+      );
+      expect(emptyViewport.length).assertEqual(1);
+      expect(emptyViewport[0].top).assertEqual(220);
+      const ordered = ConversationLayoutPolicy.horizontalCreasesFromRects(
+        390,
+        844,
+        [
+          new ConversationLayoutRect(0, 520, 390, 12),
+          new ConversationLayoutRect(0, 180, 390, 12)
+        ]
+      );
+      expect(ordered.length).assertEqual(2);
+      expect(ordered[0].top).assertEqual(180);
+      expect(ordered[1].top).assertEqual(520);
+      expect(new ConversationLayoutHorizontalCrease(180, 12).height).assertEqual(12);
+    });
+
     it('accepts a zero-width crease without creating an empty detail segment', 0, () => {
       const geometry = ConversationLayoutPolicy.resolveWideGeometry(
         900,
@@ -2824,8 +2863,8 @@ export default function remoteControllersUnitTest() {
       expect(geometry.isExtraWide).assertTrue();
       expect(geometry.detailContentOffset).assertEqual(0);
       expect(geometry.detailContentWidth).assertEqual(720);
-      expect(geometry.collapsedDetailContentOffset).assertEqual(360);
-      expect(geometry.collapsedDetailContentWidth).assertEqual(720);
+      expect(geometry.collapsedDetailContentOffset).assertEqual(0);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(1080);
     });
 
     it('keeps asymmetric tri-fold detail on the full remaining span after the first crease', 0, () => {
@@ -2835,8 +2874,8 @@ export default function remoteControllersUnitTest() {
       );
       expect(geometry.detailContentOffset).assertEqual(0);
       expect(geometry.detailContentWidth).assertEqual(720);
-      expect(geometry.collapsedDetailContentOffset).assertEqual(360);
-      expect(geometry.collapsedDetailContentWidth).assertEqual(720);
+      expect(geometry.collapsedDetailContentOffset).assertEqual(0);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(1080);
     });
 
     it('spans remaining screens when a second crease sits inside the detail pane', 0, () => {
@@ -2848,8 +2887,8 @@ export default function remoteControllersUnitTest() {
       expect(geometry.masterDetailGap).assertEqual(44);
       expect(geometry.detailContentOffset).assertEqual(0);
       expect(geometry.detailContentWidth).assertEqual(712);
-      expect(geometry.collapsedDetailContentOffset).assertEqual(395);
-      expect(geometry.collapsedDetailContentWidth).assertEqual(712);
+      expect(geometry.collapsedDetailContentOffset).assertEqual(0);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(1107);
     });
 
     it('uses width as the extra-wide fallback when crease data is missing', 0, () => {

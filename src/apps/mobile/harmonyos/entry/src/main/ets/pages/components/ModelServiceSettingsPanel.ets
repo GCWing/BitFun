@@ -2,6 +2,8 @@ import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { GENERAL_CHAT_LOCAL_MODEL_ID } from '../../services/general-chat/GeneralChatConfigStore';
+import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
+import { SettingsSheetState } from '../state/SettingsSheetState';
 import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT, SUBTLE } from './Theme';
 
 @ComponentV2
@@ -10,6 +12,8 @@ export struct ModelServiceSettingsPanel {
   private focusScrollTimerId: number = 0;
   private blurResetTimerId: number = 0;
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET;
+  @Param page: string = 'overview';
+  @Param sheetState: SettingsSheetState = new SettingsSheetState();
   @Param apiUrl: string = '';
   @Param modelName: string = '';
   @Param hasApiKey: boolean = false;
@@ -20,6 +24,9 @@ export struct ModelServiceSettingsPanel {
   };
   @Param selectedModelId: string = '';
   @Event onClose: () => void = () => {};
+  @Event onOpenAccountModels: () => void = () => {};
+  @Event onOpenLocalEditor: () => void = () => {};
+  @Event onSelectModel: (modelId: string) => void = (_modelId: string) => {};
   @Event onSaved: (apiUrl: string, modelName: string, hasApiKey: boolean) => void = () => {};
   @Event onTest: (
     apiUrl: string,
@@ -43,103 +50,77 @@ export struct ModelServiceSettingsPanel {
     _modelName: string,
     _clearApiKey: boolean
   ) => '';
-  @Local draftApiUrl: string = '';
-  @Local draftApiKey: string = '';
-  @Local draftModelName: string = '';
-  @Local clearApiKey: boolean = false;
   @Local isSaving: boolean = false;
   @Local isTesting: boolean = false;
   @Local feedbackText: string = '';
   @Local feedbackIsError: boolean = false;
   @Local focusedFieldKind: string = '';
-  @Local showLocalEditor: boolean = false;
 
   aboutToAppear(): void {
-    this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode();
-    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
-    this.draftApiUrl = this.apiUrl;
-    this.draftModelName = this.modelName;
-    this.draftApiKey = '';
-    this.clearApiKey = false;
-    this.isTesting = false;
-    this.feedbackText = '';
-    this.feedbackIsError = false;
-    this.showLocalEditor = false;
+    if (this.sheetPage() === 'local') {
+      this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode();
+      this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+      this.resetEditorDraft();
+    }
   }
 
   aboutToDisappear(): void {
     this.clearFocusScrollTimer();
     this.clearBlurResetTimer();
-    this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode);
+    if (this.sheetPage() === 'local') {
+      this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode);
+    }
   }
 
   build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Text('')
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#33000000')
-        .onClick(() => {
-          if (!this.isSaving && !this.isTesting) {
-            this.onClose();
-          }
-        })
-
-      Column({ space: 0 }) {
-        this.Header()
-        if (this.showLocalEditor) {
-          this.LocalEditor()
-        } else {
-          this.ModelOverview()
-        }
+    Column({ space: 0 }) {
+      this.Header()
+      if (this.sheetPage() === 'local') {
+        this.LocalEditor()
+      } else if (this.sheetPage() === 'account') {
+        this.AccountModelList()
+      } else {
+        this.ModelOverview()
       }
-      .width('100%')
-      .height('78%')
-      .backgroundColor(CARD)
-      .borderRadius({ topLeft: 28, topRight: 28 })
     }
     .width('100%')
     .height('100%')
+    .backgroundColor(CARD)
+    .borderRadius({ topLeft: 20, topRight: 20 })
   }
 
   @Builder
   Header() {
     Row() {
-      if (this.showLocalEditor) {
-        Button() {
+      if (this.sheetPage() !== 'overview') {
+        Stack({ alignContent: Alignment.Center }) {
           SymbolGlyph($r('sys.symbol.chevron_left'))
             .fontSize(20)
             .fontColor([INK])
         }
         .width(42)
         .height(42)
-        .padding(0)
-        .type(ButtonType.Circle)
-        .backgroundColor(SOFT)
-        .margin({ right: 12 })
+        .margin({ right: 8 })
+        .accessibilityText(RemoteI18n.t('common.back'))
         .onClick(() => {
           if (!this.isSaving && !this.isTesting) {
-            this.showLocalEditor = false;
-            this.resetEditorScroll();
+            this.onClose();
           }
         })
       }
-      Text(RemoteI18n.t(this.showLocalEditor ?
-        'settings.modelService.localTitle' : 'settings.modelService.manageTitle'))
-        .fontSize(21)
+      Text(this.headerTitle())
+        .fontSize(18)
         .fontWeight(FontWeight.Bold)
         .fontColor(INK)
       Blank()
-      Button() {
+      Stack({ alignContent: Alignment.Center }) {
         SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(20)
-          .fontColor([INK])
+          .fontSize(18)
+          .fontColor([MUTED])
       }
-      .width(42)
-      .height(42)
-      .padding(0)
-      .type(ButtonType.Circle)
-      .backgroundColor(SOFT)
+      .width(32)
+      .height(32)
+      .accessibilityText(RemoteI18n.t('common.close'))
       .onClick(() => {
         if (!this.isSaving && !this.isTesting) {
           this.onClose();
@@ -147,41 +128,124 @@ export struct ModelServiceSettingsPanel {
       })
     }
     .width('100%')
-    .height(66)
-    .padding({ left: 22, right: 18 })
+    .height(ModelServiceSettingsPolicy.HEADER_HEIGHT)
+    .padding({ left: 16, right: 16 })
     .border({ width: { bottom: 1 }, color: LINE })
     .alignItems(VerticalAlign.Center)
   }
 
   @Builder
   ModelOverview() {
-    Scroll() {
-      Column({ space: 20 }) {
-        Column({ space: 8 }) {
-          this.SectionHeader(RemoteI18n.t('settings.modelService.currentModel'), '')
-          this.CurrentModelRow()
-        }
-        .width('100%')
-
-        Column({ space: 8 }) {
-          this.SectionHeader(RemoteI18n.t('settings.modelService.accountModels'), '')
-          this.AccountModelsSummaryRow()
-        }
-        .width('100%')
-
-        Column({ space: 8 }) {
-          this.SectionHeader(RemoteI18n.t('settings.modelService.localModel'), '')
-          this.LocalModelRow()
-        }
-        .width('100%')
+    Column({ space: ModelServiceSettingsPolicy.OVERVIEW_SECTION_GAP }) {
+      Column({ space: 8 }) {
+        this.SectionHeader(RemoteI18n.t('settings.modelService.currentModel'))
+        this.CurrentModelRow()
       }
       .width('100%')
-      .padding({ left: 22, right: 22, top: 18, bottom: 30 })
-      .justifyContent(FlexAlign.Start)
+
+      Column({ space: 8 }) {
+        this.SectionHeader(RemoteI18n.t('settings.modelService.modelSources'))
+        this.ModelSourceGroup()
+      }
+      .width('100%')
     }
     .width('100%')
-    .layoutWeight(1)
-    .scrollBar(BarState.Off)
+    .padding({
+      left: 16,
+      right: 16,
+      top: ModelServiceSettingsPolicy.OVERVIEW_TOP_PADDING,
+      bottom: ModelServiceSettingsPolicy.OVERVIEW_BOTTOM_PADDING
+    })
+    .justifyContent(FlexAlign.Start)
+  }
+
+  @Builder
+  ModelSourceGroup() {
+    Column() {
+      this.AccountModelsSummaryRow()
+      Divider()
+        .color(LINE)
+        .strokeWidth(ModelServiceSettingsPolicy.SOURCE_DIVIDER_HEIGHT)
+        .margin({ left: 56 })
+      this.LocalModelRow()
+    }
+    .width('100%')
+    .backgroundColor(SOFT)
+    .borderRadius(8)
+  }
+
+  @Builder
+  AccountModelList() {
+    if (this.accountModels().length === 0) {
+      Text(RemoteI18n.t('settings.modelService.accountEmpty'))
+        .fontSize(14)
+        .fontColor(MUTED)
+        .width('100%')
+        .height(ModelServiceSettingsPolicy.EMPTY_ACCOUNT_HEIGHT)
+        .padding({
+          left: 16,
+          right: 16,
+          top: ModelServiceSettingsPolicy.LIST_TOP_PADDING
+        })
+        .textAlign(TextAlign.Start)
+    } else {
+      List({ space: ModelServiceSettingsPolicy.ACCOUNT_MODEL_ROW_GAP }) {
+        ForEach(this.accountModels(), (model: RemoteModelConfig) => {
+          ListItem() {
+            this.AccountModelRow(model)
+          }
+        }, (model: RemoteModelConfig) => model.id)
+      }
+      .width('100%')
+      .height(ModelServiceSettingsPolicy.accountListContentHeight(this.accountModels().length))
+      .padding({
+        left: 10,
+        right: 10,
+        top: ModelServiceSettingsPolicy.LIST_TOP_PADDING,
+        bottom: ModelServiceSettingsPolicy.LIST_BOTTOM_PADDING
+      })
+      .scrollBar(BarState.Auto)
+      .edgeEffect(EdgeEffect.Spring)
+      .divider(null)
+    }
+  }
+
+  @Builder
+  AccountModelRow(model: RemoteModelConfig) {
+    Row({ space: 10 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        if (this.isSelectedModel(model)) {
+          SymbolGlyph($r('sys.symbol.checkmark_circle'))
+            .fontSize(16)
+            .fontColor([INK])
+        }
+      }
+      .width(20)
+      .height(20)
+      Column({ space: 2 }) {
+        Text(this.modelLabel(model))
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(INK)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(RemoteI18n.t('settings.modelService.accountSource'))
+          .fontSize(12)
+          .fontColor(MUTED)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .height(ModelServiceSettingsPolicy.ACCOUNT_MODEL_ROW_HEIGHT)
+    .padding({ left: 10, right: 10 })
+    .backgroundColor(this.isSelectedModel(model) ? SOFT : '#00000000')
+    .borderRadius(9)
+    .onClick(() => {
+      this.onSelectModel(model.id);
+    })
   }
 
   @Builder
@@ -245,8 +309,8 @@ export struct ModelServiceSettingsPanel {
       }
       .width('100%')
       .padding({
-        left: 22,
-        right: 22,
+        left: 16,
+        right: 16,
         top: 18,
         bottom: this.focusedFieldKind.length > 0 ? 360 : 30
       })
@@ -258,21 +322,12 @@ export struct ModelServiceSettingsPanel {
   }
 
   @Builder
-  SectionHeader(title: string, detail: string) {
-    Row() {
-      Text(title)
-        .fontSize(14)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(MUTED)
-      Blank()
-      if (detail.length > 0) {
-        Text(detail)
-          .fontSize(12)
-          .fontColor(SUBTLE)
-      }
-    }
-    .width('100%')
-    .padding({ left: 4, right: 4 })
+  SectionHeader(title: string) {
+    Text(title)
+      .fontSize(14)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(MUTED)
+      .width('100%')
   }
 
   @Builder
@@ -300,7 +355,7 @@ export struct ModelServiceSettingsPanel {
       .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .height(68)
+    .height(ModelServiceSettingsPolicy.CURRENT_ROW_HEIGHT)
     .padding({ left: 16, right: 16 })
     .backgroundColor(SOFT)
     .borderRadius(8)
@@ -331,17 +386,16 @@ export struct ModelServiceSettingsPanel {
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      if (this.isAccountModelSelected()) {
-        SymbolGlyph($r('sys.symbol.checkmark_circle_fill'))
-          .fontSize(18)
-          .fontColor([INK])
-      }
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(14)
+        .fontColor([MUTED])
     }
     .width('100%')
-    .height(62)
+    .height(ModelServiceSettingsPolicy.SOURCE_ROW_HEIGHT)
     .padding({ left: 16, right: 16 })
-    .backgroundColor(SOFT)
-    .borderRadius(8)
+    .onClick(() => {
+      this.onOpenAccountModels();
+    })
   }
 
   @Builder
@@ -367,24 +421,27 @@ export struct ModelServiceSettingsPanel {
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      if (this.isLocalModelSelected()) {
-        SymbolGlyph($r('sys.symbol.checkmark_circle_fill'))
-          .fontSize(18)
-          .fontColor([INK])
+      .onClick(() => {
+        if (this.localRowSelectsOnBodyTap()) {
+          this.onSelectModel(GENERAL_CHAT_LOCAL_MODEL_ID);
+          return;
+        }
+        this.onOpenLocalEditor();
+      })
+      Stack({ alignContent: Alignment.Center }) {
+        SymbolGlyph($r('sys.symbol.chevron_right'))
+          .fontSize(14)
+          .fontColor([MUTED])
       }
-      SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(14)
-        .fontColor([MUTED])
+      .width(28)
+      .height(28)
+      .onClick(() => {
+        this.onOpenLocalEditor();
+      })
     }
     .width('100%')
-    .height(62)
+    .height(ModelServiceSettingsPolicy.SOURCE_ROW_HEIGHT)
     .padding({ left: 16, right: 16 })
-    .backgroundColor(SOFT)
-    .borderRadius(8)
-    .onClick(() => {
-      this.showLocalEditor = true;
-      this.resetEditorDraft();
-    })
   }
 
   @Builder
@@ -397,7 +454,7 @@ export struct ModelServiceSettingsPanel {
         .width('100%')
       TextInput({
         placeholder,
-        text: kind === 'url' ? this.draftApiUrl : this.draftModelName
+        text: kind === 'url' ? this.sheetState.draftApiUrl : this.sheetState.draftModelName
       })
         .width('100%')
         .height(52)
@@ -415,9 +472,9 @@ export struct ModelServiceSettingsPanel {
         })
         .onChange((value: string) => {
           if (kind === 'url') {
-            this.draftApiUrl = value;
+            this.sheetState.draftApiUrl = value;
           } else {
-            this.draftModelName = value;
+            this.sheetState.draftModelName = value;
           }
           this.clearFeedback();
         })
@@ -435,7 +492,7 @@ export struct ModelServiceSettingsPanel {
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
         Blank()
-        if (this.hasApiKey && !this.clearApiKey) {
+        if (this.hasApiKey && !this.sheetState.draftClearApiKey) {
           Text(RemoteI18n.t('settings.modelService.keySaved'))
             .fontSize(12)
             .fontColor(MUTED)
@@ -444,7 +501,7 @@ export struct ModelServiceSettingsPanel {
       .width('100%')
       TextInput({
         placeholder: this.apiKeyPlaceholder(),
-        text: this.draftApiKey
+        text: this.sheetState.draftApiKey
       })
         .type(InputType.Password)
         .showPasswordIcon(true)
@@ -463,91 +520,89 @@ export struct ModelServiceSettingsPanel {
           this.scheduleFocusedFieldReset();
         })
         .onChange((value: string) => {
-          this.draftApiKey = value;
+          this.sheetState.draftApiKey = value;
           if (value.length > 0) {
-            this.clearApiKey = false;
+            this.sheetState.draftClearApiKey = false;
           }
           this.clearFeedback();
         })
       if (this.hasApiKey) {
-        Text(this.clearApiKey ?
+        Text(this.sheetState.draftClearApiKey ?
           RemoteI18n.t('settings.modelService.keepKey') :
           RemoteI18n.t('settings.modelService.clearKey'))
           .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.clearApiKey ? INK : RED)
-        .width('100%')
-        .onClick(() => {
-          this.clearApiKey = !this.clearApiKey;
-          this.draftApiKey = '';
-          this.clearFeedback();
-        })
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.sheetState.draftClearApiKey ? INK : RED)
+          .width('100%')
+          .onClick(() => {
+            this.sheetState.draftClearApiKey = !this.sheetState.draftClearApiKey;
+            this.sheetState.draftApiKey = '';
+            this.clearFeedback();
+          })
       }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
   }
 
+  private sheetPage(): string {
+    return ModelServiceSettingsPolicy.sheetPage(this.page);
+  }
+
+  private headerTitle(): string {
+    const page = this.sheetPage();
+    if (page === 'local') {
+      return RemoteI18n.t('settings.modelService.localTitle');
+    }
+    if (page === 'account') {
+      return RemoteI18n.t('settings.modelService.chooseAccountModel');
+    }
+    return RemoteI18n.t('settings.modelService.manageTitle');
+  }
+
   private accountModels(): RemoteModelConfig[] {
-    return this.modelCatalog.models.filter((model: RemoteModelConfig): boolean => {
-      return model.enabled && model.id.startsWith('cloud:');
-    });
+    return ModelServiceSettingsPolicy.accountModels(this.modelCatalog);
   }
 
   private currentModel(): RemoteModelConfig | undefined {
-    const candidates = [
-      this.selectedModelId,
-      this.modelCatalog.session_model_id || '',
-      this.modelCatalog.default_models.primary || ''
-    ];
-    for (let index = 0; index < candidates.length; index += 1) {
-      const modelId = candidates[index];
-      const model = this.modelCatalog.models.find((item: RemoteModelConfig): boolean => {
-        return item.id === modelId && item.enabled;
-      });
-      if (model) {
-        return model;
-      }
-    }
-    return undefined;
+    return ModelServiceSettingsPolicy.currentModel(this.modelCatalog, this.selectedModelId);
   }
 
   private currentModelLabel(): string {
-    const model = this.currentModel();
-    return model ? this.modelLabel(model) : RemoteI18n.t('settings.modelService.notConfigured');
+    return ModelServiceSettingsPolicy.modelLabel(
+      this.currentModel(),
+      RemoteI18n.t('settings.modelService.notConfigured')
+    );
   }
 
   private modelLabel(model: RemoteModelConfig): string {
-    return model.model_name || model.name || model.id;
+    return ModelServiceSettingsPolicy.modelLabel(model, model.id);
   }
 
   private modelSourceLabel(model?: RemoteModelConfig): string {
     if (!model) {
       return '';
     }
-    return model.id === GENERAL_CHAT_LOCAL_MODEL_ID ?
+    return ModelServiceSettingsPolicy.isLocalModel(model) ?
       RemoteI18n.t('settings.modelService.localSource') :
       RemoteI18n.t('settings.modelService.accountSource');
   }
 
-  private isAccountModelSelected(): boolean {
+  private isSelectedModel(model: RemoteModelConfig): boolean {
     const current = this.currentModel();
-    return current !== undefined && current.id.startsWith('cloud:');
-  }
-
-  private isLocalModelSelected(): boolean {
-    return this.currentModel()?.id === GENERAL_CHAT_LOCAL_MODEL_ID;
+    return current !== undefined && current.id === model.id;
   }
 
   private hasCompleteLocalModel(): boolean {
-    return this.apiUrl.trim().length > 0 && this.modelName.trim().length > 0 && this.hasApiKey;
+    return ModelServiceSettingsPolicy.hasCompleteLocalModel(this.apiUrl, this.modelName, this.hasApiKey);
+  }
+
+  private localRowSelectsOnBodyTap(): boolean {
+    return ModelServiceSettingsPolicy.localRowSelectsOnBodyTap(this.apiUrl, this.modelName, this.hasApiKey);
   }
 
   private resetEditorDraft(): void {
-    this.draftApiUrl = this.apiUrl;
-    this.draftModelName = this.modelName;
-    this.draftApiKey = '';
-    this.clearApiKey = false;
+    this.sheetState.hydrateEditorDraft(this.apiUrl, this.modelName);
     this.isTesting = false;
     this.clearFeedback();
     this.resetEditorScroll();
@@ -561,7 +616,7 @@ export struct ModelServiceSettingsPanel {
   }
 
   private apiKeyPlaceholder(): string {
-    return this.hasApiKey && !this.clearApiKey ?
+    return this.hasApiKey && !this.sheetState.draftClearApiKey ?
       RemoteI18n.t('settings.modelService.apiKeyKeepPlaceholder') :
       RemoteI18n.t('settings.modelService.apiKeyPlaceholder');
   }
@@ -573,10 +628,10 @@ export struct ModelServiceSettingsPanel {
     this.isSaving = true;
     this.clearFeedback();
     const error = await this.onSave(
-      this.draftApiUrl,
-      this.draftApiKey,
-      this.draftModelName,
-      this.clearApiKey
+      this.sheetState.draftApiUrl,
+      this.sheetState.draftApiKey,
+      this.sheetState.draftModelName,
+      this.sheetState.draftClearApiKey
     );
     this.isSaving = false;
     if (error.length > 0) {
@@ -585,12 +640,12 @@ export struct ModelServiceSettingsPanel {
       return;
     }
     this.onSaved(
-      this.draftApiUrl.trim(),
-      this.draftModelName.trim(),
-      !this.clearApiKey && (this.draftApiKey.trim().length > 0 || this.hasApiKey)
+      this.sheetState.draftApiUrl.trim(),
+      this.sheetState.draftModelName.trim(),
+      !this.sheetState.draftClearApiKey &&
+        (this.sheetState.draftApiKey.trim().length > 0 || this.hasApiKey)
     );
-    this.showLocalEditor = false;
-    this.resetEditorScroll();
+    this.onClose();
   }
 
   private async testConnection(): Promise<void> {
@@ -600,10 +655,10 @@ export struct ModelServiceSettingsPanel {
     this.isTesting = true;
     this.clearFeedback();
     const error = await this.onTest(
-      this.draftApiUrl,
-      this.draftApiKey,
-      this.draftModelName,
-      this.clearApiKey
+      this.sheetState.draftApiUrl,
+      this.sheetState.draftApiKey,
+      this.sheetState.draftModelName,
+      this.sheetState.draftClearApiKey
     );
     this.isTesting = false;
     if (error.length > 0) {
@@ -616,7 +671,8 @@ export struct ModelServiceSettingsPanel {
   }
 
   private hasTestableApiKey(): boolean {
-    return this.draftApiKey.trim().length > 0 || (this.hasApiKey && !this.clearApiKey);
+    return this.sheetState.draftApiKey.trim().length > 0 ||
+      (this.hasApiKey && !this.sheetState.draftClearApiKey);
   }
 
   private clearFeedback(): void {
