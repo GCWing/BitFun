@@ -101,6 +101,8 @@ export interface ReviewPlatformPullRequest {
   additions: number;
   deletions: number;
   changedFiles: number;
+  /** Missing on older backends; only an explicit false means the count is unknown. */
+  changedFileCountKnown?: boolean;
   comments: number;
   reviewDecision: ReviewDecision;
   checks: ReviewChecks;

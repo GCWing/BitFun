@@ -129,6 +129,16 @@ impl ReviewHttpHeaders {
             .map(|(_, value)| value.as_str())
     }
 
+    #[cfg(test)]
+    pub(crate) fn from_pairs(values: &[(&str, &str)]) -> Self {
+        Self {
+            values: values
+                .iter()
+                .map(|(name, value)| ((*name).to_string(), (*value).to_string()))
+                .collect(),
+        }
+    }
+
     fn from_header_map(headers: &reqwest::header::HeaderMap) -> Self {
         let values = headers
             .iter()
