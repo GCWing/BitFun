@@ -42,9 +42,13 @@ pub struct JsWorker {
 impl JsWorker {
     /// Spawn Worker process: `runtime_path worker_host_path '<policy_json>'` with cwd = app_dir.
     /// The `app_id` is used as the source identifier when emitting worker events.
+    /// `resource_dir`, when present, is exported as `BITFUN_RESOURCE_DIR` so
+    /// workers can find host-bundled sidecar binaries (e.g. the bitfun-loopx
+    /// compiled loopx CLI).
     pub async fn spawn(
         runtime: &DetectedRuntime,
         worker_host_path: &Path,
+        resource_dir: Option<&Path>,
         app_dir: &Path,
         policy_json: &str,
         app_id: String,
@@ -52,14 +56,19 @@ impl JsWorker {
     ) -> Result<Self, String> {
         let exe = runtime.path.to_string_lossy();
         let host = worker_host_path.to_string_lossy();
-        let mut child = bitfun_services_core::process_manager::create_tokio_command(&*exe)
+        let mut command = bitfun_services_core::process_manager::create_tokio_command(&*exe);
+        command
             .arg(&*host)
             .arg(policy_json)
             .current_dir(app_dir)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
+            .kill_on_drop(true);
+        if let Some(dir) = resource_dir {
+            command.env("BITFUN_RESOURCE_DIR", dir);
+        }
+        let mut child = command
             .spawn()
             .map_err(|e| format!("Failed to spawn JS Worker: {}", e))?;
 

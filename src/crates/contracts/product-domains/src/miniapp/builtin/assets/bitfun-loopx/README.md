@@ -19,7 +19,7 @@ LoopX 引擎持续修复，心跳调度、人工审批、中途插话。
    `meta.json` 里的 `version` 仅用于展示，不驱动 reseed）；
 2. 本地验证 reseed：删除 `~/.bitfun/miniapps/builtin-bitfun-loopx/.builtin-manifest.json`
    （或整个目录）后重启应用，确认新资源落盘；
-3. `cargo test -p bitfun-product-domains builtin_miniapp` 全绿后提交。
+3. `cargo test -p bitfun-product-domains --features product-full builtin_miniapp` 全绿后提交。
 
 version 只是一个单调计数，没有任何语义，高频迭代时每次都 +1 即可，不必纠结
 数值。README 等未嵌入的文档改动无需 bump version。
@@ -38,9 +38,10 @@ Node 的 `child_process` / `fs` / `https`：因此它实际会 spawn 的 `gh` / 
 
 ## 平台支持
 
-- loopx 获取三平台通用：已有 CLI 直接用；否则一键拉源码到
-  `~/.bitfun/bitfun-loopx/vendor/loopx`（`python -m loopx.cli` / `python3 -m loopx.cli`
-  直跑），pip 安装兜底。
+- loopx 获取三平台通用，优先级：① 安装包内置的编译二进制（见下节「loopx 依赖
+  与合规」，宿主经 `BITFUN_RESOURCE_DIR` 传入，无需 Python/git/网络）→ ② 一键拉
+  源码到 `~/.bitfun/bitfun-loopx/vendor/loopx`（`python -m loopx.cli` /
+  `python3 -m loopx.cli` 直跑）→ ③ pip 安装兜底。
 - gh 获取：Windows 走 winget，失败回退 PowerShell 下载 release zip；macOS 走
   Homebrew，失败回退 curl + unzip 下载 release zip；Linux 无通用包管理器，直接
   curl + tar 下载 release tar.gz 到 `~/.bitfun/bitfun-loopx/bin/gh`。
@@ -58,11 +59,20 @@ Node 的 `child_process` / `fs` / `https`：因此它实际会 spawn 的 `gh` / 
 
 ## loopx 依赖与合规
 
-- loopx 不随包分发：运行时由应用自己获取（已装 CLI → 一键拉源码到
-  `~/.bitfun/bitfun-loopx/vendor/loopx`，固定 pin `v0.2.13`，
-  `python -m loopx.cli` 直跑 → pip 指引兜底）。因此本仓库不包含 loopx 源码，
-  不触发其 MIT 再分发义务。
-- loopx 为 MIT（Copyright (c) 2026 LoopX contributors）；名称按 loopx
-  [TRADEMARKS.md](https://github.com/huangruiteng/loopx/blob/main/TRADEMARKS.md)
+- **内置编译二进制（随安装包分发）**：打包流程（`scripts/desktop-tauri-build.mjs`，
+  即 `pnpm run desktop:build*` 的 bundle 路径）会先执行 `scripts/build-loopx.mjs`：
+  构建期拉取 pin `v0.2.13` 的 loopx 源码并用 PyInstaller 编译单文件二进制，随
+  tauri `bundle.resources` 作为 sidecar 分发（`resources/loopx/`）。桌面宿主把
+  资源目录经 `BITFUN_RESOURCE_DIR` 传给 MiniApp worker，探测时内置二进制优先，
+  用户机器零依赖。`--no-bundle` 的 dev 构建不触发该步骤，走 vendor/pip 兜底。
+  生成的 `resources/loopx/` 目录在 `.gitignore` 中，二进制不进仓库；`manifest.json`
+  记录版本、commit、内容哈希与构建工具链。
+- **MIT 再分发义务**：loopx 为 MIT（Copyright (c) 2026 LoopX contributors），
+  允许以二进制形式再分发，义务为保留许可证与版权声明——`resources/loopx/` 随包
+  携带上游 `LICENSE` 与 `TRADEMARKS.md`，`THIRD_PARTY_NOTICES.md` 已收录 loopx
+  条目。名称按 loopx [TRADEMARKS.md](https://github.com/huangruiteng/loopx/blob/main/TRADEMARKS.md)
   描述性使用，本应用是第三方集成，非 LoopX 官方出品。
+- **运行期兜底**：内置二进制缺失/损坏时回退 vendor 源码（`~/.bitfun/bitfun-loopx/vendor/loopx`）
+  或 pip 安装；pin 保持一致（`LOOPX_VENDOR_REF` = `v0.2.13`），升级必须伴随
+  loopx CLI JSON 契约的显式适配。
 - 本应用自身的 GitHub 凭据只存于本机应用存储（gh CLI 或粘贴的 PAT），不写入 git config。

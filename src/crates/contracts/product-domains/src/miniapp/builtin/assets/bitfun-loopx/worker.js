@@ -53,8 +53,22 @@ function moduleInterpreterArgvs() {
     : [['python3'], ['python']];
 }
 
+// Bundled sidecar binary shipped with the desktop installer (build-time
+// PyInstaller onefile; see scripts/build-loopx.mjs). The host passes the
+// resources directory through BITFUN_RESOURCE_DIR. When present this binary
+// needs no Python, no git and no network — it outranks every other candidate.
+function bundledLoopxExes() {
+  const dir = process.env.BITFUN_RESOURCE_DIR;
+  if (!dir) return [];
+  const names = process.platform === 'win32' ? ['loopx.exe', 'loopx'] : ['loopx', 'loopx.exe'];
+  return names
+    .map((name) => path.join(dir, 'loopx', name))
+    .filter((candidate) => fs.existsSync(candidate));
+}
+
 function candidatePrefixes(srcDir) {
   const list = [
+    ...bundledLoopxExes().map((exe) => ({ argv: [exe] })),
     { argv: ['loopx'] },
   ];
   for (const argv of moduleInterpreterArgvs()) {

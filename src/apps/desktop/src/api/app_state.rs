@@ -195,12 +195,28 @@ impl AppState {
                 std::path::PathBuf::from("worker_host.js")
             }
         };
+        // The bitfun-loopx MiniApp prefers a bundled, compiled loopx CLI
+        // sidecar (scripts/build-loopx.mjs, shipped via bundle.resources).
+        // Export its resource directory to the JS workers when present; the
+        // MiniApp falls back to vendor/pip acquisition when absent (e.g. dev).
+        let loopx_resource_dir = match resolve_bundled_loopx_dir() {
+            Some(dir) => {
+                log::info!("Resolved bundled loopx CLI resource dir: {}", dir.display());
+                Some(dir)
+            }
+            None => {
+                log::info!(
+                    "Bundled loopx CLI not found; bitfun-loopx will use vendor/pip acquisition"
+                );
+                None
+            }
+        };
         let speech_service = Arc::new(SpeechService::new(SpeechStoragePaths::new(
             path_manager.speech_models_dir(),
             path_manager.speech_model_downloads_dir(),
             path_manager.speech_input_temp_dir(),
         )));
-        let js_worker_pool = JsWorkerPool::new(path_manager, worker_host_path)
+        let js_worker_pool = JsWorkerPool::new(path_manager, worker_host_path, loopx_resource_dir)
             .ok()
             .map(Arc::new);
         if js_worker_pool.is_none() {
@@ -598,4 +614,45 @@ fn resolve_worker_host_path() -> Option<std::path::PathBuf> {
     }
 
     candidates.into_iter().find(|p| p.exists())
+}
+
+/// Resolve the directory hosting the bundled, compiled loopx CLI sidecar
+/// (built by `scripts/build-loopx.mjs`, shipped via `bundle.resources`). The
+/// layouts mirror `resolve_worker_host_path`, with the platform binary name
+/// under a `loopx/` subdirectory. Returns the resource directory so the
+/// worker pool can export it as `BITFUN_RESOURCE_DIR`.
+fn resolve_bundled_loopx_dir() -> Option<std::path::PathBuf> {
+    let bin_name = if cfg!(windows) { "loopx.exe" } else { "loopx" };
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+
+    candidates.push(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("loopx"),
+    );
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            candidates.push(exe_dir.join("resources").join("loopx"));
+            if let Some(parent) = exe_dir.parent() {
+                candidates.push(parent.join("Resources").join("resources").join("loopx"));
+                candidates.push(parent.join("Resources").join("loopx"));
+                if let Some(bin) = exe.file_name().and_then(|s| s.to_str()) {
+                    candidates.push(parent.join("lib").join(bin).join("resources").join("loopx"));
+                    candidates.push(
+                        parent
+                            .join("share")
+                            .join(bin)
+                            .join("resources")
+                            .join("loopx"),
+                    );
+                }
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .find(|dir| dir.join(bin_name).exists())
+        .map(|dir| dir.parent().map(|p| p.to_path_buf()).unwrap_or(dir))
 }
