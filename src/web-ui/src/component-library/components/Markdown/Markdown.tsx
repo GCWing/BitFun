@@ -11,7 +11,6 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { visit } from 'unist-util-visit';
 import { i18nService } from '@/infrastructure/i18n';
 import { MermaidBlock } from './MermaidBlock';
-import { ReproductionStepsBlock } from './ReproductionStepsBlock';
 import { AsyncPrismSyntaxHighlighter } from './AsyncPrismSyntaxHighlighter';
 import { buildMarkdownPrismStyle } from './markdownPrismTheme';
 import { Tooltip } from '../Tooltip';
@@ -784,7 +783,6 @@ export interface MarkdownProps {
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
   onTabOpen?: (tabInfo: any) => void;
   onHttpLinkClick?: (url: string, event: React.MouseEvent<HTMLAnchorElement>) => boolean | void;
-  onReproductionProceed?: () => void;
   traceContext?: MarkdownTraceContext;
 }
 
@@ -799,7 +797,6 @@ export const Markdown = React.memo<MarkdownProps>(({
   onFileViewRequest,
   onTabOpen,
   onHttpLinkClick,
-  onReproductionProceed,
   traceContext,
 }) => {
   const { current: appearance } = useAppearance();
@@ -817,18 +814,8 @@ export const Markdown = React.memo<MarkdownProps>(({
   const renderTraceEnabled = isStartupRenderTraceEnabled();
   const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
 
-  // Fault-tolerant extraction of <reproduction_steps> content
-  const { markdownContent, reproductionSteps } = useMemo(() => {
-    const regex = /<reproduction_steps>([\s\S]*?)<\/reproduction[\s_]*steps\s*>?/g;
-    const match = regex.exec(contentStr);
-
+  const markdownContent = useMemo(() => {
     let body = contentStr;
-    let steps: string | null = null;
-    if (match) {
-      steps = match[1].trim();
-      body = contentStr.replace(regex, '').trim();
-    }
-
     // While streaming, the model may emit an opening ```lang fence long before
     // the closing ```. react-markdown then flips between parsing the tail as a
     // paragraph (raw text) and as a fenced code block as more tokens arrive,
@@ -844,7 +831,7 @@ export const Markdown = React.memo<MarkdownProps>(({
       }
     }
 
-    return { markdownContent: body, reproductionSteps: steps };
+    return body;
   }, [contentStr, isStreaming]);
 
   const needsWorkspacePathForLinks = useMemo(
@@ -1455,12 +1442,6 @@ export const Markdown = React.memo<MarkdownProps>(({
         ) : basicMarkdownRenderer}
       </MarkdownErrorBoundary>
       
-      {reproductionSteps && !isStreaming && (
-        <ReproductionStepsBlock 
-          steps={reproductionSteps}
-          onProceed={onReproductionProceed}
-        />
-      )}
     </div>
   );
 });

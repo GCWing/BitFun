@@ -45,10 +45,6 @@ vi.mock('./MermaidBlock', () => ({
   MermaidBlock: () => <div data-testid="mermaid-block" />,
 }));
 
-vi.mock('./ReproductionStepsBlock', () => ({
-  ReproductionStepsBlock: () => <div data-testid="reproduction-steps" />,
-}));
-
 vi.mock('./MarkdownMathRenderer', () => ({
   default: ({ markdownContent }: { markdownContent: string }) => {
     mocks.renderMath(markdownContent);

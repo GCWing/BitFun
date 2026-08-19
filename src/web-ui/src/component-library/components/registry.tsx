@@ -39,7 +39,6 @@ import { InitMiniAppDisplay } from '@/flow_chat/tool-cards/MiniAppToolDisplay';
 import type { FlowToolItem, FlowThinkingItem } from '@/flow_chat/types/flow-chat';
 import { TOOL_CARD_CONFIGS } from '@/flow_chat/tool-cards/toolCardMetadata';
 import { ModelThinkingDisplay } from '@/flow_chat/tool-cards/ModelThinkingDisplay';
-import { ReproductionStepsBlock } from '@components/Markdown/ReproductionStepsBlock';
 import { IconCatalogPreview } from '../preview/IconCatalogPreview';
 
 const previewTextSubtle = 'color-mix(in srgb, var(--bf-appearance-token-color-static-white) 60%, var(--bf-appearance-token-color-static-black))';
@@ -1694,54 +1693,6 @@ console.log(user.greet());`);
             />
           </div>
         ),
-      },
-      {
-        id: 'reproduction-steps-card',
-        name: 'ReproductionSteps - 复现步骤',
-        description: '用于展示问题复现步骤并等待用户操作确认的卡片',
-        category: 'flowchat-cards',
-        component: () => {
-          const CompletedReproductionSteps = () => {
-            const [hasProceeded] = React.useState(true);
-            return (
-              <div className={`reproduction-steps-block ${hasProceeded ? 'proceeded' : ''}`}>
-                <div className="reproduction-steps-header">
-                  <div className="reproduction-steps-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                  </div>
-                  <div className="reproduction-steps-title">Steps</div>
-                </div>
-                <div className="reproduction-steps-content">
-                  <ol className="reproduction-steps-list">
-                    <li className="reproduction-step-item">Step 1</li>
-                    <li className="reproduction-step-item">Step 2</li>
-                    <li className="reproduction-step-item">Step 3</li>
-                  </ol>
-                </div>
-                <div className="reproduction-steps-completed">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                  <span>Waiting for AI to proceed...</span>
-                </div>
-              </div>
-            );
-          };
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-              <h3 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginBottom: '8px' }}>Reproduction Steps</h3>
-              <ReproductionStepsBlock
-                steps={`1. Run npm run dev
-2. Open http://localhost:3000
-3. Click "Button"
-4. Check console`}
-                onProceed={() => {}}
-              />
-
-              <h3 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginTop: '16px', marginBottom: '8px' }}>已完成</h3>
-              <CompletedReproductionSteps />
-            </div>
-          );
-        },
       },
       {
         id: 'create-plan-card',

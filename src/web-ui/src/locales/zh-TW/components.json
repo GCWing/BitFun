@@ -57,17 +57,6 @@
     "hideCode": "隱藏源碼",
     "copyCode": "複製代碼"
   },
-  "reproductionSteps": {
-    "completedTitle": "復現步驟已完成",
-    "instructionTitle": "請按以下步驟復現問題",
-    "continueButton": "繼續",
-    "processing": "處理中...",
-    "notified": "已通知 AI 分析日誌，請等待結果...",
-    "instruction": "完成上述步驟後，點擊下方按鈕讓 AI 繼續分析日誌",
-    "userCompleted": "[用戶已完成復現] 請立即收集並分析日誌。",
-    "userCompletedShort": "用戶已完成復現",
-    "operationFailed": "操作失敗，請重試"
-  },
   "flowChatCards": {
     "todoCard": {
       "title": "任務管理",

@@ -57,17 +57,6 @@
     "hideCode": "Hide source",
     "copyCode": "Copy code"
   },
-  "reproductionSteps": {
-    "completedTitle": "Reproduction steps completed",
-    "instructionTitle": "Follow these steps to reproduce the issue",
-    "continueButton": "Continue",
-    "processing": "Processing...",
-    "notified": "AI has been notified to analyze logs, please wait...",
-    "instruction": "After completing the above steps, click the button below to let AI continue analyzing logs",
-    "userCompleted": "[User completed reproduction] Please collect and analyze logs immediately.",
-    "userCompletedShort": "User completed reproduction",
-    "operationFailed": "Operation failed, please retry"
-  },
   "flowChatCards": {
     "todoCard": {
       "title": "Task Management",

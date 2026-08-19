@@ -9,6 +9,3 @@ export type { MarkdownProps as MarkdownRendererProps } from './Markdown';
 
 export { MermaidBlock } from './MermaidBlock';
 export type { MermaidBlockProps } from './MermaidBlock';
-
-export { ReproductionStepsBlock } from './ReproductionStepsBlock';
-export type { ReproductionStepsBlockProps } from './ReproductionStepsBlock';

@@ -27,7 +27,6 @@ import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 import { Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
-import { ReproductionStepsBlock } from '@/component-library/components/Markdown/ReproductionStepsBlock';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import {
   describeUserMessageEditImpact,
@@ -214,12 +213,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         }
       : null;
 
-    const { displayText, reproductionSteps } = useMemo(() => {
-      const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
-      const reproductionMatch = reproductionRegex.exec(messageContent);
-      const reproduction = reproductionMatch ? reproductionMatch[1].trim() : null;
-
-      let cleaned = messageContent.replace(reproductionRegex, '').trim();
+    const displayText = useMemo(() => {
+      let cleaned = messageContent;
       if (isThreadGoalContinuationCheck) {
         cleaned = cleaned.replace(/\s*\n+\s*/g, ' ').trim();
       }
@@ -231,7 +226,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           .trim();
       }
 
-      return { displayText: cleaned, reproductionSteps: reproduction };
+      return cleaned;
     }, [isThreadGoalContinuationCheck, messageContent, messageImages]);
     const copyText = composerPresentation
       ? composerPresentationToAccessibleText(composerPresentation)
@@ -662,12 +657,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 </div>
               ) : null;
             })}
-          </div>
-        )}
-
-        {reproductionSteps && (
-          <div className="user-message-item__blocks" data-bf-component="user-message-item" data-bf-part="blocks">
-            {reproductionSteps && <ReproductionStepsBlock steps={reproductionSteps} />}
           </div>
         )}
 

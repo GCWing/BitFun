@@ -140,7 +140,6 @@ vi.mock('@/infrastructure/event-bus', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  ReproductionStepsBlock: ({ steps }: { steps: string }) => <div>{steps}</div>,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   confirmDanger: componentLibraryMock.confirmDanger,
 }));
