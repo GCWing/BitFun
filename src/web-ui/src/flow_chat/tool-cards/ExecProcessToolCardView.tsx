@@ -106,7 +106,11 @@ function formatSecondsAsMs(seconds?: number): number | undefined {
     : undefined;
 }
 
-function renderFooter(model: ExecProcessCardModel, t: (key: string, options?: Record<string, unknown>) => string) {
+function renderFooter(
+  model: ExecProcessCardModel,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  statusText?: { label: string; className: string },
+) {
   const hasFooter =
     model.workdir ||
     model.sessionId != null ||
@@ -115,12 +119,18 @@ function renderFooter(model: ExecProcessCardModel, t: (key: string, options?: Re
     model.remote != null ||
     model.tty != null;
 
-  if (!hasFooter) {
-    return null;
-  }
-
   return (
-    <div data-bf-component="exec-process-tool-card" data-bf-part="footer" className="terminal-result-footer exec-process-result-footer">
+    <div
+      data-bf-component="exec-process-tool-card"
+      data-bf-part="footer"
+      data-filled={hasFooter || statusText ? 'true' : 'false'}
+      className="terminal-result-footer exec-process-result-footer"
+    >
+      {statusText && (
+        <span className={`terminal-cancelled-text ${statusText.className}`}>
+          {statusText.label}
+        </span>
+      )}
       {model.workdir && (
         <span className="exec-process-footer-group exec-process-footer-group--workdir">
           <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
@@ -156,6 +166,9 @@ function renderFooter(model: ExecProcessCardModel, t: (key: string, options?: Re
             </span>
           )}
         </span>
+      )}
+      {!hasFooter && !statusText && (
+        <span className="exec-process-footer-placeholder" aria-hidden="true">&nbsp;</span>
       )}
     </div>
   );
@@ -245,7 +258,15 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     isLastItem === true &&
     isCollapsedStatus(status) &&
     !userToggledRef.current;
-  const maxRows = isRunning || compactSettledPreview
+  // Keep auto-managed completed cards on the compact preview through the
+  // collapse animation. A manually expanded card remains eligible for the
+  // full output preview.
+  const keepAutoCompletionPreview =
+    status === 'completed' &&
+    !userToggledRef.current;
+  const keepCompactCompletionPreview =
+    keepAutoCompletionPreview || compactSettledPreview;
+  const maxRows = isRunning || keepCompactCompletionPreview
     ? EXEC_OUTPUT_STREAMING_MAX_ROWS
     : EXEC_OUTPUT_EXPANDED_MAX_ROWS;
 
@@ -413,69 +434,73 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   );
 
   const renderExpandedContent = () => {
-    if (status === 'completed') {
-      return (
-        <div data-bf-component="exec-process-tool-card" data-bf-part="result" className="terminal-result-container">
-          {model.resultOutput ? (
-            <div className="terminal-result-output" data-bf-component="exec-process-tool-card" data-bf-part="output">
-              {renderOutputWithCopyAction(model.resultOutput, { formatSessionPreview: true })}
+    const outputText = getOutputText();
+    const waitingText = (() => {
+      if (outputText) {
+        return null;
+      }
+      if (rejectedOrCancelled) {
+        return null;
+      }
+      if (status === 'completed') {
+        return model.resultNoticeText ?? model.noOutputText;
+      }
+      if (status === 'pending_confirmation') {
+        return t('toolCards.approval.waiting');
+      }
+      if (isParamsStreaming) {
+        return t('toolCards.terminal.receivingParams');
+      }
+      if (isRunning) {
+        return model.waitingText;
+      }
+      return null;
+    })();
+    const footerStatus = rejectedOrCancelled
+      ? {
+          label: t(cancelledStatusLabelKey),
+          className: cancelledStatusClassName,
+        }
+      : undefined;
+    const outputFrameClassName = [
+      'exec-process-output-frame',
+      keepCompactCompletionPreview || isRunning
+        ? 'exec-process-output-frame--compact'
+        : 'exec-process-output-frame--expanded',
+    ].join(' ');
+
+    return (
+      <div
+        data-bf-component="exec-process-tool-card"
+        data-bf-part="result"
+        data-bf-state={rejectedOrCancelled ? 'cancelled' : status === 'completed' ? 'completed' : 'active'}
+        className={`terminal-result-container exec-process-stable-body${rejectedOrCancelled ? ' cancelled' : ''}`}
+      >
+        <div className={outputFrameClassName} data-output-rows={maxRows}>
+          {outputText ? (
+            <div
+              className={status === 'completed' || rejectedOrCancelled ? 'terminal-result-output' : 'terminal-execution-output'}
+              data-bf-component="exec-process-tool-card"
+              data-bf-part="output"
+            >
+              {renderOutputWithCopyAction(outputText)}
             </div>
-          ) : model.resultNoticeText ? (
-            <div className="terminal-execution-output terminal-waiting exec-process-result-notice" data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting">
-              <span className="waiting-text">{model.resultNoticeText}</span>
+          ) : waitingText ? (
+            <div
+              className={`terminal-execution-output terminal-waiting${status === 'completed' ? ' exec-process-empty-output' : ''}${model.resultNoticeText ? ' exec-process-result-notice' : ''}`}
+              data-bf-component="exec-process-tool-card"
+              data-bf-part="waiting"
+              data-bf-state="waiting"
+            >
+              <span className="waiting-text">{waitingText}</span>
             </div>
           ) : (
-            <div className="terminal-execution-output terminal-waiting exec-process-empty-output" data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting">
-              <span className="waiting-text">{model.noOutputText}</span>
-            </div>
+            <div className="exec-process-output-placeholder" aria-hidden="true" />
           )}
-          {renderFooter(model, t)}
         </div>
-      );
-    }
-
-    if (rejectedOrCancelled) {
-      return (
-        <div data-bf-component="exec-process-tool-card" data-bf-part="result" data-bf-state="cancelled" className="terminal-result-container cancelled">
-          {liveOutput && (
-            <div className="terminal-result-output" data-bf-component="exec-process-tool-card" data-bf-part="output">
-              {renderOutputWithCopyAction(liveOutput)}
-            </div>
-          )}
-          <div className="terminal-result-footer" data-bf-component="exec-process-tool-card" data-bf-part="footer">
-            <span className="terminal-cancelled-text">
-              {t(cancelledStatusLabelKey)}
-            </span>
-          </div>
-        </div>
-      );
-    }
-
-    if (status === 'pending_confirmation') {
-      return (
-        <div data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting" className="terminal-execution-output terminal-waiting">
-          <span className="waiting-text">{t('toolCards.approval.waiting')}</span>
-        </div>
-      );
-    }
-
-    if (liveOutput && isRunning) {
-      return (
-        <div data-bf-component="exec-process-tool-card" data-bf-part="output" className="terminal-execution-output">
-          {renderOutputWithCopyAction(liveOutput)}
-        </div>
-      );
-    }
-
-    if (isRunning || isParamsStreaming) {
-      return (
-        <div data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting" className="terminal-execution-output terminal-waiting">
-          <span className="waiting-text">{isParamsStreaming ? t('toolCards.terminal.receivingParams') : model.waitingText}</span>
-        </div>
-      );
-    }
-
-    return null;
+        {renderFooter(model, t, footerStatus)}
+      </div>
+    );
   };
 
   const renderErrorContent = () => {
