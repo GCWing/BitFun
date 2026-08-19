@@ -2,6 +2,12 @@ import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, MUTED, SOFT } from './Theme';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
+import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
 import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
 import {
@@ -24,6 +30,8 @@ export struct RemoteSessionList {
   @Param workspaceKind: string = 'normal';
   @Param recentWorkspaces: RecentWorkspaceEntry[] = [];
   @Param actionPresentation: SessionActionPresentation = SessionActionPresentation.BottomSheet;
+  @Param sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Param workspaceFilter: string = '';
   @Param agentFilter: string = '';
   @Param statusFilter: string = '';
@@ -748,23 +756,6 @@ export struct RemoteSessionList {
   }
 
   private sessionDetailsSheetOptions(): SheetOptions {
-    if (this.actionPresentation === SessionActionPresentation.BottomSheet) {
-      return {
-        height: SheetSize.LARGE,
-        backgroundColor: '#00000000',
-        maskColor: '#44000000',
-        showClose: false,
-        dragBar: false
-      };
-    }
-    return {
-      height: 560,
-      width: 560,
-      preferType: SheetType.CENTER,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
-      showClose: false,
-      dragBar: false
-    };
+    return AdaptiveSheetOptions.fromPlacement(this.sessionDetailsPlacement);
   }
 }

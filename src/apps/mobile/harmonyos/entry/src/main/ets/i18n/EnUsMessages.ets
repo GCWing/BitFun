@@ -58,7 +58,7 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['generalChat.emptyResponse', 'The model returned no text.'],
   ['generalChat.requestFailed', 'Model request failed (HTTP {0}).'],
 
-  ['settings.modelService.section', 'General chat'],
+  ['settings.modelService.section', 'General'],
   ['settings.title', 'Settings'],
   ['settings.language.section', 'Language'],
   ['settings.language.title', 'Language'],
@@ -72,6 +72,8 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['settings.modelService.manageTitle', 'General chat model'],
   ['settings.modelService.localTitle', 'Custom local model'],
   ['settings.modelService.currentModel', 'In use'],
+  ['settings.modelService.modelSources', 'Model sources'],
+  ['settings.modelService.chooseAccountModel', 'Choose account model'],
   ['settings.modelService.accountModels', 'Account sync'],
   ['settings.modelService.accountModelSummary', 'Cloud account models'],
   ['settings.modelService.localModel', 'Custom local'],

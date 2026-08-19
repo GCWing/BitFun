@@ -3,6 +3,12 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, PAGE_BG, PAGE_BG_FADE, SOFT, SUBTLE } from './Theme';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
+import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
 import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
 import { SidebarGlyph } from './SidebarGlyphs';
@@ -19,6 +25,8 @@ const RECENT_BATCH: number = 6;
 @ComponentV2
 export struct AppSidebar {
   @Param sessions: RemoteSession[] = [];
+  @Param sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Param pinnedSessionId: string = '';
   @Param selectedSessionId: string = '';
   @Param connectionState: string = 'idle';
@@ -676,24 +684,7 @@ export struct AppSidebar {
   }
 
   private sessionDetailsSheetOptions(): SheetOptions {
-    if (!this.showCollapseButton) {
-      return {
-        height: SheetSize.LARGE,
-        backgroundColor: '#00000000',
-        maskColor: '#44000000',
-        showClose: false,
-        dragBar: false
-      };
-    }
-    return {
-      height: 560,
-      width: 560,
-      preferType: SheetType.CENTER,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
-      showClose: false,
-      dragBar: false
-    };
+    return AdaptiveSheetOptions.fromPlacement(this.sessionDetailsPlacement);
   }
 
   private isAccountAuthenticated(): boolean {

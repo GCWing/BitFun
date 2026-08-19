@@ -13,6 +13,9 @@ import { RemoteCreateSessionState } from '../main/ets/pages/state/RemoteCreateSe
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
 import { ConversationHeaderPolicy } from '../main/ets/pages/policy/ConversationHeaderPolicy';
+import { ModelServiceSettingsPolicy } from '../main/ets/pages/policy/ModelServiceSettingsPolicy';
+import { GENERAL_CHAT_LOCAL_MODEL_ID } from '../main/ets/services/general-chat/GeneralChatConfigStore';
+import { RemoteModelCatalog, RemoteModelConfig } from '../main/ets/model/RemoteModels';
 import { ThinkingPresentationPolicy } from '../main/ets/pages/policy/ThinkingPresentationPolicy';
 import {
   ActivityGroupPolicy,
@@ -553,6 +556,127 @@ export default function conversationPresentationUnitTest() {
       expect(projection.desktopName).assertEqual('Studio');
     });
   });
+
+  describe('ModelServiceSettingsPolicy', () => {
+    it('resolves the current model in selected / session / primary order', 0, () => {
+      const catalog = modelServiceCatalog([
+        cloudModel('cloud:a', 'alpha'),
+        cloudModel('cloud:b', 'beta'),
+        localModel('local-chat')
+      ], 'cloud:b', 'cloud:a');
+      expect(ModelServiceSettingsPolicy.currentModel(catalog, 'cloud:a')?.id).assertEqual('cloud:a');
+      expect(ModelServiceSettingsPolicy.currentModel(catalog, '')?.id).assertEqual('cloud:b');
+      expect(ModelServiceSettingsPolicy.currentModel({
+        version: 1,
+        models: catalog.models,
+        default_models: { primary: 'cloud:a' }
+      }, '')?.id).assertEqual('cloud:a');
+      expect(ModelServiceSettingsPolicy.currentModel({
+        version: 1,
+        models: [],
+        default_models: {}
+      }, '') === undefined).assertTrue();
+    });
+
+    it('lists only enabled cloud account models and keeps source rows unselected', 0, () => {
+      const catalog = modelServiceCatalog([
+        cloudModel('cloud:a', 'alpha'),
+        {
+          id: 'cloud:off',
+          name: 'off',
+          provider: 'account',
+          base_url: '',
+          model_name: 'off',
+          enabled: false,
+          capabilities: []
+        },
+        localModel('local-chat')
+      ], 'cloud:a', 'cloud:a');
+      const accountModels = ModelServiceSettingsPolicy.accountModels(catalog);
+      expect(accountModels.length).assertEqual(1);
+      expect(accountModels[0].id).assertEqual('cloud:a');
+      expect(ModelServiceSettingsPolicy.isAccountModelSelected(catalog, 'cloud:a')).assertTrue();
+      expect(ModelServiceSettingsPolicy.isLocalModelSelected(catalog, 'cloud:a')).assertFalse();
+      expect(ModelServiceSettingsPolicy.sourceRowShowsSelectionCheck()).assertFalse();
+      expect(ModelServiceSettingsPolicy.localRowSelectsOnBodyTap(
+        'https://api.example.com',
+        'local-chat',
+        true
+      )).assertTrue();
+      expect(ModelServiceSettingsPolicy.localRowSelectsOnBodyTap('', '', false)).assertFalse();
+      expect(ModelServiceSettingsPolicy.modelLabel(undefined, 'fallback')).assertEqual('fallback');
+      expect(ModelServiceSettingsPolicy.sheetPage('account')).assertEqual('account');
+      expect(ModelServiceSettingsPolicy.sheetPage('unknown')).assertEqual('overview');
+      expect(ModelServiceSettingsPolicy.parentSettingsPage('overview')).assertEqual('main');
+      expect(ModelServiceSettingsPolicy.parentSettingsPage('language')).assertEqual('main');
+      expect(ModelServiceSettingsPolicy.parentSettingsPage('account')).assertEqual('overview');
+      expect(ModelServiceSettingsPolicy.parentSettingsPage('local')).assertEqual('overview');
+    });
+
+    it('sizes the overview, account list, editor, and language sheets from content', 0, () => {
+      const overview = ModelServiceSettingsPolicy.overviewSheetHeight();
+      expect(overview < 400).assertTrue();
+      expect(overview > 300).assertTrue();
+      expect(ModelServiceSettingsPolicy.accountListSheetHeight(0)).assertEqual(
+        ModelServiceSettingsPolicy.HEADER_HEIGHT +
+          ModelServiceSettingsPolicy.LIST_TOP_PADDING +
+          ModelServiceSettingsPolicy.EMPTY_ACCOUNT_HEIGHT +
+          ModelServiceSettingsPolicy.LIST_BOTTOM_PADDING
+      );
+      const three = ModelServiceSettingsPolicy.accountListContentHeight(3);
+      const seven = ModelServiceSettingsPolicy.accountListContentHeight(7);
+      const twelve = ModelServiceSettingsPolicy.accountListContentHeight(12);
+      expect(three < seven).assertTrue();
+      expect(twelve).assertEqual(seven);
+      expect(ModelServiceSettingsPolicy.accountListSheetHeight(12))
+        .assertEqual(ModelServiceSettingsPolicy.MAX_SHEET_HEIGHT);
+      expect(ModelServiceSettingsPolicy.localEditorSheetHeight())
+        .assertEqual(ModelServiceSettingsPolicy.LOCAL_EDITOR_HEIGHT);
+      expect(ModelServiceSettingsPolicy.languageSheetHeight(2)).assertEqual(
+        ModelServiceSettingsPolicy.HEADER_HEIGHT +
+          ModelServiceSettingsPolicy.LANGUAGE_LIST_TOP_PADDING +
+          2 * ModelServiceSettingsPolicy.LANGUAGE_ROW_HEIGHT +
+          ModelServiceSettingsPolicy.LANGUAGE_LIST_BOTTOM_PADDING
+      );
+    });
+  });
+}
+
+function cloudModel(id: string, modelName: string): RemoteModelConfig {
+  return {
+    id,
+    name: modelName,
+    provider: 'account',
+    base_url: 'https://chat.example.com/v1',
+    model_name: modelName,
+    enabled: true,
+    capabilities: ['text_chat']
+  };
+}
+
+function localModel(modelName: string): RemoteModelConfig {
+  return {
+    id: GENERAL_CHAT_LOCAL_MODEL_ID,
+    name: modelName,
+    provider: 'local',
+    base_url: 'https://localhost/v1',
+    model_name: modelName,
+    enabled: true,
+    capabilities: ['text_chat']
+  };
+}
+
+function modelServiceCatalog(
+  models: RemoteModelConfig[],
+  sessionModelId: string,
+  primary: string
+): RemoteModelCatalog {
+  return {
+    version: 1,
+    models,
+    default_models: { primary },
+    session_model_id: sessionModelId
+  };
 }
 
 function thinkingPart(beforeToolIndex: number, text: string): ActivityThinkingPart {

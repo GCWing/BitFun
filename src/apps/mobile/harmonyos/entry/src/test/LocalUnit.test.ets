@@ -6,10 +6,12 @@ import appRootLifecycleUnitTest from './AppRootLifecycleUnit.test';
 import remoteControllersUnitTest from './RemoteControllersUnit.test';
 import appRootRuntimeStartupUnitTest from './AppRootRuntimeStartupUnit.test';
 import deviceDirectoryUnitTest from './DeviceDirectoryUnit.test';
+import architectureUnitTest from './ArchitectureUnit.test';
 import i18nUnitTest from './I18nUnit.test';
 
 export default function localUnitTest() {
   i18nUnitTest();
+  architectureUnitTest();
   transportAndGeneralChatUnitTest();
   conversationStateUnitTest();
   conversationPresentationUnitTest();

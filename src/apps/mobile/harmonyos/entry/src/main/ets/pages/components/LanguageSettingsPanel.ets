@@ -1,6 +1,7 @@
 import { AppLocale } from '../../i18n/AppLocale';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MODAL_SCRIM, SOFT } from './Theme';
+import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
+import { CARD, INK, LINE, MUTED } from './Theme';
 
 @ComponentV2
 export struct LanguageSettingsPanel {
@@ -14,48 +15,31 @@ export struct LanguageSettingsPanel {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Text('')
-        .width('100%')
-        .height('100%')
-        .backgroundColor(MODAL_SCRIM)
-        .onClick(() => {
-          if (this.pendingLanguage.length === 0) {
-            this.onClose();
-          }
-        })
-
-      Column({ space: 0 }) {
-        this.Header()
-        this.LanguageList()
-      }
-      .width('100%')
-      .constraintSize({ maxHeight: '70%' })
-      .backgroundColor(CARD)
-      .borderRadius({ topLeft: 28, topRight: 28 })
+    Column({ space: 0 }) {
+      this.Header()
+      this.LanguageList()
     }
     .width('100%')
     .height('100%')
+    .backgroundColor(CARD)
+    .borderRadius({ topLeft: 20, topRight: 20 })
   }
 
   @Builder
   Header() {
     Row() {
       Text(RemoteI18n.t('settings.language.choose'))
-        .fontSize(21)
+        .fontSize(18)
         .fontWeight(FontWeight.Bold)
         .fontColor(INK)
       Blank()
-      Button() {
+      Stack({ alignContent: Alignment.Center }) {
         SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(20)
-          .fontColor([INK])
+          .fontSize(18)
+          .fontColor([MUTED])
       }
-      .width(42)
-      .height(42)
-      .padding(0)
-      .type(ButtonType.Circle)
-      .backgroundColor(SOFT)
+      .width(32)
+      .height(32)
       .accessibilityText(RemoteI18n.t('common.close'))
       .onClick(() => {
         if (this.pendingLanguage.length === 0) {
@@ -64,8 +48,8 @@ export struct LanguageSettingsPanel {
       })
     }
     .width('100%')
-    .height(66)
-    .padding({ left: 22, right: 18 })
+    .height(ModelServiceSettingsPolicy.HEADER_HEIGHT)
+    .padding({ left: 16, right: 16 })
     .border({ width: { bottom: 1 }, color: LINE })
     .alignItems(VerticalAlign.Center)
   }
@@ -78,7 +62,10 @@ export struct LanguageSettingsPanel {
       }, (language: string) => `${language}:${RemoteI18n.revision()}`)
     }
     .width('100%')
-    .padding({ top: 8, bottom: 28 })
+    .padding({
+      top: ModelServiceSettingsPolicy.LANGUAGE_LIST_TOP_PADDING,
+      bottom: ModelServiceSettingsPolicy.LANGUAGE_LIST_BOTTOM_PADDING
+    })
   }
 
   @Builder
@@ -96,8 +83,8 @@ export struct LanguageSettingsPanel {
       }
     }
     .width('100%')
-    .height(64)
-    .padding({ left: 22, right: 22 })
+    .height(ModelServiceSettingsPolicy.LANGUAGE_ROW_HEIGHT)
+    .padding({ left: 16, right: 16 })
     .alignItems(VerticalAlign.Center)
     .opacity(this.pendingLanguage.length > 0 && this.pendingLanguage !== language ? 0.45 : 1)
     .onClick(() => {

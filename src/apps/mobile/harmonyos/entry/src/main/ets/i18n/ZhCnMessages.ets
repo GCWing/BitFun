@@ -58,7 +58,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['generalChat.emptyResponse', '模型没有返回文字内容。'],
   ['generalChat.requestFailed', '模型请求失败（HTTP {0}）。'],
 
-  ['settings.modelService.section', '普通对话'],
+  ['settings.modelService.section', '通用'],
   ['settings.title', '设置'],
   ['settings.language.section', '语言'],
   ['settings.language.title', '语言'],
@@ -72,6 +72,8 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['settings.modelService.manageTitle', '普通对话模型'],
   ['settings.modelService.localTitle', '本机自定义模型'],
   ['settings.modelService.currentModel', '当前使用'],
+  ['settings.modelService.modelSources', '模型来源'],
+  ['settings.modelService.chooseAccountModel', '选择账号模型'],
   ['settings.modelService.accountModels', '账号同步'],
   ['settings.modelService.accountModelSummary', '云端账号模型'],
   ['settings.modelService.localModel', '本机自定义'],

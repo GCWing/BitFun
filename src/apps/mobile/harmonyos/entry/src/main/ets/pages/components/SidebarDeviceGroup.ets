@@ -7,9 +7,11 @@ import {
   SessionListProjectionCache,
   SessionListProjector
 } from '../policy/SessionListProjection';
+import {
+  SidebarDirectoryPreviewPolicy,
+  SidebarPreviewCursor
+} from '../policy/SidebarDirectoryPreviewPolicy';
 import { GREEN, INK, MUTED, SOFT, SUBTLE } from './Theme';
-
-const SESSIONS_PER_WORKSPACE: number = 3;
 
 /**
  * One desktop's workspaces and sessions.
@@ -38,7 +40,9 @@ export struct SidebarDeviceGroup {
   @Event onCreateInWorkspace: (path: string) => void = (_path: string) => {};
   @Event onOpenWorkspace: (path: string) => void = (_path: string) => {};
   @Local collapsedPaths: string[] = [];
-  @Local expandedSessionPaths: string[] = [];
+  @Local expandedWorkspacePaths: string[] = [];
+  @Local visibleWorkspaceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
+  @Local sessionCursors: SidebarPreviewCursor[] = [];
   private readonly projectionCache: SessionListProjectionCache = new SessionListProjectionCache();
 
   build() {
@@ -58,9 +62,12 @@ export struct SidebarDeviceGroup {
             this.LoadingRow()
           }
         } else {
-          ForEach(this.workspaceEntries(), (entry: RecentWorkspaceEntry) => {
+          ForEach(this.visibleWorkspaceEntries(), (entry: RecentWorkspaceEntry) => {
             this.WorkspaceGroup(entry)
           }, (entry: RecentWorkspaceEntry): string => `${this.device.deviceId}:${entry.path}`)
+          if (this.hiddenWorkspaceCount() > 0) {
+            this.MoreWorkspacesRow()
+          }
           if (this.device.status === 'loading') {
             this.LoadingRow()
           }
@@ -174,11 +181,11 @@ export struct SidebarDeviceGroup {
   private WorkspaceGroup(entry: RecentWorkspaceEntry) {
     Column() {
       this.WorkspaceRow(entry)
-      if (!this.isCollapsed(entry.path)) {
+      if (this.isWorkspaceExpanded(entry.path)) {
         ForEach(this.visibleSessionsFor(entry.path), (item: RemoteSession) => {
           this.SessionRow(item)
         }, (item: RemoteSession): string => `${item.deviceId || this.device.deviceId}:${item.id}`)
-        if (this.visibleSessionLimit(entry.path) < this.sessionsFor(entry.path).length) {
+        if (this.hiddenSessionCount(entry.path) > 0) {
           this.MoreSessionsRow(entry.path)
         }
       }
@@ -215,8 +222,8 @@ export struct SidebarDeviceGroup {
       .onClick(() => {
         this.onCreateInWorkspace(entry.path);
       })
-      SymbolGlyph(this.isCollapsed(entry.path) ?
-        $r('sys.symbol.chevron_right') : $r('sys.symbol.chevron_down'))
+      SymbolGlyph(this.isWorkspaceExpanded(entry.path) ?
+        $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
         .fontSize(13)
         .fontColor([MUTED])
         .width(16)
@@ -277,6 +284,28 @@ export struct SidebarDeviceGroup {
   }
 
   @Builder
+  private MoreWorkspacesRow() {
+    Row({ space: 8 }) {
+      Text('···')
+        .fontSize(13)
+        .fontColor(MUTED)
+      Text(RemoteI18n.f('sidebar.moreWorkspaces', String(this.hiddenWorkspaceCount())))
+        .fontSize(13)
+        .fontColor(MUTED)
+    }
+    .width('100%')
+    .height(40)
+    .padding({ left: this.bodyIndent() })
+    .alignItems(VerticalAlign.Center)
+    .onClick(() => {
+      this.visibleWorkspaceCount = SidebarDirectoryPreviewPolicy.nextVisibleCount(
+        this.visibleWorkspaceCount,
+        this.workspaceEntries().length
+      );
+    })
+  }
+
+  @Builder
   private MoreSessionsRow(path: string) {
     Row({ space: 8 }) {
       Text('···')
@@ -291,7 +320,7 @@ export struct SidebarDeviceGroup {
     .padding({ left: this.bodyIndent() + 16 })
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
-      this.expandedSessionPaths = this.expandedSessionPaths.concat([path]);
+      this.revealMoreSessions(path);
     })
   }
 
@@ -333,23 +362,67 @@ export struct SidebarDeviceGroup {
     return this.projection().projects.filter((entry: RecentWorkspaceEntry) => entry.path.length > 0);
   }
 
+  private visibleWorkspaceEntries(): RecentWorkspaceEntry[] {
+    return SidebarDirectoryPreviewPolicy.visibleSlice(
+      this.workspaceEntries(),
+      this.visibleWorkspaceCount
+    );
+  }
+
+  private hiddenWorkspaceCount(): number {
+    return SidebarDirectoryPreviewPolicy.hiddenCount(
+      this.workspaceEntries().length,
+      this.visibleWorkspaceCount
+    );
+  }
+
   private sessionsFor(path: string): RemoteSession[] {
     return SessionListProjector.sessionsForProject(this.projection(), path);
   }
 
-  private visibleSessionLimit(path: string): number {
-    return this.expandedSessionPaths.indexOf(path) >= 0 ?
-      this.sessionsFor(path).length : SESSIONS_PER_WORKSPACE;
+  private sessionVisibleCount(path: string): number {
+    for (let index = 0; index < this.sessionCursors.length; index += 1) {
+      if (this.sessionCursors[index].path === path) {
+        return this.sessionCursors[index].visibleCount;
+      }
+    }
+    return SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
   }
 
   private visibleSessionsFor(path: string): RemoteSession[] {
-    const bucket = this.sessionsFor(path);
-    const limit = this.visibleSessionLimit(path);
-    return bucket.length <= limit ? bucket : bucket.slice(0, limit);
+    return SidebarDirectoryPreviewPolicy.visibleSlice(
+      this.sessionsFor(path),
+      this.sessionVisibleCount(path)
+    );
   }
 
   private hiddenSessionCount(path: string): number {
-    return this.sessionsFor(path).length - this.visibleSessionLimit(path);
+    return SidebarDirectoryPreviewPolicy.hiddenCount(
+      this.sessionsFor(path).length,
+      this.sessionVisibleCount(path)
+    );
+  }
+
+  private revealMoreSessions(path: string): void {
+    const next = SidebarDirectoryPreviewPolicy.nextVisibleCount(
+      this.sessionVisibleCount(path),
+      this.sessionsFor(path).length
+    );
+    const nextCursors: SidebarPreviewCursor[] = [];
+    let replaced = false;
+    for (let index = 0; index < this.sessionCursors.length; index += 1) {
+      const cursor = this.sessionCursors[index];
+      if (cursor.path === path) {
+        nextCursors.push(new SidebarPreviewCursor(path, next));
+        replaced = true;
+      } else {
+        nextCursors.push(cursor);
+      }
+    }
+    if (!replaced) {
+      nextCursors.push(new SidebarPreviewCursor(path, next));
+    }
+    this.sessionCursors = nextCursors;
   }
 
   private sessionGlyph(item: RemoteSession): Resource {
@@ -363,16 +436,27 @@ export struct SidebarDeviceGroup {
     return $r('sys.symbol.doc_text');
   }
 
-  private isCollapsed(path: string): boolean {
-    return this.collapsedPaths.indexOf(path) >= 0;
+  private isWorkspaceExpanded(path: string): boolean {
+    if (SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(this.showHeader)) {
+      return this.collapsedPaths.indexOf(path) < 0;
+    }
+    return this.expandedWorkspacePaths.indexOf(path) >= 0;
   }
 
   private toggleWorkspace(path: string): void {
-    if (this.isCollapsed(path)) {
-      this.collapsedPaths = this.collapsedPaths.filter((item: string) => item !== path);
+    if (SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(this.showHeader)) {
+      if (this.collapsedPaths.indexOf(path) >= 0) {
+        this.collapsedPaths = this.collapsedPaths.filter((item: string) => item !== path);
+        return;
+      }
+      this.collapsedPaths = this.collapsedPaths.concat([path]);
       return;
     }
-    this.collapsedPaths = this.collapsedPaths.concat([path]);
+    if (this.expandedWorkspacePaths.indexOf(path) >= 0) {
+      this.expandedWorkspacePaths = this.expandedWorkspacePaths.filter((item: string) => item !== path);
+      return;
+    }
+    this.expandedWorkspacePaths = this.expandedWorkspacePaths.concat([path]);
   }
 
   private isCurrentWorkspace(path: string): boolean {
