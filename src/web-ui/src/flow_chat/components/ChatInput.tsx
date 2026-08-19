@@ -115,6 +115,7 @@ import { resolveSessionRelationship } from '../utils/sessionMetadata';
 import { isProjectedSessionEmpty } from '../utils/flowChatTurnIdentity';
 import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
+  agentExecutionTier,
   isChatInputActionVisibleForTarget,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
@@ -1098,6 +1099,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [activeSessionMode, currentMode, isAcpTargetSession, isAssistantWorkspace],
   );
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
+  // Mode/agent discovery is a Balanced-level affordance. Minimal and Ultra
+  // have their own fixed execution surface and must not expose these entries.
+  const showStandardExecutionOptions = agentExecutionTier(currentMode) === 'balanced';
   const selectedHarnessProfile = resolveSelectedComposerExecutionLevel({
     currentMode,
   });
@@ -3198,13 +3202,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           mode.id.toLowerCase().includes(q)
       );
     }
-    const modes: SlashModeItem[] = (canSwitchModes ? modeList : []).map(mode => ({
+    const modes: SlashModeItem[] = (canSwitchModes && showStandardExecutionOptions ? modeList : []).map(mode => ({
       kind: 'mode',
       id: mode.id,
       name: mode.name,
     }));
     return [...acpCommands, ...actions, ...externalCommands, ...mcpPrompts, ...modes, ...skills];
-  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredExternalPromptCommands, getFilteredMcpPromptCommands, getFilteredSkills, isAcpInputSession, selectableCodeModes, slashCommandState.query]);
+  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredExternalPromptCommands, getFilteredMcpPromptCommands, getFilteredSkills, isAcpInputSession, selectableCodeModes, showStandardExecutionOptions, slashCommandState.query]);
 
   const getActiveSlashPickerItems = useCallback((): SlashPickerItem[] => {
     if (slashCommandState.kind === 'actions') {
@@ -4638,14 +4642,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ]);
   
   const getFilteredSelectableModes = useCallback(() => {
-    if (!canSwitchModes) return [];
+    if (!canSwitchModes || !showStandardExecutionOptions) return [];
     if (!slashCommandState.query) return selectableCodeModes;
     return selectableCodeModes.filter(
       mode =>
         mode.name.toLowerCase().includes(slashCommandState.query) ||
         mode.id.toLowerCase().includes(slashCommandState.query)
     );
-  }, [canSwitchModes, selectableCodeModes, slashCommandState.query]);
+  }, [canSwitchModes, selectableCodeModes, showStandardExecutionOptions, slashCommandState.query]);
 
   const requestModeChange = useCallback((modeId: string) => {
     if (isInterruptedTurnRecoveryInFlight) {
@@ -5105,7 +5109,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     if (slashCommandState.isActive) {
-      if (!(slashCommandState.kind === 'modes' && !canSwitchModes)) {
+      if (!(slashCommandState.kind === 'modes' && (!canSwitchModes || !showStandardExecutionOptions))) {
         const items =
           slashCommandState.kind === 'modes'
             ? getFilteredSelectableModes()
@@ -5327,7 +5331,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, showStandardExecutionOptions, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -6039,7 +6043,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   );
                 }
 
-                if (!canSwitchModes) return null;
+                if (!canSwitchModes || !showStandardExecutionOptions) return null;
 
                 const filteredModes = getFilteredSelectableModes();
                 return (
@@ -6140,7 +6144,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         visibility: boostMenuLayout ? 'visible' : 'hidden',
                       }}
                     >
-                      {canSwitchModes && (
+                      {canSwitchModes && showStandardExecutionOptions && (
                         <>
                           <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
                             {selectableCodeModes.length > 0 && (
@@ -6481,7 +6485,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     onSelectProfile={requestHarnessProfileChange}
                   />
                 ) : null}
-                {(canSwitchModes || isAcpTargetSession) && modeState.current !== 'agentic' && !isInternalUltraMode && (
+                {showStandardExecutionOptions && (canSwitchModes || isAcpTargetSession) && modeState.current !== 'agentic' && !isInternalUltraMode && (
                   <div
                     className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current}`}
                     data-bf-component="chat-input"

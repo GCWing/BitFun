@@ -208,7 +208,7 @@ describe('status track layout', () => {
     expect(agentBoostIndex).toBeGreaterThan(-1);
     expect(harnessIndex).toBeGreaterThan(agentBoostIndex);
     expect(agentModeChipIndex).toBeGreaterThan(harnessIndex);
-    expect(chatInput).toContain('harnessProfilePolicy.userConfigurable ? (');
+    expect(chatInput).toContain('executionLevelPolicy.userConfigurable ? (');
   });
 
   it('carries the Harness gear and the model pair inside the capsule', () => {
