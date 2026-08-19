@@ -4318,6 +4318,100 @@ impl SessionManager {
         }
     }
 
+    /// Sets the session's own AI auto-approve sub-mode (in-memory +
+    /// persistence). Mirrors [`Self::update_session_permission_mode`]: `None`
+    /// clears the override so the session follows the user-level default, and
+    /// the value only takes effect from the next submission.
+    pub async fn update_session_ai_auto_approve_mode(
+        &self,
+        session_id: &str,
+        ai_auto_approve_mode: Option<bitfun_product_domains::tool_permissions::AiAutoApproveMode>,
+    ) -> BitFunResult<()> {
+        if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
+            let session_storage_path = self
+                .session_storage_path_index
+                .get(session_id)
+                .map(|entry| entry.value().path.clone());
+            if let Some(session_storage_path) = session_storage_path {
+                debug!(
+                    "Session evicted from memory, restoring for ai auto-approve mode update: session_id={}",
+                    session_id
+                );
+                let _ = self
+                    .restore_session_from_storage_path(&session_storage_path, session_id)
+                    .await;
+            }
+        }
+
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+
+        let original_session = self
+            .sessions
+            .get(session_id)
+            .map(|session| session.clone())
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        if original_session.config.ai_auto_approve_mode == ai_auto_approve_mode {
+            return Ok(());
+        }
+
+        let mut updated_session = original_session.clone();
+        updated_session.config.ai_auto_approve_mode = ai_auto_approve_mode;
+        let now = SystemTime::now();
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            if let Some(workspace_path) = effective_path {
+                if let Err(error) = self
+                    .persistence_manager
+                    .save_session(&workspace_path, &updated_session)
+                    .await
+                {
+                    if let Err(rollback_error) = self
+                        .persistence_manager
+                        .save_session(&workspace_path, &original_session)
+                        .await
+                    {
+                        return Err(BitFunError::session(format!(
+                            "Session AI auto-approve mode persistence failed and rollback did not complete: session_id={session_id}, error={error}, rollback_error={rollback_error}"
+                        )));
+                    }
+                    return Err(error);
+                }
+            }
+        }
+
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.config.ai_auto_approve_mode = ai_auto_approve_mode;
+            session.updated_at = now;
+            session.last_activity_at = now;
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        debug!(
+            "Session AI auto-approve mode updated: session_id={}, ai_auto_approve_mode={:?}",
+            session_id, ai_auto_approve_mode
+        );
+
+        Ok(())
+    }
+
+    /// Reads the session's own AI auto-approve sub-mode without falling back to
+    /// the user-level default. `None` means the session never chose one.
+    pub fn session_ai_auto_approve_mode(
+        &self,
+        session_id: &str,
+    ) -> Option<bitfun_product_domains::tool_permissions::AiAutoApproveMode> {
+        self.sessions
+            .get(session_id)
+            .and_then(|session| session.config.ai_auto_approve_mode)
+    }
+
     /// Rebind where a session executes (in-memory + persistence).
     ///
     /// Only the workspace roots and the resolved execution target move; session
@@ -11395,6 +11489,91 @@ mod tests {
             manager.active_turn_permission_mode(&session_id, "turn-2"),
             None,
         );
+    }
+
+    #[tokio::test]
+    async fn session_ai_auto_approve_mode_is_per_session_and_clearable() {
+        use bitfun_product_domains::tool_permissions::AiAutoApproveMode;
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let first = manager
+            .create_session_with_id_and_details(
+                None,
+                "First".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("create first session");
+        let second = manager
+            .create_session_with_id_and_details(
+                None,
+                "Second".to_string(),
+                "agentic".to_string(),
+                config,
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("create second session");
+
+        // A new session starts without an override and follows the default.
+        assert_eq!(
+            manager.session_ai_auto_approve_mode(&first.session_id),
+            None
+        );
+
+        manager
+            .update_session_ai_auto_approve_mode(
+                &first.session_id,
+                Some(AiAutoApproveMode::Aggressive),
+            )
+            .await
+            .expect("set first session ai auto-approve mode");
+
+        // The selection stays inside the session it was made in.
+        assert_eq!(
+            manager.session_ai_auto_approve_mode(&first.session_id),
+            Some(AiAutoApproveMode::Aggressive)
+        );
+        assert_eq!(
+            manager.session_ai_auto_approve_mode(&second.session_id),
+            None
+        );
+
+        // Clearing returns the session to the user-level default.
+        manager
+            .update_session_ai_auto_approve_mode(&first.session_id, None)
+            .await
+            .expect("clear first session ai auto-approve mode");
+        assert_eq!(
+            manager.session_ai_auto_approve_mode(&first.session_id),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn session_ai_auto_approve_mode_update_rejects_a_missing_session() {
+        use bitfun_product_domains::tool_permissions::AiAutoApproveMode;
+        let manager = in_memory_test_manager();
+
+        let error = manager
+            .update_session_ai_auto_approve_mode(
+                "missing-session",
+                Some(AiAutoApproveMode::Passive),
+            )
+            .await
+            .expect_err("unknown session must not silently succeed");
+        assert!(matches!(
+            error,
+            crate::util::errors::BitFunError::NotFound(_)
+        ));
     }
 
     #[tokio::test]

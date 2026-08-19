@@ -93,7 +93,8 @@ use bitfun_agent_runtime::output_surface::{
     supports_inline_markdown_images_for_source, TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY,
 };
 use bitfun_agent_runtime::permission::{
-    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AI_AUTO_APPROVE_MODE_CONTEXT_KEY,
+    AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::remote_file_delivery::{
     needs_computer_links_for_source, remote_file_delivery_reminder,
@@ -4167,6 +4168,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 PERMISSION_MODE_CONTEXT_KEY.to_string(),
                 delegated_permission_mode.mode.as_str().to_string(),
             );
+            // The child inherits the same resolved AI auto-approve sub-mode
+            // (session override first, then the user-level default).
+            let delegated_ai_auto_approve_mode = match self
+                .session_manager
+                .get_session(&session_id)
+                .and_then(|session| session.config.ai_auto_approve_mode)
+            {
+                Some(mode) => mode,
+                None => default_ai_auto_approve_mode_from_global_config().await,
+            };
+            child_context.insert(
+                AI_AUTO_APPROVE_MODE_CONTEXT_KEY.to_string(),
+                delegated_ai_auto_approve_mode.as_str().to_string(),
+            );
             let request = SubagentExecutionRequest {
                 task_description: prompt.clone(),
                 context_mode: SubagentContextMode::Fresh,
@@ -6377,6 +6392,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         context_vars.insert(
             PERMISSION_MODE_CONTEXT_KEY.to_string(),
             submission_permission_mode.mode.as_str().to_string(),
+        );
+        // The AI auto-approve sub-mode resolves the same way (session override
+        // first, then the user-level default) and is carried in the execution
+        // context so every round and delegated subagent reads the same value.
+        let submission_ai_auto_approve_mode = match session.config.ai_auto_approve_mode {
+            Some(mode) => mode,
+            None => default_ai_auto_approve_mode_from_global_config().await,
+        };
+        context_vars.insert(
+            AI_AUTO_APPROVE_MODE_CONTEXT_KEY.to_string(),
+            submission_ai_auto_approve_mode.as_str().to_string(),
         );
         if let Some(ai_auto_approve_ask) = metadata_bool(
             user_message_metadata.as_ref(),
@@ -8945,6 +8971,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     pub async fn reply_to_tool(&self, tool_id: &str, reply: PermissionReply) -> BitFunResult<()> {
         self.tool_pipeline.reply_to_tool(tool_id, reply).await
+    }
+
+    /// Clears the tool pipeline's cached sensitive-resource markers for a
+    /// workspace, so a just-saved project permission config takes effect
+    /// immediately instead of waiting for the cache TTL.
+    pub async fn clear_sensitive_markers_cache(&self, workspace_root: &str) {
+        self.tool_pipeline
+            .clear_sensitive_markers_cache_for_workspace(workspace_root)
+            .await;
     }
 
     async fn get_subagent_concurrency_limiter(&self) -> SubagentConcurrencyLimiter {
@@ -14096,6 +14131,24 @@ async fn default_permission_mode_from_global_config() -> PermissionMode {
             })
             .unwrap_or(PermissionMode::Ask),
         Err(_) => PermissionMode::Ask,
+    }
+}
+
+/// Reads the user-level default AI auto-approve sub-mode.
+///
+/// Falls back to `Standard` on a config failure: the standard tier is the
+/// safest unattended default (escalated requests prompt the user).
+async fn default_ai_auto_approve_mode_from_global_config(
+) -> bitfun_product_domains::tool_permissions::AiAutoApproveMode {
+    match crate::service::config::get_global_config_service().await {
+        Ok(service) => service
+            .get_config(None)
+            .await
+            .map(|config: crate::service::config::types::GlobalConfig| {
+                config.tool_permissions.interaction.ai_auto_approve_mode
+            })
+            .unwrap_or_default(),
+        Err(_) => bitfun_product_domains::tool_permissions::AiAutoApproveMode::default(),
     }
 }
 

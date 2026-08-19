@@ -711,7 +711,9 @@
         "label": "无人值守档位",
         "standard": "标准",
         "aggressive": "激进",
-        "passive": "保守"
+        "passive": "保守",
+        "aggressiveNotice": "激进模式直接放行读敏感资源（不考虑读敏感权限），但写保护仍由 AI 严格审批。",
+        "riskNotice": "AI 处理敏感资源审批存在不可避免的风险，请仔细配置敏感资源后使用。"
       },
       "fullAccess": {
         "label": "完全访问",

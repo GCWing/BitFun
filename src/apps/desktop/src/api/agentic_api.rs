@@ -252,6 +252,10 @@ pub struct UpdateSessionPermissionModeRequest {
     /// user-level default again, including later changes to that default.
     #[serde(default)]
     pub mode: Option<String>,
+    /// Optional AI auto-approve sub-mode (aggressive/standard/passive) written
+    /// in the same call; `None` leaves it untouched.
+    #[serde(default)]
+    pub ai_auto_approve_mode: Option<String>,
     #[serde(default)]
     pub turn_id: Option<String>,
     #[serde(default)]
@@ -291,6 +295,9 @@ pub struct SessionPermissionModeResponse {
     /// Ephemeral override for the requested active turn, when one exists.
     pub turn_mode: Option<PermissionMode>,
     pub active_turn_id: Option<String>,
+    /// The session's own AI auto-approve sub-mode, or `null` when it follows
+    /// the user-level default.
+    pub ai_auto_approve_mode: Option<bitfun_product_domains::tool_permissions::AiAutoApproveMode>,
 }
 
 fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -1075,6 +1082,7 @@ pub struct PermissionAuditPage {
 pub struct ProjectPermissionRulesResponse {
     pub rules: Vec<PermissionRule>,
     pub sensitive_resources: Vec<String>,
+    pub write_sensitive_resources: Vec<String>,
     pub revision: String,
 }
 
@@ -1085,6 +1093,8 @@ pub struct SaveProjectPermissionRulesRequest {
     pub rules: Vec<PermissionRule>,
     #[serde(default)]
     pub sensitive_resources: Vec<String>,
+    #[serde(default)]
+    pub write_sensitive_resources: Vec<String>,
     pub revision: String,
 }
 
@@ -1305,6 +1315,7 @@ pub async fn get_project_permission_rules(
     Ok(ProjectPermissionRulesResponse {
         rules: config.rules,
         sensitive_resources: config.sensitive_resources,
+        write_sensitive_resources: config.write_sensitive_resources,
         revision: project_permission_rules_revision(content.as_deref()),
     })
 }
@@ -1312,10 +1323,13 @@ pub async fn get_project_permission_rules(
 #[tauri::command]
 pub async fn save_project_permission_rules(
     state: State<'_, AppState>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: SaveProjectPermissionRulesRequest,
 ) -> Result<ProjectPermissionRulesResponse, String> {
     validate_project_permission_rules(&request.rules)?;
     let sensitive_resources = normalize_sensitive_resources(request.sensitive_resources.clone());
+    let write_sensitive_resources =
+        normalize_sensitive_resources(request.write_sensitive_resources.clone());
 
     let target =
         project_permission_config_target_for_workspace(&state, &request.workspace_id).await?;
@@ -1332,13 +1346,21 @@ pub async fn save_project_permission_rules(
         serde_json::to_string_pretty(&ProjectPermissionConfig {
             rules: request.rules.clone(),
             sensitive_resources: sensitive_resources.clone(),
+            write_sensitive_resources: write_sensitive_resources.clone(),
         })
         .map_err(|error| format!("Failed to serialize project permission rules: {error}"))?
     );
     write_project_permission_config_content(&state, &target, &content).await?;
+    // The saved markers must take effect immediately: drop the tool pipeline's
+    // per-workspace marker cache so the next permission check reloads the file
+    // instead of waiting for the TTL.
+    coordinator
+        .clear_sensitive_markers_cache(&target.path)
+        .await;
     Ok(ProjectPermissionRulesResponse {
         rules: request.rules,
         sensitive_resources,
+        write_sensitive_resources,
         revision: project_permission_rules_revision(Some(&content)),
     })
 }
@@ -2035,6 +2057,21 @@ pub async fn update_session_permission_mode(
         session_manager.clear_active_turn_permission_mode(&session_id, turn_id);
     }
 
+    let ai_auto_approve_mode = match request.ai_auto_approve_mode.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(value) => Some(
+            bitfun_product_domains::tool_permissions::AiAutoApproveMode::parse(value)
+                .ok_or_else(|| format!("unsupported ai auto-approve mode: {value}"))?,
+        ),
+    };
+    if let Some(ai_auto_approve_mode) = ai_auto_approve_mode {
+        coordinator
+            .get_session_manager()
+            .update_session_ai_auto_approve_mode(&session_id, Some(ai_auto_approve_mode))
+            .await
+            .map_err(|error| format!("Failed to update session ai auto-approve mode: {error}"))?;
+    }
+
     let active_turn_id = requested_turn_id.and_then(|turn_id| {
         session_manager
             .get_session(&session_id)
@@ -2052,6 +2089,7 @@ pub async fn update_session_permission_mode(
             .as_deref()
             .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
         active_turn_id,
+        ai_auto_approve_mode: session_manager.session_ai_auto_approve_mode(&session_id),
     })
 }
 
@@ -2123,6 +2161,7 @@ pub async fn update_active_turn_permission_mode(
         mode: session_manager.session_permission_mode(&session_id),
         turn_mode: session_manager.active_turn_permission_mode(&session_id, &turn_id),
         active_turn_id: Some(turn_id),
+        ai_auto_approve_mode: session_manager.session_ai_auto_approve_mode(&session_id),
     })
 }
 
@@ -2172,6 +2211,7 @@ pub async fn get_session_permission_mode(
             .as_deref()
             .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
         active_turn_id,
+        ai_auto_approve_mode: session_manager.session_ai_auto_approve_mode(&session_id),
     })
 }
 

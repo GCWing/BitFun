@@ -11,8 +11,10 @@ export interface ProjectPermissionRule {
 
 export interface ProjectPermissionRulesResponse {
   rules: ProjectPermissionRule[];
-  /** User-configured sensitive-resource markers for this project. */
+  /** User-configured read-sensitive resource markers for this project. */
   sensitiveResources: string[];
+  /** User-configured write-protected resource markers for this project. */
+  writeSensitiveResources: string[];
   revision: string;
 }
 
@@ -66,9 +68,10 @@ class PermissionAPI {
     workspaceId: string,
     rules: ProjectPermissionRule[],
     sensitiveResources: string[],
+    writeSensitiveResources: string[],
     revision: string,
   ): Promise<ProjectPermissionRulesResponse> {
-    const request = { workspaceId, rules, sensitiveResources, revision };
+    const request = { workspaceId, rules, sensitiveResources, writeSensitiveResources, revision };
     try {
       return await api.invoke<ProjectPermissionRulesResponse>('save_project_permission_rules', { request });
     } catch (error) {

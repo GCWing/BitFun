@@ -477,9 +477,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // other open session.
   const [sessionPermissionMode, setSessionPermissionMode] =
     useState<SessionPermissionMode | null>(null);
+  // The session's own AI auto-approve sub-mode. `null` means it follows the
+  // global default.
+  const [sessionAiAutoApproveMode, setSessionAiAutoApproveMode] =
+    useState<AiAutoApproveMode | null>(null);
   // One-off state has two owners: the idle composer arms a future submission,
   // while an executing turn keeps a mutable override until it ends.
   const [armedTurnPermissionMode, setArmedTurnPermissionMode] =
+    useState<SessionPermissionMode | null>(null);
+  const [turnPermissionMode, setTurnPermissionMode] =
     useState<SessionPermissionMode | null>(null);
   const [activeTurnPermissionMode, setActiveTurnPermissionMode] =
     useState<SessionPermissionMode | null>(null);
@@ -2088,6 +2094,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setSessionPermissionMode(null);
       setArmedTurnPermissionMode(null);
       setActiveTurnPermissionMode(null);
+      setSessionAiAutoApproveMode(null);
+      setTurnPermissionMode(null);
       return undefined;
     }
     void (async () => {
@@ -2104,12 +2112,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         if (activePermissionTurnId && response.activeTurnId === activePermissionTurnId) {
           setActiveTurnPermissionMode(response.turnMode ?? null);
         }
+        setSessionAiAutoApproveMode(response.aiAutoApproveMode ?? null);
       } catch (error) {
         log.warn('Failed to read session permission mode', error);
         // Falling back to the global default is the safe read: it never shows a
         // wider mode than the session actually runs with.
         if (permissionModeRequestGenerationRef.current === generation) {
           setSessionPermissionMode(null);
+          setSessionAiAutoApproveMode(null);
         }
       }
     })();
@@ -2186,6 +2196,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ) => {
     if (permissionModeSaving || isAcpTargetSession) return;
     const previousConfig = toolPermissionConfig;
+    if (effectiveTargetSessionId) {
+      // A session is targeted: the sub-mode is session-scoped, so switching it
+      // here must not move every other open session.
+      if (sessionAiAutoApproveMode === mode) return;
+      const previousSessionMode = sessionAiAutoApproveMode;
+      setSessionAiAutoApproveMode(mode);
+      setPermissionModeSaving(true);
+      try {
+        const response = await agentAPI.updateSessionPermissionMode({
+          sessionId: effectiveTargetSessionId,
+          aiAutoApproveMode: mode,
+          workspacePath: effectiveTargetSession?.workspacePath,
+          remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
+          remoteSshHost: effectiveTargetSession?.remoteSshHost,
+        });
+        setSessionAiAutoApproveMode(response.aiAutoApproveMode ?? null);
+      } catch (error) {
+        log.error('Failed to change session AI auto-approve mode', error);
+        setSessionAiAutoApproveMode(previousSessionMode);
+        notificationService.error(t('chatInput.permissionMode.changeFailed'));
+      } finally {
+        setPermissionModeSaving(false);
+      }
+      return;
+    }
+    // No session targeted: write the user-level default.
     if (previousConfig.interaction.ai_auto_approve_mode === mode) return;
     setToolPermissionConfig({
       ...previousConfig,
@@ -2203,8 +2239,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setPermissionModeSaving(false);
     }
   }, [
+    effectiveTargetSessionId,
+    effectiveTargetSession?.workspacePath,
+    effectiveTargetSession?.remoteConnectionId,
+    effectiveTargetSession?.remoteSshHost,
     isAcpTargetSession,
     permissionModeSaving,
+    sessionAiAutoApproveMode,
     t,
     toolPermissionConfig,
   ]);
@@ -6425,7 +6466,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   ? chatInputPermissionMode(temporaryPermissionMode)
                   : null,
                 aiAutoApproveMode: {
-                  mode: toolPermissionConfig.interaction.ai_auto_approve_mode,
+                  mode: sessionAiAutoApproveMode
+                    ?? toolPermissionConfig.interaction.ai_auto_approve_mode,
                   saving: permissionModeSaving,
                   onChange: handleAiAutoApproveModeChange,
                 },

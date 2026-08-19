@@ -1230,7 +1230,9 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
           {resolveToolPermissionMode(toolPermissionConfig) === 'ai_auto' ? (
             <ConfigPageRow
               label={t('permissionPolicy.aiAutoApproveMode')}
-              description={t('permissionPolicy.aiAutoApproveModeDescription')}
+              description={`${t('permissionPolicy.aiAutoApproveModeDescription')} ${toolPermissionConfig.interaction.ai_auto_approve_mode === 'aggressive'
+                ? t('permissionPolicy.aiAutoApproveModeAggressiveNotice')
+                : ''} ${t('permissionPolicy.aiAutoApproveRiskNotice')}`}
               align="center"
             >
               <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">

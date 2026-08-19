@@ -720,6 +720,12 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                             );
                           })}
                         </div>
+                        <p className="bitfun-chat-input-workspace-strip__permission-ai-auto-modes-notice">
+                          {permissionControl.aiAutoApproveMode!.mode === 'aggressive'
+                            ? `${t('chatInput.permissionMode.aiAutoMode.aggressiveNotice')} `
+                            : ''}
+                          {t('chatInput.permissionMode.aiAutoMode.riskNotice')}
+                        </p>
                       </div>
                     </>
                   ) : null}

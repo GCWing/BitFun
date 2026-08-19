@@ -711,7 +711,9 @@
         "label": "無人值守檔位",
         "standard": "標準",
         "aggressive": "激進",
-        "passive": "保守"
+        "passive": "保守",
+        "aggressiveNotice": "激進模式直接放行讀敏感資源（不考慮讀敏感權限），但寫保護仍由 AI 嚴格審批。",
+        "riskNotice": "AI 處理敏感資源審批存在不可避免的風險，請仔細設定敏感資源後使用。"
       },
       "fullAccess": {
         "label": "完全存取",

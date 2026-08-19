@@ -636,6 +636,15 @@ pub const DEFAULT_SENSITIVE_RESOURCE_MARKERS: &[&str] = &[
     "keychain",
 ];
 
+/// Built-in write-protected resource markers.
+///
+/// Unlike [`DEFAULT_SENSITIVE_RESOURCE_MARKERS`] (which protect against
+/// *reading* sensitive content), these protect paths that must not be
+/// *modified*. Reads of these resources stay open; writes are strictly
+/// judged. Projects configure the list via `tool_permissions.json`
+/// (`write_sensitive_resources`); the built-in list is intentionally empty.
+pub const DEFAULT_WRITE_SENSITIVE_RESOURCE_MARKERS: &[&str] = &[];
+
 /// A process-local permission request projected to an interactive surface.
 ///
 /// Resource and display values stored here must already be safe for user

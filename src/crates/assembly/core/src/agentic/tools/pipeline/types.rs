@@ -12,11 +12,23 @@ use bitfun_runtime_ports::{
     TerminalPort,
 };
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio_util::sync::CancellationToken;
 pub use tool_runtime::context::PrimaryModelFacts;
 pub use tool_runtime::pipeline::SubagentBatchExecutionPolicy;
+
+/// Per-process counter assigning the stable turn-wide order of tool tasks.
+///
+/// The judge tool history must stay monotonically ordered across rounds, and
+/// completion order is not a reliable proxy (parallel tools complete out of
+/// order). Task creation order is.
+static TASK_TURN_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+fn next_turn_sequence() -> u64 {
+    TASK_TURN_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Tool execution options
 #[derive(Debug, Clone)]
@@ -141,6 +153,14 @@ pub struct ToolTask {
     /// when any. Surfaced to the AI judge as part of the tool history so the
     /// intent stays visible for the rest of the turn.
     pub approved_user_feedback: Option<String>,
+    /// The permission action this call was planned with (e.g. `edit`, `bash`),
+    /// filled in during permission planning. The AI judge history uses it so
+    /// the rendered action matches the permission semantics instead of the
+    /// wire tool name.
+    pub permission_action: Option<String>,
+    /// Monotonically increasing per-process sequence assigned at task creation;
+    /// used to keep the judge tool history in stable turn-wide order.
+    pub turn_sequence: u64,
     pub created_at: SystemTime,
     pub started_at: Option<SystemTime>,
     pub completed_at: Option<SystemTime>,
@@ -175,6 +195,8 @@ impl ToolTask {
             options,
             state: ToolExecutionState::Queued { position: 0 },
             approved_user_feedback: None,
+            permission_action: None,
+            turn_sequence: next_turn_sequence(),
             created_at: SystemTime::now(),
             started_at: None,
             completed_at: None,

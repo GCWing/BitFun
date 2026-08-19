@@ -711,7 +711,9 @@
         "label": "Unattended mode",
         "standard": "Standard",
         "aggressive": "Aggressive",
-        "passive": "Passive"
+        "passive": "Passive",
+        "aggressiveNotice": "Aggressive mode auto-approves reads of read-sensitive resources (read-sensitivity is ignored), but write protection is still strictly reviewed by the AI.",
+        "riskNotice": "AI approvals involving sensitive resources carry inherent risk. Please configure sensitive resources carefully before use."
       },
       "fullAccess": {
         "label": "Full access",

@@ -114,6 +114,18 @@ impl ToolStateManager {
         }
     }
 
+    /// Records the permission action this call was planned with (e.g. `edit`,
+    /// `bash`), so the AI judge history renders the permission semantics
+    /// instead of the wire tool name.
+    pub fn update_task_permission_action(&self, tool_id: &str, action: String) -> bool {
+        if let Some(mut task) = self.tasks.get_mut(tool_id) {
+            task.permission_action = Some(action);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Get all tasks of a session
     pub fn get_session_tasks(&self, session_id: &str) -> Vec<ToolTask> {
         self.tasks
@@ -123,13 +135,25 @@ impl ToolStateManager {
             .collect()
     }
 
-    /// Get all tasks of a dialog turn
+    /// Get all tasks of a dialog turn, in stable turn-wide creation order.
+    ///
+    /// The judge tool history must be monotonically ordered across rounds;
+    /// completion order is not a reliable proxy (parallel tools complete out
+    /// of order), so tasks are ordered by their `turn_sequence` with `tool_id`
+    /// as the deterministic tie-breaker.
     pub fn get_dialog_turn_tasks(&self, dialog_turn_id: &str) -> Vec<ToolTask> {
-        self.tasks
+        let mut tasks: Vec<_> = self
+            .tasks
             .iter()
             .filter(|entry| entry.value().context.dialog_turn_id == dialog_turn_id)
             .map(|entry| entry.value().clone())
-            .collect()
+            .collect();
+        tasks.sort_by(|left, right| {
+            left.turn_sequence
+                .cmp(&right.turn_sequence)
+                .then_with(|| left.tool_call.tool_id.cmp(&right.tool_call.tool_id))
+        });
+        tasks
     }
 
     /// Delete task

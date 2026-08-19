@@ -1115,17 +1115,30 @@ impl RoundExecutor {
                 context.permission_runtime_ceiling.as_ref(),
             );
 
-            // Create tool execution options (use configured timeout values)
+            // Create tool execution options (use configured timeout values).
+            // The AI auto-approve sub-mode is resolved once per submission and
+            // carried in the execution context (session override first, then
+            // the user-level default); fall back to the global config only when
+            // no resolved value is present (e.g. direct pipeline tests).
+            let ai_auto_approve_mode = context
+                .context_vars
+                .get(bitfun_agent_runtime::permission::AI_AUTO_APPROVE_MODE_CONTEXT_KEY)
+                .and_then(|value| {
+                    bitfun_product_domains::tool_permissions::AiAutoApproveMode::parse(value)
+                })
+                .unwrap_or(
+                    global_config
+                        .tool_permissions
+                        .interaction
+                        .ai_auto_approve_mode,
+                );
             let tool_options = ToolExecutionOptions {
                 timeout_secs: tool_execution_timeout,
                 subagent_batch_execution_policy,
                 permission_policy,
                 auto_approve_ask,
                 ai_auto_approve_ask,
-                ai_auto_approve_mode: global_config
-                    .tool_permissions
-                    .interaction
-                    .ai_auto_approve_mode,
+                ai_auto_approve_mode,
                 ..ToolExecutionOptions::default()
             };
 

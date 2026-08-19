@@ -14,11 +14,15 @@ pub const PROJECT_PERMISSION_FILE_NAME: &str = "tool_permissions.json";
 pub struct ProjectPermissionConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rules: Vec<PermissionRule>,
-    /// User-configured sensitive-resource markers (case-insensitive substring
-    /// match). Used only to keep such resources out of the read-only fast
-    /// path; never exposed to the AI judge prompt.
+    /// User-configured read-sensitive resource markers (case-insensitive
+    /// substring match). Used only to keep such resources out of the read-only
+    /// fast path and out of the judge prompt; never exposed to the model.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sensitive_resources: Vec<String>,
+    /// User-configured write-protected resource markers. Reads of these
+    /// resources stay open; writes are strictly judged.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub write_sensitive_resources: Vec<String>,
 }
 
 pub fn project_permission_file_path(workspace_root: &Path) -> PathBuf {
@@ -49,6 +53,7 @@ pub fn deserialize_project_permission_config(
         Ok(ProjectPermissionConfig {
             rules,
             sensitive_resources: Vec::new(),
+            write_sensitive_resources: Vec::new(),
         })
     } else {
         serde_json::from_value(value).map_err(|error| {
@@ -133,6 +138,21 @@ mod tests {
             config.sensitive_resources,
             vec!["secrets/".to_string(), ".cursorrules".to_string()]
         );
+        assert!(config.write_sensitive_resources.is_empty());
+    }
+
+    #[test]
+    fn parses_object_config_with_write_sensitive_resources() {
+        let config = deserialize_project_permission_config(
+            r#"{"rules":[],"write_sensitive_resources":["dist/","generated/"]}"#,
+        )
+        .expect("object config with write-sensitive resources should parse");
+
+        assert_eq!(
+            config.write_sensitive_resources,
+            vec!["dist/".to_string(), "generated/".to_string()]
+        );
+        assert!(config.sensitive_resources.is_empty());
     }
 
     #[test]
@@ -140,6 +160,7 @@ mod tests {
         let config = deserialize_project_permission_config(r#"{"rules":[]}"#)
             .expect("object config without sensitive resources should parse");
         assert!(config.sensitive_resources.is_empty());
+        assert!(config.write_sensitive_resources.is_empty());
     }
 
     #[test]

@@ -214,6 +214,11 @@ pub struct SessionConfig {
         skip_serializing_if = "Option::is_none"
     )]
     pub permission_mode: Option<PermissionMode>,
+    /// Explicit AI auto-approve sub-mode (aggressive/standard/passive)
+    /// selected for this session. `None` follows the user-level default, so an
+    /// unset session keeps tracking global configuration changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_auto_approve_mode: Option<bitfun_product_domains::tool_permissions::AiAutoApproveMode>,
     /// Whether this child session accepts another delegated turn.
     #[serde(default, skip_serializing_if = "is_reusable_continuation_policy")]
     pub continuation_policy: SessionContinuationPolicy,
@@ -265,6 +270,7 @@ impl Default for SessionConfig {
             model_id: None,
             reasoning_preset: None,
             permission_mode: None,
+            ai_auto_approve_mode: None,
             continuation_policy: SessionContinuationPolicy::default(),
             model_binding_policy: SessionModelBindingPolicy::default(),
             model_binding_fingerprint: None,
