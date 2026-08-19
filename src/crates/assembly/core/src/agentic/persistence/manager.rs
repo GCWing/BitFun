@@ -2185,10 +2185,14 @@ impl PersistenceManager {
         stored_state: Option<StoredSessionStateFile>,
         turns: &[DialogTurnData],
     ) -> Session {
+        let legacy_minimal = stored_state
+            .as_ref()
+            .is_some_and(|value| value.config.legacy_minimal_agent);
         let mut config = stored_state
             .as_ref()
             .map(|value| value.config.clone())
             .unwrap_or_default();
+        config.legacy_minimal_agent = false;
         if config.workspace_path.is_none() {
             config.workspace_path = metadata.workspace_path.clone();
         }
@@ -2217,7 +2221,11 @@ impl PersistenceManager {
         Session {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
-            agent_type: metadata.agent_type.clone(),
+            agent_type: if legacy_minimal {
+                "minimal".to_string()
+            } else {
+                metadata.agent_type.clone()
+            },
             last_user_dialog_agent_type: stored_state
                 .as_ref()
                 .and_then(|value| value.last_user_dialog_agent_type.clone())
@@ -2542,25 +2550,28 @@ impl PersistenceManager {
         let mut summaries = Vec::with_capacity(metadata_list.len());
 
         for metadata in metadata_list {
-            let (state, reasoning_preset, execution_profile) = self
+            let (state, reasoning_preset, legacy_minimal) = self
                 .load_stored_session_state(workspace_path, &metadata.session_id)
                 .await?
                 .map(|value| {
                     (
                         sanitize_persisted_session_state(&value.runtime_state),
                         value.config.reasoning_preset,
-                        value.config.execution_profile,
+                        value.config.legacy_minimal_agent,
                     )
                 })
-                .unwrap_or((SessionState::Idle, None, Default::default()));
+                .unwrap_or((SessionState::Idle, None, false));
 
             summaries.push(SessionSummary {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
-                agent_type: metadata.agent_type,
+                agent_type: if legacy_minimal {
+                    "minimal".to_string()
+                } else {
+                    metadata.agent_type
+                },
                 model_id: (!metadata.model_name.trim().is_empty()).then_some(metadata.model_name),
                 reasoning_preset,
-                execution_profile,
                 last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
                 last_submitted_agent_type: metadata.last_submitted_agent_type,
                 created_by: metadata.created_by,

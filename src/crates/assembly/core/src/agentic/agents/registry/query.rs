@@ -96,7 +96,11 @@ impl AgentRegistry {
                 let default_tools = entry.agent.default_tools();
                 let config = mode_configs.get(profile_id.as_ref());
                 let resolved_tools = resolve_effective_tools(&default_tools, config, &valid_tools);
-                let allowed_tools = merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names);
+                let allowed_tools = if entry.agent.include_dynamic_mcp_tools() {
+                    merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names)
+                } else {
+                    resolved_tools
+                };
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();

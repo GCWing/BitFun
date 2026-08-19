@@ -6,14 +6,13 @@ use bitfun_product_domains::tool_permissions::PermissionRequest;
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentSessionArchiveStateRequest, AgentSessionCompactionRequest,
     AgentSessionCompactionResult, AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionHarnessProfileUpdateRequest,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
-    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
-    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementRequest, SessionTranscript,
-    SessionTranscriptRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentTurnCancellationResult,
+    AgentTurnSettlementRequest, SessionTranscript, SessionTranscriptRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -206,19 +205,9 @@ pub struct UpdateSessionModeRequest(pub AgentSessionModeUpdateRequest);
 
 unit_response!(UpdateSessionModeResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(
-    method = "session/updateHarnessProfile",
-    response = UpdateSessionHarnessProfileResponse
-)]
-pub struct UpdateSessionHarnessProfileRequest(pub AgentSessionHarnessProfileUpdateRequest);
-
-unit_response!(UpdateSessionHarnessProfileResponse);
-
 pub use ForkSessionBeforeTurnRequest as ForkSessionBeforeTurnMessage;
 pub use ForkSessionRequest as ForkSessionMessage;
 pub use RenameSessionRequest as RenameSessionMessage;
-pub use UpdateSessionHarnessProfileRequest as UpdateSessionHarnessProfileMessage;
 pub use UpdateSessionModeRequest as UpdateSessionModeMessage;
 pub use UpdateSessionModelRequest as UpdateSessionModelMessage;
 

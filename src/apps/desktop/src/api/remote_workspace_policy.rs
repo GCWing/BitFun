@@ -2010,10 +2010,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("update_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("update_session_mode", RemoteWorkspacePolicy::RemoteRouted),
     (
-        "update_session_harness_profile",
-        RemoteWorkspacePolicy::RemoteRouted,
-    ),
-    (
         "update_session_permission_mode",
         RemoteWorkspacePolicy::RemoteRouted,
     ),

@@ -2,7 +2,29 @@ import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
 export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
 
-const FIXED_CHAT_INPUT_MODE_IDS = new Set(['cowork', 'claw', 'ultra']);
+const FIXED_CHAT_INPUT_MODE_IDS = new Set(['cowork', 'claw', 'minimal', 'ultra']);
+
+export type AgentExecutionTier = 'minimal' | 'balanced' | 'ultimate';
+
+export function agentExecutionTier(agentType: string | null | undefined): AgentExecutionTier {
+  switch (normalizeModeLookupId(agentType)) {
+    case 'minimal':
+      return 'minimal';
+    case 'ultra':
+      return 'ultimate';
+    default:
+      return 'balanced';
+  }
+}
+
+export function canSwitchAgentExecutionTier(params: {
+  sessionStarted: boolean;
+  currentAgentType: string | null | undefined;
+  nextAgentType: string | null | undefined;
+}): boolean {
+  return !params.sessionStarted
+    || agentExecutionTier(params.currentAgentType) === agentExecutionTier(params.nextAgentType);
+}
 const SUBAGENT_HIDDEN_CHAT_INPUT_ACTION_IDS = new Set(['goal', 'review', 'deepreview', 'init']);
 
 type WorkspaceResolutionInfo = Pick<

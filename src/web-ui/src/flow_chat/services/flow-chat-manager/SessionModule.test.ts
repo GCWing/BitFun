@@ -347,54 +347,6 @@ describe('createChatSession', () => {
     expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
   });
 
-  it('does not dedupe concurrent creates with different Harness Profiles', async () => {
-    const modelConfig = createDeferred<Record<string, unknown>>();
-    configManagerMocks.getConfigs.mockImplementation(async () => {
-      await modelConfig.promise;
-      return {};
-    });
-    agentApiMocks.createSession
-      .mockResolvedValueOnce({ sessionId: 'created-minimal' })
-      .mockResolvedValueOnce({ sessionId: 'created-standard' });
-
-    const { context } = createContext(createSession({
-      workspacePath: '/home/wsp/projects/Test',
-    }));
-    const minimalProfile = {
-      harnessProfileId: 'minimal' as const,
-      schemaVersion: 1,
-      selectedBy: 'user',
-    };
-    const standardProfile = {
-      harnessProfileId: 'balanced' as const,
-      schemaVersion: 1,
-      selectedBy: 'user',
-    };
-
-    const minimalCreate = createChatSession(context, {
-      workspacePath: '/home/wsp/projects/Test',
-      executionProfile: minimalProfile,
-    }, 'agentic');
-    const standardCreate = createChatSession(context, {
-      workspacePath: '/home/wsp/projects/Test',
-      executionProfile: standardProfile,
-    }, 'agentic');
-
-    modelConfig.resolve({});
-    await expect(Promise.all([minimalCreate, standardCreate])).resolves.toEqual([
-      'created-minimal',
-      'created-standard',
-    ]);
-
-    expect(agentApiMocks.createSession).toHaveBeenCalledTimes(2);
-    expect(agentApiMocks.createSession).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      executionProfile: minimalProfile,
-    }));
-    expect(agentApiMocks.createSession).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      executionProfile: standardProfile,
-    }));
-  });
-
   it('does not reuse or project a session creation from a superseded device activation', async () => {
     const firstResponse = createDeferred<{ sessionId: string }>();
     const secondResponse = createDeferred<{ sessionId: string }>();

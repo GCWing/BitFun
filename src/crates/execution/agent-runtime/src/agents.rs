@@ -82,6 +82,7 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
     use BuiltinAgentCategory::{Hidden, Mode, SubAgent};
 
     vec![
+        builtin_agent_spec("minimal", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec("agentic", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec("Cowork", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec(
@@ -189,8 +190,8 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
 
 pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "Claw" | "DeepResearch" | "Team"
-        | "Multitask" | "Ultra" => "auto",
+        "minimal" | "agentic" | "Cowork" | "ComputerUse" | "Plan" | "Claw" | "DeepResearch"
+        | "Team" | "Multitask" | "Ultra" => "auto",
         "Explore" | "CodeReview" | "GeneralPurpose" | "MemoryPhase2" | "SwarmPlanner"
         | "SwarmWorker" => "primary",
         "GenerateDoc"

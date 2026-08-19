@@ -880,6 +880,7 @@ pub struct AIConfig {
     pub browser_control_auto_connect_on_startup: bool,
 
     /// Maximum number of rounds per dialog turn before soft-pausing.
+    /// Zero disables the fixed round limit.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
 }
@@ -1156,7 +1157,7 @@ fn default_subagent_batch_execution_policy() -> SubagentBatchExecutionPolicy {
     SubagentBatchExecutionPolicy::ForceParallel
 }
 
-pub const DEFAULT_MAX_ROUNDS: usize = 200;
+pub const DEFAULT_MAX_ROUNDS: usize = 0;
 
 fn default_max_rounds() -> usize {
     DEFAULT_MAX_ROUNDS

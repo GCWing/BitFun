@@ -162,7 +162,8 @@ struct Cli {
     #[arg(long)]
     agent: Option<String>,
 
-    /// Select the Harness Profile for an interactive session (minimal or balanced)
+    /// Select the Harness Profile for this session (minimal or balanced).
+    /// `minimal` is kept as a compatibility alias for agent type `minimal`.
     #[arg(long, value_parser = ["minimal", "balanced"])]
     harness_profile: Option<String>,
 }
@@ -200,6 +201,14 @@ fn resolved_command_harness_profile(
     command.or_else(|| global.clone())
 }
 
+fn agent_type_with_harness_profile(agent_type: String, harness_profile: Option<&str>) -> String {
+    match harness_profile {
+        Some("minimal") => "minimal".to_string(),
+        Some("balanced") | None => agent_type,
+        Some(other) => other.to_string(),
+    }
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Start interactive chat (TUI)
@@ -212,7 +221,7 @@ enum Commands {
         #[arg(long)]
         shared: bool,
 
-        /// Harness Profile for this interactive session (minimal or balanced)
+        /// Harness Profile for this session (minimal or balanced).
         #[arg(long, value_parser = ["minimal", "balanced"])]
         harness_profile: Option<String>,
     },
@@ -234,7 +243,7 @@ enum Commands {
         #[arg(short, long, default_value = "agentic")]
         agent: String,
 
-        /// Harness profile for this session (minimal or balanced)
+        /// Harness Profile for this session (minimal or balanced).
         #[arg(long, value_parser = ["minimal", "balanced"])]
         harness_profile: Option<String>,
 
@@ -1049,18 +1058,15 @@ async fn run_interactive(
     } else {
         default_agent.clone()
     };
+    let effective_agent = agent_type_with_harness_profile(
+        effective_agent,
+        harness_profile.as_deref(),
+    );
 
     // If --continue or --session was given, skip the startup page and go directly
     // to chat with the resolved session.
     if let Some(ref session_spec) = session_override {
         let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
-        apply_tui_harness_profile(
-            agent.as_ref(),
-            &restore_session_id,
-            harness_profile.as_deref(),
-        )
-        .await?;
-
         let mut chat_mode = ChatMode::new(
             config,
             effective_agent,
@@ -1107,18 +1113,17 @@ async fn run_interactive(
         StartupResult::Exit => unreachable!(),
     };
 
-    let agent_type = startup_page.agent_type().to_string();
+    let agent_type = harness_profile
+        .as_deref()
+        .map(|profile| agent_type_with_harness_profile(startup_page.agent_type().to_string(), Some(profile)))
+        .unwrap_or_else(|| startup_page.agent_type().to_string());
     if matches!(startup_result, StartupResult::NewSession { .. }) {
         let selected_model_id = startup_page.selected_model_id().map(str::to_string);
-        if selected_model_id.is_some() || harness_profile.is_some() {
-            let session_id = agent
+        if selected_model_id.is_some() {
+            let _session_id = agent
                 .ensure_session_with_model(&agent_type, selected_model_id)
                 .await?;
-            apply_tui_harness_profile(agent.as_ref(), &session_id, harness_profile.as_deref())
-                .await?;
         }
-    } else if let Some(session_id) = restore_session_id.as_deref() {
-        apply_tui_harness_profile(agent.as_ref(), session_id, harness_profile.as_deref()).await?;
     }
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
@@ -1141,20 +1146,6 @@ async fn run_interactive(
     println!("Goodbye!");
 
     Ok(())
-}
-
-async fn apply_tui_harness_profile(
-    agent: &CliAgentRuntimeClient,
-    session_id: &str,
-    harness_profile: Option<&str>,
-) -> Result<()> {
-    let Some(harness_profile) = harness_profile else {
-        return Ok(());
-    };
-    agent
-        .update_session_harness_profile(session_id, harness_profile)
-        .await
-        .map_err(anyhow::Error::new)
 }
 
 /// Resolve a `--session` / `--continue` override to a concrete session ID.
@@ -1334,10 +1325,13 @@ async fn run_cli() -> Result<()> {
                 config,
                 root_handlers::ExecCommandArgs {
                     message,
-                    agent,
-                    harness_profile: resolved_command_harness_profile(
-                        &cli.harness_profile,
-                        harness_profile,
+                    agent: agent_type_with_harness_profile(
+                        agent,
+                        resolved_command_harness_profile(
+                            &cli.harness_profile,
+                            harness_profile,
+                        )
+                        .as_deref(),
                     ),
                     continue_last,
                     resume,
@@ -2081,9 +2075,7 @@ mod shared_tui_command_tests {
 
 #[cfg(test)]
 mod dispatch_command_tests {
-    use super::{
-        is_dispatch_command, validate_global_harness_profile_scope, Cli, Commands, DispatchAction,
-    };
+    use super::{is_dispatch_command, Cli, Commands, DispatchAction};
     use clap::{CommandFactory, Parser};
 
     #[test]
@@ -2128,65 +2120,45 @@ mod dispatch_command_tests {
             .to_string();
         assert!(!dispatch_help.contains("__run"));
     }
-
-    #[test]
-    fn dispatch_rejects_a_global_harness_profile_instead_of_ignoring_it() {
-        let cli = Cli::try_parse_from([
-            "bitfun",
-            "--harness-profile",
-            "minimal",
-            "dispatch",
-            "status",
-        ])
-        .expect("global Harness Profile should parse before scope validation");
-
-        let error =
-            validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)
-                .expect_err("Detached Dispatch must not silently use Balanced");
-        assert!(error.to_string().contains("cannot silently fall back"));
-    }
 }
 
 #[cfg(test)]
-mod harness_profile_command_tests {
-    use super::{
-        resolved_command_harness_profile, validate_global_harness_profile_scope, Cli, Commands,
-    };
+mod harness_profile_compatibility_tests {
+    use super::{agent_type_with_harness_profile, resolved_command_harness_profile, Cli, Commands};
     use clap::Parser;
 
     #[test]
-    fn exec_honors_a_global_harness_profile_before_the_subcommand() {
+    fn minimal_profile_is_an_agent_type_compatibility_alias() {
+        assert_eq!(
+            agent_type_with_harness_profile("agentic".to_string(), Some("minimal")),
+            "minimal"
+        );
+        assert_eq!(
+            agent_type_with_harness_profile("Plan".to_string(), Some("balanced")),
+            "Plan"
+        );
+    }
+
+    #[test]
+    fn legacy_global_and_subcommand_forms_keep_precedence() {
         let cli = Cli::try_parse_from([
             "bitfun",
             "--harness-profile",
-            "minimal",
+            "balanced",
             "exec",
-            "fix the tests",
+            "--harness-profile",
+            "minimal",
+            "fix",
         ])
-        .expect("parse headless exec");
-        validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)
-            .expect("exec supports Harness Profile selection");
+        .expect("legacy harness profile syntax should parse");
         let Some(Commands::Exec {
             harness_profile, ..
         }) = cli.command
         else {
             panic!("expected exec command");
         };
-
         assert_eq!(
             resolved_command_harness_profile(&cli.harness_profile, harness_profile).as_deref(),
-            Some("minimal")
-        );
-    }
-
-    #[test]
-    fn subcommand_harness_profile_overrides_the_global_value() {
-        assert_eq!(
-            resolved_command_harness_profile(
-                &Some("balanced".to_string()),
-                Some("minimal".to_string()),
-            )
-            .as_deref(),
             Some("minimal")
         );
     }

@@ -389,7 +389,6 @@ Arguments:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
-                        execution_profile: None,
                         workspace_path: Some(workspace.display_workspace.clone()),
                         project_workspace_path: Some(workspace.project_workspace.clone()),
                         execution_target: workspace.execution_target.clone(),

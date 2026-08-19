@@ -72,7 +72,6 @@ export const localSessionDriver: SessionDriver = {
     const response = await agentAPI.createSession({
       sessionName,
       agentType,
-      executionProfile: config.executionProfile,
       workspacePath,
       projectWorkspacePath,
       executionTarget: config.executionTargetRequest,
@@ -98,7 +97,6 @@ export const localSessionDriver: SessionDriver = {
     surfaceScope.assertCurrent('resolve created session model');
     const mergedConfig: SessionConfig = {
       ...config,
-      executionProfile: response.executionProfile,
       modelName: sessionModelName,
       reasoningPreset,
       workspaceId: workspaceId ?? config.workspaceId,

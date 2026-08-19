@@ -642,7 +642,6 @@ export async function createChatSession(
       agentType,
       JSON.stringify(config.executionTargetRequest ?? { kind: 'local' }),
       JSON.stringify(config.dispatchTargetRequest ?? { kind: 'local' }),
-      config.executionProfile?.harnessProfileId ?? null,
     );
 
     const pendingCreation = pendingSessionCreations.get(creationKey);

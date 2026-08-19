@@ -16,14 +16,13 @@ use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentEventReceiver, AgentInputAttachment,
     AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionHarnessProfileUpdateRequest,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
-    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionUsageRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, AgentUserAnswersRequest, AgentUserShellCommandRequest,
-    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionUsageRequest,
+    AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    AgentUserShellCommandRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
     AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, PermissionReply, PermissionRequest,
     PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
     SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
@@ -177,13 +176,6 @@ impl fmt::Display for SessionOperationError {
 impl std::error::Error for SessionOperationError {}
 
 impl SessionOperationError {
-    fn unsupported(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-            outcome_unknown: false,
-        }
-    }
-
     fn runtime(error: RuntimeError) -> Self {
         let outcome_unknown = matches!(
             &error,
@@ -1008,31 +1000,6 @@ impl CliAgentRuntimeClient {
         }
     }
 
-    pub(crate) async fn update_session_harness_profile(
-        &self,
-        session_id: &str,
-        harness_profile_id: &str,
-    ) -> std::result::Result<(), SessionOperationError> {
-        let request = AgentSessionHarnessProfileUpdateRequest {
-            session_id: session_id.to_string(),
-            execution_profile: bitfun_core_types::SessionExecutionProfile::new(
-                bitfun_core_types::HarnessProfileId::new(harness_profile_id),
-                bitfun_core_types::HarnessSelectionSource::new(
-                    bitfun_core_types::HARNESS_SELECTION_CLI,
-                ),
-            ),
-        };
-        match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
-                .update_session_harness_profile(request)
-                .await
-                .map_err(SessionOperationError::runtime),
-            CliAgentRuntimeBackend::Shared(_) => Err(SessionOperationError::unsupported(
-                "--harness-profile is not supported by the current Shared Runtime protocol; use embedded exec",
-            )),
-        }
-    }
-
     pub(crate) async fn rename_session(
         &self,
         session_id: &str,
@@ -1355,7 +1322,6 @@ impl CliAgentRuntimeClient {
                 AgentSessionCreateRequest {
                     session_name,
                     agent_type: effective_agent_type,
-                    execution_profile: None,
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     project_workspace_path: Some(project_workspace.to_string_lossy().to_string()),
                     execution_target: self.execution_target(),
@@ -1424,7 +1390,6 @@ impl CliAgentRuntimeClient {
                 AgentSessionCreateRequest {
                     session_name: Self::build_default_session_name(),
                     agent_type: agent_type.to_string(),
-                    execution_profile: None,
                     workspace_path: Some(workspace_path),
                     project_workspace_path: Some(project_workspace_path),
                     execution_target: self.execution_target(),
@@ -1468,7 +1433,6 @@ impl CliAgentRuntimeClient {
         let request = AgentSessionCreateRequest {
             session_name: Self::build_default_session_name(),
             agent_type: agent_type.to_string(),
-            execution_profile: None,
             workspace_path: Some(self.workspace_path_string()),
             project_workspace_path: None,
             execution_target: None,
@@ -1910,7 +1874,6 @@ impl CliAgentRuntimeClient {
         let request = AgentSessionCreateRequest {
             session_name: Self::build_default_session_name(),
             agent_type: agent_type.to_string(),
-            execution_profile: None,
             workspace_path: Some(project_workspace_path.clone()),
             project_workspace_path: Some(project_workspace_path.clone()),
             execution_target: Some(SessionExecutionTarget::local(project_workspace_path)),
@@ -2615,7 +2578,6 @@ mod tests {
             session_id: session_id.to_string(),
             session_name: "Workspace session".to_string(),
             agent_type: "agentic".to_string(),
-            execution_profile: Default::default(),
             model_id: None,
             reasoning_preset: None,
             last_user_dialog_agent_type: None,
@@ -2815,7 +2777,6 @@ mod dual_backend_behavior_tests {
                 session_id: session_id.into(),
                 session_name: session_name.into(),
                 agent_type: agent_type.into(),
-                execution_profile: Default::default(),
                 model_id: None,
                 reasoning_preset: None,
                 last_user_dialog_agent_type: None,
@@ -3604,7 +3565,6 @@ mod dual_backend_behavior_tests {
         let create_request = AgentSessionCreateRequest {
             session_name: "remote-unsupported-session".to_string(),
             agent_type: "agentic".to_string(),
-            execution_profile: Default::default(),
             workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
             project_workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
             execution_target: Some(SessionExecutionTarget::local(

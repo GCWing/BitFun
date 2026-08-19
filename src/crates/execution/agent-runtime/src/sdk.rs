@@ -36,11 +36,6 @@ impl AgentRuntimeSdkCompatibility {
 
 pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapabilityProfile};
 pub use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
-pub use crate::harness_profile::{
-    harness_profile_catalog, resolve_harness_profile, HarnessProfileDescriptor,
-    BALANCED_PROMPT_POLICY_ID, BALANCED_TOOL_PROFILE_ID, MINIMAL_PROMPT_POLICY_ID,
-    MINIMAL_TOOL_PROFILE_ID,
-};
 pub use crate::permission::{
     PermissionReplyResolution, PermissionRequestEventReceiver, PermissionRequestManager,
     PermissionRequestManagerError, PermissionRequestSnapshot, AUTO_APPROVE_ASK_CONTEXT_KEY,
@@ -63,10 +58,7 @@ pub use crate::runtime::{
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use crate::user_questions::{PendingUserQuestion, PendingUserQuestionSnapshot};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
-pub use bitfun_core_types::{
-    HarnessProfileId, HarnessSelectionSource, SessionExecutionProfile, SessionUsageReport,
-    BALANCED_HARNESS_PROFILE_ID, MINIMAL_HARNESS_PROFILE_ID, ULTIMATE_HARNESS_PROFILE_ID,
-};
+pub use bitfun_core_types::SessionUsageReport;
 // Event envelope types re-exported so protocol surfaces (e.g. `bitfun-app-server`)
 // can carry the runtime event stream over a JSON-RPC transport without depending
 // on `bitfun-events` directly. These are the exact types the runtime's event
@@ -88,18 +80,17 @@ pub use bitfun_runtime_ports::{
     AgentSessionCompactionResult, AgentSessionComposerUpdate, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
-    AgentSessionForkResult, AgentSessionHarnessProfilePort,
-    AgentSessionHarnessProfileUpdateRequest, AgentSessionLifecycleStatus,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageEntry,
-    AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
-    AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome,
-    AgentSessionRollbackToTurnRequest, AgentSessionSummary, AgentSessionUsagePort,
-    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentSessionForkResult, AgentSessionLifecycleStatus, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageEntry, AgentSessionLineageInspection, AgentSessionLineagePort,
+    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
+    AgentSessionListRequest, AgentSessionManagementPort, AgentSessionModePort,
+    AgentSessionModeUpdateRequest, AgentSessionModelPort, AgentSessionModelSelection,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
@@ -189,14 +180,6 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_mode_port(mut self, port: Arc<dyn AgentSessionModePort>) -> Self {
         self.inner = self.inner.with_session_mode_port(port);
-        self
-    }
-
-    pub fn with_session_harness_profile_port(
-        mut self,
-        port: Arc<dyn AgentSessionHarnessProfilePort>,
-    ) -> Self {
-        self.inner = self.inner.with_session_harness_profile_port(port);
         self
     }
 
@@ -578,13 +561,6 @@ impl AgentRuntime {
         request: AgentSessionModeUpdateRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.update_session_mode(request).await
-    }
-
-    pub async fn update_session_harness_profile(
-        &self,
-        request: AgentSessionHarnessProfileUpdateRequest,
-    ) -> Result<(), RuntimeError> {
-        self.inner.update_session_harness_profile(request).await
     }
 
     pub async fn start_session_compaction(

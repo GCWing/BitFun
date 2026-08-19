@@ -14,10 +14,9 @@ import { HarnessCreativeIcon } from '@/component-library/icons';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { notificationService } from '@/shared/notification-system';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
-import type { HarnessProfileId as RuntimeHarnessProfileId } from '@/infrastructure/api/service-api/AgentAPI';
 import './HarnessProfileSelector.scss';
 
-export type HarnessProfileId = RuntimeHarnessProfileId;
+export type HarnessProfileId = KnownHarnessProfileId;
 export type KnownHarnessProfileId = 'minimal' | 'balanced' | 'ultimate' | 'creative';
 export type SelectableHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
 
@@ -26,8 +25,6 @@ interface HarnessProfileSelectorProps {
   legacySession?: boolean;
   /** The Session has accepted its first runtime Turn, so its Harness is fixed. */
   sessionStarted?: boolean;
-  /** Persisted Harness choice to restore when leaving Ultra after Session start. */
-  lockedHarnessProfile?: HarnessProfileId;
   selectedProfile: HarnessProfileId;
   disabled?: boolean;
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
@@ -120,7 +117,6 @@ function HarnessDensityMark({
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
   sessionStarted = false,
-  lockedHarnessProfile,
   selectedProfile,
   disabled = false,
   onSelectProfile,
@@ -164,13 +160,8 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   }, [close, open]);
 
   const canSelectStartedProfile = useCallback((profileId: KnownHarnessProfileId) => (
-    !sessionStarted
-    || profileId === 'ultimate'
-    || (
-      selectedProfile === 'ultimate'
-      && profileId === lockedHarnessProfile
-    )
-  ), [lockedHarnessProfile, selectedProfile, sessionStarted]);
+    !sessionStarted || profileId === selectedProfile
+  ), [selectedProfile, sessionStarted]);
 
   const handleSelect = useCallback((profileId: KnownHarnessProfileId) => {
     if (legacySession) {

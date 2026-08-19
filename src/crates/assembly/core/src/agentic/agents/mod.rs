@@ -28,8 +28,8 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DeepResearchMode, MultitaskMode, PlanMode, TeamMode,
-    UltraMode,
+    AgenticMode, ClawMode, CoworkMode, DeepResearchMode, MinimalMode, MultitaskMode, PlanMode,
+    TeamMode, UltraMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
@@ -76,32 +76,6 @@ pub fn get_all_embedded_prompt_names() -> Vec<&'static str> {
 }
 
 pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
-
-pub const MINIMAL_HARNESS_REQUIRED_TOOLS: [&str; 4] = ["Read", "Edit", "Write", "ExecCommand"];
-pub const MINIMAL_HARNESS_ALLOWED_TOOLS: [&str; 6] = [
-    "Read",
-    "Edit",
-    "Write",
-    "ExecCommand",
-    "WriteStdin",
-    "ExecControl",
-];
-
-pub fn minimal_harness_tool_policy() -> AgentToolPolicy {
-    let allowed_tools = MINIMAL_HARNESS_ALLOWED_TOOLS
-        .iter()
-        .map(|tool| (*tool).to_string())
-        .collect();
-    let exposure_overrides = MINIMAL_HARNESS_ALLOWED_TOOLS
-        .iter()
-        .map(|tool| ((*tool).to_string(), ToolExposure::Direct))
-        .collect();
-    AgentToolPolicy {
-        allowed_tools,
-        exposure_overrides,
-        permission_constraints: PermissionConstraintLayer::default(),
-    }
-}
 
 static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOverrides> =
     std::sync::LazyLock::new(AgentToolPolicyOverrides::default);
@@ -296,6 +270,11 @@ pub trait Agent: Send + Sync + 'static {
         &EMPTY_PERMISSION_CONSTRAINTS
     }
 
+    /// Whether dynamic MCP tools may be appended to this Agent's manifest.
+    fn include_dynamic_mcp_tools(&self) -> bool {
+        true
+    }
+
     /// Whether this agent is read-only (prevents file modifications)
     fn is_readonly(&self) -> bool {
         false
@@ -304,13 +283,10 @@ pub trait Agent: Send + Sync + 'static {
 
 #[cfg(test)]
 mod tests {
-    use bitfun_agent_runtime::harness_profile::MINIMAL_PROMPT_POLICY_ID;
-
     use super::{
-        get_embedded_prompt, minimal_harness_tool_policy,
-        shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
-        shared_coding_mode_user_context_policy, Agent, AgenticMode, MultitaskMode, PlanMode,
-        ToolExposure, EMBEDDED_PROMPTS, MINIMAL_HARNESS_ALLOWED_TOOLS,
+        get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+        shared_coding_mode_user_context_policy, Agent, AgenticMode, MinimalMode, MultitaskMode,
+        PlanMode, EMBEDDED_PROMPTS,
     };
 
     #[test]
@@ -322,10 +298,10 @@ mod tests {
     }
 
     #[test]
-    fn minimal_harness_prompt_policy_resolves_to_embedded_prompt() {
+    fn minimal_agent_prompt_resolves_to_embedded_prompt() {
         assert!(
-            get_embedded_prompt(MINIMAL_PROMPT_POLICY_ID).is_some(),
-            "minimal Harness prompt policy must resolve through the embedded prompt catalog"
+            get_embedded_prompt(MinimalMode::new().prompt_template_name(None)).is_some(),
+            "minimal Agent prompt must resolve through the embedded prompt catalog"
         );
     }
 
@@ -416,23 +392,5 @@ mod tests {
         assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
-    }
-
-    #[test]
-    fn minimal_harness_policy_is_closed_direct_and_stably_ordered() {
-        let policy = minimal_harness_tool_policy();
-        let expected: Vec<String> = MINIMAL_HARNESS_ALLOWED_TOOLS
-            .iter()
-            .map(|tool| (*tool).to_string())
-            .collect();
-
-        assert_eq!(policy.allowed_tools, expected);
-        assert_eq!(policy.exposure_overrides.len(), expected.len());
-        for tool in expected {
-            assert_eq!(
-                policy.exposure_overrides.get(&tool),
-                Some(&ToolExposure::Direct)
-            );
-        }
     }
 }

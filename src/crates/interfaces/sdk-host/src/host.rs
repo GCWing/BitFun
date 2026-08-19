@@ -780,7 +780,6 @@ impl SdkHostConnection {
                         .session_name
                         .unwrap_or_else(|| DEFAULT_SESSION_NAME.to_string()),
                     agent_type: params.agent.unwrap_or_else(|| DEFAULT_AGENT.to_string()),
-                    execution_profile: None,
                     workspace_path: Some(workspace_path.clone()),
                     project_workspace_path: None,
                     execution_target: None,
@@ -907,7 +906,6 @@ impl SdkHostConnection {
                                 .agent
                                 .clone()
                                 .unwrap_or_else(|| DEFAULT_AGENT.to_string()),
-                            execution_profile: None,
                             workspace_path: Some(workspace_path.clone()),
                             project_workspace_path: None,
                             execution_target: None,

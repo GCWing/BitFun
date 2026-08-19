@@ -8,13 +8,7 @@ function session(overrides: Partial<Session> = {}): Session {
     sessionId: 'session-1',
     dialogTurns: [],
     status: 'idle',
-    config: {
-      executionProfile: {
-        harnessProfileId: 'balanced',
-        schemaVersion: 1,
-        selectedBy: 'default',
-      },
-    },
+    config: {},
     createdAt: 1,
     lastActiveAt: 1,
     error: null,
@@ -23,24 +17,6 @@ function session(overrides: Partial<Session> = {}): Session {
 }
 
 describe('chatInputSessionSubscriptionKey', () => {
-  it('invalidates ChatInput when the authoritative Harness Profile changes', () => {
-    const balanced = session();
-    const minimal = session({
-      config: {
-        ...balanced.config,
-        executionProfile: {
-          harnessProfileId: 'minimal',
-          schemaVersion: 1,
-          selectedBy: 'user',
-        },
-      },
-    });
-
-    expect(chatInputSessionSubscriptionKey(minimal)).not.toBe(
-      chatInputSessionSubscriptionKey(balanced),
-    );
-  });
-
   it('invalidates the first-turn lock when projected history counts change', () => {
     expect(chatInputSessionSubscriptionKey(session({ totalTurnCount: 1 }))).not.toBe(
       chatInputSessionSubscriptionKey(session({ totalTurnCount: 0 })),

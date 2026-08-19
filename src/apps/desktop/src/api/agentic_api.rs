@@ -18,8 +18,7 @@ use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
     AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRecoveryOutcome,
     AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
-    AgentSessionCreateResult, AgentSessionHarnessProfileUpdateRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelSelection,
+    AgentSessionCreateResult, AgentSessionModeUpdateRequest, AgentSessionModelSelection,
     AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
     AgentTurnCancellationRequest, AgentTurnInterruptionRequest, DialogSteerOutcome,
     PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
@@ -110,8 +109,6 @@ pub struct CreateSessionRequest {
     pub session_id: Option<String>,
     pub session_name: String,
     pub agent_type: String,
-    #[serde(default)]
-    pub execution_profile: Option<bitfun_core_types::SessionExecutionProfile>,
     pub workspace_path: String,
     /// Main project scope for persistence. Legacy clients omit this and use
     /// `workspacePath`.
@@ -309,21 +306,6 @@ where
 pub struct UpdateSessionModeRequest {
     pub session_id: String,
     pub mode_id: String,
-    #[serde(default)]
-    pub workspace_path: Option<String>,
-    #[serde(default)]
-    pub remote_connection_id: Option<String>,
-    #[serde(default)]
-    pub remote_ssh_host: Option<String>,
-    #[serde(default)]
-    pub include_internal: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateSessionHarnessProfileRequest {
-    pub session_id: String,
-    pub harness_profile_id: bitfun_core_types::HarnessProfileId,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -546,7 +528,6 @@ pub struct SessionResponse {
     pub session_name: String,
     /// Current/default mode selection for the next dialog turn.
     pub agent_type: String,
-    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     /// Current/default model selection for the next dialog turn.
     pub model_name: Option<String>,
     pub reasoning_preset: Option<String>,
@@ -1779,19 +1760,6 @@ pub async fn create_session(
         }
     }
 
-    let execution_profile = request.execution_profile.clone().unwrap_or_else(|| {
-        bitfun_core_types::SessionExecutionProfile::balanced(
-            bitfun_core_types::HarnessSelectionSource::new(
-                bitfun_core_types::HARNESS_SELECTION_DEFAULT,
-            ),
-        )
-    });
-    bitfun_agent_runtime::harness_profile::resolve_harness_profile(
-        &execution_profile.harness_profile_id,
-        bitfun_core::service::config::types::DEFAULT_MAX_ROUNDS,
-    )
-    .map_err(|message| format!("Invalid Harness Profile: {message}"))?;
-
     let config = request
         .config
         .map(|c| SessionConfig {
@@ -1800,7 +1768,6 @@ pub async fn create_session(
             enable_tools: c.enable_tools.unwrap_or(true),
             safe_mode: c.safe_mode.unwrap_or(true),
             max_turns: c.max_turns.unwrap_or(200),
-            execution_profile: execution_profile.clone(),
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             workspace_path: Some(request.workspace_path.clone()),
             project_workspace_path: Some(project_workspace_path.clone()),
@@ -1813,7 +1780,6 @@ pub async fn create_session(
             ..Default::default()
         })
         .unwrap_or(SessionConfig {
-            execution_profile,
             workspace_path: Some(request.workspace_path.clone()),
             project_workspace_path: Some(project_workspace_path.clone()),
             execution_target: Some(resolved_execution_target),
@@ -1946,69 +1912,6 @@ pub async fn update_session_mode(
         })
         .await
         .map_err(|error| format!("Failed to update session mode: {}", error.into_message()))
-}
-
-#[tauri::command]
-pub async fn update_session_harness_profile(
-    runtime: State<'_, DesktopRuntimeContext>,
-    request: UpdateSessionHarnessProfileRequest,
-) -> Result<(), String> {
-    let session_id = request.session_id.trim().to_string();
-    if session_id.is_empty() {
-        return Err("session_id is required".to_string());
-    }
-    ensure_session_loaded_for_selector_update(
-        runtime.inner(),
-        &session_id,
-        request.workspace_path,
-        request.remote_connection_id,
-        request.remote_ssh_host,
-        request.include_internal,
-    )
-    .await?;
-    runtime
-        .agent_runtime()
-        .update_session_harness_profile(AgentSessionHarnessProfileUpdateRequest {
-            session_id,
-            execution_profile: bitfun_core_types::SessionExecutionProfile::new(
-                request.harness_profile_id,
-                bitfun_core_types::HarnessSelectionSource::new(
-                    bitfun_core_types::HARNESS_SELECTION_USER,
-                ),
-            ),
-        })
-        .await
-        .map_err(desktop_update_session_harness_profile_error)
-}
-
-fn desktop_update_session_harness_profile_error(error: RuntimeError) -> String {
-    const HARNESS_PROFILE_LOCKED_PREFIX: &str = "harness_profile_locked:";
-
-    match error {
-        RuntimeError::Port(port_error) => match port_error.kind {
-            PortErrorKind::SessionInUse => format!("session_in_use: {}", port_error.message),
-            PortErrorKind::OutcomeUnknown => format!("outcome_unknown: {}", port_error.message),
-            PortErrorKind::NotAvailable => format!("not_available: {}", port_error.message),
-            PortErrorKind::InvalidRequest => {
-                if let Some(offset) = port_error.message.find(HARNESS_PROFILE_LOCKED_PREFIX) {
-                    port_error.message[offset..].to_string()
-                } else {
-                    format!(
-                        "Failed to update session Harness Profile: {}",
-                        port_error.message
-                    )
-                }
-            }
-            _ => format!(
-                "Failed to update session Harness Profile: {}",
-                port_error.message
-            ),
-        },
-        other => format!(
-            "Failed to update session Harness Profile: {}",
-            other.into_message()
-        ),
-    }
 }
 
 #[tauri::command]
@@ -3902,7 +3805,6 @@ pub async fn list_sessions(
             session_id: summary.session_id,
             session_name: summary.session_name,
             agent_type: summary.agent_type,
-            execution_profile: summary.execution_profile,
             model_name: None,
             reasoning_preset: None,
             last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
@@ -4108,7 +4010,6 @@ fn session_to_response_with_turn_count(session: Session, turn_count: usize) -> S
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
-        execution_profile: session.config.execution_profile,
         model_name: session.config.model_id,
         reasoning_preset: session.config.reasoning_preset,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
@@ -4229,42 +4130,6 @@ mod tests {
             ),),
             "outcome_unknown: inspect authoritative state"
         );
-    }
-
-    #[test]
-    fn harness_profile_update_errors_keep_stable_transport_codes() {
-        for (kind, expected) in [
-            (
-                PortErrorKind::SessionInUse,
-                "session_in_use: session is processing",
-            ),
-            (
-                PortErrorKind::OutcomeUnknown,
-                "outcome_unknown: inspect authoritative state",
-            ),
-            (
-                PortErrorKind::NotAvailable,
-                "not_available: future profile is unsupported",
-            ),
-            (
-                PortErrorKind::InvalidRequest,
-                "harness_profile_locked: Session already started",
-            ),
-        ] {
-            let message = match kind {
-                PortErrorKind::SessionInUse => "session is processing",
-                PortErrorKind::OutcomeUnknown => "inspect authoritative state",
-                PortErrorKind::NotAvailable => "future profile is unsupported",
-                PortErrorKind::InvalidRequest => {
-                    "Validation error: harness_profile_locked: Session already started"
-                }
-                _ => unreachable!(),
-            };
-            let encoded = desktop_update_session_harness_profile_error(RuntimeError::Port(
-                bitfun_runtime_ports::PortError::new(kind, message),
-            ));
-            assert_eq!(encoded, expected);
-        }
     }
 
     #[test]
@@ -4452,7 +4317,6 @@ mod tests {
             session_id: Some("review_child_request-1".to_string()),
             session_name: "Review fixes".to_string(),
             agent_type: "CodeReview".to_string(),
-            execution_profile: None,
             workspace_path: "/workspace".to_string(),
             project_workspace_path: None,
             execution_target: None,

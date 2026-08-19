@@ -101,7 +101,6 @@ use bitfun_agent_runtime::remote_file_delivery::{
 };
 use bitfun_agent_runtime::sdk::PermissionReply;
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
-use bitfun_core_types::MINIMAL_HARNESS_PROFILE_ID;
 use bitfun_events::{ToolEventData, ToolEventIdentity};
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_runtime_ports::{
@@ -3694,7 +3693,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         enable_tools: bool,
         skill_agent_context_vars: &HashMap<String, String>,
         runtime_tool_restrictions: &ToolRuntimeRestrictions,
-        allow_skill_agent_listing_reminders: bool,
     ) -> BitFunResult<WrappedUserInputPayload> {
         let agent_registry = get_agent_registry();
         agent_registry
@@ -3745,7 +3743,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             let diff = diff_skill_agent_snapshot(&previous_snapshot, &surface_resolution.snapshot);
             append_skill_agent_listing_diff_reminders(
                 &mut prepended_messages,
-                allow_skill_agent_listing_reminders,
                 diff.render_skill_listing_update(),
                 (!is_swarm_planner_agent_type(agent_type))
                     .then(|| diff.render_agent_listing_update())
@@ -5483,7 +5480,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: turn_id.clone(),
             turn_index,
             agent_type: runtime_agent_type,
-            execution_profile: session.config.execution_profile.clone(),
             workspace: manual_workspace,
             context: HashMap::from([(
                 "cancel_lifecycle_owner".to_string(),
@@ -6071,9 +6067,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session.config.enable_tools,
                 &skill_agent_context_vars,
                 &runtime_tool_restrictions,
-                effective_agent_type.eq_ignore_ascii_case("Ultra")
-                    || session.config.execution_profile.harness_profile_id.as_str()
-                        != MINIMAL_HARNESS_PROFILE_ID,
             )
             .await?;
         let effective_user_input = wrapped_user_input_payload.content.clone();
@@ -6453,7 +6446,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: turn_id.clone(),
             turn_index,
             agent_type: effective_agent_type.clone(),
-            execution_profile: session.config.execution_profile.clone(),
             workspace: session_workspace,
             context: context_vars,
             subagent_parent_info: persisted_subagent_context.subagent_parent_info,
@@ -6944,7 +6936,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: plan.turn_id.clone(),
             turn_index: plan.turn_index,
             agent_type: plan.agent_type.clone(),
-            execution_profile: session.config.execution_profile.clone(),
             workspace: session_workspace,
             context: context_vars,
             subagent_parent_info: persisted_subagent_context.subagent_parent_info,
@@ -9779,7 +9770,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: dialog_turn_id.clone(),
             turn_index,
             agent_type: agent_type.clone(),
-            execution_profile: session.config.execution_profile.clone(),
             workspace: subagent_workspace,
             context,
             subagent_parent_info: subagent_parent_info.clone(),
@@ -12233,17 +12223,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
-    pub async fn update_session_harness_profile(
-        &self,
-        session_id: &str,
-        execution_profile: bitfun_core_types::SessionExecutionProfile,
-    ) -> BitFunResult<()> {
-        self.ensure_session_runtime_ownership(session_id, None)?;
-        self.session_manager
-            .update_session_execution_profile(session_id, execution_profile)
-            .await
-    }
-
     /// Update the session-level prompt-cache guard mode for the latest
     /// scheduler-accepted user submission.
     pub async fn update_last_submitted_agent_type(
@@ -12396,30 +12375,12 @@ async fn create_agent_session_from_runtime_request(
         )
     })?;
     let created_by = resolve_agent_session_create_created_by(&request.metadata);
-    let execution_profile = request.execution_profile.unwrap_or_else(|| {
-        bitfun_core_types::SessionExecutionProfile::balanced(
-            bitfun_core_types::HarnessSelectionSource::new(
-                bitfun_core_types::HARNESS_SELECTION_DEFAULT,
-            ),
-        )
-    });
-    bitfun_agent_runtime::harness_profile::resolve_harness_profile(
-        &execution_profile.harness_profile_id,
-        crate::service::config::types::DEFAULT_MAX_ROUNDS,
-    )
-    .map_err(|message| {
-        bitfun_runtime_ports::PortError::new(
-            bitfun_runtime_ports::PortErrorKind::NotAvailable,
-            message,
-        )
-    })?;
     let session = coordinator
         .create_session_with_workspace_and_creator_internal(
             session_id,
             request.session_name,
             request.agent_type,
             SessionConfig {
-                execution_profile,
                 workspace_path: Some(workspace_path.clone()),
                 project_workspace_path: request.project_workspace_path,
                 execution_target: request.execution_target,
@@ -12768,7 +12729,6 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
-        execution_profile: session.execution_profile,
         model_id: session.model_id,
         reasoning_preset: session.reasoning_preset,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
@@ -13286,17 +13246,6 @@ impl bitfun_runtime_ports::AgentSessionModePort for ConversationCoordinator {
 }
 
 #[async_trait::async_trait]
-impl bitfun_runtime_ports::AgentSessionHarnessProfilePort for ConversationCoordinator {
-    async fn update_session_harness_profile(
-        &self,
-        request: bitfun_runtime_ports::AgentSessionHarnessProfileUpdateRequest,
-    ) -> bitfun_runtime_ports::PortResult<()> {
-        self.update_session_harness_profile(&request.session_id, request.execution_profile)
-            .await
-            .map_err(runtime_port_error_preserving_message)
-    }
-}
-
 #[async_trait::async_trait]
 impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordinator {
     async fn restore_session(
@@ -13329,7 +13278,6 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 session_id: session.session_id,
                 session_name: session.session_name,
                 agent_type: session.agent_type,
-                execution_profile: session.config.execution_profile,
                 model_id: session.config.model_id,
                 reasoning_preset: session.config.reasoning_preset,
                 last_user_dialog_agent_type: session.last_user_dialog_agent_type,
@@ -14417,14 +14365,9 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 
 fn append_skill_agent_listing_diff_reminders(
     prepended_messages: &mut Vec<Message>,
-    allow_listing_reminders: bool,
     skill_update: Option<String>,
     agent_update: Option<String>,
 ) {
-    if !allow_listing_reminders {
-        return;
-    }
-
     if let Some(skill_update) = skill_update {
         prepended_messages.push(Message::internal_reminder(
             InternalReminderKind::SkillListingDiff,
@@ -14901,7 +14844,6 @@ mod tests {
             session_id: "session".to_string(),
             session_name: "Session".to_string(),
             agent_type: "agentic".to_string(),
-            execution_profile: Default::default(),
             model_id: Some("fast".to_string()),
             reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: None,
@@ -17876,7 +17818,6 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Worker".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -17916,7 +17857,6 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Original".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: None,
                 workspace_path: Some(workspace.clone()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18014,7 +17954,6 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Over capacity".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18046,7 +17985,6 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Fixed worker".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18081,7 +18019,6 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Duplicate worker".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18496,7 +18433,6 @@ mod tests {
         let request = |name: &str| AgentSessionCreateRequest {
             session_name: name.to_string(),
             agent_type: "agentic".to_string(),
-            execution_profile: None,
             workspace_path: Some(workspace.clone()),
             project_workspace_path: None,
             execution_target: None,
@@ -18630,7 +18566,6 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Invalid worker".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -19555,7 +19490,7 @@ mod tests {
     }
 
     #[test]
-    fn minimal_harness_omits_skill_and_agent_listing_diff_reminders() {
+    fn skill_and_agent_listing_diff_reminders_are_added_when_changed() {
         let mut messages = vec![Message::internal_reminder(
             InternalReminderKind::AgentMode,
             "mode",
@@ -19563,12 +19498,11 @@ mod tests {
 
         append_skill_agent_listing_diff_reminders(
             &mut messages,
-            false,
             Some("skills changed".to_string()),
             Some("agents changed".to_string()),
         );
 
-        assert_eq!(messages.len(), 1);
+        assert_eq!(messages.len(), 3);
         assert_eq!(
             messages[0].internal_reminder_kind(),
             Some(InternalReminderKind::AgentMode)
@@ -19576,13 +19510,12 @@ mod tests {
     }
 
     #[test]
-    fn non_minimal_harness_preserves_skill_and_agent_listing_diff_reminders() {
+    fn skill_and_agent_listing_diff_reminders_skip_missing_updates() {
         let mut messages = Vec::new();
 
         append_skill_agent_listing_diff_reminders(
             &mut messages,
-            true,
-            Some("skills changed".to_string()),
+            None,
             Some("agents changed".to_string()),
         );
 
@@ -19592,10 +19525,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             kinds,
-            vec![
-                Some(InternalReminderKind::SkillListingDiff),
-                Some(InternalReminderKind::AgentListingDiff),
-            ]
+            vec![Some(InternalReminderKind::AgentListingDiff)]
         );
     }
 

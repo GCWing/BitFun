@@ -5,14 +5,13 @@ import { sessionWorktreeBindingSubscriptionKey } from './sessionWorktree';
  * Render-relevant Session facts consumed directly by ChatInput.
  *
  * Keep this key in sync with the component's render reads. In particular, a
- * Harness update must invalidate the snapshot even though the Session id and
- * ordinary mode stay unchanged.
+ * Mode updates must invalidate the snapshot even though the Session id stays
+ * unchanged.
  */
 export function chatInputSessionSubscriptionKey(session: Session): string {
   return (
     `${session.sessionId}|${session.mode ?? ''}|${session.title ?? ''}|${session.workspacePath ?? ''}|` +
     `${session.remoteConnectionId ?? ''}|${session.remoteSshHost ?? ''}|${session.lastSubmittedMode ?? ''}|` +
-    `${session.config.executionProfile?.harnessProfileId ?? ''}|` +
     `${session.currentAcpContextUsage?.used ?? ''}|${session.currentAcpContextUsage?.size ?? ''}|` +
     `${session.currentTokenUsage?.inputTokens ?? ''}|${session.maxContextTokens ?? ''}|` +
     `${session.needsUserAttention ? '1' : '0'}|${session.dialogTurns.length}|` +

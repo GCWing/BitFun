@@ -32,7 +32,6 @@ export const agentRuntimeRootPublicModules = [
   'events',
   'evidence_ledger',
   'file_read_state',
-  'harness_profile',
   'native_hooks',
   'output_surface',
   'permission',

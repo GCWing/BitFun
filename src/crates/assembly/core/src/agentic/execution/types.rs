@@ -8,7 +8,7 @@ use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 pub use bitfun_agent_runtime::events::FinishReason;
 use bitfun_agent_tools::LoadedDeferredToolSpec;
-use bitfun_core_types::{ModelRequestContext, SessionExecutionProfile};
+use bitfun_core_types::ModelRequestContext;
 use bitfun_runtime_ports::{
     DelegationPolicy, PermissionConstraintLayer, PermissionDelegationContext,
     PermissionRuntimeCeiling, RemoteExecPort, TerminalPort,
@@ -27,8 +27,6 @@ pub struct ExecutionContext {
     pub dialog_turn_id: String,
     pub turn_index: usize,
     pub agent_type: String,
-    /// Immutable Harness selection captured when this turn is accepted.
-    pub execution_profile: SessionExecutionProfile,
     pub workspace: Option<WorkspaceBinding>,
     pub context: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
@@ -78,8 +76,6 @@ pub struct RoundContext {
     pub model_request_context: ModelRequestContext,
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
-    /// Harness selection inherited from the owning turn snapshot.
-    pub execution_profile: SessionExecutionProfile,
     pub context_vars: HashMap<String, String>,
     pub permission_constraints: PermissionConstraintLayer,
     pub permission_runtime_ceiling: Option<PermissionRuntimeCeiling>,

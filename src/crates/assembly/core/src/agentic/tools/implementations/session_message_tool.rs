@@ -664,7 +664,6 @@ Allowed agent types when creating a session:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: agent_type.clone(),
-                        execution_profile: None,
                         workspace_path: Some(workspace_target.workspace_path.clone()),
                         project_workspace_path: Some(
                             workspace_target.project_workspace_path.clone(),
@@ -913,7 +912,6 @@ mod tests {
             session_id: "worker_1".to_string(),
             session_name: "Worker".to_string(),
             agent_type: "agentic".to_string(),
-            execution_profile: Default::default(),
             model_id: None,
             reasoning_preset: None,
             last_user_dialog_agent_type: None,
@@ -935,7 +933,6 @@ mod tests {
             session_id: "worker_1".to_string(),
             session_name: "Worker".to_string(),
             agent_type: " ".to_string(),
-            execution_profile: Default::default(),
             model_id: None,
             reasoning_preset: None,
             last_user_dialog_agent_type: None,

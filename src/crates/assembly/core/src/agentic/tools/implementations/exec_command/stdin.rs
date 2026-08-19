@@ -121,10 +121,6 @@ Output is only what was produced during this tool call's wait window."#
         "Write to or poll a running ExecCommand session.".to_string()
     }
 
-    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
-        super::command_controls_available(context).await
-    }
-
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

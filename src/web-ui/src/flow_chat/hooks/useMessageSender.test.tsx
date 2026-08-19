@@ -6,7 +6,6 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionExecutionProfile } from '@/infrastructure/api/service-api/AgentAPI';
 import { useMessageSender } from './useMessageSender';
 
 const mocks = vi.hoisted(() => {
@@ -56,9 +55,8 @@ vi.mock('@/shared/utils/logger', () => ({
 
 let sendFromProbe: (() => Promise<void>) | undefined;
 
-function Probe({ executionProfile }: { executionProfile: SessionExecutionProfile }) {
+function Probe() {
   const { sendMessage } = useMessageSender({
-    newSessionExecutionProfile: executionProfile,
     contexts: [],
     onClearContexts: mocks.onClearContexts,
   });
@@ -86,15 +84,9 @@ describe('useMessageSender', () => {
     vi.clearAllMocks();
   });
 
-  it('carries a staged Harness Profile into canonical first-session creation', async () => {
-    const executionProfile: SessionExecutionProfile = {
-      harnessProfileId: 'minimal',
-      schemaVersion: 1,
-      selectedBy: 'user',
-    };
-
+  it('creates a Session with the selected Agent type and no Harness overlay', async () => {
     await act(async () => {
-      root.render(<Probe executionProfile={executionProfile} />);
+      root.render(<Probe />);
     });
     await act(async () => {
       await sendFromProbe?.();
@@ -103,7 +95,6 @@ describe('useMessageSender', () => {
     expect(mocks.createChatSession).toHaveBeenCalledWith(
       {
         workspacePath: '/workspace/project',
-        executionProfile,
       },
       'agentic',
     );

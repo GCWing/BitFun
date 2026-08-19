@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  agentExecutionTier,
+  canSwitchAgentExecutionTier,
   isChatInputActionVisibleForTarget,
   isPrimarySlashActionVisible,
   normalizeUserDefaultChatInputModeId,
@@ -201,6 +203,7 @@ describe('resolveSwitchableChatInputModes', () => {
         { id: 'agentic' },
         { id: 'Cowork' },
         { id: 'Claw' },
+        { id: 'minimal' },
         { id: 'Ultra' },
         { id: 'PlannerPlus' },
       ]),
@@ -208,6 +211,32 @@ describe('resolveSwitchableChatInputModes', () => {
       { id: 'agentic' },
       { id: 'PlannerPlus' },
     ]);
+  });
+});
+
+describe('Agent execution tier locking', () => {
+  it('classifies product tiers from Agent types', () => {
+    expect(agentExecutionTier('minimal')).toBe('minimal');
+    expect(agentExecutionTier('Ultra')).toBe('ultimate');
+    expect(agentExecutionTier('Plan')).toBe('balanced');
+  });
+
+  it('allows Balanced switches but blocks cross-tier changes after start', () => {
+    expect(canSwitchAgentExecutionTier({
+      sessionStarted: true,
+      currentAgentType: 'Plan',
+      nextAgentType: 'Multitask',
+    })).toBe(true);
+    expect(canSwitchAgentExecutionTier({
+      sessionStarted: true,
+      currentAgentType: 'minimal',
+      nextAgentType: 'agentic',
+    })).toBe(false);
+    expect(canSwitchAgentExecutionTier({
+      sessionStarted: false,
+      currentAgentType: 'minimal',
+      nextAgentType: 'Ultra',
+    })).toBe(true);
   });
 });
 

@@ -57,7 +57,6 @@ impl BitfunAcpRuntime {
                 chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
             ),
             agent_type: "agentic".to_string(),
-            execution_profile: None,
             workspace_path: Some(cwd.clone()),
             project_workspace_path: None,
             execution_target: None,

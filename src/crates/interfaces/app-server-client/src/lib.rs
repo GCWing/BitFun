@@ -525,14 +525,6 @@ impl AppServerClient {
             .await
     }
 
-    pub async fn update_session_harness_profile(
-        &self,
-        request: UpdateSessionHarnessProfileRequest,
-    ) -> Result<UpdateSessionHarnessProfileResponse, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
-    }
-
     pub async fn list_agent_modes(
         &self,
         request: ListAgentModesRequest,

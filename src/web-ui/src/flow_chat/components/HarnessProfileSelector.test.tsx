@@ -223,7 +223,7 @@ describe('HarnessProfileSelector', () => {
     expect(
       menu?.querySelector<HTMLElement>('[data-testid="harness-profile-ultimate"]')
         ?.dataset.bfState,
-    ).toBe('available');
+    ).toBe('new-session-only');
 
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
@@ -249,13 +249,12 @@ describe('HarnessProfileSelector', () => {
     );
   });
 
-  it('lets a started Session enter Ultra and return to its locked Harness', async () => {
+  it('locks a started Session to its current execution tier', async () => {
     const onSelectProfile = vi.fn();
     await act(async () => {
       root.render(
         <HarnessProfileSelector
           sessionStarted
-          lockedHarnessProfile="minimal"
           selectedProfile="minimal"
           onSelectProfile={onSelectProfile}
         />,
@@ -270,13 +269,12 @@ describe('HarnessProfileSelector', () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onSelectProfile).toHaveBeenCalledWith('ultimate');
+    expect(onSelectProfile).not.toHaveBeenCalled();
 
     await act(async () => {
       root.render(
         <HarnessProfileSelector
           sessionStarted
-          lockedHarnessProfile="minimal"
           selectedProfile="ultimate"
           onSelectProfile={onSelectProfile}
         />,
@@ -292,13 +290,13 @@ describe('HarnessProfileSelector', () => {
     const balanced = document.querySelector<HTMLButtonElement>(
       '[data-testid="harness-profile-balanced"]',
     );
-    expect(minimal?.dataset.bfState).toBe('available');
+    expect(minimal?.dataset.bfState).toBe('new-session-only');
     expect(balanced?.dataset.bfState).toBe('new-session-only');
 
     await act(async () => {
       minimal?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onSelectProfile).toHaveBeenLastCalledWith('minimal');
+    expect(onSelectProfile).not.toHaveBeenCalled();
   });
 
   it.each(['creative'] as const)(

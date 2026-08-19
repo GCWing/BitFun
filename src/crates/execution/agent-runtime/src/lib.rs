@@ -33,8 +33,6 @@ pub mod events;
 pub mod evidence_ledger;
 #[cfg(feature = "agent-runtime")]
 pub mod file_read_state;
-#[cfg(feature = "agent-runtime")]
-pub mod harness_profile;
 #[cfg(feature = "native-hook-settings")]
 pub mod native_hooks;
 #[cfg(feature = "agent-runtime")]

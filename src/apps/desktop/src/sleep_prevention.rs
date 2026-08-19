@@ -212,7 +212,10 @@ where
             error, rollback_error
         ));
     }
-    Err(format!("Failed to save prevent-sleep preference: {}", error))
+    Err(format!(
+        "Failed to save prevent-sleep preference: {}",
+        error
+    ))
 }
 
 /// Applies the saved preference at startup and after config imports/reloads.
@@ -412,7 +415,9 @@ mod tests {
 
     #[test]
     fn config_reload_re_reads_the_preference() {
-        assert!(config_event_requires_sync(&ConfigUpdateEvent::ConfigReloaded));
+        assert!(config_event_requires_sync(
+            &ConfigUpdateEvent::ConfigReloaded
+        ));
         assert!(config_event_requires_sync(&ConfigUpdateEvent::AppUpdated));
         assert!(!config_event_requires_sync(
             &ConfigUpdateEvent::ModelConfigurationUpdated

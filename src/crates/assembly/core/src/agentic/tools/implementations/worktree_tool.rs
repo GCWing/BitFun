@@ -511,7 +511,6 @@ The tool cannot remove or rebind the worktree in which it is running. Use Sessio
                     .create_session_with_id(
                         stable_session_id,
                         AgentSessionCreateRequest {
-                            execution_profile: None,
                             session_name: input
                                 .session_name
                                 .unwrap_or_else(|| "New Worktree Session".to_string()),

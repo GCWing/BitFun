@@ -103,7 +103,6 @@ export function isTauriCommandError(error: any): error is TauriCommandError {
 const SESSION_IN_USE_PREFIX = 'session_in_use:';
 const OUTCOME_UNKNOWN_PREFIX = 'outcome_unknown:';
 const NOT_AVAILABLE_PREFIX = 'not_available:';
-const HARNESS_PROFILE_LOCKED_PREFIX = 'harness_profile_locked:';
 const GIT_REPOSITORY_UNTRUSTED_PREFIX = 'git_repository_untrusted:';
 
 /** Returns the payload carried after a stable error prefix, if present. */
@@ -152,37 +151,6 @@ function hasStableErrorPrefix(error: unknown, prefix: string): boolean {
   return stableErrorPayload(error, prefix) !== undefined;
 }
 
-function hasStableErrorCode(error: unknown, code: string): boolean {
-  const pending: unknown[] = [error];
-  const seen = new Set<object>();
-
-  for (let inspected = 0; pending.length > 0 && inspected < 12; inspected += 1) {
-    const current = pending.shift();
-    if (typeof current === 'string') {
-      const normalized = current.trimStart();
-      if (normalized.startsWith(code) || normalized.includes(`: ${code}`)) return true;
-      continue;
-    }
-    if (!current || typeof current !== 'object' || seen.has(current)) continue;
-    seen.add(current);
-
-    const candidate = current as {
-      message?: unknown;
-      originalError?: unknown;
-      context?: { originalError?: unknown };
-      details?: { originalError?: unknown };
-    };
-    pending.push(
-      candidate.message,
-      candidate.originalError,
-      candidate.context?.originalError,
-      candidate.details?.originalError,
-    );
-  }
-
-  return false;
-}
-
 /** Recognizes the stable Desktop/Peer error code without parsing localized prose. */
 export function isSessionInUseError(error: unknown): boolean {
   return hasStableErrorPrefix(error, SESSION_IN_USE_PREFIX);
@@ -196,11 +164,6 @@ export function isOutcomeUnknownError(error: unknown): boolean {
 /** Identifies a capability or persisted selection unsupported by this Host. */
 export function isNotAvailableError(error: unknown): boolean {
   return hasStableErrorPrefix(error, NOT_AVAILABLE_PREFIX);
-}
-
-/** Identifies a Session whose Harness became immutable after its first Turn. */
-export function isHarnessProfileLockedError(error: unknown): boolean {
-  return hasStableErrorCode(error, HARNESS_PROFILE_LOCKED_PREFIX);
 }
 
 /**

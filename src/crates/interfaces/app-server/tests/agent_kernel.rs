@@ -259,7 +259,6 @@ impl AgentSessionRestorePort for SessionControlProvider {
                 session_id: "session-1".to_string(),
                 session_name: "Restored Session".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: Default::default(),
                 model_id: Some("provider/model".to_string()),
                 reasoning_preset: None,
                 last_user_dialog_agent_type: None,
@@ -380,7 +379,6 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for Phase2Provider {
                 session_id: request.session_id,
                 session_name: "Phase 2".to_string(),
                 agent_type: "agentic".to_string(),
-                execution_profile: Default::default(),
                 model_id: Some("provider/model".to_string()),
                 reasoning_preset: None,
                 last_user_dialog_agent_type: None,
@@ -1383,7 +1381,6 @@ async fn create_session_returns_provider_session_id() {
                         AgentSessionCreateRequest {
                             session_name: "direct create".to_string(),
                             agent_type: "agentic".to_string(),
-                            execution_profile: None,
                             workspace_path: None,
                             project_workspace_path: None,
                             execution_target: None,
@@ -1682,7 +1679,6 @@ async fn client_connect_keeps_connection_alive_after_return() {
                 .create_session(CreateSessionMessage(AgentSessionCreateRequest {
                     session_name: "post-connect session".to_string(),
                     agent_type: "agentic".to_string(),
-                    execution_profile: None,
                     workspace_path: None,
                     project_workspace_path: None,
                     execution_target: None,

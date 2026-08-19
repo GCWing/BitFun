@@ -201,13 +201,7 @@ mod tests {
 
     #[test]
     fn evidence_debugging_replaces_debug_mode_in_coding_workflows() {
-        for mode_id in [
-            "agentic",
-            "Plan",
-            "Multitask",
-            "coding_shared",
-            "Claw",
-        ] {
+        for mode_id in ["agentic", "Plan", "Multitask", "coding_shared", "Claw"] {
             assert_eq!(
                 resolve_builtin_default_enabled("evidence-debugging", mode_id),
                 Some(true),

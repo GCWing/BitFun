@@ -56,12 +56,6 @@ import {
 import { parseReloadCommand, supportsLocalReloadContext } from '../utils/reloadCommand';
 import { reviewPromptCommandShell } from '../utils/promptCommandShellReview';
 import { notificationService } from '@/shared/notification-system';
-import {
-  isHarnessProfileLockedError,
-  isNotAvailableError,
-  isOutcomeUnknownError,
-  isSessionInUseError,
-} from '@/infrastructure/api/errors/TauriCommandError';
 import { useI18n } from '@/infrastructure/i18n';
 import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -124,6 +118,7 @@ import {
   isChatInputActionVisibleForTarget,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
+  canSwitchAgentExecutionTier,
   resolveChatInputCanUseSkills,
   resolveChatInputSendAgentType,
   resolveChatInputModePolicy,
@@ -134,11 +129,9 @@ import {
 import {
   isUltraAgentType,
   resolveComposerExecutionLevelSelection,
-  resolveChatInputHarnessProfilePolicy,
-  resolvePendingHarnessProfileForCreation,
+  resolveChatInputExecutionLevelPolicy,
   resolveSelectedComposerExecutionLevel,
-  type HarnessBackedComposerExecutionLevel,
-} from '../utils/chatInputHarnessPolicy';
+} from '../utils/chatInputExecutionLevelPolicy';
 import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
@@ -162,7 +155,6 @@ import {
 } from './ChatInputWorkspaceStrip';
 import {
   HarnessProfileSelector,
-  type HarnessProfileId,
   type SelectableHarnessProfileId,
 } from './HarnessProfileSelector';
 import { ChatInputApprovalBand } from './ChatInputApprovalBand';
@@ -204,10 +196,7 @@ import {
   type ContextUsageDisplay,
 } from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import type {
-  SessionExecutionProfile,
-  SessionPermissionMode,
-} from '@/infrastructure/api/service-api/AgentAPI';
+import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { selectInterruptedTurnRecovery } from '../utils/interruptedTurnRecovery';
 import {
@@ -1068,8 +1057,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [effectiveTargetSession]
   );
   const isAcpTargetSession = Boolean(acpTargetAgentType);
-  const harnessProfilePolicy = useMemo(
-    () => resolveChatInputHarnessProfilePolicy({
+  const executionLevelPolicy = useMemo(
+    () => resolveChatInputExecutionLevelPolicy({
       isAssistantWorkspace,
       sessionMode: effectiveTargetSession?.mode ?? effectiveTargetSession?.config.agentType,
       isAcpTargetSession,
@@ -1109,36 +1098,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [activeSessionMode, currentMode, isAcpTargetSession, isAssistantWorkspace],
   );
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
-  const [isHarnessProfileChangePending, setHarnessProfileChangePending] = useState(false);
-  const [pendingNewSessionHarnessProfile, setPendingNewSessionHarnessProfile] =
-    useState<HarnessBackedComposerExecutionLevel | null>(null);
-  const effectivePendingNewSessionHarnessProfile = resolvePendingHarnessProfileForCreation(
-    harnessProfilePolicy,
-    pendingNewSessionHarnessProfile,
-  );
-  const selectedHarnessProfile: HarnessProfileId = resolveSelectedComposerExecutionLevel({
+  const selectedHarnessProfile = resolveSelectedComposerExecutionLevel({
     currentMode,
-    harnessProfileId:
-      effectiveTargetSession?.config.executionProfile?.harnessProfileId
-      ?? effectivePendingNewSessionHarnessProfile,
   });
   const isInternalUltraMode = isUltraAgentType(currentMode);
-  const pendingNewSessionExecutionProfile = useMemo<SessionExecutionProfile | undefined>(
-    () => effectivePendingNewSessionHarnessProfile
-      ? {
-          harnessProfileId: effectivePendingNewSessionHarnessProfile,
-          schemaVersion: 1,
-          selectedBy: 'user',
-        }
-      : undefined,
-    [effectivePendingNewSessionHarnessProfile],
-  );
-
-  useEffect(() => {
-    if (effectiveTargetSessionId) {
-      setPendingNewSessionHarnessProfile(null);
-    }
-  }, [effectiveTargetSessionId]);
 
   // Session-level mode policy: fixed collaboration modes are not selectable boosts.
   const switchableModes = useMemo(
@@ -1813,7 +1776,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const { sendMessage } = useMessageSender({
     currentSessionId: effectiveTargetSessionId || undefined,
-    newSessionExecutionProfile: pendingNewSessionExecutionProfile,
     contexts,
     onClearContexts: clearContexts,
     onSuccess: onSendMessage,
@@ -2503,7 +2465,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSessionHasTurns = effectiveTargetSession
     ? !isProjectedSessionEmpty(effectiveTargetSession)
     : false;
-  // Once the runtime accepts the first submission, Harness remains fixed even
+  // Once the runtime accepts the first submission, the execution level remains fixed even
   // if the user later rolls back all surviving Turns.
   const harnessProfileLocked = effectiveTargetSessionHasTurns
     || Boolean(effectiveTargetSession?.lastSubmittedMode?.trim());
@@ -4335,71 +4297,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
 
   const requestHarnessProfileChange = useCallback(async (profileId: SelectableHarnessProfileId) => {
-    if (!harnessProfilePolicy.userConfigurable) return;
-    if (isHarnessProfileChangePending) return;
-    const storedHarnessProfile =
-      effectiveTargetSession?.config.executionProfile?.harnessProfileId ?? 'balanced';
-    const canSwitchLockedSessionMode = profileId === 'ultimate'
-      || (isUltraAgentType(currentMode) && profileId === storedHarnessProfile);
-    if (harnessProfileLocked && !canSwitchLockedSessionMode) {
+    if (!executionLevelPolicy.userConfigurable) return;
+    const selection = resolveComposerExecutionLevelSelection(profileId, currentMode);
+    if (!canSwitchAgentExecutionTier({
+      sessionStarted: harnessProfileLocked,
+      currentAgentType: currentMode,
+      nextAgentType: selection.modeId,
+    })) {
       notificationService.info(t('chatInput.harness.sessionStartedNotice'));
       return;
     }
-    const selection = resolveComposerExecutionLevelSelection(profileId, currentMode);
-    if (!sessionModeSelectionTarget) {
-      if (!effectiveTargetSessionId) {
-        setPendingNewSessionHarnessProfile(selection.harnessProfileId);
-        if (selection.modeId) {
-          requestSessionModeChange(selection.modeId);
-        }
-        return;
-      }
+    if (effectiveTargetSessionId && !sessionModeSelectionTarget) {
       notificationService.error(t('chatInput.harness.legacySessionNotice'));
       return;
     }
-    setHarnessProfileChangePending(true);
-    try {
-      // Ultra is a real Agent mode, not a Harness Profile. Preserve the
-      // Session's Harness choice so leaving Ultra can restore it unchanged.
-      if (
-        selection.harnessProfileId
-        && selection.harnessProfileId !== storedHarnessProfile
-      ) {
-        await agentAPI.updateSessionHarnessProfile({
-          ...sessionModeSelectionTarget,
-          harnessProfileId: selection.harnessProfileId,
-        });
-        FlowChatStore.getInstance().updateSessionHarnessProfile(
-          sessionModeSelectionTarget.sessionId,
-          { harnessProfileId: selection.harnessProfileId, schemaVersion: 1, selectedBy: 'user' },
-        );
-      }
-      if (selection.modeId) {
-        requestSessionModeChange(selection.modeId);
-      }
-    } catch (error) {
-      log.error('Failed to update Session Harness Profile', { error, profileId });
-      if (isHarnessProfileLockedError(error)) {
-        notificationService.info(t('chatInput.harness.sessionStartedNotice'));
-      } else if (isSessionInUseError(error)) {
-        notificationService.info(t('chatInput.harness.profileChangeBusy'));
-      } else if (isOutcomeUnknownError(error)) {
-        notificationService.error(t('chatInput.harness.profileChangeOutcomeUnknown'));
-      } else if (isNotAvailableError(error)) {
-        notificationService.error(t('chatInput.harness.profileUnavailable'));
-      } else {
-        notificationService.error(t('chatInput.harness.profileChangeFailed'));
-      }
-    } finally {
-      setHarnessProfileChangePending(false);
-    }
+    requestSessionModeChange(selection.modeId);
   }, [
     currentMode,
-    effectiveTargetSession,
     effectiveTargetSessionId,
     harnessProfileLocked,
-    harnessProfilePolicy.userConfigurable,
-    isHarnessProfileChangePending,
+    executionLevelPolicy.userConfigurable,
     requestSessionModeChange,
     sessionModeSelectionTarget,
     t,
@@ -4484,7 +4401,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     // Block sending while model switch IPC is in-flight — the backend session may
     // not yet reflect the newly selected model.
-    if (isModelSwitching || isModeChangePending || isHarnessProfileChangePending) return;
+    if (isModelSwitching || isModeChangePending) return;
     
     if (sendButtonMode === 'retry') {
       await transition(SessionExecutionEvent.RESET);
@@ -4681,7 +4598,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     isModelSwitching,
     isModeChangePending,
-    isHarnessProfileChangePending,
     caps.transferInFlight,
     isInterruptedTurnRecoveryInFlight,
     inputState.value,
@@ -4751,15 +4667,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    if (!canSwitchAgentExecutionTier({
+      sessionStarted: harnessProfileLocked,
+      currentAgentType: currentMode,
+      nextAgentType: modeId,
+    })) {
+      notificationService.info(t('chatInput.harness.sessionStartedNotice'));
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
+
     requestSessionModeChange(modeId);
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
   }, [
     canSwitchModes,
     currentMode,
     effectiveTargetSessionId,
+    harnessProfileLocked,
     isInterruptedTurnRecoveryInFlight,
     requestSessionModeChange,
     switchableModes,
+    t,
   ]);
 
   publishModeSelectionRef.current = publishModeSelection;
@@ -5091,17 +5019,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ? FlowChatStore.getInstance().getState().sessions.get(currentSessionId)?.mode
           : undefined;
         const sessionConfig = flowChatSessionConfigForCurrentWorkspace(workspace);
-        await FlowChatManager.getInstance().createChatSession(
-          pendingNewSessionExecutionProfile
-            ? { ...sessionConfig, executionProfile: pendingNewSessionExecutionProfile }
-            : sessionConfig,
-          sessionMode,
-        );
+        await FlowChatManager.getInstance().createChatSession(sessionConfig, sessionMode);
       } catch (error) {
         log.error('Failed to create new session from boost menu', { error });
       }
     },
-    [currentSessionId, pendingNewSessionExecutionProfile, workspace]
+    [currentSessionId, workspace]
   );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -5594,11 +5517,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (sendButtonMode === 'retry') {
       return (
-        <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="retry" data-bf-state={isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight ? 'disabled' : undefined}>
+        <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="retry" data-bf-state={isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
           <IconButton
             className="bitfun-chat-input__send-button bitfun-chat-input__send-button--retry"
             onClick={() => void handleSendOrCancel()}
-            disabled={isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight}
+            disabled={isModelSwitching || isModeChangePending || caps.transferInFlight}
             tooltip={t('input.retry')}
             size="small"
           >
@@ -5624,11 +5547,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </div>
             </Tooltip>
           </span>
-          <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight ? 'disabled' : undefined}>
+          <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
             <IconButton
               className="bitfun-chat-input__send-button"
               onClick={() => void handleSendOrCancel()}
-              disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight}
+              disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
               data-testid="chat-input-send-btn"
               tooltip={t('input.sendShortcut')}
               size="small"
@@ -5641,11 +5564,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     
     return (
-      <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight ? 'disabled' : undefined}>
+      <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
         <IconButton
           className="bitfun-chat-input__send-button"
           onClick={() => void handleSendOrCancel()}
-          disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight}
+          disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
           data-testid="chat-input-send-btn"
           tooltip={t('input.sendShortcut')}
           size="small"
@@ -6547,17 +6470,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     getAppearanceOverlayHost(),
                   )}
                 </div>
-                {/* Keep the add entry first, then Session Harness, then the
+                {/* Keep the add entry first, then execution level, then the
                     selected Agent/Mode. Semantic DOM and focus order match. */}
-                {harnessProfilePolicy.userConfigurable ? (
+                {executionLevelPolicy.userConfigurable ? (
                   <HarnessProfileSelector
                     legacySession={!canSwitchModes}
                     sessionStarted={harnessProfileLocked}
-                    lockedHarnessProfile={
-                      effectiveTargetSession?.config.executionProfile?.harnessProfileId
-                    }
                     selectedProfile={selectedHarnessProfile}
-                    disabled={isHarnessProfileChangePending || isModeChangePending}
+                    disabled={isModeChangePending}
                     onSelectProfile={requestHarnessProfileChange}
                   />
                 ) : null}

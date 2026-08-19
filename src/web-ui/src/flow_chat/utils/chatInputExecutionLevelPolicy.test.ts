@@ -1,47 +1,47 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveComposerExecutionLevelSelection,
-  resolveChatInputHarnessProfilePolicy,
-  resolvePendingHarnessProfileForCreation,
+  resolveChatInputExecutionLevelPolicy,
   resolveSelectedComposerExecutionLevel,
-} from './chatInputHarnessPolicy';
+} from './chatInputExecutionLevelPolicy';
 
-describe('chatInputHarnessPolicy', () => {
-  it('maps Ultimate directly to Ultra without an Ultimate Harness Profile', () => {
+describe('chatInputExecutionLevelPolicy', () => {
+  it('maps presentation levels directly to Agent types', () => {
     expect(resolveComposerExecutionLevelSelection('ultimate', 'agentic')).toEqual({
       modeId: 'Ultra',
-      harnessProfileId: null,
+    });
+    expect(resolveComposerExecutionLevelSelection('minimal', 'agentic')).toEqual({
+      modeId: 'minimal',
     });
     expect(resolveSelectedComposerExecutionLevel({
       currentMode: ' Ultra ',
-      harnessProfileId: 'minimal',
     })).toBe('ultimate');
   });
 
-  it('returns from Ultra to agentic before applying a Harness Profile', () => {
+  it('maps Balanced to agentic only when leaving a tier Agent', () => {
     expect(resolveComposerExecutionLevelSelection('minimal', 'Ultra')).toEqual({
-      modeId: 'agentic',
-      harnessProfileId: 'minimal',
+      modeId: 'minimal',
     });
     expect(resolveComposerExecutionLevelSelection('balanced', 'Plan')).toEqual({
-      modeId: null,
-      harnessProfileId: 'balanced',
+      modeId: 'Plan',
+    });
+    expect(resolveComposerExecutionLevelSelection('balanced', 'minimal')).toEqual({
+      modeId: 'agentic',
     });
   });
 
-  it('lets a root project composer configure the Harness Profile', () => {
-    const policy = resolveChatInputHarnessProfilePolicy({
+  it('lets a root project composer configure its execution level', () => {
+    const policy = resolveChatInputExecutionLevelPolicy({
       isAssistantWorkspace: false,
       isAcpTargetSession: false,
       isSubagentInputTarget: false,
     });
 
     expect(policy).toEqual({ owner: 'composer', userConfigurable: true });
-    expect(resolvePendingHarnessProfileForCreation(policy, 'minimal')).toBe('minimal');
   });
 
-  it('keeps Assistant Harness selection with the runtime default', () => {
-    const policy = resolveChatInputHarnessProfilePolicy({
+  it('keeps Assistant execution level selection with the runtime default', () => {
+    const policy = resolveChatInputExecutionLevelPolicy({
       isAssistantWorkspace: true,
       isAcpTargetSession: false,
       isSubagentInputTarget: false,
@@ -51,11 +51,10 @@ describe('chatInputHarnessPolicy', () => {
       owner: 'assistant-runtime-default',
       userConfigurable: false,
     });
-    expect(resolvePendingHarnessProfileForCreation(policy, 'minimal')).toBeNull();
   });
 
-  it('hides Harness configuration for a Claw Assistant session when workspace state is stale', () => {
-    const policy = resolveChatInputHarnessProfilePolicy({
+  it('hides execution-level configuration for a Claw Assistant session when workspace state is stale', () => {
+    const policy = resolveChatInputExecutionLevelPolicy({
       isAssistantWorkspace: false,
       sessionMode: ' claw ',
       isAcpTargetSession: false,
@@ -66,7 +65,6 @@ describe('chatInputHarnessPolicy', () => {
       owner: 'assistant-runtime-default',
       userConfigurable: false,
     });
-    expect(resolvePendingHarnessProfileForCreation(policy, 'balanced')).toBeNull();
   });
 
   it.each([
@@ -88,15 +86,14 @@ describe('chatInputHarnessPolicy', () => {
       },
       owner: 'parent-session',
     },
-  ] as const)('does not submit a composer Harness selection for $label', ({ params, owner }) => {
-    const policy = resolveChatInputHarnessProfilePolicy(params);
+  ] as const)('does not submit a composer execution-level selection for $label', ({ params, owner }) => {
+    const policy = resolveChatInputExecutionLevelPolicy(params);
 
     expect(policy).toEqual({ owner, userConfigurable: false });
-    expect(resolvePendingHarnessProfileForCreation(policy, 'balanced')).toBeNull();
   });
 
   it('lets the external ACP owner win when target facts overlap', () => {
-    const policy = resolveChatInputHarnessProfilePolicy({
+    const policy = resolveChatInputExecutionLevelPolicy({
       isAssistantWorkspace: true,
       isAcpTargetSession: true,
       isSubagentInputTarget: true,

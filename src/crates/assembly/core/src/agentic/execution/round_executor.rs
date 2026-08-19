@@ -1718,7 +1718,6 @@ mod tests {
                 "model-1", "model-1", "openai", true,
             ),
             agent_type: "agentic".to_string(),
-            execution_profile: Default::default(),
             context_vars: HashMap::new(),
             permission_constraints: Default::default(),
             permission_runtime_ceiling: None,
