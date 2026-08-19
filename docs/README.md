@@ -12,9 +12,13 @@
 | `specs/` | 写或查需求规格与设计（what & why） | [`specs/README.md`](specs/README.md) |
 | `plans/` | 写或查实施计划与收尾记录（how & when） | [`plans/README.md`](plans/README.md) |
 
-与代码需求开发无关的内容（用户指南、性能报告、外部调研）已迁至独立文档仓
-[`bitfun_doc`](https://gitcode.com/BitFun-Platform/bitfun_doc)：
-发布签名验证、远程连接指南、性能报告、智能体工程治理外部调研。
+与代码需求开发无关的内容（性能报告、外部调研等）已迁至独立文档仓
+[`bitfun_doc`](https://gitcode.com/BitFun-Platform/bitfun_doc)。
+以下产品相关指南保留在本仓 `guideline/`：
+飞书远程连接 [`feishu-bot-setup.zh-CN.md`](guideline/feishu-bot-setup.zh-CN.md)
+（[English](guideline/feishu-bot-setup.md)）、
+发布签名校验 [`verify-downloads.zh-CN.md`](guideline/verify-downloads.zh-CN.md)
+（[English](guideline/verify-downloads.md)）。
 
 不要在 `docs/` 根新增专题文章。临时调研、评审提示和个人草稿使用未跟踪的
 `*.local.md`；稳定内容按上表归入唯一 owner，不在多个目录复制。

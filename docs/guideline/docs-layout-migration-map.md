@@ -33,8 +33,9 @@ OpenBitFun commit `ac9b9ff8c` (four buckets + merge sdlc-harness + externalize n
 
 | Old path | External |
 |---|---|
-| `docs/verify-downloads*.md` | `bitfun_doc` / 开发指南/发布签名验证/ |
+| `docs/verify-downloads*.md` | **returned to code repo** as `docs/guideline/verify-downloads*.md` (linked from root README) |
 | `docs/performance/*` | `bitfun_doc` / 技术调研/性能/ |
-| `docs/remote-connect/*` | `bitfun_doc` / 开发指南/远程连接/ |
+| `docs/remote-connect/feishu-bot-setup*.md` | **returned to code repo** as `docs/guideline/feishu-bot-setup*.md` (product link in `RemoteConnectDialog.tsx`) |
+| other `docs/remote-connect/*` (if any) | historically mirrored under `bitfun_doc` / 开发指南/远程连接/ |
 
-Product links updated: root README verify URL; `RemoteConnectDialog.tsx` Feishu setup URLs.
+Product links: root README verify → `docs/guideline/verify-downloads*.md`; Feishu setup → `docs/guideline/feishu-bot-setup*.md`.

@@ -51,11 +51,15 @@ workflow policy. Ephemeral prompts, research scratch, review drafts, and
 personal notes are not repository documentation: keep them untracked and use a
 `.local.md` suffix when a local filename helps.
 
-User guides (e.g. release signature verification, remote-connect setup),
-performance reports, and external research now live in the separate
+Performance reports, external research, and other user guides that are not
+tied to in-repo product links live in the separate
 [`bitfun_doc`](https://gitcode.com/BitFun-Platform/bitfun_doc) repository.
-Product-facing links (e.g. `RemoteConnectDialog.tsx`, root `README.md`) point
-at `bitfun_doc` public URLs.
+Feishu remote-connect setup and release signature verification stay in this
+code repo under [`docs/guideline/feishu-bot-setup.md`](feishu-bot-setup.md)
+([中文](feishu-bot-setup.zh-CN.md)) and
+[`docs/guideline/verify-downloads.md`](verify-downloads.md)
+([中文](verify-downloads.zh-CN.md)). `RemoteConnectDialog.tsx` and root
+`README.md` link to those in-repo paths.
 
 ## Target `docs/` layout
 

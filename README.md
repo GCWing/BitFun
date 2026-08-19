@@ -8,7 +8,7 @@
 
 Writes code, produces documents, and drives the desktop — with Mini Apps, a Rust runtime, and a self-hostable device-sync server.
 
-[**⬇ Download for macOS · Windows · Linux**](https://github.com/GCWing/BitFun/releases/latest) · [Verify downloads](https://gitcode.com/BitFun-Platform/bitfun_doc/blob/main/开发指南/发布签名验证/verify-downloads.md)
+[**⬇ Download for macOS · Windows · Linux**](https://github.com/GCWing/BitFun/releases/latest) · [Verify downloads](./docs/guideline/verify-downloads.md)
 
 [Website](https://openbitfun.com/) · [Quick start](#first-run) · [Security](./SECURITY.md) · [Discussions](https://github.com/GCWing/BitFun/discussions) · [Contributing](./CONTRIBUTING.md)
 

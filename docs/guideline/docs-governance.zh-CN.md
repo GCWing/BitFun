@@ -39,9 +39,13 @@
 把随 PR 演进的进行中 Spec 与实施计划纳入版本控制，是当前有意采用的流程政策。临时提示词、调研草稿、
 评审草稿和个人笔记不属于仓库文档，必须保持未跟踪；本地需要文件名时使用 `.local.md` 后缀。
 
-用户指南（如发布签名验证、远程连接配置）、性能报告和外部调研已迁至独立文档仓
-[`bitfun_doc`](https://gitcode.com/BitFun-Platform/bitfun_doc)。产品外链（如 `RemoteConnectDialog.tsx`、
-根 `README.md`）指向 `bitfun_doc` 公开 URL。
+性能报告和外部调研等与代码仓产品外链弱绑定的内容已迁至独立文档仓
+[`bitfun_doc`](https://gitcode.com/BitFun-Platform/bitfun_doc)。
+飞书远程连接配置与发布签名校验保留在本仓
+[`docs/guideline/feishu-bot-setup.zh-CN.md`](feishu-bot-setup.zh-CN.md)
+（[English](feishu-bot-setup.md)）与
+[`docs/guideline/verify-downloads.zh-CN.md`](verify-downloads.zh-CN.md)
+（[English](verify-downloads.md)），分别由 `RemoteConnectDialog.tsx` 与根 `README.md` 引用。
 
 ## 本仓 `docs/` 结构
 
