@@ -17,6 +17,7 @@ export class AdaptiveLayoutInput {
   readonly wideLayoutMatched: boolean;
   readonly verticalCreases: ConversationLayoutCrease[];
   readonly horizontalCreases: ConversationLayoutHorizontalCrease[];
+  readonly isRtl: boolean;
 
   constructor(
     viewportWidth: number,
@@ -27,7 +28,8 @@ export class AdaptiveLayoutInput {
     isHoverOperate: boolean,
     wideLayoutMatched: boolean,
     verticalCreases: ConversationLayoutCrease[],
-    horizontalCreases: ConversationLayoutHorizontalCrease[]
+    horizontalCreases: ConversationLayoutHorizontalCrease[],
+    isRtl: boolean = false
   ) {
     this.viewportWidth = viewportWidth;
     this.viewportHeight = viewportHeight;
@@ -38,9 +40,10 @@ export class AdaptiveLayoutInput {
     this.wideLayoutMatched = wideLayoutMatched;
     this.verticalCreases = verticalCreases;
     this.horizontalCreases = horizontalCreases;
+    this.isRtl = isRtl;
   }
 
   static empty(): AdaptiveLayoutInput {
-    return new AdaptiveLayoutInput(0, 0, 0, false, false, false, false, [], []);
+    return new AdaptiveLayoutInput(0, 0, 0, false, false, false, false, [], [], false);
   }
 }

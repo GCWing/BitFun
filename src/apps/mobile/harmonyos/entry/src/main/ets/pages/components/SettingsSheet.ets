@@ -86,7 +86,7 @@ export struct SettingsSheet {
 
           this.AccountEntry()
 
-          this.SectionTitle(RemoteI18n.t('settings.modelService.section'))
+          this.SectionTitle(RemoteI18n.t('settings.general.section'))
           this.GeneralCard()
 
           this.SectionTitle(RemoteI18n.t('settings.about.section'))

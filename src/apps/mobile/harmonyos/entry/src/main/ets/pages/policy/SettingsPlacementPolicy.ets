@@ -58,41 +58,42 @@ export class SettingsPlacementPolicy {
 
   static resolve(input: AdaptiveLayoutInput, kind: SettingsSheetKind): SettingsPlacement {
     if (input.isHoverOperate) {
-      return SettingsPlacementPolicy.foldOperatePlacement(input, kind);
+      return SettingsPlacementPolicy.hoverPlacement(input, kind);
     }
     if (input.isFolded) {
       return SettingsPlacementPolicy.bottomPlacement(kind);
     }
-    const usableCreases = SettingsPlacementPolicy.usableVerticalCreases(
-      input.viewportWidth,
-      input.verticalCreases
-    );
-    if (usableCreases.length > 0) {
-      return SettingsPlacementPolicy.creaseSidePlacement(input, kind, usableCreases);
+    return SettingsPlacementPolicy.creaseFreeOrSidePlacement(input, kind);
+  }
+
+  /**
+   * ArkUI SheetType.SIDE docks to the trailing edge: right in LTR, left in RTL.
+   * There is no left/right switch on SheetOptions.
+   */
+  static sheetLeft(
+    placement: SettingsPlacement,
+    viewportWidth: number,
+    isRtl: boolean = false
+  ): number {
+    if (placement.mode !== SettingsPlacementMode.Side || placement.width <= 0 || viewportWidth <= 0) {
+      return 0;
     }
-    if (input.verticalCreases.length > 0) {
-      return SettingsPlacementPolicy.tabletSidePlacement(input, kind);
-    }
-    if (SettingsPlacementPolicy.isHeightScarceLandscape(input)) {
-      return SettingsPlacementPolicy.landscapeSidePlacement(input, kind);
-    }
-    if (SettingsPlacementPolicy.isWideViewport(input)) {
-      return SettingsPlacementPolicy.tabletSidePlacement(input, kind);
-    }
-    return SettingsPlacementPolicy.bottomPlacement(kind);
+    return isRtl ? 0 : Math.max(0, viewportWidth - placement.width);
   }
 
   static sheetIntersectsVerticalCrease(
     placement: SettingsPlacement,
     crease: ConversationLayoutCrease,
-    viewportWidth: number
+    viewportWidth: number,
+    isRtl: boolean = false
   ): boolean {
     if (placement.mode !== SettingsPlacementMode.Side || placement.width <= 0 || viewportWidth <= 0) {
       return false;
     }
-    const sheetLeft = viewportWidth - placement.width;
+    const sheetLeft = SettingsPlacementPolicy.sheetLeft(placement, viewportWidth, isRtl);
+    const sheetRight = sheetLeft + placement.width;
     const creaseRight = crease.left + crease.width;
-    return sheetLeft < creaseRight && viewportWidth > crease.left;
+    return sheetLeft < creaseRight && sheetRight > crease.left;
   }
 
   private static creaseSidePlacement(
@@ -100,8 +101,11 @@ export class SettingsPlacementPolicy {
     kind: SettingsSheetKind,
     usableCreases: ConversationLayoutCrease[]
   ): SettingsPlacement {
-    const crease = usableCreases[usableCreases.length - 1];
-    const width = Math.max(0, input.viewportWidth - crease.left - crease.width);
+    const crease = input.isRtl ?
+      usableCreases[0] : usableCreases[usableCreases.length - 1];
+    const width = input.isRtl ?
+      Math.max(0, crease.left) :
+      Math.max(0, input.viewportWidth - crease.left - crease.width);
     const height = SettingsPlacementPolicy.kindSideHeight(input.viewportHeight, kind);
     return new SettingsPlacement(SettingsPlacementMode.Side, width, height, 0);
   }
@@ -111,10 +115,11 @@ export class SettingsPlacementPolicy {
     kind: SettingsSheetKind
   ): SettingsPlacement {
     const ratioWidth = Math.round(input.viewportWidth * SettingsPlacementPolicy.TABLET_WIDTH_RATIO);
-    const width = Math.min(
+    const clamped = Math.min(
       SettingsPlacementPolicy.TABLET_MAX_WIDTH,
       Math.max(SettingsPlacementPolicy.TABLET_MIN_WIDTH, ratioWidth)
     );
+    const width = Math.min(input.viewportWidth, clamped);
     const height = SettingsPlacementPolicy.kindSideHeight(input.viewportHeight, kind);
     return new SettingsPlacement(SettingsPlacementMode.Side, width, height, 0);
   }
@@ -128,11 +133,48 @@ export class SettingsPlacementPolicy {
     return new SettingsPlacement(SettingsPlacementMode.Side, width, height, 0);
   }
 
-  private static foldOperatePlacement(
+  private static hoverPlacement(
     input: AdaptiveLayoutInput,
     kind: SettingsSheetKind
   ): SettingsPlacement {
-    const maxHeight = SettingsPlacementPolicy.operateMaxHeight(input);
+    const horizontal = SettingsPlacementPolicy.firstUsableHorizontalCrease(
+      input.viewportHeight,
+      input.horizontalCreases
+    );
+    if (horizontal) {
+      return SettingsPlacementPolicy.foldOperatePlacement(input, kind, horizontal);
+    }
+    return SettingsPlacementPolicy.creaseFreeOrSidePlacement(input, kind);
+  }
+
+  private static creaseFreeOrSidePlacement(
+    input: AdaptiveLayoutInput,
+    kind: SettingsSheetKind
+  ): SettingsPlacement {
+    const usableCreases = SettingsPlacementPolicy.usableVerticalCreases(
+      input.viewportWidth,
+      input.verticalCreases
+    );
+    if (usableCreases.length > 0 && SettingsPlacementPolicy.canUseSideSheet(input)) {
+      return SettingsPlacementPolicy.creaseSidePlacement(input, kind, usableCreases);
+    }
+    if (SettingsPlacementPolicy.isHeightScarceLandscape(input) &&
+      SettingsPlacementPolicy.canUseSideSheet(input)) {
+      return SettingsPlacementPolicy.landscapeSidePlacement(input, kind);
+    }
+    if (SettingsPlacementPolicy.isWideViewport(input) &&
+      SettingsPlacementPolicy.canUseSideSheet(input)) {
+      return SettingsPlacementPolicy.tabletSidePlacement(input, kind);
+    }
+    return SettingsPlacementPolicy.bottomPlacement(kind);
+  }
+
+  private static foldOperatePlacement(
+    input: AdaptiveLayoutInput,
+    kind: SettingsSheetKind,
+    crease: ConversationLayoutHorizontalCrease
+  ): SettingsPlacement {
+    const maxHeight = Math.max(0, input.viewportHeight - crease.top - crease.height);
     const height = SettingsPlacementPolicy.kindOperateHeight(maxHeight, kind);
     return new SettingsPlacement(SettingsPlacementMode.FoldOperate, 0, height, maxHeight);
   }
@@ -177,15 +219,8 @@ export class SettingsPlacementPolicy {
     );
   }
 
-  private static operateMaxHeight(input: AdaptiveLayoutInput): number {
-    const crease = SettingsPlacementPolicy.firstUsableHorizontalCrease(
-      input.viewportHeight,
-      input.horizontalCreases
-    );
-    if (crease) {
-      return Math.max(0, input.viewportHeight - crease.top - crease.height);
-    }
-    return Math.max(0, Math.floor(input.viewportHeight / 2));
+  private static canUseSideSheet(input: AdaptiveLayoutInput): boolean {
+    return input.viewportWidth >= ConversationLayoutPolicy.MD_MIN_WIDTH;
   }
 
   private static isWideViewport(input: AdaptiveLayoutInput): boolean {

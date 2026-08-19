@@ -58,9 +58,8 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['generalChat.emptyResponse', 'The model returned no text.'],
   ['generalChat.requestFailed', 'Model request failed (HTTP {0}).'],
 
-  ['settings.modelService.section', 'General'],
+  ['settings.general.section', 'General'],
   ['settings.title', 'Settings'],
-  ['settings.language.section', 'Language'],
   ['settings.language.title', 'Language'],
   ['settings.language.choose', 'Choose language'],
   ['settings.language.zhCN', '简体中文'],
