@@ -17,6 +17,7 @@ export const config = createEmbeddedConfig(
     '../specs/l1-dialog.spec.ts',
     '../specs/l1-chat.spec.ts',
     '../specs/l1-chat-scroll-whitespace.spec.ts',
+    '../specs/l1-local-rollback-path-collision.spec.ts',
   ],
   'L1'
 );
