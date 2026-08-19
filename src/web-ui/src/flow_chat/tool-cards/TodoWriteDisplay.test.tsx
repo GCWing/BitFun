@@ -32,7 +32,10 @@ const config: ToolCardConfig = {
   displayMode: 'standard',
 };
 
-function createTodoWriteItem(status: 'pending' | 'in_progress'): FlowToolItem {
+function createTodoWriteItem(
+  status: 'pending' | 'in_progress',
+  todos = [{ id: 'todo-a', content: 'Implement change', status }],
+): FlowToolItem {
   return {
     id: 'todo-tool-a',
     type: 'tool',
@@ -41,7 +44,7 @@ function createTodoWriteItem(status: 'pending' | 'in_progress'): FlowToolItem {
     status: 'streaming',
     isParamsStreaming: true,
     partialParams: {
-      todos: [{ id: 'todo-a', content: 'Implement change', status }],
+      todos,
     },
     toolCall: {
       id: 'todo-tool-a',
@@ -127,5 +130,22 @@ describe('TodoWriteDisplay expansion', () => {
       vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS);
     });
     expect(container.querySelector('.todo-expanded-body')).toBeNull();
+  });
+
+  it('shows the first task when all tasks are pending', () => {
+    act(() => {
+      root.render(
+        <TodoWriteDisplay
+          toolItem={createTodoWriteItem('pending', [
+            { id: 'todo-a', content: 'First task', status: 'pending' },
+            { id: 'todo-b', content: 'Second task', status: 'pending' },
+          ])}
+          config={config}
+        />,
+      );
+    });
+
+    expect(container.querySelector('.todo-header-current')?.textContent).toBe('First task');
+    expect(container.querySelector('.todo-header-more')).toBeNull();
   });
 });

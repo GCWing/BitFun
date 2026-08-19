@@ -79,8 +79,14 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
 
   const currentDisplayTask = useMemo(() => {
     if (inProgressTasks.length > 0) return inProgressTasks[0];
+    if (
+      todosToDisplay.length > 0 &&
+      todosToDisplay.every((todo) => todo.status === 'pending')
+    ) {
+      return todosToDisplay[0];
+    }
     return null;
-  }, [inProgressTasks]);
+  }, [inProgressTasks, todosToDisplay]);
 
   const handleToggleExpanded = useCallback(() => {
     if (todosToDisplay.length === 0) return;
