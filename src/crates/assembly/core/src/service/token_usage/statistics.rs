@@ -280,7 +280,6 @@ mod tests {
             output_tokens: 50,
             cached_tokens: 0,
             cached_tokens_available: false,
-            cache_write_tokens: 0,
             total_tokens: 150,
             token_details: None,
             is_subagent: false,

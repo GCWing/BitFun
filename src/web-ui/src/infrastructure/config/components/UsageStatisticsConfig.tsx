@@ -33,7 +33,6 @@ import './UsageStatisticsConfig.scss';
 const SERIES_COLORS = {
   input: 'var(--bf-appearance-token-color-accent-500)',
   output: 'var(--bf-appearance-token-color-success)',
-  cacheCreation: 'var(--bf-appearance-token-color-warning)',
   cacheRead: 'var(--bf-appearance-token-color-cyan-500)',
   cacheHitRate: 'var(--bf-appearance-token-color-purple-500)',
 } as const;
@@ -366,13 +365,12 @@ interface TrendChartProps {
 }
 
 const TREND_SERIES: {
-  key: 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens';
+  key: 'inputTokens' | 'outputTokens' | 'cacheReadTokens';
   color: string;
   legendKey: string;
 }[] = [
   { key: 'inputTokens', color: SERIES_COLORS.input, legendKey: 'trend.legend.input' },
   { key: 'outputTokens', color: SERIES_COLORS.output, legendKey: 'trend.legend.output' },
-  { key: 'cacheWriteTokens', color: SERIES_COLORS.cacheCreation, legendKey: 'trend.legend.cacheCreation' },
   { key: 'cacheReadTokens', color: SERIES_COLORS.cacheRead, legendKey: 'trend.legend.cacheRead' },
 ];
 
@@ -404,7 +402,6 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
       point.inputTokens,
       point.outputTokens,
       point.cacheReadTokens,
-      point.cacheWriteTokens,
     ), 0),
   );
   const yTicks = 4;
@@ -548,7 +545,6 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
               {[
                 { label: t('trend.legend.input'), value: hovered.inputTokens, color: SERIES_COLORS.input },
                 { label: t('trend.legend.output'), value: hovered.outputTokens, color: SERIES_COLORS.output },
-                { label: t('trend.legend.cacheCreation'), value: hovered.cacheWriteTokens, color: SERIES_COLORS.cacheCreation },
                 { label: t('trend.legend.cacheRead'), value: hovered.cacheReadTokens, color: SERIES_COLORS.cacheRead },
                 {
                   label: t('trend.legend.cacheHitRate'),
