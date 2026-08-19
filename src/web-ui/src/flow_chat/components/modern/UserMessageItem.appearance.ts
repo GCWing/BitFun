@@ -5,7 +5,7 @@ export const userMessageItemAppearanceDescriptor: AppearanceSurfaceDescriptor = 
   parts: [
     { id: 'root' }, { id: 'timestamp' }, { id: 'main' }, { id: 'content' },
     { id: 'steeringTag' }, { id: 'actions' }, { id: 'images' }, { id: 'image' },
-    { id: 'blocks' }, { id: 'lightbox' }, { id: 'loading' },
+    { id: 'lightbox' }, { id: 'loading' },
   ],
   states: [
     { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
