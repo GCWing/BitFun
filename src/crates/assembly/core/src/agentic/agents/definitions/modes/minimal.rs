@@ -1,11 +1,9 @@
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
-use crate::agentic::tools::framework::ToolExposure;
+use crate::agentic::agents::{Agent, UserContextPolicy};
 use async_trait::async_trait;
 
 /// A focused Agent with a stable prompt and tool manifest.
 pub struct MinimalMode {
     default_tools: Vec<String>,
-    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for MinimalMode {
@@ -27,14 +25,7 @@ impl MinimalMode {
         .into_iter()
         .map(str::to_string)
         .collect::<Vec<_>>();
-        let tool_exposure_overrides = default_tools
-            .iter()
-            .map(|name| (name.clone(), ToolExposure::Direct))
-            .collect();
-        Self {
-            default_tools,
-            tool_exposure_overrides,
-        }
+        Self { default_tools }
     }
 }
 
@@ -64,15 +55,10 @@ impl Agent for MinimalMode {
         self.default_tools.clone()
     }
 
-    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
-        &self.tool_exposure_overrides
-    }
-
     fn user_context_policy(&self) -> UserContextPolicy {
         UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
-            .with_project_layout()
     }
 
     fn include_dynamic_mcp_tools(&self) -> bool {
