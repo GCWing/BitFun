@@ -786,17 +786,7 @@ fn custom_agent_markdown_metadata(definition: &CustomAgentDefinition) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn custom_mode_defaults_include_the_thread_goal_lifecycle() {
-        let tools = default_custom_agent_tools(CustomAgentKind::Mode);
-
-        for tool_name in THREAD_GOAL_TOOL_NAMES {
-            assert!(tools.iter().any(|tool| tool == tool_name));
-        }
-    }
 
     #[test]
     fn custom_agent_user_context_policy_round_trips_memory_summary() {

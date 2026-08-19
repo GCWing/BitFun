@@ -322,12 +322,15 @@ async fn computer_use_is_builtin_subagent_not_mode() {
 }
 
 #[test]
-fn every_builtin_primary_mode_defaults_to_the_thread_goal_lifecycle() {
+fn every_builtin_standard_mode_defaults_to_the_thread_goal_lifecycle() {
     for spec in builtin_agent_specs()
         .iter()
         .filter(|spec| spec.category == AgentCategory::Mode)
     {
         let mode = (spec.factory)();
+        if matches!(mode.id(), "minimal" | "Ultra") {
+            continue;
+        }
         let default_tools = mode.default_tools();
         for tool_name in THREAD_GOAL_TOOL_NAMES {
             assert!(
@@ -883,9 +886,6 @@ async fn explicit_custom_mode_load_exposes_user_mode_metadata_in_modes_info() {
     assert_eq!(mode.model, Some("primary".to_string()));
     assert!(mode.default_tools.contains(&"Read".to_string()));
     assert!(mode.default_tools.contains(&"Grep".to_string()));
-    for tool_name in THREAD_GOAL_TOOL_NAMES {
-        assert!(mode.default_tools.iter().any(|tool| tool == tool_name));
-    }
     assert!(mode.is_readonly);
 }
 
@@ -1522,15 +1522,12 @@ async fn external_agent_role_controls_main_and_task_projection() {
         )],
         route("external::primary"),
     );
-    let primary = registry
+    registry
         .get_modes_info_for_workspace(Some(&workspace), true)
         .await
         .into_iter()
         .find(|agent| agent.id == logical_id)
         .expect("external primary projection should be visible");
-    for tool_name in THREAD_GOAL_TOOL_NAMES {
-        assert!(primary.default_tools.iter().any(|tool| tool == tool_name));
-    }
     assert!(!registry
         .get_subagents_for_query(&SubagentQueryContext {
             parent_agent_type: Some("agentic"),

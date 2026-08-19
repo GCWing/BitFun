@@ -48,6 +48,9 @@ const DEFAULT_CUSTOM_MODE_TOOLS = [
   'Skill',
   'WebSearch',
   'WebFetch',
+  'get_goal',
+  'create_goal',
+  'update_goal',
 ] as const;
 const DEFAULT_CUSTOM_SUBAGENT_TOOLS = ['LS', 'Read', 'Glob', 'Grep'] as const;
 const VISIBLE_CONTEXT_SECTIONS: UserContextSection[] = [

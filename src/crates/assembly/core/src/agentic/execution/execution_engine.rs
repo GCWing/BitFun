@@ -68,7 +68,6 @@ use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
 use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
-use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use bitfun_core_types::{ModelRequestContext, SessionModelBindingPolicy};
 use bitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
@@ -92,12 +91,6 @@ fn initial_round_index(context: &std::collections::HashMap<String, String>) -> u
         .unwrap_or(0)
 }
 use tool_runtime::context::PrimaryModelFacts;
-
-fn ensure_primary_session_goal_tools(allowed_tools: &mut Vec<String>, is_subagent: bool) {
-    if !is_subagent {
-        ensure_thread_goal_tools(allowed_tools);
-    }
-}
 
 fn skill_agent_listing_reminders(
     baseline_tool_sections: Option<&ToolListingSections>,
@@ -2645,11 +2638,7 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
             )
             .await;
-        let mut allowed_tools = tool_policy.allowed_tools.clone();
-        ensure_primary_session_goal_tools(
-            &mut allowed_tools,
-            context.subagent_parent_info.is_some(),
-        );
+        let allowed_tools = tool_policy.allowed_tools.clone();
         let enable_tools = context
             .context
             .get("enable_tools")
@@ -3594,11 +3583,7 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
             )
             .await;
-        let mut allowed_tools = tool_policy.allowed_tools.clone();
-        ensure_primary_session_goal_tools(
-            &mut allowed_tools,
-            context.subagent_parent_info.is_some(),
-        );
+        let allowed_tools = tool_policy.allowed_tools.clone();
         let enable_tools = context
             .context
             .get("enable_tools")
@@ -5157,10 +5142,10 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{
-        activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
-        manual_compaction_terminal_error, resolve_round_permission_mode,
-        runtime_context_needs_for_manifest, skill_agent_listing_reminders, ContextHealthSnapshot,
-        ExecutionEngine, RoundResult, TurnPromptScaffold,
+        activate_conditional_instructions_after_round, manual_compaction_terminal_error,
+        resolve_round_permission_mode, runtime_context_needs_for_manifest,
+        skill_agent_listing_reminders, ContextHealthSnapshot, ExecutionEngine, RoundResult,
+        TurnPromptScaffold,
     };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, ToolListingSections, UserContextPolicy,
@@ -5181,7 +5166,6 @@ mod tests {
     use crate::service::config::types::AIModelConfig;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use crate::util::types::ToolDefinition;
-    use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
     use bitfun_runtime_ports::{
         PermissionMode, WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind,
     };
@@ -5309,19 +5293,6 @@ mod tests {
             "coordinator".to_string(),
         );
         assert!(!super::execution_engine_owns_cancel_lifecycle(&context));
-    }
-
-    #[test]
-    fn primary_session_tool_policy_restores_goal_tools_but_subagents_stay_scoped() {
-        let mut primary_tools = vec!["Read".to_string()];
-        ensure_primary_session_goal_tools(&mut primary_tools, false);
-        for tool_name in THREAD_GOAL_TOOL_NAMES {
-            assert!(primary_tools.iter().any(|tool| tool == tool_name));
-        }
-
-        let mut subagent_tools = vec!["Read".to_string()];
-        ensure_primary_session_goal_tools(&mut subagent_tools, true);
-        assert_eq!(subagent_tools, vec!["Read".to_string()]);
     }
 
     #[test]

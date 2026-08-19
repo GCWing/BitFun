@@ -19523,10 +19523,7 @@ mod tests {
             .iter()
             .map(Message::internal_reminder_kind)
             .collect::<Vec<_>>();
-        assert_eq!(
-            kinds,
-            vec![Some(InternalReminderKind::AgentListingDiff)]
-        );
+        assert_eq!(kinds, vec![Some(InternalReminderKind::AgentListingDiff)]);
     }
 
     #[test]

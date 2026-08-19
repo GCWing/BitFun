@@ -15,19 +15,6 @@ pub const THREAD_GOAL_TOOL_NAMES: [&str; 3] = [
     UPDATE_GOAL_TOOL_NAME,
 ];
 
-/// Ensure a primary-session tool list exposes the complete thread-goal lifecycle.
-///
-/// Goal state can be activated outside the model tool surface (for example by
-/// the composer UI), so exposing only part of this bundle can leave an active
-/// goal with no way for the model to inspect or finish it.
-pub fn ensure_thread_goal_tools(tools: &mut Vec<String>) {
-    for tool_name in THREAD_GOAL_TOOL_NAMES {
-        if !tools.iter().any(|tool| tool == tool_name) {
-            tools.push(tool_name.to_string());
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct CreateGoalArgs {
@@ -104,27 +91,4 @@ pub fn build_goal_tool_result(
         data,
         result_for_assistant,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ensure_thread_goal_tools, THREAD_GOAL_TOOL_NAMES};
-
-    #[test]
-    fn ensure_thread_goal_tools_adds_the_complete_bundle_without_duplicates() {
-        let mut tools = vec!["Read".to_string(), "get_goal".to_string()];
-
-        ensure_thread_goal_tools(&mut tools);
-        ensure_thread_goal_tools(&mut tools);
-
-        for tool_name in THREAD_GOAL_TOOL_NAMES {
-            assert_eq!(
-                tools
-                    .iter()
-                    .filter(|tool| tool.as_str() == tool_name)
-                    .count(),
-                1
-            );
-        }
-    }
 }

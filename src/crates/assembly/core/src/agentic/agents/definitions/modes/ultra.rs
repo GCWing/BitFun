@@ -24,9 +24,6 @@ impl UltraMode {
                 "Grep",
                 "Glob",
                 "LS",
-                "get_goal",
-                "create_goal",
-                "update_goal",
                 "AskUserQuestion",
             ]
             .into_iter()

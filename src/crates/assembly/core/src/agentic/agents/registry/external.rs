@@ -656,10 +656,7 @@ fn external_agent_info(
     projection: ExternalAgentProjection,
 ) -> AgentInfo {
     let agent = entry.registration.agent.as_ref();
-    let mut default_tools = agent.default_tools();
-    if matches!(projection, ExternalAgentProjection::Primary) {
-        bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools(&mut default_tools);
-    }
+    let default_tools = agent.default_tools();
     AgentInfo {
         key: format!(
             "external::{}::{}",

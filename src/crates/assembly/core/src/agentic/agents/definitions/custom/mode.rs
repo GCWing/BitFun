@@ -95,9 +95,7 @@ impl Agent for CustomMode {
     }
 
     fn default_tools(&self) -> Vec<String> {
-        let mut tools = self.data.tools.clone();
-        bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools(&mut tools);
-        tools
+        self.data.tools.clone()
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
