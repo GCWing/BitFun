@@ -184,6 +184,7 @@
       "meta": "Meta",
       "miniapp": "MiniApp",
       "canvas": "Canvas",
+      "debugging": "Debugging",
       "gstack": "gstack",
       "other": "Other"
     },

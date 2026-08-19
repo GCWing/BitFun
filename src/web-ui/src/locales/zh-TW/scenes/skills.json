@@ -116,6 +116,7 @@
       "meta": "Meta",
       "miniapp": "MiniApp",
       "canvas": "畫布",
+      "debugging": "偵錯",
       "gstack": "gstack",
       "other": "其他"
     },

@@ -5,6 +5,7 @@ pub(super) enum BuiltinSkillGroup {
     MiniApp,
     ComputerUse,
     Canvas,
+    Debugging,
     Gstack,
 }
 
@@ -16,6 +17,7 @@ impl BuiltinSkillGroup {
             Self::MiniApp => "miniapp",
             Self::ComputerUse => "computer-use",
             Self::Canvas => "canvas",
+            Self::Debugging => "debugging",
             Self::Gstack => "gstack",
         }
     }
@@ -51,6 +53,10 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "find-skills",
         group: BuiltinSkillGroup::Meta,
+    },
+    BuiltinSkillSpec {
+        dir_name: "evidence-debugging",
+        group: BuiltinSkillGroup::Debugging,
     },
     BuiltinSkillSpec {
         dir_name: "miniapp-dev",

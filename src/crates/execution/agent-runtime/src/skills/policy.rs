@@ -70,6 +70,11 @@ const DISABLE_MINIAPP: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Disable,
 };
 
+const DISABLE_DEBUGGING: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::Group(BuiltinSkillGroup::Debugging),
+    effect: PolicyEffect::Disable,
+};
+
 // ControlHub's browser domain is the single default browser-automation path.
 // The computer-use skill group (agent-browser) stays opt-in in every mode so the
 // model never sees two parallel browser stacks; users can still enable it via
@@ -106,7 +111,12 @@ const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 
 const TEAM_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Enable,
-    rules: &[DISABLE_OFFICE, DISABLE_MINIAPP, DISABLE_COMPUTER_USE],
+    rules: &[
+        DISABLE_OFFICE,
+        DISABLE_MINIAPP,
+        DISABLE_COMPUTER_USE,
+        DISABLE_DEBUGGING,
+    ],
 };
 
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
@@ -186,6 +196,37 @@ mod tests {
                     mode_id
                 );
             }
+        }
+    }
+
+    #[test]
+    fn evidence_debugging_replaces_debug_mode_in_coding_workflows() {
+        for mode_id in [
+            "agentic",
+            "Plan",
+            "Multitask",
+            "coding_shared",
+            "Claw",
+        ] {
+            assert_eq!(
+                resolve_builtin_default_enabled("evidence-debugging", mode_id),
+                Some(true),
+                "evidence-debugging should be available in {mode_id}"
+            );
+        }
+
+        for mode_id in [
+            "Cowork",
+            "Team",
+            "ComputerUse",
+            "DeepResearch",
+            "SomeUnknownMode",
+        ] {
+            assert_eq!(
+                resolve_builtin_default_enabled("evidence-debugging", mode_id),
+                Some(false),
+                "evidence-debugging should remain opt-in in {mode_id}"
+            );
         }
     }
 }
