@@ -217,7 +217,6 @@ async fn token_usage_service_persists_records_and_filters_subagents_by_default()
     assert_eq!(summary.record_count, 1);
     assert_eq!(summary.total_input, 100);
     assert_eq!(summary.total_cached, 30);
-    assert_eq!(summary.total_cache_write, 12);
 
     let reloaded =
         bitfun_services_core::token_usage::TokenUsageService::new(temp.path().to_path_buf())
@@ -321,7 +320,7 @@ async fn token_usage_all_range_ignores_non_date_record_files() {
     let records_dir = temp.path().join("records");
     fs::write(
         records_dir.join("manual-backup.json"),
-        r#"{"records":[{"model_id":"model-b","session_id":"session-b","turn_id":"turn-b","timestamp":"2026-07-07T00:00:00Z","input_tokens":999,"output_tokens":1,"cached_tokens":0,"cached_tokens_available":false,"cache_write_tokens":0,"total_tokens":1000,"token_details":null,"is_subagent":false}]}"#,
+        r#"{"records":[{"model_id":"model-b","session_id":"session-b","turn_id":"turn-b","timestamp":"2026-07-07T00:00:00Z","input_tokens":999,"output_tokens":1,"cached_tokens":0,"cached_tokens_available":false,"total_tokens":1000,"token_details":null,"is_subagent":false}]}"#,
     )
     .expect("write stray record file");
 

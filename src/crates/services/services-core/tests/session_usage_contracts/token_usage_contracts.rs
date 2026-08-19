@@ -71,7 +71,6 @@ fn session_cache_hit_ratio_uses_reported_input_denominator() {
         total_input: 300,
         total_output: 20,
         total_cached: 50,
-        total_cache_write: 0,
         cache_reported_input_tokens: 100,
         total_tokens: 320,
         request_count: 2,

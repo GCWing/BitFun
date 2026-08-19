@@ -27,7 +27,6 @@ const STATISTICS: UsageStatistics = {
   totalInputTokens: 0,
   totalOutputTokens: 0,
   totalCachedTokens: 0,
-  totalCacheWriteTokens: 0,
   totalCacheReportedInputTokens: 0,
   byModel: [],
   byGroup: [],

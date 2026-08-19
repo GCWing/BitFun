@@ -63,7 +63,6 @@
     "legend": {
       "input": "Input",
       "output": "Output",
-      "cacheCreation": "Cache Creation",
       "cacheRead": "Cache Read",
       "cacheHitRate": "缓存命中率"
     }

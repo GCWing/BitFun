@@ -115,8 +115,6 @@ pub struct UsageTrendPoint {
     pub output_tokens: u64,
     /// Tokens served from prefix cache (cache HIT).
     pub cache_read_tokens: u64,
-    /// Tokens written into the cache (Anthropic cache WRITE).
-    pub cache_write_tokens: u64,
     /// Cache hit ratio (0.0..=1.0) when the bucket contains cache telemetry,
     /// otherwise `None`.
     pub cache_hit_rate: Option<f64>,
@@ -131,7 +129,6 @@ pub struct UsageStatistics {
     pub total_input_tokens: u64,
     pub total_output_tokens: u64,
     pub total_cached_tokens: u64,
-    pub total_cache_write_tokens: u64,
     /// Prompt input tokens from requests that reported cache telemetry. Together
     /// with `total_cached_tokens` it yields the overall cache hit rate.
     pub total_cache_reported_input_tokens: u64,
@@ -179,7 +176,6 @@ where
     let mut total_input = 0u64;
     let mut total_output = 0u64;
     let mut total_cached = 0u64;
-    let mut total_cache_write = 0u64;
     let mut total_cache_reported_input = 0u64;
 
     let mut by_model: HashMap<String, UsageStatisticsEntry> = HashMap::new();
@@ -191,7 +187,6 @@ where
         total_input += record.input_tokens as u64;
         total_output += record.output_tokens as u64;
         total_cached += record.cached_tokens as u64;
-        total_cache_write += record.cache_write_tokens as u64;
         if record.cached_tokens_available {
             total_cache_reported_input += record.input_tokens as u64;
         }
@@ -211,7 +206,6 @@ where
         total_input_tokens: total_input,
         total_output_tokens: total_output,
         total_cached_tokens: total_cached,
-        total_cache_write_tokens: total_cache_write,
         total_cache_reported_input_tokens: total_cache_reported_input,
         by_model: finalize_entries(by_model),
         by_group: finalize_entries(by_group),
@@ -323,7 +317,6 @@ fn bucket_records(
         bucket.input_tokens += record.input_tokens as u64;
         bucket.output_tokens += record.output_tokens as u64;
         bucket.cached_tokens += record.cached_tokens as u64;
-        bucket.cache_write_tokens += record.cache_write_tokens as u64;
         if record.cached_tokens_available {
             bucket.reported_input_tokens += record.input_tokens as u64;
         }
@@ -385,7 +378,6 @@ struct TrendBucket {
     input_tokens: u64,
     output_tokens: u64,
     cached_tokens: u64,
-    cache_write_tokens: u64,
     reported_input_tokens: u64,
 }
 
@@ -398,7 +390,6 @@ impl TrendBucket {
             input_tokens: self.input_tokens,
             output_tokens: self.output_tokens,
             cache_read_tokens: self.cached_tokens,
-            cache_write_tokens: self.cache_write_tokens,
             cache_hit_rate,
         }
     }
@@ -415,7 +406,6 @@ mod tests {
         input: u32,
         output: u32,
         cached: u32,
-        cache_write: u32,
         cached_available: bool,
     ) -> TokenUsageRecord {
         TokenUsageRecord {
@@ -428,7 +418,6 @@ mod tests {
             output_tokens: output,
             cached_tokens: cached,
             cached_tokens_available: cached_available,
-            cache_write_tokens: cache_write,
             total_tokens: input + output,
             token_details: None,
             is_subagent: false,
@@ -472,17 +461,16 @@ mod tests {
     fn aggregates_totals_and_breakdowns() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
         let records = vec![
-            record("model-a", t0, 1000, 200, 500, 0, true),
+            record("model-a", t0, 1000, 200, 500, true),
             record(
                 "model-a",
                 t0 + Duration::minutes(30),
                 2000,
                 300,
                 0,
-                100,
                 false,
             ),
-            record("model-b", t0 + Duration::hours(2), 500, 50, 0, 0, false),
+            record("model-b", t0 + Duration::hours(2), 500, 50, 0, false),
         ];
 
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
@@ -491,7 +479,6 @@ mod tests {
         assert_eq!(stats.total_input_tokens, 3500);
         assert_eq!(stats.total_output_tokens, 550);
         assert_eq!(stats.total_cached_tokens, 500);
-        assert_eq!(stats.total_cache_write_tokens, 100);
         assert_eq!(stats.total_tokens, 4050);
         assert_eq!(stats.total_cache_reported_input_tokens, 1000);
 
@@ -521,12 +508,11 @@ mod tests {
     #[test]
     fn same_named_models_with_different_keys_are_not_merged() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
-        let first = record("shared-model", t0, 100, 0, 0, 0, false);
+        let first = record("shared-model", t0, 100, 0, 0, false);
         let mut second = record(
             "shared-model",
             t0 + Duration::minutes(1),
             200,
-            0,
             0,
             0,
             false,
@@ -546,7 +532,7 @@ mod tests {
     #[test]
     fn entry_without_cache_telemetry_has_no_hit_rate() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
-        let records = vec![record("model-a", t0, 100, 100, 0, 0, false)];
+        let records = vec![record("model-a", t0, 100, 100, 0, false)];
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.by_model[0].cache_hit_rate, None);
         assert_eq!(stats.total_cache_reported_input_tokens, 0);
@@ -556,7 +542,7 @@ mod tests {
     fn exact_full_cache_hit_is_reported_as_exactly_one() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
         // cached == input on a single request: mathematically a 100% hit.
-        let records = vec![record("model-a", t0, 1000, 0, 1000, 0, true)];
+        let records = vec![record("model-a", t0, 1000, 0, 1000, true)];
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.by_model[0].cache_hit_rate, Some(1.0));
         assert_eq!(
@@ -569,8 +555,8 @@ mod tests {
     fn trend_buckets_by_hour_and_fills_gaps() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
         let records = vec![
-            record("model-a", t0, 100, 0, 0, 0, false),
-            record("model-a", t0 + Duration::hours(3), 200, 0, 0, 0, false),
+            record("model-a", t0, 100, 0, 0, false),
+            record("model-a", t0 + Duration::hours(3), 200, 0, 0, false),
         ];
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.granularity, UsageGranularity::Hour);
@@ -588,8 +574,8 @@ mod tests {
     fn trend_cache_hit_rate_uses_reported_input() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
         let records = vec![
-            record("model-a", t0, 1000, 0, 250, 0, true),
-            record("model-b", t0 + Duration::minutes(10), 100, 0, 0, 0, false),
+            record("model-a", t0, 1000, 0, 250, true),
+            record("model-b", t0 + Duration::minutes(10), 100, 0, 0, false),
         ];
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         let point = &stats.trend[0];
@@ -603,8 +589,8 @@ mod tests {
     fn trend_coarsens_to_days_when_hourly_span_is_too_long() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 0, 0, 0).unwrap();
         let records = vec![
-            record("model-a", t0, 100, 0, 0, 0, false),
-            record("model-a", t0 + Duration::days(60), 200, 0, 0, 0, false),
+            record("model-a", t0, 100, 0, 0, false),
+            record("model-a", t0 + Duration::days(60), 200, 0, 0, false),
         ];
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.granularity, UsageGranularity::Day);
@@ -620,14 +606,12 @@ mod tests {
                 100,
                 0,
                 0,
-                0,
                 false,
             ),
             record(
                 "model-a",
                 Utc.with_ymd_and_hms(2026, 8, 16, 15, 30, 0).unwrap(),
                 200,
-                0,
                 0,
                 0,
                 false,
@@ -658,14 +642,12 @@ mod tests {
                 100,
                 0,
                 0,
-                0,
                 false,
             ),
             record(
                 "model-a",
                 Utc.with_ymd_and_hms(2026, 3, 9, 12, 0, 0).unwrap(),
                 200,
-                0,
                 0,
                 0,
                 false,
