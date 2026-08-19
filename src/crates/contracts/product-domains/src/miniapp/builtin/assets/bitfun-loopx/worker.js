@@ -1,4 +1,4 @@
-// LoopX Console MiniApp — Worker (Node.js/Bun).
+// bitfun-loopx MiniApp — Worker (Node.js/Bun).
 // Wraps the loopx CLI (`loopx --format json …`). The host heartbeat lives in
 // ui.js; this worker is stateless per call except for the cached invocation
 // prefix and the per-goal run-once in-flight registry.
@@ -28,27 +28,54 @@ function absolutePythonExes() {
       const exe = path.join(pyRoot, version, 'python.exe');
       if (fs.existsSync(exe)) list.push(exe);
     }
+  } else if (process.platform !== 'win32') {
+    // Common absolute interpreter locations so a restricted worker PATH
+    // cannot hide a usable Python on macOS/Linux.
+    for (const exe of [
+      '/opt/homebrew/bin/python3',
+      '/usr/local/bin/python3',
+      '/usr/bin/python3',
+      '/opt/homebrew/bin/python',
+      '/usr/local/bin/python',
+      '/usr/bin/python',
+    ]) {
+      if (fs.existsSync(exe)) list.push(exe);
+    }
   }
   return list;
+}
+
+// Interpreter argv prefixes for `-m loopx.cli`, in probe order. `py -3` is the
+// Windows launcher; POSIX systems name the 3.x interpreter `python3` first.
+function moduleInterpreterArgvs() {
+  return process.platform === 'win32'
+    ? [['python'], ['py', '-3']]
+    : [['python3'], ['python']];
 }
 
 function candidatePrefixes(srcDir) {
   const list = [
     { argv: ['loopx'] },
-    { argv: ['python', '-m', 'loopx.cli'] },
-    { argv: ['py', '-3', '-m', 'loopx.cli'] },
   ];
+  for (const argv of moduleInterpreterArgvs()) {
+    list.push({ argv: [...argv, '-m', 'loopx.cli'] });
+  }
   for (const exe of absolutePythonExes()) {
     const loopxExe = path.join(path.dirname(exe), 'Scripts', 'loopx.exe');
     if (fs.existsSync(loopxExe)) list.push({ argv: [loopxExe] });
   }
-  if (srcDir && fs.existsSync(path.join(srcDir, 'loopx', 'cli.py'))) {
-    // loopx has zero runtime dependencies (pure stdlib, Python >= 3.11), so a
-    // source checkout runs directly via PYTHONPATH — no pip install needed.
-    list.push({ argv: ['python', '-m', 'loopx.cli'], env: { PYTHONPATH: srcDir } });
-    list.push({ argv: ['py', '-3', '-m', 'loopx.cli'], env: { PYTHONPATH: srcDir } });
+  // Source-checkout candidates. Both the user-configured srcDir and the
+  // console's own vendored checkout are valid; the vendor dir is probed even
+  // when srcDir is empty, so a previously-vendored loopx is always found
+  // without any configuration (loopx is pure stdlib, Python >= 3.11).
+  const srcDirs = [...new Set([srcDir, vendorLoopxDir()].filter(Boolean))];
+  for (const dir of srcDirs) {
+    if (!fs.existsSync(path.join(dir, 'loopx', 'cli.py'))) continue;
+    for (const argv of moduleInterpreterArgvs()) {
+      list.push({ argv: [...argv, '-m', 'loopx.cli'], env: { PYTHONPATH: dir } });
+    }
     for (const exe of absolutePythonExes()) {
-      list.push({ argv: [exe, '-m', 'loopx.cli'], env: { PYTHONPATH: srcDir } });
+      list.push({ argv: [exe, '-m', 'loopx.cli'], env: { PYTHONPATH: dir } });
     }
   }
   return list;
@@ -59,7 +86,7 @@ const DEFAULT_TIMEOUT_MS = 180000;
 // PR identity markers — the countability contract: every PR created by this
 // tool carries both keywords, searchable on GitHub with `"bitfun-loopx" in:title`.
 const PR_TITLE_PREFIX = '[bitfun-loopx] ';
-const PR_BODY_MARKER = 'Created by BitFun LoopX Console (bitfun-loopx).';
+const PR_BODY_MARKER = 'Created by bitfun-loopx (BitFun built-in MiniApp).';
 
 // ── debug trace (worker side) ─────────────────────────────────
 // Written to <appdir>/debug-worker.log so host logs are not required.
@@ -94,7 +121,9 @@ function buildEnv(envOverlay) {
 }
 
 // child.kill() only terminates the direct child; on Windows the interesting
-// work (python → codex …) lives in grandchildren. Kill the whole tree.
+// work (python → codex …) lives in grandchildren. Kill the whole tree: on
+// POSIX the child is spawned detached (own process group), so signal the
+// group; on Windows use taskkill /T.
 function killTree(child) {
   if (!child || child.killed || child.exitCode !== null) return;
   if (process.platform === 'win32') {
@@ -105,7 +134,11 @@ function killTree(child) {
       child.kill();
     }
   } else {
-    child.kill();
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch (_) {
+      child.kill();
+    }
   }
 }
 
@@ -139,6 +172,10 @@ function spawnLoopx(prefix, args, { timeoutMs = DEFAULT_TIMEOUT_MS, onStderrLine
     const child = spawn(cmd, [...prefixArgs, ...args], {
       shell: false,
       windowsHide: true,
+      // POSIX: run the child in its own process group so killTree can signal
+      // the whole loopx tree on timeout (kill() alone would leak python/codex
+      // descendants).
+      detached: process.platform !== 'win32',
       env: buildEnv(envOverlay),
     });
     if (onSpawned) onSpawned(child);
@@ -251,8 +288,18 @@ function quotaScanRoot() {
 // per-instance appdata: deleting/re-importing the MiniApp would otherwise
 // wipe every clone and force a fresh network clone. A stable cache also lets
 // a fresh import rediscover the repos and their per-project registries.
+// ── console data home ──
+// The clone cache and the loopx vendor checkout live under the user's stable
+// .bitfun directory, NOT the per-instance appdata: deleting/re-importing the
+// MiniApp would otherwise wipe every clone and force a fresh network clone.
+// A stable cache also lets a fresh import rediscover the repos and their
+// per-project registries.
+function consoleHome() {
+  return path.join(os.homedir(), '.bitfun', 'bitfun-loopx');
+}
+
 function cloneCacheRoot() {
-  return path.join(os.homedir(), '.bitfun', 'loopx-console', 'repos');
+  return path.join(consoleHome(), 'repos');
 }
 
 function cloneTargetDir(repo) {
@@ -275,7 +322,7 @@ const LOOPX_VENDOR_REF = 'v0.2.13';
 const LOOPX_MIN_PYTHON = { major: 3, minor: 11 };
 
 function vendorLoopxDir() {
-  return path.join(os.homedir(), '.bitfun', 'loopx-console', 'vendor', 'loopx');
+  return path.join(consoleHome(), 'vendor', 'loopx');
 }
 
 function parsePythonVersion(text) {
@@ -302,9 +349,10 @@ function pythonMeetsMinimum(version) {
 async function probePython() {
   const attempts = [
     ...absolutePythonExes().map((exe) => ({ prefix: [exe], args: ['--version'] })),
-    { prefix: ['python'], args: ['--version'] },
-    { prefix: ['py', '-3'], args: ['--version'] },
   ];
+  for (const argv of moduleInterpreterArgvs()) {
+    attempts.push({ prefix: argv, args: ['--version'] });
+  }
   let firstFound = null;
   for (const attempt of attempts) {
     let info;
@@ -357,7 +405,7 @@ async function checkPrereqs() {
 const COMMIT_TRAILER_KEY = 'Co-authored-by: bitfun-loopx';
 const COMMIT_TRAILER = `${COMMIT_TRAILER_KEY} <bitfun-loopx@users.noreply.github.com>`;
 const COMMIT_MSG_HOOK = `#!/bin/sh
-# LoopX Console marker: append the bitfun-loopx co-author trailer when absent.
+# bitfun-loopx marker: append the co-author trailer when absent.
 TRAILER='${COMMIT_TRAILER}'
 if ! grep -qF '${COMMIT_TRAILER_KEY}' "$1"; then
   printf '\\n%s\\n' "$TRAILER" >> "$1"
@@ -389,7 +437,7 @@ function repoExistsOnGithub(repo) {
   return new Promise((resolve, reject) => {
     const req = https.get(`https://api.github.com/repos/${repo}`, {
       headers: {
-        'User-Agent': 'BitFun-LoopX-Console',
+        'User-Agent': 'bitfun-loopx',
         Accept: 'application/vnd.github+json',
       },
       timeout: 30000,
@@ -486,7 +534,9 @@ async function detectLoopx(customPrefix, srcDir = null) {
 
 // Absolute python.exe locations (robust against a restricted worker PATH).
 function pythonCandidates() {
-  return absolutePythonExes();
+  const list = [...absolutePythonExes()];
+  list.push(...(process.platform === 'win32' ? ['python'] : ['python3', 'python']));
+  return list;
 }
 
 function resolveRegistryPath(projectDir) {  if (projectDir) return path.join(projectDir, '.loopx', 'registry.json');
@@ -543,12 +593,17 @@ function normalizeScheduler(schedulerHint) {
 // (codex etc.) is involved — the user configures nothing.
 function turnPreamble({ projectDir, goalId, agentId }) {
   const registry = path.join(projectDir, '.loopx', 'registry.json');
+  const moduleFallback = `${moduleInterpreterArgvs()[0].join(' ')} -m loopx.cli`;
+  const probeCmd = process.platform === 'win32' ? 'where loopx' : 'which loopx';
+  const shellNote = process.platform === 'win32'
+    ? '环境说明：命令在 PowerShell 中运行，不是 bash。loopx 示例命令里以 --turn-instance-id "${LOOPX_TURN:?}" 结尾的写法是 bash 语法 —— 不要照抄；--turn-instance-id 是可选参数，直接省略。'
+    : '环境说明：命令在 bash 中运行。loopx 示例命令里的 ${LOOPX_TURN:?} 写法仅适用于 bash；--turn-instance-id 是可选参数，直接省略。';
   return [
     `你是 LoopX 目标 "${goalId}" 的执行 agent（agent_id: ${agentId}）。`,
     `仓库目录：${projectDir}`,
     `LoopX 注册表：${registry} —— 调用 loopx 命令时始终带上 --registry "${registry}"。`,
-    'loopx CLI 已安装并位于 PATH（备用方式：python -m loopx.cli）；每轮最多执行一次 "loopx --version"、"where loopx" 之类的探测。',
-    '环境说明：命令在 PowerShell 中运行，不是 bash。loopx 示例命令里以 --turn-instance-id "${LOOPX_TURN:?}" 结尾的写法是 bash 语法 —— 不要照抄；--turn-instance-id 是可选参数，直接省略。',
+    `loopx CLI 已安装并位于 PATH（备用方式：${moduleFallback}）；每轮最多执行一次 "loopx --version"、"${probeCmd}" 之类的探测。`,
+    shellNote,
     '规则：只在仓库目录内工作；不要强杀不是你启动的进程；',
     '在结束本轮前，通过 loopx（todo complete / 证据记录）记录进度。',
     '如果 loopx 命令失败，先读错误信息再修正调用方式 —— 同一命令不要盲目重试超过两次。',
@@ -808,7 +863,7 @@ function githubApiRequest(apiPath, {
   return new Promise((resolve, reject) => {
     const bodyText = jsonBody === null ? null : JSON.stringify(jsonBody);
     const headers = {
-      'User-Agent': 'BitFun-LoopX-Console',
+      'User-Agent': 'bitfun-loopx',
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
     };
@@ -902,10 +957,22 @@ function gitRun(projectDir, args, timeoutMs = 60000) {
 // reuses the local GitHub CLI credentials. Do the same here: when the user
 // has run `gh auth login` on this machine, publish can authenticate without
 // a pasted PAT.
+function ghExeName() {
+  return process.platform === 'win32' ? 'gh.exe' : 'gh';
+}
+
 function ghExeCandidates() {
   const list = [];
   const localAppData = process.env.LOCALAPPDATA;
   if (localAppData) list.push(path.join(localAppData, 'Programs', 'GitHub CLI', 'gh.exe'));
+  if (process.platform === 'darwin') {
+    list.push('/opt/homebrew/bin/gh', '/usr/local/bin/gh');
+  } else if (process.platform === 'linux') {
+    list.push('/usr/local/bin/gh', '/usr/bin/gh');
+  }
+  // User-local install dir used by the direct-download fallback (no root and
+  // no package manager required); scanned on every platform.
+  list.push(path.join(consoleHome(), 'bin', ghExeName()));
   list.push('gh');
   return list;
 }
@@ -975,6 +1042,14 @@ function proxyUrlFrom(value) {
   return /^https?:\/\//i.test(first) ? first : `http://${first}`;
 }
 
+// POSIX mirror of the Windows system-proxy lookup: curl and gh honor the
+// standard https_proxy environment variables when present.
+function envProxyUrl() {
+  const value = process.env.HTTPS_PROXY || process.env.https_proxy
+    || process.env.HTTP_PROXY || process.env.http_proxy;
+  return proxyUrlFrom(value);
+}
+
 // winget is not guaranteed to exist (App Installer is absent on some
 // machines); resolve it by absolute candidates and fall back to the PATH.
 function wingetCandidates() {
@@ -1007,58 +1082,232 @@ function powershellExe() {
   return fs.existsSync(sys) ? sys : 'powershell';
 }
 
-// Fallback installer without winget: download the gh release zip through
-// PowerShell's Invoke-WebRequest (which honors the system proxy) and place
-// gh.exe into the standard user dir that findGhExe already scans.
-async function installGhViaZip(emit) {
-  emit('未找到 winget，改为直接下载 GitHub CLI 安装包（自动使用系统代理）…');
+// Platform release-asset shape for the direct gh download (used when no
+// package manager is available). gh ships windows_amd64.zip, macOS_<arch>.zip
+// and linux_<arch>.tar.gz.
+function ghReleaseAsset() {
+  if (process.platform === 'win32') {
+    return { pattern: /windows_amd64\.zip$/i, name: 'windows_amd64.zip', archive: 'zip' };
+  }
+  if (process.platform === 'darwin') {
+    const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+    return { pattern: new RegExp(`macOS_${arch}\\.zip$`, 'i'), name: `macOS_${arch}.zip`, archive: 'zip' };
+  }
+  if (process.platform === 'linux') {
+    const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+    return { pattern: new RegExp(`linux_${arch}\\.tar\\.gz$`, 'i'), name: `linux_${arch}.tar.gz`, archive: 'tar.gz' };
+  }
+  return null;
+}
+
+// Direct-download gh installer (no winget/brew/root required): fetches the
+// platform release archive from GitHub and places the single gh binary into a
+// user-owned directory that findGhExe already scans. Windows downloads through
+// PowerShell's Invoke-WebRequest (honors the system proxy); POSIX uses curl,
+// which honors https_proxy.
+async function installGhFromRelease(emit) {
+  const assetInfo = ghReleaseAsset();
+  if (!assetInfo) {
+    throw new Error('当前平台暂不支持自动安装 GitHub CLI，请手动安装：https://github.com/cli/cli/releases');
+  }
+  emit('未找到包管理器，改为直接下载 GitHub CLI 安装包…');
   let url = null;
   try {
     const release = await githubApiRequest('/repos/cli/cli/releases/latest');
     const asset = release && Array.isArray(release.assets)
-      ? release.assets.find((a) => a && /windows_amd64\.zip$/i.test(String(a.browser_download_url || '')))
+      ? release.assets.find((a) => a && assetInfo.pattern.test(String(a.browser_download_url || '')))
       : null;
     url = asset ? asset.browser_download_url : null;
   } catch (_) { /* fall through to the error below */ }
   if (!url) {
-    throw new Error('无法获取 GitHub CLI 最新版本信息。请手动安装：https://github.com/cli/cli/releases（下载 windows_amd64.zip 并解压）');
+    throw new Error(`无法获取 GitHub CLI 最新版本信息。请手动安装：https://github.com/cli/cli/releases（下载 ${assetInfo.name} 并解压）`);
   }
-  const dst = path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'Programs', 'GitHub CLI');
-  const tmpZip = path.join(os.tmpdir(), `gh-install-${Date.now()}.zip`);
-  const expandDir = path.join(os.tmpdir(), `gh-extract-${Date.now()}`);
+  const isWindows = process.platform === 'win32';
+  const dstDir = isWindows
+    ? path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'Programs', 'GitHub CLI')
+    : path.join(consoleHome(), 'bin');
+  const binName = ghExeName();
+  const dst = path.join(dstDir, binName);
+  const stamp = Date.now();
+  const tmpArchive = path.join(os.tmpdir(), `gh-install-${stamp}${assetInfo.archive === 'zip' ? '.zip' : '.tar.gz'}`);
+  const expandDir = path.join(os.tmpdir(), `gh-extract-${stamp}`);
   try {
     emit(`下载 ${url.slice(0, 120)} …`);
-    const ps = `[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${url}' -OutFile '${tmpZip}' -UseBasicParsing`;
-    const dl = await spawnLoopx(
-      { argv: [powershellExe()] },
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps],
-      { timeoutMs: 300000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
-    );
-    if (dl.code !== 0 || !fs.existsSync(tmpZip)) throw new Error('下载失败');
+    if (isWindows) {
+      const ps = `[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${url}' -OutFile '${tmpArchive}' -UseBasicParsing`;
+      const dl = await spawnLoopx(
+        { argv: [powershellExe()] },
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+        { timeoutMs: 300000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
+      );
+      if (dl.code !== 0 || !fs.existsSync(tmpArchive)) throw new Error('下载失败');
+    } else {
+      const dl = await spawnLoopx(
+        { argv: ['curl'] },
+        ['-fL', '--retry', '3', '-o', tmpArchive, url],
+        { timeoutMs: 300000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
+      );
+      if (dl.code !== 0 || !fs.existsSync(tmpArchive)) {
+        throw new Error('下载失败（需要 curl，或手动安装：https://github.com/cli/cli/releases）');
+      }
+    }
     emit('下载完成，正在解压…');
-    fs.mkdirSync(dst, { recursive: true });
-    const ex = await spawnLoopx(
-      { argv: [powershellExe()] },
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', `Expand-Archive -Path '${tmpZip}' -DestinationPath '${expandDir}' -Force`],
-      { timeoutMs: 120000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
-    );
-    if (ex.code !== 0) throw new Error('解压失败');
-    // zip layout: <dir>/gh_<version>_windows_amd64/bin/gh.exe
+    fs.mkdirSync(expandDir, { recursive: true });
+    if (isWindows) {
+      const ex = await spawnLoopx(
+        { argv: [powershellExe()] },
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', `Expand-Archive -Path '${tmpArchive}' -DestinationPath '${expandDir}' -Force`],
+        { timeoutMs: 120000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
+      );
+      if (ex.code !== 0) throw new Error('解压失败');
+    } else if (assetInfo.archive === 'zip') {
+      const ex = await spawnLoopx(
+        { argv: ['unzip'] },
+        ['-o', tmpArchive, '-d', expandDir],
+        { timeoutMs: 120000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
+      );
+      if (ex.code !== 0) throw new Error('解压失败（需要 unzip）');
+    } else {
+      const ex = await spawnLoopx(
+        { argv: ['tar'] },
+        ['-xzf', tmpArchive, '-C', expandDir],
+        { timeoutMs: 120000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
+      );
+      if (ex.code !== 0) throw new Error('解压失败（需要 tar）');
+    }
+    // Release layout: <root>/gh_<version>_<platform>/bin/gh[.exe]
     let ghBin = null;
     for (const entry of fs.readdirSync(expandDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      const candidate = path.join(expandDir, entry.name, 'bin', 'gh.exe');
+      const candidate = path.join(expandDir, entry.name, 'bin', binName);
       if (fs.existsSync(candidate)) { ghBin = candidate; break; }
     }
-    if (!ghBin) throw new Error('安装包内未找到 gh.exe');
-    fs.copyFileSync(ghBin, path.join(dst, 'gh.exe'));
+    if (!ghBin) throw new Error('安装包内未找到 gh 二进制');
+    fs.mkdirSync(dstDir, { recursive: true });
+    fs.copyFileSync(ghBin, dst);
+    if (!isWindows) fs.chmodSync(dst, 0o755);
     emit('GitHub CLI 安装完成');
   } catch (err) {
     throw new Error(`直接安装失败：${String(err.message || err)}。可手动安装：https://github.com/cli/cli/releases`);
   } finally {
-    try { fs.rmSync(tmpZip, { force: true }); } catch (_) {}
+    try { fs.rmSync(tmpArchive, { force: true }); } catch (_) {}
     try { fs.rmSync(expandDir, { recursive: true, force: true }); } catch (_) {}
   }
+}
+
+// Try the platform package manager for gh: winget on Windows, Homebrew on
+// macOS. Returns null when gh was installed or no package manager exists;
+// returns a user-facing error string when an install was attempted and failed
+// (never silently fall back to the direct download after a visible failure).
+async function installGhViaPackageManager(emit, envOverlay) {
+  if (process.platform === 'win32') {
+    const winget = await findWinget();
+    if (!winget) return null;
+    emit(`通过 winget（${winget}）安装…`);
+    try {
+      const install = await spawnLoopx(
+        { argv: [winget], env: envOverlay },
+        ['install', '--id', 'GitHub.cli', '-e', '--accept-source-agreements', '--accept-package-agreements'],
+        { timeoutMs: 600000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
+      );
+      if (install.code !== 0) {
+        throw new Error(String(install.stderr || install.stdout || '').trim().slice(-200) || `winget exit ${install.code}`);
+      }
+    } catch (err) {
+      return `安装 GitHub CLI 失败：${String(err.message || err)}。可手动安装后再试：https://github.com/cli/cli/releases`;
+    }
+    return null;
+  }
+  if (process.platform === 'darwin') {
+    const brew = await findBrew();
+    if (!brew) return null;
+    emit(`通过 Homebrew（${brew}）安装…`);
+    try {
+      const install = await spawnLoopx(
+        { argv: [brew], env: envOverlay },
+        ['install', 'gh'],
+        { timeoutMs: 600000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
+      );
+      if (install.code !== 0) {
+        throw new Error(String(install.stderr || install.stdout || '').trim().slice(-200) || `brew exit ${install.code}`);
+      }
+    } catch (err) {
+      return `安装 GitHub CLI 失败：${String(err.message || err)}。可手动安装后再试：https://github.com/cli/cli/releases`;
+    }
+    return null;
+  }
+  // Linux has no universal package manager; the direct release download
+  // covers it without root privileges.
+  return null;
+}
+
+async function findBrew() {
+  for (const candidate of ['/opt/homebrew/bin/brew', '/usr/local/bin/brew']) {
+    if (!fs.existsSync(candidate)) continue;
+    try {
+      const probe = await spawnLoopx({ argv: [candidate] }, ['--version'], { timeoutMs: 8000 });
+      if (probe.code === 0) return candidate;
+    } catch (_) { /* try the next candidate */ }
+  }
+  return null;
+}
+
+// gh's web login flow needs an interactive terminal to display the one-time
+// code: Windows opens a fresh console via `cmd start`, macOS opens a Terminal
+// window via osascript, Linux tries the common terminal emulators in order.
+// Resolves null once a launcher has been started (best-effort) or a
+// user-facing guidance string when no interactive terminal could be opened.
+function launchGhAuthLogin(gh, envOverlay) {
+  const authArgs = ['auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web'];
+  const spawnDetached = (exe, args, opts = {}) => new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => { if (!done) { done = true; resolve(value); } };
+    try {
+      const child = spawn(exe, args, {
+        detached: true,
+        stdio: 'ignore',
+        env: envOverlay ? { ...process.env, ...envOverlay } : process.env,
+        ...opts,
+      });
+      child.on('spawn', () => finish(null));
+      child.on('error', (err) => finish(String(err && err.message || err)));
+      // No early error within the window: assume the launcher took over.
+      setTimeout(() => finish(null), 1500);
+    } catch (err) {
+      finish(String(err && err.message || err));
+    }
+  });
+  const guidance = () => '无法自动打开登录终端。请在自己的终端执行 `gh auth login` 后回到控制台重试。';
+  if (process.platform === 'win32') {
+    return spawnDetached('cmd', ['/c', 'start', '', gh, ...authArgs], { windowsHide: false }).then(
+      (err) => (err ? `无法启动登录窗口：${err}。${guidance()}` : null),
+    );
+  }
+  if (process.platform === 'darwin') {
+    // JSON.stringify yields a double-quoted, escaped token; joining them and
+    // wrapping the result in another JSON.stringify produces a valid
+    // AppleScript string literal for `do script`.
+    const cmdLine = [gh, ...authArgs].map((s) => JSON.stringify(String(s))).join(' ');
+    const script = `tell application "Terminal" to do script ${JSON.stringify(cmdLine)}`;
+    return spawnDetached('osascript', ['-e', script]).then(
+      (err) => (err ? `无法打开终端窗口：${err}。${guidance()}` : null),
+    );
+  }
+  // Linux terminal emulators take the program and its args directly; no shell
+  // quoting is involved.
+  const terminals = [
+    ['x-terminal-emulator', ['-e', gh, ...authArgs]],
+    ['gnome-terminal', ['--', gh, ...authArgs]],
+    ['konsole', ['-e', gh, ...authArgs]],
+    ['xterm', ['-e', gh, ...authArgs]],
+  ];
+  return (async () => {
+    for (const [exe, args] of terminals) {
+      const err = await spawnDetached(exe, args);
+      if (err === null) return null;
+    }
+    return guidance();
+  })();
 }
 
 // Issue bodies frequently carry the real problem in screenshots. Detect image
@@ -1116,6 +1365,9 @@ module.exports = {
     }
     attempts.push({ argv: ['pip', 'install', target] });
     attempts.push({ argv: ['python', '-m', 'pip', 'install', target] });
+    if (process.platform !== 'win32') {
+      attempts.push({ argv: ['python3', '-m', 'pip', 'install', target] });
+    }
     let lastError = null;
     for (const prefix of attempts) {
       emit(`$ ${prefix.argv.join(' ')}`);
@@ -1150,7 +1402,7 @@ module.exports = {
   },
 
   // One-click vendor: clone (or re-pin) the loopx source checkout into
-  // ~/.bitfun/loopx-console/vendor/loopx at the known-good version
+  // ~/.bitfun/bitfun-loopx/vendor/loopx at the known-good version
   // LOOPX_VENDOR_REF and run it straight from there via
   // `python -m loopx.cli` + PYTHONPATH. No pip, no global install. Progress
   // streams through vendorLoopx:progress events.
@@ -1312,7 +1564,7 @@ module.exports = {
   // operation stays recoverable.
   async 'loopx.resetAll'({ projectDirs = null } = {}) {
     const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
-    const backupRoot = path.join(os.homedir(), '.bitfun', 'loopx-console', `cleared-${stamp}`);
+    const backupRoot = path.join(consoleHome(), `cleared-${stamp}`);
     fs.mkdirSync(backupRoot, { recursive: true });
     const moved = [];
     const renameAway = (src, name) => {
@@ -1796,59 +2048,40 @@ module.exports = {
     return { ok: true, login: user && user.login ? user.login : null };
   },
 
-  // One-click GitHub CLI login: install gh via winget when missing (honoring
-  // the system proxy), then launch `gh auth login --web` in its own console
-  // window — gh prints a one-time code there and opens the browser. The
-  // worker polls `gh auth status` until the browser flow completes.
-  // Progress streams through ghLogin:progress events.
+  // One-click GitHub CLI login: install gh when missing (winget on Windows,
+  // Homebrew on macOS, direct release download everywhere else), then launch
+  // `gh auth login --web` in its own terminal window — gh prints a one-time
+  // code there and opens the browser. The worker polls `gh auth status` until
+  // the browser flow completes. Progress streams through ghLogin:progress
+  // events.
   async 'loopx.ghLogin'({} = {}) {
     const emit = (line) => global.rpcEmit('ghLogin:progress', { line });
-    const proxyUrl = proxyUrlFrom(await readWindowsSystemProxy());
+    const proxyUrl = process.platform === 'win32'
+      ? proxyUrlFrom(await readWindowsSystemProxy())
+      : envProxyUrl();
     const envOverlay = proxyUrl ? { HTTPS_PROXY: proxyUrl, HTTP_PROXY: proxyUrl } : undefined;
     let gh = await findGhExe();
     if (!gh) {
       emit('GitHub CLI 未安装，正在安装…');
-      if (proxyUrl) emit(`检测到系统代理：${proxyUrl}（安装将经此代理下载）`);
-      const winget = await findWinget();
-      if (winget) {
-        emit(`通过 winget（${winget}）安装…`);
+      if (proxyUrl) emit(`检测到代理：${proxyUrl}（安装将经此代理下载）`);
+      const pkgError = await installGhViaPackageManager(emit, envOverlay);
+      gh = await findGhExe();
+      if (!gh && pkgError) return { ok: false, error: pkgError };
+      if (!gh) {
+        // No package manager available (or a platform without one): download
+        // the release archive directly into a user-owned directory.
         try {
-          const install = await spawnLoopx(
-            { argv: [winget], env: envOverlay },
-            ['install', '--id', 'GitHub.cli', '-e', '--accept-source-agreements', '--accept-package-agreements'],
-            { timeoutMs: 600000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
-          );
-          if (install.code !== 0) {
-            throw new Error(String(install.stderr || install.stdout || '').trim().slice(-200) || `winget exit ${install.code}`);
-          }
-        } catch (err) {
-          return {
-            ok: false,
-            error: `安装 GitHub CLI 失败：${String(err.message || err)}。可手动安装后再试：https://github.com/cli/cli/releases`,
-          };
-        }
-        gh = await findGhExe();
-      } else {
-        // No winget on this machine: download the release zip directly.
-        try {
-          await installGhViaZip(emit);
+          await installGhFromRelease(emit);
         } catch (err) {
           return { ok: false, error: String(err.message || err) };
         }
         gh = await findGhExe();
       }
-      if (!gh) return { ok: false, error: '安装完成但未找到 gh.exe，请重开控制台后重试' };
+      if (!gh) return { ok: false, error: '安装完成但未找到 gh，请重开控制台后重试' };
     }
     emit(`已找到 ${gh}。启动浏览器登录（弹出窗口会显示一次性代码，浏览器确认后自动完成）…`);
-    // gh's web flow needs a TTY; give it its own console window so the
-    // one-time code is visible and the prompts work. cmd start returns
-    // immediately; we poll auth status below.
-    try {
-      const launcher = spawn('cmd', [
-        '/c', 'start', '', gh, 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web',
-      ], { windowsHide: false, detached: true, stdio: 'ignore' });
-      launcher.on('error', () => {});
-    } catch (_) { /* the poll below reports the real outcome */ }
+    const launchError = await launchGhAuthLogin(gh, envOverlay);
+    if (launchError) return { ok: false, error: launchError };
     const deadline = Date.now() + 8 * 60000;
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 4000));
