@@ -3114,6 +3114,40 @@ test('split core boundary check keeps self-test and default execution behavior',
   assert.match(defaultRun.stdout, /Core boundary check passed\./);
 });
 
+test('Task execution boundary requires policy-aware child delegation', () => {
+  const executionRule = requiredContentRules.find(
+    (rule) => rule.path
+      === 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs'
+      && rule.patterns.some((pattern) => pattern.message.includes('background launches')),
+  );
+  assert.ok(executionRule, 'Task execution must have a required-content rule');
+
+  const backgroundRule = executionRule.patterns.find(
+    (pattern) => pattern.message.includes('background launches'),
+  );
+  const foregroundRule = executionRule.patterns.find(
+    (pattern) => pattern.message.includes('foreground execution'),
+  );
+  assert.ok(backgroundRule, 'background child delegation must be protected');
+  assert.ok(foregroundRule, 'foreground child delegation must be protected');
+  assert.match(
+    'let delegation_policy = child_delegation_policy(context, coordinator).await?;',
+    backgroundRule.regex,
+  );
+  assert.match(
+    'delegation_policy: child_delegation_policy(context, coordinator).await?',
+    foregroundRule.regex,
+  );
+  assert.doesNotMatch(
+    'delegation_policy: context.delegation_policy().spawn_child()',
+    backgroundRule.regex,
+  );
+  assert.doesNotMatch(
+    'delegation_policy: context.delegation_policy().spawn_child()',
+    foregroundRule.regex,
+  );
+});
+
 test('optional dependency ownership rejects undeclared direct feature owners', async () => {
   const {
     featureReferencesOptionalDependencyOwner,

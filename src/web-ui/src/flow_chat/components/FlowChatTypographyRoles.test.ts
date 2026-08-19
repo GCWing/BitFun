@@ -81,7 +81,7 @@ describe('FlowChat semantic typography roles', () => {
     const flowTextBlock = readSource('./FlowTextBlock.scss');
     const workspaceStrip = readSource('./ChatInputWorkspaceStrip.scss');
 
-    expectRole(chatInput, '&__placeholder {', 'body');
+    expectRole(chatInput, '&__placeholder {', 'control');
     expectRole(chatInput, '&__slash-command-label {', 'support');
     expectRole(chatInput, '&__slash-command-status {', 'meta');
     // The status track is a footnote under the capsule: one meta step for

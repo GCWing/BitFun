@@ -10,9 +10,7 @@ export const markdownAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'codePre', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'codeContent', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'fileLink' }, { id: 'visualizationLink' }, { id: 'tabLink' },
-    { id: 'table' }, { id: 'blockquote' }, { id: 'reproduction' },
-    { id: 'reproductionHeader' }, { id: 'reproductionContent' }, { id: 'reproductionActions' },
-    { id: 'math' },
+    { id: 'table' }, { id: 'blockquote' }, { id: 'math' },
   ],
   states: [
     { id: 'fallback', selector: { kind: 'self', suffix: '[data-bf-state~="fallback"]' } },
