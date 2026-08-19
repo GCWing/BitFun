@@ -270,7 +270,10 @@ test('web-ui synchronous i18nService.t namespaces stay in the bootstrap set', ()
 test('web-ui slash command picker distinguishes all commands from quick actions', () => {
   const source = readText('src/web-ui/src/flow_chat/components/ChatInput.tsx');
   const allCommandsStart = source.indexOf("if (slashCommandState.kind === 'all')");
-  const allCommandsEnd = source.indexOf('if (!canSwitchModes)', allCommandsStart);
+  const allCommandsEnd = source.indexOf(
+    'if (!canSwitchModes || !showStandardExecutionOptions)',
+    allCommandsStart,
+  );
   assert.notEqual(allCommandsStart, -1, 'ChatInput should render an all-command slash picker state');
   assert.notEqual(allCommandsEnd, -1, 'ChatInput all-command branch should stay before the mode-only branch');
 

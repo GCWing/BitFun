@@ -198,6 +198,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     assert_eq!(
         ids,
         vec![
+            "minimal",
             "agentic",
             "Cowork",
             "Multitask",
@@ -224,12 +225,20 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     );
 
     assert_eq!(specs[0].category, BuiltinAgentCategory::Mode);
-    assert_eq!(specs[8].category, BuiltinAgentCategory::SubAgent);
-    assert_eq!(specs[18].category, BuiltinAgentCategory::SubAgent);
-    assert!(specs[18]
+    let swarm_planner = specs
+        .iter()
+        .find(|spec| spec.id == "SwarmPlanner")
+        .expect("SwarmPlanner spec should exist");
+    assert_eq!(swarm_planner.category, BuiltinAgentCategory::SubAgent);
+    let code_review = specs
+        .iter()
+        .find(|spec| spec.id == "CodeReview")
+        .expect("CodeReview spec should exist");
+    assert_eq!(code_review.category, BuiltinAgentCategory::SubAgent);
+    assert!(code_review
         .visibility_policy
         .can_access_from_parent(Some("agentic")));
-    assert!(!specs[18].visibility_policy.show_in_global_registry);
+    assert!(!code_review.visibility_policy.show_in_global_registry);
     assert_eq!(default_model_id_for_builtin_agent("agentic"), "auto");
     assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
     assert_eq!(
