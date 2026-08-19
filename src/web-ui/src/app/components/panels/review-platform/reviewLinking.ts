@@ -15,6 +15,10 @@ interface PullRequestReviewStatusInput {
 }
 
 type PullRequestReviewIdentity = NonNullable<Session['reviewTargetEvidence']>['pullRequest'];
+type PullRequestChangedFileCount = Pick<
+  ReviewPlatformPullRequest,
+  'changedFiles' | 'changedFileCountKnown'
+>;
 
 function normalizeProviderHost(value: string): string {
   return value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -120,13 +124,58 @@ export function mergeRevalidatedPullRequestOverview(
   if (!current || !samePullRequestRevisions(current, overview)) {
     return overview;
   }
+  const preserveKnownLineStats = overview.changedFileCountKnown === false
+    && current.changedFileCountKnown !== false
+    ? {
+        additions: current.additions,
+        deletions: current.deletions,
+      }
+    : {};
   return {
     ...overview,
+    ...preserveKnownLineStats,
+    ...mergeChangedFileCount(current, overview),
     ci: current.ci,
     files: current.files,
     commits: current.commits,
     threads: current.threads,
   };
+}
+
+export function mergeChangedFileCount(
+  current: PullRequestChangedFileCount,
+  incoming: PullRequestChangedFileCount,
+): PullRequestChangedFileCount {
+  if (incoming.changedFileCountKnown === true) {
+    return {
+      changedFiles: incoming.changedFiles,
+      changedFileCountKnown: true,
+    };
+  }
+  if (incoming.changedFileCountKnown === false) {
+    const source = current.changedFileCountKnown !== false ? current : incoming;
+    return {
+      changedFiles: source.changedFiles,
+      changedFileCountKnown: source.changedFileCountKnown,
+    };
+  }
+  return {
+    changedFiles: incoming.changedFiles || current.changedFiles,
+    changedFileCountKnown: undefined,
+  };
+}
+
+export function resolvedChangedFileCount(
+  primary?: PullRequestChangedFileCount | null,
+  fallback?: PullRequestChangedFileCount | null,
+): number | null {
+  if (primary && primary.changedFileCountKnown !== false) {
+    return primary.changedFiles;
+  }
+  if (fallback && fallback.changedFileCountKnown !== false) {
+    return fallback.changedFiles;
+  }
+  return null;
 }
 
 export function samePullRequestRevisions(

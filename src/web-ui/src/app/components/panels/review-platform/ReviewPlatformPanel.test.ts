@@ -4,9 +4,11 @@ import type { ReviewPlatformPullRequestDetail } from '@/infrastructure/api';
 import {
   currentPullRequestReviewStatusText,
   effectivePullRequestReviewFreshness,
+  mergeChangedFileCount,
   mergeRevalidatedPullRequestOverview,
   pullRequestReviewFreshness,
   pullRequestReviewLaunchKey,
+  resolvedChangedFileCount,
   samePullRequestIdentity,
 } from './reviewLinking';
 
@@ -165,5 +167,89 @@ describe('pull request Review linking', () => {
     const merged = mergeRevalidatedPullRequestOverview(current, overview);
 
     expect(merged).toBe(overview);
+  });
+
+  it('does not replace known change stats when overview enrichment fails', () => {
+    const current = {
+      baseRevision,
+      headRevision,
+      additions: 133,
+      deletions: 22,
+      changedFiles: 13,
+      changedFileCountKnown: true,
+      ci: [],
+      files: [],
+      commits: [],
+      threads: [],
+    } as unknown as ReviewPlatformPullRequestDetail;
+    const overview = {
+      baseRevision,
+      headRevision,
+      additions: 133,
+      deletions: 22,
+      changedFiles: 0,
+      changedFileCountKnown: false,
+      ci: [],
+      files: [],
+      commits: [],
+      threads: [],
+    } as unknown as ReviewPlatformPullRequestDetail;
+
+    const merged = mergeRevalidatedPullRequestOverview(current, overview);
+
+    expect(merged.changedFiles).toBe(13);
+    expect(merged.changedFileCountKnown).toBe(true);
+  });
+
+  it('keeps an authoritative zero when merging file counts', () => {
+    expect(mergeChangedFileCount({
+      changedFiles: 13,
+      changedFileCountKnown: true,
+    }, {
+      changedFiles: 0,
+      changedFileCountKnown: true,
+    })).toEqual({
+      changedFiles: 0,
+      changedFileCountKnown: true,
+    });
+  });
+
+  it('preserves known and legacy file counts when incoming data is incomplete', () => {
+    expect(mergeChangedFileCount({
+      changedFiles: 13,
+      changedFileCountKnown: true,
+    }, {
+      changedFiles: 0,
+      changedFileCountKnown: false,
+    })).toEqual({
+      changedFiles: 13,
+      changedFileCountKnown: true,
+    });
+    expect(mergeChangedFileCount({ changedFiles: 7 }, { changedFiles: 0 })).toEqual({
+      changedFiles: 7,
+      changedFileCountKnown: undefined,
+    });
+  });
+
+  it('distinguishes an unknown file count from a real zero', () => {
+    expect(resolvedChangedFileCount({
+      changedFiles: 0,
+      changedFileCountKnown: false,
+    })).toBeNull();
+    expect(resolvedChangedFileCount({
+      changedFiles: 0,
+      changedFileCountKnown: true,
+    })).toBe(0);
+  });
+
+  it('falls back to a known count and accepts legacy payloads', () => {
+    expect(resolvedChangedFileCount({
+      changedFiles: 0,
+      changedFileCountKnown: false,
+    }, {
+      changedFiles: 13,
+      changedFileCountKnown: true,
+    })).toBe(13);
+    expect(resolvedChangedFileCount({ changedFiles: 7 })).toBe(7);
   });
 });

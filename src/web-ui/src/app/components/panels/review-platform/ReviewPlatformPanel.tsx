@@ -49,9 +49,11 @@ import type { PullRequestContext } from '@/shared/types/context';
 import {
   currentPullRequestReviewStatusText,
   effectivePullRequestReviewFreshness,
+  mergeChangedFileCount,
   mergeRevalidatedPullRequestOverview,
   pullRequestReviewFreshness,
   pullRequestReviewLaunchKey,
+  resolvedChangedFileCount,
   samePullRequestRevisions,
   samePullRequestIdentity,
   type PullRequestReviewFreshness,
@@ -198,7 +200,7 @@ function mergeDetailPage(
     ...page,
     additions: page.additions || base.additions,
     deletions: page.deletions || base.deletions,
-    changedFiles: page.changedFiles || base.changedFiles,
+    ...mergeChangedFileCount(base, page),
     ci: page.section === 'ci' ? page.ci : base.ci,
     files: page.section === 'files' ? page.files : base.files,
     commits: page.section === 'commits' ? page.commits : base.commits,
@@ -2026,7 +2028,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                         {decisionLabel(pr.reviewDecision)}
                       </span>
                       <span className="review-platform__counts">
-                        <span>{pr.changedFiles} files</span>
+                        <span>{resolvedChangedFileCount(pr) ?? '—'} files</span>
                         <span className="review-platform__additions">+{pr.additions}</span>
                         <span className="review-platform__deletions">-{pr.deletions}</span>
                       </span>
@@ -2211,7 +2213,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     <strong>{displayPr?.sourceBranch ?? selectedPr.sourceBranch}</strong>
                     <ChevronRight size={13} />
                     <strong>{displayPr?.targetBranch ?? selectedPr.targetBranch}</strong>
-                    <span>{displayPr?.changedFiles ?? selectedPr.changedFiles} files</span>
+                    <span>{resolvedChangedFileCount(displayPr, selectedPr) ?? '—'} files</span>
                     <span className="review-platform__additions">+{displayPr?.additions ?? selectedPr.additions}</span>
                     <span className="review-platform__deletions">-{displayPr?.deletions ?? selectedPr.deletions}</span>
                   </div>
@@ -2495,7 +2497,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       );
                     })}
                     {!detailLoading && detail && detail.files.length === 0 && (
-                      <div className="review-platform__empty-state">No changed files were returned by this provider.</div>
+                      <div className="review-platform__empty-state">
+                        {detail.changedFileCountKnown === false
+                          ? 'Changed files are currently unavailable from this provider.'
+                          : 'No changed files were returned by this provider.'}
+                      </div>
                     )}
                     {renderDetailPagination('Files', changePage, changedFiles.length, setChangePageIndex)}
                   </section>
