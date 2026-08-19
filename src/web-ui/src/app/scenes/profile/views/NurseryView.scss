@@ -309,23 +309,73 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__action {
-    width: 100%;
-    height: 40px;
+    position: relative;
+    z-index: 0;
+    display: inline-flex;
+    width: 168px;
+    height: 48px;
+    box-sizing: border-box;
     flex-shrink: 0;
+    align-items: center;
     justify-content: flex-start;
-    padding: 0 $size-gap-4;
-    border: 1px solid var(--bf-appearance-token-color-overlay-black-12);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-static-white);
+    justify-self: center;
+    gap: 0;
+    padding: 4px $size-gap-4 4px 0;
+    overflow: visible;
+    border: 0;
+    border-radius: $size-radius-full;
+    appearance: none;
+    background: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-static-white) 96%,
+      var(--bf-appearance-token-color-purple-100)
+    );
     color: var(--bf-appearance-token-color-static-black);
-    box-shadow: 0 3px 10px var(--bf-appearance-token-color-overlay-black-08);
+    box-shadow:
+      0 7px 18px var(--bf-appearance-token-color-overlay-black-08),
+      8px 0 24px color-mix(in srgb, var(--bf-appearance-token-color-purple-200) 22%, transparent);
+    font-family: $font-family-sans;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-medium;
+    line-height: $line-height-base;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
-    span {
-      flex: 1;
-      text-align: left;
+    .nursery-defaults__action-icon {
+      display: inline-flex;
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      margin-right: $size-gap-3;
+      margin-left: -4px;
+      border-radius: $size-radius-full;
+      background: var(--bf-appearance-token-color-static-white);
+      color: var(--bf-appearance-token-color-static-black);
+      box-shadow:
+        0 5px 14px var(--bf-appearance-token-color-overlay-black-08),
+        0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-purple-200) 34%, transparent);
+      transition:
+        background $motion-fast $easing-standard,
+        color $motion-fast $easing-standard;
     }
 
-    svg:last-child {
+    .nursery-defaults__action-label {
+      min-width: 0;
+      flex: 1;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nursery-defaults__action-chevron {
       margin-left: auto;
       color: var(--bf-appearance-token-color-overlay-black-50);
       transition: transform $motion-fast $easing-standard;
@@ -333,13 +383,48 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
     &:hover:not(:disabled),
     &:active:not(:disabled) {
-      border-color: var(--bf-appearance-token-color-overlay-black-20);
       background: var(--bf-appearance-token-color-overlay-black-08);
       color: var(--bf-appearance-token-color-static-black);
     }
 
-    &:hover:not(:disabled) svg:last-child {
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 58%, transparent);
+      outline-offset: 2px;
+    }
+
+    &:hover:not(:disabled) .nursery-defaults__action-chevron {
       transform: translateX(2px);
+    }
+
+    &::after {
+      position: absolute;
+      z-index: -1;
+      top: 50%;
+      right: -24px;
+      width: 28px;
+      height: 76px;
+      background-image: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 38%, transparent) 0 1.1px,
+        transparent 1.25px
+      );
+      background-size: 6px 6px;
+      content: '';
+      opacity: 0.72;
+      pointer-events: none;
+      transform: translateY(-50%);
+      mask-image: radial-gradient(
+        ellipse 30px 43px at -5px 50%,
+        transparent 0 65%,
+        var(--bf-appearance-token-color-static-black) 68% 82%,
+        transparent 85%
+      );
+      -webkit-mask-image: radial-gradient(
+        ellipse 30px 43px at -5px 50%,
+        transparent 0 65%,
+        var(--bf-appearance-token-color-static-black) 68% 82%,
+        transparent 85%
+      );
     }
   }
 }
@@ -603,7 +688,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     justify-content: center;
     gap: 6px;
     padding: 0 10px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 0;
     border-radius: $size-radius-full;
     background: var(--assistant-card-start-bg);
     color: var(--bf-appearance-token-color-text-primary);
@@ -619,7 +704,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     &:hover:not(:disabled),
     &:focus-visible:not(:disabled),
     &:active:not(:disabled) {
-      border-color: var(--assistant-card-inverse-bg);
       background: var(--assistant-card-inverse-bg);
       color: var(--assistant-card-inverse-color);
     }
@@ -653,7 +737,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: center;
     justify-content: center;
     padding: 0;
-    border: 1px solid var(--bf-appearance-token-color-overlay-black-12);
+    border: 0;
     border-radius: 50%;
     background: var(--assistant-card-action-bg);
     color: var(--bf-appearance-token-color-static-black);
@@ -665,7 +749,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     &:hover:not(:disabled),
     &:focus-visible:not(:disabled),
     &:active:not(:disabled) {
-      border-color: var(--assistant-card-inverse-bg);
       background: var(--assistant-card-inverse-bg);
       color: var(--assistant-card-inverse-color);
     }
@@ -696,7 +779,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: center;
     justify-content: center;
     padding: 0;
-    border: 1px solid var(--bf-appearance-token-color-overlay-black-12);
+    border: 0;
     border-radius: 50%;
     background: var(--assistant-card-action-bg);
     color: var(--bf-appearance-token-color-static-black);
@@ -708,7 +791,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     &:hover:not(:disabled),
     &:focus-visible:not(:disabled),
     &:active:not(:disabled) {
-      border-color: var(--assistant-card-inverse-bg);
       background: var(--assistant-card-inverse-bg);
       color: var(--assistant-card-inverse-color);
     }
@@ -1330,7 +1412,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   .assistant-card__chevron,
   .assistant-card__configure-chevron,
-  .nursery-defaults__action svg:last-child {
+  .nursery-defaults__action-icon,
+  .nursery-defaults__action-chevron {
     transition: none;
   }
 }

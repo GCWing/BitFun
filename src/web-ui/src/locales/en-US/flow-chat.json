@@ -688,14 +688,14 @@
       }
     },
     "harness": {
-      "selectorTooltip": "{{name}} Harness is active",
+      "selectorTooltip": "The Agent is using the {{name}} Harness execution framework",
       "activateBalanced": "Switch to Standard Harness",
       "compatibilityShort": "Legacy",
       "comingSoon": "In development",
       "newSessionOnly": "New sessions",
-      "comingSoonNotice": "{{name}} Harness is in development.",
-      "legacySessionNotice": "This legacy session keeps its original agent mode. Create a new session to use Agent Harness.",
-      "sessionStartedNotice": "Harness can only be set before the first turn starts. Create a new session to use another profile.",
+      "comingSoonNotice": "The {{name}} Harness execution framework is in development.",
+      "legacySessionNotice": "This legacy session keeps its original Agent execution mode. Create a new session to use the Agent Harness execution framework.",
+      "sessionStartedNotice": "The Agent Harness execution framework is set before the first turn starts. Create a new session to use another profile.",
       "unsupportedProfile": "Unsupported Harness ({{id}})",
       "unsupportedProfileNotice": "This session uses {{id}}, which this version cannot run. Select a supported Harness explicitly.",
       "profileChangeBusy": "Wait for the current turn to finish before changing Harness.",
@@ -703,13 +703,13 @@
       "profileUnavailable": "This Harness is not supported by the current BitFun Host.",
       "profileChangeFailed": "Failed to change Harness. Try again.",
       "profiles": {
-        "minimal": { "name": "Minimal", "promise": "Acts directly, with the least planning and checking" },
-        "balanced": { "name": "Standard", "promise": "Plans first, then verifies what matters" },
-        "ultimate": { "name": "Ultimate", "promise": "Deep planning, more collaboration, full verification" },
-        "creative": { "name": "Creative", "promise": "Builds Mini Apps and customizes BitFun itself" }
+        "minimal": { "name": "Minimal", "promise": "Lean execution and capabilities that move work forward directly" },
+        "balanced": { "name": "Standard", "promise": "The everyday default, balancing speed, resource use, and quality" },
+        "ultimate": { "name": "Ultimate", "promise": "Decomposes complex work, collaborates deeply, and integrates results" },
+        "creative": { "name": "Creative", "promise": "Orchestrates Mini Apps, product customization, and changes to BitFun" }
       }
     },
-    "specialistAgents": {
+    "agents": {
       "available": "Available",
       "needsChanges": "Needs changes",
       "comingSoon": "In development",

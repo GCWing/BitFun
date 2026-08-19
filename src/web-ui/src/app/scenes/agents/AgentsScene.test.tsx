@@ -257,7 +257,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(stylesheet).toContain('min-width: 0;');
   });
 
-  it('uses the shared responsive gallery grid and lets agent cards fill each track', () => {
+  it('uses one compact responsive catalog without overview category navigation', () => {
     const sceneSource = readFileSync(
       fileURLToPath(new URL('./AgentsScene.tsx', import.meta.url)),
       'utf8',
@@ -270,51 +270,93 @@ describeWithJsdom('AgentsScene', () => {
       fileURLToPath(new URL('./components/_AgentSurfaceCard.scss', import.meta.url)),
       'utf8',
     );
+    const coreCardStyles = readFileSync(
+      fileURLToPath(new URL('./components/CoreAgentCard.scss', import.meta.url)),
+      'utf8',
+    );
+    const agentCardSource = readFileSync(
+      fileURLToPath(new URL('./components/AgentCard.tsx', import.meta.url)),
+      'utf8',
+    );
+    const coreCardSource = readFileSync(
+      fileURLToPath(new URL('./components/CoreAgentCard.tsx', import.meta.url)),
+      'utf8',
+    );
 
-    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{360\}[^>]*>/g)).toHaveLength(2);
+    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{300\}[^>]*>/g)).toHaveLength(1);
+    expect(sceneSource).toContain('catalogAgents.map');
+    expect(sceneSource).not.toContain('gallery-anchor-bar');
+    expect(sceneSource).not.toContain('agents-core-zone');
     expect(agentCardStyles).toMatch(/\.agent-card \{\s+width: 100%;\s+min-width: 0;/);
     expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
+    expect(agentCardStyles).toContain('height: 148px;');
+    expect(coreCardSurfaceStyles).toContain('height: 148px;');
+    expect(agentCardStyles).toContain('border-radius: $size-radius-lg;');
+    expect(coreCardSurfaceStyles).toContain('border-radius: $size-radius-lg;');
+    expect(agentCardStyles).toContain('background: var(--bf-appearance-token-color-bg-elevated);');
+    expect(coreCardSurfaceStyles).toContain('background: var(--bf-appearance-token-color-bg-elevated);');
+    expect(agentCardStyles).toContain('box-shadow: $shadow-xs;');
+    expect(coreCardSurfaceStyles).toContain('box-shadow: $shadow-xs;');
+    expect(agentCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
+    expect(coreCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
+    expect(agentCardStyles).toContain('inset-block: 12px;');
+    expect(coreCardStyles).toContain('inset-block: 12px;');
+    expect(agentCardStyles).toContain('@container agent-card (max-width: 330px)');
+    expect(coreCardStyles).toContain('@container core-agent-card (max-width: 330px)');
+    expect(agentCardSource).toContain('agent-card__icon-area');
+    expect(agentCardSource).toContain('agent-card__dot-field');
+    expect(agentCardSource).toContain("t('agentCard.metrics.collaboration')");
+    expect(coreCardSource).toContain("t('agentCard.status.connected')");
+    expect(coreCardSource).toContain('core-agent-card__status');
+    expect(coreCardSource).toContain('core-agent-card__dot-field');
+    expect(agentCardSource).not.toContain('CAPABILITY_ACCENT');
+    expect(agentCardSource).not.toContain('--agent-card-gradient');
+    expect(coreCardSource).not.toContain('getAlphaColor');
+    expect(coreCardSource).not.toContain('--core-card-gradient');
+    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-appearance-token-color-text-primary\);[\s\S]*?> svg \{[\s\S]*?color: var\(--bf-appearance-token-color-success\);/);
+    expect(coreCardSurfaceStyles).not.toContain('$gradient');
+    expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
+    expect(coreCardSurfaceStyles).toContain('background-size: 7px 7px;');
+    expect(coreCardSurfaceStyles).toContain('mask-image: linear-gradient(to bottom, black 0%, transparent 100%);');
     expect(agentCardStyles).not.toContain('width: 360px;');
     expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
   });
 
-  it('shows all Harness profiles and keeps unfinished profiles explicit', async () => {
+  it('shows Harness as a three-stop rail with a separate creative direction', async () => {
     const { default: AgentsScene } = await import('./AgentsScene');
 
     await act(async () => {
       root.render(<AgentsScene />);
     });
 
-    const minimal = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-minimal"]');
-    const balanced = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-balanced"]');
-    const ultimate = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-ultimate"]');
-    const creative = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-creative"]');
+    const minimal = container.querySelector<HTMLElement>('[data-testid="agents-harness-minimal"]');
+    const balanced = container.querySelector<HTMLElement>('[data-testid="agents-harness-balanced"]');
+    const ultimate = container.querySelector<HTMLElement>('[data-testid="agents-harness-ultimate"]');
+    const creative = container.querySelector<HTMLElement>('[data-testid="agents-harness-creative"]');
+    expect(container.querySelectorAll('.bitfun-agents-scene__harness-profile')).toHaveLength(3);
+    expect(container.querySelectorAll('.bitfun-agents-scene__harness-rail-node')).toHaveLength(3);
+    expect(container.querySelectorAll('.bitfun-agents-scene__harness-rail-node.is-default')).toHaveLength(1);
+    expect(container.querySelector('.bitfun-agents-scene__harness-presentation')).toBeTruthy();
+    expect(container.querySelector('.bitfun-agents-scene__harness-track')).toBeTruthy();
+    expect(container.querySelector('.bitfun-agents-scene__harness-creative')).toBe(creative);
+    expect(container.querySelector('.bitfun-agents-scene__harness-step')).toBeNull();
+    expect(container.querySelector('.bitfun-agents-scene__harness-card')).toBeNull();
     expect(minimal).toBeTruthy();
-    expect(minimal?.dataset.bfState).toBe('connected');
-    expect(balanced?.dataset.bfState).toBe('connected');
-    expect(ultimate?.dataset.bfState).toBe('coming-soon');
-    expect(creative?.dataset.bfState).toBe('coming-soon');
+    expect(minimal?.tagName).toBe('DIV');
+    expect(container.querySelector('.bitfun-agents-scene__harness-step-status')).toBeNull();
+    expect(minimal?.dataset.bfState).toBeUndefined();
+    expect(ultimate?.dataset.bfState).toBeUndefined();
+    expect(minimal?.dataset.harnessGear).toBe('1');
+    expect(balanced?.dataset.harnessGear).toBe('2');
+    expect(ultimate?.dataset.harnessGear).toBe('3');
+    expect(creative?.dataset.harnessGear).toBe('creative');
+    expect(minimal?.textContent).toContain('harnessZone.profiles.minimal.purpose');
+    expect(minimal?.textContent).not.toContain('harnessZone.connected');
+    expect(ultimate?.textContent).not.toContain('harnessZone.comingSoon');
     expect(creative?.querySelector('[data-bf-icon="harness-creative"]')).toBeTruthy();
 
-    await act(async () => {
-      minimal?.click();
-      balanced?.click();
-    });
-
     expect(notificationInfoMock).not.toHaveBeenCalled();
-    expect(notificationSuccessMock).toHaveBeenCalledTimes(2);
-    expect(notificationSuccessMock).toHaveBeenCalledWith(
-      'harnessZone.connectedNotice',
-      expect.objectContaining({ duration: 2600 }),
-    );
-
-    await act(async () => {
-      creative?.click();
-    });
-    expect(notificationInfoMock).toHaveBeenCalledWith(
-      'harnessZone.comingSoonNotice',
-      expect.objectContaining({ duration: 3200 }),
-    );
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
   });
 
   it('shows skill grouping and editing for a custom subagent with the Skill tool', async () => {

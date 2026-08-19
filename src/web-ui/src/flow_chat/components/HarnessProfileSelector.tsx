@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Check,
-  CircleHelp,
   Grid2X2,
   Grid3X3,
   Scan,
@@ -65,44 +64,42 @@ function isProfileInDevelopment(
 }
 
 /**
- * The execution gears use progressively denser frames around the same Agent
+ * Profile-list icons use progressively denser frames around the same Agent
  * core. Creative branches from that scale with its own BitFun grid-and-brush
- * mark, redrawn from the supplied reference.
+ * mark, redrawn from the supplied reference. The ChatInput trigger stays
+ * text-only so this visual vocabulary remains inside the list.
  */
 function HarnessDensityMark({
   profile,
-  compact = false,
 }: {
-  profile?: KnownHarnessProfileId;
-  compact?: boolean;
+  profile: KnownHarnessProfileId;
 }): React.ReactElement {
-  const densityProfile = profile && isDensityProfile(profile) ? profile : undefined;
-  const DensityIcon = densityProfile ? PROFILE_DENSITY_ICONS[densityProfile] : CircleHelp;
+  const densityProfile = isDensityProfile(profile) ? profile : undefined;
+  const DensityIcon = densityProfile ? PROFILE_DENSITY_ICONS[densityProfile] : null;
 
   return (
     <span
       className="bitfun-harness-selector__density-mark"
-      data-harness-profile={profile ?? 'unknown'}
+      data-harness-profile={profile}
       data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}
-      data-size={compact ? 'compact' : 'option'}
       aria-hidden
     >
       {profile === 'creative' ? (
         <HarnessCreativeIcon
           className="bitfun-harness-selector__density-frame"
-          size={compact ? 15 : 26}
+          size={26}
         />
-      ) : (
+      ) : DensityIcon ? (
         <DensityIcon
           className="bitfun-harness-selector__density-frame"
-          size={compact ? 15 : 26}
-          strokeWidth={compact ? 1.55 : 1.4}
+          size={26}
+          strokeWidth={1.4}
         />
-      )}
+      ) : null}
       {densityProfile && (
         <Square
           className="bitfun-harness-selector__density-core"
-          size={compact ? 5 : 8}
+          size={8}
           strokeWidth={0}
           fill="currentColor"
         />
@@ -194,9 +191,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   const selectedProfileAvailable = Boolean(
     knownSelectedProfile && isSelectableProfile(knownSelectedProfile),
   );
-  const gear = knownSelectedProfile && isDensityProfile(knownSelectedProfile)
-    ? PROFILE_GEARS[knownSelectedProfile]
-    : 0;
   const triggerLabel = legacySession
     ? t('chatInput.harness.compatibilityShort')
     : knownSelectedProfile
@@ -220,7 +214,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           data-bf-component="harness-selector"
           data-bf-part="trigger"
           data-bf-state={open ? 'open' : undefined}
-          data-harness-gear={gear}
           data-harness-legacy={legacySession ? 'true' : undefined}
           data-harness-locked={sessionStarted ? 'true' : undefined}
           aria-haspopup="menu"
@@ -233,9 +226,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           }}
           data-testid="harness-profile-selector"
         >
-          {!legacySession && (
-            <HarnessDensityMark profile={knownSelectedProfile} compact />
-          )}
           <span className="bitfun-harness-selector__trigger-value">
             {triggerLabel}
           </span>

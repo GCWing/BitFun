@@ -1949,7 +1949,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               key={session.sessionId}
               content={tooltipContent}
               placement="right"
-              followCursor
               disabled={isEditing || openMenuSessionId !== null}
             >
               {row}

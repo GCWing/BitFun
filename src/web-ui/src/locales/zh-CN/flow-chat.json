@@ -688,14 +688,14 @@
       }
     },
     "harness": {
-      "selectorTooltip": "当前使用「{{name}}」Harness",
+      "selectorTooltip": "Agent 当前采用「{{name}}」Harness 执行框架",
       "activateBalanced": "切换到标准 Harness",
       "compatibilityShort": "兼容模式",
       "comingSoon": "开发中",
       "newSessionOnly": "仅新会话",
-      "comingSoonNotice": "「{{name}}」Harness 正在开发中。",
-      "legacySessionNotice": "该旧会话继续使用原 Agent 模式；请新建会话使用 Agent Harness。",
-      "sessionStartedNotice": "Harness 仅可在首轮开始前设定；如需使用其他挡位，请新建会话。",
+      "comingSoonNotice": "「{{name}}」Harness 执行框架正在开发中。",
+      "legacySessionNotice": "该旧会话继续使用原 Agent 执行模式；请新建会话使用 Agent Harness 执行框架。",
+      "sessionStartedNotice": "Agent Harness 的执行框架在首轮开始前确定；如需使用其他挡位，请新建会话。",
       "unsupportedProfile": "不受支持的 Harness（{{id}}）",
       "unsupportedProfileNotice": "该会话使用当前版本无法运行的 {{id}}。请选择一个受支持的 Harness。",
       "profileChangeBusy": "请等待当前轮次结束后再切换 Harness。",
@@ -703,13 +703,13 @@
       "profileUnavailable": "当前 BitFun Host 不支持该 Harness。",
       "profileChangeFailed": "切换 Harness 失败，请重试。",
       "profiles": {
-        "minimal": { "name": "极简", "promise": "直接执行，最少编排与校验" },
-        "balanced": { "name": "标准", "promise": "先规划再执行，关键处校验" },
-        "ultimate": { "name": "极致", "promise": "深度规划、多方协作、全面校验" },
-        "creative": { "name": "创造", "promise": "开发 Mini App，定制并改造 BitFun" }
+        "minimal": { "name": "极简", "promise": "精简执行流程与能力组合，直接推进任务" },
+        "balanced": { "name": "标准", "promise": "日常任务的常用默认选择，均衡效率、投入与质量" },
+        "ultimate": { "name": "极致", "promise": "系统分解复杂任务，深度协作并整合结果" },
+        "creative": { "name": "创造", "promise": "组织 Mini App 开发、产品定制与自身改造" }
       }
     },
-    "specialistAgents": {
+    "agents": {
       "available": "可用",
       "needsChanges": "需要变更",
       "comingSoon": "开发中",

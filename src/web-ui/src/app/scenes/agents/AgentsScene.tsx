@@ -2,19 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
   Bot,
-  Check,
+  Circle,
   Cpu,
-  Gauge,
-  Orbit,
   RotateCcw,
-  Scale,
   Pencil,
   Plus,
   Puzzle,
-  Search as SearchIcon,
   Trash2,
   Wrench,
-  Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, IconButton, Search, Select, confirmDanger } from '@/component-library';
@@ -41,6 +36,8 @@ import { ToolGroupPicker, ToolGroupSummary } from './components/ToolGroupPicker'
 import { useUserSkillGroups } from './components/useUserSkillGroups';
 import { useUserToolGroups } from './components/useUserToolGroups';
 import {
+  type AgentFilterLevel,
+  type AgentFilterType,
   type AgentWithCapabilities,
   useAgentsStore,
 } from './agentsStore';
@@ -48,7 +45,6 @@ import { useAgentsList } from './hooks/useAgentsList';
 import { AGENT_ICON_MAP } from './agentsIcons';
 import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentAppearance';
 import { getCardGradient } from '@/shared/utils/cardGradients';
-import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { isAgentProfileConfigurableToolName } from './agentToolVisibility';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
@@ -77,12 +73,13 @@ import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 
 const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
 
-const HARNESS_PROFILES = [
-  { id: 'minimal', icon: Zap, connected: true },
-  { id: 'balanced', icon: Scale, connected: true },
-  { id: 'ultimate', icon: Orbit, connected: false },
-  { id: 'creative', icon: HarnessCreativeIcon, connected: false },
+const HARNESS_GEAR_PROFILES = [
+  { id: 'minimal', gear: 1 },
+  { id: 'balanced', gear: 2 },
+  { id: 'ultimate', gear: 3 },
 ] as const;
+
+const HARNESS_DEFAULT_PROFILE_ID = 'balanced';
 
 type CapabilityTab = 'model' | 'tools' | 'skills' | 'subagents';
 
@@ -232,7 +229,6 @@ const AgentsHomeView: React.FC = () => {
     getModeProfile,
     getAgentSkills,
     getModeManageableSubagents,
-    counts,
     hiddenAgentIds,
     loadAgents,
     getModeConfig,
@@ -271,44 +267,42 @@ const AgentsHomeView: React.FC = () => {
     },
   }), [t]);
 
-  const coreAgents = useMemo(() => allAgents.filter((agent) => CORE_AGENT_IDS.has(agent.id)), [allAgents]);
+  const coreAgents = useMemo(
+    () => filteredAgents.filter((agent) => CORE_AGENT_IDS.has(agent.id)),
+    [filteredAgents],
+  );
 
   const visibleAgents = useMemo(
     () => filteredAgents.filter((agent) => isAgentInOverviewZone(agent, hiddenAgentIds)),
     [filteredAgents, hiddenAgentIds],
   );
 
-  const scrollToZone = useCallback((targetId: string) => {
-    document.getElementById(targetId)?.scrollIntoView({
-      behavior: getMotionAwareScrollBehavior('smooth'),
-      block: 'start',
-    });
-  }, []);
+  const catalogAgents = useMemo(
+    () => [...coreAgents, ...visibleAgents],
+    [coreAgents, visibleAgents],
+  );
 
-  const handleHarnessProfileClick = useCallback((profileId: typeof HARNESS_PROFILES[number]['id']) => {
-    const name = t(`harnessZone.profiles.${profileId}.name`);
-    const profile = HARNESS_PROFILES.find(candidate => candidate.id === profileId);
-    if (profile?.connected) {
-      notification.success(t('harnessZone.connectedNotice', { name }), { duration: 2600 });
-      return;
-    }
-    notification.info(t('harnessZone.comingSoonNotice', { name }), { duration: 3200 });
-  }, [notification, t]);
+  const sourceFilterOptions = useMemo(() => [
+    { value: 'all', label: t('filters.anySource') },
+    { value: 'builtin', label: t('filters.builtin') },
+    { value: 'user', label: t('filters.user') },
+    { value: 'project', label: t('filters.project') },
+    { value: 'external', label: t('filters.external') },
+  ], [t]);
 
-  const levelFilters = [
-    { key: 'builtin', label: t('filters.builtin'), count: counts.builtin },
-    { key: 'user', label: t('filters.user'), count: counts.user },
-    { key: 'project', label: t('filters.project'), count: counts.project },
-    { key: 'external', label: t('filters.external'), count: counts.external },
-  ] as const;
-
-  const typeFilters = [
-    { key: 'mode', label: t('filters.mode'), count: counts.mode },
-    { key: 'subagent', label: t('filters.subagent'), count: counts.subagent },
-  ] as const;
+  const typeFilterOptions = useMemo(() => [
+    { value: 'all', label: t('filters.anyKind') },
+    { value: 'mode', label: t('filters.mode') },
+    { value: 'subagent', label: t('filters.subagent') },
+  ], [t]);
 
   const renderSkeletons = (prefix: string) => (
-    <GallerySkeleton count={6} cardHeight={138} className={`${prefix}-skeleton`} />
+    <GallerySkeleton
+      count={6}
+      cardHeight={148}
+      minCardWidth={300}
+      className={`${prefix}-skeleton`}
+    />
   );
 
   const selectedAgent = useMemo(
@@ -409,6 +403,21 @@ const AgentsHomeView: React.FC = () => {
       return configuredTools.filter(isAgentProfileConfigurableToolName).length;
     }
     return agent.toolCount ?? 0;
+  }, [getModeConfig]);
+  const getDisplayedSkillCount = useCallback((agent: AgentWithCapabilities): number => {
+    const configuredTools = agent.agentKind === 'mode'
+      ? (getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
+      : (agent.defaultTools ?? []);
+    return hasSkillTool(configuredTools)
+      ? getConfiguredEnabledSkillKeys(getAgentSkills(agent.id)).length
+      : 0;
+  }, [getAgentSkills, getModeConfig]);
+  const getDisplayedSubagentCount = useCallback((agent: AgentWithCapabilities): number => {
+    if (agent.agentKind !== 'mode') {
+      return 0;
+    }
+    const configuredTools = getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [];
+    return hasTaskTool(configuredTools) ? (agent.visibleSubagentCount ?? 0) : 0;
   }, [getModeConfig]);
   const selectedAgentToolCount = selectedAgent ? getDisplayedToolCount(selectedAgent) : 0;
   const selectedSubagentModelValue = selectedAgent?.agentKind === 'subagent'
@@ -632,54 +641,27 @@ const AgentsHomeView: React.FC = () => {
       <GalleryPageHeader
         title={t('page.title')}
         subtitle={t('page.subtitle')}
-        extraContent={(
-          <div className="gallery-anchor-bar" data-bf-scene="agents" data-bf-part="anchorBar">
-            <button
-              type="button"
-              className="gallery-anchor-btn"
-              onClick={() => scrollToZone('harness-zone')}
-              data-testid="agents-anchor-harness"
-            >
-              {t('nav.harness')}
-            </button>
-            <button
-              type="button"
-              className="gallery-anchor-btn"
-              onClick={() => scrollToZone('core-agents-zone')}
-              data-testid="agents-anchor-core"
-            >
-              {t('nav.coreAgents')}
-            </button>
-            <button
-              type="button"
-              className="gallery-anchor-btn"
-              onClick={() => scrollToZone('agents-zone')}
-              data-testid="agents-anchor-custom"
-            >
-              {t('nav.agents')}
-            </button>
-          </div>
-        )}
         actions={(
           <>
             <Search
+              className="bitfun-agents-scene__search"
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder={t('page.searchPlaceholder')}
+              inputAriaLabel={t('page.searchPlaceholder')}
               size="small"
               clearable
-              prefixIcon={<></>}
-              suffixContent={(
-                <button
-                  type="button"
-                  className="gallery-search-btn"
-                  aria-label={t('page.searchPlaceholder')}
-                  data-testid="agents-search-btn"
-                >
-                  <SearchIcon size={14} />
-                </button>
-              )}
+              data-testid="agents-search"
             />
+            <button
+              type="button"
+              className="gallery-action-btn gallery-action-btn--primary bitfun-agents-scene__create-button"
+              onClick={openCreateAgent}
+              data-testid="agents-create-agent-btn"
+            >
+              <Plus size={15} />
+              <span>{t('page.newAgent')}</span>
+            </button>
           </>
         )}
       />
@@ -687,169 +669,132 @@ const AgentsHomeView: React.FC = () => {
       <div className="gallery-zones" data-bf-scene="agents" data-bf-part="zones" data-testid="agent-list">
         <GalleryZone
           id="harness-zone"
+          className="bitfun-agents-scene__harness-zone"
           data-testid="agents-harness-zone"
           title={t('harnessZone.title')}
           subtitle={t('harnessZone.subtitle')}
-          tools={<span className="gallery-zone-count">{HARNESS_PROFILES.length}</span>}
         >
-          <GalleryGrid minCardWidth={280} data-bf-scene="agents" data-bf-part="harnessGrid">
-            {HARNESS_PROFILES.map(({ id, icon: Icon, connected }, index) => (
-              <button
-                key={id}
-                type="button"
-                className={`bitfun-agents-scene__harness-card${connected ? ' is-connected' : ''}`}
-                style={{ '--surface-stagger-index': index } as React.CSSProperties}
-                data-bf-component="harness-profile-card"
-                data-bf-part="root"
-                data-bf-profile={id}
-                data-bf-state={connected ? 'connected' : 'coming-soon'}
-                onClick={() => handleHarnessProfileClick(id)}
-                data-testid={`agents-harness-${id}`}
-              >
-                <span className="bitfun-agents-scene__harness-card-icon" aria-hidden>
-                  <Icon size={22} strokeWidth={1.65} />
-                </span>
-                <span className="bitfun-agents-scene__harness-card-copy">
-                  <span className="bitfun-agents-scene__harness-card-title-row">
+          <div
+            className="bitfun-agents-scene__harness-presentation"
+            role="group"
+            aria-label={t('harnessZone.title')}
+            data-bf-scene="agents"
+            data-bf-part="harnessPresentation"
+          >
+            <div className="bitfun-agents-scene__harness-track">
+              <div className="bitfun-agents-scene__harness-rail" aria-hidden>
+                <span className="bitfun-agents-scene__harness-rail-line" />
+                {HARNESS_GEAR_PROFILES.map(({ id }) => (
+                  <Circle
+                    key={id}
+                    className={[
+                      'bitfun-agents-scene__harness-rail-node',
+                      id === HARNESS_DEFAULT_PROFILE_ID && 'is-default',
+                    ].filter(Boolean).join(' ')}
+                    size={9}
+                    strokeWidth={1.5}
+                    fill={
+                      id === HARNESS_DEFAULT_PROFILE_ID
+                        ? 'currentColor'
+                        : 'var(--bf-appearance-token-color-bg-scene)'
+                    }
+                  />
+                ))}
+              </div>
+              <div className="bitfun-agents-scene__harness-profile-grid">
+                {HARNESS_GEAR_PROFILES.map(({ id, gear }) => (
+                  <div
+                    key={id}
+                    className="bitfun-agents-scene__harness-profile"
+                    data-bf-component="harness-profile-step"
+                    data-bf-part="root"
+                    data-bf-profile={id}
+                    data-harness-gear={gear}
+                    data-testid={`agents-harness-${id}`}
+                  >
                     <strong>{t(`harnessZone.profiles.${id}.name`)}</strong>
-                    <span className={`bitfun-agents-scene__harness-card-status${connected ? ' is-connected' : ''}`}>
-                      {connected ? t('harnessZone.connected') : t('harnessZone.comingSoon')}
-                    </span>
-                  </span>
-                  <span className="bitfun-agents-scene__harness-card-description">
-                    {t(`harnessZone.profiles.${id}.description`)}
-                  </span>
-                  <span className="bitfun-agents-scene__harness-card-behavior">
-                    <Gauge size={12} strokeWidth={1.8} aria-hidden />
-                    {t(`harnessZone.profiles.${id}.behavior`)}
-                  </span>
-                </span>
-                {connected ? <Check className="bitfun-agents-scene__harness-card-check" size={16} strokeWidth={2.2} aria-hidden /> : null}
-              </button>
-            ))}
-          </GalleryGrid>
-        </GalleryZone>
+                    <span>{t(`harnessZone.profiles.${id}.purpose`)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-        <GalleryZone
-          id="core-agents-zone"
-          data-testid="agents-core-zone"
-          title={t('coreAgentsZone.title')}
-          subtitle={t('coreAgentsZone.subtitle')}
-          tools={(
-            <span className="gallery-zone-count">{coreAgents.length}</span>
-          )}
-        >
-          {loading ? (
-            <GallerySkeleton
-              count={3}
-              cardHeight={160}
-              minCardWidth={360}
-              className="core-agent-skeleton"
-            />
-          ) : coreAgents.length === 0 ? (
-            <GalleryEmpty
-              icon={<Cpu size={32} strokeWidth={1.5} />}
-              message={t('coreAgentsZone.empty')}
-              testId="agent-list-empty"
-            />
-          ) : (
-            <GalleryGrid minCardWidth={360} data-bf-scene="agents" data-bf-part="coreGrid">
-              {coreAgents.map((agent, index) => (
-                <CoreAgentCard
-                  key={agent.id}
-                  agent={agent}
-                  index={index}
-                  meta={coreAgentMeta[agent.id] ?? { role: agent.name, ...DEFAULT_CORE_AGENT_ACCENT }}
-                  toolCount={getDisplayedToolCount(agent)}
-                  skillCount={hasSkillTool(
-                    agent.agentKind === 'mode'
-                      ? (getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
-                      : (agent.defaultTools ?? []),
-                  )
-                    ? getConfiguredEnabledSkillKeys(getAgentSkills(agent.id)).length
-                    : 0}
-                  subagentCount={agent.agentKind === 'mode' && hasTaskTool(getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
-                    ? (agent.visibleSubagentCount ?? 0)
-                    : 0}
-                  onOpenDetails={openAgentDetails}
-                  disabledReason={
-                    agent.id === 'ComputerUse' && !computerUseEnabled
-                      ? t('coreAgentsZone.computerUseDisabledBadge')
-                      : undefined
-                  }
-                />
-              ))}
-            </GalleryGrid>
-          )}
+            <div
+              className="bitfun-agents-scene__harness-creative"
+              data-bf-component="harness-profile-step"
+              data-bf-part="root"
+              data-bf-profile="creative"
+              data-harness-gear="creative"
+              data-testid="agents-harness-creative"
+            >
+              <span className="bitfun-agents-scene__harness-creative-icon" aria-hidden>
+                <HarnessCreativeIcon size={28} />
+              </span>
+              <span className="bitfun-agents-scene__harness-creative-copy">
+                <span className="bitfun-agents-scene__harness-creative-heading">
+                  <span>{t('harnessZone.creativeTrack')}</span>
+                  <strong>{t('harnessZone.profiles.creative.name')}</strong>
+                </span>
+                <span className="bitfun-agents-scene__harness-creative-purpose">
+                  {t('harnessZone.profiles.creative.purpose')}
+                </span>
+              </span>
+            </div>
+          </div>
         </GalleryZone>
 
         <GalleryZone
           id="agents-zone"
-          data-testid="agents-custom-zone"
+          data-testid="agents-catalog-zone"
           title={t('agentsZone.title')}
           subtitle={t('agentsZone.subtitle')}
           tools={(
             <>
               <div className="bitfun-agents-scene__agent-filters" data-bf-scene="agents" data-bf-part="filters">
-                <div className="bitfun-agents-scene__agent-filter-group">
+                <div
+                  className="bitfun-agents-scene__agent-filter-group"
+                  data-testid="agents-source-filter"
+                >
                   <span className="bitfun-agents-scene__agent-filter-label">
                     {t('filters.source')}
                   </span>
-                  {levelFilters.map(({ key, label, count }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={[
-                        'gallery-cat-chip',
-                        agentFilterLevel === key && 'gallery-cat-chip--active',
-                      ].filter(Boolean).join(' ')}
-                      onClick={() => setAgentFilterLevel(agentFilterLevel === key ? 'all' : key)}
-                      data-testid="agents-source-filter"
-                      data-agent-source={key}
-                    >
-                      <span>{label}</span>
-                      <span className="gallery-filter-count">{count}</span>
-                    </button>
-                  ))}
+                  <Select
+                    className="bitfun-agents-scene__agent-filter-select"
+                    size="small"
+                    value={agentFilterLevel}
+                    options={sourceFilterOptions}
+                    triggerAriaLabel={t('filters.source')}
+                    onChange={(value) => setAgentFilterLevel(
+                      normalizeSelectValue(value) as AgentFilterLevel,
+                    )}
+                  />
                 </div>
-                <div className="bitfun-agents-scene__agent-filter-group">
+                <div
+                  className="bitfun-agents-scene__agent-filter-group"
+                  data-testid="agents-kind-filter"
+                >
                   <span className="bitfun-agents-scene__agent-filter-label">
                     {t('filters.kind')}
                   </span>
-                  {typeFilters.map(({ key, label, count }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={[
-                        'gallery-cat-chip',
-                        agentFilterType === key && 'gallery-cat-chip--active',
-                      ].filter(Boolean).join(' ')}
-                      onClick={() => setAgentFilterType(agentFilterType === key ? 'all' : key)}
-                      data-testid="agents-kind-filter"
-                      data-agent-kind={key}
-                    >
-                      <span>{label}</span>
-                      <span className="gallery-filter-count">{count}</span>
-                    </button>
-                  ))}
+                  <Select
+                    className="bitfun-agents-scene__agent-filter-select"
+                    size="small"
+                    value={agentFilterType}
+                    options={typeFilterOptions}
+                    triggerAriaLabel={t('filters.kind')}
+                    onChange={(value) => setAgentFilterType(
+                      normalizeSelectValue(value) as AgentFilterType,
+                    )}
+                  />
                 </div>
               </div>
-              <button
-                type="button"
-                className="gallery-action-btn gallery-action-btn--primary"
-                onClick={openCreateAgent}
-                data-testid="agents-create-agent-btn"
-              >
-                <Plus size={15} />
-                <span>{t('page.newAgent')}</span>
-              </button>
-              <span className="gallery-zone-count">{visibleAgents.length}</span>
+              <span className="gallery-zone-count">{catalogAgents.length}</span>
             </>
           )}
         >
           {loading ? renderSkeletons('agent') : null}
 
-          {!loading && visibleAgents.length === 0 ? (
+          {!loading && catalogAgents.length === 0 ? (
             <GalleryEmpty
               icon={<Bot size={32} strokeWidth={1.5} />}
               message={allAgents.length === 0 ? t('agentsZone.empty.noAgents') : t('agentsZone.empty.noMatch')}
@@ -857,27 +802,42 @@ const AgentsHomeView: React.FC = () => {
             />
           ) : null}
 
-          {!loading && visibleAgents.length > 0 ? (
-            <GalleryGrid minCardWidth={360}>
-              {visibleAgents.map((agent, index) => (
-                <AgentCard
-                  key={agent.id}
-                  agent={agent}
-                  index={index}
-                  toolCount={getDisplayedToolCount(agent)}
-                  skillCount={hasSkillTool(
-                    agent.agentKind === 'mode'
-                      ? (getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
-                      : (agent.defaultTools ?? []),
-                  )
-                    ? getConfiguredEnabledSkillKeys(getAgentSkills(agent.id)).length
-                    : 0}
-                  subagentCount={agent.agentKind === 'mode' && hasTaskTool(getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
-                    ? (agent.visibleSubagentCount ?? 0)
-                    : 0}
-                  onOpenDetails={openAgentDetails}
-                />
-              ))}
+          {!loading && catalogAgents.length > 0 ? (
+            <GalleryGrid
+              minCardWidth={300}
+              data-bf-scene="agents"
+              data-bf-part="catalogGrid"
+            >
+              {catalogAgents.map((agent, index) => {
+                const commonCardProps = {
+                  agent,
+                  index,
+                  toolCount: getDisplayedToolCount(agent),
+                  skillCount: getDisplayedSkillCount(agent),
+                  subagentCount: getDisplayedSubagentCount(agent),
+                  onOpenDetails: openAgentDetails,
+                };
+
+                if (CORE_AGENT_IDS.has(agent.id)) {
+                  return (
+                    <CoreAgentCard
+                      key={agent.id}
+                      {...commonCardProps}
+                      meta={coreAgentMeta[agent.id] ?? {
+                        role: agent.name,
+                        ...DEFAULT_CORE_AGENT_ACCENT,
+                      }}
+                      disabledReason={
+                        agent.id === 'ComputerUse' && !computerUseEnabled
+                          ? t('coreAgentsZone.computerUseDisabledBadge')
+                          : undefined
+                      }
+                    />
+                  );
+                }
+
+                return <AgentCard key={agent.id} {...commonCardProps} />;
+              })}
             </GalleryGrid>
           ) : null}
         </GalleryZone>
