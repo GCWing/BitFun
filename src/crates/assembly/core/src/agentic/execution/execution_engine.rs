@@ -72,7 +72,8 @@ use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVER
 use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use bitfun_core_types::{
-    ModelRequestContext, SessionModelBindingPolicy, MINIMAL_HARNESS_PROFILE_ID,
+    ModelRequestContext, SessionModelBindingPolicy, BALANCED_HARNESS_PROFILE_ID,
+    MINIMAL_HARNESS_PROFILE_ID,
 };
 use bitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
 use dashmap::DashMap;
@@ -104,7 +105,23 @@ fn ensure_primary_session_goal_tools(allowed_tools: &mut Vec<String>, is_subagen
 
 fn is_root_minimal_harness(context: &ExecutionContext) -> bool {
     context.subagent_parent_info.is_none()
+        && !is_ultra_agent_type(&context.agent_type)
         && context.execution_profile.harness_profile_id.as_str() == MINIMAL_HARNESS_PROFILE_ID
+}
+
+fn is_ultra_agent_type(agent_type: &str) -> bool {
+    agent_type.eq_ignore_ascii_case("Ultra")
+}
+
+fn effective_harness_profile_id<'a>(
+    agent_type: &str,
+    harness_profile_id: &'a bitfun_core_types::HarnessProfileId,
+) -> &'a str {
+    if is_ultra_agent_type(agent_type) {
+        BALANCED_HARNESS_PROFILE_ID
+    } else {
+        harness_profile_id.as_str()
+    }
 }
 
 fn skill_agent_listing_reminders_for_profile(
@@ -2730,11 +2747,11 @@ impl ExecutionEngine {
         let mut tool_manifest_context_vars = context.context.clone();
         tool_manifest_context_vars.insert(
             "harness_profile_id".to_string(),
-            context
-                .execution_profile
-                .harness_profile_id
-                .as_str()
-                .to_string(),
+            effective_harness_profile_id(
+                &context.agent_type,
+                &context.execution_profile.harness_profile_id,
+            )
+            .to_string(),
         );
 
         let tool_description_context = tool_context_runtime::build_tool_description_context(
@@ -3713,11 +3730,11 @@ impl ExecutionEngine {
         execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
         execution_context_vars.insert(
             "harness_profile_id".to_string(),
-            context
-                .execution_profile
-                .harness_profile_id
-                .as_str()
-                .to_string(),
+            effective_harness_profile_id(
+                &context.agent_type,
+                &context.execution_profile.harness_profile_id,
+            )
+            .to_string(),
         );
         let tool_manifest_context_vars = execution_context_vars.clone();
 
@@ -3811,12 +3828,15 @@ impl ExecutionEngine {
             })
             .await?;
 
-        let max_model_rounds = resolve_harness_profile(
-            &context.execution_profile.harness_profile_id,
-            self.config.max_rounds,
-        )
-        .map_err(BitFunError::NotImplemented)?
-        .max_model_rounds;
+        let effective_harness_profile_id =
+            bitfun_core_types::HarnessProfileId::new(effective_harness_profile_id(
+                &context.agent_type,
+                &context.execution_profile.harness_profile_id,
+            ));
+        let max_model_rounds =
+            resolve_harness_profile(&effective_harness_profile_id, self.config.max_rounds)
+                .map_err(BitFunError::NotImplemented)?
+                .max_model_rounds;
 
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)
         let mut messages = vec![turn_prompt_scaffold.system_prompt_message.clone()];
@@ -5335,11 +5355,11 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{
-        activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
-        manual_compaction_terminal_error, missing_required_minimal_tool_definitions,
-        resolve_round_permission_mode, runtime_context_needs_for_manifest,
-        skill_agent_listing_reminders_for_profile, ContextHealthSnapshot, ExecutionEngine,
-        RoundResult, TurnPromptScaffold,
+        activate_conditional_instructions_after_round, effective_harness_profile_id,
+        ensure_primary_session_goal_tools, manual_compaction_terminal_error,
+        missing_required_minimal_tool_definitions, resolve_round_permission_mode,
+        runtime_context_needs_for_manifest, skill_agent_listing_reminders_for_profile,
+        ContextHealthSnapshot, ExecutionEngine, RoundResult, TurnPromptScaffold,
     };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, ToolListingSections, UserContextPolicy,
@@ -5361,6 +5381,7 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use crate::util::types::ToolDefinition;
     use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
+    use bitfun_core_types::{HarnessProfileId, MINIMAL_HARNESS_PROFILE_ID};
     use bitfun_runtime_ports::{
         PermissionMode, WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind,
     };
@@ -5393,6 +5414,20 @@ mod tests {
             deferred_tool_summaries: Vec::new(),
             catalog_generation: 0,
         }
+    }
+
+    #[test]
+    fn ultra_ignores_harness_profile_special_cases() {
+        let minimal = HarnessProfileId::new(MINIMAL_HARNESS_PROFILE_ID);
+
+        assert_eq!(
+            effective_harness_profile_id("Ultra", &minimal),
+            bitfun_core_types::BALANCED_HARNESS_PROFILE_ID,
+        );
+        assert_eq!(
+            effective_harness_profile_id("agentic", &minimal),
+            MINIMAL_HARNESS_PROFILE_ID,
+        );
     }
 
     #[test]

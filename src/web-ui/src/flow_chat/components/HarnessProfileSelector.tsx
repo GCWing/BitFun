@@ -19,13 +19,15 @@ import './HarnessProfileSelector.scss';
 
 export type HarnessProfileId = RuntimeHarnessProfileId;
 export type KnownHarnessProfileId = 'minimal' | 'balanced' | 'ultimate' | 'creative';
-export type SelectableHarnessProfileId = 'minimal' | 'balanced';
+export type SelectableHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
 
 interface HarnessProfileSelectorProps {
   /** Session still runs the legacy agent mode and cannot switch. */
   legacySession?: boolean;
   /** The Session has accepted its first runtime Turn, so its Harness is fixed. */
   sessionStarted?: boolean;
+  /** Persisted Harness choice to restore when leaving Ultra after Session start. */
+  lockedHarnessProfile?: HarnessProfileId;
   selectedProfile: HarnessProfileId;
   disabled?: boolean;
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
@@ -54,7 +56,7 @@ function isDensityProfile(profile: KnownHarnessProfileId): profile is DensityHar
 function isSelectableProfile(
   profile: KnownHarnessProfileId,
 ): profile is SelectableHarnessProfileId {
-  return profile === 'minimal' || profile === 'balanced';
+  return profile !== 'creative';
 }
 
 function isProfileInDevelopment(
@@ -118,6 +120,7 @@ function HarnessDensityMark({
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
   sessionStarted = false,
+  lockedHarnessProfile,
   selectedProfile,
   disabled = false,
   onSelectProfile,
@@ -160,6 +163,15 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     };
   }, [close, open]);
 
+  const canSelectStartedProfile = useCallback((profileId: KnownHarnessProfileId) => (
+    !sessionStarted
+    || profileId === 'ultimate'
+    || (
+      selectedProfile === 'ultimate'
+      && profileId === lockedHarnessProfile
+    )
+  ), [lockedHarnessProfile, selectedProfile, sessionStarted]);
+
   const handleSelect = useCallback((profileId: KnownHarnessProfileId) => {
     if (legacySession) {
       notificationService.info(t('chatInput.harness.legacySessionNotice'), { duration: 3800 });
@@ -178,14 +190,14 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       close();
       return;
     }
-    if (sessionStarted) {
+    if (!canSelectStartedProfile(profileId)) {
       notificationService.info(t('chatInput.harness.sessionStartedNotice'), { duration: 3800 });
       close();
       return;
     }
     void onSelectProfile(profileId);
     close();
-  }, [close, legacySession, onSelectProfile, selectedProfile, sessionStarted, t]);
+  }, [canSelectStartedProfile, close, legacySession, onSelectProfile, selectedProfile, t]);
 
   const knownSelectedProfile = PROFILE_IDS.find(id => id === selectedProfile);
   const selectedProfileAvailable = Boolean(
@@ -198,9 +210,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       : t('chatInput.harness.unsupportedProfile', { id: selectedProfile });
   const triggerTooltip = legacySession
     ? t('chatInput.harness.legacySessionNotice')
-    : sessionStarted
-      ? t('chatInput.harness.sessionStartedNotice')
-      : selectedProfileAvailable
+    : selectedProfileAvailable
         ? t('chatInput.harness.selectorTooltip', { name: triggerLabel })
         : t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile });
 
@@ -259,7 +269,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
               ? 'current'
               : isProfileInDevelopment(id)
                 ? 'coming-soon'
-                : sessionStarted
+                : !canSelectStartedProfile(id)
                   ? 'new-session-only'
                   : 'available';
             return (
@@ -288,7 +298,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                     <Check size={13} strokeWidth={2.4} aria-hidden />
                   ) : isProfileInDevelopment(id) ? (
                     t('chatInput.harness.comingSoon')
-                  ) : sessionStarted ? (
+                  ) : !canSelectStartedProfile(id) ? (
                     t('chatInput.harness.newSessionOnly')
                   ) : (
                     null

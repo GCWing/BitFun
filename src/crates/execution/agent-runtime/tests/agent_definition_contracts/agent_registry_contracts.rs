@@ -205,6 +205,10 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
             "Claw",
             "DeepResearch",
             "Team",
+            "Ultra",
+            "SwarmPlanner",
+            "SwarmWorker",
+            "SwarmReviewer",
             "ComputerUse",
             "Explore",
             "GeneralPurpose",
@@ -220,12 +224,12 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     );
 
     assert_eq!(specs[0].category, BuiltinAgentCategory::Mode);
-    assert_eq!(specs[7].category, BuiltinAgentCategory::SubAgent);
-    assert_eq!(specs[14].category, BuiltinAgentCategory::SubAgent);
-    assert!(specs[14]
+    assert_eq!(specs[8].category, BuiltinAgentCategory::SubAgent);
+    assert_eq!(specs[18].category, BuiltinAgentCategory::SubAgent);
+    assert!(specs[18]
         .visibility_policy
         .can_access_from_parent(Some("agentic")));
-    assert!(!specs[14].visibility_policy.show_in_global_registry);
+    assert!(!specs[18].visibility_policy.show_in_global_registry);
     assert_eq!(default_model_id_for_builtin_agent("agentic"), "auto");
     assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
     assert_eq!(
@@ -247,6 +251,30 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     );
     assert_eq!(default_model_id_for_builtin_agent("ReviewGeneral"), "fast");
     assert_eq!(default_model_id_for_builtin_agent("ReviewWorker"), "fast");
+    assert_eq!(default_model_id_for_builtin_agent("Ultra"), "auto");
+    assert_eq!(
+        default_model_id_for_builtin_agent("SwarmPlanner"),
+        "primary"
+    );
+    assert_eq!(default_model_id_for_builtin_agent("SwarmWorker"), "primary");
+    assert_eq!(default_model_id_for_builtin_agent("SwarmReviewer"), "fast");
+
+    for swarm_id in ["SwarmPlanner", "SwarmWorker", "SwarmReviewer"] {
+        let swarm = specs
+            .iter()
+            .find(|spec| spec.id == swarm_id)
+            .expect("Swarm agent should be registered");
+        assert!(swarm
+            .visibility_policy
+            .can_access_from_parent(Some("Ultra")));
+        assert!(swarm
+            .visibility_policy
+            .can_access_from_parent(Some("SwarmPlanner")));
+        assert!(!swarm.visibility_policy.show_in_global_registry);
+        assert!(!swarm
+            .visibility_policy
+            .can_access_from_parent(Some("agentic")));
+    }
 
     let computer_use = specs
         .iter()

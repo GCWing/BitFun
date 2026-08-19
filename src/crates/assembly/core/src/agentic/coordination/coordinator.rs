@@ -6071,8 +6071,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session.config.enable_tools,
                 &skill_agent_context_vars,
                 &runtime_tool_restrictions,
-                session.config.execution_profile.harness_profile_id.as_str()
-                    != MINIMAL_HARNESS_PROFILE_ID,
+                effective_agent_type.eq_ignore_ascii_case("Ultra")
+                    || session.config.execution_profile.harness_profile_id.as_str()
+                        != MINIMAL_HARNESS_PROFILE_ID,
             )
             .await?;
         let effective_user_input = wrapped_user_input_payload.content.clone();

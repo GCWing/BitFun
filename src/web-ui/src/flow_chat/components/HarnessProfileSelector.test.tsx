@@ -148,7 +148,7 @@ describe('HarnessProfileSelector', () => {
     expect(rows[1]?.dataset.bfState).toBe('current');
   });
 
-  it('activates minimal and balanced while reporting unfinished profiles as unavailable', async () => {
+  it('activates all implemented profiles while reporting Creative as unavailable', async () => {
     const onSelectProfile = vi.fn();
     await act(async () => {
       root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={onSelectProfile} />);
@@ -161,8 +161,8 @@ describe('HarnessProfileSelector', () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(notify.info).toHaveBeenCalledTimes(1);
-    expect(onSelectProfile).not.toHaveBeenCalled();
+    expect(onSelectProfile).toHaveBeenCalledWith('ultimate');
+    expect(onSelectProfile).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
@@ -172,8 +172,8 @@ describe('HarnessProfileSelector', () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-creative"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(notify.info).toHaveBeenCalledTimes(2);
-    expect(onSelectProfile).not.toHaveBeenCalled();
+    expect(notify.info).toHaveBeenCalledTimes(1);
+    expect(onSelectProfile).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
@@ -183,6 +183,8 @@ describe('HarnessProfileSelector', () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(onSelectProfile).toHaveBeenCalledTimes(2);
+    expect(onSelectProfile).toHaveBeenLastCalledWith('minimal');
     expect(onSelectProfile).toHaveBeenCalledWith('minimal');
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
@@ -218,6 +220,10 @@ describe('HarnessProfileSelector', () => {
       menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
         ?.textContent,
     ).toContain('chatInput.harness.newSessionOnly');
+    expect(
+      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-ultimate"]')
+        ?.dataset.bfState,
+    ).toBe('available');
 
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
@@ -243,7 +249,59 @@ describe('HarnessProfileSelector', () => {
     );
   });
 
-  it.each(['ultimate', 'creative'] as const)(
+  it('lets a started Session enter Ultra and return to its locked Harness', async () => {
+    const onSelectProfile = vi.fn();
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          sessionStarted
+          lockedHarnessProfile="minimal"
+          selectedProfile="minimal"
+          onSelectProfile={onSelectProfile}
+        />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelectProfile).toHaveBeenCalledWith('ultimate');
+
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          sessionStarted
+          lockedHarnessProfile="minimal"
+          selectedProfile="ultimate"
+          onSelectProfile={onSelectProfile}
+        />,
+      );
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const minimal = document.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-minimal"]',
+    );
+    const balanced = document.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-balanced"]',
+    );
+    expect(minimal?.dataset.bfState).toBe('available');
+    expect(balanced?.dataset.bfState).toBe('new-session-only');
+
+    await act(async () => {
+      minimal?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelectProfile).toHaveBeenLastCalledWith('minimal');
+  });
+
+  it.each(['creative'] as const)(
     'does not present a persisted %s profile as active',
     async (profileId) => {
       await act(async () => {

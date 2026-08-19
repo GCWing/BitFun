@@ -132,8 +132,12 @@ import {
   resolveSwitchableChatInputModes,
 } from '../utils/chatInputMode';
 import {
+  isUltraAgentType,
+  resolveComposerExecutionLevelSelection,
   resolveChatInputHarnessProfilePolicy,
   resolvePendingHarnessProfileForCreation,
+  resolveSelectedComposerExecutionLevel,
+  type HarnessBackedComposerExecutionLevel,
 } from '../utils/chatInputHarnessPolicy';
 import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -1107,15 +1111,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
   const [isHarnessProfileChangePending, setHarnessProfileChangePending] = useState(false);
   const [pendingNewSessionHarnessProfile, setPendingNewSessionHarnessProfile] =
-    useState<SelectableHarnessProfileId | null>(null);
+    useState<HarnessBackedComposerExecutionLevel | null>(null);
   const effectivePendingNewSessionHarnessProfile = resolvePendingHarnessProfileForCreation(
     harnessProfilePolicy,
     pendingNewSessionHarnessProfile,
   );
-  const selectedHarnessProfile: HarnessProfileId =
-    effectiveTargetSession?.config.executionProfile?.harnessProfileId
-      ?? effectivePendingNewSessionHarnessProfile
-      ?? 'balanced';
+  const selectedHarnessProfile: HarnessProfileId = resolveSelectedComposerExecutionLevel({
+    currentMode,
+    harnessProfileId:
+      effectiveTargetSession?.config.executionProfile?.harnessProfileId
+      ?? effectivePendingNewSessionHarnessProfile,
+  });
+  const isInternalUltraMode = isUltraAgentType(currentMode);
   const pendingNewSessionExecutionProfile = useMemo<SessionExecutionProfile | undefined>(
     () => effectivePendingNewSessionHarnessProfile
       ? {
@@ -4330,13 +4337,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const requestHarnessProfileChange = useCallback(async (profileId: SelectableHarnessProfileId) => {
     if (!harnessProfilePolicy.userConfigurable) return;
     if (isHarnessProfileChangePending) return;
-    if (harnessProfileLocked) {
+    const storedHarnessProfile =
+      effectiveTargetSession?.config.executionProfile?.harnessProfileId ?? 'balanced';
+    const canSwitchLockedSessionMode = profileId === 'ultimate'
+      || (isUltraAgentType(currentMode) && profileId === storedHarnessProfile);
+    if (harnessProfileLocked && !canSwitchLockedSessionMode) {
       notificationService.info(t('chatInput.harness.sessionStartedNotice'));
       return;
     }
+    const selection = resolveComposerExecutionLevelSelection(profileId, currentMode);
     if (!sessionModeSelectionTarget) {
       if (!effectiveTargetSessionId) {
-        setPendingNewSessionHarnessProfile(profileId);
+        setPendingNewSessionHarnessProfile(selection.harnessProfileId);
+        if (selection.modeId) {
+          requestSessionModeChange(selection.modeId);
+        }
         return;
       }
       notificationService.error(t('chatInput.harness.legacySessionNotice'));
@@ -4344,14 +4359,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     setHarnessProfileChangePending(true);
     try {
-      await agentAPI.updateSessionHarnessProfile({
-        ...sessionModeSelectionTarget,
-        harnessProfileId: profileId,
-      });
-      FlowChatStore.getInstance().updateSessionHarnessProfile(
-        sessionModeSelectionTarget.sessionId,
-        { harnessProfileId: profileId, schemaVersion: 1, selectedBy: 'user' },
-      );
+      // Ultra is a real Agent mode, not a Harness Profile. Preserve the
+      // Session's Harness choice so leaving Ultra can restore it unchanged.
+      if (
+        selection.harnessProfileId
+        && selection.harnessProfileId !== storedHarnessProfile
+      ) {
+        await agentAPI.updateSessionHarnessProfile({
+          ...sessionModeSelectionTarget,
+          harnessProfileId: selection.harnessProfileId,
+        });
+        FlowChatStore.getInstance().updateSessionHarnessProfile(
+          sessionModeSelectionTarget.sessionId,
+          { harnessProfileId: selection.harnessProfileId, schemaVersion: 1, selectedBy: 'user' },
+        );
+      }
+      if (selection.modeId) {
+        requestSessionModeChange(selection.modeId);
+      }
     } catch (error) {
       log.error('Failed to update Session Harness Profile', { error, profileId });
       if (isHarnessProfileLockedError(error)) {
@@ -4368,7 +4393,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setHarnessProfileChangePending(false);
     }
-  }, [effectiveTargetSessionId, harnessProfileLocked, harnessProfilePolicy.userConfigurable, isHarnessProfileChangePending, sessionModeSelectionTarget, t]);
+  }, [
+    currentMode,
+    effectiveTargetSession,
+    effectiveTargetSessionId,
+    harnessProfileLocked,
+    harnessProfilePolicy.userConfigurable,
+    isHarnessProfileChangePending,
+    requestSessionModeChange,
+    sessionModeSelectionTarget,
+    t,
+  ]);
   
   const interruptedTurnRecovery = useMemo(
     () => selectInterruptedTurnRecovery(effectiveTargetSession, {
@@ -6518,12 +6553,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <HarnessProfileSelector
                     legacySession={!canSwitchModes}
                     sessionStarted={harnessProfileLocked}
+                    lockedHarnessProfile={
+                      effectiveTargetSession?.config.executionProfile?.harnessProfileId
+                    }
                     selectedProfile={selectedHarnessProfile}
-                    disabled={isHarnessProfileChangePending}
+                    disabled={isHarnessProfileChangePending || isModeChangePending}
                     onSelectProfile={requestHarnessProfileChange}
                   />
                 ) : null}
-                {(canSwitchModes || isAcpTargetSession) && modeState.current !== 'agentic' && (
+                {(canSwitchModes || isAcpTargetSession) && modeState.current !== 'agentic' && !isInternalUltraMode && (
                   <div
                     className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current}`}
                     data-bf-component="chat-input"

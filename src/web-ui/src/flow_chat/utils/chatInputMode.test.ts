@@ -201,6 +201,7 @@ describe('resolveSwitchableChatInputModes', () => {
         { id: 'agentic' },
         { id: 'Cowork' },
         { id: 'Claw' },
+        { id: 'Ultra' },
         { id: 'PlannerPlus' },
       ]),
     ).toEqual([
@@ -211,6 +212,17 @@ describe('resolveSwitchableChatInputModes', () => {
 });
 
 describe('resolveChatInputSendAgentType', () => {
+  it('sends Ultra directly for the Ultimate composer level', () => {
+    expect(
+      resolveChatInputSendAgentType({
+        isSubagentTarget: false,
+        sessionMode: null,
+        acpTargetAgentType: null,
+        composerMode: 'Ultra',
+      }),
+    ).toBe('Ultra');
+  });
+
   it('keeps normal sessions on the composer or ACP target mode', () => {
     expect(
       resolveChatInputSendAgentType({

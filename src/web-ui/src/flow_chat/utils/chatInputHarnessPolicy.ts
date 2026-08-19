@@ -1,5 +1,48 @@
 import type { HarnessProfileId } from '@/infrastructure/api/service-api/AgentAPI';
 
+export type SelectableComposerExecutionLevel = 'minimal' | 'balanced' | 'ultimate';
+export type HarnessBackedComposerExecutionLevel = Exclude<
+  SelectableComposerExecutionLevel,
+  'ultimate'
+>;
+
+export interface ComposerExecutionLevelSelection {
+  modeId: string | null;
+  harnessProfileId: HarnessBackedComposerExecutionLevel | null;
+}
+
+export function isUltraAgentType(agentType: string | null | undefined): boolean {
+  return agentType?.trim().toLowerCase() === 'ultra';
+}
+
+/**
+ * The composer presents Ultra beside Harness profiles, but Ultra is an Agent
+ * mode in the runtime. Selecting it therefore changes the mode directly and
+ * never persists `ultimate` as a Harness Profile.
+ */
+export function resolveComposerExecutionLevelSelection(
+  level: SelectableComposerExecutionLevel,
+  currentMode: string,
+): ComposerExecutionLevelSelection {
+  if (level === 'ultimate') {
+    return { modeId: 'Ultra', harnessProfileId: null };
+  }
+
+  return {
+    modeId: isUltraAgentType(currentMode) ? 'agentic' : null,
+    harnessProfileId: level,
+  };
+}
+
+export function resolveSelectedComposerExecutionLevel(params: {
+  currentMode: string;
+  harnessProfileId: HarnessProfileId | null | undefined;
+}): HarnessProfileId {
+  return isUltraAgentType(params.currentMode)
+    ? 'ultimate'
+    : params.harnessProfileId ?? 'balanced';
+}
+
 export type ChatInputHarnessProfileOwner =
   | 'composer'
   | 'assistant-runtime-default'

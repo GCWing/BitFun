@@ -99,6 +99,25 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
             SubagentVisibilityPolicy::default(),
         ),
         builtin_agent_spec("Team", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec("Ultra", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec(
+            "SwarmPlanner",
+            SubAgent,
+            "primary",
+            SubagentVisibilityPolicy::hidden(["Ultra", "SwarmPlanner"]),
+        ),
+        builtin_agent_spec(
+            "SwarmWorker",
+            SubAgent,
+            "primary",
+            SubagentVisibilityPolicy::hidden(["Ultra", "SwarmPlanner"]),
+        ),
+        builtin_agent_spec(
+            "SwarmReviewer",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::hidden(["Ultra", "SwarmPlanner"]),
+        ),
         builtin_agent_spec(
             "ComputerUse",
             SubAgent,

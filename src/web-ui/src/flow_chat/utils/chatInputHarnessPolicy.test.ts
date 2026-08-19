@@ -1,10 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
+  resolveComposerExecutionLevelSelection,
   resolveChatInputHarnessProfilePolicy,
   resolvePendingHarnessProfileForCreation,
+  resolveSelectedComposerExecutionLevel,
 } from './chatInputHarnessPolicy';
 
 describe('chatInputHarnessPolicy', () => {
+  it('maps Ultimate directly to Ultra without an Ultimate Harness Profile', () => {
+    expect(resolveComposerExecutionLevelSelection('ultimate', 'agentic')).toEqual({
+      modeId: 'Ultra',
+      harnessProfileId: null,
+    });
+    expect(resolveSelectedComposerExecutionLevel({
+      currentMode: ' Ultra ',
+      harnessProfileId: 'minimal',
+    })).toBe('ultimate');
+  });
+
+  it('returns from Ultra to agentic before applying a Harness Profile', () => {
+    expect(resolveComposerExecutionLevelSelection('minimal', 'Ultra')).toEqual({
+      modeId: 'agentic',
+      harnessProfileId: 'minimal',
+    });
+    expect(resolveComposerExecutionLevelSelection('balanced', 'Plan')).toEqual({
+      modeId: null,
+      harnessProfileId: 'balanced',
+    });
+  });
+
   it('lets a root project composer configure the Harness Profile', () => {
     const policy = resolveChatInputHarnessProfilePolicy({
       isAssistantWorkspace: false,
