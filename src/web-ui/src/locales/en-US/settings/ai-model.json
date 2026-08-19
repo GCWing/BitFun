@@ -46,7 +46,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "Subscription accounts",
-    "sectionDescription": "Sign in once to an OpenCode account and use either its Zen or Go API plan, alongside Codex and Antigravity",
+    "sectionDescription": "Connect Codex, Antigravity, OpenCode, or Grok Build subscriptions",
     "rescan": "Refresh status",
     "import": "Use as model",
     "login": "Sign in",
@@ -71,6 +71,7 @@
       "apiKey": "API Key",
       "codex": "Codex (ChatGPT subscription)",
       "antigravity": "Antigravity (Google subscription)",
+      "grok": "Grok Build (SuperGrok subscription)",
       "opencodeZen": "OpenCode account · Zen API",
       "opencodeGo": "OpenCode account · Go API"
     },

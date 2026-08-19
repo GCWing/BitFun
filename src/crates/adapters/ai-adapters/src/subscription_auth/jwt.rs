@@ -2,7 +2,7 @@
 //!
 //! We only read the payload (no signature verification): the tokens are issued
 //! to this client by the provider and stored locally, so we simply extract
-//! metadata such as `exp`, `email`, and the ChatGPT account id.
+//! metadata such as `exp`, `email`, subject, and the ChatGPT account id.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::Value;
@@ -20,6 +20,14 @@ pub(crate) fn decode_claims(token: &str) -> Option<Value> {
 pub(crate) fn email(token: &str) -> Option<String> {
     decode_claims(token)?
         .get("email")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Returns the stable `sub` claim if present.
+pub(crate) fn subject(token: &str) -> Option<String> {
+    decode_claims(token)?
+        .get("sub")?
         .as_str()
         .map(str::to_string)
 }
@@ -62,10 +70,12 @@ mod tests {
     fn parses_email_and_account_id() {
         let token = make_token(serde_json::json!({
             "exp": 1_800_000_000i64,
+            "sub": "user_123",
             "email": "user@example.com",
             "https://api.openai.com/auth": { "chatgpt_account_id": "acct_123" }
         }));
         assert_eq!(email(&token).as_deref(), Some("user@example.com"));
+        assert_eq!(subject(&token).as_deref(), Some("user_123"));
         assert_eq!(chatgpt_account_id(&token).as_deref(), Some("acct_123"));
     }
 

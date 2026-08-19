@@ -2406,6 +2406,7 @@ const AIModelConfig: React.FC = () => {
       { value: 'api_key', label: t('subscriptionAuth.options.apiKey') },
       { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
       { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
+      { value: 'subscription:grok', label: t('subscriptionAuth.options.grok') },
       { value: 'subscription:opencode:zen', label: t('subscriptionAuth.options.opencodeZen') },
       { value: 'subscription:opencode:go', label: t('subscriptionAuth.options.opencodeGo') },
     ];

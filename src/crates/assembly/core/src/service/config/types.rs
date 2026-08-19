@@ -1313,6 +1313,7 @@ pub enum SubscriptionProvider {
     Codex,
     Antigravity,
     Opencode,
+    Grok,
 }
 
 /// OpenCode API product selected for a subscription-authenticated model.
@@ -1327,7 +1328,7 @@ pub enum OpenCodePlan {
 /// Where to obtain the runtime auth material for an `AIModelConfig`.
 ///
 /// Stored on disk as `{"type":"api_key"}` or
-/// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"}`.
+/// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"|"grok"}`.
 /// OpenCode models may additionally persist `"plan":"zen"|"go"`; an absent
 /// plan preserves the legacy Zen Chat Completions behavior.
 /// Tokens live in the subscription auth store and are resolved at request time.
@@ -2007,6 +2008,26 @@ mod tests {
         assert_eq!(
             serde_json::from_value::<AuthConfig>(serialized).expect("Go auth should roundtrip"),
             go
+        );
+    }
+
+    #[test]
+    fn grok_subscription_auth_roundtrips_without_opencode_plan() {
+        let grok = AuthConfig::Subscription {
+            provider: SubscriptionProvider::Grok,
+            plan: None,
+        };
+        let serialized = serde_json::to_value(&grok).expect("Grok auth should serialize");
+        assert_eq!(
+            serialized,
+            serde_json::json!({
+                "type": "subscription",
+                "provider": "grok"
+            })
+        );
+        assert_eq!(
+            serde_json::from_value::<AuthConfig>(serialized).expect("Grok auth should deserialize"),
+            grok
         );
     }
 

@@ -1,7 +1,7 @@
 //! In-app subscription authentication.
 //!
 //! Lets BitFun sign in to another product's subscription (Codex/ChatGPT,
-//! Antigravity/Google, OpenCode) with an OpenCode-style in-app OAuth flow,
+//! Antigravity/Google, OpenCode, Grok Build/SuperGrok) with an in-app OAuth flow,
 //! and use the resulting tokens to authenticate AI requests. Secret material
 //! is stored in the operating-system credential vault; the local JSON file
 //! contains non-secret account metadata only.
@@ -10,6 +10,7 @@
 
 mod antigravity;
 mod codex;
+mod grok;
 mod jwt;
 mod oauth_server;
 mod opencode;
@@ -38,6 +39,7 @@ pub enum SubscriptionProvider {
     Codex,
     Antigravity,
     Opencode,
+    Grok,
 }
 
 /// Transport policy shared by subscription-auth requests.
@@ -61,7 +63,8 @@ impl SubscriptionHttpOptions {
 
 impl SubscriptionProvider {
     /// All providers, in display order.
-    pub const ALL: [SubscriptionProvider; 3] = [Self::Codex, Self::Antigravity, Self::Opencode];
+    pub const ALL: [SubscriptionProvider; 4] =
+        [Self::Codex, Self::Antigravity, Self::Opencode, Self::Grok];
 
     /// Stable store key / serde tag for this provider.
     pub fn key(self) -> &'static str {
@@ -69,6 +72,7 @@ impl SubscriptionProvider {
             Self::Codex => "codex",
             Self::Antigravity => "antigravity",
             Self::Opencode => "opencode",
+            Self::Grok => "grok",
         }
     }
 
@@ -78,6 +82,7 @@ impl SubscriptionProvider {
             "codex" => Some(Self::Codex),
             "antigravity" => Some(Self::Antigravity),
             "opencode" => Some(Self::Opencode),
+            "grok" => Some(Self::Grok),
             _ => None,
         }
     }
@@ -86,7 +91,8 @@ impl SubscriptionProvider {
         match self {
             Self::Codex => "Codex (ChatGPT)",
             Self::Antigravity => "Antigravity (Google)",
-            Self::Opencode => "OpenCode",
+            Self::Opencode => "OpenCode (Go/Zen)",
+            Self::Grok => "Grok Build (SuperGrok)",
         }
         .to_string()
     }
@@ -96,6 +102,7 @@ impl SubscriptionProvider {
             Self::Codex => codex::suggested(),
             Self::Antigravity => antigravity::suggested(),
             Self::Opencode => opencode::suggested(),
+            Self::Grok => grok::suggested(),
         }
     }
 }
@@ -313,10 +320,12 @@ pub(crate) fn store_lock(provider: SubscriptionProvider) -> &'static tokio::sync
     static CODEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static ANTIGRAVITY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static OPENCODE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    static GROK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     match provider {
         SubscriptionProvider::Codex => &CODEX,
         SubscriptionProvider::Antigravity => &ANTIGRAVITY,
         SubscriptionProvider::Opencode => &OPENCODE,
+        SubscriptionProvider::Grok => &GROK,
     }
 }
 
@@ -542,6 +551,9 @@ pub async fn start_login_with_options(
             }
             SubscriptionProvider::Opencode => {
                 opencode::begin_login(begin_cancel.clone(), expected_revision, options).await
+            }
+            SubscriptionProvider::Grok => {
+                grok::begin_login(begin_cancel.clone(), expected_revision, options).await
             }
         }
     };
@@ -801,6 +813,7 @@ pub async fn resolve_with_options(
         SubscriptionProvider::Codex => codex::resolve(options).await,
         SubscriptionProvider::Antigravity => antigravity::resolve(options).await,
         SubscriptionProvider::Opencode => opencode::resolve(options).await,
+        SubscriptionProvider::Grok => grok::resolve(options).await,
     }
 }
 
@@ -818,6 +831,21 @@ pub async fn resolve_opencode_with_options(
     options: &SubscriptionHttpOptions,
 ) -> Result<ResolvedCredential> {
     opencode::resolve_for(plan, format, options).await
+}
+
+/// Resolves a Grok Build credential for a concrete model. The adapter owns
+/// both the subscription endpoint and model-routing header so the OAuth token
+/// can never be sent to an arbitrary URL supplied by model configuration.
+pub async fn resolve_grok(model: &str) -> Result<ResolvedCredential> {
+    resolve_grok_with_options(model, &SubscriptionHttpOptions::default()).await
+}
+
+/// Resolves a Grok Build credential with an explicit transport policy.
+pub async fn resolve_grok_with_options(
+    model: &str,
+    options: &SubscriptionHttpOptions,
+) -> Result<ResolvedCredential> {
+    grok::resolve_for(model, options).await
 }
 
 /// Forces a resolve (which refreshes and saves), then returns the account entry.
@@ -878,12 +906,20 @@ mod tests {
             serde_json::to_value(SubscriptionProvider::Antigravity).unwrap(),
             serde_json::json!("antigravity")
         );
+        assert_eq!(
+            serde_json::to_value(SubscriptionProvider::Grok).unwrap(),
+            serde_json::json!("grok")
+        );
         let parsed: SubscriptionProvider =
             serde_json::from_value(serde_json::json!("opencode")).unwrap();
         assert_eq!(parsed, SubscriptionProvider::Opencode);
         assert_eq!(
             SubscriptionProvider::from_key("codex"),
             Some(SubscriptionProvider::Codex)
+        );
+        assert_eq!(
+            SubscriptionProvider::from_key("grok"),
+            Some(SubscriptionProvider::Grok)
         );
         assert_eq!(SubscriptionProvider::from_key("unknown"), None);
     }

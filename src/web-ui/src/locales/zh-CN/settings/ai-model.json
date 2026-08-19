@@ -46,7 +46,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "订阅账号",
-    "sectionDescription": "OpenCode 账号只需登录一次，即可分别使用 Zen 或 Go API 套餐；同时支持 Codex 与 Antigravity",
+    "sectionDescription": "连接 Codex、Antigravity、OpenCode 或 Grok Build 订阅",
     "rescan": "刷新状态",
     "import": "导入使用",
     "login": "登录",
@@ -71,6 +71,7 @@
       "apiKey": "API Key",
       "codex": "Codex（ChatGPT 订阅）",
       "antigravity": "Antigravity（Google 订阅）",
+      "grok": "Grok Build（SuperGrok 订阅）",
       "opencodeZen": "OpenCode 账号 · Zen API",
       "opencodeGo": "OpenCode 账号 · Go API"
     },
