@@ -6,6 +6,11 @@ import {
 import { WideLayoutGeometry } from '../layout/WideLayoutGeometry';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { FilePreviewLayout, FilePreviewPlacement } from '../policy/FilePreviewPlacementPolicy';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
 import { AppShellState } from '../state/AppShellState';
 import { FilePreviewState } from '../state/FilePreviewState';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
@@ -38,6 +43,8 @@ export struct WideConversationHost {
   @Param remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
   @Param actions: AppRootPresentationActions = emptyAppRootPresentationActions();
   @Param filePreviewLayout: FilePreviewLayout = new FilePreviewLayout(FilePreviewPlacement.Hidden);
+  @Param sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Param wideMasterPaneWidth: number = 0;
   @Param wideMasterDetailGap: number = 0;
   @Param wideDetailContentOffset: number = 0;
@@ -103,6 +110,7 @@ export struct WideConversationHost {
             presentationState: this.remoteSurfaceState,
             actions: this.actions,
             wideMasterPaneCollapsed: false,
+            sessionDetailsPlacement: this.sessionDetailsPlacement,
             onRestoreSidebar: this.onRestoreMasterPane
           })
         }
@@ -141,6 +149,7 @@ export struct WideConversationHost {
       Column() {
         AppSidebar({
           sessions: this.generalPageState.recentSessions(),
+          sessionDetailsPlacement: this.sessionDetailsPlacement,
           pinnedSessionId: this.generalPageState.pinnedSessionId(),
           selectedSessionId: AppRouteContract.isGeneralComposerRoute(this.route) ?
             this.generalPageState.conversation.activeSession.sessionId : '',
@@ -319,7 +328,9 @@ export struct WideConversationHost {
   @Builder
   private MasterDetailGap() {
     if (this.wideMasterDetailGap > 0) {
-      Row() {}.width(this.wideMasterDetailGap).height('100%').backgroundColor(LINE)
+      // Reserve the physical crease so rows do not sit on the hinge, but do
+      // not paint it as a divider. The device already has that hinge.
+      Row() {}.width(this.wideMasterDetailGap).height('100%').backgroundColor(PAGE_BG)
     }
   }
 

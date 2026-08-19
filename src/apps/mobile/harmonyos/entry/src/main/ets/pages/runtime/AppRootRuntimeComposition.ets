@@ -925,6 +925,8 @@ export abstract class AppRootRuntimeComposition {
         this.settingsController.test(url, key, model, clear),
       saveGeneral: async (url: string, key: string, model: string, clear: boolean): Promise<string> =>
         this.settingsController.save(url, key, model, clear),
+      selectGeneralModel: async (modelId: string): Promise<boolean> =>
+        this.settingsController.selectModel(modelId),
       setLanguage: async (language: string): Promise<void> => {
         await this.localeController.setLanguage(language);
       }
