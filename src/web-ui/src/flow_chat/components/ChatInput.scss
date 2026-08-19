@@ -435,7 +435,12 @@
           min-height: 20px !important;
           max-height: 20px !important;
           overflow: hidden;
-          line-height: var(--bf-appearance-token-flowchat-support-line-height);
+          // The track is fixed at 20px; match the line box to it so the
+          // half-leading is symmetric and the text centres exactly like the
+          // labels in the neighbouring pills. The 1.45 support line height
+          // (≈18.85px at 13px) parks the line box at the track's top edge and
+          // the text reads ~1px high.
+          line-height: 20px;
           font-size: flow-type.$control-size;
           padding: 0 !important;
           width: 100%;
