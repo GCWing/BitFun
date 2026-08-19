@@ -4,11 +4,10 @@ export const agentsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'agents',
   parts: [
     { id: 'root' },
-    { id: 'anchorBar' },
     { id: 'zones' },
-    { id: 'harnessGrid' },
-    { id: 'coreGrid' },
+    { id: 'harnessPresentation' },
     { id: 'filters' },
+    { id: 'catalogGrid' },
     { id: 'detailSection' },
   ],
 };

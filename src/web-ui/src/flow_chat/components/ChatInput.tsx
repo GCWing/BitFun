@@ -4910,15 +4910,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const selectReviewAgent = useCallback(() => {
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
     if (!canLaunchReview) {
-      notificationService.info(t('chatInput.specialistAgents.reviewUnavailable'), { duration: 3200 });
+      notificationService.info(t('chatInput.agents.reviewUnavailable'), { duration: 3200 });
       return;
     }
     selectSlashCommandAction('review');
   }, [canLaunchReview, selectSlashCommandAction, t]);
 
-  const showSpecialistAgentComingSoon = useCallback((agentName: string) => {
+  const showAgentComingSoon = useCallback((agentName: string) => {
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
-    notificationService.info(t('chatInput.specialistAgents.comingSoonNotice', { name: agentName }), {
+    notificationService.info(t('chatInput.agents.comingSoonNotice', { name: agentName }), {
       duration: 3200,
     });
   }, [t]);
@@ -6276,18 +6276,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                               }}
                             >
                               <span className="bitfun-chat-input__mode-option-name">
-                                {t('chatInput.specialistAgents.review.name')}
+                                {t('chatInput.agents.review.name')}
                               </span>
                               <span className="bitfun-chat-input__mode-option-actions">
                                 <span className="bitfun-chat-input__slash-command-current">
                                   {canLaunchReview
-                                    ? t('chatInput.specialistAgents.available')
-                                    : t('chatInput.specialistAgents.needsChanges')}
+                                    ? t('chatInput.agents.available')
+                                    : t('chatInput.agents.needsChanges')}
                                 </span>
                               </span>
                             </div>
                             {(['cowork', 'computerUse'] as const).map(agentId => {
-                              const agentName = t(`chatInput.specialistAgents.${agentId}.name`);
+                              const agentName = t(`chatInput.agents.${agentId}.name`);
                               return (
                                 <div
                                   key={agentId}
@@ -6298,17 +6298,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   data-bf-part="boostItem"
                                   data-bf-boost-item-kind="agent"
                                   data-bf-agent-id={agentId}
-                                  onClick={() => showSpecialistAgentComingSoon(agentName)}
+                                  onClick={() => showAgentComingSoon(agentName)}
                                   onKeyDown={event => {
                                     if (event.key !== 'Enter' && event.key !== ' ') return;
                                     event.preventDefault();
-                                    showSpecialistAgentComingSoon(agentName);
+                                    showAgentComingSoon(agentName);
                                   }}
                                 >
                                   <span className="bitfun-chat-input__mode-option-name">{agentName}</span>
                                   <span className="bitfun-chat-input__mode-option-actions">
                                     <span className="bitfun-chat-input__slash-command-current">
-                                      {t('chatInput.specialistAgents.comingSoon')}
+                                      {t('chatInput.agents.comingSoon')}
                                     </span>
                                   </span>
                                 </div>

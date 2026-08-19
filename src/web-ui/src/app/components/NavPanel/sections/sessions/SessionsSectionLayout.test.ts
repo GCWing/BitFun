@@ -10,6 +10,14 @@ function readSessionsSectionStylesheet(): string {
   return stylesheet.replace(/\r\n/g, '\n');
 }
 
+function readSessionsSectionSource(): string {
+  const source = readFileSync(
+    fileURLToPath(new URL('./SessionsSection.tsx', import.meta.url)),
+    'utf8',
+  );
+  return source.replace(/\r\n/g, '\n');
+}
+
 function extractInlineItemActionsBlock(stylesheet: string): string {
   const match = stylesheet.match(/&__inline-item-actions\s*\{(?<body>[\s\S]*?)\n\s*\}/);
   return match?.groups?.body ?? '';
@@ -69,6 +77,17 @@ describe('SessionsSection layout styles', () => {
 
     expect(actionButtonBlock).toContain('width: 20px;');
     expect(actionButtonBlock).toContain('height: 20px;');
+  });
+
+  it('anchors session detail tooltips beside the row instead of over adjacent sessions', () => {
+    const source = readSessionsSectionSource();
+    const sessionTooltip = source.match(
+      /<Tooltip\s+key=\{session\.sessionId\}[\s\S]*?disabled=\{isEditing \|\| openMenuSessionId !== null\}\s*>/,
+    )?.[0] ?? '';
+
+    expect(sessionTooltip).toContain('content={tooltipContent}');
+    expect(sessionTooltip).toContain('placement="right"');
+    expect(sessionTooltip).not.toContain('followCursor');
   });
 
   it('centers empty and session expansion helper content', () => {

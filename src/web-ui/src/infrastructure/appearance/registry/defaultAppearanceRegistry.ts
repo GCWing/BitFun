@@ -121,7 +121,7 @@ import { sessionsSectionAppearanceDescriptor } from '@/app/components/NavPanel/s
 import { deviceOverviewAppearanceDescriptor } from '@/app/components/NavPanel/components/DeviceStatusControl.appearance';
 import { sessionNavigationAppearanceDescriptor } from '@/app/components/NavPanel/components/WorkspaceSessionGroupingToggle.appearance';
 import { assistantAvatarAppearanceDescriptor } from '@/app/components/AssistantAvatar/appearance';
-import { harnessProfileCardAppearanceDescriptor } from '@/app/scenes/agents/components/HarnessProfileCard.appearance';
+import { harnessProfileStepAppearanceDescriptor } from '@/app/scenes/agents/components/HarnessProfileStep.appearance';
 import { contentCanvasAppearanceDescriptor } from '@/app/components/panels/content-canvas/appearance';
 import { filesPanelAppearanceDescriptor } from '@/app/components/panels/FilesPanel.appearance';
 import { reviewPlatformAppearanceDescriptor } from '@/app/components/panels/review-platform/appearance';
@@ -377,7 +377,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(assistantAvatarAppearanceDescriptor)
     .registerComponent(deviceOverviewAppearanceDescriptor)
     .registerComponent(sessionNavigationAppearanceDescriptor)
-    .registerComponent(harnessProfileCardAppearanceDescriptor)
+    .registerComponent(harnessProfileStepAppearanceDescriptor)
     .registerComponent(subagentAvatarAppearanceDescriptor)
     .registerComponent(announcementAppearanceDescriptor)
     .registerComponent(contextMenuAppearanceDescriptor)

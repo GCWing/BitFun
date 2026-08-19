@@ -19,8 +19,7 @@
   height: 26px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 9px 0 7px;
+  padding: 0 9px;
   border: 0;
   border-radius: 13px;
   background: transparent;
@@ -61,17 +60,9 @@
   display: inline-grid;
   place-items: center;
   flex: none;
+  width: 28px;
+  height: 28px;
   color: var(--bf-appearance-token-color-text-secondary);
-
-  &[data-size='compact'] {
-    width: 15px;
-    height: 15px;
-  }
-
-  &[data-size='option'] {
-    width: 28px;
-    height: 28px;
-  }
 }
 
 .bitfun-harness-selector__density-frame,
@@ -174,16 +165,5 @@
 
   svg {
     color: var(--bf-appearance-token-color-accent-500);
-  }
-}
-
-// The density mark alone still reads the gear once the label no longer fits.
-@media (max-width: 560px) {
-  .bitfun-harness-selector__trigger-value {
-    display: none;
-  }
-
-  .bitfun-harness-selector__trigger {
-    padding: 0 7px;
   }
 }

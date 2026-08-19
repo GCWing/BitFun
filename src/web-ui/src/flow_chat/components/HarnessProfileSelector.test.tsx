@@ -55,7 +55,7 @@ describe('HarnessProfileSelector', () => {
     vi.clearAllMocks();
   });
 
-  it('reads the active gear from a progressively denser mark rather than from color alone', async () => {
+  it('keeps the active Harness icon out of the ChatInput trigger', async () => {
     await act(async () => {
       root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={vi.fn()} />);
     });
@@ -63,12 +63,8 @@ describe('HarnessProfileSelector', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       '[data-testid="harness-profile-selector"]',
     );
-    expect(trigger?.dataset.harnessGear).toBe('2');
-    expect(density(trigger!)).toBe(2);
-    expect(
-      trigger?.querySelector<HTMLElement>('.bitfun-harness-selector__density-mark')
-        ?.dataset.harnessProfile,
-    ).toBe('balanced');
+    expect(trigger?.querySelector('.bitfun-harness-selector__density-mark')).toBeNull();
+    expect(trigger?.textContent).toContain('chatInput.harness.profiles.balanced.name');
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -83,8 +79,7 @@ describe('HarnessProfileSelector', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       '[data-testid="harness-profile-selector"]',
     );
-    expect(trigger?.dataset.harnessGear).toBe('1');
-    expect(density(trigger!)).toBe(1);
+    expect(trigger?.querySelector('.bitfun-harness-selector__density-mark')).toBeNull();
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -101,12 +96,7 @@ describe('HarnessProfileSelector', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       '[data-testid="harness-profile-selector"]',
     );
-    expect(trigger?.dataset.harnessGear).toBe('0');
-    expect(density(trigger!)).toBe(0);
-    expect(
-      trigger?.querySelector<HTMLElement>('.bitfun-harness-selector__density-mark')
-        ?.dataset.harnessProfile,
-    ).toBe('unknown');
+    expect(trigger?.querySelector('.bitfun-harness-selector__density-mark')).toBeNull();
     expect(trigger?.textContent).toContain('chatInput.harness.unsupportedProfile');
   });
 

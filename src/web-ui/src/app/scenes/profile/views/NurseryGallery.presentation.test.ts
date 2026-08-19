@@ -32,6 +32,31 @@ describe('Nursery gallery presentation', () => {
     );
   });
 
+  it('uses a compact layered pill for the default configuration action', () => {
+    const source = readSibling('./NurseryGallery.tsx');
+    const stylesheet = readSibling('./NurseryView.scss');
+    const actionMarkupEnd = source.indexOf('className="nursery-defaults__action"');
+    const actionMarkupStart = source.lastIndexOf('<button', actionMarkupEnd);
+    const actionMarkup = source.slice(actionMarkupStart, source.indexOf('</button>', actionMarkupEnd));
+    const actionStart = stylesheet.indexOf('&__action {');
+    const actionEnd = stylesheet.indexOf('\n  }\n}', actionStart);
+    const actionSection = stylesheet.slice(actionStart, actionEnd);
+
+    expect(source).toContain('className="nursery-defaults__action-icon"');
+    expect(source).toContain('className="nursery-defaults__action-label"');
+    expect(source).toContain('className="nursery-defaults__action-chevron"');
+    expect(actionMarkup).toContain('<button');
+    expect(actionMarkup).not.toContain('data-bf-component');
+    expect(actionMarkup).not.toContain('variant=');
+    expect(actionSection).toContain('width: 168px;');
+    expect(actionSection).toContain('height: 48px;');
+    expect(actionSection).toContain('border: 0;');
+    expect(actionSection).toContain('border-radius: $size-radius-full;');
+    expect(actionSection).toContain('width: 44px;');
+    expect(actionSection).toContain('background-image: radial-gradient(');
+    expect(actionSection).toContain('mask-image: radial-gradient(');
+  });
+
   it('keeps assistant card content and actions in bounded regions', () => {
     const source = readSibling('./AssistantCard.tsx');
     const stylesheet = readSibling('./NurseryView.scss');

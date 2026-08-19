@@ -1,77 +1,100 @@
 @use '../../../../component-library/styles/tokens' as *;
 @use '../../../styles/surface-stagger';
+@use './AgentSurfaceCard' as surface;
 
 .agent-card {
   width: 100%;
   min-width: 0;
-  height: 200px;
-  border-radius: 15px;
-  background: var(--bf-appearance-token-element-bg-soft);
-  display: flex;
-  flex-direction: column;
+  height: 148px;
+  border: 1px solid var(--bf-appearance-token-border-base);
+  border-radius: $size-radius-lg;
+  background: var(--bf-appearance-token-color-bg-elevated);
+  box-shadow: $shadow-xs;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
   position: relative;
   overflow: hidden;
   cursor: pointer;
+  container-name: agent-card;
+  container-type: inline-size;
   animation: agent-card-in 0.22s $easing-decelerate both;
   @include surface-stagger.animation-delay(35ms);
   transition:
-    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.35s ease;
-
-  // Top gradient overlay - shows on hover across the whole card
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--agent-card-gradient);
-    opacity: 0;
-    transition: opacity 0.35s ease;
-    pointer-events: none;
-    z-index: 0;
-  }
+    transform $motion-fast $easing-decelerate,
+    border-color $motion-fast $easing-standard,
+    background-color $motion-fast $easing-standard,
+    box-shadow $motion-fast $easing-standard;
 
   &:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px var(--bf-appearance-token-color-overlay-black-20);
-
-    &::before {
-      opacity: 0.4;
-    }
+    transform: translateY(-1px);
+    border-color: var(--bf-appearance-token-border-medium);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    box-shadow: $shadow-sm;
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-text-primary);
     outline-offset: 2px;
   }
 
-  // ── Header with icon ──
-  &__header {
+  &__icon-area {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px 8px;
+    position: relative;
+    z-index: 1;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset-block: 12px;
+      inset-inline-end: 0;
+      width: 1px;
+      background: var(--bf-appearance-token-border-subtle);
+    }
+  }
+
+  &__icon-tile {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
-    padding: $size-gap-3;
-    padding-bottom: 0;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: $size-radius-lg;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    box-shadow: $shadow-xs;
     position: relative;
     z-index: 1;
   }
 
-  &__icon-area {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: var(--bf-appearance-token-color-overlay-white-12);
-    backdrop-filter: blur(8px);
+  &__dot-field {
+    @include surface.agent-icon-dot-field();
   }
 
   &__icon {
     color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__content {
+    grid-column: 2;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  &__header {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-2;
   }
 
   &__header-info {
@@ -79,6 +102,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 4px;
     overflow: hidden;
   }
@@ -86,13 +110,13 @@
   &__title-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-2;
+    width: 100%;
+    min-width: 0;
   }
 
   &__name {
-    font-size: 1.2em;
-    font-weight: 900;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-semibold;
     color: var(--bf-appearance-token-color-text-primary);
     line-height: $line-height-base;
     white-space: nowrap;
@@ -107,23 +131,30 @@
     flex-shrink: 0;
   }
 
-  // ── Body ──
+  &__kind-badge.badge {
+    max-width: 112px;
+    padding: 1px 6px;
+    overflow: hidden;
+    border-color: transparent;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: 10px;
+    text-overflow: ellipsis;
+  }
+
   &__body {
     flex: 1;
-    padding: $size-gap-2 $size-gap-3;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
     overflow: hidden;
-    position: relative;
-    z-index: 1;
   }
 
   &__desc {
     margin: 0;
-    font-size: 0.85em;
-    font-weight: 300;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 85%, transparent);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: $font-weight-normal;
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: $line-height-relaxed;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -133,71 +164,87 @@
   }
 
   &__meta {
-    display: inline-flex;
-    align-items: center;
-    gap: $size-gap-2;
-    flex-wrap: wrap;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-base;
+    height: 100%;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    align-items: stretch;
   }
 
   &__meta-item {
-    display: inline-flex;
+    min-width: 0;
+    display: flex;
     align-items: center;
-    gap: 3px;
-    font-size: 10px;
+    justify-content: center;
+    gap: 4px;
+    padding-inline: 5px;
+    overflow: hidden;
+
+    strong {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &.agent-card__meta-value--text {
+        font-size: 9px;
+      }
+    }
+  }
+
+  &__meta-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    border-radius: 5px;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__meta-label {
+    overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
+    font-size: 9px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__cap-chips {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    flex-wrap: wrap;
+    gap: 3px;
+    flex-wrap: nowrap;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   &__cap-chip {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: $size-radius-full;
-    border: 1px solid;
-    background: var(--bf-appearance-token-color-overlay-white-04);
+    border: 1px solid transparent;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 10px;
     font-weight: $font-weight-medium;
     white-space: nowrap;
   }
 
-  // ── Footer summary bar ──
   &__footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
-    border-radius: 0 0 15px 15px;
-    overflow: hidden;
-    position: relative;
-    z-index: 1;
-
-    &::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: var(--agent-card-gradient);
-      opacity: 0.5;
-      transition: opacity 0.35s ease;
-      pointer-events: none;
-    }
+    margin-top: auto;
+    padding: 3px;
+    @include surface.agent-surface-footer();
   }
 
-  &:hover &__footer::after {
-    opacity: 1;
-  }
-
-  &__cap-chips,
   &__meta {
     position: relative;
     z-index: 1;
@@ -208,10 +255,19 @@
 @media (max-width: 720px) {
   .agent-card {
     width: 100%;
-    min-height: 180px;
+    min-height: 148px;
+  }
+}
 
-    &__header {
-      flex-direction: column;
+@container agent-card (max-width: 330px) {
+  .agent-card {
+    &__content {
+      padding-inline: 9px;
+    }
+
+    &__meta-label,
+    &__cap-chip:nth-child(n + 2) {
+      display: none;
     }
   }
 }

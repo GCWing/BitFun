@@ -266,7 +266,7 @@ describe('status track layout', () => {
     );
   });
 
-  it('expresses Harness intensity by shape so the gauge survives a narrow composer', () => {
+  it('keeps Harness profile icons in the list instead of the ChatInput trigger', () => {
     const component = readLocalFile('HarnessProfileSelector.tsx');
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
@@ -275,9 +275,10 @@ describe('status track layout', () => {
       'data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}',
     );
     expect(component).toContain('className="bitfun-harness-selector__density-core"');
-    expect(stylesheet).toMatch(
-      /@media \(max-width: 560px\)[\s\S]*?__trigger-value \{\n {4}display: none;/,
-    );
+    expect(component).toContain('<HarnessDensityMark profile={id} />');
+    expect(component).not.toContain('<HarnessDensityMark profile={knownSelectedProfile}');
+    expect(component).not.toContain('compact');
+    expect(stylesheet).not.toMatch(/__trigger-value \{[\s\S]*?display: none;/);
   });
 
   it('states thinking strength with a compact concentric mark so the pill cannot widen', () => {

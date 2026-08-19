@@ -9,48 +9,44 @@
   "loading": "Loading…",
   "page": {
     "title": "Agents",
-    "subtitle": "Choose how the root Harness works, then review the specialist Agents it can call.",
+    "subtitle": "Manage Agents and their execution framework so each task gets the right capability mix.",
     "searchPlaceholder": "Search agents by name or description…",
     "newAgent": "New Agent"
   },
   "nav": {
     "harness": "Agent Harness",
     "coreAgents": "Connected Agents",
-    "agents": "Specialist Agents"
+    "agents": "Agents"
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "The root Agent strategy for each turn. Minimal and Standard are connected to the current agentic runtime; unavailable profiles remain explicit.",
-    "connected": "Connected",
-    "comingSoon": "In development",
-    "connectedNotice": "{{name}} Harness is available for session selection.",
-    "comingSoonNotice": "{{name}} Harness is in development.",
+    "subtitle": "Defines how the root Agent structures work, calls tools, coordinates Agents, and integrates results.",
+    "gearLabel": "Gear {{level}}",
+    "creativeTrack": "Creative track",
     "profiles": {
       "minimal": {
         "name": "Minimal",
-        "description": "Fast, direct work with the least necessary coordination.",
-        "behavior": "Minimum planning and focused verification"
+        "purpose": "A lean flow for moving lightweight work forward quickly."
       },
       "balanced": {
         "name": "Standard",
-        "description": "Adaptive planning, on-demand Agents, and focused verification.",
-        "behavior": "Default · connected through agentic"
+        "purpose": "Balances speed and quality for most everyday work."
       },
       "ultimate": {
         "name": "Ultimate",
-        "description": "Bounded decomposition, specialist collaboration, and independent review.",
-        "behavior": "Quality-first with explicit budgets"
+        "purpose": "Deeper decomposition and Agent collaboration for complex, high-value work."
       },
       "creative": {
         "name": "Creative",
-        "description": "Personalizes BitFun by building Mini Apps, tailoring product capabilities, and modifying BitFun itself.",
-        "behavior": "Mini App development, product customization, self-modification"
+        "purpose": "Supports exploration with more flexible ways to execute and create results."
       }
     }
   },
   "filters": {
     "source": "Source",
     "kind": "Type",
+    "anySource": "Any source",
+    "anyKind": "Any type",
     "builtin": "Built-in",
     "user": "User",
     "project": "Project",
@@ -66,7 +62,7 @@
     "computerUseDisabledBadge": "Disabled in Settings",
     "modes": {
       "agentic": {
-        "role": "Coding specialist agent"
+        "role": "Coding agent"
       },
       "cowork": {
         "role": "Office & collaboration agent"
@@ -77,14 +73,24 @@
     }
   },
   "agentsZone": {
-    "title": "Specialist Agents",
-    "subtitle": "Browse Agents the Harness can use for planning, research, review, coding, testing, and other focused work.",
+    "title": "Agents",
+    "subtitle": "Browse built-in, user, project, and external Agents in one place, then open a card to review or configure it.",
     "empty": {
       "noAgents": "No agents are available right now",
       "noMatch": "No matching agents"
     }
   },
   "agentCard": {
+    "status": {
+      "connected": "Connected"
+    },
+    "metrics": {
+      "tools": "Tools",
+      "skills": "Skills",
+      "collaboration": "Agents",
+      "capabilities": "Capabilities",
+      "model": "Model"
+    },
     "badges": {
       "agent": "Agent",
       "userMode": "User Agent",

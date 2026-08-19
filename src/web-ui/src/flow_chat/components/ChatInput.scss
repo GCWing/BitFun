@@ -410,7 +410,7 @@
         // speaks at the input's own size.
         .bitfun-harness-selector__trigger {
           height: 30px;
-          padding: 0 10px 0 8px;
+          padding: 0 10px;
           border-radius: 15px;
           background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
           font-size: flow-type.$control-size;
@@ -418,13 +418,6 @@
           &:hover,
           &[data-bf-state='open'] {
             background: var(--bf-appearance-token-element-bg-soft);
-          }
-        }
-
-        // Collapsed to the density mark alone, the padding centres the mark.
-        @media (max-width: 560px) {
-          .bitfun-harness-selector__trigger {
-            padding: 0 8px;
           }
         }
       }

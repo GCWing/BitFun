@@ -293,17 +293,22 @@ const NurseryGallery: React.FC = () => {
             </div>
           </div>
 
-          <Button
+          <button
             type="button"
-            variant="secondary"
-            size="small"
             className="nursery-defaults__action"
             onClick={openDefaults}
           >
-            <Settings2 size={14} strokeWidth={1.8} aria-hidden="true" />
-            <span>{t('nursery.template.configure')}</span>
-            <ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
-          </Button>
+            <span className="nursery-defaults__action-icon" aria-hidden="true">
+              <Settings2 size={16} strokeWidth={1.8} />
+            </span>
+            <span className="nursery-defaults__action-label">{t('nursery.template.configure')}</span>
+            <ChevronRight
+              className="nursery-defaults__action-chevron"
+              size={15}
+              strokeWidth={1.8}
+              aria-hidden="true"
+            />
+          </button>
         </section>
 
         <GalleryZone

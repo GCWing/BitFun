@@ -8,49 +8,45 @@
   "goManage": "前往管理",
   "loading": "加载中…",
   "page": {
-    "title": "专业智能体",
-    "subtitle": "选择根 Harness 的工作方式，并查看它可以调用的专业 Agent。",
+    "title": "智能体",
+    "subtitle": "管理智能体及其执行框架，让不同任务使用合适的能力组合。",
     "searchPlaceholder": "搜索 Agent 名称或描述…",
     "newAgent": "新建 Agent"
   },
   "nav": {
     "harness": "Agent Harness",
     "coreAgents": "已接入 Agent",
-    "agents": "专业 Agent"
+    "agents": "智能体"
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "每个 Turn 的根 Agent 策略。极简与标准已接入当前 agentic Runtime；不可用策略会明确标识。",
-    "connected": "已接入",
-    "comingSoon": "开发中",
-    "connectedNotice": "「{{name}}」Harness 已可用于 Session 选择。",
-    "comingSoonNotice": "「{{name}}」Harness 正在开发中。",
+    "subtitle": "决定根 Agent 如何组织任务、调用工具、协同智能体并整合结果。",
+    "gearLabel": "{{level}} 档",
+    "creativeTrack": "创意方向",
     "profiles": {
       "minimal": {
         "name": "极简",
-        "description": "快速直接，以最低必要协作完成工作。",
-        "behavior": "最少规划与针对性验证"
+        "purpose": "精简流程，快速推进，适合轻量任务。"
       },
       "balanced": {
         "name": "标准",
-        "description": "自适应规划、按需调用 Agent，并进行针对性验证。",
-        "behavior": "默认 · 通过 agentic 接入"
+        "purpose": "平衡效率与质量，适用于大多数日常工作。"
       },
       "ultimate": {
         "name": "极致",
-        "description": "有界分解、专业协作与独立复核。",
-        "behavior": "质量优先，预算明确"
+        "purpose": "深度拆解与智能协同，适合复杂与高价值任务。"
       },
       "creative": {
         "name": "创造",
-        "description": "为 BitFun 做个性化定制：开发 Mini App、调整产品能力，并修改 BitFun 自身。",
-        "behavior": "Mini App 开发、产品定制与自身改造"
+        "purpose": "面向创新与探索，支持更灵活的执行与产出方式。"
       }
     }
   },
   "filters": {
     "source": "来源",
     "kind": "类型",
+    "anySource": "来源不限",
+    "anyKind": "类型不限",
     "builtin": "内置",
     "user": "用户",
     "project": "项目",
@@ -66,7 +62,7 @@
     "computerUseDisabledBadge": "已在设置中禁用",
     "modes": {
       "agentic": {
-        "role": "编码专业智能体"
+        "role": "编码智能体"
       },
       "cowork": {
         "role": "办公智能体"
@@ -77,14 +73,24 @@
     }
   },
   "agentsZone": {
-    "title": "专业 Agent",
-    "subtitle": "查看 Harness 可用于规划、研究、审核、编码、测试等专项工作的 Agent。",
+    "title": "智能体",
+    "subtitle": "统一查看内置、用户、项目和外部智能体，点击卡片查看与配置能力。",
     "empty": {
       "noAgents": "当前没有可用的 Agent",
       "noMatch": "没有匹配的 Agent"
     }
   },
   "agentCard": {
+    "status": {
+      "connected": "已接入"
+    },
+    "metrics": {
+      "tools": "工具",
+      "skills": "技能",
+      "collaboration": "协作",
+      "capabilities": "能力",
+      "model": "模型"
+    },
     "badges": {
       "agent": "Agent",
       "userMode": "用户 Agent",

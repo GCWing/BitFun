@@ -2,37 +2,69 @@
 @use './AgentSurfaceCard' as surface;
 
 .core-agent-card {
-  --core-accent: var(--bf-appearance-token-color-accent-500);
+  @include surface.agent-surface-card();
 
-  @include surface.agent-surface-card(
-    var(--core-card-gradient),
-    var(--core-accent)
-  );
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  container-name: core-agent-card;
+  container-type: inline-size;
 
-  // ── Header ────────────────────────────────────────────────────────
-
-  &__top {
+  &__icon-rail {
+    grid-column: 1;
+    grid-row: 1;
     display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px 8px;
+    position: relative;
+    z-index: 1;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset-block: 12px;
+      inset-inline-end: 0;
+      width: 1px;
+      background: var(--bf-appearance-token-border-subtle);
+    }
+  }
+
+  &__icon-wrap {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
     align-items: center;
-    gap: $size-gap-3;
-    padding: $size-gap-3;
-    padding-bottom: 0;
+    justify-content: center;
+    border-radius: $size-radius-lg;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    box-shadow: $shadow-xs;
+    color: var(--bf-appearance-token-color-text-primary);
+    position: relative;
+    z-index: 1;
+    transition: transform $motion-fast $easing-decelerate;
+  }
+
+  &__dot-field {
+    @include surface.agent-icon-dot-field();
+  }
+
+  &__content {
+    grid-column: 2;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
     position: relative;
     z-index: 1;
   }
 
-  &__icon-wrap {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: var(--bf-appearance-token-color-overlay-white-12);
-    backdrop-filter: blur(8px);
+  &__top {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--core-accent);
-    transition: transform $motion-fast $easing-decelerate;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    min-width: 0;
   }
 
   &__top-info {
@@ -40,13 +72,14 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 4px;
     overflow: hidden;
   }
 
   &__name {
-    font-size: 1.2em;
-    font-weight: 900;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-semibold;
     color: var(--bf-appearance-token-color-text-primary);
     line-height: $line-height-base;
     white-space: nowrap;
@@ -54,30 +87,59 @@
     text-overflow: ellipsis;
   }
 
-  &__role {
+  &__role.badge {
+    max-width: 100%;
+    padding: 1px 6px;
+    overflow: hidden;
+    border-color: transparent;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: 10px;
+    text-overflow: ellipsis;
+  }
+
+  &__status {
+    max-width: 46%;
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    color: var(--core-accent);
-    opacity: 0.9;
-  }
+    flex: 0 1 auto;
+    padding-top: 2px;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: 10px;
+    line-height: $line-height-base;
+    white-space: nowrap;
 
-  // ── Body ─────────────────────────────────────────────────────────
+    > svg {
+      flex: none;
+      color: var(--bf-appearance-token-color-success);
+    }
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &.is-disabled {
+      color: var(--bf-appearance-token-color-text-secondary);
+
+      > svg {
+        color: var(--bf-appearance-token-color-warning);
+      }
+    }
+  }
 
   &__body {
     flex: 1;
-    padding: $size-gap-2 $size-gap-3;
-    position: relative;
-    z-index: 1;
+    min-height: 0;
   }
 
   &__desc {
     margin: 0;
-    font-size: 0.85em;
-    font-weight: 300;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 85%, transparent);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: $font-weight-normal;
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: $line-height-relaxed;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -86,73 +148,80 @@
     word-break: break-word;
   }
 
-  // ── Footer ───────────────────────────────────────────────────────
-
   &__footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
-    @include surface.agent-surface-footer(var(--core-card-gradient));
-  }
-
-  &:hover &__footer::after {
-    opacity: 1;
-  }
-
-  &__tags {
-    display: inline-flex;
-    align-items: center;
-    gap: $size-gap-2;
-    min-width: 0;
-  }
-
-  &__tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 10px;
-    color: var(--bf-appearance-token-color-text-muted);
-    position: relative;
-    z-index: 1;
-
-    strong {
-      font-weight: $font-weight-semibold;
-      color: var(--core-accent);
-      opacity: 0.9;
-    }
-
-    &--disabled {
-      padding: 1px 6px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
-      color: var(--bf-appearance-token-color-warning);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 140px;
-    }
+    margin-top: auto;
+    padding: 3px;
+    @include surface.agent-surface-footer();
   }
 
   &__meta {
-    display: inline-flex;
-    align-items: center;
-    gap: $size-gap-2;
+    height: 100%;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    align-items: stretch;
     position: relative;
     z-index: 1;
   }
 
   &__meta-item {
-    display: inline-flex;
+    min-width: 0;
+    display: flex;
     align-items: center;
-    gap: 3px;
-    font-size: 10px;
-    color: var(--bf-appearance-token-color-text-muted);
+    justify-content: center;
+    gap: 4px;
+    padding-inline: 5px;
+    overflow: hidden;
+
+    strong {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &.core-agent-card__meta-value--text {
+        font-size: 9px;
+      }
+    }
   }
+
+  &__meta-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    border-radius: 5px;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__meta-label {
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 9px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
 }
 
-// ── Animation ─────────────────────────────────────────────────────
+@container core-agent-card (max-width: 330px) {
+  .core-agent-card {
+    &__content {
+      padding-inline: 9px;
+    }
+
+    &__meta-label {
+      display: none;
+    }
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .core-agent-card {
