@@ -159,6 +159,16 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
         worker_js: include_str!("builtin/assets/ppt-live/worker.js"),
         esm_dependencies_json: include_str!("builtin/assets/ppt-live/esm_dependencies.json"),
     },
+    BuiltinMiniAppBundle {
+        id: "builtin-bitfun-loopx",
+        version: 1,
+        meta_json: include_str!("builtin/assets/bitfun-loopx/meta.json"),
+        html: include_str!("builtin/assets/bitfun-loopx/index.html"),
+        css: include_str!("builtin/assets/bitfun-loopx/style.css"),
+        ui_js: include_str!("builtin/assets/bitfun-loopx/ui.js"),
+        worker_js: include_str!("builtin/assets/bitfun-loopx/worker.js"),
+        esm_dependencies_json: include_str!("builtin/assets/bitfun-loopx/esm_dependencies.json"),
+    },
 ];
 
 pub fn builtin_content_hash(app: &BuiltinMiniAppBundle) -> String {
@@ -368,6 +378,7 @@ mod tests {
                 "builtin-regex-playground",
                 "builtin-coding-selfie",
                 "builtin-ppt-live",
+                "builtin-bitfun-loopx",
             ]
         );
 
