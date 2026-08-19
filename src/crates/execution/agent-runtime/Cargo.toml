@@ -39,6 +39,7 @@ agent-runtime = [
     "dep:bitfun-core-types",
     "dep:bitfun-events",
     "dep:bitfun-harness",
+    "dep:bitfun-product-domains",
     "dep:bitfun-runtime-ports",
     "dep:bitfun-runtime-services",
     "dep:dashmap",
@@ -59,27 +60,27 @@ agent-runtime = [
 ]
 
 [dependencies]
-async-trait = { workspace = true }
-bitfun-agent-stream = { path = "../agent-stream" }
-bitfun-agent-tools = { path = "../tool-contracts" }
-bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-events = { path = "../../contracts/events" }
-bitfun-harness = { path = "../harness" }
-bitfun-product-domains = { path = "../../contracts/product-domains" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
-bitfun-runtime-services = { path = "../runtime-services" }
-dashmap = { workspace = true }
-hex = { workspace = true }
-log = { workspace = true }
-regex = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-serde_yaml = { workspace = true }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
-uuid = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }
-tokio-util = { workspace = true }
+async-trait = { workspace = true, optional = true }
+bitfun-agent-stream = { path = "../agent-stream", optional = true }
+bitfun-agent-tools = { path = "../tool-contracts", optional = true }
+bitfun-core-types = { path = "../../contracts/core-types", optional = true }
+bitfun-events = { path = "../../contracts/events", optional = true }
+bitfun-harness = { path = "../harness", optional = true }
+bitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true, features = ["agent-api", "git-port", "permission", "plugin-runtime", "remote-workspace-ports", "runtime-event-port", "terminal-port", "workspace-ports"] }
+bitfun-runtime-services = { path = "../runtime-services", optional = true }
+dashmap = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_yaml = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
 
 [dev-dependencies]
 bitfun-runtime-services = { path = "../runtime-services", features = ["test-support"] }

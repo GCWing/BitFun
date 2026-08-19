@@ -485,8 +485,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // while an executing turn keeps a mutable override until it ends.
   const [armedTurnPermissionMode, setArmedTurnPermissionMode] =
     useState<SessionPermissionMode | null>(null);
-  const [turnPermissionMode, setTurnPermissionMode] =
-    useState<SessionPermissionMode | null>(null);
   const [activeTurnPermissionMode, setActiveTurnPermissionMode] =
     useState<SessionPermissionMode | null>(null);
   const permissionModeRequestGenerationRef = useRef(0);
@@ -2095,7 +2093,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setArmedTurnPermissionMode(null);
       setActiveTurnPermissionMode(null);
       setSessionAiAutoApproveMode(null);
-      setTurnPermissionMode(null);
       return undefined;
     }
     void (async () => {
