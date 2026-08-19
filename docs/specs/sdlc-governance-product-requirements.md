@@ -1,7 +1,7 @@
 # BitFun 可配置开发体验产品需求
 
 > 范围：定义 BitFun 加载任意外部目标项目后的产品定位、目标用户、核心体验、产品规格、关键边界、平台入口差异、功能需求和成功指标。
-> 关联文档：[external-research.md](https://gitcode.com/BitFun-Platform/bitfun_doc/blob/main/技术调研/智能体工程治理/external-research.md) 提供外部证据，[design.md](../architecture/sdlc-governance-architecture.md) 承接总体架构设计，[../architecture/review-lifecycle.md](../architecture/review-lifecycle.md) 定义版本化 Review 生命周期，[implementation-plan.md](../plans/sdlc-governance-implementation-plan.md) 承接阶段落地，[traceability-matrix.md](sdlc-governance-traceability-matrix.md) 承接覆盖关系检查。
+> 关联文档：[design.md](../architecture/sdlc-governance-architecture.md) 承接总体架构设计，[../architecture/review-lifecycle.md](../architecture/review-lifecycle.md) 定义版本化 Review 生命周期，[implementation-plan.md](../plans/sdlc-governance-implementation-plan.md) 承接阶段落地，[traceability-matrix.md](sdlc-governance-traceability-matrix.md) 承接覆盖关系检查。
 
 ## 1. 背景
 

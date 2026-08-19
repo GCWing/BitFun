@@ -2,10 +2,8 @@
 
 用途：约定 BitFun **代码仓**里文档如何存放、如何撰写、如何索引。
 适用范围：仓库内 `docs/`、根目录 `AGENTS` / `CONTRIBUTING`、以及模块旁的 `AGENTS.md`。
-状态：stable（目标结构已定：`architecture/`、`guideline/`、`specs/`、`plans/`；非代码内容在 `bitfun_doc`）
+状态：stable（目标结构已定：`architecture/`、`guideline/`、`specs/`、`plans/`）
 权威语言：中文（本文件）。英文摘要见 [`docs-governance.md`](docs-governance.md)。
-
-独立 docs 仓（用户手册、接入指南等）不在本文范围内。
 
 ## 不可违反的语义保持规则
 
@@ -27,20 +25,18 @@
   docs/architecture/，用户可见说明放到所属应用 README。
 - 已废弃的 docs/superpowers/**、docs/features/**、docs/development/** 路径不要再新增文件。
 
-## 分仓
+## 本仓文档范围
 
-| 放代码仓 | 放独立 docs 仓 |
-|---|---|
-| 改本仓代码时必读的边界与操作约定 | 用户手册、接入手册、对外宣传说明 |
-| 架构约束、验证矩阵、命令列表 | 培训材料、营销长文、与实现弱相关的长篇 |
-| 随 PR 推进的规格与实施计划（进行中或已稳定） | 纯历史归档、部署/运维搭建指南 |
-| 模块旁 `AGENTS.md` / `LOGGING.md` | — |
+本代码仓应跟踪：
+
+- 改本仓代码时必读的边界与操作约定
+- 架构约束、验证矩阵、命令列表
+- 随 PR 推进的规格与实施计划（进行中或已稳定）
+- 模块旁 `AGENTS.md` / `LOGGING.md`
 
 把随 PR 演进的进行中 Spec 与实施计划纳入版本控制，是当前有意采用的流程政策。临时提示词、调研草稿、
 评审草稿和个人笔记不属于仓库文档，必须保持未跟踪；本地需要文件名时使用 `.local.md` 后缀。
 
-性能报告和外部调研等与代码仓产品外链弱绑定的内容已迁至独立文档仓
-[`bitfun_doc`](https://gitcode.com/BitFun-Platform/bitfun_doc)。
 飞书远程连接配置与发布签名校验保留在本仓
 [`docs/guideline/feishu-bot-setup.zh-CN.md`](feishu-bot-setup.zh-CN.md)
 （[English](feishu-bot-setup.md)）与

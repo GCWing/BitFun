@@ -7,11 +7,9 @@
 ## 文档结构（原 sdlc-harness README 入口索引）
 
 > 原 docs/sdlc-harness/README.md 的导航表折叠于此；路径已迁到四目录布局。
-> 外部调研已外置到 [itfun_doc](https://gitcode.com/BitFun-Platform/bitfun_doc)。
 
 | 文档 | 角色 | 主要内容 |
 |---|---|---|
-| [external-research.md](https://gitcode.com/BitFun-Platform/bitfun_doc/blob/main/技术调研/智能体工程治理/external-research.md) | 调研文档（外置） | 外部产品、论文、标准和趋势信号 |
 | [sdlc-governance-product-requirements.md](../specs/sdlc-governance-product-requirements.md) | 产品需求 | 产品定位、用户画像、体验路径、产品规格、关键边界、平台差异和成功指标 |
 | [sdlc-governance-agent-workflow-adjustment.md](../specs/sdlc-governance-agent-workflow-adjustment.md) | 非权威候选调整提案 | 智能体工作流、并发 GUI、Review 范围控制、token 成本和任务完成度平衡；采纳前需回填权威文档 |
 | [sdlc-governance-agent-workflow-staged-plan.md](../plans/sdlc-governance-agent-workflow-staged-plan.md) | 场景收敛计划 | 将工作流、审查、并发和成本控制压回真实用户场景，不新增独立阶段路线 |

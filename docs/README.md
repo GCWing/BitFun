@@ -12,8 +12,6 @@
 | `specs/` | 写或查需求规格与设计（what & why） | [`specs/README.md`](specs/README.md) |
 | `plans/` | 写或查实施计划与收尾记录（how & when） | [`plans/README.md`](plans/README.md) |
 
-与代码需求开发无关的内容（性能报告、外部调研等）已迁至独立文档仓
-[`bitfun_doc`](https://gitcode.com/BitFun-Platform/bitfun_doc)。
 以下产品相关指南保留在本仓 `guideline/`：
 飞书远程连接 [`feishu-bot-setup.zh-CN.md`](guideline/feishu-bot-setup.zh-CN.md)
 （[English](guideline/feishu-bot-setup.md)）、
