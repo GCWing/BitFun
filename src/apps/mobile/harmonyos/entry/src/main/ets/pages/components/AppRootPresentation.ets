@@ -23,6 +23,8 @@ import {
   SettingsSheetKind
 } from '../policy/SettingsPlacementPolicy';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
+import { i18n } from '@kit.LocalizationKit';
+import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
@@ -410,14 +412,14 @@ export struct AppRootPresentation {
     this.wideDetailContentWidth = geometry.detailContentWidth;
     this.wideCollapsedDetailContentOffset = geometry.collapsedDetailContentOffset;
     this.wideCollapsedDetailContentWidth = geometry.collapsedDetailContentWidth;
-    this.refreshSheetPlacements();
+    this.refreshSheetPlacements(reportedVertical);
     this.actions.onLayoutModeChanged(this.largeScreenLayout);
     if (wasWideLayout && !this.largeScreenLayout) {
       this.actions.onCompactLayoutEntered();
     }
   }
 
-  private refreshSheetPlacements(): void {
+  private refreshSheetPlacements(reportedVertical: ConversationLayoutCrease[]): void {
     const input = new AdaptiveLayoutInput(
       this.viewportWidth,
       this.viewportHeight,
@@ -426,8 +428,9 @@ export struct AppRootPresentation {
       this.isExpandedFoldable(),
       this.isHoverLayout(),
       this.wideLayoutMatched,
-      this.verticalCreases,
-      this.horizontalCreases
+      reportedVertical,
+      this.horizontalCreases,
+      this.isRtlLayout()
     );
     this.settingsPlacement = SettingsPlacementPolicy.resolve(input, SettingsSheetKind.Settings);
     this.connectPlacement = SettingsPlacementPolicy.resolve(input, SettingsSheetKind.Connect);
@@ -436,6 +439,14 @@ export struct AppRootPresentation {
       input,
       SettingsSheetKind.RemoteViewSettings
     );
+  }
+
+  private isRtlLayout(): boolean {
+    try {
+      return i18n.isRTL(RemoteI18n.language());
+    } catch (_err) {
+      return false;
+    }
   }
 
   private isHoverLayout(): boolean {

@@ -139,7 +139,10 @@ if (!spansViewportWidth && spansViewportHeight) {
 | 平板宽屏，无折痕 | Side Sheet | `clamp(400, 0.32w, 520)` |
 | 双折展开，一道纵向折痕 | Side Sheet | `w - c1.left - c1.width`，**无下限** |
 | 三折展开，两道纵向折痕 | Side Sheet | `w - c2.left - c2.width`，**无下限** |
-| 悬停 / 半折 | Bottom Sheet | `maxHeight = h - (横折痕.top + 横折痕.height)` |
+| 悬停 / 半折，有可用横折痕 | Bottom Sheet（FoldOperate） | `height = kindOperateHeight(h - (横折痕.top + 横折痕.height))`，UI 必须用 `height` 而不是未封顶的 `maxHeight` |
+| 悬停 / 半折，只有可用纵折痕（书本折） | Side Sheet | 与展开态同一公式：`w - lastCrease.left - lastCrease.width`，**无下限**。书本折悬停的铰链仍是竖的，底部限高挡不住跨铰链 |
+| 悬停 / 半折，折痕不可观察 | Bottom Sheet | 用当前窗口高度，**禁止** `floor(h/2)`。编造中线比诚实退回窗口更糟 |
+| 折痕数据非法 | 当作没有折痕，走上面的无折痕决策树 | 不是「强制平板 400」。窄窗口配异常折痕必须仍能进 Bottom，不得溢出 |
 
 窄屏横屏固定 45%：横屏是唯一高度稀缺的场景，宽度多给没有收益。
 
@@ -212,7 +215,19 @@ Policy 不引用任何 ArkUI 类型，`SheetOptions` 的组装留在组件里。
 
 `height ≤ viewportHeight - (横折痕.top + 横折痕.height)` 的底部 Sheet 物理上就完整落在下半屏，上半屏会话原样保留。视觉结果与 FolderStack 方案一致，实现只是一个高度数字。
 
-这也是 `horizontalCreases` 字段存在的唯一理由 —— 不是用来识别悬停态（`useHoverOperate()` 已经解决），而是用来算 operate 区高度。
+这也是 `horizontalCreases` 字段存在的主要理由 —— 不是用来识别悬停态（`useHoverOperate()` 已经解决），而是在**铰链已经横过来**时算 operate 区高度。
+
+书本折（Mate X7）展开态把铰链报成宽扁 rect（hidumper `0, 1064, 2496, 171` px，vp 约 `0,340,799x55`）。`classifyCreaseRects` 一次分类：能映射成纵折痕的 rect 不再进横向。否则同一道铰链在悬停态会被当成假横折痕，走出 FoldOperate 矮底栏，而不是右叶 Side。Sheet 入参必须使用探测到的原始纵折痕，不能复用 `currentVerticalCreases()` 的悬停清空。没有可用横折痕时不得把 `floor(viewportHeight / 2)` 当成 operate 区。
+
+### 缺陷修复（2026-08-19）
+
+评审里有一条「测试通过但行为不存在」：`kindOperateHeight()` 写入了 `placement.height`，`AdaptiveSheetOptions` 的 FoldOperate 分支却把 `placement.maxHeight` 交给 `bindSheet`。会话详情 / 远程视图设置的 560 / 520 封顶永远到不了 UI。修复后 FoldOperate 与 Side、Bottom 一样只把 `placement.height` 写进 `SheetOptions.height`；`maxHeight` 只表达 operate 区天花板，供策略与测试断言。
+
+非法折痕回退「无折痕宽屏档」的含义是：**假装折痕不存在，再走无折痕决策树**。宽视口才进 `clamp(400, 0.32w, 520)`；窄视口进 Bottom。`tabletSidePlacement` 额外把宽度 `min` 到 `viewportWidth`，任何 Side 宽度都不得大于窗口。
+
+`SheetType.SIDE` 的贴边由 ArkUI 决定，API 20 文档写明：LTR 从右侧进、RTL 从左侧进，没有左/右开关。交叉检测用 trailing edge（`sheetLeft(placement, viewportWidth, isRtl)`），禁止写死 `right`。Side 宽度也按 trailing 叶：LTR 用最后一道折痕之后的剩余宽度，RTL 用第一道折痕的 `left`。窗口宽度 < 600vp 时 ArkUI 根本不接受 SIDE，策略不得在这种窗口返回 Side。
+
+设置首页分组标题改用 `settings.general.section`（通用 / General）。`settings.language.section` 已无引用，删除。`settings.modelService.*` 只留给模型子页。
 
 ## 实施顺序
 
@@ -259,7 +274,7 @@ T5 独立
 ### T5：信息架构收敛（纯视觉，可任意时机插入）
 
 - 设置分三组：账号 / 通用（语言 + 模型）/ 关于。
-- `settings.modelService.section` 由「普通对话」改为「通用」，消除「普通对话 → 模型」的两跳标签。同步改 `ZhCnMessages` / `EnUsMessages`，`I18nUnit.test.ets` 的键对齐测试兜底。
+- 设置首页分组标题用 `settings.general.section`（通用 / General），不再复用 `settings.modelService.section`。同步改 `ZhCnMessages` / `EnUsMessages`，`I18nUnit.test.ets` 的键对齐测试兜底。
 - 关闭按钮从 50×50 带阴影降为 40×40 无阴影（`SettingsSheet.ets:109-124`）。
 - **不需要**移除「个人资料」分组标题 —— 该标题本就不存在，`SettingsHome()` 中 `AccountEntry()`（`:91`）直接跟在大标题之后。
 
@@ -292,12 +307,13 @@ T5 独立
 | 窄屏竖屏，打开设置 | 与改动前完全一致的底部 Sheet |
 | 窄屏横屏，打开设置 | 侧边 Sheet，约 45% 宽 |
 | 平板无折痕（MatePad Pro 1440vp） | 侧边 Sheet，461vp，比改前的 680 窄 |
-| 双折展开（Mate X7），打开设置 | Sheet 左缘 ≥ 折痕右缘，完整落在右叶 |
+| 双折展开（Mate X7），打开设置 | Sheet 左缘 ≥ 折痕右缘，完整落在右叶。2026-08-19 真机：`rects=[0,340.48,798.72x54.72]` → `side 312x627`，`SheetPage [1235,122][2210,2416]`，左缘贴折痕右缘 1235px |
 | 双折展开，打开连接 Sheet | 同上 |
 | 双折展开，打开会话详情 | 同上，不再是居中的 560×560 |
 | 双折展开，打开远程视图设置 | 同上，不再是居中的 560×520 |
 | 三折完整展开（两道折痕） | Sheet 完整落在第二道折痕之后的右屏 |
-| 悬停态，打开设置 | Sheet 完整落在横折痕下方 operate 区，上半会话可见 |
+| 悬停态，有横折痕，打开设置 | Sheet 高度为 `placement.height`（kind 封顶后的 operate 区），上半会话可见 |
+| 悬停态，只有竖折痕（书本折） | Side Sheet 落在 trailing 叶：LTR 为最后一道折痕之后，RTL 为第一道折痕之前。分类必须走真实 rect 管线，不得手填 `horizontalCreases: []` |
 | 折叠单屏，全部 Sheet | 与改动前完全一致 |
 | 展开态开着设置 → 合盖 | 不闪烁、不残留；当前子页与草稿保留 |
 | 悬停态开着设置 → 展开 | 同上 |
@@ -317,7 +333,7 @@ T5 独立
 5. 两道纵向折痕
 6. 折痕偏到极端位置（叶片极窄）
 7. 折痕数据非法（负宽、越界、坐标在内容区外）
-8. 悬停态（横折痕）
+8. 悬停态（横折痕限高、无折痕不编造、书本折走纵折痕 Side）
 
 对齐现有 `ConversationLayoutPolicy` 的标准：新增行、函数、分支覆盖率均为 100%。
 

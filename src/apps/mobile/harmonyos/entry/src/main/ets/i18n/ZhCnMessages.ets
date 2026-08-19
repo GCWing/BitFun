@@ -58,9 +58,8 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['generalChat.emptyResponse', '模型没有返回文字内容。'],
   ['generalChat.requestFailed', '模型请求失败（HTTP {0}）。'],
 
-  ['settings.modelService.section', '通用'],
+  ['settings.general.section', '通用'],
   ['settings.title', '设置'],
-  ['settings.language.section', '语言'],
   ['settings.language.title', '语言'],
   ['settings.language.choose', '选择语言'],
   ['settings.language.zhCN', '简体中文'],

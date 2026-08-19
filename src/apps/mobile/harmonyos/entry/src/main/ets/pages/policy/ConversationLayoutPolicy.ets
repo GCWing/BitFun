@@ -32,6 +32,19 @@ export class ConversationLayoutRect {
   }
 }
 
+export class ConversationLayoutCreases {
+  readonly vertical: ConversationLayoutCrease[];
+  readonly horizontal: ConversationLayoutHorizontalCrease[];
+
+  constructor(
+    vertical: ConversationLayoutCrease[],
+    horizontal: ConversationLayoutHorizontalCrease[]
+  ) {
+    this.vertical = vertical;
+    this.horizontal = horizontal;
+  }
+}
+
 export class ConversationLayoutGeometry {
   readonly masterPaneWidth: number;
   readonly masterDetailGap: number;
@@ -131,30 +144,47 @@ export class ConversationLayoutPolicy {
     return areaWidth > 0 ? areaWidth : layoutWidth;
   }
 
+  static classifyCreaseRects(
+    viewportWidth: number,
+    viewportHeight: number,
+    rects: ConversationLayoutRect[]
+  ): ConversationLayoutCreases {
+    const vertical: ConversationLayoutCrease[] = [];
+    const horizontal: ConversationLayoutHorizontalCrease[] = [];
+    rects.forEach((rect: ConversationLayoutRect): void => {
+      if (rect.width < 0 || rect.height < 0) {
+        return;
+      }
+      const mappedVertical = ConversationLayoutPolicy.mapVerticalCrease(
+        viewportWidth,
+        viewportHeight,
+        rect
+      );
+      if (mappedVertical) {
+        vertical.push(mappedVertical);
+        return;
+      }
+      const mappedHorizontal = ConversationLayoutPolicy.mapHorizontalCrease(viewportWidth, rect);
+      if (mappedHorizontal) {
+        horizontal.push(mappedHorizontal);
+      }
+    });
+    return new ConversationLayoutCreases(
+      ConversationLayoutPolicy.visibleCreases(viewportWidth, vertical),
+      ConversationLayoutPolicy.visibleHorizontalCreases(viewportHeight, horizontal)
+    );
+  }
+
   static verticalCreasesFromRects(
     viewportWidth: number,
     viewportHeight: number,
     rects: ConversationLayoutRect[]
   ): ConversationLayoutCrease[] {
-    const mapped: ConversationLayoutCrease[] = [];
-    rects.forEach((rect: ConversationLayoutRect): void => {
-      if (rect.width < 0 || rect.height < 0) {
-        return;
-      }
-      if (rect.height > rect.width) {
-        mapped.push(new ConversationLayoutCrease(rect.left, rect.width));
-        return;
-      }
-      if (viewportWidth <= 0 || viewportHeight <= 0) {
-        return;
-      }
-      const spansViewportWidth = rect.width >= viewportWidth * 0.8;
-      const spansViewportHeight = rect.width >= viewportHeight * 0.8;
-      if (!spansViewportWidth && spansViewportHeight) {
-        mapped.push(new ConversationLayoutCrease(rect.top, rect.height));
-      }
-    });
-    return ConversationLayoutPolicy.visibleCreases(viewportWidth, mapped);
+    return ConversationLayoutPolicy.classifyCreaseRects(
+      viewportWidth,
+      viewportHeight,
+      rects
+    ).vertical;
   }
 
   static horizontalCreasesFromRects(
@@ -162,20 +192,43 @@ export class ConversationLayoutPolicy {
     viewportHeight: number,
     rects: ConversationLayoutRect[]
   ): ConversationLayoutHorizontalCrease[] {
-    const mapped: ConversationLayoutHorizontalCrease[] = [];
-    rects.forEach((rect: ConversationLayoutRect): void => {
-      if (rect.width < 0 || rect.height < 0) {
-        return;
-      }
-      if (rect.width <= rect.height) {
-        return;
-      }
-      if (viewportWidth > 0 && rect.width < viewportWidth * 0.8) {
-        return;
-      }
-      mapped.push(new ConversationLayoutHorizontalCrease(rect.top, rect.height));
-    });
-    return ConversationLayoutPolicy.visibleHorizontalCreases(viewportHeight, mapped);
+    return ConversationLayoutPolicy.classifyCreaseRects(
+      viewportWidth,
+      viewportHeight,
+      rects
+    ).horizontal;
+  }
+
+  private static mapVerticalCrease(
+    viewportWidth: number,
+    viewportHeight: number,
+    rect: ConversationLayoutRect
+  ): ConversationLayoutCrease | undefined {
+    if (rect.height > rect.width) {
+      return new ConversationLayoutCrease(rect.left, rect.width);
+    }
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return undefined;
+    }
+    const spansViewportHeight = rect.width >= viewportHeight * 0.8;
+    const rotatedRight = rect.top + rect.height;
+    if (spansViewportHeight && rect.top > 0 && rotatedRight < viewportWidth) {
+      return new ConversationLayoutCrease(rect.top, rect.height);
+    }
+    return undefined;
+  }
+
+  private static mapHorizontalCrease(
+    viewportWidth: number,
+    rect: ConversationLayoutRect
+  ): ConversationLayoutHorizontalCrease | undefined {
+    if (rect.width <= rect.height) {
+      return undefined;
+    }
+    if (viewportWidth > 0 && rect.width < viewportWidth * 0.8) {
+      return undefined;
+    }
+    return new ConversationLayoutHorizontalCrease(rect.top, rect.height);
   }
 
   static useMasterDetail(

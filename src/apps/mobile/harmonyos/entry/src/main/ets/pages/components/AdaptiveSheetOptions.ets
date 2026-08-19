@@ -11,7 +11,7 @@ export class AdaptiveSheetOptions {
   static fromPlacement(placement: SettingsPlacement, dragBar: boolean = false): SheetOptions {
     if (placement.mode === SettingsPlacementMode.FoldOperate) {
       return {
-        height: placement.maxHeight,
+        height: placement.height,
         backgroundColor: '#00000000',
         maskColor: '#44000000',
         showClose: false,

@@ -2791,6 +2791,8 @@ export default function remoteControllersUnitTest() {
         .assertEqual(1107);
       expect(ConversationLayoutPolicy.resolveLayoutViewportWidth(360, 780, 360, 780, 0))
         .assertEqual(360);
+      expect(ConversationLayoutPolicy.resolveLayoutViewportWidth(0, 780, 360, 780, 0))
+        .assertEqual(360);
     });
 
     it('rotates a physical horizontal crease into a vertical layout crease', 0, () => {
@@ -2802,6 +2804,44 @@ export default function remoteControllersUnitTest() {
       expect(creases.length).assertEqual(1);
       expect(creases[0].left).assertEqual(351);
       expect(creases[0].width).assertEqual(44);
+      const vertical = ConversationLayoutPolicy.verticalCreasesFromRects(
+        680,
+        740,
+        [new ConversationLayoutRect(352, 0, 16, 740)]
+      );
+      expect(vertical.length).assertEqual(1);
+      expect(vertical[0].left).assertEqual(352);
+      expect(vertical[0].width).assertEqual(16);
+      const rejected = ConversationLayoutPolicy.verticalCreasesFromRects(
+        680,
+        740,
+        [
+          new ConversationLayoutRect(10, 10, -4, 20),
+          new ConversationLayoutRect(10, 10, 20, -4)
+        ]
+      );
+      expect(rejected.length).assertEqual(0);
+      const emptyViewport = ConversationLayoutPolicy.verticalCreasesFromRects(
+        0,
+        0,
+        [new ConversationLayoutRect(0, 351, 776, 44)]
+      );
+      expect(emptyViewport.length).assertEqual(0);
+      const notARotatedHinge = ConversationLayoutPolicy.verticalCreasesFromRects(
+        680,
+        740,
+        [new ConversationLayoutRect(0, 670, 680, 20)]
+      );
+      expect(notARotatedHinge.length).assertEqual(0);
+      const mateX7Expand = ConversationLayoutPolicy.classifyCreaseRects(
+        707.2,
+        706.56,
+        [new ConversationLayoutRect(0, 340.48, 798.72, 54.72)]
+      );
+      expect(mateX7Expand.vertical.length).assertEqual(1);
+      expect(mateX7Expand.vertical[0].left).assertEqual(340.48);
+      expect(mateX7Expand.vertical[0].width).assertEqual(54.72);
+      expect(mateX7Expand.horizontal.length).assertEqual(0);
     });
 
     it('keeps a true horizontal crease on its own axis', 0, () => {
@@ -2840,6 +2880,34 @@ export default function remoteControllersUnitTest() {
       expect(ordered[0].top).assertEqual(180);
       expect(ordered[1].top).assertEqual(520);
       expect(new ConversationLayoutHorizontalCrease(180, 12).height).assertEqual(12);
+      const square = ConversationLayoutPolicy.horizontalCreasesFromRects(
+        390,
+        844,
+        [new ConversationLayoutRect(0, 200, 80, 80)]
+      );
+      expect(square.length).assertEqual(0);
+      const zeroHeight = ConversationLayoutPolicy.horizontalCreasesFromRects(
+        390,
+        844,
+        [new ConversationLayoutRect(0, 220, 390, 0)]
+      );
+      expect(zeroHeight.length).assertEqual(1);
+      expect(zeroHeight[0].top).assertEqual(220);
+      expect(zeroHeight[0].height).assertEqual(0);
+      const tallRejected = ConversationLayoutPolicy.horizontalCreasesFromRects(
+        390,
+        844,
+        [new ConversationLayoutRect(10, 80, 16, 400)]
+      );
+      expect(tallRejected.length).assertEqual(0);
+      const trueHorizontal = ConversationLayoutPolicy.classifyCreaseRects(
+        390,
+        844,
+        [new ConversationLayoutRect(0, 400, 390, 16)]
+      );
+      expect(trueHorizontal.vertical.length).assertEqual(0);
+      expect(trueHorizontal.horizontal.length).assertEqual(1);
+      expect(trueHorizontal.horizontal[0].top).assertEqual(400);
     });
 
     it('accepts a zero-width crease without creating an empty detail segment', 0, () => {
