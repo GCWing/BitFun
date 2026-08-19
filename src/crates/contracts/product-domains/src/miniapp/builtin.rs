@@ -161,7 +161,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-bitfun-loopx",
-        version: 1,
+        version: 2,
         meta_json: include_str!("builtin/assets/bitfun-loopx/meta.json"),
         html: include_str!("builtin/assets/bitfun-loopx/index.html"),
         css: include_str!("builtin/assets/bitfun-loopx/style.css"),

@@ -1,4 +1,4 @@
-// LoopX Console — UI + host heartbeat.
+// bitfun-loopx — UI + host heartbeat.
 // The heartbeat is a single setTimeout chain armed to the earliest per-goal
 // due time; each poll's interval is dictated by loopx's scheduler_hint
 // (recommended interval, unchanged-poll backoff, max clamp, reset_token).
@@ -28,7 +28,7 @@ setTimeout(releaseThemeGate, 800);
 
 const I18N = {
   'zh-CN': {
-    title: 'LoopX 控制台',
+    title: 'bitfun-loopx',
     refresh: '刷新目标列表',
     retry: '重试',
     notFoundTitle: '未检测到 loopx CLI',
@@ -37,7 +37,7 @@ const I18N = {
     vendoringLoopx: '正在拉取…（首次需联网，约 1 分钟）',
     vendorDone: '拉取完成',
     vendorFailed: '拉取失败',
-    prereqNeedPython: '缺少 Python 3.11+（loopx 源码运行需要）。安装后点「重试」：python.org/downloads 或 winget install Python.Python.3.12',
+    prereqNeedPython: '缺少 Python 3.11+（loopx 源码运行需要）。安装后点「重试」：python.org/downloads，或 brew install python（macOS）/ winget install Python.Python.3.12（Windows）',
     prereqNeedGit: '缺少 git（拉取源码需要）。安装后点「重试」：git-scm.com 或 winget install Git.Git',
     prereqUnknown: '无法探测运行环境（需要 Python 3.11+ 与 git）。也可以在自己的终端执行 pip install git+https://github.com/huangruiteng/loopx.git',
     issuesProgress: (done, total) => `issues ${done}/${total}`,
@@ -128,7 +128,7 @@ const I18N = {
     taskStageStarting: '任务已创建，正在启动 Agent',
     taskStarted: (id) => `任务 ${id} 已创建并开始执行`,
     stageExpand: '正在获取 issue 列表…',
-    stageBootstrap: '正在创建 LoopX 任务…',
+    stageBootstrap: '正在创建 bitfun-loopx 任务…',
     stageRegister: '正在注册 Agent…',
     stagePlan: '正在解析 Issue 修复计划…',
     stageTodos: (c, t) => `正在写入 todos ${c}/${t}…`,
@@ -233,14 +233,14 @@ const I18N = {
     publishDone: (url) => `✅ PR 已提交：${url}`,
     publishFailed: 'PR 提交失败',
     publishNeedToken: '发布 PR 需要先配置 GitHub Token',
-    resetLoopxTitle: '清除所有 loopx 状态？',
-    resetLoopxText: '将备份并清除本机全部 loopx 相关状态：所有任务（goal）、todo 与运行历史、全局/项目注册表、控制台的仓库克隆缓存和持久化日志。数据会整体移入 ~/.bitfun/loopx-console/cleared-<时间戳> 备份目录，可手动找回。此操作不可撤销。',
+    resetLoopxTitle: '清除所有 bitfun-loopx 状态？',
+    resetLoopxText: '将备份并清除本机全部 loopx 相关状态：所有任务（goal）、todo 与运行历史、全局/项目注册表、控制台的仓库克隆缓存和持久化日志。数据会整体移入控制台数据目录下的 cleared-<时间戳> 备份目录，可手动找回。此操作不可撤销。',
     resetLoopxConfirm: '全部清除',
     resetLoopxWorking: '正在清除…',
-    resetLoopxDone: (dir) => `已清除全部 loopx 状态（备份保留在 ${dir}）`,
+    resetLoopxDone: (dir) => `已清除全部 bitfun-loopx 状态（备份保留在 ${dir}）`,
     resetLoopxFailed: '清除失败',
     approveFailed: (e) => `批准失败：${e}`,
-    notifGateTitle: 'LoopX 需要你审批',
+    notifGateTitle: 'bitfun-loopx 需要你审批',
     notifGateBody: (id, block, info) => (info > 0
       ? `${id}：${block} 项待确认、${info} 项仅知会`
       : `${id} 有 ${block} 项待确认`),
@@ -249,7 +249,7 @@ const I18N = {
     activityStarting: '正在启动 Agent…',
     activitySentPrompt: (n) => `▶ 已向 Agent 发送指令（${n} 字符，点击展开）`,
     activityRunning: (elapsed) => `Agent 正在执行 · 已用时 ${elapsed}`,
-    activityCommitted: 'LoopX 已提交本次执行结果',
+    activityCommitted: 'bitfun-loopx 已提交本次执行结果',
     activityValidationPassed: '独立校验已通过',
     activityValidationFailed: '独立校验未通过',
     activityStateUpdated: '目标状态已更新',
@@ -291,7 +291,7 @@ const I18N = {
     intakeTruncated: (n) => `（仅显示前 ${n} 个，列表未取全）`,
   },
   'en-US': {
-    title: 'LoopX Console',
+    title: 'bitfun-loopx',
     refresh: 'Refresh goals',
     retry: 'Retry',
     notFoundTitle: 'loopx CLI not found',
@@ -300,7 +300,7 @@ const I18N = {
     vendoringLoopx: 'Fetching… (first time needs network, ~1 min)',
     vendorDone: 'Fetch complete',
     vendorFailed: 'Fetch failed',
-    prereqNeedPython: 'Python 3.11+ is missing (required to run loopx from source). Install it, then press Retry: python.org/downloads or winget install Python.Python.3.12',
+    prereqNeedPython: 'Python 3.11+ is missing (required to run loopx from source). Install it, then press Retry: python.org/downloads, brew install python (macOS) or winget install Python.Python.3.12 (Windows)',
     prereqNeedGit: 'git is missing (required to fetch the source). Install it, then press Retry: git-scm.com or winget install Git.Git',
     prereqUnknown: 'Could not probe the environment (needs Python 3.11+ and git). You can also run pip install git+https://github.com/huangruiteng/loopx.git in your own terminal.',
     issuesProgress: (done, total) => `issues ${done}/${total}`,
@@ -391,7 +391,7 @@ const I18N = {
     taskStageStarting: 'Task created, starting the Agent',
     taskStarted: (id) => `Task ${id} created and started`,
     stageExpand: 'Fetching the issue list…',
-    stageBootstrap: 'Creating the LoopX task…',
+    stageBootstrap: 'Creating the bitfun-loopx task…',
     stageRegister: 'Registering the Agent…',
     stagePlan: 'Planning the issue fix…',
     stageTodos: (c, t) => `Writing todos ${c}/${t}…`,
@@ -496,14 +496,14 @@ const I18N = {
     publishDone: (url) => `✅ PR submitted: ${url}`,
     publishFailed: 'PR submission failed',
     publishNeedToken: 'A GitHub token is required to publish the PR',
-    resetLoopxTitle: 'Clear all LoopX state?',
-    resetLoopxText: 'This backs up and removes every LoopX-related state on this machine: all goals, todos and run history, global/project registries, the console\'s clone cache and persisted logs. Everything moves into a timestamped backup under ~/.bitfun/loopx-console/cleared-<timestamp> so it stays recoverable. This cannot be undone.',
+    resetLoopxTitle: 'Clear all bitfun-loopx state?',
+    resetLoopxText: 'This backs up and removes every LoopX-related state on this machine: all goals, todos and run history, global/project registries, the console\'s clone cache and persisted logs. Everything moves into a timestamped backup under the console data directory (cleared-<timestamp>) so it stays recoverable. This cannot be undone.',
     resetLoopxConfirm: 'Clear everything',
     resetLoopxWorking: 'Clearing…',
-    resetLoopxDone: (dir) => `All LoopX state cleared (backup kept at ${dir})`,
+    resetLoopxDone: (dir) => `All bitfun-loopx state cleared (backup kept at ${dir})`,
     resetLoopxFailed: 'Clear failed',
     approveFailed: (e) => `Approval failed: ${e}`,
-    notifGateTitle: 'LoopX needs your approval',
+    notifGateTitle: 'bitfun-loopx needs your approval',
     notifGateBody: (id, block, info) => (info > 0
       ? `${id}: ${block} to confirm, ${info} informational`
       : `${id} has ${block} item${block > 1 ? 's' : ''} to confirm`),
@@ -512,7 +512,7 @@ const I18N = {
     activityStarting: 'Starting the Agent…',
     activitySentPrompt: (n) => `▶ Instructions sent to the agent (${n} chars, click to expand)`,
     activityRunning: (elapsed) => `Agent is working · ${elapsed} elapsed`,
-    activityCommitted: 'LoopX committed this run',
+    activityCommitted: 'bitfun-loopx committed this run',
     activityValidationPassed: 'Independent validation passed',
     activityValidationFailed: 'Independent validation failed',
     activityStateUpdated: 'Goal state updated',
@@ -1856,7 +1856,7 @@ function generateCauseAnalysis(g, todo) {
       ].filter(Boolean).join('\n');
       try {
         const run = await app.agent.run(prompt, {
-          sessionName: `LoopX PR 分析 · ${goalDisplayName(g)}`,
+          sessionName: `bitfun-loopx PR 分析 · ${goalDisplayName(g)}`,
           enableTools: false,
           model: S.config.defaultModel || 'auto',
         });
@@ -1914,7 +1914,7 @@ async function ensureGateSummary(g, todo) {
   ].join('\n');
   try {
     const run = await app.agent.run(prompt, {
-      sessionName: `LoopX 摘要 · ${goalDisplayName(g)}`,
+      sessionName: `bitfun-loopx 摘要 · ${goalDisplayName(g)}`,
       enableTools: false,
       model: S.config.defaultModel || 'auto',
     });
@@ -1958,7 +1958,7 @@ function githubCredState() {
 // tool carries both keywords in its title, searchable on GitHub with
 // `"bitfun-loopx" in:title`.
 const PR_TITLE_PREFIX = '[bitfun-loopx] ';
-const PR_BODY_MARKER = 'Created by BitFun LoopX Console (bitfun-loopx).';
+const PR_BODY_MARKER = 'Created by bitfun-loopx (BitFun built-in MiniApp).';
 
 
 function prTitleFor(g) {
@@ -3562,7 +3562,7 @@ async function executeRunOnce(g) {
     // continues with its full prior context instead of starting from scratch.
     requestedSessionId = agentSessionIdFor(g.goalId);
     const run = await app.agent.run(composed.prompt, {
-      sessionName: `LoopX · ${g.goalId}`,
+      sessionName: `bitfun-loopx · ${g.goalId}`,
       sessionId: requestedSessionId || undefined,
       enableTools: true,
       model: modelForGoal(g.goalId),
