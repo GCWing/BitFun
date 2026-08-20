@@ -74,6 +74,14 @@ $z-overlay: 100;
 $z-modal: 200;
 $z-modal-active: 250;
 $z-fullscreen: 280;
+// The appearance overlay host owns this single level in the document, and every
+// portaled overlay stacks inside it. That is what lets detached UI clear the
+// container it escaped from whatever z-index that container picked — so a
+// container that hosts app UI (panels, canvases, the floating mini chat) has to
+// stay below this line. The overlay levels below only order overlays against
+// each other inside the host; chrome that must outrank every overlay keeps its
+// own level in the document instead.
+$z-overlay-host: 300;
 $z-tooltip: 350;
 $z-popover: 360;
 $z-notification: 400;
