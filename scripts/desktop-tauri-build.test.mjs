@@ -332,7 +332,7 @@ test('official packaging injects the DeepSeek profile resource', () => {
   mkdirSync(fixture, { recursive: true });
   const baseConfig = join(fixture, 'tauri.conf.json');
   writeFileSync(baseConfig, JSON.stringify({
-    bundle: { resources: { 'resources/worker_host.js': 'resources/worker_host.js' } },
+    bundle: { resources: { 'resources/worker_host.cjs': 'resources/worker_host.cjs' } },
   }));
   try {
     const generated = prepareTauriConfig(baseConfig, {
@@ -345,8 +345,8 @@ test('official packaging injects the DeepSeek profile resource', () => {
       'resources/dsh-profile',
     );
     assert.equal(
-      config.bundle.resources['resources/worker_host.js'],
-      'resources/worker_host.js',
+      config.bundle.resources['resources/worker_host.cjs'],
+      'resources/worker_host.cjs',
     );
   } finally {
     rmSync(fixture, { force: true, recursive: true });

@@ -5,7 +5,7 @@
  * stderr: JSON-RPC responses (one per line)
  * stdout: user console.log (forwarded to host)
  *
- * Usage: node worker_host.js '<policy_json>'
+ * Usage: node worker_host.cjs (policy via BITFUN_WORKER_POLICY env; argv[2] accepted for manual runs)
  * Cwd: MiniApp app directory (contains source/worker.js, package.json, storage.json)
  */
 
@@ -15,7 +15,10 @@ const { exec: execCallback } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(execCallback);
 
-const policy = JSON.parse(process.argv[2] || '{}');
+// Policy arrives through BITFUN_WORKER_POLICY (env) because Windows argv
+// parsing does not round-trip multi-line JSON reliably. argv[2] stays as a
+// convenience for manual runs.
+const policy = JSON.parse(process.env.BITFUN_WORKER_POLICY || process.argv[2] || '{}');
 const appDir = process.cwd();
 const storagePath = path.join(appDir, 'storage.json');
 

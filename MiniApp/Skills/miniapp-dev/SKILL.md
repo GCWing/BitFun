@@ -121,10 +121,10 @@ src/web-ui/src/flow_chat/tool-cards/MiniAppToolDisplay.tsx   # InitMiniAppDispla
 ### Worker 宿主
 
 ```
-src/apps/desktop/resources/worker_host.js
+src/apps/desktop/resources/worker_host.cjs
 ```
 
-Node/Bun 标准脚本：从 argv 读策略 JSON，stdin 收 RPC、stderr 回响应，内置 fs/shell/net/os/storage dispatch + 加载用户 `source/worker.js` 自定义方法。
+Node/Bun 标准脚本：从 `BITFUN_WORKER_POLICY` 环境变量读策略 JSON（argv[2] 仅作手动运行兜底），stdin 收 RPC、stderr 回响应，内置 fs/shell/net/os/storage dispatch + 加载用户 `source/worker.js` 自定义方法。
 
 ## MiniApp 数据模型 (V2)
 
