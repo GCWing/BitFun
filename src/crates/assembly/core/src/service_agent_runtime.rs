@@ -3055,6 +3055,7 @@ mod tests {
                 thinking_items: vec![ThinkingItemData {
                     id: "thinking-1".to_string(),
                     content: "visible thought".to_string(),
+                    reasoning_kind: None,
                     is_streaming: false,
                     is_collapsed: false,
                     timestamp: 1_105,

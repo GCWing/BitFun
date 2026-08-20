@@ -17,6 +17,9 @@ pub struct ResponsesStreamEvent {
     #[allow(dead_code)]
     #[serde(default)]
     pub content_index: Option<usize>,
+    /// Summary part index within a reasoning output item.
+    #[serde(default)]
+    pub summary_index: Option<usize>,
     #[serde(default)]
     pub response: Option<Value>,
     #[serde(default)]
@@ -84,6 +87,7 @@ pub fn parse_responses_output_item(
         "function_call" => Some(UnifiedResponse {
             text: None,
             reasoning_content: None,
+            reasoning_content_kind: None,
             thinking_signature: None,
             tool_call: Some(UnifiedToolCall {
                 tool_call_index,
@@ -125,6 +129,7 @@ pub fn parse_responses_output_item(
             text.map(|text| UnifiedResponse {
                 text: Some(text),
                 reasoning_content: None,
+                reasoning_content_kind: None,
                 thinking_signature: None,
                 tool_call: None,
                 usage: None,

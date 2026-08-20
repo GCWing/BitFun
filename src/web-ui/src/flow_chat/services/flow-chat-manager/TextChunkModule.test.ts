@@ -273,4 +273,40 @@ describe('processNormalTextChunkInternal', () => {
     expect((thinkingItems[0] as any).content).toBe('Initial reasoning plus late reasoning');
     expect((thinkingItems[0] as any).status).toBe('completed');
   });
+
+  it('keeps raw reasoning and its display summary in separate thinking items', () => {
+    const session = makeSession();
+    const context = makeContext(session);
+
+    processThinkingChunkInternal(
+      context,
+      'session-1',
+      'turn-1',
+      'round-1',
+      'private chain',
+      false,
+      undefined,
+      undefined,
+      'reasoning',
+    );
+    processThinkingChunkInternal(
+      context,
+      'session-1',
+      'turn-1',
+      'round-1',
+      'display summary',
+      false,
+      undefined,
+      undefined,
+      'summary',
+    );
+
+    const thinkingItems = session.dialogTurns[0].modelRounds[0].items
+      .filter(item => item.type === 'thinking');
+    expect(thinkingItems).toHaveLength(2);
+    expect(thinkingItems.map(item => (item as any).reasoningKind)).toEqual([
+      'reasoning',
+      'summary',
+    ]);
+  });
 });

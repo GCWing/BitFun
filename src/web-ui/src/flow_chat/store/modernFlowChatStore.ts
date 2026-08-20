@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem, TokenUsage } from '../types/flow-chat';
+import type { Session, DialogTurn, ModelRound, FlowItem, FlowThinkingItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem, TokenUsage } from '../types/flow-chat';
 import {
   isCollapsibleTool,
   READ_TOOL_NAMES,
@@ -486,6 +486,10 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           // One round is always exactly one virtual item. Splitting a completed
           // round into segments swaps a single virtual-item key for N new keys,
           // which remounts the visible assistant message and flashes the pane.
+          const trailingItem = round.items.at(-1);
+          const shouldExpandTrailingThinking = roundIndex === rounds.length - 1
+            && trailingItem?.type === 'thinking'
+            && (trailingItem as FlowThinkingItem).reasoningKind !== 'summary';
           items.push({
             type: 'model-round',
             data: round,
@@ -493,9 +497,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             isLastRound: roundIndex === rounds.length - 1,
             isTurnComplete,
             layoutHints: {
-              expandedThinkingItemIds: roundIndex === rounds.length - 1
-                && round.items.at(-1)?.type === 'thinking'
-                ? [round.items.at(-1)!.id]
+              expandedThinkingItemIds: shouldExpandTrailingThinking
+                ? [trailingItem.id]
                 : [],
             },
             turnStartedAt: turn.startTime,

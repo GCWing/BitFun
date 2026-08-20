@@ -476,6 +476,7 @@ fn apply_event(projection: &mut SessionProjection, event: &AgenticEvent) -> bool
             attempt_id,
             attempt_index,
             content,
+            reasoning_kind,
             is_end,
             ..
         } => {
@@ -489,11 +490,13 @@ fn apply_event(projection: &mut SessionProjection, event: &AgenticEvent) -> bool
                     round_id: candidate_round,
                     attempt_id: candidate_attempt,
                     attempt_index: candidate_attempt_index,
+                    reasoning_kind: candidate_reasoning_kind,
                     ..
                 } if candidate_turn == turn_id
                     && candidate_round == round_id
                     && candidate_attempt == attempt_id
-                    && candidate_attempt_index == attempt_index)
+                    && candidate_attempt_index == attempt_index
+                    && candidate_reasoning_kind == reasoning_kind)
             }) {
                 accumulated.push_str(content);
                 *accumulated_end |= *is_end;
@@ -684,6 +687,7 @@ mod tests {
         SessionEventJournal, SessionEventProjectionStore, StoredSessionEvents,
         MAX_REPLAYABLE_TAIL_EVENTS, MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS,
     };
+    use bitfun_core_types::ReasoningContentKind;
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
@@ -740,6 +744,24 @@ mod tests {
             attempt_id: None,
             attempt_index: None,
             text: value.to_string(),
+        }
+    }
+
+    fn thinking(
+        session_id: &str,
+        turn_id: &str,
+        value: &str,
+        reasoning_kind: ReasoningContentKind,
+    ) -> AgenticEvent {
+        AgenticEvent::ThinkingChunk {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+            round_id: "round".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            content: value.to_string(),
+            reasoning_kind: Some(reasoning_kind),
+            is_end: false,
         }
     }
 
@@ -1022,6 +1044,43 @@ mod tests {
         assert!(matches!(
             &missed[0],
             AgenticEvent::TextChunk { text, .. } if text == "lo"
+        ));
+    }
+
+    #[test]
+    fn compact_projection_keeps_reasoning_text_and_summary_separate() {
+        let journal = SessionEventJournal::with_stream_id("runtime-a".to_string());
+        journal.record(&turn_started("session", "turn"));
+        journal.record(&thinking(
+            "session",
+            "turn",
+            "private chain",
+            ReasoningContentKind::Reasoning,
+        ));
+        journal.record(&thinking(
+            "session",
+            "turn",
+            "display summary",
+            ReasoningContentKind::Summary,
+        ));
+
+        let snapshot = journal.snapshot("session");
+        assert_eq!(snapshot.events.len(), 3);
+        assert!(matches!(
+            &snapshot.events[1],
+            AgenticEvent::ThinkingChunk {
+                content,
+                reasoning_kind: Some(ReasoningContentKind::Reasoning),
+                ..
+            } if content == "private chain"
+        ));
+        assert!(matches!(
+            &snapshot.events[2],
+            AgenticEvent::ThinkingChunk {
+                content,
+                reasoning_kind: Some(ReasoningContentKind::Summary),
+                ..
+            } if content == "display summary"
         ));
     }
 

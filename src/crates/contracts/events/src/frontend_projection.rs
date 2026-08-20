@@ -163,6 +163,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             attempt_id,
             attempt_index,
             content,
+            reasoning_kind,
             is_end,
         } => Some(AgenticFrontendEvent::new(
             "agentic://text-chunk",
@@ -174,6 +175,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "attemptIndex": attempt_index,
                 "text": content,
                 "contentType": "thinking",
+                "reasoningKind": reasoning_kind,
                 "isThinkingEnd": is_end,
             }),
         )),
@@ -525,7 +527,7 @@ mod tests {
         ModelRoundAttemptDiagnostic,
     };
     use bitfun_core_types::{
-        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+        ReasoningContentKind, SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };
 
     #[test]
@@ -566,12 +568,14 @@ mod tests {
             attempt_id: Some("attempt-1".to_string()),
             attempt_index: Some(2),
             content: "thinking".to_string(),
+            reasoning_kind: Some(ReasoningContentKind::Summary),
             is_end: true,
         })
         .expect("projected");
 
         assert_eq!(projected.event_name, "agentic://text-chunk");
         assert_eq!(projected.payload["contentType"], "thinking");
+        assert_eq!(projected.payload["reasoningKind"], "summary");
         assert_eq!(projected.payload["isThinkingEnd"], true);
     }
 

@@ -1,6 +1,6 @@
 //! Agentic Events Definition
 pub use bitfun_core_types::errors::{AiErrorDetail, ErrorCategory};
-use bitfun_core_types::{SessionExecutionTarget, ToolImageAttachment};
+use bitfun_core_types::{ReasoningContentKind, SessionExecutionTarget, ToolImageAttachment};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
@@ -343,6 +343,8 @@ pub enum AgenticEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         attempt_index: Option<u32>,
         content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_kind: Option<ReasoningContentKind>,
         #[serde(default)]
         is_end: bool,
     },

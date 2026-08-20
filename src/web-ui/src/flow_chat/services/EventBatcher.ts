@@ -413,6 +413,7 @@ export interface TextChunkEventData {
   attemptIndex?: number;
   text: string;
   contentType: 'text' | 'thinking';
+  reasoningKind?: 'reasoning' | 'summary';
   isThinkingEnd?: boolean;
 }
 
@@ -439,11 +440,11 @@ function resolveAttemptMergeToken(data: { attemptId?: string; attemptIndex?: num
  * Generate merge key for TextChunk events
  * 
  * Key structure:
- * - Text chunk: text:{sessionId}:{roundId}:{contentType}:{attemptToken}
+ * - Text chunk: text:{sessionId}:{roundId}:{contentType}:{reasoningKind}:{attemptToken}
  */
 export function generateTextChunkKey(data: TextChunkEventData): string {
-  const { sessionId, roundId, contentType } = data;
-  return `text:${sessionId}:${roundId}:${contentType}:${resolveAttemptMergeToken(data)}`;
+  const { sessionId, roundId, contentType, reasoningKind = 'none' } = data;
+  return `text:${sessionId}:${roundId}:${contentType}:${reasoningKind}:${resolveAttemptMergeToken(data)}`;
 }
 
 /**
@@ -497,7 +498,8 @@ export function parseEventKey(key: string): {
         ids: {
           sessionId: parts[1],
           roundId: parts[2],
-          contentType: parts[3]
+          contentType: parts[3],
+          reasoningKind: parts[4]
         }
       };
     }

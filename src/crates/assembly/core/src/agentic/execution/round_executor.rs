@@ -980,6 +980,7 @@ impl RoundExecutor {
                     .with_turn_id(context.dialog_turn_id.clone())
                     .with_round_id(round_id.clone())
                     .with_thinking_signature(stream_result.thinking_signature.clone())
+                    .with_reasoning_content_kind(stream_result.reasoning_content_kind)
                     .with_memory_citation(parsed_memory_citation)
                     .with_model_response_replay(model_response_replay);
 
@@ -1204,6 +1205,7 @@ impl RoundExecutor {
                 .with_turn_id(context.dialog_turn_id.clone())
                 .with_round_id(round_id.clone())
                 .with_thinking_signature(stream_result.thinking_signature.clone())
+                .with_reasoning_content_kind(stream_result.reasoning_content_kind)
                 .with_memory_citation(parsed_memory_citation)
                 .with_model_response_replay(model_response_replay);
 
@@ -2001,6 +2003,7 @@ mod tests {
     fn error_trace_response_from_stream_result_preserves_structured_context() {
         let stream_result = StreamResult {
             full_thinking: "reasoning".to_string(),
+            reasoning_content_kind: Some(bitfun_core_types::ReasoningContentKind::Reasoning),
             reasoning_content_present: true,
             thinking_signature: Some("sig".to_string()),
             full_text: String::new(),

@@ -790,6 +790,12 @@ fn default_is_markdown() -> bool {
 pub struct ThinkingItemData {
     pub id: String,
     pub content: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "reasoning_kind"
+    )]
+    pub reasoning_kind: Option<bitfun_core_types::ReasoningContentKind>,
     #[serde(alias = "is_streaming")]
     pub is_streaming: bool,
     #[serde(alias = "is_collapsed")]
@@ -1663,6 +1669,7 @@ mod tests {
         });
         let thinking: ThinkingItemData = serde_json::from_value(thinking_payload)
             .expect("thinking attempt fields should deserialize");
+        assert!(thinking.reasoning_kind.is_none());
         assert_eq!(thinking.attempt_id.as_deref(), Some("round-1:attempt:2"));
         assert_eq!(thinking.attempt_index, Some(2));
 

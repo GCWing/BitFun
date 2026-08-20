@@ -689,6 +689,7 @@ mod tests {
         round.thinking_items.push(ThinkingItemData {
             id: "thinking_1".to_string(),
             content: "private reasoning".to_string(),
+            reasoning_kind: None,
             is_streaming: false,
             is_collapsed: true,
             timestamp: 1,

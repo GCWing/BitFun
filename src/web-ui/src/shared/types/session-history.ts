@@ -289,8 +289,9 @@ export interface TextItemData {
 }
 
 export interface ThinkingItemData {
-  id: string;
-  content: string;
+    id: string;
+    content: string;
+    reasoningKind?: 'reasoning' | 'summary';
   isStreaming: boolean;
   isCollapsed: boolean;
   timestamp: number;

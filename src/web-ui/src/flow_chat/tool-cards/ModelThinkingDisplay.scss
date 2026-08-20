@@ -63,12 +63,31 @@
   }
 
   .thinking-label {
+    min-width: 0;
     font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     font-weight: normal;
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.8;
     line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
+}
+
+/* Reasoning summaries use their latest provider part as a compact live status. */
+.flow-thinking-item.summary.collapsed {
+  .thinking-collapsed-header {
+    min-width: 0;
+  }
+
+  .thinking-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.flow-thinking-item.summary .thinking-label {
+  color: var(--bf-appearance-token-color-text-secondary);
+  opacity: 0.9;
 }
 
 /* Rotate chevron when expanded */

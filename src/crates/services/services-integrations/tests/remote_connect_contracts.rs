@@ -2427,6 +2427,7 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         attempt_id: None,
         attempt_index: None,
         content: "<thinking>plan".to_string(),
+        reasoning_kind: None,
         is_end: false,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {

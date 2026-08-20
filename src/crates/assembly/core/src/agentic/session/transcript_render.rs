@@ -585,6 +585,7 @@ mod search_projection_tests {
             thinking_items: vec![ThinkingItemData {
                 id: "thinking".to_string(),
                 content: "private reasoning".to_string(),
+                reasoning_kind: None,
                 is_streaming: false,
                 is_collapsed: false,
                 timestamp: 1,

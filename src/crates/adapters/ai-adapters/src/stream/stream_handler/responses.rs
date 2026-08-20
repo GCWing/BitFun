@@ -8,6 +8,7 @@ use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
 use bitfun_agent_stream::ToolCallCompletion;
 use bitfun_core_types::errors::AiProviderError;
+use bitfun_core_types::ReasoningContentKind;
 use eventsource_stream::Eventsource;
 use log::{debug, error, trace};
 use reqwest::Response;
@@ -371,6 +372,7 @@ pub async fn handle_responses_stream(
     let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
     let mut response_created_count = 0usize;
     let mut response_prompt_cache_key_hash: Option<String> = None;
+    let mut last_reasoning_summary_part: Option<(Option<usize>, usize)> = None;
 
     loop {
         let sse = match next_stream_item(&mut stream, &timeout_controller).await {
@@ -518,10 +520,32 @@ pub async fn handle_responses_stream(
                     );
                 }
             }
-            "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
+            "response.reasoning_text.delta" => {
                 if let Some(delta) = event.delta.filter(|delta| !delta.is_empty()) {
                     let unified_response = UnifiedResponse {
                         reasoning_content: Some(delta),
+                        reasoning_content_kind: Some(ReasoningContentKind::Reasoning),
+                        ..Default::default()
+                    };
+                    emit_unified_response(
+                        &mut timeout_controller,
+                        &tx_event,
+                        &mut stats,
+                        unified_response,
+                    );
+                }
+            }
+            "response.reasoning_summary_text.delta" => {
+                if let Some(delta) = event.delta.filter(|delta| !delta.is_empty()) {
+                    let delta = separate_reasoning_summary_part(
+                        &mut last_reasoning_summary_part,
+                        event.output_index,
+                        event.summary_index,
+                        delta,
+                    );
+                    let unified_response = UnifiedResponse {
+                        reasoning_content: Some(delta),
+                        reasoning_content_kind: Some(ReasoningContentKind::Summary),
                         ..Default::default()
                     };
                     emit_unified_response(
@@ -848,13 +872,33 @@ pub async fn handle_responses_stream(
     }
 }
 
+fn separate_reasoning_summary_part(
+    last_part: &mut Option<(Option<usize>, usize)>,
+    output_index: Option<usize>,
+    summary_index: Option<usize>,
+    delta: String,
+) -> String {
+    let Some(summary_index) = summary_index else {
+        return delta;
+    };
+    let current_part = (output_index, summary_index);
+    let starts_new_part = last_part.is_some_and(|previous| previous != current_part);
+    *last_part = Some(current_part);
+
+    if starts_new_part {
+        format!("\n\n{delta}")
+    } else {
+        delta
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         super::stream_stats::StreamStats, completed_replay_capture, extract_api_error,
         extract_api_error_message, handle_function_call_arguments_delta,
         handle_function_call_output_item_done, responses_completed_tool_call_completion,
-        InProgressToolCall, StreamTimeoutController,
+        separate_reasoning_summary_part, InProgressToolCall, StreamTimeoutController,
     };
     use bitfun_agent_stream::ToolCallCompletion;
     use bitfun_core_types::errors::ErrorCategory;
@@ -933,6 +977,52 @@ mod tests {
         assert_eq!(
             responses_completed_tool_call_completion(false),
             ToolCallCompletion::NormalNoToolUse
+        );
+    }
+
+    #[test]
+    fn reasoning_summary_deltas_in_the_same_part_stay_contiguous() {
+        let mut last_part = None;
+
+        assert_eq!(
+            separate_reasoning_summary_part(&mut last_part, Some(0), Some(0), "**First".into()),
+            "**First"
+        );
+        assert_eq!(
+            separate_reasoning_summary_part(&mut last_part, Some(0), Some(0), " part**".into()),
+            " part**"
+        );
+    }
+
+    #[test]
+    fn reasoning_summary_inserts_a_paragraph_boundary_between_parts() {
+        let mut last_part = None;
+        let first = separate_reasoning_summary_part(
+            &mut last_part,
+            Some(0),
+            Some(0),
+            "**First part**".into(),
+        );
+        let second = separate_reasoning_summary_part(
+            &mut last_part,
+            Some(0),
+            Some(1),
+            "**Second part**".into(),
+        );
+
+        assert_eq!(
+            format!("{first}{second}"),
+            "**First part**\n\n**Second part**"
+        );
+    }
+
+    #[test]
+    fn reasoning_summary_without_an_index_keeps_gateway_compatibility() {
+        let mut last_part = Some((Some(0), 0));
+
+        assert_eq!(
+            separate_reasoning_summary_part(&mut last_part, Some(0), None, "delta".into()),
+            "delta"
         );
     }
 

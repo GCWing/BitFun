@@ -1,5 +1,5 @@
 use crate::tool_call_accumulator::ToolCallCompletion;
-use bitfun_core_types::ModelResponseReplayItem;
+use bitfun_core_types::{ModelResponseReplayItem, ReasoningContentKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -27,6 +27,9 @@ pub struct ModelResponseReplayCapture {
 pub struct UnifiedResponse {
     pub text: Option<String>,
     pub reasoning_content: Option<String>,
+    /// Distinguishes provider reasoning text from a user-displayable reasoning summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content_kind: Option<ReasoningContentKind>,
     /// Signature for Anthropic extended thinking (returned in multi-turn conversations)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_signature: Option<String>,
@@ -64,6 +67,7 @@ impl fmt::Debug for UnifiedResponse {
         f.debug_struct("UnifiedResponse")
             .field("text", &self.text)
             .field("reasoning_content", &reasoning_summary)
+            .field("reasoning_content_kind", &self.reasoning_content_kind)
             .field("thinking_signature", &"<omitted>")
             .field("tool_call", &self.tool_call)
             .field("usage", &self.usage)

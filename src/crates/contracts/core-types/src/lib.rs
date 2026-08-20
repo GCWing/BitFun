@@ -23,9 +23,10 @@ pub use ai::{
     ProviderCatalogModelLimits, ProviderCatalogModelPricing, ProviderCatalogModelSource,
     ProviderCatalogProvider, ProviderCatalogSource, ProviderCatalogUpstreamProvider, ProxyConfig,
     ReasoningCapabilityStatus, ReasoningCatalogBinding, ReasoningCatalogProjection,
-    ReasoningCatalogProjectionRequest, ReasoningConfig, ReasoningPreset, ReasoningPresetAction,
-    ReasoningPresetDescriptor, ReasoningPresetSource, RemoteModelInfo, ToolCall,
-    ToolCallConfirmationDetails, ToolCallRequestInfo, ToolCallResponseInfo, ToolDefinition,
+    ReasoningCatalogProjectionRequest, ReasoningConfig, ReasoningContentKind, ReasoningPreset,
+    ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource, RemoteModelInfo,
+    ToolCall, ToolCallConfirmationDetails, ToolCallRequestInfo, ToolCallResponseInfo,
+    ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
 pub use model::{

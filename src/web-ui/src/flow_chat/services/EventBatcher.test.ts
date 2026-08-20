@@ -7,6 +7,7 @@ import {
   generateTextChunkKey,
   generateToolEventKey,
   getBatchedEventsLogPayload,
+  parseEventKey,
   summarizeBatchedEventsForLog,
   type BatchedEvent,
   type ToolEventData,
@@ -116,6 +117,28 @@ describe('generateToolEventKey', () => {
       text: 'beta',
       contentType: 'text',
     }));
+  });
+
+  it('separates raw reasoning from reasoning summary chunks', () => {
+    const common = {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      roundId: 'round-1',
+      text: 'chunk',
+      contentType: 'thinking' as const,
+    };
+
+    const reasoningKey = generateTextChunkKey({
+      ...common,
+      reasoningKind: 'reasoning',
+    });
+    const summaryKey = generateTextChunkKey({
+      ...common,
+      reasoningKind: 'summary',
+    });
+
+    expect(reasoningKey).not.toEqual(summaryKey);
+    expect(parseEventKey(summaryKey)?.ids.reasoningKind).toBe('summary');
   });
 });
 

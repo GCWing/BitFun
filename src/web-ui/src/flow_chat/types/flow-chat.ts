@@ -41,6 +41,7 @@ export interface FlowTextItem extends FlowItem {
 export interface FlowThinkingItem extends FlowItem {
   type: 'thinking';
   content: string;
+  reasoningKind?: 'reasoning' | 'summary';
   isStreaming: boolean;
   isCollapsed: boolean; // Whether the thinking block is collapsed.
 }
