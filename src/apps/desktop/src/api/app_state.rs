@@ -184,15 +184,15 @@ impl AppState {
 
         let worker_host_path = match resolve_worker_host_path() {
             Some(p) => {
-                log::info!("Resolved worker_host.js at: {}", p.display());
+                log::info!("Resolved worker host at: {}", p.display());
                 p
             }
             None => {
                 log::warn!(
-                    "worker_host.js not found in any candidate location; \
+                    "worker host not found in any candidate location; \
                      MiniApp Workers will not start"
                 );
-                std::path::PathBuf::from("worker_host.js")
+                std::path::PathBuf::from("worker_host.cjs")
             }
         };
         // The bitfun-loopx MiniApp prefers a bundled, compiled loopx CLI
@@ -220,7 +220,7 @@ impl AppState {
             .ok()
             .map(Arc::new);
         if js_worker_pool.is_none() {
-            log::warn!("JsWorkerPool not initialized (missing worker_host.js or no Bun/Node)");
+            log::warn!("JsWorkerPool not initialized (missing worker host or no Bun/Node)");
         }
 
         let statistics = Arc::new(RwLock::new(AppStatistics {
@@ -565,48 +565,51 @@ impl AppState {
     }
 }
 
-/// Try every layout we know about for `worker_host.js`, dev or bundled:
-///   1. `CARGO_MANIFEST_DIR/resources/worker_host.js` — `cargo run` / `tauri dev`.
-///   2. `<exe_dir>/resources/worker_host.js` — generic side-by-side bundle.
-///   3. `<exe_dir>/../Resources/resources/worker_host.js` — macOS `.app` (Tauri
+/// Try every layout we know about for `worker_host.cjs`, dev or bundled:
+///   1. `CARGO_MANIFEST_DIR/resources/worker_host.cjs` — `cargo run` / `tauri dev`.
+///   2. `<exe_dir>/resources/worker_host.cjs` — generic side-by-side bundle.
+///   3. `<exe_dir>/../Resources/resources/worker_host.cjs` — macOS `.app` (Tauri
 ///      copies bundle.resources into `Contents/Resources/`).
-///   4. `<exe_dir>/../Resources/worker_host.js` — flat macOS layout fallback.
-///   5. `<exe_dir>/../lib/<bin>/resources/worker_host.js` — typical Linux deb/AppImage.
-///   6. `<exe_dir>/../share/<bin>/resources/worker_host.js` — alt Linux layout.
+///   4. `<exe_dir>/../Resources/worker_host.cjs` — flat macOS layout fallback.
+///   5. `<exe_dir>/../lib/<bin>/resources/worker_host.cjs` — typical Linux deb/AppImage.
+///   6. `<exe_dir>/../share/<bin>/resources/worker_host.cjs` — alt Linux layout.
+/// `.cjs` (not `.js`): the host is CommonJS and must stay that way regardless of
+/// the nearest `package.json` ("type": "module" in this repo's root would make
+/// Node treat a `.js` host as ESM and crash on `require`).
 fn resolve_worker_host_path() -> Option<std::path::PathBuf> {
     let mut candidates: Vec<std::path::PathBuf> = Vec::new();
 
     candidates.push(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources")
-            .join("worker_host.js"),
+            .join("worker_host.cjs"),
     );
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
-            candidates.push(exe_dir.join("resources").join("worker_host.js"));
+            candidates.push(exe_dir.join("resources").join("worker_host.cjs"));
             if let Some(parent) = exe_dir.parent() {
                 candidates.push(
                     parent
                         .join("Resources")
                         .join("resources")
-                        .join("worker_host.js"),
+                        .join("worker_host.cjs"),
                 );
-                candidates.push(parent.join("Resources").join("worker_host.js"));
+                candidates.push(parent.join("Resources").join("worker_host.cjs"));
                 if let Some(bin_name) = exe.file_name().and_then(|s| s.to_str()) {
                     candidates.push(
                         parent
                             .join("lib")
                             .join(bin_name)
                             .join("resources")
-                            .join("worker_host.js"),
+                            .join("worker_host.cjs"),
                     );
                     candidates.push(
                         parent
                             .join("share")
                             .join(bin_name)
                             .join("resources")
-                            .join("worker_host.js"),
+                            .join("worker_host.cjs"),
                     );
                 }
             }
