@@ -5,7 +5,7 @@
 //! WebView costs one Tauri IPC message (JSON serialization, WebView2 boundary
 //! crossing, JS parse + dispatch) and, when peer devices are attached, one
 //! end-to-end encrypted relay message. This module merges chunks of the same
-//! stream (session / turn / round / attempt / contentType) within a short
+//! stream (session / turn / round / attempt / contentType / reasoningKind) within a short
 //! window so the frontend still receives content-equivalent events at a
 //! fraction of the message rate.
 //!
@@ -24,6 +24,7 @@
 //!   emits thinking chunks before text chunks, and `flush` therefore emits the
 //!   merged thinking event before the merged text event.
 
+use bitfun_core_types::ReasoningContentKind;
 use bitfun_events::AgenticEvent;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -118,7 +119,14 @@ pub fn update_rate_ema(previous: f64, flushed_chars: usize, elapsed: Duration) -
 pub const INITIAL_RATE_EMA_CPS: f64 = WINDOW_REF_CPS;
 
 /// Stable merge key for one streaming text/thinking stream.
-type ChunkStreamKey = (String, String, String, String, bool);
+type ChunkStreamKey = (
+    String,
+    String,
+    String,
+    String,
+    bool,
+    Option<ReasoningContentKind>,
+);
 
 fn resolve_attempt_token(attempt_id: &Option<String>, attempt_index: Option<u32>) -> String {
     if let Some(id) = attempt_id {
@@ -148,6 +156,7 @@ enum PendingChunk {
         attempt_id: Option<String>,
         attempt_index: Option<u32>,
         content: String,
+        reasoning_kind: Option<ReasoningContentKind>,
         is_end: bool,
     },
 }
@@ -177,6 +186,7 @@ impl PendingChunk {
                 attempt_id,
                 attempt_index,
                 content,
+                reasoning_kind,
                 is_end,
             } => AgenticEvent::ThinkingChunk {
                 session_id,
@@ -185,6 +195,7 @@ impl PendingChunk {
                 attempt_id,
                 attempt_index,
                 content,
+                reasoning_kind,
                 is_end,
             },
         }
@@ -251,6 +262,7 @@ impl TextChunkCoalescer {
                     round_id.clone(),
                     resolve_attempt_token(&attempt_id, attempt_index),
                     false,
+                    None,
                 );
                 match self.pending.get_mut(&key) {
                     Some(PendingChunk::Text { text: pending, .. }) => {
@@ -284,6 +296,7 @@ impl TextChunkCoalescer {
                 attempt_id,
                 attempt_index,
                 content,
+                reasoning_kind,
                 is_end,
             } => {
                 let key = (
@@ -292,6 +305,7 @@ impl TextChunkCoalescer {
                     round_id.clone(),
                     resolve_attempt_token(&attempt_id, attempt_index),
                     true,
+                    reasoning_kind,
                 );
                 match self.pending.get_mut(&key) {
                     Some(PendingChunk::Thinking {
@@ -315,6 +329,7 @@ impl TextChunkCoalescer {
                                 attempt_id,
                                 attempt_index,
                                 content,
+                                reasoning_kind,
                                 is_end,
                             },
                         );
@@ -389,6 +404,24 @@ mod tests {
             attempt_id: attempt_id.map(str::to_string),
             attempt_index,
             content: content.to_string(),
+            reasoning_kind: None,
+            is_end,
+        }
+    }
+
+    fn typed_thinking_chunk(
+        content: &str,
+        reasoning_kind: ReasoningContentKind,
+        is_end: bool,
+    ) -> AgenticEvent {
+        AgenticEvent::ThinkingChunk {
+            session_id: "s".to_string(),
+            turn_id: "t".to_string(),
+            round_id: "r".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            content: content.to_string(),
+            reasoning_kind: Some(reasoning_kind),
             is_end,
         }
     }
@@ -472,6 +505,44 @@ mod tests {
             AgenticEvent::TextChunk { text, .. } => assert_eq!(text, "answer text"),
             other => panic!("expected TextChunk second, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn keeps_reasoning_text_and_summary_streams_separate() {
+        let mut coalescer = TextChunkCoalescer::new();
+        assert!(coalescer
+            .push(typed_thinking_chunk(
+                "private chain",
+                ReasoningContentKind::Reasoning,
+                false,
+            ))
+            .is_empty());
+        assert!(coalescer
+            .push(typed_thinking_chunk(
+                "display summary",
+                ReasoningContentKind::Summary,
+                false,
+            ))
+            .is_empty());
+
+        let events = coalescer.flush();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(
+            &events[0],
+            AgenticEvent::ThinkingChunk {
+                content,
+                reasoning_kind: Some(ReasoningContentKind::Reasoning),
+                ..
+            } if content == "private chain"
+        ));
+        assert!(matches!(
+            &events[1],
+            AgenticEvent::ThinkingChunk {
+                content,
+                reasoning_kind: Some(ReasoningContentKind::Summary),
+                ..
+            } if content == "display summary"
+        ));
     }
 
     #[test]

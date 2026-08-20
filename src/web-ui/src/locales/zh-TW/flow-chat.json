@@ -1868,6 +1868,7 @@
       "thinking": "思考中...",
       "preparing": "準備思考",
       "thinkingProcess": "思考過程",
+      "thinkingSummary": "思考總結",
       "thinkingComplete": "已完成思考",
       "thinkingCharacters": "思考了 {{count}} 字符"
     },

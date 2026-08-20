@@ -97,6 +97,7 @@ impl From<MessageDelta> for UnifiedResponse {
         Self {
             text: None,
             reasoning_content: None,
+            reasoning_content_kind: None,
             thinking_signature: None,
             tool_call: None,
             usage: value.usage.map(UnifiedTokenUsage::from),

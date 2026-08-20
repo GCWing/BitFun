@@ -2,7 +2,7 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::util::types::{Message as AIMessage, ToolCall as AIToolCall, ToolImageAttachment};
 use crate::util::TokenCounter;
 use bitfun_agent_runtime::prompt_markup::is_system_reminder_only;
-use bitfun_core_types::ModelResponseReplay;
+use bitfun_core_types::{ModelResponseReplay, ReasoningContentKind};
 pub use bitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -63,6 +63,8 @@ pub struct MessageMetadata {
     /// Anthropic extended thinking signature (for passing back in multi-turn conversations)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_signature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content_kind: Option<ReasoningContentKind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_kind: Option<MessageSemanticKind>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -262,6 +264,7 @@ impl From<Message> for AIMessage {
             MessageRole::System => "system",
         };
         let thinking_signature = msg.metadata.thinking_signature.clone();
+        let reasoning_content_kind = msg.metadata.reasoning_content_kind;
         let model_response_replay = msg.metadata.model_response_replay.clone();
 
         match msg.content {
@@ -330,10 +333,13 @@ impl From<Message> for AIMessage {
                 }
             }
             MessageContent::Mixed {
-                reasoning_content,
+                mut reasoning_content,
                 text,
                 tool_calls,
             } => {
+                if reasoning_content_kind == Some(ReasoningContentKind::Summary) {
+                    reasoning_content = None;
+                }
                 let converted_tool_calls = if tool_calls.is_empty() {
                     // Set to None when tool_call is empty to avoid deepseek model errors
                     None
@@ -608,6 +614,14 @@ impl Message {
         self
     }
 
+    pub fn with_reasoning_content_kind(
+        mut self,
+        reasoning_content_kind: Option<ReasoningContentKind>,
+    ) -> Self {
+        self.metadata.reasoning_content_kind = reasoning_content_kind;
+        self
+    }
+
     pub fn with_memory_citation(mut self, memory_citation: Option<MemoryCitation>) -> Self {
         self.metadata.memory_citation = memory_citation;
         self
@@ -774,7 +788,7 @@ mod tests {
     use super::{Message, ToolCall};
     use crate::util::types::Message as AIMessage;
     use bitfun_agent_stream::ToolArgumentRepairKind;
-    use bitfun_core_types::{ModelResponseReplay, ModelResponseReplayItem};
+    use bitfun_core_types::{ModelResponseReplay, ModelResponseReplayItem, ReasoningContentKind};
     use serde_json::json;
 
     #[test]
@@ -786,6 +800,38 @@ mod tests {
 
         assert_eq!(ai_msg.reasoning_content.as_deref(), Some(""));
         assert_eq!(ai_msg.thinking_signature.as_deref(), Some("sig_1"));
+    }
+
+    #[test]
+    fn reasoning_summary_is_not_sent_as_generic_reasoning_content() {
+        let msg = Message::assistant_with_reasoning(
+            Some("display summary".to_string()),
+            "answer".to_string(),
+            vec![],
+        )
+        .with_reasoning_content_kind(Some(ReasoningContentKind::Summary));
+
+        let ai_msg = AIMessage::from(msg);
+
+        assert!(ai_msg.reasoning_content.is_none());
+        assert_eq!(ai_msg.content.as_deref(), Some("answer"));
+    }
+
+    #[test]
+    fn legacy_message_without_reasoning_content_kind_still_deserializes() {
+        let message = Message::assistant_with_reasoning(
+            Some("legacy reasoning".to_string()),
+            "answer".to_string(),
+            vec![],
+        );
+        let mut encoded = serde_json::to_value(message).expect("serialize message");
+        encoded["metadata"]
+            .as_object_mut()
+            .expect("metadata object")
+            .remove("reasoning_content_kind");
+
+        let restored: Message = serde_json::from_value(encoded).expect("legacy message");
+        assert!(restored.metadata.reasoning_content_kind.is_none());
     }
 
     #[test]

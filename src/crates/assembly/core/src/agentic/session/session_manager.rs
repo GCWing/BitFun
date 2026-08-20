@@ -7265,6 +7265,7 @@ impl SessionManager {
                                     thinking_items.push(ThinkingItemData {
                                         id: format!("{}-think-{}", round_id, order_index),
                                         content: reasoning.clone(),
+                                        reasoning_kind: msg.metadata.reasoning_content_kind,
                                         is_streaming: false,
                                         is_collapsed: true,
                                         timestamp,

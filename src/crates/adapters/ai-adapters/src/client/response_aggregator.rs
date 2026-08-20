@@ -27,6 +27,7 @@ pub(crate) async fn aggregate_stream_response(
                 let UnifiedResponse {
                     text,
                     reasoning_content,
+                    reasoning_content_kind: _,
                     thinking_signature: _,
                     tool_call,
                     usage: chunk_usage,

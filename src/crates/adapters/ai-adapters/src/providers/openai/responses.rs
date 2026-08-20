@@ -64,6 +64,18 @@ fn log_prompt_cache_diagnostics(request_body: &serde_json::Value) {
     );
 }
 
+fn ensure_reasoning_summary_opt_in(request_body: &mut serde_json::Value) {
+    let Some(reasoning) = request_body
+        .get_mut("reasoning")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    reasoning
+        .entry("summary".to_string())
+        .or_insert_with(|| serde_json::Value::String("auto".to_string()));
+}
+
 fn try_build_request_body_with_context(
     client: &AIClient,
     instructions: Option<String>,
@@ -111,7 +123,7 @@ fn try_build_request_body_with_context(
                 if value.trim().is_empty() {
                     return Err(anyhow!("Responses reasoning effort must not be empty"));
                 }
-                body["reasoning"] = serde_json::json!({ "effort": value });
+                body["reasoning"] = serde_json::json!({ "effort": value, "summary": "auto" });
                 Ok(true)
             }
             ReasoningPresetAction::Toggle { .. } | ReasoningPresetAction::BudgetTokens { .. } => {
@@ -164,6 +176,7 @@ fn try_build_request_body_with_context(
         );
         shared::apply_reasoning_actions(preset, &mut request_body, protected_keys, &[], compile)?;
     }
+    ensure_reasoning_summary_opt_in(&mut request_body);
 
     shared::log_request_body(
         TARGET,
@@ -301,6 +314,9 @@ mod tests {
     use super::{build_request_body, build_request_body_with_context};
     use crate::types::{ModelRequestContext, ToolDefinition};
     use crate::{client::AIClient, types::AIConfig};
+    use bitfun_core_types::{
+        ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
+    };
     use serde_json::json;
 
     fn test_client() -> AIClient {
@@ -368,6 +384,51 @@ mod tests {
         );
 
         assert!(request_body.get("include").is_none());
+    }
+
+    #[test]
+    fn responses_reasoning_effort_requests_auto_summary() {
+        let client = test_client().with_reasoning_preset(&ReasoningPresetDescriptor {
+            id: "high".to_string(),
+            label: "High".to_string(),
+            order: 0,
+            actions: vec![ReasoningPresetAction::Effort {
+                value: "high".to_string(),
+            }],
+            source: ReasoningPresetSource::ModelConfig,
+            execution_provider: None,
+            execution_model: None,
+        });
+        let request_body = build_request_body(&client, None, Vec::new(), None, None);
+
+        assert_eq!(
+            request_body["reasoning"],
+            json!({ "effort": "high", "summary": "auto" })
+        );
+    }
+
+    #[test]
+    fn responses_reasoning_summary_preserves_explicit_override() {
+        let concise_request_body = build_request_body(
+            &test_client(),
+            None,
+            Vec::new(),
+            None,
+            Some(json!({ "reasoning": { "effort": "low", "summary": "concise" } })),
+        );
+        let disabled_request_body = build_request_body(
+            &test_client(),
+            None,
+            Vec::new(),
+            None,
+            Some(json!({ "reasoning": { "effort": "low", "summary": null } })),
+        );
+
+        assert_eq!(
+            concise_request_body["reasoning"]["summary"],
+            json!("concise")
+        );
+        assert_eq!(disabled_request_body["reasoning"]["summary"], json!(null));
     }
 
     #[test]

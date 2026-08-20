@@ -4,6 +4,7 @@ use crate::agentic::core::ToolCall;
 use crate::agentic::events::EventQueue;
 use crate::util::errors::BitFunError;
 use crate::util::types::ai::GeminiUsage;
+use bitfun_core_types::ReasoningContentKind;
 use futures::stream::BoxStream;
 use serde_json::Value;
 use std::sync::Arc;
@@ -22,6 +23,7 @@ const MEMORY_CITATION_HIDDEN_TEXT_TAG: &str = "memory_citation";
 #[derive(Debug, Clone)]
 pub struct StreamResult {
     pub full_thinking: String,
+    pub reasoning_content_kind: Option<ReasoningContentKind>,
     pub reasoning_content_present: bool,
     pub thinking_signature: Option<String>,
     pub full_text: String,
@@ -40,6 +42,7 @@ impl From<bitfun_agent_stream::StreamResult> for StreamResult {
     fn from(result: bitfun_agent_stream::StreamResult) -> Self {
         Self {
             full_thinking: result.full_thinking,
+            reasoning_content_kind: result.reasoning_content_kind,
             reasoning_content_present: result.reasoning_content_present,
             thinking_signature: result.thinking_signature,
             full_text: result.full_text,

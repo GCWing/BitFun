@@ -683,6 +683,17 @@ pub struct ModelReasoningSummaryPart {
     pub text: String,
 }
 
+/// Human-readable reasoning text exposed by a model provider.
+///
+/// A summary is safe, provider-generated display content and is not equivalent
+/// to either raw reasoning text or opaque reasoning state used for replay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningContentKind {
+    Reasoning,
+    Summary,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,

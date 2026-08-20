@@ -277,6 +277,7 @@ mod tests {
         ThinkingItemData {
             id: id.to_string(),
             content: content.to_string(),
+            reasoning_kind: None,
             is_streaming: false,
             is_collapsed: false,
             timestamp: 0,

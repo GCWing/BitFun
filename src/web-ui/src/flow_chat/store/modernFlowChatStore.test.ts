@@ -526,6 +526,45 @@ describe('sessionToVirtualItems explore grouping', () => {
     ]);
   });
 
+  it('keeps a trailing reasoning summary collapsed in layout hints', () => {
+    const session = makeSession({
+      sessionId: 'summary-layout-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'summary-layout-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound({
+          id: 'active-summary',
+          items: [{
+            id: 'summary-1',
+            type: 'thinking',
+            content: 'Inspecting the implementation',
+            reasoningKind: 'summary',
+            isStreaming: true,
+            isCollapsed: true,
+            timestamp: 1000,
+            status: 'streaming',
+          }],
+          isStreaming: true,
+          isComplete: false,
+          status: 'streaming',
+          renderHints: { disableExploreGrouping: true },
+        })],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const modelRound = sessionToVirtualItems(session)
+      .find((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(modelRound?.layoutHints?.expandedThinkingItemIds).toEqual([]);
+  });
+
   it('appends a completion notice for abnormal completed turns', () => {
     const session = makeSession({
       dialogTurns: [{

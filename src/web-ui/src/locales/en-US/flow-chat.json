@@ -1868,6 +1868,7 @@
       "thinking": "Thinking...",
       "preparing": "Preparing to think",
       "thinkingProcess": "Thinking Process",
+      "thinkingSummary": "Thinking Summary",
       "thinkingComplete": "Thinking complete",
       "thinkingCharacters": "Thought {{count}} characters"
     },

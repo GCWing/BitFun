@@ -1929,7 +1929,15 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
  * Handle text chunk event
  */
 function handleTextChunk(context: FlowChatContext, event: any): void {
-  const { sessionId, turnId, roundId, text, contentType = 'text', isThinkingEnd = false } = event;
+  const {
+    sessionId,
+    turnId,
+    roundId,
+    text,
+    contentType = 'text',
+    reasoningKind,
+    isThinkingEnd = false,
+  } = event;
   if (!shouldProcessEvent(sessionId, turnId, 'data', 'TextChunk')) {
     return;
   }
@@ -1970,6 +1978,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
     attemptIndex: event.attemptIndex,
     text,
     contentType: contentType as 'text' | 'thinking',
+    reasoningKind,
     isThinkingEnd,
   };
   
@@ -2008,9 +2017,29 @@ export function processBatchedEvents(
       const { eventType } = parsed;
       
       if (eventType === 'text') {
-        const { sessionId, turnId, roundId, attemptId, attemptIndex, text, contentType, isThinkingEnd } = payload;
+        const {
+          sessionId,
+          turnId,
+          roundId,
+          attemptId,
+          attemptIndex,
+          text,
+          contentType,
+          reasoningKind,
+          isThinkingEnd,
+        } = payload;
         if (contentType === 'thinking') {
-          processThinkingChunkInternal(context, sessionId, turnId, roundId, text, isThinkingEnd, attemptId, attemptIndex);
+          processThinkingChunkInternal(
+            context,
+            sessionId,
+            turnId,
+            roundId,
+            text,
+            isThinkingEnd,
+            attemptId,
+            attemptIndex,
+            reasoningKind,
+          );
         } else {
           processNormalTextChunkInternal(context, sessionId, turnId, roundId, text, attemptId, attemptIndex);
         }

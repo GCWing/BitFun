@@ -101,6 +101,7 @@ export interface SubagentTextChunkData {
   attemptIndex?: number;
   text: string;
   contentType: string;
+  reasoningKind?: 'reasoning' | 'summary';
   isThinkingEnd?: boolean;
 }
 
