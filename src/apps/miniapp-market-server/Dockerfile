@@ -6,6 +6,7 @@ WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches/ patches/
 COPY src/miniapp-market-web/package.json src/miniapp-market-web/package.json
 RUN --mount=type=cache,id=bitfun-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --ignore-scripts --filter bitfun-miniapp-market-web
