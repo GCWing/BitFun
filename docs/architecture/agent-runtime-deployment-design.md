@@ -554,6 +554,7 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 
 - 只有一套 Agent Runtime 业务实现；部署差异不能产生第二套 Session、Tool、Permission 或 MCP owner。
 - 当前入口使用第 1.1 节列出的 adapter；Embedded TUI 使用 direct Runtime adapter，Web/需要连接边界的 Rich Client 继续使用 App Server。
+- Rust Runtime 与 Node/Bun Plugin Host 进程不要默认按 Client、workspace、session 或 plugin 拆进程；进程边界应由负责状态 owner、execution/security domain、可计量的安全条件与容量需求共同决定。
 - Client、窗口、Session 或 workspace 数量不会自动等量增加 Runtime 或 Plugin Host 进程。
 - 当前 Shared Runtime IPC 是第一方 TUI 的 private compatibility transport，不成为公开 SDK、Remote、Peer、HTTP 或浏览器协议；是否由 App Server Shared transport 替换仍待评审。
 - Shared TUI 的 Model、Skill、Subagent、MCP、External Source V1、Hook 和 Worktree 管理由 controller 直接调用现有 owner/service。这些 capability 不进入 `CliAgentRuntimeClient` 或 v17 wire。Account/Settings Sync 和后续 External Application V2 未由当前 Shared Host 提供并返回 typed unsupported；Remote workspace scope 明确 fail closed，不回落控制端本机。MCP service 的进程状态和 tool registry 只属于当前 CLI 进程，不即时重配已经运行的 Shared Runtime Host；跨进程 MCP 管理需要单独的同步/restart contract。

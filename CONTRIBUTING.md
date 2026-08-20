@@ -4,6 +4,10 @@
 
 Thanks for your interest in BitFun! BitFun is a multi-platform AI programming environment powered by Rust and TypeScript, with shared core logic across Desktop/CLI/Server. This guide explains how to contribute effectively.
 
+This file is the **human contribution entry**: how to set up, open PRs, and what we welcome.
+
+**Code-change norms, architecture, and verification** live in [`AGENTS.md`](AGENTS.md) — do not treat this file as a third command or verification encyclopedia.
+
 ## Code of Conduct
 
 Be respectful, kind, and constructive. We welcome contributors of all backgrounds and experience levels.
@@ -72,7 +76,7 @@ pnpm run e2e:test
 
 > **`desktop:dev` vs `desktop:preview:debug`**: `desktop:dev` runs `tauri dev`, which provides **full hot-reload** — frontend changes apply instantly via Vite HMR, and Rust/backend changes trigger an incremental rebuild followed by an automatic app restart. This is the recommended workflow for active development. `desktop:preview:debug` launches a pre-built debug binary alongside a Vite dev server; frontend edits still get HMR, but **Rust-side changes are not auto-rebuilt** — you must stop and re-run the command (or use `--force-rebuild`). Use `desktop:preview:debug` when you only need to iterate on frontend code or want a faster cold-start without waiting for `tauri dev` initialization.
 
-> For the full script list, see [`package.json`](package.json). For agent-specific commands, verification, and architecture rules, see [`AGENTS.md`](AGENTS.md).
+> For the full script list, see [`package.json`](package.json) and [`docs/guideline/common-commands.md`](docs/guideline/common-commands.md). After changes, pick the smallest check from [`docs/guideline/verification.md`](docs/guideline/verification.md). For agent-specific commands, verification, and architecture rules, see [`AGENTS.md`](AGENTS.md). Docs placement: [`docs/guideline/docs-governance.md`](docs/guideline/docs-governance.md).
 
 ### Desktop debugging tools
 
@@ -166,7 +170,7 @@ Common local checks:
 | Repository metadata or GitHub config | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
 | Frontend runtime or UI | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
-| Rust shared runtime or services | `cargo check --workspace`, plus a focused `cargo test` when behavior changed |
+| Rust shared runtime or services | Nearest module `AGENTS.md`; otherwise `cargo check -p <owning-package>` with the minimum feature set, plus a focused `cargo test` when behavior changed |
 | Desktop/Tauri integration | `cargo check -p bitfun-desktop` |
 | i18n resources or contract | use the matching i18n row in `AGENTS.md` |
 

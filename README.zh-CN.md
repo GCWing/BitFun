@@ -8,7 +8,7 @@
 
 能写代码、能做文档、能操控桌面，并提供小应用、Rust Runtime 和可自部署的多设备互控服务器。
 
-[**⬇ 下载 macOS · Windows · Linux 版**](https://github.com/GCWing/BitFun/releases/latest) · [校验下载](./docs/verify-downloads.zh-CN.md)
+[**⬇ 下载 macOS · Windows · Linux 版**](https://github.com/GCWing/BitFun/releases/latest) · [校验下载](./docs/guideline/verify-downloads.zh-CN.md)
 
 [官网](https://openbitfun.com/) · [快速开始](#第一次运行) · [安全策略](./SECURITY_CN.md) · [讨论区](https://github.com/GCWing/BitFun/discussions) · [参与贡献](./CONTRIBUTING_CN.md)
 
@@ -131,7 +131,7 @@ BitFun 的扩展路径从轻到重连续展开：
 | 层级 | 方式 | 适合场景 |
 | --- | --- | --- |
 | **L1** | Agent 自定义 | 定义角色、流程、约束和工具组合。 |
-| **L2** | MCP / Skills / [Hooks](docs/features/agent-hooks.zh-CN.md) | 接入外部工具和专业能力，并在 Agent 生命周期节点运行你自己的命令 —— 完全兼容 Codex Hooks，已有脚本无需适配。 |
+| **L2** | MCP / Skills / [Hooks](docs/specs/agent-hooks.zh-CN.md) | 接入外部工具和专业能力，并在 Agent 生命周期节点运行你自己的命令 —— 完全兼容 Codex Hooks，已有脚本无需适配。 |
 | **L3** | Mini App | 为任务生成专属界面、表单、面板或可视化。 |
 | **L4** | 源码级改造 | 修改工具、适配器、UI、Runtime 或产品形态。 |
 

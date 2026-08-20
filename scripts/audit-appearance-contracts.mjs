@@ -43,8 +43,8 @@ const finalStateContractFiles = [
   'src/web-ui/src/infrastructure/config/index.ts',
   'src/web-ui/src/shared/context-menu-system/types/menu.types.ts',
   'tests/e2e/helpers/performance-trace.ts',
-  'docs/development/ui-testids.md',
-  'docs/development/ui-testids-CN.md',
+  'docs/guideline/ui-testids.md',
+  'docs/guideline/ui-testids.zh-CN.md',
 ];
 const retiredFinalStateContracts = [
   ['generate-startup-theme-bootstrap', /generate-startup-theme-bootstrap/],

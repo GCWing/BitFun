@@ -6,36 +6,102 @@ BitFun is a Rust workspace plus React frontends.
 
 Repository rule: **keep product logic platform-agnostic, then expose it through platform adapters**.
 
+This file is the **formal standards entry** (progressive disclosure): indexes to authoritative
+docs, plus the smallest always-on navigation. Open linked docs when the task matches; do not
+copy long rule bodies back into this entry.
+
 ## Quick start
 
-1. Read `README.md` and `CONTRIBUTING.md` before architecture-sensitive changes.
-2. Use the primary product loop below for normal development. Surface-specific
-   alternatives belong in the nearest app guide.
-3. After Rust file changes, prefer `pnpm run fmt:rs` to format only changed or staged `.rs` files. Use `cargo fmt` only when you intentionally want broader formatting coverage.
-4. After changes, use the nearest local `AGENTS.md` for the focused verification
-   command. The repository-level verification section below only covers
-   cross-cutting checks.
-5. Workspace Rust dependencies own compatible versions, not broad capability
-   unions. Each crate must select the dependency features it actually uses;
-   keep test-only features in dev-dependencies and attach feature-gated service
-   capabilities to the owning crate feature. Disable third-party defaults in
-   `[workspace.dependencies]` when they are not part of every consumer's
-   contract; members inherit that policy and add only their needed slices. For
-   internal crates whose guarded `default` is empty, do not repeat
-   `default-features = false` on every edge. Narrow consumers of an intentional
-   compatibility default, such as ACP, must still disable it explicitly.
-   Manifests copied into a standalone Docker build context must keep explicit
-   versions and default policy because they cannot inherit the workspace root.
-   `tokio/full` is forbidden in the root workspace and workspace members.
+1. Read [`README.md`](README.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md) before architecture-sensitive changes. Humans contributing via PR start at CONTRIBUTING; code-change norms start here.
+2. Desktop: prefer `pnpm run desktop:dev`. Use `pnpm run desktop:preview:debug` only for faster frontend-only cold start (no Rust auto-rebuild). See [`docs/guideline/common-commands.md`](docs/guideline/common-commands.md).
+3. After Rust edits: `pnpm run fmt:rs` (changed/staged `.rs` only). Use `cargo fmt` only when you intentionally want broader formatting coverage.
+4. Use **Route by task** / **Standards map**, then pick checks from [`docs/guideline/verification.md`](docs/guideline/verification.md).
+5. Root workspace dependencies own compatible versions; consuming crates select only the features they use. Keep test-only features in `dev-dependencies`, attach feature-gated service capabilities to the owning crate feature, and disable third-party defaults in `[workspace.dependencies]` when they are not part of every consumer's contract. Internal crates whose guarded `default` is empty do not repeat `default-features = false` on every edge; narrow consumers of an intentional compatibility default such as ACP still disable it explicitly. Manifests copied into a standalone Docker build context keep explicit versions and default policy. `tokio/full` is forbidden in the root workspace and workspace members.
+
+## How to use this file
+
+1. Prefer the nearest module `AGENTS.md` / `AGENTS-CN.md` when editing under that directory.
+2. **Standards map** = norm types. **Architecture index** = STD-01 subtopics. **Cross-cutting index** = host/logging/agent-loop topics. **Route by task** = change → read → verify.
+3. Open linked authorities for detail. Keep this file and [`AGENTS-CN.md`](AGENTS-CN.md) in sync.
+4. Use [`docs/README.md`](docs/README.md) for the complete documentation map; placement and migration rules remain in [`docs-governance.md`](docs/guideline/docs-governance.md).
+
+## Language (repo docs)
+
+Summary only; full rules in [`docs/guideline/docs-governance.md`](docs/guideline/docs-governance.md).
+
+| Kind | Language |
+|---|---|
+| Human-facing narrative | Chinese authority (English optional). Spec workflow index [`docs/specs/README.md`](docs/specs/README.md) is Chinese-authority. |
+| Root `AGENTS` / `CONTRIBUTING` | Bilingual; **must stay in sync** |
+| AI / code-change ops (`docs/guideline/*`, module `AGENTS`) | English authority |
+| Logs | English only |
+
+## Standards map
+
+| ID | Norm type | Read when | Authority (start here) |
+|---|---|---|---|
+| STD-01 | Repository & architecture | Layers, dependencies, product-line boundaries | **Layered Module Index** + **Architecture index** → linked design docs |
+| STD-02/03 | Coding & language stacks | Style beyond local AGENTS | Nearest module `AGENTS.md` |
+| STD-04 | Frontend & interaction | UI, state, adapter, i18n, theme | i18n/theme: [`docs/architecture/i18n.md`](docs/architecture/i18n.md), ops guide [`docs/guideline/i18n.md`](docs/guideline/i18n.md), [`docs/architecture/theme-token-optimization.md`](docs/architecture/theme-token-optimization.md), ops [`docs/guideline/theme-color-tokens.md`](docs/guideline/theme-color-tokens.md); UI/state/adapter: nearest surface `AGENTS.md` (e.g. [`src/web-ui/AGENTS.md`](src/web-ui/AGENTS.md)) |
+| STD-05 | API & data contracts | DTO, events, Tauri command, persistence, error **shape** | DTO/events/contracts: [`src/crates/contracts/AGENTS.md`](src/crates/contracts/AGENTS.md) and child-module `AGENTS.md`; Tauri/host/remote: [`docs/guideline/host-platform-and-remote.md`](docs/guideline/host-platform-and-remote.md) |
+| STD-06 | DFX | Retry, cancel, partial success, heterogeneous inputs, failure **UX**, logging, security | Logging: [`docs/guideline/logging.md`](docs/guideline/logging.md), [`src/web-ui/LOGGING.md`](src/web-ui/LOGGING.md), [`src/crates/LOGGING.md`](src/crates/LOGGING.md); remote: [`host-platform-and-remote.md`](docs/guideline/host-platform-and-remote.md); Agent loop: [`agent-loop-behavior.md`](docs/guideline/agent-loop-behavior.md); security: [`SECURITY.md`](SECURITY.md) |
+| STD-07 | Docs & templates | Spec / design / plan; where docs live | [`docs/guideline/docs-governance.md`](docs/guideline/docs-governance.md); [`docs/specs/README.md`](docs/specs/README.md) |
+| STD-08 | Testing & verification | Which check to run after a change | [`docs/guideline/verification.md`](docs/guideline/verification.md) |
+| STD-09 | Git & delivery | Branch, PR, contribute | [`CONTRIBUTING.md`](CONTRIBUTING.md) ([中文](CONTRIBUTING_CN.md)); do not duplicate command or verification encyclopedias in CONTRIBUTING |
+| STD-10 | AI collaboration | Same norms across agents/tools | This entry + nearest module `AGENTS.md`; do not fork tool-only rule copies |
+| STD-11 | Automated protection | Audits, baselines, boundary checks | i18n/theme audit authorities + [`docs/guideline/theme-color-tokens.md`](docs/guideline/theme-color-tokens.md) + [`docs/guideline/verification.md`](docs/guideline/verification.md); never raise baselines to silence failures |
+| STD-12 | Module norms | Package/crate-local rules | Nearest `AGENTS.md` / `AGENTS-CN.md` |
+
+**Also:** command dictionary → [`docs/guideline/common-commands.md`](docs/guideline/common-commands.md) (not a substitute for Verification; also linked from Quick start §2).
+
+## Architecture index (STD-01)
+
+When the task hits a row below, open that authority. Do not stop at the STD-01 map row alone.
+
+| Topic | Open when | Authority |
+|---|---|---|
+| Product architecture | `bitfun-core` split, feature/dependency boundaries, build-speed refactors | [`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md) (see §1.1); Rust build dependencies: [`docs/architecture/rust-build-dependency-boundaries.md`](docs/architecture/rust-build-dependency-boundaries.md); topic map [`docs/architecture/README.md`](docs/architecture/README.md) |
+| Agent Runtime deployment | Multi-GUI/TUI/Remote instances, shared Session control, process topology | [`docs/architecture/agent-runtime-deployment-design.md`](docs/architecture/agent-runtime-deployment-design.md) |
+| Agent hooks | Native Codex-compatible hooks, BitFun deviations / gates | [`docs/specs/agent-hooks.md`](docs/specs/agent-hooks.md) ([中文](docs/specs/agent-hooks.zh-CN.md)); do not fork the Codex hook contract |
+| Physical layers | Where a crate/app belongs, dependency direction | **Layered Module Index** in this file |
+| CLI / TUI product line | CLI/TUI parity, non-interactive output, config import, plugin UX, CLI Agent, branded CLI | [`docs/architecture/cli-product-line-design.md`](docs/architecture/cli-product-line-design.md), [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md) |
+| HarmonyOS PC CLI/TUI | HarmonyOS PC terminal / CLI-TUI portability | [`docs/architecture/platform-portability-design.md`](docs/architecture/platform-portability-design.md) |
+| Product customization | Product definition, branded distro, GUI/TUI layout selection, bundled extensions, customization builds | [`docs/architecture/product-customization-blueprint.md`](docs/architecture/product-customization-blueprint.md) |
+| OpenCode compatibility | Live OpenCode config or plugin execution | [`docs/architecture/extensions/opencode-extension-compatibility.md`](docs/architecture/extensions/opencode-extension-compatibility.md) — **read current P0 runtime guardrail** (managed-package / static-preview; do not treat design targets as shipped) |
+| SDLC quality harness | Lifecycle evidence, gates, Artifact Graph, Project Profile, Deep Review, target-project governance | [`docs/architecture/sdlc-governance-architecture.md`](docs/architecture/sdlc-governance-architecture.md); if module boundaries/behavior change, also matching docs under [`docs/architecture/`](docs/architecture/) (security-boundary, quality-data-plane, evidence-pack, artifact-graph, project-profile-integration, agent-workflow-design) or [`docs/specs/`](docs/specs/) (configurable-policy-profile, risk-classifier, pr-quality-gate, agent-evaluation, requirement-impact-analysis); do not hard-code BitFun-repo assumptions as target-project rules |
+
+## Cross-cutting index
+
+Condition-triggered rules. Open only when the task matches; details stay in the linked docs.
+
+| Topic | Open when | Authority |
+|---|---|---|
+| Logging | Adding or changing log output / observability text | Repository-wide policy: [`docs/guideline/logging.md`](docs/guideline/logging.md); frontend API: [`src/web-ui/LOGGING.md`](src/web-ui/LOGGING.md); Rust API: [`src/crates/LOGGING.md`](src/crates/LOGGING.md) |
+| Tauri / platform / remote / upgrade | Desktop commands, UI↔host boundaries, remote scenarios, and cross-version behavior | [`docs/guideline/host-platform-and-remote.md`](docs/guideline/host-platform-and-remote.md); [`src/apps/desktop/AGENTS.md`](src/apps/desktop/AGENTS.md) |
+| Agent loop | Agent loop, repeated tool calls, anti-loop safeguards | [`docs/guideline/agent-loop-behavior.md`](docs/guideline/agent-loop-behavior.md); nearest `src/crates/execution/*/AGENTS.md` |
+
+## Route by task
+
+| Task / change | Read first | Then verify |
+|---|---|---|
+| Unsure where code belongs | Layered Module Index + Product architecture row | [`verification.md`](docs/guideline/verification.md) matching row |
+| Desktop Tauri / desktop-only API | [`host-platform-and-remote.md`](docs/guideline/host-platform-and-remote.md); [`src/apps/desktop/AGENTS.md`](src/apps/desktop/AGENTS.md); `remote_workspace_policy.rs` | Desktop row in Verification |
+| Shared Rust (assembly/adapters/services/execution/contracts) | Layered Module Index + nearest crate `AGENTS.md` | Shared Rust row in Verification |
+| Web UI (no locale contract change) | [`src/web-ui/AGENTS.md`](src/web-ui/AGENTS.md); platform section in [`host-platform-and-remote.md`](docs/guideline/host-platform-and-remote.md) | Frontend row in Verification |
+| i18n / locales | [`docs/architecture/i18n.md`](docs/architecture/i18n.md); ops [`docs/guideline/i18n.md`](docs/guideline/i18n.md) | Locale / i18n rows in Verification |
+| Theme / color tokens | [`docs/architecture/theme-token-optimization.md`](docs/architecture/theme-token-optimization.md), ops [`docs/guideline/theme-color-tokens.md`](docs/guideline/theme-color-tokens.md) | `pnpm run theme:color-audit:all` |
+| Logging / log message text | Cross-cutting → Logging | Focused check for the touched surface |
+| Agent loop / anti-loop changes | [`agent-loop-behavior.md`](docs/guideline/agent-loop-behavior.md) | Nearest execution/runtime tests |
+| Mobile web pairing / reconnect | [`src/mobile-web/AGENTS.md`](src/mobile-web/AGENTS.md) | Mobile web row in Verification |
+| CLI / TUI / HarmonyOS PC / customization / OpenCode / SDLC | Matching **Architecture index** row | Smallest surface check + module AGENTS |
+| Installer | [`BitFun-Installer/AGENTS.md`](BitFun-Installer/AGENTS.md) | Installer rows in Verification |
+| Failure UX / provider errors / remote unsupported | STD-05/06 authorities; remote section in [`host-platform-and-remote.md`](docs/guideline/host-platform-and-remote.md) | Contract/focused tests for the touched surface |
+| Writing Spec / design | [`docs/specs/README.md`](docs/specs/README.md) + [`templates/`](docs/specs/templates/); governance [`docs-governance.md`](docs/guideline/docs-governance.md) | Human review; cite applicable STD rows |
+| Opening a PR / contribution process | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Smallest Verification row for touched files |
 
 ## Layered Module Index
 
-Dependencies flow top to bottom. This table is the physical crate layout, not
-the full conceptual architecture. For Product Surface / Product Assembly /
-Product Feature / Agent Kernel / Execution / Extension / Cross-platform Adapter /
-Stable Contracts and Security Control Plane boundaries, read
-[`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md).
-Keep crate dependencies inside each layer to the smallest set needed.
+Dependencies flow top to bottom. This table is the **physical** crate layout, not the full conceptual architecture — see Product architecture in the Architecture index. Keep crate dependencies inside each layer to the smallest set needed.
 
 | # | Layer | Path | Owns | Modules / entries | Layer doc |
 |---|---|---|---|---|---|
@@ -57,302 +123,6 @@ Boundary rules:
 - Execution crates are portable runtime building blocks, not host-specific or delivery-profile owners.
 - Contracts stay behavior-light and must not depend upward.
 
-
-## Common commands
-
-Keep this list to stable repository entry points. Surface- and crate-specific
-test commands belong in the nearest local `AGENTS.md` and must not be copied here.
-
-```bash
-# Setup and primary product loop
-pnpm install
-pnpm run desktop:dev               # full hot-reload: Vite HMR + Rust auto-rebuild & restart
-
-# Repository checks
-pnpm run fmt:rs                    # format only changed / staged Rust files
-pnpm run check:repo-hygiene        # repository content and filename rules
-pnpm run check:github-config       # GitHub workflow/configuration rules
-pnpm run check:core-boundaries     # Cargo/module ownership boundaries
-```
-
-For Web UI, mobile, CLI, Desktop, Installer, packaging, and focused test
-commands, use the nearest local guide. The full script registry remains in
-[`package.json`](package.json).
-
-## Global rules
-
-### Process artifacts
-
-- Do not add or update files under `docs/superpowers/**`. Keep temporary
-  planning, design, and implementation-process artifacts local. Move durable
-  architecture or feature facts into the existing document for that area, and
-  put user-facing guidance in the owning app README.
-
-### Internationalization
-
-- Locale ids, aliases, fallback rules, and surface defaults are owned by
-  `src/shared/i18n/contract/locales.json`. Run `pnpm run i18n:generate`
-  after editing it.
-- Shared stable labels live in
-  `src/shared/i18n/resources/shared/<locale>/terms.json`; workflow copy stays
-  in the owning product surface.
-- Do not import Web UI locale resources into smaller product surfaces such as
-  `src/mobile-web` or `BitFun-Installer`. See `docs/architecture/i18n.md`.
-- Static self-contained pages may use generated page-scoped shared-term files;
-  they must not import Web UI locale catalogs.
-- Web UI loads only bootstrap namespaces eagerly; use `useI18n(namespace)` for
-  route or feature copy and keep direct `i18nService.t(...)` calls in bootstrap
-  namespaces.
-- Use shared i18n formatting helpers for user-visible dates, times, and
-  numbers instead of direct `Intl.*` or `toLocale*` calls.
-- `pnpm run i18n:audit` enforces key/placeholder parity, direct static key
-  existence, dynamic key source proofs, literal fallback and locale-format
-  no-growth baselines, shared-term/l10n governance baselines, non-blocking
-  same-text locale inventory, and the no-hardcoded-CJK source budget.
-
-### Theme and color tokens
-
-- Theme and color-token baselines are ratchet contracts, not editable test
-  expectations. Do not make a failing theme audit pass by raising values in
-  `scripts/theme-color-governance-baseline*.json`, loosening fixture/assertion
-  counts, adding broad allowlist entries, or removing CI audit coverage.
-- Lower theme baselines when measured debt is removed. If a change truly needs a
-  new color or key, add the smallest owner contract and document why existing
-  semantic, component, or specialized-domain tokens cannot cover it.
-- For theme, CSS variable, widget payload, mobile, installer, or CLI/TUI color
-  changes, run `pnpm run theme:color-audit:all`.
-
-### Logging
-
-Logs must be English-only, with no emojis.
-
-- Frontend: [`src/web-ui/LOGGING.md`](src/web-ui/LOGGING.md)
-- Backend: [`src/crates/LOGGING.md`](src/crates/LOGGING.md)
-
-### Tauri commands
-
-- Command names: `snake_case`
-- TypeScript may wrap with `camelCase`, but invoke Rust with a structured `request`
-
-```rust
-#[tauri::command]
-pub async fn your_command(
-    state: State<'_, AppState>,
-    request: YourRequest,
-) -> Result<YourResponse, String>
-```
-
-```ts
-await api.invoke('your_command', { request: { ... } });
-```
-
-### Platform boundaries
-
-- Do not call Tauri APIs directly from UI components; go through the adapter/infrastructure layer.
-- Desktop-only host adapters belong in `src/apps/desktop`, then flow through typed capability interfaces and, when event delivery is needed, the production transport adapter.
-- In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`.
-
-### Remote scenarios
-
-BitFun is not a local-only desktop app. The workspace, the runtime that executes
-a turn, and the person driving it can each sit on a different machine. Treat the
-four scenarios below as first-class targets of every change, not as a later port.
-
-| Scenario | What it means | Design entry point |
-|---|---|---|
-| Remote workspace | The active workspace lives on an SSH host, a jump-host chain, or a Docker container; files, terminal, search, and Agent subprocesses must execute there | [remote-workspace-transport.md](docs/architecture/remote-workspace-transport.md), [remote-workspaces.md](docs/features/remote-workspaces.md) |
-| Remote control | Mobile web, or a Feishu / Telegram / WeChat bot, drives a session on a Desktop or CLI host through the Remote Connect relay | [`src/mobile-web`](src/mobile-web/AGENTS.md), `remote_connect` in [services-integrations](src/crates/services/services-integrations/AGENTS.md), [relay-service](src/crates/services/relay-service/AGENTS.md) |
-| Peer Device Mode | One same-account device becomes the data plane of another: the controller shell stays local, invokes and events come from the peer | [peer-device-mode.md](docs/architecture/peer-device-mode.md), [peer-device README](src/web-ui/src/infrastructure/peer-device/README.md) |
-| Detached Dispatch | A controller submits a durable job to another BitFun host and may then disconnect; the target owns the job, session, worktree, event log, and permission mailbox | [detached-task-dispatch.md](docs/architecture/detached-task-dispatch.md) |
-
-Rules that apply to all four:
-
-- Design the remote path together with the feature. A capability that assumes UI,
-  process, and filesystem share one machine is incomplete, not "phase one".
-- Degrade loudly. When a scenario cannot be supported, gate the entry point or
-  return a clear unsupported state. Silent local fallback, fake success, empty
-  payloads, and generic errors are all regressions; local fallback additionally
-  leaks local content to a remote controller.
-- Keep blocking interaction answerable from a distance. New permission prompts,
-  dialogs, and pickers must reach the driving surface through the existing dialog
-  and permission-mailbox orchestration. A turn that only the desktop window can
-  unblock deadlocks remote control and dispatch jobs.
-- Survive disconnect. Remote surfaces reconnect, replay by cursor, and re-hydrate,
-  so prefer resumable cursors and idempotent mutations over state that exists only
-  while a client happens to be attached.
-- Remote workspace paths are POSIX on every client OS. Do not split or join them
-  with host `std::path` semantics, and do not reuse a controller-side path on a
-  peer host.
-
-Per-scenario obligations:
-
-- **Remote workspace**: every desktop Tauri command declares its policy in
-  [`remote_workspace_policy.rs`](src/apps/desktop/src/api/remote_workspace_policy.rs).
-  The contract test there rejects new commands without an explicit policy and
-  forbids growing the `LegacyUnaudited` backlog.
-- **Remote control**: mobile web and IM bots reach sessions through the
-  `RemoteCommand` wire protocol and the bot command router / menu, not through the
-  Web UI. When a session-level capability is added or moved — workspace or
-  assistant selection, session lifecycle, mode, model, approval, attachment —
-  extend those surfaces or make them answer with an explicit unsupported reply.
-- **Peer Device Mode**: product commands are proxied to the peer by default. A
-  command that must stay on the controller (window chrome, updater, account
-  identity, local OS automation) has to be denied in all three lists that are kept
-  in sync: [`peer_host_invoke.rs`](src/apps/desktop/src/api/peer_host_invoke.rs),
-  [`deny.rs`](src/apps/cli/src/peer_host/deny.rs), and
-  [`peer-device-adapter.ts`](src/web-ui/src/infrastructure/api/adapters/peer-device-adapter.ts).
-  Read the peer-device README invariants before changing session, account, or
-  hydrate paths.
-- **Detached Dispatch**: jobs run headless on the target under the CLI delivery
-  profile, with no interactive host and no guaranteed controller connection. The
-  controller is an observer, never a runtime or filesystem proxy. Do not add
-  behavior that requires a live submitter, and treat the dispatch protocol version
-  and required target capabilities as a compatibility contract — a new target-side
-  requirement needs a negotiated capability, not an assumption.
-
-State which remote scenarios a change was exercised in. Local-only tests are not
-evidence of remote behavior.
-
-### Upgrade compatibility
-
-Users upgrade in place, and the remote scenarios above routinely put two
-different BitFun versions on the same connection. Every change must keep
-existing installs working without manual repair.
-
-- **Persisted shapes are read by older and newer code.** Config, settings,
-  sessions, connection profiles, worktree and dispatch records: add fields with
-  defaults, keep deserialization tolerant, and never repurpose or narrow the
-  meaning of a field that is already on disk. A field old data cannot supply
-  must not become required.
-- **Never delete or reset user data to recover from something you cannot
-  parse.** Keep the record, degrade the feature, and surface a clear state.
-  Missing credentials, an unreadable profile, a timeout, or an offline host are
-  not reasons to drop a session, workspace, or connection. Destructive removal
-  stays an explicit user action.
-- **Cross-version boundaries negotiate; they do not assume.** Peer HostInvoke,
-  the dispatch protocol, relay and mobile web, and IM bots all talk to a build
-  you do not control. Advertise a capability and check it before using it —
-  package version equality is not evidence of behavior — and keep the older
-  side on a working path instead of failing it.
-- **A rename is a migration.** Keep reading the old name, id, or record shape
-  until no supported peer can still send it, and migrate referenced data
-  (vault entries, workspace pointers) together with the thing being renamed.
-- **Prove it with tests.** Cover legacy deserialization and an old-payload
-  round trip, not just the new shape. A test that only exercises data written
-  by the current code is not upgrade coverage.
-
-### Agent loop behavior
-
-- Do not add hard-coded limits or pattern checks to the agent loop as a first response to looping behavior, such as blocking repeated tool calls by string or count alone.
-- Excessive hard-coding turns the agent loop into a brittle workflow engine. Investigate the root cause first: tool behavior, model interaction, session context packaging, prompt/tool schema design, or state synchronization issues.
-
-### Agent hooks
-
-- BitFun implements the Codex hook contract, so <https://learn.chatgpt.com/docs/hooks> is the reference for events, payload fields, and the decision schema. Do not fork that contract. [`docs/features/agent-hooks.md`](docs/features/agent-hooks.md) ([中文](docs/features/agent-hooks.zh-CN.md)) covers only the BitFun-specific parts — file locations, the `app.hooks` gates, and the deviations table — and must be updated whenever a deviation is added or closed.
-- The portable engine (settings parsing, payload construction, process execution, decision merging) lives in `bitfun-agent-runtime::native_hooks`. `bitfun-core::native_hooks` owns config discovery, gating, and per-event dispatch helpers; dispatch sites call those helpers instead of executing hooks inline.
-- Three separate things share the word "hook": these native user hooks, the internal compiled-in `post_call_hooks`, and the read-only external hook catalog of other AI applications (`external_hooks`). Keep them separate.
-
-## Architecture
-
-### Product architecture guardrails
-
-For any `bitfun-core` decomposition, feature-boundary, dependency-boundary, or
-Rust build-speed refactor, read both
-[`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)
-and
-[`docs/architecture/rust-build-dependency-boundaries.md`](docs/architecture/rust-build-dependency-boundaries.md)
-before editing. Keep these files as entry points; put module-specific ownership
-details in the nearest module `AGENTS.md`.
-
-Repository-level decomposition rules:
-
-- Do not confuse DTO/contract extraction with runtime owner migration.
-- Product surfaces may diverge; share stable facts or ports, not UI, protocol,
-  lifecycle, or platform implementation.
-- Moving runtime ownership requires a reviewed port/provider design, old-path
-  compatibility, behavior equivalence tests, and explicit confirmation when a
-  behavior boundary could change.
-
-For Agent Runtime deployment, multi-GUI/TUI/Remote instances, shared Session
-control, or process-topology changes, also read
-[`docs/architecture/agent-runtime-deployment-design.md`](docs/architecture/agent-runtime-deployment-design.md).
-Do not key Rust Runtime or Node/Bun Plugin Host processes by client, workspace,
-session, or plugin by default; use the responsible state module, execution and
-security conditions, and measured capacity.
-
-### CLI product-line guardrails
-
-For CLI/TUI parity work, non-interactive output contracts, external config
-imports, plugin management UX, CLI Agent behavior, or branded CLI distributions,
-read [`docs/architecture/cli-product-line-design.md`](docs/architecture/cli-product-line-design.md)
-and [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md). Keep CLI/TUI presentation
-in the app; move reusable product behavior through Product Assembly, Agent
-Runtime, Tool/Harness, Runtime Services, or the existing extension boundaries.
-
-### HarmonyOS PC CLI/TUI guardrails
-
-For changes that affect HarmonyOS PC CLI/TUI support, also read
-[`docs/architecture/platform-portability-design.md`](docs/architecture/platform-portability-design.md).
-This is a future platform target, not implemented support. The product target is
-the real PC system terminal; HAP, `hdc shell`, the phone Remote App, and remote
-execution are not substitutes. Design each concrete adaptation as a separate
-topic and keep the current mobile capability unchanged.
-
-### Product customization guardrails
-
-For product definitions, branded distributions, GUI/TUI layout selection,
-bundled product extensions, or customization build tasks, read
-[`docs/architecture/product-customization-blueprint.md`](docs/architecture/product-customization-blueprint.md).
-Keep product customization separate from user runtime configuration and plugins.
-GUI and TUI may share stable product facts, but not layout, component, theme-key,
-keybinding, or renderer schemas. Product assembly results and layout selections
-may carry a small immutable list of product identity, data-isolation, recovery,
-upgrade-integrity, or legal protection IDs. They must not carry user/source-level
-plugin policy, installation, activation, update, permission, or dynamic health state.
-Product Profile, Brand Pack, GUI/TUI Surface Blueprint, and Resolved Product Manifest are retired
-design terms, not current production objects. Do not create compatibility formats
-for them; implement only the smallest product-definition and assembly-result fields
-used by a real build and runtime consumer.
-
-For OpenCode live configuration or plugin execution, also read
-[`docs/architecture/extensions/opencode-extension-compatibility.md`](docs/architecture/extensions/opencode-extension-compatibility.md).
-The current P0 adapter remains a managed-package/static-preview path until the matching
-OC-R phase is implemented and verified. Do not extend the legacy managed-package
-path as the target OpenCode runtime model, and do not treat a design target as an
-already available capability.
-
-### SDLC quality guardrails
-
-For lifecycle evidence, gates, Artifact Graph, Project Profile, Deep Review
-policy, OpenCode compatibility, or target-project governance changes, read
-[`docs/sdlc-harness/README.md`](docs/sdlc-harness/README.md)
-first, then [`docs/sdlc-harness/design.md`](docs/sdlc-harness/design.md). If
-module boundaries or behavior change, follow the matching design under
-`docs/sdlc-harness/architecture/` or `docs/sdlc-harness/features/`.
-
-Do not hard-code BitFun repository assumptions as target-project rules; keep
-quality protection behavior target-aware, evidence-backed, risk-tiered,
-cost-aware, and auditable.
-
-## Verification
-
-Choose verification at the owner, not from a repository-wide test matrix:
-
-1. Read the nearest local `AGENTS.md` and run its narrowest command that covers
-   the changed behavior.
-2. Prefer one package, one test target or module filter, and the minimum feature
-   set. Do not use `product-full`, `all-features`, or a workspace-wide suite as a
-   shortcut.
-3. Run a repository check only when its contract changed: repository hygiene for
-   layout/content rules, GitHub config for workflow changes, and core boundaries
-   for Cargo features, dependency direction, or test-target layout.
-4. Leave broad builds, workspace suites, packaging, and platform matrices to
-   existing CI unless the change affects those paths or reproduces a CI failure.
-
-If a module lacks a useful focused command, add it to that module's guide rather
-than expanding this file. Do not pre-emptively align every module's test list;
-document a command only when a real workflow needs it.
-
 ## Agent-doc priority
 
-Prefer the nearest matching `AGENTS.md` / `AGENTS-CN.md` for the directory you are changing. If local guidance conflicts with this file, follow the more specific, nearer document.
+Prefer the nearest matching `AGENTS.md` / `AGENTS-CN.md` for the directory you are changing. If local guidance conflicts with this file, follow the more specific nearer document.

@@ -4,6 +4,10 @@
 
 感谢你对 BitFun 的兴趣！BitFun 是一个由 Rust 与 TypeScript 驱动的多端 AI 编程环境，桌面端/CLI/Server 共享核心逻辑。本指南说明如何高效参与贡献。
 
+本文是**人类贡献入口**：如何搭建、如何开 PR、我们欢迎什么。
+
+**改代码规范、架构与验证**见 [`AGENTS.md`](AGENTS.md)——不要把本文当成第三套命令或验证百科。
+
 ## 行为准则
 
 请保持尊重、友善与建设性沟通。我们欢迎不同背景与经验的贡献者。
@@ -69,7 +73,7 @@ pnpm run e2e:test
 
 > **`desktop:dev` 与 `desktop:preview:debug` 的区别**：`desktop:dev` 运行 `tauri dev`，提供**完整热更新** — 前端改动通过 Vite HMR 即时生效，Rust/后端改动会触发增量重编译并自动重启应用，是日常开发的首选方式。`desktop:preview:debug` 启动预构建的 debug 二进制和 Vite dev server；前端编辑仍可 HMR，但 **Rust 侧改动不会自动重编译** — 需要手动停止并重新运行命令（或使用 `--force-rebuild`）。适合仅需迭代前端代码、或希望跳过 `tauri dev` 初始化以更快冷启动的场景。
 
-> 完整脚本列表见 [`package.json`](package.json)。agent 专用命令、验证与架构规则见 [`AGENTS.md`](AGENTS.md)。
+> 完整脚本列表见 [`package.json`](package.json) 与 [`docs/guideline/common-commands.md`](docs/guideline/common-commands.md)。改完后从 [`docs/guideline/verification.md`](docs/guideline/verification.md) 选最小检查。agent 专用命令、验证与架构规则见 [`AGENTS.md`](AGENTS.md)。文档放置：[`docs/guideline/docs-governance.md`](docs/guideline/docs-governance.md)。
 
 ### 桌面端调试工具
 
@@ -154,7 +158,7 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 | 仓库元信息或 GitHub 配置 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
 | 前端运行时或 UI | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
-| Rust 共享 runtime 或 services | `cargo check --workspace`；行为变化时再加 focused `cargo test` |
+| Rust 共享 runtime 或 services | 先用最近模块 `AGENTS.md` 的命令；若未提供，则以最小 feature 运行 `cargo check -p <owning-package>`，行为变化时再加 focused `cargo test` |
 | Desktop/Tauri 集成 | `cargo check -p bitfun-desktop` |
 | i18n 资源或契约 | 使用 `AGENTS.md` 中匹配的 i18n 验证行 |
 

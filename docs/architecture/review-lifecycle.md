@@ -580,6 +580,6 @@ introduce another Review runtime or persistence owner.
   submission.
 - [product-architecture.md](product-architecture.md) defines the repository
   layers and platform-adapter boundary.
-- [../sdlc-harness/product-requirements-agent-workflow-adjustment.md](../sdlc-harness/product-requirements-agent-workflow-adjustment.md)
+- [../specs/sdlc-governance-agent-workflow-adjustment.md](../specs/sdlc-governance-agent-workflow-adjustment.md)
   explains the user-facing Review and workflow requirements without defining a
   second runtime.

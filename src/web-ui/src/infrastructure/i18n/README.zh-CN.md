@@ -5,7 +5,7 @@
 本文档只作为 Web UI 运行时入口。跨形态语言契约、资源归属、key 规范和校验规则以以下文档为准：
 
 - `docs/architecture/i18n.md`
-- `docs/development/i18n.md`
+- `docs/guideline/i18n.md`
 
 这里保持精简，避免本地示例和项目级规范分叉。
 

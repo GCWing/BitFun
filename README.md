@@ -8,7 +8,7 @@
 
 Writes code, produces documents, and drives the desktop — with Mini Apps, a Rust runtime, and a self-hostable device-sync server.
 
-[**⬇ Download for macOS · Windows · Linux**](https://github.com/GCWing/BitFun/releases/latest) · [Verify downloads](./docs/verify-downloads.md)
+[**⬇ Download for macOS · Windows · Linux**](https://github.com/GCWing/BitFun/releases/latest) · [Verify downloads](./docs/guideline/verify-downloads.md)
 
 [Website](https://openbitfun.com/) · [Quick start](#first-run) · [Security](./SECURITY.md) · [Discussions](https://github.com/GCWing/BitFun/discussions) · [Contributing](./CONTRIBUTING.md)
 
@@ -131,7 +131,7 @@ BitFun's extension paths progress continuously from light to deep customization:
 | Tier | Path | Best for |
 | --- | --- | --- |
 | **L1** | Custom Agent | Defining roles, flows, constraints, and tool bundles. |
-| **L2** | MCP / Skills / [Hooks](docs/features/agent-hooks.md) | Connecting external tools and professional capabilities, and running your own commands at Agent lifecycle points — fully Codex-hook compatible, so existing hook scripts work as-is. |
+| **L2** | MCP / Skills / [Hooks](docs/specs/agent-hooks.md) | Connecting external tools and professional capabilities, and running your own commands at Agent lifecycle points — fully Codex-hook compatible, so existing hook scripts work as-is. |
 | **L3** | Mini App | Generating dedicated interfaces, forms, panels, or visualizations for tasks. |
 | **L4** | Source-level customization | Changing tools, adapters, UI, Runtime, or product shape. |
 
