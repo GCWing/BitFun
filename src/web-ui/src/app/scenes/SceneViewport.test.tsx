@@ -97,12 +97,13 @@ describe('SceneViewport transitions', () => {
 
   function visibleScenes(): Element[] {
     return Array.from(container.querySelectorAll('[data-testid="scene-viewport-scene"]'))
-      .filter(scene => !scene.hasAttribute('hidden'));
+      .filter(scene => scene.classList.contains('bitfun-scene-viewport__scene--visible'));
   }
 
   it('keeps one scene visible while a lazy pointer target becomes ready', async () => {
     act(() => root.render(<SceneViewport />));
     expect(visibleScenes().map(scene => scene.getAttribute('data-scene-id'))).toEqual(['session']);
+    expect(container.querySelector('[data-scene-id="session"]')?.hasAttribute('hidden')).toBe(false);
 
     sceneHarness.state = {
       openTabs: [
@@ -128,7 +129,8 @@ describe('SceneViewport transitions', () => {
     });
 
     expect(visibleScenes().map(scene => scene.getAttribute('data-scene-id'))).toEqual(['agents']);
-    expect(container.querySelector('[data-scene-id="session"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-scene-id="session"]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelector('[data-scene-id="session"]')?.hasAttribute('inert')).toBe(true);
     expect(container.querySelector('[data-scene-id="agents"]')?.classList.contains(
       'bitfun-scene-viewport__scene--incoming',
     )).toBe(true);
@@ -156,7 +158,9 @@ describe('SceneViewport transitions', () => {
     act(() => root.render(<SceneViewport />));
 
     expect(visibleScenes().map(scene => scene.getAttribute('data-scene-id'))).toEqual(['session']);
-    expect(container.querySelector('[data-scene-id="agents"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-scene-id="agents"]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelector('[data-scene-id="agents"]')?.hasAttribute('inert')).toBe(true);
+    expect(container.querySelector('[data-scene-id="agents"]')?.hasAttribute('hidden')).toBe(false);
   });
 
   it('keeps an auto-evicted MiniApp scene mounted and hidden', async () => {
@@ -175,7 +179,9 @@ describe('SceneViewport transitions', () => {
 
     const retained = container.querySelector('[data-scene-id="miniapp:gomoku"]');
     expect(retained).not.toBeNull();
-    expect(retained?.hasAttribute('hidden')).toBe(true);
+    expect(retained?.classList.contains('bitfun-scene-viewport__scene--visible')).toBe(false);
     expect(retained?.getAttribute('aria-hidden')).toBe('true');
+    expect(retained?.hasAttribute('inert')).toBe(true);
+    expect(retained?.hasAttribute('hidden')).toBe(false);
   });
 });

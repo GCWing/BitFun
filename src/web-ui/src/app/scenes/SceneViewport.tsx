@@ -239,9 +239,8 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
                 isIncoming && 'bitfun-scene-viewport__scene--incoming',
                 isOutgoing && 'bitfun-scene-viewport__scene--outgoing',
               ].filter(Boolean).join(' ')}
-              hidden={!isVisible}
-              aria-hidden={!isActive}
-              {...(!isActive ? { inert: '' } : {})}
+              aria-hidden={!isActive || !isVisible}
+              {...(!isActive || !isVisible ? { inert: '' } : {})}
               data-testid="scene-viewport-scene"
               data-scene-id={tabId}
               data-scene-active={isActive ? 'true' : 'false'}

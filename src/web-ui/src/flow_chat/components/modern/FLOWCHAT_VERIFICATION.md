@@ -51,6 +51,12 @@ group does not renumber the others.
    measure. This is the per-item estimate doing its job, and it is the single
    most visible symptom if the estimate ever regresses.
 4. Session switching and history paging do not restore stale footer height.
+5. Scroll up in session A, switch to session B, then return to A. The same Turn
+   must remain at the same viewport offset, both in the ordinary tail projection
+   and after navigating into an explicit history window.
+6. From that reading position, switch to Settings and back. The session scene
+   remains mounted with usable geometry while inactive, and the viewport must
+   not enter host suspension or move to the tail.
 
 ### Submitting and revealing
 
