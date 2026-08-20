@@ -40,6 +40,36 @@ $scene-gutter: clamp(28px, 4vw, 64px);
       min-height: 0;
     }
   }
+
+  // Non-desktop surfaces (server/web): explicit degrade notice instead of an
+  // empty gallery, telling the user where MiniApps actually run.
+  &__unsupported {
+    display: grid;
+    place-items: center;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: $size-gap-3;
+    background: var(--bf-appearance-token-color-bg-primary);
+  }
+
+  &__unsupported-card {
+    max-width: 440px;
+    padding: $size-gap-4;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    text-align: center;
+  }
+
+  &__unsupported-title {
+    margin: 0 0 $size-gap-1;
+    font-size: 15px;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__unsupported-body {
+    margin: 0;
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
 }
 
 @media (max-width: 560px) {
