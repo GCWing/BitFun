@@ -1,9 +1,9 @@
 {
   "schema": "bitfun.appearance.registry",
   "schemaVersion": 1,
-  "generatedFrom": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
-  "generatedAt": "2026-08-16T16:09:40.016459+00:00",
-  "sourceRevision": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
+  "generatedFrom": "869bde45876aaf486a2e339bc37afa6343e30e3f",
+  "generatedAt": "2026-08-20T07:09:03.732279+00:00",
+  "sourceRevision": "869bde45876aaf486a2e339bc37afa6343e30e3f",
   "sourceDirty": false,
   "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "components": [
@@ -3046,6 +3046,52 @@
     },
     {
       "id": "reasoning-preset-selector",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "label",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "option",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "open",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"open\"]"
+          }
+        },
+        {
+          "id": "selected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "acp-mode-selector",
       "parts": [
         {
           "id": "root",
@@ -11352,6 +11398,41 @@
       ]
     },
     {
+      "id": "usage-statistics-config",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "filters",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "summary",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "distributions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "modelHitRate",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trendPanel",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "empty",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
       "id": "settings-nav",
       "parts": [
         {
@@ -15839,37 +15920,10 @@
         {
           "id": "root",
           "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "section",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "description",
-          "propertyProfile": "container"
         }
       ],
       "facets": [],
       "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
         {
           "id": "failed",
           "selector": {

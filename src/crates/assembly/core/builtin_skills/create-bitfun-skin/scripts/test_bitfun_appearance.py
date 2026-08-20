@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 import bitfun_appearance as appearance
+import sync_registry as registry_sync
 
 
 def base_manifest() -> dict[str, object]:
@@ -111,6 +112,30 @@ class ManifestValidatorTests(unittest.TestCase):
         formatted_button = appearance.format_descriptor(button, "component")
         self.assertTrue(formatted_button["states"])
         self.assertTrue(all("selector" in state for state in formatted_button["states"]))
+
+    def test_registry_contract_comparison_ignores_provenance_only_changes(self) -> None:
+        current = {
+            "schema": "bitfun.appearance.registry",
+            "schemaVersion": 1,
+            "sourceRevision": "old-revision",
+            "generatedAt": "old-time",
+            **{key: [] for key in registry_sync.CONTRACT_KEYS},
+        }
+        checkout = {
+            **current,
+            "sourceRevision": "new-revision",
+            "generatedAt": "new-time",
+        }
+        self.assertEqual(
+            registry_sync.contract_view(current),
+            registry_sync.contract_view(checkout),
+        )
+
+        checkout["components"] = [{"id": "new-component"}]
+        self.assertNotEqual(
+            registry_sync.contract_view(current),
+            registry_sync.contract_view(checkout),
+        )
 
 
 if __name__ == "__main__":

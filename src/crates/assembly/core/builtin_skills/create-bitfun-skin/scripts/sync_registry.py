@@ -14,10 +14,26 @@ from typing import Any
 
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "references" / "appearance-registry.json"
+CONTRACT_KEYS = (
+    "components",
+    "scenes",
+    "renderers",
+    "defaultForceableProperties",
+    "cssTokenNames",
+    "widgetVariableNames",
+)
 
 
 class SyncError(Exception):
     pass
+
+
+def contract_view(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": value.get("schema"),
+        "schemaVersion": value.get("schemaVersion"),
+        **{key: value.get(key) for key in CONTRACT_KEYS},
+    }
 
 
 def run(command: list[str], cwd: Path) -> str:
@@ -114,16 +130,15 @@ def main() -> int:
                 current = json.loads(output.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as error:
                 raise SyncError(f"Could not read bundled registry: {error}") from error
-            comparable_expected = {key: value for key, value in output_value.items() if key != "generatedAt"}
-            comparable_current = {key: value for key, value in current.items() if key != "generatedAt"}
-            if comparable_current != comparable_expected:
+            if contract_view(current) != contract_view(output_value):
                 raise SyncError(
                     "Bundled registry differs from the selected BitFun checkout; "
                     "run sync_registry.py without --check to refresh it"
                 )
             print(json.dumps({
                 "output": str(output),
-                "revision": revision,
+                "snapshotRevision": current.get("sourceRevision"),
+                "checkoutRevision": revision,
                 "dirty": dirty,
                 "synchronized": True,
             }, indent=2))

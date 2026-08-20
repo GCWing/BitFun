@@ -64,7 +64,10 @@ class CinematicContractTests(unittest.TestCase):
         plan = contract.load_surface_plan()
         self.assertEqual("example-style-selection", plan["scope"])
         self.assertEqual("cinematic-animated-wallpaper", plan["styleId"])
-        self.assertIsInstance(plan["validatedAgainstRegistryRevision"], str)
+        self.assertEqual(
+            build_support.registry_provenance()["sourceRevision"],
+            plan["validatedAgainstRegistryRevision"],
+        )
         resolved = contract.resolve_palette_values(plan, palette["colors"])
         serialized = json.dumps(resolved)
         self.assertNotIn('"kind": "palette"', serialized)
