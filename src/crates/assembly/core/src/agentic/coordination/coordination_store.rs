@@ -8,8 +8,8 @@ use tokio::task;
 use uuid::Uuid;
 
 const SCHEMA_VERSION: i64 = 2;
-const SWARM_MAX_NODES: i64 = 32;
-const SWARM_MAX_DEPTH: i64 = 3;
+const SWARM_MAX_NODES: i64 = 128;
+const SWARM_MAX_DEPTH: i64 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BackgroundTaskStatus {
@@ -1174,17 +1174,6 @@ mod tests {
         store
             .reserve_swarm_child(
                 "planner",
-                "too-deep-planner",
-                "SwarmPlanner",
-                "SwarmPlanner",
-                3,
-            )
-            .await
-            .expect_err("final tree level cannot contain a planner");
-
-        store
-            .reserve_swarm_child(
-                "planner",
                 "nested-planner",
                 "SwarmPlanner",
                 "SwarmPlanner",
@@ -1192,6 +1181,46 @@ mod tests {
             )
             .await
             .expect("reserve nested planner");
+        store
+            .reserve_swarm_child(
+                "nested-planner",
+                "deep-planner",
+                "SwarmPlanner",
+                "SwarmPlanner",
+                3,
+            )
+            .await
+            .expect("reserve planner on the penultimate level");
+        store
+            .reserve_swarm_child(
+                "deep-planner",
+                "final-worker",
+                "SwarmPlanner",
+                "SwarmWorker",
+                4,
+            )
+            .await
+            .expect("reserve worker on the final level");
+        store
+            .reserve_swarm_child(
+                "deep-planner",
+                "final-planner",
+                "SwarmPlanner",
+                "SwarmPlanner",
+                4,
+            )
+            .await
+            .expect_err("final tree level cannot contain a planner");
+        store
+            .reserve_swarm_child(
+                "final-worker",
+                "beyond-final-level",
+                "SwarmWorker",
+                "SwarmWorker",
+                5,
+            )
+            .await
+            .expect_err("a sixth tree level must be rejected");
         store
             .reserve_swarm_child(
                 "nested-planner",
@@ -1212,6 +1241,8 @@ mod tests {
             [
                 "worker".to_string(),
                 "nested-planner".to_string(),
+                "deep-planner".to_string(),
+                "final-worker".to_string(),
                 "nested-worker".to_string(),
             ]
             .into_iter()
@@ -1219,8 +1250,8 @@ mod tests {
         );
 
         // A planner may use the rest of the tree budget for direct children.
-        // The five existing nodes plus these twenty-seven fill the 32-node tree.
-        for index in 0..27 {
+        // The seven existing nodes plus these 121 fill the 128-node tree.
+        for index in 0..121 {
             store
                 .reserve_swarm_child(
                     "planner",

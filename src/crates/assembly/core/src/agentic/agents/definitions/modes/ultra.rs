@@ -23,8 +23,10 @@ impl UltraMode {
                 "Read",
                 "Grep",
                 "Glob",
-                "LS",
                 "AskUserQuestion",
+                "ExecCommand",
+                "WriteStdin",
+                "ExecControl",
             ]
             .into_iter()
             .map(str::to_string)

@@ -1,6 +1,6 @@
+use crate::agentic::agents::UserContextPolicy;
 use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
 use crate::agentic::tools::framework::ToolExposure;
-use crate::define_readonly_subagent_with_overrides;
 use async_trait::async_trait;
 
 pub struct SwarmPlannerAgent;
@@ -42,7 +42,9 @@ impl Agent for SwarmPlannerAgent {
             "Read",
             "Grep",
             "Glob",
-            "LS",
+            "ExecCommand",
+            "WriteStdin",
+            "ExecControl",
         ]
         .into_iter()
         .map(str::to_string)
@@ -62,15 +64,76 @@ fn reviewer_tool_exposure_overrides() -> AgentToolPolicyOverrides {
     overrides
 }
 
-define_readonly_subagent_with_overrides!(
-    SwarmReviewerAgent,
-    "SwarmReviewer",
-    "Swarm Reviewer",
-    "Read-only reviewer that independently validates a coherent change set from one or more Swarm Workers against their assignments and acceptance criteria.",
-    "swarm_reviewer_agent",
-    &["Read", "Grep", "Glob", "LS", "GetFileDiff"],
-    reviewer_tool_exposure_overrides()
-);
+pub struct SwarmReviewerAgent {
+    default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
+}
+
+impl Default for SwarmReviewerAgent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SwarmReviewerAgent {
+    pub fn new() -> Self {
+        Self {
+            default_tools: [
+                "Read",
+                "Grep",
+                "Glob",
+                "ExecCommand",
+                "WriteStdin",
+                "ExecControl",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+            tool_exposure_overrides: reviewer_tool_exposure_overrides(),
+        }
+    }
+}
+
+#[async_trait]
+impl Agent for SwarmReviewerAgent {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn id(&self) -> &str {
+        "SwarmReviewer"
+    }
+
+    fn name(&self) -> &str {
+        "Swarm Reviewer"
+    }
+
+    fn description(&self) -> &str {
+        "Read-only reviewer that independently validates a coherent change set from one or more Swarm Workers against their assignments and acceptance criteria."
+    }
+
+    fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
+        "swarm_reviewer_agent"
+    }
+
+    fn default_tools(&self) -> Vec<String> {
+        self.default_tools.clone()
+    }
+
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+    }
+
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
+    }
+
+    fn is_readonly(&self) -> bool {
+        true
+    }
+}
 
 pub struct SwarmWorkerAgent {
     default_tools: Vec<String>,
