@@ -524,6 +524,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const sessionViewportStateRef = useRef<Map<string, SessionViewportState>>(new Map());
+  const viewportRestorePendingSessionIdRef = useRef<string | null>(null);
+  const [viewportRestorePendingSessionId, setViewportRestorePendingSessionId] = useState<string | null>(null);
   const activeSessionViewportSnapshot = activeSession?.sessionId
     ? sessionViewportStateRef.current.get(activeSession.sessionId)?.snapshot ?? null
     : null;
@@ -533,6 +535,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     && activeSessionViewportSnapshot.anchorTurnId !== null
     && activeSessionViewportSnapshot.anchorOffsetPx !== null
   );
+  const restoreGateSessionId = viewportRestorePendingSessionId
+    ?? (
+      activeSession?.sessionId !== activeSessionIdRef.current
+      && isRestoringRememberedReadingPosition
+        ? activeSession?.sessionId ?? null
+        : null
+    );
   const [historyInitialContentReadyKey, setHistoryInitialContentReadyKey] = useState<string | null>(null);
   const [historyInitialContentPostPaintKey, setHistoryInitialContentPostPaintKey] = useState<string | null>(null);
   const { workspacePath, activeWorkspace } = useWorkspaceContext();
@@ -559,7 +568,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     });
   }, []);
 
-  const handleViewportSnapshot = useCallback((snapshot: FlowChatViewportSnapshot) => {
+  const acceptViewportSnapshot = useCallback((snapshot: FlowChatViewportSnapshot) => {
     rememberSessionViewportState(snapshot.sessionId, { snapshot });
     traceViewportRepeating(`sessionSnapshot|${snapshot.sessionId}|${snapshot.presentationMode}`, {
       location: 'viewport.sessionSnapshotCaptured',
@@ -569,6 +578,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         presentationMode: snapshot.presentationMode,
         viewportMode: snapshot.viewportMode,
         historyWindow: snapshot.historyWindow,
+        anchorItemKey: snapshot.anchorItemKey,
+        anchorItemType: snapshot.anchorItemType,
         anchorTurnId: snapshot.anchorTurnId,
         anchorOffsetPx: snapshot.anchorOffsetPx,
         scrollTopPx: snapshot.scrollTopPx,
@@ -576,6 +587,46 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       }),
     });
   }, [rememberSessionViewportState]);
+
+  const handleViewportSnapshot = useCallback((snapshot: FlowChatViewportSnapshot) => {
+    if (
+      viewportRestorePendingSessionIdRef.current === snapshot.sessionId
+      || restoreGateSessionId === snapshot.sessionId
+    ) {
+      traceViewportRepeating(`sessionSnapshotIgnored|${snapshot.sessionId}`, {
+        location: 'viewport.sessionSnapshotIgnoredDuringRestore',
+        message: 'FlowChat ignored a provisional viewport snapshot while restoring a session',
+        data: () => ({
+          sessionId: snapshot.sessionId,
+          anchorItemKey: snapshot.anchorItemKey,
+          anchorItemType: snapshot.anchorItemType,
+          anchorTurnId: snapshot.anchorTurnId,
+          anchorOffsetPx: snapshot.anchorOffsetPx,
+          scrollTopPx: snapshot.scrollTopPx,
+          isAtTail: snapshot.isAtTail,
+        }),
+      });
+      return;
+    }
+    acceptViewportSnapshot(snapshot);
+  }, [acceptViewportSnapshot, restoreGateSessionId]);
+
+  const handleViewportRestoreSettled = useCallback((sessionId: string) => {
+    if (viewportRestorePendingSessionIdRef.current !== sessionId) return;
+    viewportRestorePendingSessionIdRef.current = null;
+    setViewportRestorePendingSessionId(null);
+    const capturedSnapshot = virtualListRef.current?.captureViewportSnapshot() ?? null;
+    if (capturedSnapshot?.sessionId === sessionId) {
+      // Restoration started from an explicit reader-owned position. A scroll
+      // event that recomputes the tail band can trail the final layout frame,
+      // so its old ref value must not turn that restored position back into a
+      // session-open tail request at the hand-off boundary.
+      acceptViewportSnapshot({
+        ...capturedSnapshot,
+        isAtTail: false,
+      });
+    }
+  }, [acceptViewportSnapshot]);
   const showHistoryPlaceholder = virtualItems.length === 0 && (
     historyState === 'metadata-only' ||
     historyState === 'hydrating' ||
@@ -700,6 +751,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     setContinuousProjectionSessionId(null);
     const restoredIntent = remembered?.viewportIntent
       ?? (sessionId ? { kind: 'live-tail', sessionId } : null);
+    const rememberedSnapshot = remembered?.snapshot ?? null;
+    const shouldRestoreRememberedViewport = Boolean(
+      rememberedSnapshot
+      && !rememberedSnapshot.isAtTail
+      && rememberedSnapshot.anchorTurnId !== null
+      && rememberedSnapshot.anchorOffsetPx !== null
+    );
+    viewportRestorePendingSessionIdRef.current = shouldRestoreRememberedViewport
+      ? sessionId ?? null
+      : null;
+    setViewportRestorePendingSessionId(viewportRestorePendingSessionIdRef.current);
     updateViewportIntent(restoredIntent);
     setHistoryBoundaryState(IDLE_HISTORY_BOUNDARY_STATE);
     historyBoundaryRequestsRef.current = { before: null, after: null };
@@ -715,7 +777,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           previousSessionId,
           restoredPresentationMode: restoredHistoryPresentation ? 'history-window' : 'tail',
           restoredViewportIntent: restoredIntent,
-          snapshot: remembered?.snapshot ?? null,
+          snapshot: rememberedSnapshot,
         }),
       });
     }
@@ -1346,6 +1408,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     if (
       !isViewportActive ||
       !sessionId ||
+      viewportRestorePendingSessionId === sessionId ||
       isReadingTurnViewport ||
       isRestoringRememberedReadingPosition ||
       !latestTurnId ||
@@ -1387,6 +1450,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     latestTurnId,
     latestTurnUsesFollowOutput,
     turnSummaries.length,
+    viewportRestorePendingSessionId,
   ]);
 
   useEffect(() => {
@@ -2673,6 +2737,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
                   onRequestJumpToLatest={jumpToLiveTail}
                   onUserScrollIntent={handleVirtualListUserScrollIntent}
                   onViewportSnapshot={handleViewportSnapshot}
+                  onViewportRestoreSettled={handleViewportRestoreSettled}
                   initialViewportSnapshot={activeSessionViewportSnapshot}
                 />
               </>

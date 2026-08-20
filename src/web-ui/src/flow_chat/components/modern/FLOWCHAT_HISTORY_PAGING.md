@@ -612,17 +612,23 @@ nothing to align.
 Switching sessions remounts the virtual list, so preserving a reading position
 cannot depend on keeping the old scroller or virtualizer alive. The container
 keeps a session-scoped snapshot of the rendered history presentation, viewport
-intent, and the first visible Turn's offset from the viewport top. Restoring the
-session reinstates the presentation first, then restores that Turn-and-offset
-relationship through `viewportOwner.shift` and opens the ordinary anchor settle
-window so later measurements keep it stable.
+intent, and the first visible virtual row's stable key and offset from the
+viewport top. The Turn id remains a compatibility fallback, but a long Turn may
+have its user message offscreen while a model round is visible, so the exact row
+is the authoritative identity. Restoring the session reinstates the presentation
+first, then restores that row-and-offset relationship through
+`viewportOwner.shift` and opens the ordinary anchor settle window so later
+measurements keep it stable.
 
 The saved `scrollTop` is only a materialization hint when the anchor Turn has
 not entered the rendered virtual window yet. It is never the final answer: once
 the Turn exists in the DOM, its semantic offset is authoritative. A snapshot
 whose reader was away from the tail also suppresses the session-open tail
 follow, including when the reader was using the ordinary tail projection rather
-than an explicit history window.
+than an explicit history window. Snapshot publication remains gated until that
+relationship is within rounding error for two painted frames: provisional mount
+geometry must not replace the saved snapshot or re-enable automatic tail
+placement while restoration is still in flight.
 
 ## Diagnosing History Paging
 

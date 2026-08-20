@@ -215,6 +215,7 @@ vi.mock('./VirtualItemRenderer', () => ({
       className="virtual-item-wrapper"
       data-item-type={mocks.renderItemMetadata ? item.type : undefined}
       data-turn-id={item.turnId}
+      data-virtual-item-key={`${item.type}:${item.turnId}:${item.data?.id ?? item.data?.groupId ?? ''}`}
       data-virtual-index={index}
     >
       {item.data?.content ?? item.turnId}
@@ -235,6 +236,16 @@ function userMessage(turnId: string, id: string, content: string) {
     type: 'user-message',
     turnId,
     data: { id, content },
+  };
+}
+
+function modelRound(turnId: string, id: string, content: string) {
+  return {
+    type: 'model-round',
+    turnId,
+    data: { id, content, items: [] },
+    isLastRound: true,
+    isTurnComplete: true,
   };
 }
 
@@ -1132,7 +1143,58 @@ describe('VirtualMessageList natural scroll contract', () => {
     }
   });
 
-  it('materializes and restores a saved reading position without starting tail follow', () => {
+  it('restores the exact visible virtual row instead of the Turn header', () => {
+    mocks.items = [
+      userMessage('turn-1', 'message-1', 'Question'),
+      modelRound('turn-1', 'round-1', 'Long answer'),
+    ];
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const restoreLayout = fakeLayout({
+      clientHeight: 600,
+      scrollHeight: 2000,
+      turnTopFromScrollerTop: 120,
+    });
+    try {
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.getBoundingClientRect = () => (
+        { ...new DOMRect(0, 0, 1000, 600), top: 0, bottom: 600 } as DOMRect
+      );
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        writable: true,
+        value: 400,
+      });
+      const [turnHeader, modelRoundElement] = Array.from(
+        container.querySelectorAll<HTMLElement>('.virtual-item-wrapper'),
+      );
+      turnHeader.getBoundingClientRect = () => (
+        { ...new DOMRect(0, -300, 1000, 40), top: -300, bottom: -260 } as DOMRect
+      );
+      let modelRoundTop = -80;
+      modelRoundElement.getBoundingClientRect = () => (
+        { ...new DOMRect(0, modelRoundTop, 1000, 900), top: modelRoundTop, bottom: modelRoundTop + 900 } as DOMRect
+      );
+
+      const snapshot = listRef.current?.captureViewportSnapshot();
+      expect(snapshot).toMatchObject({
+        anchorItemKey: 'model-round:turn-1:round-1',
+        anchorItemType: 'model-round',
+        anchorTurnId: 'turn-1',
+        anchorOffsetPx: -80,
+      });
+
+      modelRoundTop = 170;
+      act(() => {
+        expect(snapshot && listRef.current?.restoreViewportSnapshot(snapshot)).toBe(true);
+      });
+      expect(scroller.scrollTop).toBe(650);
+    } finally {
+      restoreLayout();
+    }
+  });
+
+  it('materializes and restores a saved reading position without starting tail follow', async () => {
     const listRef = React.createRef<VirtualMessageListRef>();
     const initialViewportSnapshot = {
       sessionId: 'session-1',
@@ -1165,6 +1227,7 @@ describe('VirtualMessageList natural scroll contract', () => {
 
       expect(mocks.startAtTailOnMount).toBe(false);
       expect(scroller.scrollTop).toBe(140);
+      await settleOpenReveal();
       expect(container.querySelector('[data-open-viewport-settled="true"]')).not.toBeNull();
     } finally {
       restoreLayout();
