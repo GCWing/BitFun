@@ -6,6 +6,8 @@
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
 !.npmrc
+!patches/
+!patches/**
 
 !src/
 !src/**/
