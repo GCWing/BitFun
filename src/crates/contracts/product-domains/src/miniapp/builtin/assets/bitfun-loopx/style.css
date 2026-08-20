@@ -31,17 +31,9 @@ body { background: var(--lx-bg); color: var(--lx-text); font: 13px/1.45 var(--lx
 button, input, select { font: inherit; }
 .lx { display: flex; flex-direction: column; height: 100vh; min-width: 0; }
 
-.topbar {
-  display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 7px 12px;
-  border-bottom: 1px solid var(--lx-border); background: var(--lx-surface); flex: 0 0 auto;
-}
-.brand { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
-.brand__icon { display: grid; place-items: center; color: var(--lx-accent); }
-.brand__title { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: 0; }
 .btn:focus-visible, .goal:focus-visible, .board-more__chip:focus-visible {
   outline: 2px solid var(--lx-accent); outline-offset: 1px;
 }
-.topbar__spacer { flex: 1; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lx-text-mute); flex: 0 0 auto; }
 /* Per-card status chips answer "is this task running normally?" at a glance —
    the global header heartbeat readout is gone. */
@@ -54,7 +46,6 @@ button, input, select { font: inherit; }
 .goal-status--ok { color: var(--lx-ok); background: color-mix(in srgb, var(--lx-ok) 10%, transparent); }
 .goal-status--err { color: var(--lx-error); background: color-mix(in srgb, var(--lx-error) 12%, transparent); }
 .goal-status--muted { color: var(--lx-text-mute); background: color-mix(in srgb, var(--lx-text-mute) 10%, transparent); }
-.topbar__actions { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px;
@@ -506,7 +497,6 @@ button, input, select { font: inherit; }
 .issue-preview__todo { padding: 2px 0 2px 8px; border-left: 2px solid var(--lx-accent); overflow-wrap: anywhere; }
 
 @media (max-width: 760px) {
-  .topbar { flex-wrap: wrap; }
   .workspace { gap: 0; margin: 8px 8px 0; }
   .review-zone { flex-basis: clamp(220px, 36vw, 260px); }
   .run-rail { flex-basis: clamp(160px, 28vw, 200px); }
