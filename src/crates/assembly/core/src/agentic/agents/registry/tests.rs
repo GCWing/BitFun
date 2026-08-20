@@ -368,6 +368,31 @@ fn every_builtin_mode_with_control_hub_can_also_schedule_with_cron() {
 }
 
 #[test]
+fn agent_list_and_delete_are_exposed_only_to_swarm_planners() {
+    for spec in builtin_agent_specs() {
+        let agent = (spec.factory)();
+        let has_list = agent.default_tools().iter().any(|tool| tool == "AgentList");
+        let has_delete = agent
+            .default_tools()
+            .iter()
+            .any(|tool| tool == "AgentDelete");
+        let should_have_controls = matches!(agent.id(), "Ultra" | "SwarmPlanner");
+        assert_eq!(
+            has_list,
+            should_have_controls,
+            "unexpected AgentList exposure for {}",
+            agent.id()
+        );
+        assert_eq!(
+            has_delete,
+            should_have_controls,
+            "unexpected AgentDelete exposure for {}",
+            agent.id()
+        );
+    }
+}
+
+#[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
     for agent_type in [
         "Explore",

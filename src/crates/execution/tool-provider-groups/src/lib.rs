@@ -101,12 +101,11 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
         "CreateCanvas" | "ReadCanvas" | "UpdateCanvas" | "PatchCanvas" => {
             Some(ToolPackFeatureGroup::Canvas)
         }
-        "Task" | "AgentSpawn" | "AgentSendInput" | "AgentInterrupt" | "AgentWait"
-        | "LaunchReviewAgent" | "Skill" | "AskUserQuestion" | "TodoWrite" | "get_goal"
-        | "create_goal" | "update_goal" | "CreatePlan" | "submit_code_review" | "GetToolSpec"
-        | "CallDeferredTool" | "SessionControl" | "SessionMessage" | "SessionHistory" | "Cron" => {
-            Some(ToolPackFeatureGroup::AgentControl)
-        }
+        "Task" | "AgentSpawn" | "AgentSendInput" | "AgentInterrupt" | "AgentList"
+        | "AgentDelete" | "AgentWait" | "LaunchReviewAgent" | "Skill" | "AskUserQuestion"
+        | "TodoWrite" | "get_goal" | "create_goal" | "update_goal" | "CreatePlan"
+        | "submit_code_review" | "GetToolSpec" | "CallDeferredTool" | "SessionControl"
+        | "SessionMessage" | "SessionHistory" | "Cron" => Some(ToolPackFeatureGroup::AgentControl),
         _ => None,
     }
 }
@@ -190,6 +189,8 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "AgentSpawn",
             "AgentSendInput",
             "AgentInterrupt",
+            "AgentList",
+            "AgentDelete",
             "AgentWait",
             "LaunchReviewAgent",
             "Skill",
@@ -482,6 +483,8 @@ mod tests {
                 "AgentSpawn",
                 "AgentSendInput",
                 "AgentInterrupt",
+                "AgentList",
+                "AgentDelete",
                 "AgentWait",
                 "LaunchReviewAgent",
                 "Skill",
