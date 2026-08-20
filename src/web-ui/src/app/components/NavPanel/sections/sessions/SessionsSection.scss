@@ -11,6 +11,12 @@
 
 .bitfun-nav-panel {
   &__inline-list {
+    // Left text rail shared by session rows and the expand toggle. Context
+    // stylesheets that indent rows (see WorkspaceListSection's 30px icon
+    // gutter) re-declare this so the toggle label can never drift off the rail
+    // the session titles sit on.
+    --bf-nav-session-rail: #{$size-gap-1};
+
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -121,7 +127,7 @@
     min-width: 0;
     max-width: 100%;
     height: 26px;
-    padding: 0 $size-gap-1;
+    padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);
     border: none;
     border-radius: 4px;
     background: transparent;
@@ -560,21 +566,26 @@
     }
   }
 
+  // Reads as the next row of the list rather than a floating footer: same left
+  // text rail and row geometry as __inline-item, with the remaining count in a
+  // trailing `+N` chip so the number is scannable without a full sentence.
   &__inline-toggle {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 4px;
+    justify-content: flex-start;
+    gap: 5px;
     height: 22px;
-    padding: 0 $size-gap-1;
-    margin-top: 2px;
+    padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);
+    margin-top: 1px;
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: var(--bf-appearance-token-font-size-2xs);
+    text-align: left;
     cursor: pointer;
     width: 100%;
+    min-width: 0;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard;
 
@@ -598,11 +609,59 @@
     animation: bitfun-nav-session-spin 1s linear infinite;
   }
 
-  &__inline-toggle-dots {
-    letter-spacing: 1px;
-    font-size: var(--bf-appearance-token-font-size-sm);
+  // Trailing, not leading: a leading icon would push the label off the rail by
+  // its own width, which is exactly the misalignment this rail is here to stop.
+  &__inline-toggle-chevron {
+    flex: 0 0 auto;
+    opacity: 0.65;
+    transition: opacity $motion-fast $easing-standard,
+                transform $motion-fast $easing-standard;
+  }
+
+  // Grows to fill the row so the count chip and chevron ride the trailing edge,
+  // with or without a chip (the "show less" state has none).
+  &__inline-toggle-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // Count badge, not a second button: it never takes the pointer on its own and
+  // stays visually quieter than the label it annotates.
+  &__inline-toggle-count {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    height: 15px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 9%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     line-height: 1;
-    opacity: 0.7;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+  }
+
+  &__inline-toggle:hover &__inline-toggle-chevron,
+  &__inline-toggle:focus-visible &__inline-toggle-chevron {
+    opacity: 1;
+    transform: translateY(1px);
+  }
+
+  &__inline-toggle[data-session-nav-toggle-action='show-less']:hover &__inline-toggle-chevron,
+  &__inline-toggle[data-session-nav-toggle-action='show-less']:focus-visible &__inline-toggle-chevron {
+    transform: translateY(-1px);
+  }
+
+  &__inline-toggle:hover &__inline-toggle-count,
+  &__inline-toggle:focus-visible &__inline-toggle-count {
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 22%, transparent);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__inline-item-edit-btn {
@@ -783,7 +842,7 @@
 
   &__inline-item {
     height: 28px;
-    padding: 0 6px;
+    padding: 0 6px 0 var(--bf-nav-session-rail);
     border-radius: $size-radius-sm;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -808,7 +867,6 @@
   }
 
   &__inline-item-action-btn,
-  &__inline-toggle,
   &__inline-item-edit-btn {
     border-radius: $size-radius-sm;
     transition:
@@ -818,6 +876,21 @@
 
     &:active {
       transform: scale(0.94);
+    }
+  }
+
+  // Press feedback matches a full-width row, not the 20px icon buttons: the
+  // icon-button 0.94 squish travels far too much across the panel width.
+  &__inline-toggle {
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active:not(:disabled) {
+      transform: scale(0.99);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
   }
 
@@ -868,6 +941,8 @@
 .bitfun-nav-panel {
   &__inline-list {
     padding-block: 3px;
+    // Rail for this rhythm: rows previously hard-coded `padding: 0 6px`.
+    --bf-nav-session-rail: 6px;
   }
 
   &__inline-item {
@@ -913,7 +988,7 @@
   }
 
   &__inline-toggle {
-    height: 28px;
+    height: 32px;
     @include nav-font.nav-panel-text-meta;
 
     font-size: var(--bf-appearance-token-font-size-xs);

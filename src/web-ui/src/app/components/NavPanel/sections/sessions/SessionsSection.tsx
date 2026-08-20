@@ -7,7 +7,7 @@
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, MoreHorizontal, Loader2, Archive, Clock3, Copy, FileDown, ChevronLeft } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, MoreHorizontal, Loader2, Archive, Clock3, Copy, FileDown, ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { IconButton, Input, PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -892,6 +892,42 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const hasMoreUnloadedSessions =
     !hasActiveSessionFilter && !workspaceScopes?.length && allTopLevelSessions.length < totalTopLevelSessionCount;
   const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
+  // The visible label stays short ("Show more") and the remaining count rides in
+  // a trailing `+N` chip; screen readers get the full sentence via aria-label.
+  // Keyed off `action` so the label, the chevron direction and the CSS hook on
+  // data-session-nav-toggle-action can never disagree.
+  const expandToggleLabels = useMemo((): {
+    label: string;
+    ariaLabel: string;
+    remainingCount: number | null;
+  } => {
+    if (expandToggleState.action === 'show-more') {
+      const count = expandToggleState.collapsedRemainingCount;
+      return {
+        label: t('nav.sessions.showMoreLabel'),
+        ariaLabel: t('nav.sessions.showMore', { count }),
+        remainingCount: count,
+      };
+    }
+    if (expandToggleState.action === 'show-all') {
+      const count = expandToggleState.expandedRemainingCount;
+      return {
+        label: t('nav.sessions.showAllLabel'),
+        ariaLabel: t('nav.sessions.showAll', { count }),
+        remainingCount: count,
+      };
+    }
+    return {
+      label: t('nav.sessions.showLess'),
+      ariaLabel: t('nav.sessions.showLess'),
+      remainingCount: null,
+    };
+  }, [
+    expandToggleState.action,
+    expandToggleState.collapsedRemainingCount,
+    expandToggleState.expandedRemainingCount,
+    t,
+  ]);
 
   useEffect(() => {
     if (
@@ -1963,14 +1999,18 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           type="button"
           className="bitfun-nav-panel__inline-toggle"
           data-testid="nav-session-list-load-more"
+          aria-label={t('nav.sessions.showMore', {
+            count: topLevelSessions.length - sessionDisplayLimit,
+          })}
           onClick={() => setLevel2DisplayCount(prev => prev + SESSIONS_LEVEL_2_PAGE)}
         >
-          <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
-          <span>
-            {t('nav.sessions.showMore', {
-              count: topLevelSessions.length - sessionDisplayLimit,
-            })}
+          <span className="bitfun-nav-panel__inline-toggle-label">
+            {t('nav.sessions.showMoreLabel')}
           </span>
+          <span className="bitfun-nav-panel__inline-toggle-count" aria-hidden>
+            +{topLevelSessions.length - sessionDisplayLimit}
+          </span>
+          <ChevronDown size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
         </button>
       )}
 
@@ -1983,37 +2023,24 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           data-bf-state={metadataPageState.isLoading ? 'loading' : undefined}
           data-testid="nav-session-list-toggle"
           data-session-nav-toggle-action={expandToggleState.action}
+          aria-label={expandToggleLabels.ariaLabel}
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}
         >
-          {expandLevel === 0 ? (
-            <>
-              {metadataPageState.isLoading ? (
-                <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" />
-              ) : (
-                <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
-              )}
-              <span>
-                {t('nav.sessions.showMore', {
-                  count: expandToggleState.collapsedRemainingCount,
-                })}
-              </span>
-            </>
-          ) : expandLevel === 1 && expandToggleState.expandedRemainingCount > 0 ? (
-            <>
-              {metadataPageState.isLoading ? (
-                <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" />
-              ) : (
-                <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
-              )}
-              <span>
-                {t('nav.sessions.showAll', {
-                  count: expandToggleState.expandedRemainingCount,
-                })}
-              </span>
-            </>
+          <span className="bitfun-nav-panel__inline-toggle-label">
+            {expandToggleLabels.label}
+          </span>
+          {expandToggleLabels.remainingCount !== null && (
+            <span className="bitfun-nav-panel__inline-toggle-count" aria-hidden>
+              +{expandToggleLabels.remainingCount}
+            </span>
+          )}
+          {metadataPageState.isLoading ? (
+            <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" aria-hidden />
+          ) : expandToggleLabels.remainingCount === null ? (
+            <ChevronUp size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           ) : (
-            <span>{t('nav.sessions.showLess')}</span>
+            <ChevronDown size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           )}
         </button>
       )}

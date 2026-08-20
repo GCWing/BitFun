@@ -1053,11 +1053,13 @@
       padding-top: 0;
       padding-left: 0;
       padding-right: 0;
+      // Shared by the rows below and by the "show more" toggle, which is their
+      // sibling — without this the toggle label sits 26px left of the titles.
+      --bf-nav-session-rail: 30px;
     }
 
     .bitfun-nav-panel__inline-item {
       height: 28px;
-      padding-left: 30px;
 
       &.is-child {
         padding-left: 44px;
@@ -1393,11 +1395,13 @@
       padding-top: 0;
       padding-left: 0;
       padding-right: 0;
+      // Shared by the rows below and by the "show more" toggle, which is their
+      // sibling — without this the toggle label sits 26px left of the titles.
+      --bf-nav-session-rail: 30px;
     }
 
     .bitfun-nav-panel__inline-item {
       height: 28px;
-      padding-left: 30px;
 
       &.is-child {
         padding-left: 44px;

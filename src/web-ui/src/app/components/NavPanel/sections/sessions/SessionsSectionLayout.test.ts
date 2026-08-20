@@ -90,13 +90,57 @@ describe('SessionsSection layout styles', () => {
     expect(sessionTooltip).not.toContain('followCursor');
   });
 
-  it('centers empty and session expansion helper content', () => {
+  it('centers empty session placeholder content', () => {
     const stylesheet = readSessionsSectionStylesheet();
     const emptyBlock = extractBlock(stylesheet, '&__inline-empty');
-    const toggleBlock = extractBlock(stylesheet, '&__inline-toggle');
 
     expect(emptyBlock).toContain('text-align: center;');
-    expect(toggleBlock).toContain('justify-content: center;');
+  });
+
+  it('aligns the session expansion toggle to the session row text rail', () => {
+    const stylesheet = readSessionsSectionStylesheet();
+    const toggleBlock = extractBlock(stylesheet, '&__inline-toggle');
+    const inlineItemBlock = extractBlock(stylesheet, '&__inline-item');
+    const inlineListBlock = extractBlock(stylesheet, '&__inline-list');
+
+    // The toggle is a sibling of the rows, so both take their left padding from
+    // one inherited rail. Context stylesheets that indent rows (see
+    // WorkspaceListSection's 30px icon gutter) only have to move the rail.
+    expect(inlineListBlock).toContain('--bf-nav-session-rail:');
+    expect(toggleBlock).toContain('padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);');
+    expect(inlineItemBlock).toContain('padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);');
+    expect(toggleBlock).toContain('justify-content: flex-start;');
+    expect(toggleBlock).toContain('text-align: left;');
+    expect(toggleBlock).toContain(`gap: ${inlineItemBlock.match(/gap: (\d+px);/)?.[1] ?? ''};`);
+    expect(toggleBlock).not.toContain('justify-content: center;');
+    // Every rule that indents a row must move the rail rather than hard-coding
+    // padding-left, or the sibling toggle silently drifts off the rail again.
+    const rowPaddingDecls = stylesheet.match(/&__inline-item \{[^}]*?padding(?:-left)?: [^;]+;/g) ?? [];
+    expect(rowPaddingDecls.length).toBeGreaterThan(0);
+    for (const decl of rowPaddingDecls) {
+      expect(decl).toContain('var(--bf-nav-session-rail)');
+    }
+  });
+
+  it('keeps the remaining session count in a compact trailing chip', () => {
+    const stylesheet = readSessionsSectionStylesheet();
+    const countBlock = extractBlock(stylesheet, '&__inline-toggle-count');
+    const labelBlock = extractBlock(stylesheet, '&__inline-toggle-label');
+    const source = readSessionsSectionSource();
+
+    expect(countBlock).toContain('flex: 0 0 auto;');
+    expect(countBlock).toContain('border-radius: 999px;');
+    expect(countBlock).toContain('font-variant-numeric: tabular-nums;');
+    // The label grows to fill the row, pushing the chip and the chevron to the
+    // trailing edge, and absorbs overflow so the chip is never ellipsized away.
+    expect(labelBlock).toContain('flex: 1 1 auto;');
+    expect(labelBlock).toContain('min-width: 0;');
+    expect(labelBlock).toContain('text-overflow: ellipsis;');
+    // The chip is decorative; the full sentence stays on the button's aria-label.
+    expect(source).toContain('className="bitfun-nav-panel__inline-toggle-count" aria-hidden');
+    expect(source).toContain("aria-label={t('nav.sessions.showMore', {");
+    expect(source).toContain('aria-label={expandToggleLabels.ariaLabel}');
+    expect(source).not.toContain('inline-toggle-dots');
   });
 
   it('keeps child-session badges visible while long titles are ellipsized', () => {
