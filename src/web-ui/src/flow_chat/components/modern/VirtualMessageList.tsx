@@ -79,6 +79,7 @@ import {
 } from './virtualMessageListLayout';
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
 import type { FlowChatViewportSnapshot } from './flowChatViewportSnapshot';
+import { getVirtualItemStableKey } from './virtualItemIdentity';
 import { warnHistoryPagingRefusedWithPendingTurns } from '../../services/historySessionDiagnostics';
 import {
   VIEWPORT_PLACEMENT_SETTLE_MS,
@@ -194,6 +195,7 @@ export interface VirtualMessageListProps {
   onRequestJumpToLatest?: () => void;
   onUserScrollIntent?: () => void;
   onViewportSnapshot?: (snapshot: FlowChatViewportSnapshot) => void;
+  onViewportRestoreSettled?: (sessionId: string) => void;
   initialViewportSnapshot?: FlowChatViewportSnapshot | null;
 }
 
@@ -306,23 +308,6 @@ function normalizeBoundaryResult(
   return result;
 }
 
-function getVirtualItemStableKey(item: VirtualItem): string {
-  switch (item.type) {
-    case 'user-message':
-    case 'user-steering-message':
-      return `${item.type}:${item.turnId}:${item.data.id}`;
-    case 'model-round':
-      return `${item.type}:${item.turnId}:${item.data.id}`;
-    case 'explore-group':
-      return `${item.type}:${item.turnId}:${item.data.groupId}`;
-    case 'turn-completion-notice':
-      return `${item.type}:${item.turnId}:${item.data.reasonCode}`;
-    case 'turn-failure-notice':
-    case 'image-analyzing':
-      return `${item.type}:${item.turnId}`;
-  }
-}
-
 /**
  * Whether a pointer press landed on the scroller's scrollbar rather than on the
  * transcript.
@@ -358,6 +343,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   onRequestJumpToLatest,
   onUserScrollIntent,
   onViewportSnapshot,
+  onViewportRestoreSettled,
   initialViewportSnapshot = null,
 }, ref) => {
   const { t } = useTranslation('flow-chat');
@@ -433,6 +419,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   /** A pointer is held on the scrollbar, so the scrolling it causes is intent. */
   const isScrollbarPressRef = useRef(false);
   const viewportSnapshotFrameRef = useRef<number | null>(null);
+  const lastSnapshotRestoreErrorPxRef = useRef(Number.POSITIVE_INFINITY);
   const onViewportSnapshotRef = useRef(onViewportSnapshot);
   onViewportSnapshotRef.current = onViewportSnapshot;
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -1029,19 +1016,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         element,
         turnId: element.dataset.turnId ?? null,
         itemType: element.dataset.itemType ?? null,
+        itemKey: element.dataset.virtualItemKey ?? null,
         top: rect.top,
         bottom: rect.bottom,
       };
     });
-    const visibleTurnIds = resolveVisibleFlowChatTurnIds(
-      entries,
-      scrollerRect.top,
-      scrollerRect.bottom,
-    );
-    const anchorTurnId = visibleTurnIds[0] ?? null;
-    const anchorElement = anchorTurnId
-      ? entries.find(entry => entry.turnId === anchorTurnId)?.element
-      : undefined;
+    const anchorEntry = entries.find(entry => (
+      entry.bottom > scrollerRect.top && entry.top < scrollerRect.bottom
+    ));
+    const anchorTurnId = anchorEntry?.turnId ?? null;
+    const anchorElement = anchorEntry?.element;
     const anchorRect = anchorElement?.getBoundingClientRect();
 
     return {
@@ -1049,6 +1033,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       presentationMode,
       viewportMode,
       historyWindow,
+      anchorItemKey: anchorEntry?.itemKey ?? null,
+      anchorItemType: anchorEntry?.itemType ?? null,
       anchorTurnId,
       anchorOffsetPx: anchorRect
         ? roundViewportPx(anchorRect.top - scrollerRect.top)
@@ -1065,8 +1051,23 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (!scroller || snapshot.anchorTurnId === null || snapshot.anchorOffsetPx === null) {
       return false;
     }
-    const anchor = findRenderedTurnAnchorElement(scroller, snapshot.anchorTurnId);
+    const exactAnchor = snapshot.anchorItemKey
+      ? Array.from(
+        scroller.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-virtual-item-key]'),
+      ).find(element => element.dataset.virtualItemKey === snapshot.anchorItemKey) ?? null
+      : null;
+    const exactAnchorIndex = snapshot.anchorItemKey
+      ? virtualItems.findIndex(item => getVirtualItemStableKey(item) === snapshot.anchorItemKey)
+      : -1;
+    const mustMaterializeExactAnchor = snapshot.anchorItemKey !== null
+      && snapshot.anchorItemKey !== undefined
+      && exactAnchorIndex >= 0
+      && exactAnchor === null;
+    const anchor = mustMaterializeExactAnchor
+      ? null
+      : exactAnchor ?? findRenderedTurnAnchorElement(scroller, snapshot.anchorTurnId);
     if (!anchor) {
+      lastSnapshotRestoreErrorPxRef.current = Number.POSITIVE_INFINITY;
       const materializeByPx = snapshot.scrollTopPx - scroller.scrollTop;
       if (Math.abs(materializeByPx) > 0.5 && viewportOwner.shift(materializeByPx)) {
         traceViewport({
@@ -1074,6 +1075,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           message: 'FlowChat used the saved offset to materialize the semantic session anchor',
           data: () => ({
             sessionId: snapshot.sessionId,
+            anchorItemKey: snapshot.anchorItemKey,
+            anchorItemType: snapshot.anchorItemType,
             anchorTurnId: snapshot.anchorTurnId,
             approximateScrollTopPx: snapshot.scrollTopPx,
             shiftedPx: roundViewportPx(materializeByPx),
@@ -1084,6 +1087,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
     const currentOffsetPx = anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
     const correctionPx = currentOffsetPx - snapshot.anchorOffsetPx;
+    lastSnapshotRestoreErrorPxRef.current = Math.abs(correctionPx);
     if (Math.abs(correctionPx) > 0.5) {
       if (!viewportOwner.shift(correctionPx)) return false;
     }
@@ -1096,6 +1100,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       message: 'FlowChat restored a session anchor from its semantic snapshot',
       data: () => ({
         sessionId: snapshot.sessionId,
+        anchorItemKey: snapshot.anchorItemKey,
+        anchorItemType: snapshot.anchorItemType,
+        resolvedBy: exactAnchor ? 'virtual-item' : 'turn-fallback',
         anchorTurnId: snapshot.anchorTurnId,
         expectedOffsetPx: snapshot.anchorOffsetPx,
         currentOffsetPx: roundViewportPx(currentOffsetPx),
@@ -1103,7 +1110,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }),
     });
     return true;
-  }, [activeSessionId, viewportAnchor, viewportOwner]);
+  }, [activeSessionId, viewportAnchor, viewportOwner, virtualItems]);
 
   const publishViewportSnapshot = useCallback(() => {
     const snapshot = captureViewportSnapshot();
@@ -1190,12 +1197,32 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     let cancelled = false;
     let frameId: number | null = null;
     let attempts = 0;
+    let quietFrames = 0;
     const restore = () => {
       if (cancelled) return;
       attempts += 1;
       if (restoreViewportSnapshot(initialViewportSnapshot)) {
-        setIsOpenViewportSettled(true);
-        return;
+        quietFrames = lastSnapshotRestoreErrorPxRef.current <= 0.5
+          ? quietFrames + 1
+          : 0;
+        if (quietFrames >= 2) {
+          traceViewport({
+            location: 'viewport.sessionSnapshotSettled',
+            message: 'FlowChat session snapshot remained stable across painted frames',
+            data: () => ({
+              sessionId: initialViewportSnapshot.sessionId,
+              anchorItemKey: initialViewportSnapshot.anchorItemKey,
+              anchorItemType: initialViewportSnapshot.anchorItemType,
+              anchorTurnId: initialViewportSnapshot.anchorTurnId,
+              attempts,
+              quietFrames,
+              finalErrorPx: roundViewportPx(lastSnapshotRestoreErrorPxRef.current),
+            }),
+          });
+          onViewportRestoreSettled?.(initialViewportSnapshot.sessionId);
+          setIsOpenViewportSettled(true);
+          return;
+        }
       }
       if (attempts < 12) {
         frameId = requestAnimationFrame(restore);
@@ -1206,11 +1233,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         message: 'FlowChat could not materialize the saved session anchor',
         data: () => ({
           sessionId: initialViewportSnapshot.sessionId,
+          anchorItemKey: initialViewportSnapshot.anchorItemKey,
+          anchorItemType: initialViewportSnapshot.anchorItemType,
           anchorTurnId: initialViewportSnapshot.anchorTurnId,
           attempts,
           itemCount: virtualItems.length,
         }),
       });
+      onViewportRestoreSettled?.(initialViewportSnapshot.sessionId);
       setIsOpenViewportSettled(true);
     };
     restore();
@@ -1221,6 +1251,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [
     initialViewportSnapshot,
     isOpenViewportSettled,
+    onViewportRestoreSettled,
     restoreViewportSnapshot,
     shouldRestoreInitialSnapshot,
     virtualItems.length,
