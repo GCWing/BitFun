@@ -1,4 +1,5 @@
 import type {
+  AdminSubmission,
   AdminSubmissionDetail,
   ApiErrorEnvelope,
   CursorPage,
@@ -113,7 +114,7 @@ export const marketApi = {
   withdrawSubmission: (id: string) =>
     request<void>(`/submissions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   adminSubmissions: (status: SubmissionStatus = 'submitted') =>
-    request<CursorPage<MarketSubmission>>(
+    request<CursorPage<AdminSubmission>>(
       `/admin/submissions?status=${encodeURIComponent(status)}`,
     ),
   adminDetail: (id: string) =>
