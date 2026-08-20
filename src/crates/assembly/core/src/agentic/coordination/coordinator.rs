@@ -11496,6 +11496,150 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub(crate) async fn direct_child_agents(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<super::DirectChildAgentRecord>> {
+        self.background_subagent_outcomes
+            .direct_child_agents(parent_session_id)
+            .await
+    }
+
+    pub(crate) async fn delete_direct_child_agents(
+        &self,
+        parent_session_id: &str,
+        agent_ids: &[String],
+    ) -> BitFunResult<usize> {
+        let mut targets = Vec::with_capacity(agent_ids.len());
+        for agent_id in agent_ids {
+            let target_session_id = self
+                .background_subagent_outcomes
+                .resolve_direct_child_agent_id(parent_session_id, agent_id)
+                .await?;
+            targets.push((agent_id.clone(), target_session_id));
+        }
+
+        let mut deleted_agents = 0usize;
+        for (agent_id, target_session_id) in targets {
+            deleted_agents += self
+                .delete_resolved_direct_child_agent(
+                    parent_session_id,
+                    &agent_id,
+                    &target_session_id,
+                )
+                .await?;
+        }
+        Ok(deleted_agents)
+    }
+
+    async fn delete_resolved_direct_child_agent(
+        &self,
+        parent_session_id: &str,
+        agent_id: &str,
+        target_session_id: &str,
+    ) -> BitFunResult<usize> {
+        let subtree = self
+            .background_subagent_outcomes
+            .swarm_subtree_session_ids_postorder(target_session_id)
+            .await?;
+        if subtree.last().map(String::as_str) != Some(target_session_id) {
+            return Err(BitFunError::OutcomeUnknown(format!(
+                "Agent subtree could not be resolved completely: agent_id={agent_id}"
+            )));
+        }
+
+        let storage_path = self
+            .session_manager
+            .resolve_session_workspace_binding(parent_session_id)
+            .await
+            .map(|binding| binding.session_storage_dir())
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Parent session workspace not found: {parent_session_id}"
+                ))
+            })?;
+        for session_id in &subtree {
+            if self.session_manager.get_session(session_id).is_none() {
+                self.restore_internal_session_from_storage_path(&storage_path, session_id)
+                    .await?;
+            }
+        }
+
+        self.cancel_background_subagents_for_parent(parent_session_id, target_session_id, true)
+            .await?;
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut maintenance_permits = Vec::new();
+        if let Some(scheduler) = get_global_scheduler() {
+            for session_id in &subtree {
+                maintenance_permits.push(
+                    scheduler
+                        .begin_session_deletion(
+                            session_id,
+                            &storage_path,
+                            deadline.saturating_duration_since(Instant::now()),
+                        )
+                        .await?,
+                );
+            }
+        } else {
+            for session_id in &subtree {
+                self.cancel_active_turn_for_session(
+                    session_id,
+                    deadline.saturating_duration_since(Instant::now()),
+                )
+                .await?;
+                self.ensure_session_execution_drained(
+                    session_id,
+                    deadline.saturating_duration_since(Instant::now()),
+                )
+                .await?;
+            }
+        }
+
+        for session_id in &subtree {
+            self.delete_agent_session_by_id(session_id).await?;
+        }
+        drop(maintenance_permits);
+        Ok(subtree.len())
+    }
+
+    async fn delete_agent_session_by_id(&self, session_id: &str) -> BitFunResult<()> {
+        let session = self
+            .session_manager
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        let workspace_path = session.config.workspace_path.clone().map(PathBuf::from);
+        let is_remote_workspace = Self::session_hooks_are_remote(&session).await;
+        let model = session.config.model_id.clone().unwrap_or_default();
+        if let Some(workspace_path) = workspace_path.as_deref() {
+            native_hooks::dispatch_session_end(
+                NativeHookSessionFacts {
+                    session_id,
+                    turn_id: None,
+                    workspace_root: Some(workspace_path),
+                    is_remote_workspace,
+                    model: &model,
+                    bypass_permissions: false,
+                },
+                "other",
+            )
+            .await;
+        } else {
+            native_hooks::clear_session_hook_state(session_id);
+        }
+        self.session_manager
+            .delete_session_by_id(session_id)
+            .await?;
+        self.background_subagent_outcomes
+            .delete_session_references(session_id)
+            .await?;
+        self.emit_event(AgenticEvent::SessionDeleted {
+            session_id: session_id.to_string(),
+        })
+        .await;
+        Ok(())
+    }
+
     pub(crate) async fn swarm_depth_for_session(
         &self,
         session_id: &str,

@@ -86,6 +86,13 @@ pub(crate) struct BackgroundTaskRecord {
     pub delivered_at_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DirectChildAgentRecord {
+    pub agent_id: String,
+    pub child_session_id: String,
+    pub status: BackgroundTaskStatus,
+}
+
 pub(crate) struct CoordinationStore {
     db_path: PathBuf,
     connection: OnceCell<Arc<Mutex<Connection>>>,
@@ -172,6 +179,78 @@ impl CoordinationStore {
                 .map_err(db_error)?
                 .flatten()
                 .ok_or_else(|| BitFunError::tool(format!("Agent was not found: {agent_id}")))
+        })
+        .await
+    }
+
+    pub(crate) async fn direct_child_agents(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<DirectChildAgentRecord>> {
+        let parent_session_id = parent_session_id.to_string();
+        self.with_connection(move |connection| {
+            let mut statement = connection
+                .prepare(
+                    r#"
+WITH latest_tasks AS (
+    SELECT agent_pk, status,
+           ROW_NUMBER() OVER (PARTITION BY agent_pk ORDER BY task_pk DESC) AS row_number
+    FROM background_tasks
+)
+SELECT agents.agent_id, agents.child_session_id,
+       COALESCE(latest_tasks.status, 'running')
+FROM agents
+JOIN swarm_nodes
+  ON swarm_nodes.session_id = agents.child_session_id
+ AND swarm_nodes.parent_session_id = agents.parent_session_id
+LEFT JOIN latest_tasks
+  ON latest_tasks.agent_pk = agents.agent_pk
+ AND latest_tasks.row_number = 1
+WHERE agents.parent_session_id = ?1
+  AND agents.state = 'active'
+ORDER BY swarm_nodes.created_at_ms ASC, agents.agent_pk ASC
+                    "#,
+                )
+                .map_err(db_error)?;
+            let rows = statement
+                .query_map(params![parent_session_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })
+                .map_err(db_error)?;
+            rows.map(|row| {
+                let (agent_id, child_session_id, status) = row.map_err(db_error)?;
+                Ok(DirectChildAgentRecord {
+                    agent_id,
+                    child_session_id,
+                    status: BackgroundTaskStatus::parse(&status)?,
+                })
+            })
+            .collect()
+        })
+        .await
+    }
+
+    pub(crate) async fn resolve_direct_child_agent_id(
+        &self,
+        parent_session_id: &str,
+        agent_id: &str,
+    ) -> BitFunResult<String> {
+        let parent_session_id = parent_session_id.to_string();
+        let agent_id = agent_id.to_string();
+        self.with_connection(move |connection| {
+            connection
+                .query_row(
+                    "SELECT agents.child_session_id FROM agents JOIN swarm_nodes ON swarm_nodes.session_id = agents.child_session_id AND swarm_nodes.parent_session_id = agents.parent_session_id WHERE agents.parent_session_id = ?1 AND agents.agent_id = ?2 AND agents.state = 'active'",
+                    params![parent_session_id, agent_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .map_err(db_error)?
+                .ok_or_else(|| BitFunError::tool(format!("Direct child agent was not found: {agent_id}")))
         })
         .await
     }
@@ -342,6 +421,34 @@ WITH RECURSIVE descendants(session_id) AS (
     JOIN descendants parent ON child.parent_session_id = parent.session_id
 )
 SELECT session_id FROM descendants
+                    "#,
+                )
+                .map_err(db_error)?;
+            let rows = statement
+                .query_map(params![session_id], |row| row.get::<_, String>(0))
+                .map_err(db_error)?;
+            rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_error)
+        })
+        .await
+    }
+
+    pub(crate) async fn swarm_subtree_session_ids_postorder(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        let session_id = session_id.to_string();
+        self.with_connection(move |connection| {
+            let mut statement = connection
+                .prepare(
+                    r#"
+WITH RECURSIVE subtree(session_id, depth) AS (
+    SELECT session_id, depth FROM swarm_nodes WHERE session_id = ?1
+    UNION ALL
+    SELECT child.session_id, child.depth
+    FROM swarm_nodes child
+    JOIN subtree parent ON child.parent_session_id = parent.session_id
+)
+SELECT session_id FROM subtree ORDER BY depth DESC, session_id ASC
                     "#,
                 )
                 .map_err(db_error)?;
@@ -641,6 +748,12 @@ WHERE task_pk = ?3
             transaction
                 .execute(
                     "DELETE FROM coordination_sessions WHERE parent_session_id = ?1",
+                    params![session_id],
+                )
+                .map_err(db_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM swarm_nodes WHERE session_id = ?1",
                     params![session_id],
                 )
                 .map_err(db_error)?;
@@ -1308,6 +1421,111 @@ mod tests {
         assert_eq!(first_claim.len(), 1);
         assert_eq!(first_claim[0].status, BackgroundTaskStatus::Completed);
         assert!(second_claim.is_empty());
+    }
+
+    #[tokio::test]
+    async fn direct_child_agents_use_latest_status_and_ignore_delivery() {
+        let (_root, store) = test_store();
+        store
+            .reserve_swarm_child("root", "planner", "Ultra", "SwarmPlanner", 1)
+            .await
+            .expect("reserve planner");
+        store
+            .reserve_swarm_child("planner", "worker", "SwarmPlanner", "SwarmWorker", 2)
+            .await
+            .expect("reserve nested worker");
+        let first = store
+            .register_background_task(registration("root", "planner", "spawn-turn", None))
+            .await
+            .expect("register first task");
+        let latest = store
+            .register_background_task(registration("root", "planner", "follow-up-turn", None))
+            .await
+            .expect("register latest task");
+        store
+            .register_background_task(registration("planner", "worker", "nested-turn", None))
+            .await
+            .expect("register nested task");
+        store
+            .update_task_status(first.task_pk, BackgroundTaskStatus::Failed, None, None)
+            .await
+            .expect("fail first task");
+        store
+            .update_task_status(latest.task_pk, BackgroundTaskStatus::Completed, None, None)
+            .await
+            .expect("complete latest task");
+        store
+            .claim_terminal_tasks("root", &[latest.task_pk], "wait-turn")
+            .await
+            .expect("consume latest result");
+
+        let agents = store
+            .direct_child_agents("root")
+            .await
+            .expect("list direct children");
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].agent_id, first.agent_id);
+        assert_eq!(agents[0].child_session_id, "planner");
+        assert_eq!(agents[0].status, BackgroundTaskStatus::Completed);
+
+        store
+            .delete_session_references("planner")
+            .await
+            .expect("delete planner references");
+        assert!(store
+            .direct_child_agents("root")
+            .await
+            .expect("list children after deletion")
+            .is_empty());
+        store
+            .resolve_direct_child_agent_id("root", &first.agent_id)
+            .await
+            .expect_err("deleted agent id must no longer resolve");
+    }
+
+    #[tokio::test]
+    async fn direct_child_resolution_and_subtree_postorder_are_lineage_scoped() {
+        let (_root, store) = test_store();
+        store
+            .reserve_swarm_child("root", "planner", "Ultra", "SwarmPlanner", 1)
+            .await
+            .expect("reserve planner");
+        store
+            .reserve_swarm_child("planner", "worker", "SwarmPlanner", "SwarmWorker", 2)
+            .await
+            .expect("reserve worker");
+        let planner = store
+            .register_background_task(registration("root", "planner", "planner-turn", None))
+            .await
+            .expect("register planner");
+        let worker = store
+            .register_background_task(registration(
+                "planner",
+                "worker",
+                "worker-turn",
+                Some("nested-worker"),
+            ))
+            .await
+            .expect("register worker");
+
+        assert_eq!(
+            store
+                .resolve_direct_child_agent_id("root", &planner.agent_id)
+                .await
+                .expect("resolve direct planner"),
+            "planner"
+        );
+        store
+            .resolve_direct_child_agent_id("root", &worker.agent_id)
+            .await
+            .expect_err("a grandchild is not a direct child of root");
+        assert_eq!(
+            store
+                .swarm_subtree_session_ids_postorder("planner")
+                .await
+                .expect("load subtree"),
+            ["worker", "planner"]
+        );
     }
 
     #[tokio::test]

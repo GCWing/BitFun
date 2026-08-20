@@ -1,6 +1,6 @@
 use super::coordination_store::{
     BackgroundTaskRecord, BackgroundTaskRegistration, BackgroundTaskStatus, CoordinationStore,
-    RegisteredBackgroundTask,
+    DirectChildAgentRecord, RegisteredBackgroundTask,
 };
 use super::coordinator::{SubagentResult, SubagentResultStatus};
 use crate::agentic::session::SessionManager;
@@ -480,6 +480,27 @@ impl BackgroundSubagentOutcomeStore {
             .await
     }
 
+    pub(crate) async fn direct_child_agents(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<DirectChildAgentRecord>> {
+        self.reconcile_stale_running_tasks(parent_session_id)
+            .await?;
+        self.coordination_store
+            .direct_child_agents(parent_session_id)
+            .await
+    }
+
+    pub(crate) async fn resolve_direct_child_agent_id(
+        &self,
+        parent_session_id: &str,
+        agent_id: &str,
+    ) -> BitFunResult<String> {
+        self.coordination_store
+            .resolve_direct_child_agent_id(parent_session_id, agent_id)
+            .await
+    }
+
     pub(crate) async fn reserve_swarm_child(
         &self,
         parent_session_id: &str,
@@ -520,6 +541,15 @@ impl BackgroundSubagentOutcomeStore {
     ) -> BitFunResult<Vec<String>> {
         self.coordination_store
             .swarm_descendant_session_ids(session_id)
+            .await
+    }
+
+    pub(crate) async fn swarm_subtree_session_ids_postorder(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        self.coordination_store
+            .swarm_subtree_session_ids_postorder(session_id)
             .await
     }
 

@@ -19,6 +19,8 @@ impl UltraMode {
                 "AgentSpawn",
                 "AgentSendInput",
                 "AgentInterrupt",
+                "AgentList",
+                "AgentDelete",
                 "AgentWait",
                 "Read",
                 "Grep",
@@ -27,6 +29,7 @@ impl UltraMode {
                 "ExecCommand",
                 "WriteStdin",
                 "ExecControl",
+                "ListModels",
             ]
             .into_iter()
             .map(str::to_string)

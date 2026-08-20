@@ -53,6 +53,8 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "AgentSpawn" => Some(Arc::new(AgentSpawnTool::new())),
             "AgentSendInput" => Some(Arc::new(AgentSendInputTool::new())),
             "AgentInterrupt" => Some(Arc::new(AgentInterruptTool::new())),
+            "AgentList" => Some(Arc::new(AgentListTool::new())),
+            "AgentDelete" => Some(Arc::new(AgentDeleteTool::new())),
             "AgentWait" => Some(Arc::new(AgentWaitTool::new())),
             "LaunchReviewAgent" => Some(Arc::new(LaunchReviewAgentTool::new())),
             "Skill" => Some(Arc::new(SkillTool::new())),

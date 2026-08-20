@@ -19,6 +19,7 @@ pub(crate) use background_outcomes::{
     BackgroundSubagentOutcome, BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode,
     BackgroundSubagentWaitResult,
 };
+pub(crate) use coordination_store::DirectChildAgentRecord;
 
 pub use coordinator::get_global_coordinator;
 pub use scheduler::get_global_scheduler;
