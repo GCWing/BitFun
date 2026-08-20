@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The "more" control in the conversation header, redrawn from HarmonyOS'
+    `app.media.remote_ref_more` rather than from Material's vertical default.
+
+    The viewport is the asset's own 64x19 grid, not the 24x24 the rest of this
+    set shares. `TemplateIcon` fits that asset into a 23x7 box, and `Icon` fits
+    a painter the same way, so the two only agree if the drawable carries the
+    asset's aspect. A square viewport here would letterbox to 7x7 and the dots
+    would come out a third of their size.
+
+    Three dots of diameter 13 on 22.5 centres, with the asset's 3-unit margin:
+    the gap is wider than half a dot, not the hairline an earlier redraw used.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="23dp"
+    android:height="7dp"
+    android:viewportWidth="64"
+    android:viewportHeight="19">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M9.5,3 A6.5,6.5 0 1 0 9.5,16 A6.5,6.5 0 1 0 9.5,3 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M32,3 A6.5,6.5 0 1 0 32,16 A6.5,6.5 0 1 0 32,3 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54.5,3 A6.5,6.5 0 1 0 54.5,16 A6.5,6.5 0 1 0 54.5,3 Z" />
+</vector>

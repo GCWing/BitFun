@@ -48,6 +48,7 @@
     "models-dev:update": "node scripts/update-models-dev-snapshot.mjs",
     "check:build-prereqs": "node scripts/check-build-prereqs.mjs",
     "harmony:architecture": "node scripts/check-harmonyos-architecture.mjs",
+    "mobile:architecture": "node scripts/check-mobile-architecture.mjs",
     "check:core-boundaries": "node scripts/check-core-boundaries.mjs",
     "check:core-boundaries:test": "node --test scripts/check-core-boundaries.test.mjs",
     "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs && node --test scripts/check-github-config.test.mjs",

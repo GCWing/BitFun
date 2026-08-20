@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Debug builds pair against harmonyos/tools/fake-relay.mjs on the developer's
+      machine, which serves plain HTTP. Release builds keep the platform default,
+      so a production APK still refuses cleartext.
+    -->
+    <application
+        android:usesCleartextTraffic="true"
+        tools:ignore="UnusedAttribute" />
+
+</manifest>

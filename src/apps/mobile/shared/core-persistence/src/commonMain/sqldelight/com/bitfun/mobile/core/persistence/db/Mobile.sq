@@ -1,0 +1,80 @@
+CREATE TABLE chat_session (
+    session_id TEXT NOT NULL PRIMARY KEY,
+    title TEXT NOT NULL,
+    agent_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    message_count INTEGER NOT NULL,
+    workspace_path TEXT,
+    workspace_name TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE chat_message (
+    message_id TEXT NOT NULL PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    status TEXT NOT NULL,
+    timestamp TEXT,
+    thinking TEXT,
+    payload_json TEXT NOT NULL
+);
+
+CREATE INDEX chat_message_session_index ON chat_message(session_id);
+
+CREATE TABLE chat_draft (
+    draft_id TEXT NOT NULL PRIMARY KEY,
+    text TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+selectSessions:
+SELECT * FROM chat_session ORDER BY updated_at DESC;
+
+selectSessionsByAgent:
+SELECT * FROM chat_session WHERE agent_type = ? ORDER BY updated_at DESC;
+
+selectSession:
+SELECT * FROM chat_session WHERE session_id = ?;
+
+selectMessages:
+SELECT * FROM chat_message WHERE session_id = ? ORDER BY timestamp ASC, message_id ASC;
+
+deleteSession:
+DELETE FROM chat_session WHERE session_id = ?;
+
+deleteMessagesForSession:
+DELETE FROM chat_message WHERE session_id = ?;
+
+upsertSession:
+INSERT OR REPLACE INTO chat_session(
+    session_id, title, agent_type, status, updated_at, created_at, message_count,
+    workspace_path, workspace_name, pinned
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- Pinning is exclusive per kind, so clearing the old one and setting the new one
+-- happen together or not at all; see ChatLocalStore.pinSession.
+clearPinnedSessions:
+UPDATE chat_session SET pinned = 0 WHERE agent_type = ? AND pinned = 1;
+
+setPinnedSession:
+UPDATE chat_session SET pinned = 1 WHERE session_id = ?;
+
+setSessionStatus:
+UPDATE chat_session SET status = ? WHERE session_id = ?;
+
+upsertMessage:
+INSERT OR REPLACE INTO chat_message(
+    message_id, session_id, role, text, status, timestamp, thinking, payload_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectDraft:
+SELECT * FROM chat_draft WHERE draft_id = ?;
+
+upsertDraft:
+INSERT OR REPLACE INTO chat_draft(draft_id, text, updated_at) VALUES (?, ?, ?);
+
+deleteDraft:
+DELETE FROM chat_draft WHERE draft_id = ?;

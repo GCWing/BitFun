@@ -1,0 +1,246 @@
+package com.bitfun.mobile.app.ui.chat
+
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.util.Base64
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.bitfun.mobile.app.R
+import com.bitfun.mobile.app.ui.settings.RemoteSettingsSheet
+import com.bitfun.mobile.core.feature.connection.ConnectionPhase
+import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
+import com.bitfun.mobile.core.feature.session.ComposerImage
+import com.bitfun.mobile.core.feature.session.ConversationRowKind
+import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
+import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
+import com.bitfun.mobile.core.feature.session.conversationRows
+import com.bitfun.mobile.core.feature.session.selectedModelOption
+import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
+import java.util.UUID
+
+internal const val CONVERSATION_TEST_TAG: String = "conversation"
+internal const val CONVERSATION_BACK_TEST_TAG: String = "conversation-back"
+
+/**
+ * The transcript itself, tagged so a test can scroll it to a row.
+ *
+ * Separate from [CONVERSATION_TEST_TAG] because that one sits on the whole
+ * surface, header and composer included, and it is not the scrollable.
+ */
+internal const val CONVERSATION_LIST_TEST_TAG: String = "conversation-list"
+
+/** The relay refuses anything larger, and refusing here is a better error. */
+private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+/**
+ * One open session: the transcript and the composer, ported from
+ * `pages/components/ConversationSurface.ets`.
+ *
+ * The transcript is a lazy list and the composer is pinned below it, so a
+ * long session never pushes the input off screen. That is also why this surface
+ * replaces the session list rather than sitting under it — the list's own scroll
+ * cannot contain a lazy list.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ConversationView(
+    state: RemoteSessionUiState.Ready,
+    phase: ConnectionPhase,
+    onBack: () -> Unit,
+    onOpenSidebar: (() -> Unit)? = null,
+    onIntent: (RemoteSessionIntent) -> Unit,
+    /**
+     * Where this transcript is running — a desktop name, or the brand and the
+     * branch. Built by `ConversationHeaderPresenter` at the call site, because
+     * only the screen knows whether it reached this session through a pairing
+     * or through an account device.
+     */
+    contextTitle: String,
+    /** A file the agent named, taken from a markdown link. Path, then label. */
+    onOpenFile: (String, String) -> Unit,
+    /**
+     * The file the preview surface currently holds, normalised, and whether it
+     * is still arriving. Passed as two scalars rather than the workspace state:
+     * this screen is about the transcript, and the only thing it needs from the
+     * preview is which of its own file cards is the one on screen.
+     */
+    previewingRemotePath: String,
+    previewLoading: Boolean,
+    download: RemoteFileDownloadUiState,
+    onDownloadFile: (String, String) -> Unit,
+    modifier: Modifier,
+) {
+    val timeline = state.timeline ?: return
+    val sessionId = state.selectedSessionId.orEmpty()
+    val rows = remember(timeline) { timeline.conversationRows() }
+    val visibleRows = remember(rows) { rows.filter { it.kind != ConversationRowKind.EMPTY } }
+    val uploadedFileCount = rows.sumOf { it.images.size }
+    // Resolved here rather than inside the click: a Toast is raised from a
+    // callback, and reading resources off `LocalContext` there reads them
+    // without the composition's configuration.
+    val uploadedFilesMessage = if (uploadedFileCount > 0) {
+        stringResource(R.string.session_uploaded_files_count, uploadedFileCount)
+    } else {
+        stringResource(R.string.session_uploaded_files_empty)
+    }
+    var draft by rememberSaveable(sessionId) { mutableStateOf("") }
+    var images by remember(sessionId) { mutableStateOf<List<ComposerImage>>(emptyList()) }
+    var showSettings by rememberSaveable(sessionId) { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+            if (bytes != null && bytes.size <= MAX_IMAGE_BYTES && images.size < MAX_COMPOSER_IMAGES) {
+                images = images + ComposerImage(
+                    id = "android-" + UUID.randomUUID(),
+                    dataUrl = "data:" + mime + ";base64," + Base64.encodeToString(bytes, Base64.NO_WRAP),
+                    mimeType = mime,
+                )
+            }
+        }
+    }
+    val voiceInput = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+            if (text.isNotBlank()) {
+                draft = listOf(draft.trim(), text.trim()).filter(String::isNotEmpty).joinToString(" ")
+            }
+        }
+    }
+
+    Column(modifier = modifier.fillMaxSize().testTag(CONVERSATION_TEST_TAG)) {
+        ConversationHeader(
+            title = state.sessions.firstOrNull { it.id == sessionId }?.title.orEmpty(),
+            contextTitle = contextTitle,
+            canStop = timeline.activeTurn != null,
+            enabled = !state.busy && sessionId.isNotEmpty(),
+            onBack = onBack,
+            onOpenSidebar = onOpenSidebar,
+            onRename = { title ->
+                onIntent(RemoteSessionIntent.RenameSession(sessionId, title))
+            },
+            onShowUploadedFiles = {
+                Toast.makeText(context, uploadedFilesMessage, Toast.LENGTH_SHORT).show()
+            },
+            onStop = {
+                onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
+            },
+            modifier = Modifier,
+        )
+
+        if (phase != ConnectionPhase.CONNECTED) {
+            ChatStatusBar(
+                phase = phase,
+                canStop = timeline.activeTurn != null,
+                onStop = {
+                    onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
+                },
+            )
+        }
+
+        ConversationTimelineView(
+            rows = visibleRows,
+            enabled = !state.busy,
+            onApproveTool = { toolId ->
+                onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId))
+            },
+            onRejectTool = { toolId, reason ->
+                onIntent(RemoteSessionIntent.RejectTool(sessionId, toolId, reason))
+            },
+            onCancelTool = { toolId, reason ->
+                onIntent(RemoteSessionIntent.CancelTool(sessionId, toolId, reason))
+            },
+            onAnswerTool = { toolId, answer ->
+                onIntent(RemoteSessionIntent.AnswerQuestion(sessionId, toolId, answer))
+            },
+            onRetry = { text ->
+                onIntent(RemoteSessionIntent.SendMessage(sessionId, text, null))
+            },
+            onOpenFile = onOpenFile,
+            previewingRemotePath = previewingRemotePath,
+            previewLoading = previewLoading,
+            download = download,
+            onDownloadFile = onDownloadFile,
+            downloadEnabled = !state.busy && phase == ConnectionPhase.CONNECTED,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        )
+
+        ComposerBar(
+            draft = draft,
+            images = images,
+            // An empty session id would send nowhere, so it reads as busy.
+            busy = state.busy || sessionId.isEmpty(),
+            streaming = timeline.activeTurn != null,
+            phase = phase,
+            model = timeline.selectedModelOption(stringResource(R.string.models_unnamed)),
+            capabilities = ChatComposerCapabilities.RemoteChat,
+            placeholder = stringResource(R.string.message_input_label),
+            onDraftChange = { draft = it },
+            onRemoveImage = { id -> images = images.filterNot { it.id == id } },
+            onOpenModels = { showSettings = true },
+            modifier = Modifier,
+            onAttach = {
+                photoPicker.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            },
+            onVoice = {
+                voiceInput.launch(
+                    Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(
+                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                        )
+                    },
+                )
+            },
+            onSend = {
+                onIntent(
+                    RemoteSessionIntent.SendMessage(
+                        sessionId,
+                        draft,
+                        images.takeIf { it.isNotEmpty() },
+                    ),
+                )
+                draft = ""
+                images = emptyList()
+            },
+            onStop = {
+                onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
+            },
+        )
+    }
+
+    if (showSettings) {
+        ModalBottomSheet(onDismissRequest = { showSettings = false }) {
+            RemoteSettingsSheet(
+                state = state,
+                sessionId = sessionId,
+                onIntent = onIntent,
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+            )
+        }
+    }
+}

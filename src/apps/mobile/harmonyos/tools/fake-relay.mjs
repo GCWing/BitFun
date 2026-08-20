@@ -156,6 +156,10 @@ let currentWorkspace = {
   assistant_id: undefined,
 };
 let activeTurn = false;
+// Whether /command answers at all. A test flips this to make the desktop go
+// quiet without the pairing being torn down — the exact situation the mobile
+// heartbeat exists for, and one a scenario chosen at startup cannot produce.
+let reachable = true;
 let pollCount = 0;
 let cancelled = false;
 let sentMessage = '';
@@ -180,9 +184,25 @@ const assistants = [
   },
 ];
 
+// A file whose extension the syntax highlighter recognises, so a preview can be
+// checked for a line-number gutter and coloured runs rather than only for text.
+// Every kind the lexer knows appears once: comment, keyword, type, call,
+// constant, string and number.
+const PREVIEW_SOURCE = [
+  '// bitfun preview fixture',
+  'fn main() {',
+  '    let answer: Preview = 42;',
+  '    println!("hello");',
+  '    return true;',
+  '}',
+  '',
+].join('\n');
+
 const previewFiles = new Map([
   ['README.md', Buffer.from('# BitFun Preview\n\nThis is a fake relay file download.\n', 'utf8')],
   ['/workspace/BitFun/README.md', Buffer.from('# BitFun Preview\n\nThis is a fake relay file download.\n', 'utf8')],
+  ['src/preview.rs', Buffer.from(PREVIEW_SOURCE, 'utf8')],
+  ['/workspace/BitFun/src/preview.rs', Buffer.from(PREVIEW_SOURCE, 'utf8')],
 ]);
 
 function isScenario(name) {
@@ -515,6 +535,28 @@ function activeTurnPayload(status = 'active') {
   };
 }
 
+/**
+ * The desktop treats a missing, empty or root `workspace_path` as "no workspace
+ * open" and refuses the command. Mirrored here so a client that forgets to send
+ * it fails against the simulator too, instead of only in the field.
+ * See `RemoteCommand::ListSessions` in `services-integrations/src/remote_connect.rs`.
+ */
+function hasWorkspacePath(command) {
+  const path = String(command.workspace_path || '').trim();
+  return path.length > 0 && path !== '/';
+}
+
+function isClawAgent(agentType) {
+  return String(agentType || '').trim().toLowerCase() === 'claw';
+}
+
+function noWorkspaceError() {
+  return {
+    resp: 'error',
+    message: 'No workspace is open on the remote device; select a recent workspace or create one first',
+  };
+}
+
 function responseFor(command) {
   switch (command.cmd) {
     case 'get_workspace_info':
@@ -597,6 +639,9 @@ function responseFor(command) {
       }
     case 'list_sessions':
       {
+        if (!hasWorkspacePath(command)) {
+          return noWorkspaceError();
+        }
         const allSessions = currentSessionItems();
         const query = String(command.query || '').trim().toLowerCase();
         const agentType = String(command.agent_type || '').trim().toLowerCase();
@@ -615,6 +660,9 @@ function responseFor(command) {
         };
       }
     case 'create_session':
+      if (!isClawAgent(command.agent_type) && !hasWorkspacePath(command)) {
+        return noWorkspaceError();
+      }
       createdSession = {
         id: 'session-created-preview',
         title: command.session_name || (command.agent_type === 'cowork' ? 'Remote Cowork Session' : 'Remote Code Session'),
@@ -637,6 +685,16 @@ function responseFor(command) {
       return {
         resp: 'ok',
         catalog: currentModelCatalog(),
+      };
+    case 'get_permission_mode':
+      return {
+        resp: 'ok',
+        mode: 'ask',
+      };
+    case 'set_permission_mode':
+      return {
+        resp: 'ok',
+        mode: command.mode || 'ask',
       };
     case 'set_session_model':
       selectedModelId = command.model_id || selectedModelId;
@@ -861,15 +919,38 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const body = await readBody(req);
+    // POST {"reachable": false} to make the relay behave as it does when the
+    // desktop has gone: the room still exists, so pairing is untouched, but no
+    // command gets through. Test-only; nothing in either app calls it.
+    if (req.url === '/control/reachable') {
+      reachable = body.reachable !== false;
+      console.log(`control reachable=${reachable}`);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ resp: 'ok', reachable }));
+      return;
+    }
     if (req.url === `/api/rooms/${ROOM_ID}/pair`) {
       const mobilePublicKey = Buffer.from(body.public_key, 'base64');
       sharedKey = scalarMult(privateKey, mobilePublicKey);
-      const payload = encryptJson(sharedKey, { challenge: { nonce: 'preview-challenge' } });
+      // Shape must match PairingChallenge in
+      // src/crates/services/services-integrations/src/remote_connect/pairing.rs:
+      // a flat 32-char lowercase-hex string plus a unix-seconds timestamp. The
+      // desktop validates the echo against exactly that, so a stub that sends
+      // anything else only passes because nothing here checks it back.
+      const payload = encryptJson(sharedKey, {
+        challenge: crypto.randomBytes(16).toString('hex'),
+        timestamp: Math.floor(Date.now() / 1000),
+      });
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(payload));
       return;
     }
     if (req.url === `/api/rooms/${ROOM_ID}/command`) {
+      if (!reachable) {
+        res.writeHead(503);
+        res.end();
+        return;
+      }
       if (!sharedKey) throw new Error('Not paired');
       const command = decryptJson(sharedKey, body);
       console.log('command', command.cmd || 'pair_challenge', command.session_id || '', command.workspace_path || '');

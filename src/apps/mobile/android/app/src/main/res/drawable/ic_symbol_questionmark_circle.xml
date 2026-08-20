@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HarmonyOS `sys.symbol.questionmark_circle`, redrawn. The agent is waiting on an answer.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,3.60 A8.4,8.4 0 1 0 12,20.40 A8.4,8.4 0 1 0 12,3.60 Z"
+        android:strokeWidth="1.7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M9.5,9.4 A2.5,2.5 0 1 1 12.6,11.9 C11.9,12.2 11.9,12.9 11.9,13.6 V14.1"
+        android:strokeWidth="1.7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M11.9,15.50 A1,1 0 1 0 11.9,17.50 A1,1 0 1 0 11.9,15.50 Z" />
+</vector>

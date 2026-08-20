@@ -29,6 +29,13 @@ src/crates/services/services-integrations/assets/models-dev.json text eol=lf
 src/crates/services/services-integrations/assets/models-dev.LICENSE.txt text eol=lf
 src/crates/services/services-integrations/assets/models-dev.provenance.json text eol=lf
 
+# The Gradle wrapper is an extensionless POSIX shell script, so the `*.sh` rule
+# above does not cover it. Its `.bat` sibling is the mirror case: cmd.exe needs
+# CRLF. The wrapper jar is binary and must never be filtered.
+gradlew             text eol=lf
+gradlew.bat         text eol=crlf
+*.jar               binary
+
 Dockerfile          text eol=lf
 Dockerfile.*        text eol=lf
 *.Dockerfile        text eol=lf

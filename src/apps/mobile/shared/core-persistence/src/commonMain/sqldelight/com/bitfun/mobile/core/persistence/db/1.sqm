@@ -1,0 +1,6 @@
+-- v1 -> v2: a session can be pinned to the top of the sidebar.
+--
+-- A device that already has conversations must keep them: the column is added
+-- rather than the table rebuilt, and every existing row defaults to unpinned,
+-- which is what they were.
+ALTER TABLE chat_session ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;

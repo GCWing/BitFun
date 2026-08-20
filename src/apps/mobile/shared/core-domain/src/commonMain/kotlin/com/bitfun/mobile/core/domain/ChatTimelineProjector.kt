@@ -1,0 +1,236 @@
+package com.bitfun.mobile.core.domain
+
+import com.bitfun.mobile.core.protocol.ChatMessageItemResponse
+import com.bitfun.mobile.core.protocol.ImageAttachment
+import com.bitfun.mobile.core.protocol.RemoteToolStatusResponse
+import kotlin.math.absoluteValue
+
+public class ChatTimelineRevisionTracker public constructor() {
+    private var signature: String = ""
+    private var revision: Int = 0
+
+    public fun update(items: List<ChatTimelineItem>): Int {
+        val nextSignature = items.joinToString("|") { item ->
+            val message = item.message
+            listOf(
+                item.type.name,
+                item.id,
+                item.isStreaming,
+                item.isFinalizing,
+                message?.status.orEmpty(),
+                message?.renderVersion ?: 0,
+                message?.let { textSignature(it.text) }.orEmpty(),
+                message?.thinking?.let(::textSignature).orEmpty(),
+                message?.items?.size ?: 0,
+                message?.tools?.size ?: 0,
+            ).joinToString(":")
+        }
+        if (nextSignature != signature) {
+            signature = nextSignature
+            revision += 1
+        }
+        return revision
+    }
+
+    public fun reset(): Int {
+        signature = ""
+        revision += 1
+        return revision
+    }
+
+    private fun textSignature(value: String): String =
+        "${value.length}:${stableTextHash(value)}"
+}
+
+public object ChatTimelineProjector {
+    public fun project(
+        messages: List<ChatMessage>,
+        pendingMessages: List<ChatMessage>,
+        activeTurn: ChatMessage?,
+        hasMoreMessages: Boolean,
+    ): List<ChatTimelineItem> {
+        val timelineMessages = realMessages(messages)
+        val pendingItems = pendingMessagesNotPersisted(pendingMessages, timelineMessages)
+        val items = timelineMessages.map { message ->
+            ChatTimelineItem(
+                id = "message-${message.id}",
+                type = messageItemType(message),
+                message = message,
+                isStreaming = false,
+                isFinalizing = false,
+                showRetryAction = false,
+            )
+        }.toMutableList()
+
+        pendingItems.forEach { message ->
+            items += ChatTimelineItem(
+                id = "pending-${message.id}",
+                type = ChatTimelineItemType.OPTIMISTIC_USER_MESSAGE,
+                message = message,
+                isStreaming = false,
+                isFinalizing = false,
+                showRetryAction = false,
+            )
+        }
+
+        if (activeTurn != null && shouldRenderActiveTurn(timelineMessages, activeTurn)) {
+            items += ChatTimelineItem(
+                id = "active-${activeTurnKey(activeTurn)}-${activeTurnVersionKey(activeTurn)}",
+                type = ChatTimelineItemType.ASSISTANT_LIVE_TURN,
+                message = activeTurn,
+                isStreaming = MessageStatusSemantics.isStreaming(activeTurn.status),
+                isFinalizing = MessageStatusSemantics.isFinalizing(activeTurn.status),
+                showRetryAction = false,
+            )
+        }
+
+        if (items.isEmpty() && !hasMoreMessages) {
+            items += ChatTimelineItem(
+                id = "empty-state",
+                type = ChatTimelineItemType.EMPTY_STATE,
+                message = null,
+                isStreaming = false,
+                isFinalizing = false,
+                showRetryAction = false,
+            )
+        }
+
+        markLatestFailedMessageRetryable(items)
+        return items
+    }
+
+    public fun pendingMessagesNotPersisted(
+        pendingMessages: List<ChatMessage>,
+        messages: List<ChatMessage>,
+    ): List<ChatMessage> = pendingMessages.filter { pending ->
+        messages.none { message -> isPersistedUserDuplicate(pending, message) }
+    }
+
+    private fun markLatestFailedMessageRetryable(items: MutableList<ChatTimelineItem>) {
+        for (index in items.indices.reversed()) {
+            val message = items[index].message ?: continue
+            items[index] = items[index].copy(
+                showRetryAction = MessageStatusSemantics.isRetryableFailure(message.status),
+            )
+            return
+        }
+    }
+
+    private fun realMessages(messages: List<ChatMessage>): List<ChatMessage> =
+        messages.filterNot(::isSeedMessage)
+
+    private fun shouldRenderActiveTurn(
+        messages: List<ChatMessage>,
+        activeTurn: ChatMessage,
+    ): Boolean {
+        if (activeTurn.id.isEmpty()) return false
+        return messages.none { message -> isPersistedAssistantDuplicate(activeTurn, message) }
+    }
+
+    private fun isSeedMessage(message: ChatMessage): Boolean =
+        message.id.startsWith("system-") && message.role == "assistant"
+
+    private fun messageItemType(message: ChatMessage): ChatTimelineItemType =
+        if (message.role == "user") {
+            ChatTimelineItemType.USER_MESSAGE
+        } else {
+            ChatTimelineItemType.ASSISTANT_MESSAGE
+        }
+
+    private fun isPersistedAssistantDuplicate(
+        activeTurn: ChatMessage,
+        message: ChatMessage,
+    ): Boolean {
+        if (message.role != "assistant" || !hasDisplayableAssistantFinal(message)) return false
+        if (message.id == activeTurn.id) return true
+        if (!activeTurn.turnId.isNullOrEmpty() && message.id == "${activeTurn.turnId}_assistant") {
+            return true
+        }
+        val activeText = activeTurn.text.trim()
+        val messageText = message.text.trim()
+        return activeText.isNotEmpty() && activeText == messageText
+    }
+
+    private fun hasDisplayableAssistantFinal(message: ChatMessage): Boolean {
+        val text = message.text.trim()
+        if (text.isNotEmpty() && text != message.thinking.orEmpty().trim()) return true
+        return lastTopLevelText(message.items.orEmpty()).isNotEmpty()
+    }
+
+    private fun lastTopLevelText(items: List<ChatMessageItemResponse>): String {
+        for (item in items.asReversed()) {
+            val type = item.type.orEmpty().lowercase()
+            val content = item.content.orEmpty().trim()
+            if (
+                content.isNotEmpty() &&
+                item.tool == null &&
+                item.isSubagent != true &&
+                type !in setOf("thinking", "tool", "subagent", "agent")
+            ) {
+                return content
+            }
+        }
+        return ""
+    }
+
+    private fun activeTurnKey(activeTurn: ChatMessage): String =
+        activeTurn.turnId?.takeIf(String::isNotEmpty) ?: activeTurn.id
+
+    private fun activeTurnVersionKey(activeTurn: ChatMessage): String {
+        val signature = listOf(
+            activeTurn.status,
+            (activeTurn.renderVersion ?: 0).toString(),
+            "${activeTurn.text.length}:${stableTextHash(activeTurn.text)}",
+            "${activeTurn.thinking.orEmpty().length}:${stableTextHash(activeTurn.thinking.orEmpty())}",
+            itemSignature(activeTurn.items.orEmpty()),
+            toolSignature(activeTurn.tools.orEmpty()),
+        ).joinToString("|")
+        return stableTextHash(signature)
+    }
+
+    private fun itemSignature(items: List<ChatMessageItemResponse>): String =
+        items.mapIndexed { index, item ->
+            listOf(
+                index.toString(),
+                item.type.orEmpty(),
+                if (item.isSubagent == true) "1" else "0",
+                "${item.content.orEmpty().length}:${stableTextHash(item.content.orEmpty())}",
+                item.tool?.let { toolSignature(listOf(it)) }.orEmpty(),
+                item.subItems?.let(::itemSignature).orEmpty(),
+            ).joinToString(":")
+        }.joinToString(",")
+
+    private fun toolSignature(tools: List<RemoteToolStatusResponse>): String =
+        tools.mapIndexed { index, tool ->
+            val preview = "${tool.inputPreview.orEmpty()}|${tool.resultPreview.orEmpty()}|${tool.errorPreview.orEmpty()}"
+            listOf(
+                index.toString(),
+                tool.id.orEmpty(),
+                tool.name.orEmpty(),
+                tool.status.orEmpty(),
+                (tool.durationMs ?: 0).toString(),
+                "${preview.length}:${stableTextHash(preview)}",
+            ).joinToString(":")
+        }.joinToString(",")
+
+    private fun isPersistedUserDuplicate(
+        pending: ChatMessage,
+        message: ChatMessage,
+    ): Boolean {
+        if (pending.role != "user" || message.role != "user") return false
+        if (pending.id == message.id) return true
+        val pendingText = pending.text.trim()
+        val messageText = message.text.trim()
+        if (pendingText.isEmpty() || pendingText != messageText) return false
+        return imageSignature(pending.images.orEmpty()) == imageSignature(message.images.orEmpty())
+    }
+
+    private fun imageSignature(images: List<ImageAttachment>): String =
+        images.map { image -> "${image.name}:${image.dataUrl}" }.sorted().joinToString("|")
+}
+
+private fun stableTextHash(text: String): String {
+    var hash = 0
+    text.forEach { character -> hash = (hash shl 5) - hash + character.code }
+    return hash.toLong().absoluteValue.toString(36)
+}

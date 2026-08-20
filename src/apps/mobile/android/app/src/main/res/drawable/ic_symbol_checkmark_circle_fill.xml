@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HarmonyOS `sys.symbol.checkmark_circle_fill`, redrawn.
+
+    One path with `evenOdd` rather than a black disc under a white tick, so the
+    tick is a hole and whatever tints the glyph shows through it. Two paths would
+    need the surface colour baked in, and this panel is drawn on `surface` in
+    light and on a different one in dark.
+
+    The tick is the outline of a 2.3-wide stroke from (7.4,12.5) through
+    (10.6,15.7) to (16.8,8.5), mitred at the corner and squared off at the ends —
+    at 21dp the mitre is indistinguishable from the source's round caps, and
+    round caps cannot be expressed inside a filled path.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="M12,1.2 A10.8,10.8 0 1 0 12,22.8 A10.8,10.8 0 1 0 12,1.2 Z M8.21,11.69 L10.54,14.01 L15.93,7.75 L17.67,9.25 L10.66,17.39 L6.59,13.31 Z" />
+</vector>

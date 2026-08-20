@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HarmonyOS `sys.symbol.folder`, redrawn. The workspace glyph.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M2.8,17.8 V6.6 A2,2 0 0 1 4.8,4.6 H8.6 L10.7,7 H19.2 A2,2 0 0 1 21.2,9 V17.8 A2,2 0 0 1 19.2,19.8 H4.8 A2,2 0 0 1 2.8,17.8 Z"
+        android:strokeWidth="1.7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

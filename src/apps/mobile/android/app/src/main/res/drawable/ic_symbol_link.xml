@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HarmonyOS `sys.symbol.link`, redrawn. Two half-links, drawn as arcs so the join stays open.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M10.4,13.6 A3.4,3.4 0 0 1 10.4,8.8 L13.4,5.8 A3.4,3.4 0 0 1 18.2,10.6 L16.8,12"
+        android:strokeWidth="1.7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M13.6,10.4 A3.4,3.4 0 0 1 13.6,15.2 L10.6,18.2 A3.4,3.4 0 0 1 5.8,13.4 L7.2,12"
+        android:strokeWidth="1.7"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

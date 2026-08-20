@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose paints everything, so this only has to survive the window between
+      launch and the first frame. Extending a platform theme keeps the app off
+      the com.google.android.material dependency entirely.
+    -->
+    <style name="Theme.BitFun" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
