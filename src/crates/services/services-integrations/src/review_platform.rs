@@ -38,6 +38,9 @@ const MAX_REVIEW_TARGET_PAGES: usize = 10;
 const MAX_REVIEW_TARGET_LIST_ITEMS: usize = MAX_REVIEW_TARGET_PAGES * 100;
 const MAX_REVIEW_TARGET_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_REVIEW_FILE_DIFF_CHARS: usize = 80_000;
+// GitCode truncates `GET /pulls/{number}/files` at 3,000 entries without a
+// total-count header. The line-count headers are truncated with the body.
+const GITCODE_PULL_REQUEST_FILES_RESPONSE_LIMIT: usize = 3_000;
 const DEFAULT_ISSUE_PAGE: u32 = 1;
 const DEFAULT_ISSUE_PAGE_SIZE: u32 = 100;
 const MAX_ISSUE_PAGE_SIZE: u32 = 100;
@@ -3553,12 +3556,20 @@ fn apply_gitcode_pull_request_change_stats(
     let Some(values) = response.value.as_array() else {
         return;
     };
+    let file_count = i32::try_from(values.len()).unwrap_or(i32::MAX);
+    if values.len() >= GITCODE_PULL_REQUEST_FILES_RESPONSE_LIMIT {
+        if !pull_request.changed_file_count_known || pull_request.changed_files < file_count {
+            pull_request.changed_files = file_count;
+            pull_request.changed_file_count_known = false;
+        }
+        return;
+    }
     let files = values
         .iter()
         .map(gitcode_file_from_value)
         .collect::<Vec<_>>();
     apply_files_stats(pull_request, &files);
-    pull_request.changed_files = i32::try_from(files.len()).unwrap_or(i32::MAX);
+    pull_request.changed_files = file_count;
     pull_request.changed_file_count_known = true;
     if let Some(total) = header_u64(&response.headers, "total_added_lines") {
         pull_request.additions = i32::try_from(total).unwrap_or(i32::MAX);
@@ -6547,18 +6558,19 @@ fn gitcode_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
         "closed" => ReviewItemState::Closed,
         _ => ReviewItemState::Open,
     };
-    let changed_files = value_string(value, "changes_count")
-        .trim_end_matches('+')
-        .parse::<i32>()
-        .ok()
-        .or_else(|| {
-            value.get("changed_files").and_then(|count| {
-                count
-                    .as_i64()
-                    .or_else(|| count.as_str()?.parse::<i64>().ok())
-                    .and_then(|count| i32::try_from(count).ok())
-            })
-        });
+    let changes_count = value_string(value, "changes_count");
+    let changes_count = changes_count.trim();
+    let changes_count_is_approximate = changes_count.ends_with('+');
+    let changed_files_from_changes_count = changes_count.trim_end_matches('+').parse::<i32>().ok();
+    let changed_files_from_legacy_field = value.get("changed_files").and_then(|count| {
+        count
+            .as_i64()
+            .or_else(|| count.as_str()?.parse::<i64>().ok())
+            .and_then(|count| i32::try_from(count).ok())
+    });
+    let changed_files = changed_files_from_changes_count.or(changed_files_from_legacy_field);
+    let changed_file_count_known = changed_files.is_some()
+        && !(changed_files_from_changes_count.is_some() && changes_count_is_approximate);
     ReviewPlatformPullRequest {
         id: number.to_string(),
         provider_id: None,
@@ -6595,7 +6607,7 @@ fn gitcode_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
         additions: gitcode_pull_request_line_count(value, "added_lines", "additions"),
         deletions: gitcode_pull_request_line_count(value, "removed_lines", "deletions"),
         changed_files: changed_files.unwrap_or(0),
-        changed_file_count_known: changed_files.is_some(),
+        changed_file_count_known,
         comments: value_i64(value, "comments") as i32,
         review_decision: ReviewDecision::Pending,
         checks: empty_checks(),
@@ -8205,6 +8217,19 @@ mod tests {
     }
 
     #[test]
+    fn gitcode_pull_request_marks_approximate_change_count_unknown() {
+        let pull_request = gitcode_pull_request_from_value(&json!({
+            "number": 5,
+            "title": "large change",
+            "state": "open",
+            "changes_count": "3000+"
+        }));
+
+        assert_eq!(pull_request.changed_files, 3_000);
+        assert!(!pull_request.changed_file_count_known);
+    }
+
+    #[test]
     fn gitcode_pull_request_marks_missing_file_count_unknown() {
         let pull_request = gitcode_pull_request_from_value(&json!({
             "number": 5,
@@ -8330,6 +8355,57 @@ mod tests {
         assert!(pull_request.changed_file_count_known);
         assert_eq!(pull_request.additions, 133);
         assert_eq!(pull_request.deletions, 22);
+    }
+
+    #[test]
+    fn gitcode_capped_file_response_does_not_claim_truncated_stats() {
+        let response = JsonResponse {
+            value: Value::Array(
+                (0..GITCODE_PULL_REQUEST_FILES_RESPONSE_LIMIT)
+                    .map(|index| {
+                        json!({
+                            "filename": format!("src/{index}.rs"),
+                            "additions": "1",
+                            "deletions": "1"
+                        })
+                    })
+                    .collect(),
+            ),
+            headers: ReviewHttpHeaders::from_pairs(&[
+                ("total_added_lines", "1910"),
+                ("total_removed_lines", "116799"),
+            ]),
+        };
+        let mut unknown_count = gitcode_pull_request_from_value(&json!({
+            "number": 5,
+            "title": "large change",
+            "state": "open",
+            "added_lines": 133,
+            "removed_lines": 22
+        }));
+
+        apply_gitcode_pull_request_change_stats(&mut unknown_count, &response);
+
+        assert_eq!(unknown_count.changed_files, 3_000);
+        assert!(!unknown_count.changed_file_count_known);
+        assert_eq!(unknown_count.additions, 133);
+        assert_eq!(unknown_count.deletions, 22);
+
+        let mut provider_count = gitcode_pull_request_from_value(&json!({
+            "number": 5,
+            "title": "large change",
+            "state": "open",
+            "added_lines": 401011,
+            "removed_lines": 5219754,
+            "changes_count": "32202"
+        }));
+
+        apply_gitcode_pull_request_change_stats(&mut provider_count, &response);
+
+        assert_eq!(provider_count.changed_files, 32_202);
+        assert!(provider_count.changed_file_count_known);
+        assert_eq!(provider_count.additions, 401_011);
+        assert_eq!(provider_count.deletions, 5_219_754);
     }
 
     #[test]
