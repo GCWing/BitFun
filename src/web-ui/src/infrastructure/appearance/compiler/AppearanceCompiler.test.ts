@@ -755,7 +755,7 @@ describe('AppearanceCompiler', () => {
       scenes: {
         agents: {
           parts: {
-            coreGrid: { base: { borderColor: accent } },
+            catalogGrid: { base: { borderColor: accent } },
           },
         },
       },
@@ -774,7 +774,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="sessions-section"][data-bf-part="row"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="files-panel"][data-bf-part="search"][data-bf-search-mode="content"]');
     expect(snapshot.cssText).toContain('[data-bf-component="remote-connect-dialog"][data-bf-part="groupTab"][data-bf-group="account"][data-bf-state~="active"]');
-    expect(snapshot.cssText).toContain('[data-bf-scene="agents"][data-bf-part="coreGrid"]');
+    expect(snapshot.cssText).toContain('[data-bf-scene="agents"][data-bf-part="catalogGrid"]');
     expect(snapshot.cssText).toContain('[data-bf-component="session-usage-panel"][data-bf-part="tab"][data-bf-tab="models"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="file-operation-tool-card"][data-bf-part="root"][data-bf-action="modify"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="acp-agents-config"][data-bf-part="root"][data-bf-view="json"]');
