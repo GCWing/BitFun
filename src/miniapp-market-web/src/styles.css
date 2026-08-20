@@ -1811,6 +1811,10 @@ main {
   font-size: 10px;
 }
 
+.review-list .review-submission-meta {
+  color: var(--text-secondary);
+}
+
 .review-detail {
   min-width: 0;
   padding: 20px;

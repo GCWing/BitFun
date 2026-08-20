@@ -136,8 +136,21 @@ struct FavoriteAggregate {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AdminSubmissionSummary {
+    #[serde(flatten)]
+    submission: MarketSubmission,
+    submitter: MarketUserSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    submitted_at: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AdminSubmissionDetail {
     submission: MarketSubmission,
+    submitter: MarketUserSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    submitted_at: Option<i64>,
     source_files: BTreeMap<String, String>,
     previous_source_files: BTreeMap<String, String>,
     source_diffs: BTreeMap<String, String>,
@@ -893,9 +906,9 @@ async fn list_admin_submissions(
     State(state): State<Arc<MarketState>>,
     headers: HeaderMap,
     Query(query): Query<SubmissionListQuery>,
-) -> MarketResult<Json<CursorPage<MarketSubmission>>> {
+) -> MarketResult<Json<CursorPage<AdminSubmissionSummary>>> {
     require_admin(&state, &headers).await?;
-    let items = list_submissions(&state, None, query.status, true).await?;
+    let items = list_admin_submission_summaries(&state, query.status).await?;
     Ok(Json(CursorPage {
         items,
         next_cursor: None,
@@ -907,8 +920,12 @@ async fn get_admin_submission(
     headers: HeaderMap,
     Path(submission_id): Path<String>,
 ) -> MarketResult<Json<AdminSubmissionDetail>> {
-    let admin = require_admin(&state, &headers).await?;
-    let submission = submission_by_id(&state, &submission_id, admin.user.internal_id, true).await?;
+    require_admin(&state, &headers).await?;
+    let AdminSubmissionSummary {
+        submission,
+        submitter,
+        submitted_at,
+    } = admin_submission_by_id(&state, &submission_id).await?;
     let source_files = if let Some(hash) = submission.package_sha256.as_deref() {
         let package = state.artifacts.read_package(hash).await?;
         validate_market_package(&package)?.source_files
@@ -945,6 +962,8 @@ async fn get_admin_submission(
     .map_err(MarketError::internal)?;
     Ok(Json(AdminSubmissionDetail {
         submission,
+        submitter,
+        submitted_at,
         source_files,
         previous_source_files,
         source_diffs,
@@ -1370,6 +1389,51 @@ async fn submission_by_id(
     submission_from_row(state, row).await
 }
 
+async fn admin_submission_by_id(
+    state: &MarketState,
+    submission_id: &str,
+) -> MarketResult<AdminSubmissionSummary> {
+    let row = sqlx::query(
+        "SELECT s.id AS id, s.listing_id AS listing_id, s.slug AS slug,
+                s.release_number AS release_number, s.metadata_json AS metadata_json,
+                s.status AS status, s.package_sha256 AS package_sha256,
+                s.package_size AS package_size, s.rejection_reason AS rejection_reason,
+                s.created_at AS created_at, s.updated_at AS updated_at,
+                s.owner_user_id AS owner_user_id, s.submitted_at AS submitted_at,
+                u.github_id AS submitter_github_id, u.login AS submitter_login,
+                u.avatar_url AS submitter_avatar_url
+         FROM submissions s
+         JOIN users u ON u.id = s.owner_user_id
+         WHERE s.id = ?",
+    )
+    .bind(submission_id)
+    .fetch_optional(state.db.pool())
+    .await
+    .map_err(MarketError::internal)?
+    .ok_or_else(|| MarketError::not_found("Submission was not found."))?;
+    admin_submission_from_row(state, row).await
+}
+
+async fn admin_submission_from_row(
+    state: &MarketState,
+    row: sqlx::sqlite::SqliteRow,
+) -> MarketResult<AdminSubmissionSummary> {
+    let submitter = MarketUserSummary {
+        github_id: row.get("submitter_github_id"),
+        login: row.get("submitter_login"),
+        avatar_url: row.get("submitter_avatar_url"),
+    };
+    let submitted_at = row
+        .try_get::<Option<i64>, _>("submitted_at")
+        .map_err(MarketError::internal)?;
+    let submission = submission_from_row(state, row).await?;
+    Ok(AdminSubmissionSummary {
+        submission,
+        submitter,
+        submitted_at,
+    })
+}
+
 async fn submission_from_row(
     state: &MarketState,
     row: sqlx::sqlite::SqliteRow,
@@ -1443,6 +1507,40 @@ async fn list_submissions(
             continue;
         }
         submissions.push(submission_from_row(state, row).await?);
+    }
+    Ok(submissions)
+}
+
+async fn list_admin_submission_summaries(
+    state: &MarketState,
+    status: Option<MarketSubmissionStatus>,
+) -> MarketResult<Vec<AdminSubmissionSummary>> {
+    let mut builder = QueryBuilder::<Sqlite>::new(
+        "SELECT s.id AS id, s.listing_id AS listing_id, s.slug AS slug,
+                s.release_number AS release_number, s.metadata_json AS metadata_json,
+                s.status AS status, s.package_sha256 AS package_sha256,
+                s.package_size AS package_size, s.rejection_reason AS rejection_reason,
+                s.created_at AS created_at, s.updated_at AS updated_at,
+                s.owner_user_id AS owner_user_id, s.submitted_at AS submitted_at,
+                u.github_id AS submitter_github_id, u.login AS submitter_login,
+                u.avatar_url AS submitter_avatar_url
+         FROM submissions s
+         JOIN users u ON u.id = s.owner_user_id
+         WHERE 1 = 1",
+    );
+    if let Some(status) = status {
+        builder.push(" AND s.status = ");
+        builder.push_bind(status_string(status));
+    }
+    builder.push(" ORDER BY s.updated_at DESC LIMIT 200");
+    let rows = builder
+        .build()
+        .fetch_all(state.db.pool())
+        .await
+        .map_err(MarketError::internal)?;
+    let mut submissions = Vec::with_capacity(rows.len());
+    for row in rows {
+        submissions.push(admin_submission_from_row(state, row).await?);
     }
     Ok(submissions)
 }
@@ -2269,6 +2367,26 @@ mod tests {
         .execute(db.pool())
         .await
         .unwrap();
+
+        let queue = list_admin_submission_summaries(
+            state.as_ref(),
+            Some(MarketSubmissionStatus::Submitted),
+        )
+        .await
+        .unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].submitter.login, "bobleer");
+        assert_eq!(queue[0].submitted_at, Some(now));
+        let queue_item = serde_json::to_value(&queue[0]).unwrap();
+        assert_eq!(queue_item["name"], "Regex Workshop");
+        assert_eq!(queue_item["submitter"]["githubId"], 24753352);
+        assert_eq!(queue_item["submittedAt"], now);
+
+        let admin_submission = admin_submission_by_id(state.as_ref(), &submission_id)
+            .await
+            .unwrap();
+        assert_eq!(admin_submission.submitter.login, "bobleer");
+        assert_eq!(admin_submission.submitted_at, Some(now));
 
         approve_submission(state.as_ref(), &owner, &submission_id)
             .await

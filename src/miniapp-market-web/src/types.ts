@@ -121,8 +121,15 @@ export interface MarketSubmission {
   updatedAt: number;
 }
 
+export interface AdminSubmission extends MarketSubmission {
+  submitter?: MarketUser;
+  submittedAt?: number;
+}
+
 export interface AdminSubmissionDetail {
   submission: MarketSubmission;
+  submitter?: MarketUser;
+  submittedAt?: number;
   sourceFiles: Record<string, string>;
   previousSourceFiles: Record<string, string>;
   sourceDiffs: Record<string, string>;
