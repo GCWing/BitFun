@@ -607,6 +607,23 @@ existed: a message sent while parked on the first Turn left the transcript on a
 24-item window it was never in, with follow-output holding an answer it had
 nothing to align.
 
+## Restoring a Session Reading Position
+
+Switching sessions remounts the virtual list, so preserving a reading position
+cannot depend on keeping the old scroller or virtualizer alive. The container
+keeps a session-scoped snapshot of the rendered history presentation, viewport
+intent, and the first visible Turn's offset from the viewport top. Restoring the
+session reinstates the presentation first, then restores that Turn-and-offset
+relationship through `viewportOwner.shift` and opens the ordinary anchor settle
+window so later measurements keep it stable.
+
+The saved `scrollTop` is only a materialization hint when the anchor Turn has
+not entered the rendered virtual window yet. It is never the final answer: once
+the Turn exists in the DOM, its semantic offset is authoritative. A snapshot
+whose reader was away from the tail also suppresses the session-open tail
+follow, including when the reader was using the ordinary tail projection rather
+than an explicit history window.
+
 ## Diagnosing History Paging
 
 Older Turns are paged in when the viewport reaches the head of the loaded

@@ -71,6 +71,8 @@ interface UseFlowChatFollowOutputOptions {
   virtualItemCount: number;
   isStreaming: boolean;
   isViewportActive: boolean;
+  /** Restored history presentations must not start by pinning the tail. */
+  startAtTailOnMount?: boolean;
   /** The native host has temporarily withdrawn the scroller from layout. */
   isViewportSuspended?: () => boolean;
   scrollerRef: RefObject<HTMLElement | null>;
@@ -201,6 +203,7 @@ export function useFlowChatFollowOutput({
   virtualItemCount,
   isStreaming,
   isViewportActive,
+  startAtTailOnMount = true,
   isViewportSuspended = () => false,
   scrollerRef,
   getTailSpacerPx,
@@ -1253,7 +1256,7 @@ export function useFlowChatFollowOutput({
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
-      if (virtualItemCount > 0) {
+      if (virtualItemCount > 0 && startAtTailOnMount) {
         enterFollowOutput(isStreaming ? 'streaming-resumed' : 'session-open');
       }
       return;
@@ -1266,7 +1269,7 @@ export function useFlowChatFollowOutput({
       exitFollowOutput('session-changed');
       // A Turn waiting to be shown belongs to the session that gained it.
       pendingNewTurnIdRef.current = null;
-      if (virtualItemCount > 0) {
+      if (virtualItemCount > 0 && startAtTailOnMount) {
         enterFollowOutput(isStreaming ? 'streaming-resumed' : 'session-open');
       }
       return;
@@ -1314,6 +1317,7 @@ export function useFlowChatFollowOutput({
     enterFollowOutput,
     exitFollowOutput,
     isStreaming,
+    startAtTailOnMount,
     latestTurnId,
     virtualItemCount,
   ]);

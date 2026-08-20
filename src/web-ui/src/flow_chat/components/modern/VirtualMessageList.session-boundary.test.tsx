@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   isFollowingOutput: false,
   followsNow: false,
   scheduleFollowToLatest: vi.fn(),
+  startAtTailOnMount: true,
   revealNewTurnTail: null as null | ((turnId: string) => boolean),
   /**
    * The register the list built, reached through the hook it hands it to.
@@ -174,9 +175,11 @@ vi.mock('./useFlowChatFollowOutput', () => ({
   useFlowChatFollowOutput: (options: {
     viewportOwner: { claim: (owner: string) => boolean };
     revealNewTurnTail: (turnId: string) => boolean;
+    startAtTailOnMount?: boolean;
   }) => {
     mocks.viewportOwner = options.viewportOwner;
     mocks.revealNewTurnTail = options.revealNewTurnTail;
+    mocks.startAtTailOnMount = options.startAtTailOnMount ?? true;
     return {
       isFollowingOutput: mocks.isFollowingOutput,
       enterFollowOutput: mocks.enterFollowOutput,
@@ -318,6 +321,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     mocks.handleUserScrollIntent.mockReset();
     mocks.handleFollowScroll.mockReset();
     mocks.scheduleFollowToLatest.mockReset();
+    mocks.startAtTailOnMount = true;
     mocks.revealNewTurnTail = null;
     mocks.viewportOwner = null;
     mocks.setVisibleTurnInfo.mockReset();
@@ -1075,5 +1079,95 @@ describe('VirtualMessageList natural scroll contract', () => {
     act(() => root.render(<VirtualMessageList ref={listRef} />));
     expect(listRef.current?.prepareTurnNavigation('turn-2')).toBe('pending');
     expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain('168px');
+  });
+
+  it('captures and restores a history viewport by Turn and viewport offset', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const layout = {
+      clientHeight: 600,
+      scrollHeight: 2000,
+      turnTopFromScrollerTop: 120,
+    };
+    const restoreLayout = fakeLayout(layout);
+    try {
+      act(() => root.render(
+        <VirtualMessageList
+          ref={listRef}
+          presentationMode="history-window"
+          viewportMode="history-reading"
+          historyWindow={{ startOrdinal: 4, endOrdinalExclusive: 8 }}
+        />,
+      ));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.getBoundingClientRect = () => (
+        { ...new DOMRect(0, 0, 1000, 600), top: 0, bottom: 600 } as DOMRect
+      );
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        writable: true,
+        value: 400,
+      });
+
+      const snapshot = listRef.current?.captureViewportSnapshot();
+      expect(snapshot).toMatchObject({
+        sessionId: 'session-1',
+        presentationMode: 'history-window',
+        viewportMode: 'history-reading',
+        historyWindow: { startOrdinal: 4, endOrdinalExclusive: 8 },
+        anchorTurnId: 'turn-1',
+        anchorOffsetPx: 120,
+        scrollTopPx: 400,
+      });
+
+      layout.turnTopFromScrollerTop = 260;
+      let restored = false;
+      act(() => {
+        restored = snapshot ? listRef.current?.restoreViewportSnapshot(snapshot) ?? false : false;
+      });
+
+      expect(restored).toBe(true);
+      expect(scroller.scrollTop).toBe(540);
+    } finally {
+      restoreLayout();
+    }
+  });
+
+  it('materializes and restores a saved reading position without starting tail follow', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const initialViewportSnapshot = {
+      sessionId: 'session-1',
+      presentationMode: 'tail' as const,
+      viewportMode: 'live-tail' as const,
+      historyWindow: null,
+      anchorTurnId: 'turn-1',
+      anchorOffsetPx: 120,
+      scrollTopPx: 400,
+      isAtTail: false,
+      capturedAtMs: 1,
+    };
+    const layout = {
+      clientHeight: 600,
+      scrollHeight: 2000,
+      turnTopFromScrollerTop: 260,
+    };
+    const restoreLayout = fakeLayout(layout);
+    try {
+      act(() => root.render(
+        <VirtualMessageList
+          ref={listRef}
+          initialViewportSnapshot={initialViewportSnapshot}
+        />,
+      ));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.getBoundingClientRect = () => (
+        { ...new DOMRect(0, 0, 1000, 600), top: 0, bottom: 600 } as DOMRect
+      );
+
+      expect(mocks.startAtTailOnMount).toBe(false);
+      expect(scroller.scrollTop).toBe(140);
+      expect(container.querySelector('[data-open-viewport-settled="true"]')).not.toBeNull();
+    } finally {
+      restoreLayout();
+    }
   });
 });
