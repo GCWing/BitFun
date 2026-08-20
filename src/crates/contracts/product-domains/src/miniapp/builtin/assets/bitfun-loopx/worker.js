@@ -2096,9 +2096,19 @@ module.exports = {
     emit(`已找到 ${gh}。启动浏览器登录（弹出窗口会显示一次性代码，浏览器确认后自动完成）…`);
     const launchError = await launchGhAuthLogin(gh, envOverlay);
     if (launchError) return { ok: false, error: launchError };
+    // The login poll can take minutes: emit a heartbeat line every 30s so the
+    // dialog always shows which step is in progress and that the worker is
+    // still alive (the RPC call itself may run for several minutes).
+    emit('登录终端已打开。请在浏览器中完成 GitHub 授权，控制台会自动检测结果（最多等待 8 分钟）…');
     const deadline = Date.now() + 8 * 60000;
+    let lastWaitEmitAt = 0;
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 4000));
+      if (Date.now() - lastWaitEmitAt >= 30000) {
+        lastWaitEmitAt = Date.now();
+        const waitedMin = Math.max(0, Math.round((8 * 60000 - (deadline - Date.now())) / 60000));
+        emit(`仍在等待浏览器登录…（已等待约 ${waitedMin} 分钟 / 最多 8 分钟）`);
+      }
       try {
         const status = await spawnLoopx({ argv: [gh], env: envOverlay }, ['auth', 'status'], { timeoutMs: 15000 });
         if (status.code === 0) {
