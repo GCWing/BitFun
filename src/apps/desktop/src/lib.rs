@@ -315,6 +315,12 @@ fn handle_secondary_launch(app: &tauri::AppHandle) {
     }
 }
 
+pub(crate) fn e2e_storage_guard_enabled() -> bool {
+    std::env::var("BITFUN_E2E_STORAGE_GUARD")
+        .ok()
+        .is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+}
+
 fn main_window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
 }
@@ -697,8 +703,11 @@ pub async fn run() {
 
     let mut builder = tauri::Builder::default();
 
+    let is_e2e_webdriver =
+        e2e_storage_guard_enabled() && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some();
+
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    {
+    if !is_e2e_webdriver {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             log::info!(
                 "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",

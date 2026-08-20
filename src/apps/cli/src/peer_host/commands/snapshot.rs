@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_runtime_ports::{
-    AgentSessionRollbackToTurnRequest, LocalWorkspaceSnapshotPort,
+    AgentSessionRollbackToTurnRequest, AgentSessionWorkspaceLocation, LocalWorkspaceSnapshotPort,
     LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats, PortError, PortErrorKind,
 };
 
@@ -33,10 +33,12 @@ pub(super) async fn require_local_snapshot_workspace(
 async fn require_complete_rollback_workspace(
     request: &Value,
     workspace_path: &str,
+    explicit_location: Option<AgentSessionWorkspaceLocation>,
 ) -> Result<(), String> {
     let is_remote = optional_string(request, "remoteConnectionId").is_some()
         || optional_string(request, "remoteSshHost").is_some()
-        || is_remote_path(workspace_path).await;
+        || explicit_location == Some(AgentSessionWorkspaceLocation::Remote)
+        || (explicit_location.is_none() && is_remote_path(workspace_path).await);
     if is_remote {
         return Err(format!(
             "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: {workspace_path}"
@@ -134,7 +136,12 @@ pub(crate) async fn rollback_session_to_turn(
             .map_err(|error| format!("Invalid targeted Session rollback request: {error}"))?;
 
     bitfun_agent_runtime::session_control::validate_session_id(&rollback_request.session_id)?;
-    require_complete_rollback_workspace(request, &rollback_request.workspace_path).await?;
+    require_complete_rollback_workspace(
+        request,
+        &rollback_request.workspace_path,
+        rollback_request.explicit_workspace_location(),
+    )
+    .await?;
     ensure_session_workspace_runtime_ownership(state, request)?;
     let outcome = state
         .agent_runtime
@@ -227,6 +234,7 @@ mod tests {
         let rollback_error = require_complete_rollback_workspace(
             &json!({ "remoteConnectionId": "remote-1" }),
             "/root/repos",
+            None,
         )
         .await
         .expect_err("complete remote rollback must report missing snapshot coverage");
@@ -240,12 +248,40 @@ mod tests {
             .find("pub(crate) async fn rollback_session_to_turn")
             .expect("rollback handler must exist")..];
         let remote_guard = rollback_source
-            .find("require_complete_rollback_workspace(request, &rollback_request.workspace_path)")
+            .find("require_complete_rollback_workspace(")
             .expect("rollback must have an explicit remote guard");
         let runtime_call = rollback_source
             .find(".rollback_session_to_turn(")
             .expect("rollback must delegate to the Agent Session runtime");
         assert!(remote_guard < runtime_call);
+    }
+
+    #[tokio::test]
+    async fn explicit_local_rollback_identity_wins_over_a_remote_path_collision() {
+        let workspace = tempfile::tempdir().expect("create local workspace");
+        let workspace_path = workspace.path().to_string_lossy().to_string();
+        let remote =
+            bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
+        remote
+            .register_remote_workspace(
+                workspace_path.clone(),
+                "peer-rollback-path-collision".to_string(),
+                "Peer rollback collision test".to_string(),
+                "remote.example".to_string(),
+            )
+            .await;
+
+        require_complete_rollback_workspace(
+            &json!({ "workspaceId": "local_workspace-1" }),
+            &workspace_path,
+            Some(bitfun_runtime_ports::AgentSessionWorkspaceLocation::Local),
+        )
+        .await
+        .expect("explicit local identity must disambiguate the registered remote path");
+
+        remote
+            .unregister_remote_workspace("peer-rollback-path-collision", &workspace_path)
+            .await;
     }
 
     #[tokio::test]

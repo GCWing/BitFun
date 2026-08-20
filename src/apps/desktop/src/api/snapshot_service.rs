@@ -9,7 +9,7 @@ use bitfun_core::service::snapshot::{
     initialize_snapshot_manager_for_workspace, open_snapshot_manager_for_view, FileChangeEntry,
     OperationType, SnapshotConfig, SnapshotManager,
 };
-use bitfun_runtime_ports::SessionStoragePathRequest;
+use bitfun_runtime_ports::{AgentSessionWorkspaceLocation, SessionStoragePathRequest};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -370,8 +370,12 @@ async fn ensure_local_snapshot_mutation_path(
 async fn ensure_complete_rollback_supported(
     workspace_path: &str,
     remote_scope: &SnapshotRemoteScope,
+    explicit_location: Option<AgentSessionWorkspaceLocation>,
 ) -> Result<(), String> {
-    if remote_scope.declares_remote() || is_remote_path(workspace_path).await {
+    let is_remote = remote_scope.declares_remote()
+        || explicit_location == Some(AgentSessionWorkspaceLocation::Remote)
+        || (explicit_location.is_none() && is_remote_path(workspace_path).await);
+    if is_remote {
         return Err(format!(
             "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: {workspace_path}"
         ));
@@ -563,7 +567,8 @@ pub async fn rollback_session(
     runtime: State<'_, DesktopRuntimeContext>,
     request: RollbackSessionRequest,
 ) -> Result<Vec<String>, String> {
-    ensure_complete_rollback_supported(&request.workspace_path, &request.remote_scope).await?;
+    ensure_complete_rollback_supported(&request.workspace_path, &request.remote_scope, None)
+        .await?;
     ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
     let _history_mutation = begin_snapshot_history_mutation(
         runtime.inner(),
@@ -606,7 +611,12 @@ pub async fn rollback_session_to_turn(
         remote_connection_id: request.remote_connection_id.clone(),
         remote_ssh_host: request.remote_ssh_host.clone(),
     };
-    ensure_complete_rollback_supported(&request.workspace_path, &remote_scope).await?;
+    ensure_complete_rollback_supported(
+        &request.workspace_path,
+        &remote_scope,
+        request.explicit_workspace_location(),
+    )
+    .await?;
     ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
     runtime
         .session_application()
@@ -1357,7 +1367,7 @@ mod tests {
             remote_ssh_host: Some("example.com".to_string()),
         };
 
-        let error = ensure_complete_rollback_supported("/root/repos", &scope)
+        let error = ensure_complete_rollback_supported("/root/repos", &scope, None)
             .await
             .expect_err("remote rollback must fail before changing files or history");
 
@@ -1365,6 +1375,40 @@ mod tests {
             error,
             "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: /root/repos"
         );
+    }
+
+    #[tokio::test]
+    async fn explicit_local_rollback_identity_wins_over_a_remote_path_collision() {
+        let workspace = tempfile::tempdir().expect("create local workspace");
+        let workspace_path = workspace.path().to_string_lossy().to_string();
+        let remote =
+            bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
+        remote
+            .register_remote_workspace(
+                workspace_path.clone(),
+                "rollback-path-collision".to_string(),
+                "Rollback collision test".to_string(),
+                "remote.example".to_string(),
+            )
+            .await;
+
+        let legacy_error =
+            ensure_complete_rollback_supported(&workspace_path, &Default::default(), None)
+                .await
+                .expect_err("legacy path-only requests must retain remote fallback behavior");
+        assert!(legacy_error.contains("not supported for remote workspaces"));
+
+        ensure_complete_rollback_supported(
+            &workspace_path,
+            &Default::default(),
+            Some(bitfun_runtime_ports::AgentSessionWorkspaceLocation::Local),
+        )
+        .await
+        .expect("explicit local identity must disambiguate the registered remote path");
+
+        remote
+            .unregister_remote_workspace("rollback-path-collision", &workspace_path)
+            .await;
     }
 
     #[test]
