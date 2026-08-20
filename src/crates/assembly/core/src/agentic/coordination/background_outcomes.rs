@@ -61,15 +61,6 @@ pub(crate) enum BackgroundSubagentWaitMode {
     All,
 }
 
-impl BackgroundSubagentWaitMode {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Any => "any",
-            Self::All => "all",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct BackgroundSubagentWaitResult {
     pub status: BackgroundSubagentWaitStatus,
