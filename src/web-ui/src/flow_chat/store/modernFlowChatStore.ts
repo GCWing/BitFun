@@ -43,10 +43,9 @@ export interface ExploreGroupData {
   isGroupStreaming: boolean;
   isLastGroupInTurn: boolean;
   /**
-   * True when this group is no longer the tail of the turn — a non-explore
-   * (critical) round, a top-level notice, or a newer dialog turn has superseded
-   * the group. Turn completion alone does not cut the live tail. The renderer
-   * uses this to trigger one-shot auto-collapse.
+   * True when this group is no longer the tail of the turn. Expansion no
+   * longer depends on this flag; it is retained for bounded tail presentation
+   * and projection diagnostics.
    */
   wasCutByCritical: boolean;
 }
@@ -122,13 +121,10 @@ interface ModernFlowChatState {
  * Check if ModelRound is explore-only (contains only exploration tools)
  * Explore-only rounds can be collapsed
  * 
- * Key check: must contain at least one collapsible tool OR be a pure thinking round.
- * Pure thinking rounds (thinking without critical tools) are merged into
- * adjacent explore groups to reduce visual noise from standalone "thinking N chars" lines.
+ * Key check: the round must be fully settled and contain at least one
+ * collapsible tool. Active rounds stay as ordinary model-round items so a
+ * running tool is never hidden inside a collapsed explore group.
  * Pure text rounds (like final replies) should not be collapsed.
- * Explore-capable rounds keep explore-group identity from the first render so
- * settling a streaming narrative cannot swap virtual-item keys and remount the pane.
- * Typewriter remount risk is covered by useTypewriter(replayOnMount: false).
  */
 function hasTrailingVisibleText(round: ModelRound): boolean {
   for (let index = round.items.length - 1; index >= 0; index -= 1) {
@@ -149,6 +145,15 @@ function hasTrailingVisibleText(round: ModelRound): boolean {
 
 function isExploreOnlyRound(round: ModelRound): boolean {
   if (!round.items || round.items.length === 0) return false;
+
+  if (
+    !isTerminalRoundStatus(round.status) ||
+    round.isStreaming ||
+    !round.isComplete ||
+    round.items.some(isActiveFlowItem)
+  ) {
+    return false;
+  }
 
   if (round.renderHints?.disableExploreGrouping === true) {
     return false;
@@ -175,34 +180,6 @@ function isExploreOnlyRound(round: ModelRound): boolean {
   });
   
   return allItemsCollapsible;
-}
-
-/**
- * Identify a hard boundary that should close an earlier explore group.
- *
- * Streaming thinking/text is provisional: the same round can still receive a
- * collapsible tool and become part of the live explore tail. Only a
- * non-collapsible tool, explicit grouping suppression, or settled visible
- * narrative should cut the preceding group.
- */
-function isHardCriticalRound(round: ModelRound): boolean {
-  if (round.renderHints?.disableExploreGrouping === true) {
-    return true;
-  }
-
-  const hasNonCollapsibleTool = round.items.some(item => (
-    item.type === 'tool' && !isCollapsibleTool(getEffectiveToolName(item as FlowToolItem))
-  ));
-  if (hasNonCollapsibleTool) {
-    return true;
-  }
-
-  return (
-    isTerminalRoundStatus(round.status) &&
-    !round.isStreaming &&
-    round.isComplete !== false &&
-    hasTrailingVisibleText(round)
-  );
 }
 
 /**
@@ -459,9 +436,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         }
       });
 
-      // Always flush the trailing explore group so its container is stable
-      // throughout streaming. The wasCutByCritical flag distinguishes "still
-      // growing" from "permanently closed" for the renderer.
+      // Flush the trailing settled explore group. Active rounds never enter a
+      // group and remain visible as ordinary model-round items until terminal.
       if (currentGroup) {
         tempGroups.push(currentGroup);
       }
@@ -480,27 +456,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           const isGroupStreaming = group.rounds.some(
             r => r.isStreaming || r.items.some(isActiveFlowItem),
           );
-          // A group is "cut by critical" when it is no longer the tail of the
-          // turn. Two conditions cover all cases:
-          //   1. group.endIndex < rounds.length - 1: there are rounds after
-          //      this group's last round — they could be non-explore (critical)
-          //      rounds OR another explore group. Either way this group is no
-          //      longer the tail.
-          //      NOTE: checking !isLastGroup alone is NOT sufficient because
-          //      tempGroups only contains explore-only groups; a following
-          //      critical round (e.g. TodoWrite) is invisible to tempGroups
-          //      yet still sits after this group in the rounds array.
-          //   2. the caller knows another top-level item follows this segment
-          //      (user steering, a completion/failure notice, or a newer turn).
-          //
-          // Turn completion by itself is deliberately not a cut. The live tail
-          // keeps its final action visible; a later conversation item is what
-          // makes the group compact.
-          const hasHardCriticalRoundAfter = rounds
-            .slice(group.endIndex + 1)
-            .some(isHardCriticalRound);
           const wasCutByCritical =
-            hasHardCriticalRoundAfter ||
+            group.endIndex < rounds.length - 1 ||
             options.collapseTrailingExploreGroup;
 
           const groupId = group.rounds[0]?.id ?? `explore-group-${turn.id}-${group.startIndex}`;

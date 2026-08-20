@@ -232,7 +232,7 @@ export function estimateExploreGroupHeight(
 ): VirtualItemHeightEstimate {
   const isExpanded = context.exploreGroupStates?.has(item.data.groupId)
     ? context.exploreGroupStates.get(item.data.groupId)
-    : !item.data.wasCutByCritical;
+    : false;
   const contentHeight = item.data.allItems.reduce<number>(
     (total, flowItem) => total + estimateFlowItemHeight(flowItem as AnyFlowItem, context).heightPx,
     0,
