@@ -164,6 +164,8 @@ fn swarm_planner_prompts_define_the_closed_agent_spawn_catalog() {
             );
         }
         assert!(prompt.contains("AgentSpawn accepts exactly these `agent_type` values"));
+        assert!(prompt.contains("5 levels"));
+        assert!(prompt.contains("128 agents including"));
         assert!(!prompt.contains("<available_agents>"));
         assert!(!prompt.contains("GeneralPurpose"));
         assert!(!prompt.contains("Explore"));
