@@ -1,5 +1,6 @@
 package com.bitfun.mobile.core.transport
 
+import com.bitfun.mobile.core.protocol.ImageAttachment
 import com.bitfun.mobile.core.protocol.RelayJson
 import io.ktor.client.HttpClient
 import io.ktor.client.request.accept
@@ -30,6 +31,7 @@ public enum class ModelProviderProtocol {
 public data class ModelProviderMessage public constructor(
     public val role: String,
     public val content: String,
+    public val images: List<ImageAttachment> = emptyList(),
 )
 
 public data class ModelProviderStreamResult public constructor(
@@ -137,7 +139,7 @@ public object ModelProviderRequest {
                 append("{\"role\":")
                 append(jsonString(message.role))
                 append(",\"content\":")
-                append(jsonString(message.content))
+                append(contentJson(message, protocol))
                 append('}')
             }
             append("]}")
@@ -147,6 +149,56 @@ public object ModelProviderRequest {
 
     private fun jsonString(value: String): String =
         RelayJson.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(value))
+
+    /** Provider-specific multimodal content, matching the HarmonyOS adapter. */
+    private fun contentJson(message: ModelProviderMessage, protocol: ModelProviderProtocol): String {
+        if (message.images.isEmpty()) return jsonString(message.content)
+
+        val text = message.content.trim()
+        val parts = mutableListOf<String>()
+        if (protocol == ModelProviderProtocol.OPEN_AI && text.isNotEmpty()) {
+            parts += "{\"type\":\"text\",\"text\":${jsonString(text)}}"
+        }
+        message.images.forEach { image ->
+            val dataUrl = image.dataUrl.trim()
+            if (dataUrl.isEmpty()) return@forEach
+            val mediaType = imageMediaType(dataUrl)
+            val base64 = imageBase64(dataUrl)
+            if (base64.isEmpty()) return@forEach
+            parts += when (protocol) {
+                ModelProviderProtocol.ANTHROPIC ->
+                    "{\"type\":\"image\",\"source\":{" +
+                        "\"type\":\"base64\",\"media_type\":${jsonString(mediaType)}," +
+                        "\"data\":${jsonString(base64)}}}"
+
+                ModelProviderProtocol.OPEN_AI -> {
+                    val normalized = if (dataUrl.startsWith("data:")) {
+                        dataUrl
+                    } else {
+                        "data:$mediaType;base64,$base64"
+                    }
+                    "{\"type\":\"image_url\",\"image_url\":{" +
+                        "\"url\":${jsonString(normalized)}}}"
+                }
+            }
+        }
+        if (protocol == ModelProviderProtocol.ANTHROPIC && text.isNotEmpty()) {
+            parts += "{\"type\":\"text\",\"text\":${jsonString(text)}}"
+        }
+        return if (parts.isEmpty()) jsonString(message.content) else parts.joinToString(",", "[", "]")
+    }
+
+    private fun imageMediaType(dataUrl: String): String {
+        if (!dataUrl.startsWith("data:")) return "image/jpeg"
+        val end = dataUrl.indexOf(';')
+        return if (end > 5) dataUrl.substring(5, end) else "image/jpeg"
+    }
+
+    private fun imageBase64(dataUrl: String): String {
+        val marker = ";base64,"
+        val index = dataUrl.indexOf(marker)
+        return if (index >= 0) dataUrl.substring(index + marker.length) else dataUrl
+    }
 }
 
 public class ModelProviderStreamClient internal constructor(

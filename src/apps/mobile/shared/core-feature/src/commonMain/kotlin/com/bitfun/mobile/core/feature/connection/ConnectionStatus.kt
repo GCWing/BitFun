@@ -21,6 +21,19 @@ public enum class ConnectionPhase {
 }
 
 /**
+ * Whether a command sent right now could still be answered.
+ *
+ * The same three phases HarmonyOS' `RemoteUiState.canUseRemote` allows: a link
+ * that is up, one that is coming back, and one still being paired. Offering a
+ * refresh or a download over a dropped link would only queue work that nothing
+ * is going to collect.
+ */
+public fun ConnectionPhase.allowsRemoteCommands(): Boolean = when (this) {
+    ConnectionPhase.CONNECTED, ConnectionPhase.RECONNECTING, ConnectionPhase.CONNECTING -> true
+    ConnectionPhase.IDLE, ConnectionPhase.DISCONNECTED, ConnectionPhase.FAILED -> false
+}
+
+/**
  * The heading a shell shows for a phase.
  *
  * A cause rather than a sentence, because the wording lives in each app's

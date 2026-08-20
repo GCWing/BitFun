@@ -6,12 +6,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bitfun.mobile.app.platform.LogcatCoreLog
+import com.bitfun.mobile.app.platform.LEGACY_MOBILE_DEVICE_NAMES
 import com.bitfun.mobile.app.platform.deviceIdentity
 import com.bitfun.mobile.core.feature.CloudSettingsSource
 import com.bitfun.mobile.core.feature.account.AccountIntent
 import com.bitfun.mobile.core.feature.account.AccountStore
 import com.bitfun.mobile.core.feature.account.AccountUiState
 import com.bitfun.mobile.core.feature.account.create
+import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionStore
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
@@ -32,15 +34,19 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
         identity.installId,
         identity.displayName,
         LogcatCoreLog,
+        LEGACY_MOBILE_DEVICE_NAMES,
     )
     val state: StateFlow<AccountUiState> = store.state
     private val _remoteState = MutableStateFlow<RemoteSessionUiState>(RemoteSessionUiState.Idle)
     val remoteState: StateFlow<RemoteSessionUiState> = _remoteState.asStateFlow()
+    private val _connectionPhase = MutableStateFlow(ConnectionPhase.IDLE)
+    val connectionPhase: StateFlow<ConnectionPhase> = _connectionPhase.asStateFlow()
     private val _workspaceState = MutableStateFlow<RemoteWorkspaceUiState>(RemoteWorkspaceUiState.Idle)
     val workspaceState: StateFlow<RemoteWorkspaceUiState> = _workspaceState.asStateFlow()
     private var remoteStore: RemoteSessionStore? = null
     private var workspaceStore: RemoteWorkspaceStore? = null
     private var remoteJob: Job? = null
+    private var connectionJob: Job? = null
     private var workspaceJob: Job? = null
     private var activeTarget: String? = null
 
@@ -87,18 +93,23 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
 
     private fun bindTarget(target: String?) {
         remoteJob?.cancel()
+        connectionJob?.cancel()
         workspaceJob?.cancel()
         remoteStore?.dispatch(RemoteSessionIntent.Stop)
         workspaceStore?.dispatch(RemoteWorkspaceIntent.Stop)
         remoteStore = null
         workspaceStore = null
         _remoteState.value = RemoteSessionUiState.Idle
+        _connectionPhase.value = ConnectionPhase.IDLE
         _workspaceState.value = RemoteWorkspaceUiState.Idle
         activeTarget = target
         if (target == null) return
 
         remoteStore = store.createSessionStore(viewModelScope)?.also { created ->
             remoteJob = viewModelScope.launch { created.state.collect { _remoteState.value = it } }
+            connectionJob = viewModelScope.launch {
+                created.connectionPhase.collect { _connectionPhase.value = it }
+            }
             created.dispatch(RemoteSessionIntent.Load)
         }
         workspaceStore = store.createWorkspaceStore(viewModelScope)?.also { created ->

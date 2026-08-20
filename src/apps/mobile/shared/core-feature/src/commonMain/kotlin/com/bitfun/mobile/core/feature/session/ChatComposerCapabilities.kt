@@ -5,8 +5,8 @@ package com.bitfun.mobile.core.feature.session
  *
  * Ported from `ChatComposerCapabilities.ets`. The composer is a single widget
  * used by two conversations with different rules — general chat has no desktop
- * to reach and no attachment pipeline — so the differences are data rather than
- * a second copy of the widget.
+ * to reach, while both current chat surfaces can carry image attachments — so
+ * the differences are data rather than a second copy of the widget.
  */
 public data class ChatComposerCapabilities public constructor(
     public val supportsAttachments: Boolean,
@@ -16,13 +16,13 @@ public data class ChatComposerCapabilities public constructor(
 ) {
     public companion object {
         /**
-         * No attachments and no connection gate: the provider call is text-only
-         * and goes straight out over the network the phone already has.
+         * No connection gate: the provider call goes straight out over the
+         * network the phone already has.
          */
         public val GeneralChat: ChatComposerCapabilities = ChatComposerCapabilities(
-            supportsAttachments = false,
+            supportsAttachments = true,
             requiresRemoteConnection = false,
-            showAddButton = false,
+            showAddButton = true,
             showVoiceInput = true,
         )
 

@@ -27,11 +27,11 @@ import com.bitfun.mobile.app.R
  * Approve and reject as equal halves of one row, ported from
  * `ToolConfirmationPanel` in `pages/components/ToolInteractionPanels.ets`.
  *
- * The source also offers a JSON editor over `tool_input` before approving. It is
- * not ported, and the omission is deliberate: `RemoteCommandFactory.confirmTool`
- * builds `{cmd, tool_id}` and the desktop's `RemoteCommand::ConfirmTool` binds
- * only `tool_id`, so an edited object is dropped at the wire on HarmonyOS too.
- * Drawing the editor here would promise an edit the protocol cannot carry.
+ * The HarmonyOS source offers a JSON editor over `tool_input` before approving.
+ * Android does not expose it yet because the shared intent still carries only a
+ * tool id; the HarmonyOS command factory currently drops `updatedInput` at the
+ * wire as well. The UI and protocol need to move together before this surface
+ * can promise editable approval on both clients.
  */
 @Composable
 internal fun ToolConfirmationPanel(

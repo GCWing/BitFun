@@ -4,22 +4,17 @@ import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
 import android.util.Base64
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.settings.RemoteSettingsSheet
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
-import com.bitfun.mobile.core.feature.connection.ConnectionStatusPresenter
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
 import com.bitfun.mobile.core.feature.session.ComposerImage
 import com.bitfun.mobile.core.feature.session.ConversationRowKind
@@ -41,6 +35,7 @@ import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.session.conversationRows
 import com.bitfun.mobile.core.feature.session.selectedModelOption
+import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import java.util.UUID
 
 internal const val CONVERSATION_TEST_TAG: String = "conversation"
@@ -61,7 +56,7 @@ private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
  * One open session: the transcript and the composer, ported from
  * `pages/components/ConversationSurface.ets`.
  *
- * The transcript is a [LazyColumn] and the composer is pinned below it, so a
+ * The transcript is a lazy list and the composer is pinned below it, so a
  * long session never pushes the input off screen. That is also why this surface
  * replaces the session list rather than sitting under it — the list's own scroll
  * cannot contain a lazy list.
@@ -72,6 +67,7 @@ internal fun ConversationView(
     state: RemoteSessionUiState.Ready,
     phase: ConnectionPhase,
     onBack: () -> Unit,
+    onOpenSidebar: (() -> Unit)? = null,
     onIntent: (RemoteSessionIntent) -> Unit,
     /**
      * Where this transcript is running — a desktop name, or the brand and the
@@ -90,12 +86,23 @@ internal fun ConversationView(
      */
     previewingRemotePath: String,
     previewLoading: Boolean,
+    download: RemoteFileDownloadUiState,
+    onDownloadFile: (String, String) -> Unit,
     modifier: Modifier,
 ) {
     val timeline = state.timeline ?: return
     val sessionId = state.selectedSessionId.orEmpty()
     val rows = remember(timeline) { timeline.conversationRows() }
-    val listState = rememberLazyListState()
+    val visibleRows = remember(rows) { rows.filter { it.kind != ConversationRowKind.EMPTY } }
+    val uploadedFileCount = rows.sumOf { it.images.size }
+    // Resolved here rather than inside the click: a Toast is raised from a
+    // callback, and reading resources off `LocalContext` there reads them
+    // without the composition's configuration.
+    val uploadedFilesMessage = if (uploadedFileCount > 0) {
+        stringResource(R.string.session_uploaded_files_count, uploadedFileCount)
+    } else {
+        stringResource(R.string.session_uploaded_files_empty)
+    }
     var draft by rememberSaveable(sessionId) { mutableStateOf("") }
     var images by remember(sessionId) { mutableStateOf<List<ComposerImage>>(emptyList()) }
     var showSettings by rememberSaveable(sessionId) { mutableStateOf(false) }
@@ -123,11 +130,6 @@ internal fun ConversationView(
         }
     }
 
-    // Follow the tail: new rows arrive while the user is reading the latest one.
-    LaunchedEffect(rows.size) {
-        if (rows.isNotEmpty()) listState.animateScrollToItem(rows.lastIndex)
-    }
-
     Column(modifier = modifier.fillMaxSize().testTag(CONVERSATION_TEST_TAG)) {
         ConversationHeader(
             title = state.sessions.firstOrNull { it.id == sessionId }?.title.orEmpty(),
@@ -135,56 +137,55 @@ internal fun ConversationView(
             canStop = timeline.activeTurn != null,
             enabled = !state.busy && sessionId.isNotEmpty(),
             onBack = onBack,
+            onOpenSidebar = onOpenSidebar,
             onRename = { title ->
                 onIntent(RemoteSessionIntent.RenameSession(sessionId, title))
             },
-            onOpenSettings = { showSettings = true },
+            onShowUploadedFiles = {
+                Toast.makeText(context, uploadedFilesMessage, Toast.LENGTH_SHORT).show()
+            },
             onStop = {
                 onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
             },
             modifier = Modifier,
         )
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth().testTag(CONVERSATION_LIST_TEST_TAG),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(rows, key = { it.id }) { row ->
-                if (row.kind == ConversationRowKind.EMPTY) {
-                    ConversationEmptyState(Modifier)
-                } else {
-                    ChatMessageBubble(
-                        row = row,
-                        enabled = !state.busy,
-                        onApproveTool = { toolId ->
-                            onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId))
-                        },
-                        onRejectTool = { toolId, reason ->
-                            onIntent(RemoteSessionIntent.RejectTool(sessionId, toolId, reason))
-                        },
-                        onCancelTool = { toolId, reason ->
-                            onIntent(RemoteSessionIntent.CancelTool(sessionId, toolId, reason))
-                        },
-                        onAnswerTool = { toolId, answer ->
-                            onIntent(RemoteSessionIntent.AnswerQuestion(sessionId, toolId, answer))
-                        },
-                        // A retry is the same message again; the failed row stays
-                        // where it is so the order the user typed in survives.
-                        onRetry = { text ->
-                            onIntent(RemoteSessionIntent.SendMessage(sessionId, text, null))
-                        },
-                        // A link in an agent turn names a file on the desktop,
-                        // so it opens the same preview the file field opens.
-                        onOpenLink = { path, label -> onOpenFile(path, label) },
-                        previewingRemotePath = previewingRemotePath,
-                        previewLoading = previewLoading,
-                        modifier = Modifier,
-                    )
-                }
-            }
+        if (phase != ConnectionPhase.CONNECTED) {
+            ChatStatusBar(
+                phase = phase,
+                canStop = timeline.activeTurn != null,
+                onStop = {
+                    onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
+                },
+            )
         }
+
+        ConversationTimelineView(
+            rows = visibleRows,
+            enabled = !state.busy,
+            onApproveTool = { toolId ->
+                onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId))
+            },
+            onRejectTool = { toolId, reason ->
+                onIntent(RemoteSessionIntent.RejectTool(sessionId, toolId, reason))
+            },
+            onCancelTool = { toolId, reason ->
+                onIntent(RemoteSessionIntent.CancelTool(sessionId, toolId, reason))
+            },
+            onAnswerTool = { toolId, answer ->
+                onIntent(RemoteSessionIntent.AnswerQuestion(sessionId, toolId, answer))
+            },
+            onRetry = { text ->
+                onIntent(RemoteSessionIntent.SendMessage(sessionId, text, null))
+            },
+            onOpenFile = onOpenFile,
+            previewingRemotePath = previewingRemotePath,
+            previewLoading = previewLoading,
+            download = download,
+            onDownloadFile = onDownloadFile,
+            downloadEnabled = !state.busy && phase == ConnectionPhase.CONNECTED,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        )
 
         ComposerBar(
             draft = draft,

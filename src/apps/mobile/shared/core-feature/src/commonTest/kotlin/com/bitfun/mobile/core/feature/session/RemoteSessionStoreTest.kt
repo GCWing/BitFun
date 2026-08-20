@@ -3,6 +3,7 @@ package com.bitfun.mobile.core.feature.session
 import com.bitfun.mobile.core.protocol.CommandStatus
 import com.bitfun.mobile.core.protocol.RelayJson
 import com.bitfun.mobile.core.protocol.RemoteCommand
+import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.transport.RelayFailure
 import com.bitfun.mobile.core.transport.RelayTransportException
 import com.bitfun.mobile.core.transport.RemoteCommandTransport
@@ -238,6 +239,34 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun aDroppedPollKeepsTheTranscriptAndTheNextResponseRestoresTheConnection() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
+        val beforeDrop = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+
+        transport.pollFailure = RelayFailure.NetworkUnreachable
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        val reconnecting = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(beforeDrop.selectedSessionId, reconnecting.selectedSessionId)
+        assertEquals(beforeDrop.timeline?.sessionId, reconnecting.timeline?.sessionId)
+        assertEquals(ConnectionPhase.RECONNECTING, store.connectionPhase.value)
+
+        transport.pollFailure = null
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
     fun refreshRetriesThePermissionModeAlone() = runTest {
         val transport = FakeSessionTransport()
         transport.permissionFailure = RelayFailure.Timeout
@@ -333,6 +362,9 @@ private class FakeSessionTransport : RemoteCommandTransport {
     /** When set, `list_sessions` fails below the desktop instead. */
     var failure: RelayFailure? = null
 
+    /** When set, the open conversation's health poll fails below the desktop. */
+    var pollFailure: RelayFailure? = null
+
     /** Poll payloads served in order; the last one repeats, as a quiet desktop does. */
     var polls: List<String> = listOf(IDLE_POLL)
     private var pollIndex = 0
@@ -349,6 +381,9 @@ private class FakeSessionTransport : RemoteCommandTransport {
         if (command.cmd == "list_sessions") {
             rejection?.let { throw RelayTransportException(RelayFailure.RemoteRejected(it)) }
             failure?.let { throw RelayTransportException(it) }
+        }
+        if (command.cmd == "poll_session") {
+            pollFailure?.let { throw RelayTransportException(it) }
         }
         if (command.cmd == "get_permission_mode" || command.cmd == "set_permission_mode") {
             permissionFailure?.let { throw RelayTransportException(it) }

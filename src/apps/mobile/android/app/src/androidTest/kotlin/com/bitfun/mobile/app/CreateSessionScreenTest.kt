@@ -14,6 +14,7 @@ import com.bitfun.mobile.app.ui.remote.CREATE_SESSION_WORKSPACE_TEST_TAG
 import com.bitfun.mobile.app.ui.remote.CreateSessionScreen
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
+import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import com.bitfun.mobile.core.feature.workspace.RemoteFilePreviewUiState
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 import org.junit.Assert.assertEquals
@@ -41,6 +42,7 @@ class CreateSessionScreenTest {
         selected = null,
         preview = RemoteFilePreviewUiState.None,
         busy = false,
+        download = RemoteFileDownloadUiState.None,
     )
 
     @Test

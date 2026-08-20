@@ -1,27 +1,33 @@
 package com.bitfun.mobile.app.ui.remote
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,15 +42,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.theme.bitFunColors
 import com.bitfun.mobile.core.feature.pairing.PairingIntent
@@ -56,6 +66,8 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 internal const val CONNECT_TEST_TAG: String = "connect"
 internal const val CONNECT_MANUAL_TEST_TAG: String = "connect-manual"
+internal const val CONNECT_PAIRING_CODE_TEST_TAG: String = "connect-pairing-code"
+internal const val CONNECT_SUBMIT_TEST_TAG: String = "connect-submit"
 
 /**
  * The connect page, ported from `pages/components/ConnectView.ets`.
@@ -63,17 +75,20 @@ internal const val CONNECT_MANUAL_TEST_TAG: String = "connect-manual"
  * Scanning is the way in and typing is the fallback, as on HarmonyOS: the link
  * is long, opaque and easy to mistype, so the intro step offers the camera and
  * keeps the fields out of sight until someone asks for them. HarmonyOS draws its
- * own camera preview; here the scan is Play Services' full-screen one, so its
- * step is the system's rather than a page of ours.
+ * own camera preview. Android delegates capture to Play Services, but keeps the
+ * matching scan step underneath it so cancellation returns to the same manual
+ * fallback and back-navigation structure.
  */
 @Composable
 internal fun ConnectView(
     state: PairingUiState,
     onSubmit: (PairingIntent.Submit) -> Unit,
     onDismiss: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier,
 ) {
     var manual by rememberSaveable { mutableStateOf(false) }
+    var scanning by rememberSaveable { mutableStateOf(false) }
     var url by rememberSaveable { mutableStateOf("") }
     var userId by rememberSaveable { mutableStateOf("") }
     // Never rememberSaveable: a password must not reach saved instance state.
@@ -119,16 +134,36 @@ internal fun ConnectView(
                 }
             }
             .addOnFailureListener { scanFailed = true }
+            .addOnCanceledListener { scanFailed = true }
         Unit
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .testTag(CONNECT_TEST_TAG),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    Box(modifier = modifier.fillMaxSize().testTag(CONNECT_TEST_TAG)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 8.dp, bottom = 34.dp),
+        ) {
+            if (scanning) {
+                ScanPairing(
+                    scanFailed = scanFailed,
+                    connecting = connecting,
+                    onBack = { scanning = false },
+                    onManual = { manual = true },
+                )
+            } else {
+                IntroPairing(
+                    state = state,
+                    connecting = connecting,
+                    onScan = {
+                        scanning = true
+                        scan()
+                    },
+                    onDismiss = onDismiss,
+                    onBack = onBack,
+                )
+            }
+        }
         if (manual) {
             ManualPairing(
                 state = state,
@@ -144,69 +179,143 @@ internal fun ConnectView(
                 onBack = { manual = false },
                 onDismiss = onDismiss,
                 onSubmit = { onSubmit(PairingIntent.Submit(url, userId, password)) },
-            )
-        } else {
-            IntroPairing(
-                state = state,
-                scanFailed = scanFailed,
-                connecting = connecting,
-                onScan = scan,
-                onManual = { manual = true },
-                onDismiss = onDismiss,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
 }
 
 @Composable
-private fun IntroPairing(
+private fun ColumnScope.IntroPairing(
     state: PairingUiState,
-    scanFailed: Boolean,
     connecting: Boolean,
     onScan: () -> Unit,
-    onManual: () -> Unit,
     onDismiss: () -> Unit,
+    onBack: () -> Unit,
 ) {
-    Hero()
+    Box {
+        Hero()
+        Surface(
+            onClick = onBack,
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 28.dp, top = 18.dp)
+                .size(48.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painterResource(R.drawable.ic_symbol_chevron_left),
+                    contentDescription = stringResource(R.string.common_back),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
+        }
+    }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .offset(y = (-10).dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(15.dp),
     ) {
+        ConnectDesktopGlyph()
         Text(
             stringResource(R.string.connect_title),
-            style = MaterialTheme.typography.headlineSmall,
+            fontSize = 24.sp,
+            lineHeight = 30.sp,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
-        Centered(stringResource(R.string.connect_body))
-        Centered(stringResource(R.string.connect_steps))
+        Centered(stringResource(R.string.connect_body), fontSize = 17.sp, lineHeight = 25.sp)
+        Centered(stringResource(R.string.connect_steps), fontSize = 17.sp, lineHeight = 25.sp)
 
         if (state is PairingUiState.Failed) {
             PairingFailureCard(state, onDismiss)
         }
-        if (scanFailed) {
-            Centered(stringResource(R.string.connect_scan_failed))
-        }
+    }
 
-        Button(
-            onClick = onScan,
-            enabled = !connecting,
-            modifier = Modifier.fillMaxWidth(),
+    Button(
+        onClick = onScan,
+        enabled = !connecting,
+        modifier = Modifier
+            .align(Alignment.CenterHorizontally)
+            .padding(bottom = 14.dp)
+            .fillMaxWidth(0.82f)
+            .height(58.dp),
+        shape = RoundedCornerShape(29.dp),
+        contentPadding = ButtonDefaults.ContentPadding,
+    ) {
+        if (connecting) {
+            CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
+            Text(stringResource(R.string.pairing_connecting))
+        } else {
+            Text(
+                stringResource(R.string.connect_have_pair_code),
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.ScanPairing(
+    scanFailed: Boolean,
+    connecting: Boolean,
+    onBack: () -> Unit,
+    onManual: () -> Unit,
+) {
+    Box {
+        Hero(height = 252.dp)
+        Surface(
+            onClick = onBack,
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 28.dp, top = 18.dp).size(48.dp),
         ) {
-            if (connecting) {
-                CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
-                Text(stringResource(R.string.pairing_connecting))
-            } else {
-                Text(stringResource(R.string.connect_scan_action))
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painterResource(R.drawable.ic_symbol_chevron_left),
+                    contentDescription = stringResource(R.string.common_back),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(21.dp),
+                )
             }
         }
-        OutlinedButton(
-            onClick = onManual,
-            enabled = !connecting,
-            modifier = Modifier.fillMaxWidth().testTag(CONNECT_MANUAL_TEST_TAG),
-        ) {
-            Text(stringResource(R.string.connect_switch_manual))
+    }
+    Column(
+        modifier = Modifier.weight(1f).fillMaxWidth().offset(y = (-50).dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        CameraFrame()
+        Text(
+            stringResource(R.string.connect_scan_title),
+            fontSize = 24.sp,
+            lineHeight = 30.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (scanFailed) {
+            Centered(stringResource(R.string.connect_scan_failed), fontSize = 13.sp, lineHeight = 18.sp)
         }
+    }
+    OutlinedButton(
+        onClick = onManual,
+        enabled = !connecting,
+        modifier = Modifier
+            .align(Alignment.CenterHorizontally)
+            .fillMaxWidth(0.78f)
+            .height(58.dp)
+            .testTag(CONNECT_MANUAL_TEST_TAG),
+        shape = RoundedCornerShape(35.dp),
+    ) {
+        Text(stringResource(R.string.connect_switch_manual), fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -225,102 +334,252 @@ private fun ManualPairing(
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onSubmit: () -> Unit,
+    modifier: Modifier,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    val canSubmit = url.isNotBlank() && !connecting &&
+        (!requiresAccount || ((userId.ifBlank { suggestedUserId }).isNotBlank() && password.isNotBlank()))
+    val consumeTouches = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.58f))
+            .clickable(enabled = !connecting, onClick = onBack),
+        contentAlignment = Alignment.Center,
     ) {
-        TextButton(onClick = onBack, enabled = !connecting) {
-            Icon(
-                painterResource(R.drawable.ic_symbol_chevron_left),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp).padding(end = 4.dp),
-            )
-            Text(stringResource(R.string.connect_back))
-        }
-        Text(stringResource(R.string.pairing_title), style = MaterialTheme.typography.headlineSmall)
-        Text(
-            stringResource(R.string.pairing_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        OutlinedTextField(
-            value = url,
-            onValueChange = onUrlChange,
-            label = { Text(stringResource(R.string.pairing_url_label)) },
-            singleLine = false,
-            enabled = !connecting,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = userId,
-            onValueChange = onUserIdChange,
-            label = { Text(stringResource(R.string.pairing_user_label)) },
-            placeholder = { Text(suggestedUserId) },
-            singleLine = true,
-            enabled = !connecting,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (requiresAccount) {
-            OutlinedTextField(
-                value = password,
-                onValueChange = onPasswordChange,
-                label = { Text(stringResource(R.string.pairing_password_label)) },
-                supportingText = { Text(stringResource(R.string.pairing_password_hint)) },
-                singleLine = true,
-                enabled = !connecting,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .widthIn(max = 520.dp)
+                .clip(RoundedCornerShape(34.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(34.dp))
+                .clickable(
+                    interactionSource = consumeTouches,
+                    indication = null,
+                    onClick = {},
+                )
+                .padding(start = 28.dp, end = 28.dp, top = 30.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Text(
+                stringResource(R.string.connect_manual_title),
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth(),
             )
-        }
-
-        if (state is PairingUiState.Failed) {
-            PairingFailureCard(state, onDismiss)
-        }
-
-        Button(
-            onClick = onSubmit,
-            enabled = state.acceptsSubmit,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            if (connecting) {
-                CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
-                Text(stringResource(R.string.pairing_connecting))
-            } else {
-                Text(stringResource(R.string.pairing_connect))
+            Text(
+                stringResource(R.string.connect_manual_body),
+                fontSize = 17.sp,
+                lineHeight = 24.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            PairingPillField(
+                value = url,
+                onValueChange = onUrlChange,
+                placeholder = stringResource(R.string.connect_pair_code_placeholder),
+                height = 62.dp,
+                fontSize = 20.sp,
+                keyboardType = KeyboardType.Uri,
+                enabled = !connecting,
+                testTag = CONNECT_PAIRING_CODE_TEST_TAG,
+            )
+            if (requiresAccount) {
+                PairingPillField(
+                    value = userId,
+                    onValueChange = onUserIdChange,
+                    placeholder = suggestedUserId.ifBlank { stringResource(R.string.pairing_user_label) },
+                    height = 56.dp,
+                    fontSize = 18.sp,
+                    enabled = !connecting,
+                )
+                PairingPillField(
+                    value = password,
+                    onValueChange = onPasswordChange,
+                    placeholder = stringResource(R.string.pairing_password_label),
+                    height = 56.dp,
+                    fontSize = 18.sp,
+                    keyboardType = KeyboardType.Password,
+                    visualTransformation = PasswordVisualTransformation(),
+                    enabled = !connecting,
+                )
+                Text(
+                    stringResource(R.string.pairing_password_hint),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (state is PairingUiState.Failed) {
+                PairingFailureCard(state, onDismiss)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(
+                    onClick = onBack,
+                    enabled = !connecting,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    shape = RoundedCornerShape(29.dp),
+                    modifier = Modifier.weight(1f).height(58.dp).testTag(CONNECT_SUBMIT_TEST_TAG),
+                ) {
+                    Text(stringResource(R.string.common_cancel), fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onSubmit,
+                    enabled = canSubmit,
+                    shape = RoundedCornerShape(29.dp),
+                    modifier = Modifier.weight(1f).height(58.dp),
+                ) {
+                    if (connecting) {
+                        CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
+                    }
+                    Text(stringResource(R.string.connect_pair), fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
 }
 
+@Composable
+private fun PairingPillField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    height: Dp,
+    fontSize: androidx.compose.ui.unit.TextUnit,
+    enabled: Boolean,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    testTag: String? = null,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        visualTransformation = visualTransformation,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = fontSize,
+            color = MaterialTheme.colorScheme.onSurface,
+        ),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(height / 2))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 20.dp)
+            .then(testTag?.let { Modifier.testTag(it) } ?: Modifier),
+        decorationBox = { field ->
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) {
+                    Text(
+                        placeholder,
+                        fontSize = fontSize,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                field()
+            }
+        },
+    )
+}
+
 /**
  * The wash behind the heading, from `ConnectView.ets#HeroWash`.
  *
- * Three translucent blobs over a tinted band. The offsets are the source's own,
- * scaled to this shorter band; they are decoration, so they are placed rather
- * than laid out — a blob that reflowed with the text would stop being a wash.
+ * Three translucent blobs over a tinted 282dp band. The offsets are the source's
+ * own; they are decoration, so they are placed rather than laid out — a blob
+ * that reflowed with the text would stop being a wash.
  */
 @Composable
-private fun Hero() {
+private fun Hero(height: Dp = 282.dp) {
     val extras = bitFunColors
     Surface(
         color = extras.heroBackground,
-        shape = RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp),
-        modifier = Modifier.fillMaxWidth().height(180.dp),
+        shape = RoundedCornerShape(36.dp),
+        modifier = Modifier.fillMaxWidth().height(height),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Blob(extras.heroSurface, 0.70f, 260.dp, 142.dp, 112.dp, 16.dp)
-            Blob(extras.heroAccent, 0.42f, 188.dp, 134.dp, (-42).dp, 126.dp)
+        Box {
+            Blob(extras.heroSurface, 0.70f, 260.dp, 142.dp, 112.dp, 26.dp)
+            Blob(extras.heroAccent, 0.42f, 188.dp, 134.dp, (-42).dp, 198.dp)
             Blob(extras.heroSecondary, 0.54f, 188.dp, 126.dp, 258.dp, 0.dp)
-            Text(
-                stringResource(R.string.pairing_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
         }
+    }
+}
+
+@Composable
+private fun CameraFrame() {
+    val accent = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .size(282.dp)
+            .clip(RoundedCornerShape(40.dp))
+            .background(Color.Black.copy(alpha = 0.10f)),
+    ) {
+        ScanCorner(accent, Alignment.TopStart, true, true)
+        ScanCorner(accent, Alignment.TopEnd, false, true)
+        ScanCorner(accent, Alignment.BottomStart, true, false)
+        ScanCorner(accent, Alignment.BottomEnd, false, false)
+    }
+}
+
+@Composable
+private fun BoxScope.ScanCorner(color: Color, alignment: Alignment, left: Boolean, top: Boolean) {
+    Box(
+        Modifier
+            .align(alignment)
+            .padding(
+                start = if (left) 32.dp else 0.dp,
+                end = if (left) 0.dp else 32.dp,
+                top = if (top) 32.dp else 0.dp,
+                bottom = if (top) 0.dp else 32.dp,
+            )
+            .size(64.dp),
+    ) {
+        Box(
+            Modifier
+                .align(if (top) Alignment.TopCenter else Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color),
+        )
+        Box(
+            Modifier
+                .align(if (left) Alignment.CenterStart else Alignment.CenterEnd)
+                .width(4.dp)
+                .height(64.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color),
+        )
+    }
+}
+
+/** The two bordered rectangles used by Harmony's `DesktopGlyph()`. */
+@Composable
+private fun ConnectDesktopGlyph() {
+    Box(Modifier.size(68.dp, 55.dp)) {
+        Box(
+            Modifier
+                .offset(x = 5.dp)
+                .size(58.dp, 39.dp)
+                .border(5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(8.dp)),
+        )
+        Box(
+            Modifier
+                .offset(x = 21.dp, y = 38.dp)
+                .size(26.dp, 13.dp)
+                .border(5.dp, MaterialTheme.colorScheme.onSurface),
+        )
     }
 }
 
@@ -337,12 +596,14 @@ private fun BoxScope.Blob(color: Color, alpha: Float, width: Dp, height: Dp, x: 
 }
 
 @Composable
-private fun Centered(text: String) {
+private fun Centered(text: String, fontSize: androidx.compose.ui.unit.TextUnit = 14.sp, lineHeight: androidx.compose.ui.unit.TextUnit = 21.sp) {
     Text(
         text,
-        style = MaterialTheme.typography.bodyMedium,
+        fontSize = fontSize,
+        lineHeight = lineHeight,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(0.84f),
     )
 }
 

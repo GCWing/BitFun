@@ -2,15 +2,21 @@ package com.bitfun.mobile.app
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import com.bitfun.mobile.app.ui.chat.FILE_REFERENCE_CARD_TEST_TAG
+import com.bitfun.mobile.app.ui.chat.FILE_DOWNLOAD_ACTION_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.FileReferenceCards
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import androidx.compose.ui.unit.dp
 
 /**
  * The file cards under an agent turn, ported from `MessageFileCards`.
@@ -94,5 +100,30 @@ class FileReferenceCardsTest {
         composeRule.onNodeWithText("README.md").performClick()
 
         assertEquals(1, opens)
+    }
+
+    @Test
+    fun downloadIsASeparateActionAndKeepsTheOriginalReference() {
+        var downloaded: Pair<String, String>? = null
+        var opens = 0
+
+        composeRule.setContent {
+            FileReferenceCards(
+                text = "See computer:///repo/src/main.kt#L12-40.",
+                previewingRemotePath = "",
+                previewLoading = false,
+                onOpen = { _, _ -> opens += 1 },
+                onDownload = { reference, label -> downloaded = reference to label },
+                modifier = Modifier,
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Download").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag(FILE_DOWNLOAD_ACTION_TEST_TAG)
+            .assertWidthIsEqualTo(44.dp)
+            .assertHeightIsEqualTo(44.dp)
+
+        assertEquals(0, opens)
+        assertEquals("computer:///repo/src/main.kt#L12-40" to "main.kt", downloaded)
     }
 }

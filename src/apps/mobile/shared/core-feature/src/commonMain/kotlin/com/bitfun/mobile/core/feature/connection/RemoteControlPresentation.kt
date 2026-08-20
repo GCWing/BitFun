@@ -61,12 +61,15 @@ public object RemoteControlPresenter {
      * room id never crosses this seam.
      * @param accountDeviceName may be blank for a device the relay only knows by
      * id, in which case the id is what the card can name.
+     * @param accountPhase the selected device store's latest real command/poll
+     * phase; selection alone is not evidence that the device is reachable.
      */
     public fun summarize(
         pairingPhase: ConnectionPhase,
         pairedRoomLabel: String,
         accountDeviceId: String,
         accountDeviceName: String,
+        accountPhase: ConnectionPhase,
     ): RemoteControlSummary = when {
         pairedRoomLabel.isNotBlank() -> RemoteControlSummary(
             source = RemoteControlSource.QR_PAIRING,
@@ -88,9 +91,7 @@ public object RemoteControlPresenter {
         accountDeviceId.isNotBlank() -> RemoteControlSummary(
             source = RemoteControlSource.ACCOUNT_DEVICE,
             desktopName = accountDeviceName.ifBlank { accountDeviceId },
-            // Selecting a device is what builds its session store, so a device
-            // that is still selected is a device this app is still driving.
-            phase = ConnectionPhase.CONNECTED,
+            phase = accountPhase,
             // There is no release for an account device — the binding is the
             // selection — so the only thing left to offer is re-binding it,
             // which is exactly what re-tapping its row in the account does.

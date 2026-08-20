@@ -13,17 +13,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
-import com.bitfun.mobile.app.ui.chat.message.ChatAttachedImage
 import com.bitfun.mobile.app.ui.chat.message.ChatCaption
 import com.bitfun.mobile.app.ui.chat.message.ChatMessageRetryAction
 import com.bitfun.mobile.app.ui.chat.message.ChatTypingDots
 import com.bitfun.mobile.app.ui.chat.message.ChatUserMessageBubble
 import com.bitfun.mobile.app.ui.chat.message.MessageBlockCallbacks
 import com.bitfun.mobile.app.ui.chat.message.MessageBlockList
+import com.bitfun.mobile.app.ui.chat.message.MessageImageGallery
 import com.bitfun.mobile.app.ui.chat.message.ThinkingBlock
 import com.bitfun.mobile.app.ui.chat.tool.ToolStatusList
 import com.bitfun.mobile.core.feature.session.ConversationRow
 import com.bitfun.mobile.core.feature.session.ConversationRowKind
+import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
 internal const val BUBBLE_TEST_TAG: String = "chat-bubble"
 
@@ -47,18 +48,26 @@ internal fun ChatMessageBubble(
     /** The file the preview surface is showing, so its card can say so. */
     previewingRemotePath: String,
     previewLoading: Boolean,
+    download: RemoteFileDownloadUiState = RemoteFileDownloadUiState.None,
+    onDownloadFile: (String, String) -> Unit = { _, _ -> },
+    downloadEnabled: Boolean = true,
     modifier: Modifier,
 ) {
     val fromUser = row.kind == ConversationRowKind.USER
     Column(
-        modifier = modifier.fillMaxWidth().testTag(BUBBLE_TEST_TAG),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                top = if (fromUser) 8.dp else 2.dp,
+                bottom = if (fromUser) 12.dp else 10.dp,
+            )
+            .testTag(BUBBLE_TEST_TAG),
         horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (fromUser) {
             ChatUserMessageBubble(row.text, row.images, Modifier)
         } else {
-            row.images.forEach { image -> ChatAttachedImage(image) }
             AssistantContent(
                 row = row,
                 callbacks = MessageBlockCallbacks(
@@ -70,8 +79,12 @@ internal fun ChatMessageBubble(
                     onOpenLink = onOpenLink,
                     previewingRemotePath = previewingRemotePath,
                     previewLoading = previewLoading,
+                    download = download,
+                    onDownloadFile = onDownloadFile,
+                    downloadEnabled = downloadEnabled,
                 ),
             )
+            MessageImageGallery(images = row.images, userStyle = false)
         }
 
         // Three mutually exclusive footnotes about delivery, in the order they
@@ -115,7 +128,10 @@ private fun AssistantContent(row: ConversationRow, callbacks: MessageBlockCallba
             text = row.text,
             previewingRemotePath = callbacks.previewingRemotePath,
             previewLoading = callbacks.previewLoading,
+            download = callbacks.download,
             onOpen = callbacks.onOpenLink,
+            onDownload = callbacks.onDownloadFile,
+            downloadEnabled = callbacks.downloadEnabled,
             modifier = Modifier,
         )
     }

@@ -15,16 +15,23 @@ public sealed interface RemoteFilePreviewUiState {
         public val name: String,
         public val content: String,
         public val truncated: Boolean,
+        public val loadedBytes: Long,
+        public val mimeType: String,
+        public val sizeBytes: Long,
+        /** Markdown is rendered rather than shown as numbered source. */
+        public val markdown: Boolean,
     ) : RemoteFilePreviewUiState
     public data class Image public constructor(
         public val target: FilePreviewTarget,
         public val name: String,
         public val mimeType: String,
         public val bytes: ByteArray,
+        public val sizeBytes: Long,
     ) : RemoteFilePreviewUiState
     public data class Unsupported public constructor(
         public val target: FilePreviewTarget,
         public val mimeType: String,
+        public val sizeBytes: Long,
     ) : RemoteFilePreviewUiState
     /**
      * @param retryable whether asking again could give a different answer. A
@@ -35,7 +42,50 @@ public sealed interface RemoteFilePreviewUiState {
         public val target: FilePreviewTarget,
         public val kind: FilePreviewFailureKind,
         public val retryable: Boolean,
+        public val mimeType: String,
+        public val sizeBytes: Long,
     ) : RemoteFilePreviewUiState
+}
+
+/**
+ * Byte counts as the preview surface says them, matching HarmonyOS'
+ * `RemoteUiState.formatBytes` exactly: whole units, and never a unit smaller
+ * than the number deserves. A header line that disagreed across the two apps
+ * would be a parity difference no screenshot could explain away.
+ */
+public object FilePreviewFormat {
+    private const val KB: Long = 1024
+    private const val MB: Long = 1024 * 1024
+
+    public fun bytes(value: Long): String = when {
+        value < KB -> "$value B"
+        value < MB -> "${((value.toDouble() / KB) + 0.5).toLong()} KB"
+        else -> "${((value.toDouble() / MB) + 0.5).toLong()} MB"
+    }
+}
+
+public sealed interface RemoteFileDownloadUiState {
+    public data object None : RemoteFileDownloadUiState
+    public data class Loading public constructor(
+        public val target: FilePreviewTarget,
+        public val downloadedBytes: Long,
+        public val totalBytes: Long,
+    ) : RemoteFileDownloadUiState
+    public data class AwaitingSave public constructor(
+        public val target: FilePreviewTarget,
+        public val name: String,
+        public val mimeType: String,
+        public val bytes: ByteArray,
+    ) : RemoteFileDownloadUiState
+    public data class Saved public constructor(
+        public val target: FilePreviewTarget,
+        public val name: String,
+    ) : RemoteFileDownloadUiState
+    public data class Failed public constructor(
+        public val target: FilePreviewTarget,
+        public val kind: FilePreviewFailureKind,
+        public val retryable: Boolean,
+    ) : RemoteFileDownloadUiState
 }
 
 /**
@@ -72,6 +122,7 @@ public sealed interface RemoteWorkspaceUiState {
         public val selected: SelectedWorkspace?,
         public val preview: RemoteFilePreviewUiState,
         public val busy: Boolean,
+        public val download: RemoteFileDownloadUiState,
     ) : RemoteWorkspaceUiState
     public data class Failed public constructor(public val retryable: Boolean) : RemoteWorkspaceUiState
 }
@@ -85,6 +136,13 @@ public sealed interface RemoteWorkspaceIntent {
         public val label: String,
         public val sessionId: String,
     ) : RemoteWorkspaceIntent
+    public data class DownloadFile public constructor(
+        public val reference: String,
+        public val label: String,
+        public val sessionId: String,
+    ) : RemoteWorkspaceIntent
+    public data class DownloadSaved public constructor(public val reference: String) : RemoteWorkspaceIntent
+    public data class DownloadSaveFailed public constructor(public val reference: String) : RemoteWorkspaceIntent
     public data object DismissPreview : RemoteWorkspaceIntent
     public data object Stop : RemoteWorkspaceIntent
 }

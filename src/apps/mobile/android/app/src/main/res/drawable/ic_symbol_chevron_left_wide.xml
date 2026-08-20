@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The conversation header's back control, redrawn from HarmonyOS'
+    `app.media.remote_ref_back`.
+
+    HarmonyOS deliberately uses two different back glyphs: the file preview
+    header draws `sys.symbol.chevron_left` at font size 22, which
+    `ic_symbol_chevron_left` already matches, while the conversation header
+    draws this raster asset fitted into a 15x23 box. This one is blunter and
+    much heavier — its stroke is 15% of its height where the system symbol's is
+    12% — so it needs its own drawing rather than a larger size on the other.
+
+    The viewport is the asset's own 38x59 grid for the same reason the ellipsis
+    keeps its 64x19: `Icon` fits a painter, so only a drawable carrying the
+    asset's aspect survives a 15x23 box intact.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="15dp"
+    android:height="23dp"
+    android:viewportWidth="38"
+    android:viewportHeight="59">
+    <path
+        android:pathData="M31,7 L7,29.5 L31,52"
+        android:strokeWidth="8"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

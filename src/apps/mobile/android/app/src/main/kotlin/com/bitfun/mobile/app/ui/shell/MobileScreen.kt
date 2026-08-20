@@ -2,6 +2,15 @@ package com.bitfun.mobile.app.ui.shell
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,39 +18,34 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -67,6 +71,7 @@ import com.bitfun.mobile.core.feature.account.AccountUiState
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.connection.RemoteControlPresenter
 import com.bitfun.mobile.core.feature.connection.RemoteControlSource
+import com.bitfun.mobile.core.feature.connection.allowsRemoteCommands
 import com.bitfun.mobile.core.feature.connection.connectionPhase
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatIntent
 import com.bitfun.mobile.core.feature.layout.ConversationLayoutPolicy
@@ -75,11 +80,12 @@ import com.bitfun.mobile.core.feature.layout.FilePreviewPlacementPolicy
 import com.bitfun.mobile.core.feature.pairing.PairingIntent
 import com.bitfun.mobile.core.feature.pairing.PairingUiState
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
+import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.shell.SidebarSessionRow
 import com.bitfun.mobile.core.feature.workspace.RemoteFilePreviewUiState
+import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
-import kotlinx.coroutines.launch
 
 internal const val MENU_TEST_TAG: String = "shell-menu"
 
@@ -131,8 +137,7 @@ private fun PaneSeparator(gapWidth: Int) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MobileScreen() {
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
+    var compactDrawerOpen by rememberSaveable { mutableStateOf(false) }
     val shell = rememberAppShellState()
 
     val pairingViewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory)
@@ -145,6 +150,7 @@ internal fun MobileScreen() {
     val accountState by accountViewModel.state.collectAsStateWithLifecycle()
     val pairingRemoteState by pairingViewModel.remoteState.collectAsStateWithLifecycle()
     val accountRemoteState by accountViewModel.remoteState.collectAsStateWithLifecycle()
+    val accountPhase by accountViewModel.connectionPhase.collectAsStateWithLifecycle()
     val generalChatState by generalChatViewModel.state.collectAsStateWithLifecycle()
     val pairingPhase: ConnectionPhase = pairingState.connectionPhase()
     val readyAccount = accountState as? AccountUiState.Ready
@@ -155,13 +161,14 @@ internal fun MobileScreen() {
     // and only together do they make one connection with a provenance. The
     // shared presenter decides which of the two wins, so the sheet renders it
     // rather than working it out a second time.
-    val controlSummary = remember(pairingState, pairingPhase, readyAccount) {
+    val controlSummary = remember(pairingState, pairingPhase, readyAccount, accountPhase) {
         RemoteControlPresenter.summarize(
             pairingPhase = pairingPhase,
             pairedRoomLabel = (pairingState as? PairingUiState.Paired)
                 ?.workspace?.roomLabel.orEmpty(),
             accountDeviceId = readyAccount?.selectedDeviceId.orEmpty(),
             accountDeviceName = readyAccount?.selectedDeviceName.orEmpty(),
+            accountPhase = accountPhase,
         )
     }
     val phase = controlSummary.phase
@@ -170,11 +177,24 @@ internal fun MobileScreen() {
         RemoteControlSource.ACCOUNT_DEVICE -> accountWorkspaceState
         RemoteControlSource.NONE -> RemoteWorkspaceUiState.Idle
     }
+    val activeRemoteState = when (controlSummary.source) {
+        RemoteControlSource.QR_PAIRING -> pairingRemoteState
+        RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
+        RemoteControlSource.NONE -> RemoteSessionUiState.Idle
+    }
 
     fun dispatchActiveWorkspace(intent: RemoteWorkspaceIntent) {
         when (controlSummary.source) {
             RemoteControlSource.QR_PAIRING -> pairingViewModel.dispatchWorkspace(intent)
             RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel.dispatchWorkspace(intent)
+            RemoteControlSource.NONE -> Unit
+        }
+    }
+
+    fun dispatchActiveSession(intent: RemoteSessionIntent) {
+        when (controlSummary.source) {
+            RemoteControlSource.QR_PAIRING -> pairingViewModel.dispatchSession(intent)
+            RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel.dispatchSession(intent)
             RemoteControlSource.NONE -> Unit
         }
     }
@@ -235,18 +255,30 @@ internal fun MobileScreen() {
         // A no-op while the sidebar is permanent, which is why the sidebar's
         // callbacks are the same lambdas in both shapes: only the container that
         // holds it changes, not what its rows do.
-        scope.launch { drawerState.close() }
+        compactDrawerOpen = false
     }
 
     // Whether there is room for the sidebar to stay. The policy is the same one
     // `AppRootPresentation.ets` asks, given the same three facts.
     val window = rememberWindowMetrics()
+    val layoutCreases = if (window.isFolded || window.isHoverLayout) {
+        emptyList()
+    } else {
+        ConversationLayoutPolicy.effectiveVerticalCreases(
+            viewportWidth = window.widthDp,
+            creases = window.creases,
+            synthesizeCenterHinge = window.isExpandedFoldable,
+        )
+    }
     val wide = ConversationLayoutPolicy.useMasterDetail(
         viewportWidth = window.widthDp,
-        largeScreenDevice = window.largeScreenDevice,
-        creases = window.creases,
+        wideViewportMatched = window.wideViewportMatched,
+        isFolded = window.isFolded,
+        creases = layoutCreases,
+        isExpandedFoldable = window.isExpandedFoldable,
+        isHover = window.isHoverLayout,
     )
-    val geometry = ConversationLayoutPolicy.resolveWideGeometry(window.widthDp, window.creases)
+    val geometry = ConversationLayoutPolicy.resolveWideGeometry(window.widthDp, layoutCreases)
 
     // A file the agent referenced is the third thing that wants the window, and
     // the one that decides whether the other two still fit. Only the remote
@@ -259,7 +291,7 @@ internal fun MobileScreen() {
         previewVisible = previewVisible,
         largeScreenLayout = wide,
         viewportWidth = window.widthDp,
-        creases = window.creases,
+        creases = layoutCreases,
         // So the list does not jump sideways the moment a file opens beside it.
         preferredMasterWidth = geometry.masterPaneWidth,
     )
@@ -270,6 +302,10 @@ internal fun MobileScreen() {
         // never had room for either.
         else -> previewLayout.masterPaneWidth
     }
+    // Match `AppShell.sidebarWidth()` for the compact drawer. Material's
+    // default drawer is 360dp, which is visibly wider than Harmony's 280dp
+    // sidebar on a normal phone window.
+    val compactDrawerWidth = minOf(280, maxOf(220, (window.widthDp * 0.68f).toInt()))
     // The button and the pane are the same sidebar; exactly one of them is real.
     val showMenu = sidebarWidth == 0
 
@@ -277,7 +313,18 @@ internal fun MobileScreen() {
         AppSidebar(
             accountUserId = accountUserId,
             connectionPhase = phase,
+            remoteDevices = if (controlSummary.source == RemoteControlSource.ACCOUNT_DEVICE) {
+                readyAccount?.devices.orEmpty()
+            } else {
+                emptyList()
+            },
+            remoteSelectedDeviceId = readyAccount?.selectedDeviceId
+                .takeIf { controlSummary.source == RemoteControlSource.ACCOUNT_DEVICE },
+            remoteDeviceName = controlSummary.desktopName,
+            remoteState = activeRemoteState,
+            workspaceState = activeWorkspaceState,
             remoteActive = shell.surface == MobileSurface.REMOTE,
+            remoteSelectedSessionId = shell.remoteSessionId,
             sessions = sidebarSessions,
             // Only while general chat is on screen: the highlight names
             // what the content area is showing, not what the store last
@@ -290,6 +337,32 @@ internal fun MobileScreen() {
             onToggleSearch = shell::toggleSearch,
             onEnterCode = {
                 shell.show(MobileSurface.REMOTE)
+                shell.closeRemoteSession()
+                closeDrawer()
+            },
+            onRetryRemoteDevice = {
+                dispatchActiveSession(RemoteSessionIntent.Load)
+                dispatchActiveWorkspace(RemoteWorkspaceIntent.Load)
+            },
+            onSelectRemoteDevice = { deviceId ->
+                accountViewModel.selectDevice(deviceId)
+                shell.show(MobileSurface.REMOTE)
+                shell.closeRemoteSession()
+            },
+            onOpenRemoteSession = { sessionId ->
+                dispatchActiveSession(RemoteSessionIntent.Open(sessionId))
+                shell.openRemoteSession(sessionId)
+                closeDrawer()
+            },
+            onCreateRemoteInWorkspace = { path ->
+                dispatchActiveWorkspace(RemoteWorkspaceIntent.SelectWorkspace(path))
+                shell.createRemoteSession()
+                closeDrawer()
+            },
+            onOpenRemoteWorkspace = { path ->
+                dispatchActiveWorkspace(RemoteWorkspaceIntent.SelectWorkspace(path))
+                shell.show(MobileSurface.REMOTE)
+                shell.closeRemoteSession()
                 closeDrawer()
             },
             onNewChat = {
@@ -301,9 +374,6 @@ internal fun MobileScreen() {
                 generalChatViewModel.dispatch(GeneralChatIntent.SelectSession(session.id))
                 shell.show(MobileSurface.GENERAL_CHAT)
                 closeDrawer()
-            },
-            onRenameSession = { id, title ->
-                generalChatViewModel.dispatch(GeneralChatIntent.RenameSession(id, title))
             },
             onArchiveSession = { id, archived ->
                 generalChatViewModel.dispatch(GeneralChatIntent.ArchiveSession(id, archived))
@@ -322,16 +392,10 @@ internal fun MobileScreen() {
                 generalChatViewModel.dispatch(GeneralChatIntent.DeleteSession(id))
             },
             onOpenSettings = {
-                // The gear is one button over two pages, split on what is behind
-                // it, as `AppRootOverlaySurfaces.openSettings()` splits it: from a
-                // remote conversation it asks about the desktop, and from the
-                // app's own chat it asks about the app.
-                shell.openSettings(
-                    when (shell.surface) {
-                        MobileSurface.REMOTE -> SettingsMode.REMOTE
-                        MobileSurface.GENERAL_CHAT -> SettingsMode.GENERAL
-                    },
-                )
+                // HarmonyOS' `onSidebar.settings` always opens root settings.
+                // Remote-control settings has a separate remote-home action;
+                // the sidebar gear does not change meaning behind the drawer.
+                shell.openSettings(SettingsMode.GENERAL)
                 closeDrawer()
             },
             onOpenAccount = {
@@ -352,53 +416,21 @@ internal fun MobileScreen() {
             // second padding: the IME inset already contains the navigation
             // bar's, and adding them would leave a gap the height of the bar.
             contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            stringResource(
-                                when (shell.surface) {
-                                    MobileSurface.GENERAL_CHAT -> R.string.navigation_general_chat
-                                    MobileSurface.REMOTE -> R.string.navigation_remote
-                                },
-                            ),
-                        )
-                    },
-                    navigationIcon = {
-                        // Nothing to open when the sidebar never left: a button
-                        // that reveals what is already on screen is a button that
-                        // does nothing.
-                        if (showMenu) {
-                            IconButton(
-                                onClick = { scope.launch { drawerState.open() } },
-                                modifier = Modifier.testTag(MENU_TEST_TAG),
-                            ) {
-                                Icon(
-                                    // Two bars, drawn off the source's own
-                                    // `gpt_home_menu_glyph` rather than the
-                                    // three Material stacks up.
-                                    painterResource(R.drawable.ic_symbol_menu_lines),
-                                    contentDescription = stringResource(R.string.shell_open_sidebar),
-                                    modifier = Modifier.size(width = 22.dp, height = 14.dp),
-                                )
-                            }
-                        }
-                    },
-                    actions = {
-                        if (shell.surface == MobileSurface.REMOTE) {
-                            Text(
-                                stringResource(phase.labelRes()),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                )
-            },
+            // HarmonyOS hides the platform title bar. Each product surface owns
+            // its 44dp controls and title row, so a Material TopAppBar here would
+            // add a second header above every conversation and remote page.
+            topBar = {},
         ) { insets ->
             Box(Modifier.padding(insets)) {
                 when (shell.surface) {
-                    MobileSurface.GENERAL_CHAT -> GeneralChatScreen(Modifier)
+                    MobileSurface.GENERAL_CHAT -> GeneralChatScreen(
+                        modifier = Modifier,
+                        onOpenSidebar = if (showMenu) {
+                            { compactDrawerOpen = true }
+                        } else {
+                            null
+                        },
+                    )
                     MobileSurface.REMOTE -> when (controlSummary.source) {
                         RemoteControlSource.ACCOUNT_DEVICE -> AccountRemoteScreen(
                             remoteState = accountRemoteState,
@@ -406,14 +438,40 @@ internal fun MobileScreen() {
                             deviceId = readyAccount?.selectedDeviceId.orEmpty(),
                             deviceName = controlSummary.desktopName,
                             accountUsername = readyAccount?.username.orEmpty(),
+                            phase = accountPhase,
                             onSessionIntent = accountViewModel::dispatchSession,
                             onWorkspaceIntent = accountViewModel::dispatchWorkspace,
+                            onOpenSidebar = if (showMenu) {
+                                { compactDrawerOpen = true }
+                            } else {
+                                null
+                            },
+                            compact = !wide,
+                            requestedSessionId = shell.remoteSessionId,
+                            creatingSession = shell.remoteCreating,
+                            onOpenSession = shell::openRemoteSession,
+                            onCreateSession = shell::createRemoteSession,
+                            onRemoteHome = shell::closeRemoteSession,
                             modifier = Modifier,
                         )
 
                         RemoteControlSource.QR_PAIRING,
                         RemoteControlSource.NONE,
-                        -> PairingScreen(Modifier)
+                        -> PairingScreen(
+                            modifier = Modifier,
+                            onOpenSidebar = if (showMenu) {
+                                { compactDrawerOpen = true }
+                            } else {
+                                null
+                            },
+                            onBack = { shell.show(MobileSurface.GENERAL_CHAT) },
+                            compact = !wide,
+                            requestedSessionId = shell.remoteSessionId,
+                            creatingSession = shell.remoteCreating,
+                            onOpenSession = shell::openRemoteSession,
+                            onCreateSession = shell::createRemoteSession,
+                            onRemoteHome = shell::closeRemoteSession,
+                        )
                     }
                 }
             }
@@ -424,8 +482,11 @@ internal fun MobileScreen() {
         preview?.let { current ->
             FilePreviewSurface(
                 preview = current,
+                download = (activeWorkspaceState as? RemoteWorkspaceUiState.Ready)?.download
+                    ?: RemoteFileDownloadUiState.None,
+                remoteAvailable = phase.allowsRemoteCommands(),
                 onIntent = ::dispatchActiveWorkspace,
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -433,10 +494,19 @@ internal fun MobileScreen() {
     // The drawer wraps both shapes rather than only the compact one: a window
     // that loses its permanent sidebar to a preview still has a menu button, and
     // that button needs something to open.
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = showMenu,
-        drawerContent = { if (showMenu) ModalDrawerSheet { sidebar() } },
+    LaunchedEffect(showMenu) {
+        if (!showMenu) compactDrawerOpen = false
+    }
+    BitFunCompactDrawer(
+        open = showMenu && compactDrawerOpen,
+        drawerWidth = compactDrawerWidth.dp,
+        onDismiss = ::closeDrawer,
+        drawerContent = {
+            Surface(
+                color = MaterialTheme.colorScheme.background,
+                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+            ) { sidebar() }
+        },
     ) {
         if (previewLayout.placement == FilePreviewPlacement.CompactFullPage) {
             // Two documents in one phone width is two columns of hyphenation, so
@@ -493,89 +563,120 @@ internal fun MobileScreen() {
         }
     }
 
-    if (shell.showSettings) {
+    val settingsContent: @Composable (Modifier) -> Unit = { contentModifier ->
+        when (shell.settingsMode) {
+            SettingsMode.GENERAL -> GeneralSettingsScreen(
+                modifier = contentModifier,
+                accountUserId = accountUserId,
+                accountUsername = readyAccount?.username.orEmpty(),
+                config = generalChatState.config,
+                models = generalChatState.models,
+                activeModelId = generalChatState.activeModelId,
+                configFailure = generalChatState.configFailure,
+                connectionTest = generalChatState.connectionTest,
+                onChatIntent = generalChatViewModel::dispatch,
+                onSaveConfig = { intent ->
+                    generalChatViewModel.dispatch(intent)
+                    generalChatViewModel.state.value.configFailure == null
+                },
+                onOpenAccount = shell::openAccount,
+                onClose = shell::dismissSettings,
+            )
+
+            SettingsMode.REMOTE -> SettingsScreen(
+                modifier = contentModifier,
+                accountUserId = accountUserId,
+                summary = controlSummary,
+                // The permission mode belongs to the desktop the summary
+                // named, so it has to be asked of that desktop's store —
+                // asking the other one would answer for a connection this
+                // page is not describing, or for none at all.
+                remoteState = when (controlSummary.source) {
+                    RemoteControlSource.QR_PAIRING -> pairingRemoteState
+                    RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
+                    RemoteControlSource.NONE -> RemoteSessionUiState.Idle
+                },
+                onSessionIntent = when (controlSummary.source) {
+                    RemoteControlSource.QR_PAIRING -> pairingViewModel::dispatchSession
+                    RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel::dispatchSession
+                    RemoteControlSource.NONE -> {
+                        {}
+                    }
+                },
+                onClose = shell::dismissSettings,
+                onOpenAccount = shell::openAccount,
+                onDisconnect = { pairingViewModel.dispatch(PairingIntent.Disconnect) },
+                onReconnect = {
+                    // A room is re-checked where it stands; a device is asked
+                    // for again, which is the same command its row in the
+                    // account sends. Neither re-pairs behind the user's back.
+                    when (controlSummary.source) {
+                        RemoteControlSource.QR_PAIRING ->
+                            pairingViewModel.dispatch(PairingIntent.Verify)
+
+                        RemoteControlSource.ACCOUNT_DEVICE -> {
+                            val deviceId = readyAccount?.selectedDeviceId
+                            if (deviceId != null) {
+                                accountViewModel.selectDevice(deviceId)
+                            }
+                        }
+
+                        RemoteControlSource.NONE -> Unit
+                    }
+                },
+                onConnectByLink = {
+                    shell.dismissSettings()
+                    shell.show(MobileSurface.REMOTE)
+                },
+            )
+        }
+    }
+
+    if (wide) {
+        AnimatedVisibility(
+            visible = shell.showSettings,
+            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                scaleIn(tween(180, easing = FastOutSlowInEasing), initialScale = 0.97f),
+            exit = fadeOut(tween(160, easing = FastOutSlowInEasing)) +
+                scaleOut(tween(160, easing = FastOutSlowInEasing), targetScale = 0.97f),
+        ) {
+            val sheetWidth = minOf(680, maxOf(540, (window.widthDp * 0.48f).toInt()))
+            val sheetHeight = minOf(760, maxOf(560, window.heightDp - 80))
+            BackHandler(onBack = shell::dismissSettings)
+            Box(
+                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.27f))
+                        .clickable(onClick = shell::dismissSettings),
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.background,
+                    shape = RoundedCornerShape(30.dp),
+                    shadowElevation = 12.dp,
+                    modifier = Modifier
+                        .width(sheetWidth.dp)
+                        .height(sheetHeight.dp)
+                        .clickable(interactionSource = null, indication = null, onClick = {}),
+                ) {
+                    settingsContent(Modifier.fillMaxSize())
+                }
+            }
+        }
+    } else if (shell.showSettings) {
         ModalBottomSheet(
             onDismissRequest = shell::dismissSettings,
-            // Full height on open, never half: the source's sheet is a page, and
-            // a half-open one puts the permission modes — the reason to come here
-            // — below the fold behind a drag the page gives no sign is needed.
+            // Compact sheets open fully: the page gives no indication that
+            // lower controls are hidden behind another upward drag.
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            // The source's own sheet chrome: PAGE_BG rather than a raised
-            // container, corners at 34, and no drag handle — the page carries a
-            // close button of its own, and a handle above a centred title would
-            // push it off the vertical the source centres it on.
             containerColor = MaterialTheme.colorScheme.background,
             shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
             dragHandle = null,
         ) {
-            when (shell.settingsMode) {
-                SettingsMode.GENERAL -> GeneralSettingsScreen(
-                    modifier = Modifier.fillMaxWidth(),
-                    accountUserId = accountUserId,
-                    accountUsername = readyAccount?.username.orEmpty(),
-                    config = generalChatState.config,
-                    models = generalChatState.models,
-                    activeModelId = generalChatState.activeModelId,
-                    configFailure = generalChatState.configFailure,
-                    connectionTest = generalChatState.connectionTest,
-                    onChatIntent = generalChatViewModel::dispatch,
-                    onSaveConfig = { intent ->
-                        generalChatViewModel.dispatch(intent)
-                        generalChatViewModel.state.value.configFailure == null
-                    },
-                    onOpenAccount = shell::openAccount,
-                    onClose = shell::dismissSettings,
-                )
-
-                SettingsMode.REMOTE -> SettingsScreen(
-                    modifier = Modifier.fillMaxWidth(),
-                    accountUserId = accountUserId,
-                    summary = controlSummary,
-                    // The permission mode belongs to the desktop the summary
-                    // named, so it has to be asked of that desktop's store —
-                    // asking the other one would answer for a connection this
-                    // page is not describing, or for none at all.
-                    remoteState = when (controlSummary.source) {
-                        RemoteControlSource.QR_PAIRING -> pairingRemoteState
-                        RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
-                        RemoteControlSource.NONE -> RemoteSessionUiState.Idle
-                    },
-                    onSessionIntent = when (controlSummary.source) {
-                        RemoteControlSource.QR_PAIRING -> pairingViewModel::dispatchSession
-                        RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel::dispatchSession
-                        RemoteControlSource.NONE -> {
-                            {}
-                        }
-                    },
-                    onClose = shell::dismissSettings,
-                    onOpenAccount = shell::openAccount,
-                    onDisconnect = { pairingViewModel.dispatch(PairingIntent.Disconnect) },
-                    onReconnect = {
-                        // A room is re-checked where it stands; a device is asked
-                        // for again, which is the same command its row in the
-                        // account sends. Neither re-pairs behind the user's back.
-                        when (controlSummary.source) {
-                            RemoteControlSource.QR_PAIRING ->
-                                pairingViewModel.dispatch(PairingIntent.Verify)
-
-                            RemoteControlSource.ACCOUNT_DEVICE -> {
-                                val deviceId = readyAccount?.selectedDeviceId
-                                if (deviceId != null) {
-                                    accountViewModel.dispatch(
-                                        AccountIntent.SelectDevice(deviceId),
-                                    )
-                                }
-                            }
-
-                            RemoteControlSource.NONE -> Unit
-                        }
-                    },
-                    onConnectByLink = {
-                        shell.dismissSettings()
-                        shell.show(MobileSurface.REMOTE)
-                    },
-                )
-            }
+            settingsContent(Modifier.fillMaxWidth().fillMaxHeight(0.94f))
         }
     }
     if (shell.showAccount) {
@@ -584,8 +685,19 @@ internal fun MobileScreen() {
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.background,
             shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
+            dragHandle = null,
         ) {
-            AccountScreen(Modifier.fillMaxWidth())
+            AccountScreen(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.94f),
+                onBack = shell::dismissAccount,
+                onDeviceSelected = {
+                    shell.dismissAccount()
+                    shell.dismissSettings()
+                    shell.closeRemoteSession()
+                    shell.show(MobileSurface.REMOTE)
+                },
+                viewModel = accountViewModel,
+            )
         }
     }
 }

@@ -1,6 +1,16 @@
 package com.bitfun.mobile.app.ui.remote
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -13,13 +23,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.chat.ConversationView
+import com.bitfun.mobile.app.ui.common.CircleControl
+import com.bitfun.mobile.app.ui.shell.MENU_TEST_TAG
 import com.bitfun.mobile.app.viewmodel.PairingViewModel
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.connection.connectionPhase
@@ -43,6 +60,14 @@ import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 @Composable
 internal fun PairingScreen(
     modifier: Modifier,
+    onOpenSidebar: (() -> Unit)? = null,
+    onBack: () -> Unit = {},
+    compact: Boolean = true,
+    requestedSessionId: String? = null,
+    creatingSession: Boolean = false,
+    onOpenSession: (String) -> Unit = {},
+    onCreateSession: () -> Unit = {},
+    onRemoteHome: () -> Unit = {},
     viewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -66,6 +91,13 @@ internal fun PairingScreen(
                 desktopName = "",
                 onSessionIntent = viewModel::dispatchSession,
                 onWorkspaceIntent = viewModel::dispatchWorkspace,
+                onOpenSidebar = onOpenSidebar,
+                compact = compact,
+                requestedSessionId = requestedSessionId,
+                creatingSession = creatingSession,
+                onOpenSession = onOpenSession,
+                onCreateSession = onCreateSession,
+                onRemoteHome = onRemoteHome,
                 connectionDetails = {
                     PairedDetails(
                         workspace = current.workspace,
@@ -82,6 +114,7 @@ internal fun PairingScreen(
             state = current,
             onSubmit = viewModel::dispatch,
             onDismiss = { viewModel.dispatch(PairingIntent.Dismiss) },
+            onBack = onBack,
             modifier = modifier,
         )
     }
@@ -95,18 +128,33 @@ internal fun AccountRemoteScreen(
     deviceId: String,
     deviceName: String,
     accountUsername: String,
+    phase: ConnectionPhase,
     onSessionIntent: (com.bitfun.mobile.core.feature.session.RemoteSessionIntent) -> Unit,
     onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
+    onOpenSidebar: (() -> Unit)? = null,
+    compact: Boolean = true,
+    requestedSessionId: String? = null,
+    creatingSession: Boolean = false,
+    onOpenSession: (String) -> Unit = {},
+    onCreateSession: () -> Unit = {},
+    onRemoteHome: () -> Unit = {},
     modifier: Modifier,
 ) {
     RemoteConnectedScreen(
         remoteState = remoteState,
         workspaceState = workspaceState,
-        phase = ConnectionPhase.CONNECTED,
+        phase = phase,
         deviceId = deviceId,
         desktopName = deviceName,
         onSessionIntent = onSessionIntent,
         onWorkspaceIntent = onWorkspaceIntent,
+        onOpenSidebar = onOpenSidebar,
+        compact = compact,
+        requestedSessionId = requestedSessionId,
+        creatingSession = creatingSession,
+        onOpenSession = onOpenSession,
+        onCreateSession = onCreateSession,
+        onRemoteHome = onRemoteHome,
         connectionDetails = {
             AccountDeviceDetails(deviceName = deviceName, accountUsername = accountUsername)
         },
@@ -123,21 +171,26 @@ private fun RemoteConnectedScreen(
     desktopName: String,
     onSessionIntent: (com.bitfun.mobile.core.feature.session.RemoteSessionIntent) -> Unit,
     onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
+    onOpenSidebar: (() -> Unit)?,
+    compact: Boolean,
+    requestedSessionId: String?,
+    creatingSession: Boolean,
+    onOpenSession: (String) -> Unit,
+    onCreateSession: () -> Unit,
+    onRemoteHome: () -> Unit,
     connectionDetails: @Composable () -> Unit,
     modifier: Modifier,
 ) {
-    // Which session the user asked to open. Not the same as the store's
-    // `selectedSessionId`, which stays set after the user comes back to the list.
-    var openSessionId by rememberSaveable(deviceId) { mutableStateOf<String?>(null) }
-    var creating by rememberSaveable(deviceId) { mutableStateOf(false) }
+    RemoteDownloadSaver(workspaceState, onWorkspaceIntent)
     val conversation = (remoteState as? RemoteSessionUiState.Ready)?.takeIf {
-        openSessionId != null && it.selectedSessionId == openSessionId && it.timeline != null
+        requestedSessionId != null && it.selectedSessionId == requestedSessionId && it.timeline != null
     }
     if (conversation != null) {
         ConversationView(
             state = conversation,
             phase = phase,
-            onBack = { openSessionId = null },
+            onBack = onRemoteHome,
+            onOpenSidebar = onOpenSidebar,
             onIntent = onSessionIntent,
             contextTitle = ConversationHeaderPresenter.contextTitle(
                 desktopName = desktopName,
@@ -155,34 +208,165 @@ private fun RemoteConnectedScreen(
             },
             previewingRemotePath = workspaceState.previewingRemotePath(),
             previewLoading = workspaceState.previewLoading(),
+            download = (workspaceState as? RemoteWorkspaceUiState.Ready)?.download
+                ?: com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState.None,
+            onDownloadFile = { path, label ->
+                onWorkspaceIntent(
+                    RemoteWorkspaceIntent.DownloadFile(
+                        path,
+                        label,
+                        conversation.selectedSessionId.orEmpty(),
+                    ),
+                )
+            },
             modifier = modifier,
         )
-    } else if (creating) {
+    } else if (creatingSession) {
         CreateSessionRoute(
             sessionState = remoteState,
             workspaceState = workspaceState,
             phase = phase,
             deviceId = deviceId,
-            onBack = { creating = false },
-            onCreated = {
-                creating = false
-                openSessionId = it
-            },
+            onBack = onRemoteHome,
+            onCreated = onOpenSession,
             onWorkspaceIntent = onWorkspaceIntent,
             onIntent = onSessionIntent,
+            modifier = modifier,
+        )
+    } else if (compact) {
+        RemoteCompactHome(
+            remoteState = remoteState,
+            desktopName = desktopName,
+            onOpenSidebar = onOpenSidebar,
+            onCreate = onCreateSession,
             modifier = modifier,
         )
     } else {
-        RemoteSessionListView(
-            state = remoteState,
-            workspaceState = workspaceState,
-            connectionDetails = connectionDetails,
-            onIntent = onSessionIntent,
-            onWorkspaceIntent = onWorkspaceIntent,
-            onOpen = { openSessionId = it },
-            onCreate = { creating = true },
-            modifier = modifier,
-        )
+        Column(modifier = modifier.fillMaxSize()) {
+            RemoteShellHeader(onOpenSidebar)
+            RemoteSessionListView(
+                state = remoteState,
+                workspaceState = workspaceState,
+                connectionDetails = connectionDetails,
+                onIntent = onSessionIntent,
+                onWorkspaceIntent = onWorkspaceIntent,
+                onOpen = onOpenSession,
+                onCreate = onCreateSession,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RemoteCompactHome(
+    remoteState: RemoteSessionUiState,
+    desktopName: String,
+    onOpenSidebar: (() -> Unit)?,
+    onCreate: () -> Unit,
+    modifier: Modifier,
+) {
+    val ready = remoteState as? RemoteSessionUiState.Ready
+    val hasSessions = ready?.sessions?.isNotEmpty() == true
+    val loading = remoteState is RemoteSessionUiState.Loading
+    val title = when {
+        loading -> stringResource(R.string.sessions_loading)
+        remoteState is RemoteSessionUiState.Failed -> stringResource(R.string.sessions_failed)
+        hasSessions -> stringResource(R.string.remote_pick_session)
+        else -> stringResource(R.string.remote_empty_title)
+    }
+    val body = if (hasSessions) {
+        stringResource(R.string.remote_pick_session_text)
+    } else {
+        stringResource(R.string.remote_empty_text)
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        RemoteShellHeader(onOpenSidebar, desktopName)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, bottom = 56.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.padding(bottom = 18.dp).size(28.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                title,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                body,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.width(280.dp).padding(top = 10.dp),
+            )
+            if (!loading) {
+                Button(
+                    onClick = onCreate,
+                    shape = RoundedCornerShape(23.dp),
+                    modifier = Modifier.padding(top = 12.dp).width(148.dp).height(46.dp),
+                ) {
+                    Text(stringResource(R.string.remote_start_session), fontSize = 15.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemoteShellHeader(onOpenSidebar: (() -> Unit)?, subtitle: String = "") {
+    val hasSubtitle = subtitle.isNotBlank()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(if (hasSubtitle) 76.dp else 64.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        onOpenSidebar?.let { openSidebar ->
+            CircleControl(
+                icon = R.drawable.ic_symbol_menu_lines,
+                glyphSize = 22,
+                contentDescription = stringResource(R.string.shell_open_sidebar),
+                onClick = openSidebar,
+                modifier = Modifier.testTag(MENU_TEST_TAG),
+            )
+        } ?: Box(Modifier.size(44.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                stringResource(R.string.navigation_remote),
+                fontSize = if (hasSubtitle) 18.sp else 17.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+            if (hasSubtitle) {
+                Text(
+                    subtitle,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        Box(Modifier.size(44.dp))
     }
 }
 
@@ -256,10 +440,14 @@ internal fun RemoteWorkspacePanel(
                 enabled = fileReference.isNotBlank(),
             ) { Text(stringResource(R.string.file_preview_open)) }
             if (showPreview) {
+                // The pane sizes itself to the space it is given, and this
+                // panel is inside a scrolling column with none to give.
                 FilePreviewSurface(
                     preview = state.preview,
+                    download = state.download,
+                    remoteAvailable = true,
                     onIntent = onIntent,
-                    modifier = Modifier,
+                    modifier = Modifier.fillMaxWidth().height(360.dp),
                 )
             }
         }

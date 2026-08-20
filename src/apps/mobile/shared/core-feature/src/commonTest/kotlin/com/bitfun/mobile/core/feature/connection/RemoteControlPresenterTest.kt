@@ -11,6 +11,7 @@ class RemoteControlPresenterTest {
             pairedRoomLabel = "",
             accountDeviceId = "",
             accountDeviceName = "",
+            accountPhase = ConnectionPhase.IDLE,
         )
 
         assertEquals(RemoteControlSource.NONE, summary.source)
@@ -25,6 +26,7 @@ class RemoteControlPresenterTest {
             pairedRoomLabel = "ab12",
             accountDeviceId = "",
             accountDeviceName = "",
+            accountPhase = ConnectionPhase.IDLE,
         )
         assertEquals(RemoteControlSource.QR_PAIRING, live.source)
         assertEquals("ab12", live.desktopName)
@@ -37,6 +39,7 @@ class RemoteControlPresenterTest {
             pairedRoomLabel = "ab12",
             accountDeviceId = "",
             accountDeviceName = "",
+            accountPhase = ConnectionPhase.IDLE,
         )
         assertEquals(RemoteControlSource.QR_PAIRING, lost.source)
         assertEquals(RemoteControlAction.RECONNECT, lost.action)
@@ -49,6 +52,7 @@ class RemoteControlPresenterTest {
             pairedRoomLabel = "",
             accountDeviceId = "device-1",
             accountDeviceName = "Studio",
+            accountPhase = ConnectionPhase.CONNECTED,
         )
 
         assertEquals(RemoteControlSource.ACCOUNT_DEVICE, summary.source)
@@ -64,6 +68,7 @@ class RemoteControlPresenterTest {
             pairedRoomLabel = "",
             accountDeviceId = "device-1",
             accountDeviceName = "  ",
+            accountPhase = ConnectionPhase.RECONNECTING,
         )
 
         assertEquals("device-1", summary.desktopName)
@@ -76,9 +81,23 @@ class RemoteControlPresenterTest {
             pairedRoomLabel = "ab12",
             accountDeviceId = "device-1",
             accountDeviceName = "Studio",
+            accountPhase = ConnectionPhase.FAILED,
         )
 
         assertEquals(RemoteControlSource.QR_PAIRING, summary.source)
         assertEquals("ab12", summary.desktopName)
+    }
+
+    @Test
+    fun aSelectedAccountDevicePublishesItsTransportPhase() {
+        val summary = RemoteControlPresenter.summarize(
+            pairingPhase = ConnectionPhase.IDLE,
+            pairedRoomLabel = "",
+            accountDeviceId = "device-1",
+            accountDeviceName = "Studio",
+            accountPhase = ConnectionPhase.RECONNECTING,
+        )
+
+        assertEquals(ConnectionPhase.RECONNECTING, summary.phase)
     }
 }

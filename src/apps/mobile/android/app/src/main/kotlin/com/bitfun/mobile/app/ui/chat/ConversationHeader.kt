@@ -1,6 +1,8 @@
 package com.bitfun.mobile.app.ui.chat
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,14 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,11 +22,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.common.CircleControl
 
@@ -57,9 +60,10 @@ internal fun ConversationHeader(
     canStop: Boolean,
     enabled: Boolean,
     onBack: () -> Unit,
+    onOpenSidebar: (() -> Unit)? = null,
     onRename: (String) -> Unit,
-    onOpenSettings: () -> Unit,
     onStop: () -> Unit,
+    onShowUploadedFiles: () -> Unit = {},
     modifier: Modifier,
 ) {
     // Keyed on the title so a rename landing from the desktop closes the editor
@@ -68,21 +72,36 @@ internal fun ConversationHeader(
     var draft by rememberSaveable(title) { mutableStateOf(title) }
     var menuOpen by rememberSaveable { mutableStateOf(false) }
 
+    val hasSubtitle = contextTitle.isNotBlank()
+
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 16.dp),
+                .height(if (hasSubtitle) 76.dp else 64.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CircleControl(
-                icon = R.drawable.ic_symbol_chevron_left,
-                glyphSize = 20,
-                contentDescription = stringResource(R.string.conversation_back),
-                onClick = onBack,
-                modifier = Modifier.testTag(CONVERSATION_BACK_TEST_TAG),
-            )
+            if (onOpenSidebar != null) {
+                CircleControl(
+                    icon = R.drawable.ic_symbol_menu_lines,
+                    glyphSize = 22,
+                    contentDescription = stringResource(R.string.shell_open_sidebar),
+                    onClick = onOpenSidebar,
+                    modifier = Modifier.testTag(CONVERSATION_BACK_TEST_TAG),
+                )
+            } else {
+                CircleControl(
+                    icon = R.drawable.ic_symbol_chevron_left_wide,
+                    glyphSize = 20,
+                    glyphWidth = 15,
+                    glyphHeight = 23,
+                    contentDescription = stringResource(R.string.conversation_back),
+                    onClick = onBack,
+                    modifier = Modifier.testTag(CONVERSATION_BACK_TEST_TAG),
+                )
+            }
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -91,7 +110,9 @@ internal fun ConversationHeader(
             ) {
                 Text(
                     title.ifBlank { stringResource(R.string.conversation_title_default) },
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = if (hasSubtitle) 18.sp else 17.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -102,20 +123,25 @@ internal fun ConversationHeader(
                             editing = !editing
                         },
                 )
-                Text(
-                    contextTitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (hasSubtitle) {
+                    Text(
+                        contextTitle,
+                        fontSize = 14.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
 
             Box {
                 CircleControl(
                     icon = R.drawable.ic_symbol_ellipsis,
                     glyphSize = 20,
+                    glyphWidth = 23,
+                    glyphHeight = 7,
                     contentDescription = stringResource(R.string.session_actions),
                     onClick = {
                         // The editor and the menu are two answers to the same
@@ -125,26 +151,30 @@ internal fun ConversationHeader(
                     },
                     modifier = Modifier.testTag(CONVERSATION_MENU_TEST_TAG),
                 )
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.conversation_settings)) },
-                        onClick = {
-                            menuOpen = false
-                            onOpenSettings()
-                        },
-                    )
-                    // Only while something is running: an item that does nothing
-                    // is worse than an item that is not there.
-                    if (canStop) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.message_stop)) },
-                            onClick = {
-                                menuOpen = false
-                                onStop()
-                            },
+                BitFunHeaderActionMenu(
+                    expanded = menuOpen,
+                    onDismiss = { menuOpen = false },
+                    sectionTitle = stringResource(R.string.session_section),
+                    actions = buildList {
+                        add(
+                            BitFunHeaderAction(
+                                icon = R.drawable.ic_symbol_cloud,
+                                label = stringResource(R.string.session_uploaded_files),
+                                onClick = onShowUploadedFiles,
+                            ),
                         )
-                    }
-                }
+                        if (canStop) {
+                            add(
+                                BitFunHeaderAction(
+                                    icon = R.drawable.ic_symbol_xmark,
+                                    label = stringResource(R.string.message_stop),
+                                    onClick = onStop,
+                                    dividerBefore = true,
+                                ),
+                            )
+                        }
+                    },
+                )
             }
         }
 
@@ -175,29 +205,88 @@ private fun TitleEditor(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedTextField(
+        val fieldShape = RoundedCornerShape(14.dp)
+        BasicTextField(
             value = draft,
             onValueChange = onDraftChange,
-            label = { Text(stringResource(R.string.session_rename_label)) },
-            // A title is one line by definition, and the return key is worth
-            // more as "done" than as a newline the relay would strip anyway.
             singleLine = true,
             enabled = enabled,
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.weight(1f).testTag(CONVERSATION_RENAME_TEST_TAG),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (draft.isEmpty()) {
+                        Text(
+                            stringResource(R.string.session_rename_label),
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    inner()
+                }
+            },
+            modifier = Modifier
+                .weight(1f)
+                .height(42.dp)
+                .clip(fieldShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, fieldShape)
+                .padding(horizontal = 12.dp)
+                .testTag(CONVERSATION_RENAME_TEST_TAG),
         )
-        Button(
+        val saveEnabled = enabled && draft.isNotBlank()
+        EditorButton(
+            label = stringResource(R.string.session_rename_confirm),
+            primary = true,
+            enabled = saveEnabled,
             onClick = onSave,
-            enabled = enabled && draft.isNotBlank(),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.height(48.dp),
-        ) { Text(stringResource(R.string.session_rename_confirm)) }
-        TextButton(onClick = onCancel, modifier = Modifier.height(48.dp)) {
-            Text(stringResource(R.string.common_cancel))
-        }
+        )
+        EditorButton(
+            label = stringResource(R.string.common_cancel),
+            primary = false,
+            enabled = true,
+            onClick = onCancel,
+        )
+    }
+}
+
+@Composable
+private fun EditorButton(
+    label: String,
+    primary: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        modifier = Modifier
+            .width(52.dp)
+            .height(42.dp)
+            .clip(shape)
+            .background(
+                if (primary && enabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant,
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (primary && enabled) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+        )
     }
 }

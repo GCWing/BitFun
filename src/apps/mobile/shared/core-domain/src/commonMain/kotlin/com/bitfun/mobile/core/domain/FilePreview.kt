@@ -44,6 +44,18 @@ public data class FilePreviewFailure public constructor(
     public val retryable: Boolean,
 )
 
+/**
+ * Which of the preview surface's bodies a file gets. HarmonyOS decides this in
+ * `RemoteFilePreviewController.rendererFor`; the choice is the same product
+ * rule on both platforms, so it lives here rather than in either app.
+ */
+public enum class FilePreviewRenderer {
+    IMAGE,
+    MARKDOWN,
+    TEXT,
+    UNSUPPORTED,
+}
+
 public object FilePreviewPolicy {
     public const val TEXT_MAX_BYTES: Long = 2L * 1024L * 1024L
     public const val IMAGE_MAX_BYTES: Long = 12L * 1024L * 1024L
@@ -52,6 +64,86 @@ public object FilePreviewPolicy {
         if (fileSize > 0) minOf(fileSize, TEXT_MAX_BYTES) else TEXT_MAX_BYTES
 
     public fun canPreviewImage(fileSize: Long): Boolean = fileSize <= IMAGE_MAX_BYTES
+
+    /**
+     * SVG is an image by MIME and a text file by everything the preview can
+     * actually do with it, so it deliberately falls through to the text branch.
+     */
+    public fun rendererFor(name: String, mimeType: String): FilePreviewRenderer {
+        val mime = mimeType.lowercase()
+        val extension = extensionOf(name)
+        if (mime.startsWith("image/") && extension != "svg") return FilePreviewRenderer.IMAGE
+        if (mime == "text/markdown" || extension == "md" || extension == "mdx") {
+            return FilePreviewRenderer.MARKDOWN
+        }
+        if (mime.startsWith("text/") || mime in TEXT_MIME_TYPES ||
+            extension in TEXT_EXTENSIONS || fileNameOf(name) in TEXT_FILE_NAMES
+        ) {
+            return FilePreviewRenderer.TEXT
+        }
+        return FilePreviewRenderer.UNSUPPORTED
+    }
+
+    /**
+     * A NUL byte in the first 4 KiB is how HarmonyOS decides the desktop handed
+     * back something that only claimed to be text. Reading further would not
+     * change the answer and the preview only ever holds the head of the file.
+     */
+    public fun looksBinary(bytes: ByteArray): Boolean {
+        val limit = minOf(bytes.size, SNIFF_BYTES)
+        for (index in 0 until limit) {
+            if (bytes[index].toInt() == 0) return true
+        }
+        return false
+    }
+
+    /**
+     * Text that decoded without a NUL but is still not text: a replacement
+     * character means the bytes were not UTF-8, and more than 2% control
+     * characters means they were never prose or source to begin with.
+     */
+    public fun looksUndecodable(bytes: ByteArray, text: String): Boolean {
+        if (text.contains('\uFFFD')) return true
+        val limit = minOf(bytes.size, SNIFF_BYTES)
+        if (limit == 0) return false
+        var controls = 0
+        for (index in 0 until limit) {
+            val value = bytes[index].toInt() and 0xFF
+            if (value < 32 && value != 9 && value != 10 && value != 13) controls += 1
+        }
+        return controls.toDouble() / limit > CONTROL_RATIO_LIMIT
+    }
+
+    private fun extensionOf(name: String): String {
+        val fileName = fileNameOf(name)
+        val dot = fileName.lastIndexOf('.')
+        return if (dot >= 0) fileName.substring(dot + 1) else ""
+    }
+
+    private fun fileNameOf(name: String): String =
+        name.replace('\\', '/').substringAfterLast('/').lowercase()
+
+    private const val SNIFF_BYTES: Int = 4096
+    private const val CONTROL_RATIO_LIMIT: Double = 0.02
+
+    private val TEXT_MIME_TYPES: Set<String> = setOf(
+        "application/json",
+        "application/xml",
+        "application/javascript",
+    )
+
+    private val TEXT_EXTENSIONS: Set<String> = setOf(
+        "js", "jsx", "ts", "tsx", "mjs", "cjs", "py", "rs", "go", "java", "kt", "kts", "c", "cpp",
+        "h", "hpp", "cs", "rb", "php", "swift", "vue", "svelte", "css", "scss", "less", "json",
+        "jsonc", "yaml", "yml", "toml", "xml", "csv", "tsv", "txt", "log", "sh", "bash", "zsh",
+        "fish", "ps1", "bat", "cmd", "sql", "graphql", "gql", "proto", "lock", "env", "ini", "cfg",
+        "conf", "ets", "gitignore", "editorconfig", "gradle", "properties", "svg", "cc",
+    )
+
+    private val TEXT_FILE_NAMES: Set<String> = setOf(
+        "dockerfile", "makefile", "justfile", "gemfile", "rakefile", "procfile",
+        "license", "readme", "changelog",
+    )
 
     public fun failure(message: String): FilePreviewFailure {
         val text = message.lowercase()

@@ -71,12 +71,17 @@ internal fun SettingsSectionHeader(text: String, modifier: Modifier) {
 internal fun SettingsCard(
     modifier: Modifier,
     radius: Int = 24,
+    bordered: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         shape = RoundedCornerShape(radius.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = if (bordered) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        },
         modifier = modifier.fillMaxWidth(),
         content = content,
     )

@@ -3,6 +3,7 @@ package com.bitfun.mobile.core.feature.workspace
 import com.bitfun.mobile.core.domain.FilePreviewFailure
 import com.bitfun.mobile.core.domain.FilePreviewFailureReason
 import com.bitfun.mobile.core.domain.FilePreviewPolicy
+import com.bitfun.mobile.core.domain.FilePreviewRenderer
 import com.bitfun.mobile.core.domain.FilePreviewTarget
 import com.bitfun.mobile.core.domain.FilePreviewTargetContext
 import com.bitfun.mobile.core.domain.FileReferenceKind
@@ -48,6 +49,9 @@ public class RemoteWorkspaceStore internal constructor(
             is RemoteWorkspaceIntent.SelectWorkspace -> selectWorkspace(intent.path)
             is RemoteWorkspaceIntent.SelectAssistant -> selectAssistant(intent.path)
             is RemoteWorkspaceIntent.OpenFile -> resolveAndOpenFile(intent)
+            is RemoteWorkspaceIntent.DownloadFile -> resolveAndDownloadFile(intent)
+            is RemoteWorkspaceIntent.DownloadSaved -> finishDownload(intent.reference, true)
+            is RemoteWorkspaceIntent.DownloadSaveFailed -> finishDownload(intent.reference, false)
             RemoteWorkspaceIntent.DismissPreview -> updateReady { it.copy(preview = RemoteFilePreviewUiState.None) }
             RemoteWorkspaceIntent.Stop -> stop()
         }
@@ -81,6 +85,7 @@ public class RemoteWorkspaceStore internal constructor(
                     selected = info.asSelectedWorkspace(),
                     preview = RemoteFilePreviewUiState.None,
                     busy = false,
+                    download = RemoteFileDownloadUiState.None,
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -134,17 +139,28 @@ public class RemoteWorkspaceStore internal constructor(
                 )
                 val size = info.size ?: 0
                 val mime = info.mimeType ?: "application/octet-stream"
-                when {
-                    isText(mime, target.remotePath) -> loadText(target, info.name ?: basename(target.remotePath), size)
-                    mime.startsWith("image/") && FilePreviewPolicy.canPreviewImage(size) ->
-                        loadImage(target, info.name ?: basename(target.remotePath), mime, size)
-                    mime.startsWith("image/") -> failPreview(target, "file too large")
-                    else -> updateReady { it.copy(preview = RemoteFilePreviewUiState.Unsupported(target, mime)) }
+                val name = info.name ?: basename(target.remotePath)
+                // The name decides as much as the type does: the desktop reports
+                // `text/plain` for Markdown, and `image/svg+xml` for a file the
+                // preview can only show as source.
+                when (FilePreviewPolicy.rendererFor(name.ifEmpty { target.remotePath }, mime)) {
+                    FilePreviewRenderer.MARKDOWN -> loadText(target, name, mime, size, markdown = true)
+                    FilePreviewRenderer.TEXT -> loadText(target, name, mime, size, markdown = false)
+                    FilePreviewRenderer.IMAGE ->
+                        if (FilePreviewPolicy.canPreviewImage(size)) {
+                            loadImage(target, name, mime, size)
+                        } else {
+                            failPreview(target, "file too large", mime, size)
+                        }
+                    FilePreviewRenderer.UNSUPPORTED ->
+                        updateReady { it.copy(preview = RemoteFilePreviewUiState.Unsupported(target, mime, size)) }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                failPreview(target, error.message.orEmpty())
+                // `get_file_info` may be what failed, so the type and size are
+                // not known here; the header falls back to the path it asked for.
+                failPreview(target, error.message.orEmpty(), "", 0)
             }
         }
     }
@@ -179,6 +195,8 @@ public class RemoteWorkspaceStore internal constructor(
                         placeholder,
                         FilePreviewFailureKind.UNAVAILABLE,
                         true,
+                        "",
+                        0,
                     ),
                 )
             }
@@ -187,11 +205,157 @@ public class RemoteWorkspaceStore internal constructor(
         openFile(resolvedTarget)
     }
 
-    private suspend fun loadText(target: FilePreviewTarget, name: String, size: Long) {
+    private fun resolveAndDownloadFile(intent: RemoteWorkspaceIntent.DownloadFile) {
+        val ready = _state.value as? RemoteWorkspaceUiState.Ready ?: return
+        targetEpoch += 1
+        val resolution = FileTargetResolver.resolve(
+            reference = intent.reference,
+            label = intent.label,
+            context = FilePreviewTargetContext(
+                sessionId = intent.sessionId,
+                workspacePath = ready.selected?.path.orEmpty(),
+                controlTargetEpoch = targetEpoch,
+            ),
+        )
+        val target = resolution.target
+        if (resolution.kind != FileReferenceKind.REMOTE_WORKSPACE_FILE || target == null) {
+            val placeholder = FilePreviewTarget(
+                intent.reference,
+                intent.reference,
+                intent.label,
+                intent.sessionId,
+                ready.selected?.path.orEmpty(),
+                targetEpoch,
+                0,
+                0,
+            )
+            updateReady {
+                it.copy(
+                    download = RemoteFileDownloadUiState.Failed(
+                        placeholder,
+                        FilePreviewFailureKind.UNAVAILABLE,
+                        false,
+                    ),
+                )
+            }
+            return
+        }
+        downloadFile(target)
+    }
+
+    private fun downloadFile(target: FilePreviewTarget) {
+        val current = _state.value as? RemoteWorkspaceUiState.Ready ?: return
+        if (current.busy || current.download is RemoteFileDownloadUiState.Loading ||
+            current.download is RemoteFileDownloadUiState.AwaitingSave
+        ) return
+        work?.cancel()
+        _state.value = current.copy(download = RemoteFileDownloadUiState.Loading(target, 0, 0))
+        work = scope.launch {
+            try {
+                val info = transport.send<FileInfoResponse>(
+                    RemoteCommand(
+                        cmd = "get_file_info",
+                        path = target.remotePath,
+                        sessionId = target.sessionId.ifEmpty { null },
+                    ),
+                )
+                val total = (info.size ?: 0).coerceAtLeast(0)
+                val chunks = mutableListOf<ByteArray>()
+                var offset = 0
+                var expectedTotal = total
+                var name = info.name ?: basename(target.remotePath)
+                var mime = info.mimeType ?: "application/octet-stream"
+                updateReady { it.copy(download = RemoteFileDownloadUiState.Loading(target, 0, total)) }
+                do {
+                    val response = transport.send<ReadFileChunkResponse>(
+                        RemoteCommand(
+                            cmd = "read_file_chunk",
+                            path = target.remotePath,
+                            sessionId = target.sessionId.ifEmpty { null },
+                            offset = offset,
+                            limit = DOWNLOAD_CHUNK_BYTES,
+                        ),
+                    )
+                    val bytes = withContext(backgroundDispatcher) { decode(response.chunkBase64.orEmpty()) }
+                    expectedTotal = (response.totalSize ?: expectedTotal).coerceAtLeast(offset.toLong())
+                    if (bytes.isEmpty() && offset.toLong() < expectedTotal) {
+                        error("remote file transfer stopped before completion")
+                    }
+                    chunks += bytes
+                    offset += bytes.size
+                    name = response.name?.takeIf(String::isNotBlank) ?: name
+                    mime = response.mimeType?.takeIf(String::isNotBlank) ?: mime
+                    val responseTotal = expectedTotal.coerceAtLeast(offset.toLong())
+                    updateReady {
+                        it.copy(download = RemoteFileDownloadUiState.Loading(target, offset.toLong(), responseTotal))
+                    }
+                    if (offset == Int.MAX_VALUE && offset.toLong() < expectedTotal) {
+                        error("remote file is too large for this client")
+                    }
+                } while (offset.toLong() < expectedTotal)
+                val bytes = withContext(backgroundDispatcher) { chunks.joinBytes() }
+                updateReady {
+                    it.copy(download = RemoteFileDownloadUiState.AwaitingSave(target, name, mime, bytes))
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                failDownload(target, error.message.orEmpty())
+            }
+        }
+    }
+
+    private fun finishDownload(reference: String, saved: Boolean) {
+        val current = (_state.value as? RemoteWorkspaceUiState.Ready)?.download
+            as? RemoteFileDownloadUiState.AwaitingSave ?: return
+        if (reference != current.target.path && reference != current.target.remotePath) return
+        updateReady {
+            it.copy(
+                download = if (saved) {
+                    RemoteFileDownloadUiState.Saved(current.target, current.name)
+                } else {
+                    RemoteFileDownloadUiState.Failed(current.target, FilePreviewFailureKind.LOAD_FAILED, true)
+                },
+            )
+        }
+    }
+
+    private fun failDownload(target: FilePreviewTarget, message: String) {
+        val failure = if (message.isBlank()) {
+            FilePreviewFailure(FilePreviewFailureReason.LOAD_FAILED, true)
+        } else {
+            FilePreviewPolicy.failure(message)
+        }
+        updateReady {
+            it.copy(download = RemoteFileDownloadUiState.Failed(target, failure.toKind(), failure.retryable))
+        }
+    }
+
+    private suspend fun loadText(
+        target: FilePreviewTarget,
+        name: String,
+        mime: String,
+        size: Long,
+        markdown: Boolean,
+    ) {
         val limit = FilePreviewPolicy.textReadLimit(size).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         val response = readChunk(target, limit)
         val bytes = withContext(backgroundDispatcher) { decode(response.chunkBase64.orEmpty()) }
         val content = withContext(backgroundDispatcher) { bytes.decodeToString() }
+        // The type said text; the bytes are the only thing that can disagree,
+        // and a wall of replacement characters is worse than saying no.
+        if (FilePreviewPolicy.looksBinary(bytes) || FilePreviewPolicy.looksUndecodable(bytes, content)) {
+            updateReady {
+                it.copy(
+                    preview = RemoteFilePreviewUiState.Unsupported(
+                        target,
+                        response.mimeType ?: mime,
+                        response.totalSize ?: size,
+                    ),
+                )
+            }
+            return
+        }
         updateReady {
             it.copy(
                 preview = RemoteFilePreviewUiState.Text(
@@ -199,6 +363,10 @@ public class RemoteWorkspaceStore internal constructor(
                     name = response.name ?: name,
                     content = content,
                     truncated = (response.totalSize ?: size) > bytes.size,
+                    loadedBytes = bytes.size.toLong(),
+                    mimeType = response.mimeType ?: mime,
+                    sizeBytes = response.totalSize ?: size,
+                    markdown = markdown,
                 ),
             )
         }
@@ -214,6 +382,7 @@ public class RemoteWorkspaceStore internal constructor(
                     name = response.name ?: name,
                     mimeType = response.mimeType ?: mime,
                     bytes = bytes,
+                    sizeBytes = response.totalSize ?: size,
                 ),
             )
         }
@@ -230,7 +399,7 @@ public class RemoteWorkspaceStore internal constructor(
             ),
         )
 
-    private fun failPreview(target: FilePreviewTarget, message: String) {
+    private fun failPreview(target: FilePreviewTarget, message: String, mime: String, size: Long) {
         val failure = if (message.isBlank()) {
             FilePreviewFailure(FilePreviewFailureReason.LOAD_FAILED, true)
         } else {
@@ -238,7 +407,7 @@ public class RemoteWorkspaceStore internal constructor(
         }
         updateReady {
             it.copy(
-                preview = RemoteFilePreviewUiState.Failed(target, failure.toKind(), failure.retryable),
+                preview = RemoteFilePreviewUiState.Failed(target, failure.toKind(), failure.retryable, mime, size),
             )
         }
     }
@@ -260,11 +429,17 @@ public class RemoteWorkspaceStore internal constructor(
         )
     }
 
-    private fun isText(mime: String, path: String): Boolean =
-        mime.startsWith("text/") || mime in setOf("application/json", "application/xml", "application/javascript") ||
-            path.substringAfterLast('.', "").lowercase() in TEXT_EXTENSIONS
-
     private fun decode(value: String): ByteArray = Base64.Default.decode(value)
+
+    private fun List<ByteArray>.joinBytes(): ByteArray {
+        val result = ByteArray(sumOf { it.size })
+        var offset = 0
+        forEach { chunk ->
+            chunk.copyInto(result, offset)
+            offset += chunk.size
+        }
+        return result
+    }
 
     private fun basename(path: String): String = path.replace('\\', '/').substringAfterLast('/').ifEmpty { "file" }
 
@@ -278,9 +453,6 @@ public class RemoteWorkspaceStore internal constructor(
             backgroundDispatcher: CoroutineDispatcher,
         ): RemoteWorkspaceStore = RemoteWorkspaceStore(scope, transport, backgroundDispatcher)
 
-        private val TEXT_EXTENSIONS = setOf(
-            "md", "txt", "kt", "kts", "java", "swift", "rs", "ts", "tsx", "js", "jsx", "json", "xml",
-            "yaml", "yml", "toml", "gradle", "properties", "sh", "py", "c", "cc", "cpp", "h", "hpp",
-        )
+        private const val DOWNLOAD_CHUNK_BYTES = 3 * 1024 * 1024
     }
 }

@@ -228,18 +228,6 @@ internal fun ToolStatusRow(
                         }
                     },
             )
-            // Inline rather than on a line of its own: stopping a tool is about
-            // that tool, and a button under the row reads as being about the turn.
-            if (ToolAction.CANCEL in tool.actions) {
-                PillButton(
-                    label = stringResource(R.string.tool_cancel),
-                    primary = false,
-                    enabled = enabled,
-                    compact = true,
-                    onClick = { onCancel(CANCEL_REASON) },
-                    modifier = Modifier,
-                )
-            }
             if (canExpand) {
                 Box(
                     modifier = Modifier
@@ -290,6 +278,22 @@ internal fun ToolStatusRow(
                 enabled = enabled,
                 onSubmit = onAnswer,
             )
+        }
+
+        if (ToolAction.CANCEL in tool.actions) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = DETAIL_INDENT),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                PillButton(
+                    label = stringResource(R.string.tool_cancel),
+                    primary = false,
+                    enabled = enabled,
+                    compact = true,
+                    onClick = { onCancel(CANCEL_REASON) },
+                    modifier = Modifier,
+                )
+            }
         }
     }
 }

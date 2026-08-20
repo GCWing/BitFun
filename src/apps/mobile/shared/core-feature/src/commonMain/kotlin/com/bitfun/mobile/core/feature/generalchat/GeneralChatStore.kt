@@ -6,6 +6,7 @@ import com.bitfun.mobile.core.domain.ConversationEvent
 import com.bitfun.mobile.core.domain.GeneralChatExportFormatter
 import com.bitfun.mobile.core.feature.CloudSettingsSource
 import com.bitfun.mobile.core.feature.markdown.MarkdownParser
+import com.bitfun.mobile.core.feature.session.ComposerImage
 import com.bitfun.mobile.core.persistence.ChatLocalStore
 import com.bitfun.mobile.core.persistence.DraftStore
 import com.bitfun.mobile.core.persistence.PersistedChatMessage
@@ -16,6 +17,7 @@ import com.bitfun.mobile.core.transport.ModelProviderFailure
 import com.bitfun.mobile.core.transport.ModelProviderMessage
 import com.bitfun.mobile.core.transport.ModelProviderStreamClient
 import com.bitfun.mobile.core.transport.ModelProviderStreamResult
+import com.bitfun.mobile.core.protocol.ImageAttachment
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -100,6 +102,7 @@ public class GeneralChatStore internal constructor(
                 timeline = timeline.snapshot(),
                 messages = projectMessages(),
                 draft = drafts.load(draftId(sessionId)).orEmpty(),
+                images = emptyList(),
                 busy = false,
                 failure = null,
                 export = null,
@@ -118,6 +121,7 @@ public class GeneralChatStore internal constructor(
             GeneralChatIntent.ClearConnectionTest ->
                 _state.value = _state.value.copy(connectionTest = GeneralChatConnectionTestUi())
             is GeneralChatIntent.UpdateDraft -> updateDraft(intent.text)
+            is GeneralChatIntent.SetImages -> setImages(intent.images)
             is GeneralChatIntent.SelectModel -> selectModel(intent.modelId)
             GeneralChatIntent.NewSession -> newSession()
             is GeneralChatIntent.SelectSession -> selectSession(intent.sessionId)
@@ -307,6 +311,11 @@ public class GeneralChatStore internal constructor(
         _state.value = _state.value.copy(draft = text)
     }
 
+    private fun setImages(images: List<ComposerImage>) {
+        if (_state.value.busy) return
+        _state.value = _state.value.copy(images = images.take(MAX_ATTACHMENTS))
+    }
+
     private fun selectModel(modelId: String) {
         val selected = try {
             config.selectModel(modelId)
@@ -346,6 +355,7 @@ public class GeneralChatStore internal constructor(
             timeline = timeline.snapshot(),
             messages = projectMessages(),
             draft = drafts.load(draftId(target)).orEmpty(),
+            images = emptyList(),
             busy = false,
             failure = null,
             export = null,
@@ -430,7 +440,11 @@ public class GeneralChatStore internal constructor(
         }
         if (_state.value.busy) return
         val prompt = _state.value.draft.trim()
-        if (prompt.isEmpty()) return
+        val composerImages = _state.value.images
+        if (prompt.isEmpty() && composerImages.isEmpty()) return
+        val imageAttachments = composerImages.map { image ->
+            ImageAttachment(name = image.id, dataUrl = image.dataUrl)
+        }
 
         val turnSession = sessionId
         val userMessage = message(
@@ -439,19 +453,20 @@ public class GeneralChatStore internal constructor(
             text = prompt,
             status = "sent",
             turnId = null,
+            images = imageAttachments,
         )
         timeline.applyEvent(ConversationEvent.UserMessage(userMessage, true))
         chats.saveMessage(persistedMessage(userMessage, turnSession))
         drafts.delete(draftId(turnSession))
         val turnId = nextId("turn")
         timeline.applyEvent(ConversationEvent.TurnStarted(turnSession, turnId))
-        publish(draft = "", busy = true, failure = null)
+        publish(draft = "", images = emptyList(), busy = true, failure = null)
         saveSession()
 
         val messages = timeline.snapshot().persistedMessages
             .filter { it.role == "user" || it.role == "assistant" }
-            .filter { it.text.isNotBlank() }
-            .map { ModelProviderMessage(it.role, it.text) }
+            .filter { it.text.isNotBlank() || !it.images.isNullOrEmpty() }
+            .map { ModelProviderMessage(it.role, it.text, it.images.orEmpty()) }
         request = scope.launch {
             try {
                 val result = stream.stream(
@@ -515,6 +530,7 @@ public class GeneralChatStore internal constructor(
 
     private fun publish(
         draft: String = _state.value.draft,
+        images: List<ComposerImage> = _state.value.images,
         busy: Boolean = _state.value.busy,
         failure: GeneralChatFailureReason? = _state.value.failure,
     ) {
@@ -522,6 +538,7 @@ public class GeneralChatStore internal constructor(
             timeline = timeline.snapshot(),
             messages = projectMessages(),
             draft = draft,
+            images = images,
             busy = busy,
             failure = failure,
         )
@@ -607,6 +624,7 @@ public class GeneralChatStore internal constructor(
                     renderVersion = message.renderVersion,
                     turnId = message.turnId,
                     detail = message.detail,
+                    images = message.images.orEmpty(),
                 ),
             ),
         )
@@ -615,7 +633,7 @@ public class GeneralChatStore internal constructor(
         val payload = try {
             STORAGE_JSON.decodeFromString<StoredMessagePayload>(message.payloadJson)
         } catch (_: Throwable) {
-            StoredMessagePayload(null, null, null)
+            StoredMessagePayload(null, null, null, emptyList())
         }
         return ChatMessage(
             id = message.messageId,
@@ -629,7 +647,7 @@ public class GeneralChatStore internal constructor(
             thinking = message.thinking,
             tools = null,
             items = null,
-            images = null,
+            images = payload.images,
         )
     }
 
@@ -674,6 +692,7 @@ public class GeneralChatStore internal constructor(
             text: String,
             status: String,
             turnId: String?,
+            images: List<ImageAttachment> = emptyList(),
         ): ChatMessage = ChatMessage(
             id = id,
             role = role,
@@ -686,7 +705,7 @@ public class GeneralChatStore internal constructor(
             thinking = null,
             tools = null,
             items = null,
-            images = null,
+            images = images,
         )
 
         private const val AGENT_TYPE = "general_chat"
@@ -695,6 +714,7 @@ public class GeneralChatStore internal constructor(
         private const val ARCHIVED = "archived"
         private const val DRAFT_PREFIX = "general-chat-composer:"
         private const val TITLE_LIMIT = 80
+        private const val MAX_ATTACHMENTS = 4
         /** What a real reply may run to; the source's `buildRequestBody(..., 4096, ...)`. */
         private const val REPLY_TOKEN_LIMIT: Int = 4096
 
@@ -715,6 +735,7 @@ public class GeneralChatStore internal constructor(
             "It is not a blockchain, gaming, NFT, cryptocurrency, or Web3 product. Never invent those product claims.",
             "Treat those product exclusions as internal factual constraints and do not mention them unless the user asks something directly related.",
             "Help with general questions, writing, summarization, planning, research preparation, and everyday work.",
+            "The user may attach images. When images are present, inspect them and answer from what you can see.",
             "This mobile chat currently has no local workspace, shell, desktop file, web browsing, or external tool access.",
             "Never claim to have used unavailable tools or accessed information you were not given.",
             "When a task requires reading or changing a local repository, running commands, or accessing desktop files, explain that the user should use BitFun Remote/Code.",
@@ -729,4 +750,5 @@ private data class StoredMessagePayload(
     val renderVersion: Int?,
     val turnId: String?,
     val detail: String?,
+    val images: List<ImageAttachment> = emptyList(),
 )

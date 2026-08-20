@@ -24,9 +24,9 @@ internal enum class MobileSurface {
 /**
  * Which settings page the one settings sheet is showing.
  *
- * `AppShellState.ets` keeps the same field for the same reason: the sidebar's
- * gear opens two different pages depending on what the conversation behind it
- * is, so "settings is open" is not enough to know what to draw.
+ * `AppShellState.ets` keeps the same field because root settings, remote-control
+ * settings, and account details share one overlay host. The sidebar gear always
+ * selects [GENERAL]; remote-specific entry points select [REMOTE].
  */
 internal enum class SettingsMode {
     GENERAL,
@@ -52,6 +52,8 @@ internal class AppShellState(
     accountReturnsToSettings: Boolean,
     searchOpen: Boolean,
     sidebarQuery: String,
+    remoteSessionId: String? = null,
+    remoteCreating: Boolean = false,
 ) {
     internal var surface: MobileSurface by mutableStateOf(surface)
         private set
@@ -74,15 +76,34 @@ internal class AppShellState(
     internal var sidebarQuery: String by mutableStateOf(sidebarQuery)
         private set
 
+    internal var remoteSessionId: String? by mutableStateOf(remoteSessionId)
+        private set
+
+    internal var remoteCreating: Boolean by mutableStateOf(remoteCreating)
+        private set
+
     internal fun show(next: MobileSurface) {
         surface = next
     }
 
-    /**
-     * Which page depends on the conversation the gear was pressed over, as
-     * `AppRootOverlaySurfaces.openSettings()` decides it: a remote conversation
-     * asks about the desktop it is driving, and anything else asks about the app.
-     */
+    internal fun openRemoteSession(sessionId: String) {
+        surface = MobileSurface.REMOTE
+        remoteCreating = false
+        remoteSessionId = sessionId
+    }
+
+    internal fun createRemoteSession() {
+        surface = MobileSurface.REMOTE
+        remoteCreating = true
+        remoteSessionId = null
+    }
+
+    internal fun closeRemoteSession() {
+        remoteCreating = false
+        remoteSessionId = null
+    }
+
+    /** Opens the requested settings surface in the shared overlay host. */
     internal fun openSettings(mode: SettingsMode) {
         settingsMode = mode
         showSettings = true
@@ -136,6 +157,8 @@ internal class AppShellState(
                     it.accountReturnsToSettings,
                     it.searchOpen,
                     it.sidebarQuery,
+                    it.remoteSessionId,
+                    it.remoteCreating,
                 )
             },
             restore = {
@@ -147,6 +170,8 @@ internal class AppShellState(
                     accountReturnsToSettings = it[4] as Boolean,
                     searchOpen = it[5] as Boolean,
                     sidebarQuery = it[6] as String,
+                    remoteSessionId = it.getOrNull(7) as String?,
+                    remoteCreating = it.getOrNull(8) as? Boolean ?: false,
                 )
             },
         )
@@ -163,5 +188,7 @@ internal fun rememberAppShellState(): AppShellState = rememberSaveable(saver = A
         accountReturnsToSettings = false,
         searchOpen = false,
         sidebarQuery = "",
+        remoteSessionId = null,
+        remoteCreating = false,
     )
 }

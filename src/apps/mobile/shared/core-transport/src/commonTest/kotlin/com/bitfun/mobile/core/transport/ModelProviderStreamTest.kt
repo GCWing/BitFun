@@ -1,5 +1,6 @@
 package com.bitfun.mobile.core.transport
 
+import com.bitfun.mobile.core.protocol.ImageAttachment
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -23,6 +24,33 @@ class ModelProviderStreamTest {
         assertContains(anthropic, "\"messages\":[{\"role\":\"user\"")
         assertContains(openAi, "{\"role\":\"system\",\"content\":\"system facts\"}")
         assertContains(openAi, "{\"role\":\"user\",\"content\":\"hello\"}")
+    }
+
+    @Test
+    fun buildsProviderSpecificImageContent() {
+        val image = ImageAttachment("photo.jpg", "data:image/png;base64,AAAA")
+        val message = ModelProviderMessage("user", "look", listOf(image))
+
+        val anthropic = ModelProviderRequest.body(
+            "claude",
+            listOf(message),
+            ModelProviderProtocol.ANTHROPIC,
+            40,
+            "system facts",
+        )
+        val openAi = ModelProviderRequest.body(
+            "gpt",
+            listOf(message),
+            ModelProviderProtocol.OPEN_AI,
+            40,
+            "system facts",
+        )
+
+        assertContains(anthropic, "\"type\":\"image\"")
+        assertContains(anthropic, "\"media_type\":\"image/png\"")
+        assertContains(anthropic, "\"data\":\"AAAA\"")
+        assertContains(openAi, "\"type\":\"image_url\"")
+        assertContains(openAi, "\"url\":\"data:image/png;base64,AAAA\"")
     }
 
     @Test

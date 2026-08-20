@@ -9,6 +9,7 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -109,6 +111,9 @@ internal fun ChatUserMessageBubble(
     images: List<ConversationImage>,
     modifier: Modifier,
 ) {
+    val visibleText = text.trim().takeUnless {
+        it == "(empty message)" || it == "(空消息)"
+    }.orEmpty()
     // Capped rather than full width so a short question does not read as a
     // paragraph, and so the two sides of the exchange are distinguishable at a
     // glance before either is read.
@@ -120,12 +125,12 @@ internal fun ChatUserMessageBubble(
         ) {
             Column(
                 modifier = Modifier.padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                images.forEach { image -> ChatAttachedImage(image) }
-                if (text.isNotEmpty()) {
+                MessageImageGallery(images = images, userStyle = true)
+                if (visibleText.isNotEmpty()) {
                     Text(
-                        text,
+                        visibleText,
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -175,19 +180,49 @@ internal fun ChatMessageRetryAction(
 }
 
 @Composable
-internal fun ChatAttachedImage(image: ConversationImage) {
+internal fun MessageImageGallery(
+    images: List<ConversationImage>,
+    userStyle: Boolean,
+) {
+    if (images.isEmpty()) return
+    val perRow = if (userStyle) 2 else 3
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        images.chunked(perRow).forEach { imageRow ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                imageRow.forEach { image -> ChatAttachedImage(image, userStyle) }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ChatAttachedImage(image: ConversationImage, userStyle: Boolean = false) {
     // Anything the relay did not carry inline shows as a name rather than a
     // broken frame; see [decodeInlineImage].
     val bitmap = remember(image.dataUrl) { decodeInlineImage(image.dataUrl) }
+    val imageSize = if (userStyle) 112.dp else 92.dp
+    val shape = RoundedCornerShape(if (userStyle) 12.dp else 14.dp)
     if (bitmap != null) {
         Image(
             bitmap = bitmap.asImageBitmap(),
             contentDescription = image.name,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(imageSize)
+                .clip(shape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
         )
     } else {
-        ChatCaption(image.name.ifBlank { stringResource(R.string.chat_image) }, error = false)
+        Surface(
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.size(imageSize),
+        ) {
+            Box(Modifier.padding(8.dp), contentAlignment = Alignment.Center) {
+                ChatCaption(image.name.ifBlank { stringResource(R.string.chat_image) }, error = false)
+            }
+        }
     }
 }
 

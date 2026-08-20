@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +32,7 @@ import com.bitfun.mobile.app.ui.chat.FileReferenceCards
 import com.bitfun.mobile.app.ui.chat.MarkdownContent
 import com.bitfun.mobile.app.ui.chat.tool.ToolStatusList
 import com.bitfun.mobile.core.feature.session.MessageBlock
+import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
 internal const val SUBAGENT_GROUP_TEST_TAG: String = "subagent-group"
 
@@ -44,6 +47,9 @@ internal data class MessageBlockCallbacks(
     /** The file the preview surface is showing, so its card can say so. */
     val previewingRemotePath: String,
     val previewLoading: Boolean,
+    val download: RemoteFileDownloadUiState,
+    val onDownloadFile: (String, String) -> Unit,
+    val downloadEnabled: Boolean,
 )
 
 /**
@@ -77,7 +83,10 @@ private fun MessageBlockView(block: MessageBlock, callbacks: MessageBlockCallbac
                 text = block.text,
                 previewingRemotePath = callbacks.previewingRemotePath,
                 previewLoading = callbacks.previewLoading,
+                download = callbacks.download,
                 onOpen = callbacks.onOpenLink,
+                onDownload = callbacks.onDownloadFile,
+                downloadEnabled = callbacks.downloadEnabled,
                 modifier = Modifier,
             )
         }
@@ -171,18 +180,57 @@ private fun SubagentGroup(block: MessageBlock.Subagent, callbacks: MessageBlockC
 @Composable
 internal fun ThinkingBlock(thinking: String, streaming: Boolean) {
     var expanded by remember(thinking) { mutableStateOf(streaming) }
+    var userToggled by remember(thinking) { mutableStateOf(false) }
+    LaunchedEffect(streaming) {
+        expanded = if (streaming) {
+            if (userToggled) expanded else true
+        } else {
+            userToggled = false
+            false
+        }
+    }
     Column(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, top = 2.dp, bottom = if (expanded) 8.dp else 2.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ChatCaption(
-            stringResource(if (expanded) R.string.chat_thinking_hide else R.string.chat_thinking_show),
-            error = false,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clickable(enabled = thinking.isNotBlank()) {
+                    if (streaming) userToggled = true
+                    expanded = !expanded
+                },
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (streaming) {
+                ChatTypingDots(Modifier.width(22.dp))
+            } else {
+                androidx.compose.material3.Icon(
+                    painter = androidx.compose.ui.res.painterResource(
+                        if (expanded) R.drawable.ic_symbol_chevron_down else R.drawable.ic_symbol_chevron_right,
+                    ),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(16.dp),
+                )
+            }
+            Text(
+                stringResource(
+                    if (streaming) R.string.chat_thinking_in_progress else R.string.chat_thinking_complete,
+                ),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+        }
         if (expanded) {
             Text(
                 thinking,
-                style = MaterialTheme.typography.bodySmall,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

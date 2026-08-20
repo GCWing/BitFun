@@ -252,9 +252,12 @@ public class AccountStore internal constructor(
             deviceName: String,
         ): AccountStore = AccountStore(scope, backend, secureStore, deviceId, deviceName)
 
-        internal fun backend(log: CoreLog): AccountBackend {
+        internal fun backend(log: CoreLog, legacyMobileDeviceNames: Set<String>): AccountBackend {
             val transportLog = log.asTransportLog()
-            return CloudBackend(CloudAccountClient.create(transportLog), transportLog)
+            return CloudBackend(
+                CloudAccountClient.create(transportLog, legacyMobileDeviceNames),
+                transportLog,
+            )
         }
 
         private const val SESSION_KEY = "cloud_account_session"

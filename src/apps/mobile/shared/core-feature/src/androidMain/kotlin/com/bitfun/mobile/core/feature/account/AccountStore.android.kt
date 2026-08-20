@@ -15,9 +15,10 @@ public fun AccountStore.Companion.create(
     deviceId: String,
     deviceName: String,
     log: CoreLog,
+    legacyMobileDeviceNames: Set<String>,
 ): AccountStore = AccountStore.create(
     scope = scope,
-    backend = AccountStore.backend(log),
+    backend = AccountStore.backend(log, legacyMobileDeviceNames),
     secureStore = androidSecureStore(context.applicationContext, "cloud_account"),
     deviceId = deviceId,
     deviceName = deviceName,

@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -30,8 +31,11 @@ import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.session.MessageFileReference
 import com.bitfun.mobile.core.feature.session.MessageFileReferenceProjector
+import com.bitfun.mobile.core.feature.workspace.FilePreviewFormat
+import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
 internal const val FILE_REFERENCE_CARD_TEST_TAG: String = "file-reference-card"
+internal const val FILE_DOWNLOAD_ACTION_TEST_TAG: String = "file-download-action"
 
 /**
  * The files an agent turn named, as cards under the turn — ported from
@@ -52,7 +56,10 @@ internal fun FileReferenceCards(
     text: String,
     previewingRemotePath: String,
     previewLoading: Boolean,
+    download: RemoteFileDownloadUiState = RemoteFileDownloadUiState.None,
     onOpen: (String, String) -> Unit,
+    onDownload: (String, String) -> Unit = { _, _ -> },
+    downloadEnabled: Boolean = true,
     modifier: Modifier,
 ) {
     // Projecting is a markdown parse; a streaming turn recomposes on every
@@ -66,11 +73,15 @@ internal fun FileReferenceCards(
     ) {
         references.forEach { reference ->
             val open = reference.remotePath == previewingRemotePath
+            val downloadState = download.forReference(reference.reference, reference.remotePath)
             FileReferenceCard(
                 reference = reference,
                 selected = open,
                 loading = open && previewLoading,
                 onOpen = { onOpen(reference.reference, reference.label) },
+                download = downloadState,
+                onDownload = { onDownload(reference.reference, reference.label) },
+                downloadEnabled = downloadEnabled,
             )
         }
     }
@@ -81,7 +92,10 @@ private fun FileReferenceCard(
     reference: MessageFileReference,
     selected: Boolean,
     loading: Boolean,
+    download: RemoteFileDownloadUiState,
     onOpen: () -> Unit,
+    onDownload: () -> Unit,
+    downloadEnabled: Boolean,
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -101,47 +115,107 @@ private fun FileReferenceCard(
         modifier = Modifier.fillMaxWidth().testTag(FILE_REFERENCE_CARD_TEST_TAG),
     ) {
         Row(
-            modifier = Modifier.clickable(onClick = onOpen).padding(12.dp).height(44.dp),
+            modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
+            Row(
+                modifier = Modifier.weight(1f).height(44.dp).clickable(onClick = onOpen),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (loading) {
-                    CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        painterResource(R.drawable.ic_symbol_doc_text),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (loading) {
+                        CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            painterResource(R.drawable.ic_symbol_doc_text),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        reference.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        download.statusText(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+            val actionEnabled = downloadEnabled &&
+                download !is RemoteFileDownloadUiState.Loading &&
+                download !is RemoteFileDownloadUiState.AwaitingSave
+            Box(
+                modifier = Modifier.size(44.dp).testTag(FILE_DOWNLOAD_ACTION_TEST_TAG)
+                    .alpha(if (actionEnabled) 1f else 0.55f)
+                    .clip(RoundedCornerShape(12.dp)).clickable(
+                    enabled = actionEnabled,
+                    onClick = onDownload,
+                ),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    reference.label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                // The second line says where the file is, not what it is called
-                // again — every card here points at the paired desktop.
-                Text(
-                    stringResource(R.string.file_reference_desktop),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (download is RemoteFileDownloadUiState.Loading ||
+                    download is RemoteFileDownloadUiState.AwaitingSave
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        painterResource(R.drawable.ic_symbol_arrow_down_to_line),
+                        contentDescription = stringResource(R.string.file_download),
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
             }
         }
     }
+}
+
+/** Also read by the file preview pane's status band, which says it the same way. */
+@Composable
+internal fun RemoteFileDownloadUiState.statusText(): String = when (this) {
+    RemoteFileDownloadUiState.None -> stringResource(R.string.file_reference_desktop)
+    is RemoteFileDownloadUiState.Loading -> if (totalBytes > 0) {
+        stringResource(
+            R.string.file_downloading_progress,
+            FilePreviewFormat.bytes(downloadedBytes),
+            FilePreviewFormat.bytes(totalBytes),
+        )
+    } else {
+        stringResource(R.string.file_downloading)
+    }
+    is RemoteFileDownloadUiState.AwaitingSave -> stringResource(R.string.file_saving)
+    is RemoteFileDownloadUiState.Saved -> stringResource(R.string.common_done)
+    is RemoteFileDownloadUiState.Failed -> stringResource(R.string.file_download_failed)
+}
+
+internal fun RemoteFileDownloadUiState.forReference(
+    reference: String,
+    remotePath: String,
+): RemoteFileDownloadUiState {
+    val target = when (this) {
+        RemoteFileDownloadUiState.None -> return this
+        is RemoteFileDownloadUiState.Loading -> target
+        is RemoteFileDownloadUiState.AwaitingSave -> target
+        is RemoteFileDownloadUiState.Saved -> target
+        is RemoteFileDownloadUiState.Failed -> target
+    }
+    return if (target.path == reference || target.remotePath == remotePath) this else RemoteFileDownloadUiState.None
 }

@@ -11,16 +11,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +30,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -37,11 +39,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
-import com.bitfun.mobile.app.viewmodel.AppSettingsViewModel
-import com.bitfun.mobile.app.viewmodel.AppThemeMode
+import com.bitfun.mobile.app.platform.AppLocale
+import com.bitfun.mobile.app.platform.AppLocaleController
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConfigFailure
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConfigUi
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConnectionTestUi
@@ -56,11 +57,10 @@ internal const val GENERAL_SETTINGS_CLOSE_TEST_TAG: String = "general-settings-c
 /**
  * The app's own settings page, ported from `pages/components/SettingsSheet.ets`.
  *
- * The counterpart of [SettingsScreen], and the reason the gear has to branch: the
- * source's sidebar opens this one from a local conversation and the remote-control
- * page from a remote one, because the two pages answer different questions. This
- * one is about the phone — who is signed in, which model the app talks to on its
- * own, and what build this is — and mentions no desktop anywhere.
+ * The counterpart of [SettingsScreen]. The source's sidebar gear always opens
+ * this root page; remote-control settings is reached by its own remote action.
+ * This page is about the phone — who is signed in, which model the app talks to
+ * on its own, and what build this is — and mentions no desktop anywhere.
  *
  * Its chrome is deliberately not the remote page's. The source rounds these cards
  * at 8 rather than 24 and left-aligns the title rather than centring it: this page
@@ -91,14 +91,15 @@ internal fun GeneralSettingsScreen(
     onSaveConfig: (GeneralChatIntent.SaveConfig) -> Boolean,
     onOpenAccount: () -> Unit,
     onClose: () -> Unit,
-    viewModel: AppSettingsViewModel = viewModel(factory = AppSettingsViewModel.Factory),
 ) {
-    val theme by viewModel.theme.collectAsStateWithLifecycle()
     // The provider editor covers this page rather than opening beside it, the way
     // `if (this.showModelService) { this.ModelServicePanel() }` stacks it over the
     // settings column. A second bottom sheet on top of this one would be a sheet
     // over a sheet, which Compose will draw and no phone can make sense of.
     var showModelService by rememberSaveable { mutableStateOf(false) }
+    var showLanguagePicker by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val selectedLocale = AppLocaleController.current(LocalConfiguration.current)
 
     Box(modifier = modifier.fillMaxSize().testTag(GENERAL_SETTINGS_TEST_TAG)) {
         Column(
@@ -109,12 +110,13 @@ internal fun GeneralSettingsScreen(
                 // which is the source's `top: 64` over a floating `CloseButton()`:
                 // a 28sp heading and a 44dp circle on one line read as a top bar,
                 // and this page is not one — nothing here goes back anywhere.
-                .padding(start = 16.dp, end = 16.dp, top = 76.dp, bottom = 34.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 64.dp, bottom = 34.dp),
         ) {
             Text(
                 stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.headlineMedium
-                    .copy(fontWeight = FontWeight.Bold),
+                fontSize = 28.sp,
+                lineHeight = 34.sp,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 30.dp),
             )
@@ -122,6 +124,7 @@ internal fun GeneralSettingsScreen(
             SettingsCard(
                 modifier = Modifier.testTag(GENERAL_SETTINGS_PROFILE_TEST_TAG),
                 radius = 8,
+                bordered = false,
             ) {
                 AccountEntryRow(
                     subtitle = accountUsername.ifBlank {
@@ -135,55 +138,38 @@ internal fun GeneralSettingsScreen(
                 )
             }
 
-            GeneralSectionTitle(stringResource(R.string.settings_general_chat_section))
-            SettingsCard(modifier = Modifier, radius = 8) {
-                GeneralSettingsRow(
-                    icon = R.drawable.ic_symbol_square_grid_2x2,
-                    title = stringResource(R.string.model_service_title),
-                    // `modelServiceStatus()`: the model that would answer, which
-                    // is not the local form's model name — with no local model
-                    // configured, an account model is still an answer, and the
-                    // row would otherwise read "not configured" beside a chat
-                    // that works.
-                    value = models.firstOrNull { it.id == activeModelId }?.label
-                        ?: stringResource(R.string.model_service_not_configured),
-                    onClick = { showModelService = true },
-                    modifier = Modifier.testTag(GENERAL_SETTINGS_MODEL_TEST_TAG),
+            GeneralSectionTitle(stringResource(R.string.settings_language_section))
+            SettingsCard(modifier = Modifier, radius = 8, bordered = false) {
+                LanguageSettingsRow(
+                    value = when (selectedLocale) {
+                        AppLocale.ENGLISH -> stringResource(R.string.settings_language_english)
+                        AppLocale.SIMPLIFIED_CHINESE -> stringResource(R.string.settings_language_chinese)
+                    },
+                    onClick = { showLanguagePicker = true },
                 )
             }
 
-            // Not in the source, which has no theme to choose: HarmonyOS follows
-            // the system and offers nothing. It sits here rather than on the
-            // remote page because it is a fact about this phone, and that page is
-            // about a desktop — the one section there that never belonged.
-            GeneralSectionTitle(stringResource(R.string.settings_theme))
-            SettingsCard(modifier = Modifier, radius = 8) {
+            GeneralSectionTitle(stringResource(R.string.settings_general_chat_section))
+            SettingsCard(modifier = Modifier, radius = 8, bordered = false) {
                 Column(modifier = Modifier.padding(vertical = 5.dp)) {
-                    THEME_MODES.forEach { (mode, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.setTheme(mode) }
-                                .defaultMinSize(minHeight = 52.dp)
-                                .padding(start = 12.dp, end = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = theme == mode,
-                                onClick = { viewModel.setTheme(mode) },
-                            )
-                            Text(
-                                stringResource(label),
-                                style = MaterialTheme.typography.bodyLarge
-                                    .copy(fontWeight = FontWeight.Medium),
-                            )
-                        }
-                    }
+                    GeneralSettingsRow(
+                        icon = R.drawable.ic_symbol_square_grid_2x2,
+                        title = stringResource(R.string.model_service_title),
+                        // `modelServiceStatus()`: the model that would answer, which
+                        // is not the local form's model name — with no local model
+                        // configured, an account model is still an answer, and the
+                        // row would otherwise read "not configured" beside a chat
+                        // that works.
+                        value = models.firstOrNull { it.id == activeModelId }?.label
+                            ?: stringResource(R.string.model_service_not_configured),
+                        onClick = { showModelService = true },
+                        modifier = Modifier.testTag(GENERAL_SETTINGS_MODEL_TEST_TAG),
+                    )
                 }
             }
 
             GeneralSectionTitle(stringResource(R.string.settings_about_section))
-            SettingsCard(modifier = Modifier, radius = 8) {
+            SettingsCard(modifier = Modifier, radius = 8, bordered = false) {
                 Column(modifier = Modifier.padding(vertical = 5.dp)) {
                     StaticSettingsRow(
                         title = stringResource(R.string.settings_about_product),
@@ -204,18 +190,34 @@ internal fun GeneralSettingsScreen(
         }
 
         // The source's `CloseButton()`, in the same corner on both settings pages.
-        FilledTonalIconButton(
+        Surface(
             onClick = onClose,
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 3.dp,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 16.dp, end = 16.dp)
-                .size(44.dp)
+                .padding(top = 22.dp, end = 18.dp)
+                .size(50.dp)
                 .testTag(GENERAL_SETTINGS_CLOSE_TEST_TAG),
         ) {
-            Icon(
-                painterResource(R.drawable.ic_symbol_xmark),
-                contentDescription = stringResource(R.string.common_close),
-                modifier = Modifier.size(20.dp),
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painterResource(R.drawable.ic_symbol_xmark),
+                    contentDescription = stringResource(R.string.common_close),
+                    modifier = Modifier.size(21.dp),
+                )
+            }
+        }
+
+        if (showLanguagePicker) {
+            LanguagePickerOverlay(
+                selected = selectedLocale,
+                onDismiss = { showLanguagePicker = false },
+                onSelect = { locale ->
+                    showLanguagePicker = false
+                    AppLocaleController.set(context, locale)
+                },
             )
         }
 
@@ -237,6 +239,139 @@ internal fun GeneralSettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageSettingsRow(value: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .defaultMinSize(minHeight = 52.dp)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            "Aa",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 20.sp,
+            modifier = Modifier.widthIn(min = 23.dp),
+        )
+        Text(
+            stringResource(R.string.settings_language_title),
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 130.dp),
+        )
+        SettingsChevron()
+    }
+}
+
+@Composable
+private fun LanguagePickerOverlay(
+    selected: AppLocale,
+    onDismiss: () -> Unit,
+    onSelect: (AppLocale) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                topStart = 28.dp,
+                topEnd = 28.dp,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = {})
+                .defaultMinSize(minHeight = 194.dp),
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(66.dp)
+                        .padding(start = 22.dp, end = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.settings_language_choose),
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Surface(
+                        onClick = onDismiss,
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(42.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painterResource(R.drawable.ic_symbol_xmark),
+                                contentDescription = stringResource(R.string.common_close),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider()
+                LanguageChoiceRow(
+                    label = stringResource(R.string.settings_language_chinese),
+                    selected = selected == AppLocale.SIMPLIFIED_CHINESE,
+                    onClick = { onSelect(AppLocale.SIMPLIFIED_CHINESE) },
+                )
+                LanguageChoiceRow(
+                    label = stringResource(R.string.settings_language_english),
+                    selected = selected == AppLocale.ENGLISH,
+                    onClick = { onSelect(AppLocale.ENGLISH) },
+                )
+                Spacer(Modifier.size(28.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(
+                painterResource(R.drawable.ic_symbol_checkmark_circle),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
@@ -377,9 +512,3 @@ private fun appVersionName(): String {
         }.getOrNull().orEmpty().ifBlank { unknown }
     }
 }
-
-private val THEME_MODES = listOf(
-    AppThemeMode.SYSTEM to R.string.settings_theme_system,
-    AppThemeMode.LIGHT to R.string.settings_theme_light,
-    AppThemeMode.DARK to R.string.settings_theme_dark,
-)

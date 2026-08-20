@@ -44,18 +44,6 @@ private const val DEVICE_KIND_DESKTOP = "desktop"
 private const val DEVICE_KIND_MOBILE = "mobile"
 
 /**
- * Device names our own non-desktop builds register under, lowercased.
- *
- * Only labels we hardcode ourselves belong here — the Android client reports
- * `Build.MODEL` (`android/.../DeviceInstall.kt:27`), an arbitrary string that
- * guessing at would hide desktops as readily as phones.
- *
- * Kept in step with `harmonyos/.../CloudAccountClient.ets`, which carries the
- * same list for the HarmonyOS client.
- */
-private val KNOWN_NON_DESKTOP_DEVICE_NAMES = setOf("harmonyos phone", "harmonyos watch")
-
-/**
  * Whether a relay device row is a desktop, and so controllable from a phone.
  *
  * A row that reports its kind is taken at its word. A row without one predates
@@ -65,11 +53,14 @@ private val KNOWN_NON_DESKTOP_DEVICE_NAMES = setOf("harmonyos phone", "harmonyos
  * desktop would strand the user, while a stale phone row disappears the next
  * time that phone logs in against a relay that stores kinds.
  */
-private fun AccountDeviceWire.isDesktop(selfDeviceId: String): Boolean {
+private fun AccountDeviceWire.isDesktop(
+    selfDeviceId: String,
+    isLegacyMobileDeviceName: (String) -> Boolean,
+): Boolean {
     val kind = deviceKind?.trim().orEmpty()
     if (kind.isNotEmpty()) return kind == DEVICE_KIND_DESKTOP
     if (selfDeviceId.isNotEmpty() && deviceId == selfDeviceId) return false
-    return deviceName.trim().lowercase() !in KNOWN_NON_DESKTOP_DEVICE_NAMES
+    return !isLegacyMobileDeviceName(deviceName)
 }
 
 public enum class CloudAccountFailure {
@@ -137,7 +128,12 @@ public data class CloudSettingsBlob public constructor(
 public class CloudAccountClient internal constructor(
     private val client: HttpClient,
     private val log: TransportLog = TransportLog.None,
+    legacyMobileDeviceNames: Set<String> = emptySet(),
 ) {
+    private val normalizedLegacyMobileDeviceNames = legacyMobileDeviceNames.mapTo(mutableSetOf()) {
+        it.trim().lowercase()
+    }
+
     public suspend fun login(
         relayUrl: String,
         username: String,
@@ -206,7 +202,11 @@ public class CloudAccountClient internal constructor(
             ListSerializer(AccountDeviceWire.serializer()),
             session.token,
             RELAY_DEFAULT_TIMEOUT_MS,
-        ).filter { it.isDesktop(selfDeviceId) }.map { device ->
+        ).filter { device ->
+            device.isDesktop(selfDeviceId) { name ->
+                name.trim().lowercase() in normalizedLegacyMobileDeviceNames
+            }
+        }.map { device ->
             CloudAccountDevice(
                 device.deviceId,
                 device.deviceName.ifEmpty { device.deviceId },
@@ -387,6 +387,11 @@ public class CloudAccountClient internal constructor(
         public fun create(): CloudAccountClient = CloudAccountClient(relayHttpClient(), TransportLog.None)
 
         public fun create(log: TransportLog): CloudAccountClient = CloudAccountClient(relayHttpClient(), log)
+
+        public fun create(
+            log: TransportLog,
+            legacyMobileDeviceNames: Set<String>,
+        ): CloudAccountClient = CloudAccountClient(relayHttpClient(), log, legacyMobileDeviceNames)
     }
 }
 

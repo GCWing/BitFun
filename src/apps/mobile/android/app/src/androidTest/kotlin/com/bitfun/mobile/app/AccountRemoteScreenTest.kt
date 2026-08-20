@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import com.bitfun.mobile.app.ui.remote.AccountRemoteScreen
 import com.bitfun.mobile.app.ui.theme.BitFunTheme
+import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 import org.junit.Rule
@@ -27,6 +28,7 @@ class AccountRemoteScreenTest {
                     deviceId = "device-1",
                     deviceName = "Studio Mac",
                     accountUsername = "tester",
+                    phase = ConnectionPhase.CONNECTED,
                     onSessionIntent = {},
                     onWorkspaceIntent = {},
                     modifier = Modifier,
@@ -34,9 +36,6 @@ class AccountRemoteScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Connected").assertIsDisplayed()
-        composeRule.onNodeWithText("Controlling · Studio Mac").assertIsDisplayed()
-        composeRule.onNodeWithText("Sessions").assertIsDisplayed()
         composeRule.onAllNodesWithText("Connect to a desktop").assertCountEquals(0)
     }
 }

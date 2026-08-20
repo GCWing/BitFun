@@ -5,6 +5,7 @@ import com.bitfun.mobile.core.persistence.DraftStore
 import com.bitfun.mobile.core.persistence.PersistedChatMessage
 import com.bitfun.mobile.core.persistence.PersistedChatSession
 import com.bitfun.mobile.core.persistence.SecureStore
+import com.bitfun.mobile.core.feature.session.ComposerImage
 import com.bitfun.mobile.core.transport.ModelProviderException
 import com.bitfun.mobile.core.transport.ModelProviderFailure
 import com.bitfun.mobile.core.transport.ModelProviderStreamResult
@@ -115,6 +116,39 @@ class GeneralChatStoreTest {
         assertEquals(2, chats.messages.size)
         assertEquals(listOf(state.sessionId), state.sessions.map { it.id })
         assertEquals("question", state.sessions.single().title)
+    }
+
+    @Test
+    fun imageOnlySendPersistsAndReplaysTheAttachment() = runTest {
+        var recorded: GeneralChatStreamRequest? = null
+        val stream = GeneralChatStreamPort { request, _ ->
+            recorded = request
+            ModelProviderStreamResult(200, "reply-1", "I can see it.")
+        }
+        val chats = MemoryChats()
+        val secure = MemorySecure()
+        val store = store(this, stream = stream, chats = chats, secure = secure)
+        store.dispatch(configure())
+        store.dispatch(
+            GeneralChatIntent.SetImages(
+                listOf(ComposerImage("image-1", "data:image/png;base64,AAAA", "image/png")),
+            ),
+        )
+
+        store.dispatch(GeneralChatIntent.Send)
+        advanceUntilIdle()
+
+        val user = store.state.value.timeline.persistedMessages.first()
+        assertEquals("", user.text)
+        assertEquals("data:image/png;base64,AAAA", user.images?.single()?.dataUrl)
+        assertEquals(emptyList(), store.state.value.images)
+        assertEquals("data:image/png;base64,AAAA", recorded?.messages?.single()?.images?.single()?.dataUrl)
+
+        val restarted = store(this, reply("unused"), chats = chats, secure = secure)
+        assertEquals(
+            "data:image/png;base64,AAAA",
+            restarted.state.value.timeline.persistedMessages.first().images?.single()?.dataUrl,
+        )
     }
 
     @Test

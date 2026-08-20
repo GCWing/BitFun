@@ -79,13 +79,16 @@ class CloudAccountClientTest {
                   {"device_id":"phone-2","device_name":"Pixel 8","online":true,"device_kind":"mobile"},
                   {"device_id":"watch-1","device_name":"Watch","online":false,"device_kind":"watch"},
                   {"device_id":"phone-1","device_name":"Pixel 8","online":true},
-                  {"device_id":"phone-3","device_name":"HarmonyOS Phone","online":true},
-                  {"device_id":"watch-2","device_name":"HarmonyOS Watch","online":false},
+                  {"device_id":"phone-3","device_name":"Legacy Phone","online":true},
+                  {"device_id":"watch-2","device_name":"Legacy Watch","online":false},
                   {"device_id":"legacy-1","device_name":"DESKTOP-KM3L4UI","online":false,"last_seen_at":9}
                 ]""",
             )
         }
-        val client = CloudAccountClient(relayHttpClient(engine))
+        val client = CloudAccountClient(
+            relayHttpClient(engine),
+            legacyMobileDeviceNames = setOf("Legacy Phone", "Legacy Watch"),
+        )
 
         val devices = client.listDevices(
             "https://relay.test/relay",

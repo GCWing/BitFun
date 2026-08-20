@@ -34,12 +34,14 @@ import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.remote.SessionActionSheet
 import com.bitfun.mobile.app.ui.remote.SessionDetailsSheet
-import com.bitfun.mobile.app.ui.session.RenameSessionDialog
+import com.bitfun.mobile.core.feature.account.AccountDeviceUi
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.SessionActionPolicy
 import com.bitfun.mobile.core.feature.session.SessionActionScope
+import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.shell.SidebarPresentation
 import com.bitfun.mobile.core.feature.shell.SidebarSessionRow
+import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 
 internal const val SIDEBAR_TEST_TAG: String = "app-sidebar"
 
@@ -62,7 +64,13 @@ internal const val SIDEBAR_CODE_TEST_TAG: String = "app-sidebar-code"
 internal fun AppSidebar(
     accountUserId: String?,
     connectionPhase: ConnectionPhase,
+    remoteDevices: List<AccountDeviceUi>,
+    remoteSelectedDeviceId: String?,
+    remoteDeviceName: String,
+    remoteState: RemoteSessionUiState,
+    workspaceState: RemoteWorkspaceUiState,
     remoteActive: Boolean,
+    remoteSelectedSessionId: String?,
     sessions: List<SidebarSessionRow>,
     selectedSessionId: String?,
     query: String,
@@ -70,9 +78,13 @@ internal fun AppSidebar(
     onQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onEnterCode: () -> Unit,
+    onRetryRemoteDevice: () -> Unit,
+    onSelectRemoteDevice: (String) -> Unit,
+    onOpenRemoteSession: (String) -> Unit,
+    onCreateRemoteInWorkspace: (String) -> Unit,
+    onOpenRemoteWorkspace: (String) -> Unit,
     onNewChat: () -> Unit,
     onOpenSession: (SidebarSessionRow) -> Unit,
-    onRenameSession: (String, String) -> Unit,
     onArchiveSession: (String, Boolean) -> Unit,
     onExportSession: (SidebarSessionRow) -> Unit,
     onDeleteSession: (String) -> Unit,
@@ -87,7 +99,6 @@ internal fun AppSidebar(
     // they are open, and a captured row would go stale the moment a reply lands.
     var actionSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     var detailsSessionId by rememberSaveable { mutableStateOf<String?>(null) }
-    var renameSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     var archivedExpanded by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize().testTag(SIDEBAR_TEST_TAG)) {
@@ -103,14 +114,6 @@ internal fun AppSidebar(
                 SidebarSignedOutHeader(onNewChat)
             }
 
-            NavRow(
-                label = stringResource(R.string.sidebar_code),
-                active = remoteActive,
-                leading = { ConnectionDot(connectionPhase) },
-                onClick = onEnterCode,
-                modifier = Modifier.testTag(SIDEBAR_CODE_TEST_TAG),
-            )
-
             SidebarSessionList(
                 sections = sections,
                 selectedSessionId = selectedSessionId,
@@ -120,6 +123,23 @@ internal fun AppSidebar(
                 onToggleArchived = { archivedExpanded = !archivedExpanded },
                 onOpenSession = onOpenSession,
                 onOpenActions = { actionSessionId = it.id },
+                workspaceContent = {
+                    SidebarRemoteWorkspaceSection(
+                        connectionPhase = connectionPhase,
+                        devices = remoteDevices,
+                        selectedDeviceId = remoteSelectedDeviceId,
+                        deviceName = remoteDeviceName,
+                        remoteState = remoteState,
+                        workspaceState = workspaceState,
+                        selectedSessionId = remoteSelectedSessionId.takeIf { remoteActive },
+                        onConnect = onEnterCode,
+                        onRetryActive = onRetryRemoteDevice,
+                        onSelectDevice = onSelectRemoteDevice,
+                        onOpenSession = onOpenRemoteSession,
+                        onCreateInWorkspace = onCreateRemoteInWorkspace,
+                        onOpenWorkspace = onOpenRemoteWorkspace,
+                    )
+                },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -156,7 +176,6 @@ internal fun AppSidebar(
                 GENERAL_CHAT_AGENT_TYPE,
                 false,
             ),
-            onRename = { renameSessionId = id },
             onViewDetails = { detailsSessionId = id },
             onArchive = {
                 onArchiveSession(id, !session.status.equals(ARCHIVED, ignoreCase = true))
@@ -187,55 +206,6 @@ internal fun AppSidebar(
         )
     }
 
-    renameSessionId?.let { id ->
-        val session = sessions.firstOrNull { it.id == id }
-        if (session == null) {
-            renameSessionId = null
-            return@let
-        }
-        RenameSessionDialog(
-            currentTitle = session.title,
-            onConfirm = { onRenameSession(id, it) },
-            onDismiss = { renameSessionId = null },
-        )
-    }
-}
-
-/** A destination, drawn the way `NavRow` draws it in the source. */
-@Composable
-private fun NavRow(
-    label: String,
-    active: Boolean,
-    leading: @Composable () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(46.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(start = 12.dp, end = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        leading()
-        Text(
-            label,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            painterResource(R.drawable.ic_symbol_desktop),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-    }
 }
 
 private const val GENERAL_CHAT_AGENT_TYPE = "general_chat"

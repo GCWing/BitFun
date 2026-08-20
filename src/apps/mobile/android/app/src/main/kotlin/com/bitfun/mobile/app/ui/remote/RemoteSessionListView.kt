@@ -10,23 +10,29 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,35 +42,40 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.state.SessionViewSettings
 import com.bitfun.mobile.app.ui.settings.SessionViewSettingsSheet
 import com.bitfun.mobile.app.ui.settings.VIEW_SETTINGS_TOGGLE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.statusText
+import com.bitfun.mobile.app.ui.shell.sidebar.SidebarCircleButton
 import com.bitfun.mobile.core.feature.session.RelativeTime
 import com.bitfun.mobile.core.feature.session.RemoteSessionFailureReason
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.session.SessionActionPolicy
 import com.bitfun.mobile.core.feature.session.SessionActionScope
-import com.bitfun.mobile.core.feature.session.SessionAgentFilter
 import com.bitfun.mobile.core.feature.session.SessionListPresentation
 import com.bitfun.mobile.core.feature.session.SessionListSection
 import com.bitfun.mobile.core.feature.session.SessionTimePresentation
 import com.bitfun.mobile.core.feature.session.SessionWorkspaceContext
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
+import kotlinx.coroutines.delay
 
 internal const val SESSION_LIST_TEST_TAG: String = "session-list"
 internal const val SESSION_CREATE_TEST_TAG: String = "session-create"
 internal const val SESSION_PROJECTS_TEST_TAG: String = "session-projects"
 internal const val SESSION_SHOW_MORE_TEST_TAG_PREFIX: String = "session-show-more:"
+internal const val SESSION_SEARCH_TOGGLE_TEST_TAG: String = "session-search-toggle"
+internal const val SESSION_SEARCH_FIELD_TEST_TAG: String = "session-search-field"
 
 /**
  * The paired desktop's sessions, ported from `pages/components/SessionList.ets`.
@@ -86,28 +97,24 @@ internal fun RemoteSessionListView(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 4.dp)
             .testTag(SESSION_LIST_TEST_TAG),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        connectionDetails()
-
         RemoteSessionListContent(
             state = state,
             workspaceState = workspaceState,
             onIntent = onIntent,
             onOpen = onOpen,
             onCreate = onCreate,
-        )
-
-        RemoteWorkspacePanel(
-            state = workspaceState,
-            sessionId = (state as? RemoteSessionUiState.Ready)?.selectedSessionId.orEmpty(),
-            onIntent = onWorkspaceIntent,
-            // The shell gives the file a pane or the whole page; see
-            // `MobileScreen`'s `previewLayout`.
-            showPreview = false,
+            connectionDetails = connectionDetails,
+            workspaceContent = {
+                RemoteWorkspacePanel(
+                    state = workspaceState,
+                    sessionId = (state as? RemoteSessionUiState.Ready)?.selectedSessionId.orEmpty(),
+                    onIntent = onWorkspaceIntent,
+                    showPreview = false,
+                )
+            },
         )
     }
 }
@@ -119,6 +126,7 @@ internal fun RemoteSessionListView(
  * header, and both callers already own the surface they scroll.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun RemoteSessionListContent(
     state: RemoteSessionUiState,
     workspaceState: RemoteWorkspaceUiState,
@@ -126,10 +134,11 @@ internal fun RemoteSessionListContent(
     onOpen: (String) -> Unit,
     /** Opens the longer create route, where the first message is written. */
     onCreate: () -> Unit,
+    connectionDetails: @Composable () -> Unit,
+    workspaceContent: @Composable () -> Unit,
 ) {
     var search by rememberSaveable { mutableStateOf("") }
-    var renaming by rememberSaveable { mutableStateOf<String?>(null) }
-    var renameDraft by rememberSaveable { mutableStateOf("") }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     var actionsFor by rememberSaveable { mutableStateOf<String?>(null) }
     var detailsFor by rememberSaveable { mutableStateOf<String?>(null) }
     var viewSettingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -142,125 +151,62 @@ internal fun RemoteSessionListContent(
         mutableStateOf(SessionViewSettings.Default)
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(stringResource(R.string.sessions_title), style = MaterialTheme.typography.titleLarge)
-            if (state is RemoteSessionUiState.Ready && !state.busy) {
-                Text(
-                    stringResource(R.string.sessions_messages_synced),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    val ready = state as? RemoteSessionUiState.Ready
+    LaunchedEffect(ready?.query) {
+        if (ready != null && ready.query != search) search = ready.query
+    }
+    LaunchedEffect(search, searchOpen) {
+        if (searchOpen && ready != null && search != ready.query) {
+            delay(250)
+            onIntent(RemoteSessionIntent.Search(search))
         }
-        when (state) {
-            RemoteSessionUiState.Idle -> Unit
-            RemoteSessionUiState.Loading -> Text(stringResource(R.string.sessions_loading))
-            is RemoteSessionUiState.Failed -> SessionFailure(
-                state,
-                onRetry = { onIntent(RemoteSessionIntent.Load) },
-            )
-            is RemoteSessionUiState.Ready -> {
-                // Search is applied on tap, not per keystroke: every apply is a
-                // round trip to the desktop.
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = search,
-                        onValueChange = { search = it },
-                        label = { Text(stringResource(R.string.sessions_search)) },
-                        enabled = !state.busy,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = { onIntent(RemoteSessionIntent.Search(search)) },
-                        enabled = !state.busy,
-                    ) { Text(stringResource(R.string.sessions_search_action)) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        SessionAgentFilter.ALL to R.string.sessions_filter_all,
-                        SessionAgentFilter.CODE to R.string.sessions_filter_code,
-                        SessionAgentFilter.COWORK to R.string.sessions_filter_cowork,
-                    ).forEach { (filter, label) ->
-                        FilterChip(
-                            selected = state.agentFilter == filter,
-                            onClick = { onIntent(RemoteSessionIntent.SetAgentFilter(filter)) },
-                            enabled = !state.busy,
-                            label = { Text(stringResource(label)) },
-                        )
-                    }
-                }
-                // Icons rather than three sentences side by side, as
-                // `RemoteSessionList.ets` has them: the source puts creation
-                // behind a pencil that opens a Code/Cowork menu, and on a phone
-                // the spelled-out labels wrapped mid-word.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box {
-                        IconButton(
-                            onClick = { createMenuOpen = true },
-                            enabled = !state.busy,
-                        ) {
-                            Icon(
-                                painterResource(R.drawable.ic_symbol_square_and_pencil),
-                                contentDescription = stringResource(R.string.sidebar_new_chat),
-                                modifier = Modifier.size(21.dp),
-                            )
-                        }
-                        // The two agent types the desktop can start, named as
-                        // `ProjectCreateMenu` names them, above the longer route
-                        // that lets the user say what the session is for first.
-                        DropdownMenu(
-                            expanded = createMenuOpen,
-                            onDismissRequest = { createMenuOpen = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.create_title)) },
-                                onClick = {
-                                    createMenuOpen = false
-                                    onCreate()
-                                },
-                                modifier = Modifier.testTag(SESSION_CREATE_TEST_TAG),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sessions_filter_code)) },
-                                onClick = {
-                                    createMenuOpen = false
-                                    onIntent(RemoteSessionIntent.CreateSession("code"))
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sessions_filter_cowork)) },
-                                onClick = {
-                                    createMenuOpen = false
-                                    onIntent(RemoteSessionIntent.CreateSession("cowork"))
-                                },
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = { viewSettingsOpen = !viewSettingsOpen },
-                        modifier = Modifier.testTag(VIEW_SETTINGS_TOGGLE_TEST_TAG),
-                    ) {
-                        Icon(
-                            // The source marks this control with the same three
-                            // dots the session overflow uses — `AppSidebar.ets`
-                            // renders `SidebarGlyph({ kind: 'session_more' })`
-                            // here — so a tuner slider would be our invention.
-                            painterResource(R.drawable.ic_symbol_ellipsis),
-                            contentDescription = stringResource(R.string.view_settings_title),
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
+    }
 
+    Column(modifier = Modifier.fillMaxSize()) {
+        RemoteSessionListHeader(
+            searchOpen = searchOpen,
+            busy = ready?.busy == true,
+            createMenuOpen = createMenuOpen,
+            onToggleViewSettings = { viewSettingsOpen = true },
+            onToggleSearch = {
+                searchOpen = !searchOpen
+                if (!searchOpen && search.isNotEmpty()) {
+                    search = ""
+                    onIntent(RemoteSessionIntent.Search(""))
+                }
+            },
+            onToggleCreateMenu = { createMenuOpen = !createMenuOpen },
+            onDismissCreateMenu = { createMenuOpen = false },
+            onCreate = onCreate,
+            onCreateAgent = { agentType ->
+                createMenuOpen = false
+                onIntent(RemoteSessionIntent.CreateSession(agentType))
+            },
+        )
+        if (searchOpen) {
+            RemoteSessionSearchField(
+                query = search,
+                enabled = ready != null,
+                onQueryChange = { search = it },
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            connectionDetails()
+            when (state) {
+                RemoteSessionUiState.Idle -> Unit
+                RemoteSessionUiState.Loading -> Text(stringResource(R.string.sessions_loading))
+                is RemoteSessionUiState.Failed -> SessionFailure(
+                    state,
+                    onRetry = { onIntent(RemoteSessionIntent.Load) },
+                )
+                is RemoteSessionUiState.Ready -> {
                 // The desktop's search is a separate, server-side narrowing; the
                 // sheet's filters are applied here on what came back, exactly as
                 // `RemoteSessionList.ets` layers the two.
@@ -271,24 +217,6 @@ internal fun RemoteSessionListContent(
                         workspace = workspace,
                         options = viewSettings.options(query = ""),
                         nowMs = System.currentTimeMillis(),
-                    )
-                }
-
-                if (viewSettingsOpen) {
-                    SessionViewSettingsSheet(
-                        settings = viewSettings,
-                        workspaces = remember(state.sessions, workspace) {
-                            SessionListPresentation.workspaceOptions(state.sessions, workspace)
-                        },
-                        agentGroups = remember(state.sessions, workspace) {
-                            SessionListPresentation.agentGroups(state.sessions, workspace)
-                        },
-                        statuses = remember(state.sessions) {
-                            SessionListPresentation.statusOptions(state.sessions)
-                        },
-                        onChange = { viewSettings = it },
-                        onClose = { viewSettingsOpen = false },
-                        modifier = Modifier,
                     )
                 }
 
@@ -337,29 +265,6 @@ internal fun RemoteSessionListContent(
                                 },
                                 onActions = { actionsFor = session.id },
                             )
-                            if (renaming == session.id) {
-                                OutlinedTextField(
-                                    value = renameDraft,
-                                    onValueChange = { renameDraft = it },
-                                    label = { Text(stringResource(R.string.session_rename_label)) },
-                                    enabled = !state.busy,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    TextButton(
-                                        onClick = {
-                                            onIntent(
-                                                RemoteSessionIntent.RenameSession(session.id, renameDraft),
-                                            )
-                                            renaming = null
-                                        },
-                                        enabled = !state.busy && renameDraft.isNotBlank(),
-                                    ) { Text(stringResource(R.string.session_rename_confirm)) }
-                                    TextButton(onClick = { renaming = null }) {
-                                        Text(stringResource(R.string.pairing_dismiss))
-                                    }
-                                }
-                            }
                         }
                         if (!collapsed && batch.nextCount > 0) {
                             TextButton(
@@ -382,11 +287,6 @@ internal fun RemoteSessionListContent(
                         ) { Text(stringResource(R.string.sessions_load_more)) }
                     }
                 }
-                Button(
-                    onClick = { onIntent(RemoteSessionIntent.Refresh) },
-                    enabled = !state.busy,
-                ) { Text(stringResource(R.string.sessions_refresh)) }
-
                 // Looked up by id rather than held as an object: a refresh that
                 // lands while the sheet is open replaces every row, and holding
                 // the old copy would show a title the list no longer has. If the
@@ -400,10 +300,6 @@ internal fun RemoteSessionListContent(
                             session.agentType,
                             state.busy,
                         ),
-                        onRename = {
-                            renaming = session.id
-                            renameDraft = session.title
-                        },
                         onViewDetails = { detailsFor = session.id },
                         // Archive and export are local-storage operations, so
                         // the policy never offers them for a REMOTE scope and
@@ -427,8 +323,186 @@ internal fun RemoteSessionListContent(
                         onDismiss = { detailsFor = null },
                     )
                 }
+                }
+            }
+            workspaceContent()
+        }
+    }
+
+    if (viewSettingsOpen && ready != null) {
+        val workspace = workspaceState.asSessionContext()
+        ModalBottomSheet(
+            onDismissRequest = { viewSettingsOpen = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.background,
+            dragHandle = null,
+        ) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                SessionViewSettingsSheet(
+                    settings = viewSettings,
+                    workspaces = remember(ready.sessions, workspace) {
+                        SessionListPresentation.workspaceOptions(ready.sessions, workspace)
+                    },
+                    agentGroups = remember(ready.sessions, workspace) {
+                        SessionListPresentation.agentGroups(ready.sessions, workspace)
+                    },
+                    statuses = remember(ready.sessions) {
+                        SessionListPresentation.statusOptions(ready.sessions)
+                    },
+                    onChange = { viewSettings = it },
+                    onClose = { viewSettingsOpen = false },
+                    modifier = Modifier,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun RemoteSessionListHeader(
+    searchOpen: Boolean,
+    busy: Boolean,
+    createMenuOpen: Boolean,
+    onToggleViewSettings: () -> Unit,
+    onToggleSearch: () -> Unit,
+    onToggleCreateMenu: () -> Unit,
+    onDismissCreateMenu: () -> Unit,
+    onCreate: () -> Unit,
+    onCreateAgent: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(50.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.app_name),
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
+        )
+        SidebarCircleButton(
+            icon = R.drawable.ic_symbol_ellipsis,
+            contentDescription = stringResource(R.string.view_settings_title),
+            diameter = 38,
+            onClick = onToggleViewSettings,
+            modifier = Modifier.testTag(VIEW_SETTINGS_TOGGLE_TEST_TAG),
+        )
+        SidebarCircleButton(
+            icon = R.drawable.ic_symbol_magnifyingglass,
+            contentDescription = stringResource(R.string.sidebar_search),
+            diameter = 38,
+            onClick = onToggleSearch,
+            modifier = Modifier.testTag(SESSION_SEARCH_TOGGLE_TEST_TAG),
+        )
+        Box {
+            SidebarCircleButton(
+                icon = R.drawable.ic_symbol_square_and_pencil,
+                contentDescription = stringResource(R.string.sidebar_new_chat),
+                diameter = 38,
+                onClick = onToggleCreateMenu,
+                modifier = Modifier,
+            )
+            DropdownMenu(
+                expanded = createMenuOpen,
+                onDismissRequest = onDismissCreateMenu,
+                modifier = Modifier.width(150.dp),
+                shape = RoundedCornerShape(14.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
+                shadowElevation = 18.dp,
+            ) {
+                CompactCreateMenuItem(
+                    label = stringResource(R.string.create_title),
+                    enabled = !busy,
+                    onClick = {
+                        onDismissCreateMenu()
+                        onCreate()
+                    },
+                    modifier = Modifier.testTag(SESSION_CREATE_TEST_TAG),
+                )
+                CompactCreateMenuItem(
+                    label = stringResource(R.string.sessions_filter_code),
+                    enabled = !busy,
+                    onClick = { onCreateAgent("code") },
+                    modifier = Modifier,
+                )
+                CompactCreateMenuItem(
+                    label = stringResource(R.string.sessions_filter_cowork),
+                    enabled = !busy,
+                    onClick = { onCreateAgent("cowork") },
+                    modifier = Modifier,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactCreateMenuItem(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    DropdownMenuItem(
+        text = {
+            Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        },
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(42.dp),
+    )
+}
+
+@Composable
+private fun RemoteSessionSearchField(
+    query: String,
+    enabled: Boolean,
+    onQueryChange: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 4.dp)
+            .height(42.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_symbol_magnifyingglass),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            enabled = enabled,
+            singleLine = true,
+            textStyle = LocalTextStyle.current.copy(
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+            decorationBox = { field ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            stringResource(R.string.sidebar_search_placeholder),
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    field()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().testTag(SESSION_SEARCH_FIELD_TEST_TAG),
+        )
     }
 }
 

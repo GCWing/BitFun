@@ -20,7 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
-import com.bitfun.mobile.app.ui.shell.labelRes
+import com.bitfun.mobile.app.ui.common.labelRes
 import com.bitfun.mobile.core.feature.connection.RemoteControlAction
 import com.bitfun.mobile.core.feature.connection.RemoteControlSource
 import com.bitfun.mobile.core.feature.connection.RemoteControlSummary

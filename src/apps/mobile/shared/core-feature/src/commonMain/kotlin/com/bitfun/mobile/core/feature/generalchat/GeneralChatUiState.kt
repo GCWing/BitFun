@@ -2,6 +2,7 @@ package com.bitfun.mobile.core.feature.generalchat
 
 import com.bitfun.mobile.core.domain.ChatTimelineState
 import com.bitfun.mobile.core.feature.markdown.MarkdownBlock
+import com.bitfun.mobile.core.feature.session.ComposerImage
 
 public enum class GeneralChatFailureReason {
     UNCONFIGURED,
@@ -51,6 +52,8 @@ public data class GeneralChatUiState public constructor(
     public val busy: Boolean,
     public val failure: GeneralChatFailureReason?,
     public val export: GeneralChatExportUi?,
+    /** Images selected for the next general-chat turn. */
+    public val images: List<ComposerImage>,
 )
 
 /**
@@ -125,6 +128,11 @@ public sealed interface GeneralChatIntent {
     public data object ClearConnectionTest : GeneralChatIntent
 
     public data class UpdateDraft public constructor(public val text: String) : GeneralChatIntent
+
+    /** Replaces the pending image selection without touching the draft. */
+    public data class SetImages public constructor(
+        public val images: List<ComposerImage>,
+    ) : GeneralChatIntent
 
     /** Selects a catalog id; credentials remain owned by the config store. */
     public data class SelectModel public constructor(public val modelId: String) : GeneralChatIntent

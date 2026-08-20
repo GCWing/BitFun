@@ -8,6 +8,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
 /**
  * The palette, ported from the HarmonyOS client's `Theme.ets` plus its
@@ -190,6 +193,29 @@ private val DarkExtras = BitFunColors(
 
 private val LocalBitFunColors = staticCompositionLocalOf { LightExtras }
 
+/**
+ * Harmony's mobile surfaces use a small, explicit type scale rather than the
+ * platform Material defaults. Keeping the roles here makes every remaining
+ * Material control start from the same geometry as the ArkUI counterpart.
+ */
+private val BitFunTypography = androidx.compose.material3.Typography(
+    displayLarge = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold),
+    displayMedium = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold),
+    displaySmall = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
+    headlineLarge = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold),
+    headlineMedium = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
+    headlineSmall = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold),
+    titleLarge = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
+    titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
+    titleSmall = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
+    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
+    labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    labelMedium = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium),
+    labelSmall = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
+)
+
 /** The extra palette for the theme in scope. Reads like `MaterialTheme.colorScheme`. */
 internal val bitFunColors: BitFunColors
     @Composable @ReadOnlyComposable get() = LocalBitFunColors.current
@@ -197,6 +223,10 @@ internal val bitFunColors: BitFunColors
 @Composable
 internal fun BitFunTheme(dark: Boolean, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalBitFunColors provides if (dark) DarkExtras else LightExtras) {
-        MaterialTheme(colorScheme = if (dark) DarkScheme else LightScheme, content = content)
+        MaterialTheme(
+            colorScheme = if (dark) DarkScheme else LightScheme,
+            typography = BitFunTypography,
+            content = content,
+        )
     }
 }

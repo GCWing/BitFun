@@ -1,6 +1,10 @@
 package com.bitfun.mobile.app
 
+import android.accessibilityservice.AccessibilityService
+import android.os.SystemClock
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -9,26 +13,32 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.bitfun.mobile.app.ui.chat.COMPOSER_INPUT_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.COMPOSER_SEND_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.CONVERSATION_BACK_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.CONVERSATION_LIST_TEST_TAG
-import com.bitfun.mobile.app.ui.chat.GENERAL_CHAT_MODEL_TEST_TAG
 import com.bitfun.mobile.app.ui.remote.CONNECTION_RETRY_TEST_TAG
 import com.bitfun.mobile.app.ui.remote.CONNECT_MANUAL_TEST_TAG
+import com.bitfun.mobile.app.ui.remote.CONNECT_PAIRING_CODE_TEST_TAG
+import com.bitfun.mobile.app.ui.remote.CONNECT_SUBMIT_TEST_TAG
+import com.bitfun.mobile.app.ui.remote.FILE_PREVIEW_DOWNLOAD_TEST_TAG
+import com.bitfun.mobile.app.ui.remote.FILE_PREVIEW_HEADER_TEST_TAG
+import com.bitfun.mobile.app.ui.remote.FILE_PREVIEW_REFRESH_TEST_TAG
 import com.bitfun.mobile.app.ui.remote.FILE_PREVIEW_TEST_TAG
 import com.bitfun.mobile.app.ui.remote.SESSION_LIST_TEST_TAG
-import com.bitfun.mobile.app.ui.settings.CURRENT_CONTROL_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.GENERAL_SETTINGS_CLOSE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.GENERAL_SETTINGS_MODEL_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.GENERAL_SETTINGS_PROFILE_TEST_TAG
+import com.bitfun.mobile.app.ui.settings.GENERAL_SETTINGS_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.MODEL_SERVICE_ACCOUNT_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.MODEL_SERVICE_KEY_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.MODEL_SERVICE_LOCAL_TEST_TAG
@@ -37,13 +47,12 @@ import com.bitfun.mobile.app.ui.settings.MODEL_SERVICE_PROBE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.MODEL_SERVICE_SAVE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.MODEL_SERVICE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.MODEL_SERVICE_URL_TEST_TAG
-import com.bitfun.mobile.app.ui.settings.QR_CONNECT_TEST_TAG
-import com.bitfun.mobile.app.ui.settings.SETTINGS_CLOSE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.SETTINGS_PROFILE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.VIEW_SETTINGS_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.VIEW_SETTINGS_TOGGLE_TEST_TAG
 import com.bitfun.mobile.app.ui.shell.MENU_TEST_TAG
 import com.bitfun.mobile.app.ui.shell.sidebar.SIDEBAR_CODE_TEST_TAG
+import com.bitfun.mobile.app.ui.shell.sidebar.SIDEBAR_REMOTE_SESSION_TEST_TAG
 import com.bitfun.mobile.app.ui.shell.sidebar.SIDEBAR_SETTINGS_TEST_TAG
 import com.bitfun.mobile.app.ui.shell.sidebar.SIDEBAR_TEST_TAG
 import com.bitfun.mobile.core.feature.layout.ConversationLayoutPolicy
@@ -71,7 +80,7 @@ class MobileScreenTest {
 
         composeRule.onNodeWithTag(SIDEBAR_CODE_TEST_TAG).performClick()
 
-        waitForText("Connect to a desktop")
+        waitForText("Get a pairing code")
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsNotDisplayed()
     }
 
@@ -107,7 +116,7 @@ class MobileScreenTest {
             composeRule.onNodeWithTag(GENERAL_SETTINGS_PROFILE_TEST_TAG).performClick()
         }
 
-        waitForText(if (signedOut) "Relay URL" else "Account")
+        waitForText(if (signedOut) "Sign in to BitFun" else "Account")
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsNotDisplayed()
     }
 
@@ -130,40 +139,43 @@ class MobileScreenTest {
         waitForNoText("About")
     }
 
-    /**
-     * One gear, two pages, chosen by what it was pressed over.
-     *
-     * `AppRootOverlaySurfaces.openSettings()` branches on the conversation behind
-     * the sidebar, and the two pages have no section in common: the general one
-     * names a model and a build, the remote one names a desktop. A gear that
-     * always opened the remote page — which is what this app did until the
-     * general page existed — leaves the model settings reachable only from the
-     * composer, and tells a user with no desktop about a connection they have
-     * never made.
-     */
+    /** The sidebar gear is the app-settings entry, even over a remote surface. */
     @Test
-    fun theGearOpensThePageThatMatchesTheSurface() {
+    fun theGearAlwaysOpensRootSettings() {
         composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
         openSettingsFromAuthenticatedDrawerOrSkip()
 
-        waitForText("Settings")
+        waitForTag(GENERAL_SETTINGS_TEST_TAG)
         composeRule.onNodeWithTag(GENERAL_SETTINGS_MODEL_TEST_TAG).assertIsDisplayed()
         composeRule.onNodeWithTag(GENERAL_SETTINGS_CLOSE_TEST_TAG).performClick()
-        waitForNoText("About")
+        waitForNoTag(GENERAL_SETTINGS_TEST_TAG)
 
         composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
-        composeRule.onNodeWithTag(SIDEBAR_CODE_TEST_TAG).performClick()
-        waitForText("Connect to a desktop")
+        waitForTag(SIDEBAR_TEST_TAG)
+        val connectNodes = composeRule.onAllNodesWithTag(SIDEBAR_CODE_TEST_TAG)
+            .fetchSemanticsNodes()
+        if (connectNodes.isNotEmpty()) {
+            composeRule.onNodeWithTag(SIDEBAR_CODE_TEST_TAG).performClick()
+        } else {
+            val remoteSessions = composeRule.onAllNodesWithTag(SIDEBAR_REMOTE_SESSION_TEST_TAG)
+                .fetchSemanticsNodes()
+            assumeTrue(
+                "A connected instrumentation device needs at least one remote session",
+                remoteSessions.isNotEmpty(),
+            )
+            composeRule.onAllNodesWithTag(SIDEBAR_REMOTE_SESSION_TEST_TAG)[0].performClick()
+        }
+        waitForTag(MENU_TEST_TAG)
 
         composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
+        waitForTag(SIDEBAR_TEST_TAG)
         openSettingsFromAuthenticatedDrawerOrSkip()
 
-        waitForText("Remote control")
-        composeRule.onNodeWithTag(CURRENT_CONTROL_TEST_TAG).assertIsDisplayed()
-        composeRule.onNodeWithTag(QR_CONNECT_TEST_TAG).assertIsDisplayed()
-        composeRule.onNodeWithTag(SETTINGS_PROFILE_TEST_TAG).assertIsDisplayed()
-        composeRule.onNodeWithTag(SETTINGS_CLOSE_TEST_TAG).performClick()
-        waitForNoText("Remote control")
+        waitForTag(GENERAL_SETTINGS_TEST_TAG)
+        composeRule.onNodeWithTag(GENERAL_SETTINGS_MODEL_TEST_TAG).assertIsDisplayed()
+        composeRule.onAllNodesWithTag(SETTINGS_PROFILE_TEST_TAG).assertCountEquals(0)
+        composeRule.onNodeWithTag(GENERAL_SETTINGS_CLOSE_TEST_TAG).performClick()
+        waitForNoTag(GENERAL_SETTINGS_TEST_TAG)
     }
 
     /**
@@ -174,7 +186,7 @@ class MobileScreenTest {
      */
     @Test
     fun modelServiceSheetRefusesAnInvalidApiUrl() {
-        composeRule.onNodeWithTag(GENERAL_CHAT_MODEL_TEST_TAG).performClick()
+        openGeneralModelService()
         composeRule.onNodeWithTag(MODEL_SERVICE_TEST_TAG).assertIsDisplayed()
 
         // The panel opens on the overview, so the form is one row in.
@@ -202,7 +214,7 @@ class MobileScreenTest {
      */
     @Test
     fun theModelPanelSaysWhatTheAccountHasSynced() {
-        composeRule.onNodeWithTag(GENERAL_CHAT_MODEL_TEST_TAG).performClick()
+        openGeneralModelService()
 
         composeRule.onNodeWithText("Account sync").assertIsDisplayed()
         composeRule.onNodeWithTag(MODEL_SERVICE_ACCOUNT_TEST_TAG).assertIsDisplayed()
@@ -219,7 +231,7 @@ class MobileScreenTest {
      */
     @Test
     fun theConnectionTestWaitsForSomethingToAuthenticateWith() {
-        composeRule.onNodeWithTag(GENERAL_CHAT_MODEL_TEST_TAG).performClick()
+        openGeneralModelService()
         composeRule.onNodeWithTag(MODEL_SERVICE_LOCAL_TEST_TAG).performClick()
 
         composeRule.onNodeWithTag(MODEL_SERVICE_PROBE_TEST_TAG).assertIsNotEnabled()
@@ -232,12 +244,11 @@ class MobileScreenTest {
     }
 
     @Test
-    fun remoteFormReportsEmptyPairingLink() {
+    fun remoteFormRefusesEmptyPairingLink() {
         openRemote()
         // Scanning is the front door; the fields live one step behind it.
-        composeRule.onNodeWithTag(CONNECT_MANUAL_TEST_TAG).performClick()
-        composeRule.onNodeWithText("Connect").performClick()
-        composeRule.onNodeWithText("Enter a pairing link first.").assertIsDisplayed()
+        openManualPairing()
+        composeRule.onNodeWithText("Pair").assertIsNotEnabled()
     }
 
     @Test
@@ -246,9 +257,9 @@ class MobileScreenTest {
         assumeTrue("bitfunPairingUrl instrumentation argument is required", pairingUrl.isNotBlank())
 
         openRemote()
-        composeRule.onNodeWithTag(CONNECT_MANUAL_TEST_TAG).performClick()
-        composeRule.onNodeWithText("Pairing link").performTextInput(pairingUrl)
-        composeRule.onNodeWithText("Connect").performClick()
+        openManualPairing()
+        composeRule.onNodeWithTag(CONNECT_PAIRING_CODE_TEST_TAG).performTextInput(pairingUrl)
+        composeRule.onNodeWithTag(CONNECT_SUBMIT_TEST_TAG).performClick()
 
         // The shell's top bar names the connection state once pairing lands.
         waitForText("Connected")
@@ -285,9 +296,9 @@ class MobileScreenTest {
         assumeTrue("bitfunPairingUrl instrumentation argument is required", pairingUrl.isNotBlank())
 
         openRemote()
-        composeRule.onNodeWithTag(CONNECT_MANUAL_TEST_TAG).performClick()
-        composeRule.onNodeWithText("Pairing link").performTextInput(pairingUrl)
-        composeRule.onNodeWithText("Connect").performClick()
+        openManualPairing()
+        composeRule.onNodeWithTag(CONNECT_PAIRING_CODE_TEST_TAG).performTextInput(pairingUrl)
+        composeRule.onNodeWithTag(CONNECT_SUBMIT_TEST_TAG).performClick()
 
         waitForText("完善鸿蒙端远程控制", substring = true)
         composeRule.onNodeWithText("完善鸿蒙端远程控制", substring = true)
@@ -325,9 +336,9 @@ class MobileScreenTest {
         assumeTrue("bitfunPairingUrl instrumentation argument is required", pairingUrl.isNotBlank())
 
         openRemote()
-        composeRule.onNodeWithTag(CONNECT_MANUAL_TEST_TAG).performClick()
-        composeRule.onNodeWithText("Pairing link").performTextInput(pairingUrl)
-        composeRule.onNodeWithText("Connect").performClick()
+        openManualPairing()
+        composeRule.onNodeWithTag(CONNECT_PAIRING_CODE_TEST_TAG).performTextInput(pairingUrl)
+        composeRule.onNodeWithTag(CONNECT_SUBMIT_TEST_TAG).performClick()
         waitForText("完善鸿蒙端远程控制", substring = true)
 
         composeRule.onNodeWithTag(VIEW_SETTINGS_TOGGLE_TEST_TAG).performScrollTo().performClick()
@@ -359,9 +370,9 @@ class MobileScreenTest {
         assumeTrue("bitfunPairingUrl instrumentation argument is required", pairingUrl.isNotBlank())
 
         openRemote()
-        composeRule.onNodeWithTag(CONNECT_MANUAL_TEST_TAG).performClick()
-        composeRule.onNodeWithText("Pairing link").performTextInput(pairingUrl)
-        composeRule.onNodeWithText("Connect").performClick()
+        openManualPairing()
+        composeRule.onNodeWithTag(CONNECT_PAIRING_CODE_TEST_TAG).performTextInput(pairingUrl)
+        composeRule.onNodeWithTag(CONNECT_SUBMIT_TEST_TAG).performClick()
         // The workspace panel only appears once the desktop has answered with
         // one, which is the same round trip the file field then depends on.
         waitForText("Remote file path")
@@ -373,6 +384,20 @@ class MobileScreenTest {
         // Wherever it lands the preview is a surface of its own, not a card at
         // the bottom of a long page: no scrolling to reach it.
         composeRule.onNodeWithTag(FILE_PREVIEW_TEST_TAG).assertIsDisplayed()
+        // HarmonyOS' `FilePreviewSurface.ets` gives the header a fixed 68vp and
+        // each of its controls a 44vp square. Those are the numbers a pixel
+        // comparison would otherwise be the first thing to notice.
+        composeRule.onNodeWithTag(FILE_PREVIEW_HEADER_TEST_TAG).assertHeightIsEqualTo(68.dp)
+        composeRule.onNodeWithTag(FILE_PREVIEW_REFRESH_TEST_TAG)
+            .assertWidthIsEqualTo(44.dp)
+            .assertHeightIsEqualTo(44.dp)
+        composeRule.onNodeWithTag(FILE_PREVIEW_DOWNLOAD_TEST_TAG)
+            .assertWidthIsEqualTo(44.dp)
+            .assertHeightIsEqualTo(44.dp)
+        // The type and size come from `get_file_info`, so their presence in the
+        // header is evidence the real desktop answered and not just that the
+        // bytes arrived.
+        composeRule.onNodeWithText("text/", substring = true).assertIsDisplayed()
         // Two lines rather than one: a number in front of the second line is
         // what proves the gutter counts the file rather than labelling its top.
         composeRule.onNodeWithText("1  // bitfun preview fixture\n2  fn main() {", substring = true)
@@ -385,7 +410,11 @@ class MobileScreenTest {
         val widthDp = composeRule.activity.resources.configuration.screenWidthDp
         if (widthDp < ConversationLayoutPolicy.WIDE_LAYOUT_MIN_WIDTH) {
             composeRule.onNodeWithTag(SESSION_LIST_TEST_TAG).assertDoesNotExist()
-            composeRule.onNodeWithText("Close").performClick()
+            // The close control is the header's chevron now, not a labelled
+            // button, and the installed locale may not be English.
+            composeRule.onNodeWithContentDescription(
+                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.common_close),
+            ).performClick()
             composeRule.onNodeWithTag(SESSION_LIST_TEST_TAG).assertIsDisplayed()
         }
     }
@@ -401,9 +430,9 @@ class MobileScreenTest {
         assumeTrue("bitfunPairingUrl instrumentation argument is required", pairingUrl.isNotBlank())
 
         openRemote()
-        composeRule.onNodeWithTag(CONNECT_MANUAL_TEST_TAG).performClick()
-        composeRule.onNodeWithText("Pairing link").performTextInput(pairingUrl)
-        composeRule.onNodeWithText("Connect").performClick()
+        openManualPairing()
+        composeRule.onNodeWithTag(CONNECT_PAIRING_CODE_TEST_TAG).performTextInput(pairingUrl)
+        composeRule.onNodeWithTag(CONNECT_SUBMIT_TEST_TAG).performClick()
         waitForText("Connected")
 
         try {
@@ -424,7 +453,44 @@ class MobileScreenTest {
     private fun openRemote() {
         composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
         composeRule.onNodeWithTag(SIDEBAR_CODE_TEST_TAG).performClick()
-        waitForText("Connect to a desktop")
+        waitForText("Get a pairing code")
+    }
+
+    /** The compact connect page starts with the scanner; canceling it exposes the typed-link fallback. */
+    private fun openManualPairing() {
+        composeRule.onNodeWithText("I have a pairing code").performClick()
+        // Google Code Scanner owns a separate system activity. Espresso's
+        // pressBack requires our activity to be resumed, so inject the platform
+        // key directly and wait for the cancellation callback to reveal the
+        // same manual fallback Harmony shows after a scan error.
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val automation = instrumentation.uiAutomation
+        val targetPackage = instrumentation.targetContext.packageName
+        val scannerDeadline = SystemClock.uptimeMillis() + 10_000
+        var activePackage = automation.rootInActiveWindow?.packageName?.toString()
+        while (SystemClock.uptimeMillis() < scannerDeadline &&
+            (activePackage == null || activePackage == targetPackage)
+        ) {
+            SystemClock.sleep(100)
+            activePackage = automation.rootInActiveWindow?.packageName?.toString()
+        }
+        check(activePackage != null && activePackage != targetPackage) {
+            "Google Code Scanner did not become the active window"
+        }
+        automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        val returnDeadline = SystemClock.uptimeMillis() + 10_000
+        while (SystemClock.uptimeMillis() < returnDeadline &&
+            automation.rootInActiveWindow?.packageName?.toString() != targetPackage
+        ) {
+            SystemClock.sleep(100)
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag(CONNECT_MANUAL_TEST_TAG)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag(CONNECT_MANUAL_TEST_TAG).assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Manual pairing").assertIsDisplayed()
     }
 
     /**
@@ -461,6 +527,18 @@ class MobileScreenTest {
         }
     }
 
+    private fun waitForTag(tag: String, timeoutMillis: Long = 20_000) {
+        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun waitForNoTag(tag: String, timeoutMillis: Long = 20_000) {
+        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     private fun openSettingsFromAuthenticatedDrawerOrSkip() {
         val settingsNodes = composeRule.onAllNodesWithTag(SIDEBAR_SETTINGS_TEST_TAG)
             .fetchSemanticsNodes()
@@ -469,5 +547,12 @@ class MobileScreenTest {
             settingsNodes.isNotEmpty(),
         )
         composeRule.onNodeWithTag(SIDEBAR_SETTINGS_TEST_TAG).performClick()
+    }
+
+    private fun openGeneralModelService() {
+        composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
+        openSettingsFromAuthenticatedDrawerOrSkip()
+        waitForText("Settings")
+        composeRule.onNodeWithTag(GENERAL_SETTINGS_MODEL_TEST_TAG).performClick()
     }
 }

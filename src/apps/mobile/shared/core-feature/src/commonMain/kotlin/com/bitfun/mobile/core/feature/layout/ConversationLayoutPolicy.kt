@@ -19,10 +19,11 @@ public data class WindowCrease(
  * Where the two panes go once [ConversationLayoutPolicy.useMasterDetail] says
  * there are two.
  *
- * @param detailContentOffset how far into the detail pane its content starts,
- * so a conversation is not laid across a hinge. Zero on a flat screen.
- * @param collapsedDetailContentOffset the same, for the layout with no master
- * pane — the detail pane on its own, still avoiding the hinge.
+ * @param detailContentOffset how far into the detail pane its content starts.
+ * The current HarmonyOS policy uses the full span after the master seam, so
+ * this is zero.
+ * @param collapsedDetailContentOffset where content starts when the master pane
+ * is hidden; asymmetric and multi-crease layouts may choose the dominant band.
  */
 public data class ConversationLayoutGeometry(
     val masterPaneWidth: Int,
@@ -43,18 +44,17 @@ private data class LayoutSegment(val left: Int, val width: Int)
  * Ports `pages/policy/ConversationLayoutPolicy.ets`. The numbers are the
  * source's, and so is the order they are asked in.
  *
- * **Two of the ArkTS parameters are deliberately gone.** `mediaQueryMatched`
- * carried the answer from a separate `matchMediaSync` channel, which exists
- * because ArkUI hands width and media queries to a component through different
- * doors; here the width *is* the query, so a second opinion about it would only
- * be a way for the two to disagree. `isFolded` guarded against a device closed
- * onto its cover screen, which on both platforms already reports a viewport far
- * under [WIDE_LAYOUT_MIN_WIDTH] — and whose crease list the ArkTS caller empties
- * for that same reason before calling in.
+ * Platform adapters translate their fold APIs into the semantic booleans this
+ * policy accepts. HarmonyOS fold-status numbers and Android WindowManager types
+ * stay in their owning apps; the layout decision remains shared pure logic.
  */
 public object ConversationLayoutPolicy {
-    /** Under this, one pane, whatever the device is. */
-    public const val WIDE_LAYOUT_MIN_WIDTH: Int = 720
+    /** Official GridRow sm|md|lg|xl boundaries used by the HarmonyOS surface. */
+    public const val MD_MIN_WIDTH: Int = 600
+    public const val LG_MIN_WIDTH: Int = 840
+    public const val XL_MIN_WIDTH: Int = 1440
+    public const val WIDE_LAYOUT_MIN_WIDTH: Int = MD_MIN_WIDTH
+    public const val EXTRA_WIDE_MIN_WIDTH: Int = LG_MIN_WIDTH
 
     /** The master pane on a screen with no hinge to align to. */
     public const val FALLBACK_MASTER_PANE_WIDTH: Int = 344
@@ -65,30 +65,61 @@ public object ConversationLayoutPolicy {
     /** A detail pane narrower than this cannot hold a conversation. */
     public const val MIN_DETAIL_PANE_WIDTH: Int = 360
 
-    /** Past this there is room for a third thing on screen. */
-    public const val EXTRA_WIDE_MIN_WIDTH: Int = 1080
+    /** Width reserved for a foldable whose platform omitted its crease bounds. */
+    public const val SYNTHETIC_HINGE_WIDTH: Int = 16
 
     /**
-     * @param largeScreenDevice the platform's own answer to "is this a big
-     * screen rather than a phone". HarmonyOS passes `deviceType == 'tablet'`;
-     * Android passes whether the window is in the expanded width class, because
-     * Android has no device-type string and the window is the whole answer there.
-     *
-     * A window with exactly one vertical crease stays single-pane on purpose:
-     * the seam would land on the hinge, which puts the list on one leaf and the
-     * conversation on the other and leaves the master pane half the device wide.
-     * Two creases is a tri-fold, where the middle panel is a detail pane of its
-     * own accord.
+     * Whether a half-open posture should use the compact hover presentation.
+     * A landscape window that is already md-wide remains master/detail.
      */
+    public fun useHoverOperate(
+        halfOpened: Boolean,
+        viewportWidth: Int,
+        viewportHeight: Int,
+    ): Boolean {
+        if (!halfOpened) return false
+        if (viewportWidth >= MD_MIN_WIDTH && viewportWidth >= viewportHeight) return false
+        return true
+    }
+
+    /** Whether the conversation should render a persistent master pane. */
     public fun useMasterDetail(
         viewportWidth: Int,
-        largeScreenDevice: Boolean,
+        wideViewportMatched: Boolean,
+        isFolded: Boolean,
         creases: List<WindowCrease>,
+        isExpandedFoldable: Boolean,
+        isHover: Boolean,
     ): Boolean {
-        if (viewportWidth < WIDE_LAYOUT_MIN_WIDTH) return false
+        if (isFolded || isHover) return false
+        if (!hasWideViewport(viewportWidth, wideViewportMatched)) return false
+        val visible = effectiveVerticalCreases(viewportWidth, creases, isExpandedFoldable)
+        return canFitMasterDetail(viewportWidth, visible)
+    }
+
+    /**
+     * Keep reported creases when available; otherwise give an expanded foldable
+     * a centered synthetic hinge so both panes stay off the physical fold.
+     */
+    public fun effectiveVerticalCreases(
+        viewportWidth: Int,
+        creases: List<WindowCrease>,
+        synthesizeCenterHinge: Boolean,
+    ): List<WindowCrease> {
         val visible = creases.visibleIn(viewportWidth)
-        if (visible.isNotEmpty()) return visible.size >= 2
-        return largeScreenDevice
+        if (visible.isNotEmpty()) return visible
+        if (!synthesizeCenterHinge) return emptyList()
+        return listOfNotNull(syntheticCenterCrease(viewportWidth))
+    }
+
+    /** A safe fallback for unfolded devices that report posture but no bounds. */
+    public fun syntheticCenterCrease(viewportWidth: Int): WindowCrease? {
+        val minimum = MIN_MASTER_PANE_WIDTH + MIN_DETAIL_PANE_WIDTH + SYNTHETIC_HINGE_WIDTH
+        if (viewportWidth < minimum) return null
+        val centered = (viewportWidth - SYNTHETIC_HINGE_WIDTH) / 2
+        val maximumMaster = viewportWidth - SYNTHETIC_HINGE_WIDTH - MIN_DETAIL_PANE_WIDTH
+        val masterPaneWidth = maxOf(MIN_MASTER_PANE_WIDTH, minOf(centered, maximumMaster))
+        return WindowCrease(masterPaneWidth, SYNTHETIC_HINGE_WIDTH)
     }
 
     /**
@@ -103,27 +134,37 @@ public object ConversationLayoutPolicy {
         creases: List<WindowCrease>,
     ): ConversationLayoutGeometry {
         val visible = creases.visibleIn(viewportWidth)
-        // The first hinge that both panes can live with. One too close to either
-        // edge is worse than no hinge at all, so it is skipped rather than
-        // squeezed against.
-        val seam = visible.firstOrNull { crease ->
-            crease.left >= MIN_MASTER_PANE_WIDTH &&
-                crease.left + crease.width <= viewportWidth - MIN_DETAIL_PANE_WIDTH
-        }
-        val masterPaneWidth = seam?.left ?: FALLBACK_MASTER_PANE_WIDTH
+        val seam = firstUsableCrease(viewportWidth, visible)
+        val masterPaneWidth = seam?.left ?: fallbackMasterPaneWidth(viewportWidth)
         val masterDetailGap = seam?.width?.coerceAtLeast(0) ?: 0
         val detailStart = masterPaneWidth + masterDetailGap
-        val content = detailSegments(viewportWidth, detailStart, visible).widest()
-        val collapsed = detailSegments(viewportWidth, 0, visible).widest()
+        val detailWidth = maxOf(0, viewportWidth - detailStart)
+        val collapsed = collapsedContentSegment(viewportWidth, visible, detailStart, detailWidth)
         return ConversationLayoutGeometry(
             masterPaneWidth = masterPaneWidth,
             masterDetailGap = masterDetailGap,
             isExtraWide = visible.size > 1 || viewportWidth >= EXTRA_WIDE_MIN_WIDTH,
-            detailContentOffset = content?.let { it.left - detailStart } ?: 0,
-            detailContentWidth = content?.width ?: 0,
-            collapsedDetailContentOffset = collapsed?.left ?: 0,
-            collapsedDetailContentWidth = collapsed?.width ?: 0,
+            detailContentOffset = 0,
+            detailContentWidth = detailWidth,
+            collapsedDetailContentOffset = collapsed.left,
+            collapsedDetailContentWidth = collapsed.width,
         )
+    }
+
+    private fun collapsedContentSegment(
+        viewportWidth: Int,
+        visible: List<WindowCrease>,
+        detailStart: Int,
+        detailWidth: Int,
+    ): LayoutSegment {
+        if (visible.isEmpty()) return LayoutSegment(0, maxOf(0, viewportWidth))
+        if (visible.size == 1) {
+            val widest = detailSegments(viewportWidth, 0, visible).widest()
+            if (widest != null && widest.width <= viewportWidth * 0.55f) {
+                return LayoutSegment(0, maxOf(0, viewportWidth))
+            }
+        }
+        return LayoutSegment(detailStart, detailWidth)
     }
 
     /** The detail pane cut into the runs between its hinges. */
@@ -150,6 +191,31 @@ public object ConversationLayoutPolicy {
         fold(null as LayoutSegment?) { widest, segment ->
             if (widest == null || segment.width >= widest.width) segment else widest
         }
+
+    private fun canFitMasterDetail(viewportWidth: Int, visible: List<WindowCrease>): Boolean {
+        val seam = firstUsableCrease(viewportWidth, visible)
+        val masterPaneWidth = seam?.left ?: fallbackMasterPaneWidth(viewportWidth)
+        val masterDetailGap = seam?.width?.coerceAtLeast(0) ?: 0
+        return masterPaneWidth >= MIN_MASTER_PANE_WIDTH &&
+            viewportWidth - masterPaneWidth - masterDetailGap >= MIN_DETAIL_PANE_WIDTH
+    }
+
+    private fun fallbackMasterPaneWidth(viewportWidth: Int): Int {
+        val maximumMaster = viewportWidth - MIN_DETAIL_PANE_WIDTH
+        if (maximumMaster < MIN_MASTER_PANE_WIDTH) return FALLBACK_MASTER_PANE_WIDTH
+        return minOf(FALLBACK_MASTER_PANE_WIDTH, maximumMaster)
+    }
+
+    private fun firstUsableCrease(
+        viewportWidth: Int,
+        visible: List<WindowCrease>,
+    ): WindowCrease? = visible.firstOrNull { crease ->
+        crease.left >= MIN_MASTER_PANE_WIDTH &&
+            crease.left + crease.width <= viewportWidth - MIN_DETAIL_PANE_WIDTH
+    }
+
+    private fun hasWideViewport(viewportWidth: Int, wideViewportMatched: Boolean): Boolean =
+        wideViewportMatched || viewportWidth >= MD_MIN_WIDTH
 }
 
 /**

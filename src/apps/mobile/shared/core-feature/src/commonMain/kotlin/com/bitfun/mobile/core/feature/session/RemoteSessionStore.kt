@@ -10,6 +10,7 @@ import com.bitfun.mobile.core.domain.ChatTimelineStore
 import com.bitfun.mobile.core.domain.PollSessionResult
 import com.bitfun.mobile.core.domain.RemoteSession
 import com.bitfun.mobile.core.domain.SessionNaming
+import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.protocol.ActiveTurnSnapshotResponse
 import com.bitfun.mobile.core.protocol.ChatMessageItemResponse
 import com.bitfun.mobile.core.protocol.ChatMessageResponse
@@ -46,6 +47,8 @@ public class RemoteSessionStore internal constructor(
 ) {
     private val _state = MutableStateFlow<RemoteSessionUiState>(RemoteSessionUiState.Idle)
     public val state: StateFlow<RemoteSessionUiState> = _state.asStateFlow()
+    private val _connectionPhase = MutableStateFlow(ConnectionPhase.IDLE)
+    public val connectionPhase: StateFlow<ConnectionPhase> = _connectionPhase.asStateFlow()
     private val timelineStore = ChatTimelineStore()
     private val controller = ChatSessionController.create(scope, RoomPoller(transport), ControllerCallbacks())
     private var work: Job? = null
@@ -118,11 +121,13 @@ public class RemoteSessionStore internal constructor(
         turnEndSync?.cancel()
         turnEndSync = null
         controller.stop()
+        _connectionPhase.value = ConnectionPhase.DISCONNECTED
     }
 
     private fun load(query: String, filter: SessionAgentFilter) {
         if (_state.value is RemoteSessionUiState.Loading) return
         val current = _state.value as? RemoteSessionUiState.Ready
+        if (current == null) _connectionPhase.value = ConnectionPhase.CONNECTING
         work?.cancel()
         // Searching or switching tabs keeps the list on screen; only a cold start
         // blanks it, so typing in the search box does not flash a spinner.
@@ -131,7 +136,7 @@ public class RemoteSessionStore internal constructor(
         work = scope.launch {
             try {
                 if (!resolveWorkspacePath()) {
-                    _state.value = RemoteSessionUiState.Failed(RemoteSessionFailureReason.NO_WORKSPACE)
+                    failKnown(RemoteSessionFailureReason.NO_WORKSPACE, current)
                     return@launch
                 }
                 val page = listSessions(0, query, filter)
@@ -146,10 +151,11 @@ public class RemoteSessionStore internal constructor(
                     agentFilter = filter,
                     hasMore = page.hasMore,
                 )
+                markConnected()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -233,9 +239,11 @@ public class RemoteSessionStore internal constructor(
         val normalized = sessionId.trim()
         if (normalized.isEmpty()) {
             _state.value = RemoteSessionUiState.Failed(RemoteSessionFailureReason.SESSION_NOT_FOUND)
+            _connectionPhase.value = ConnectionPhase.FAILED
             return
         }
         val current = _state.value as? RemoteSessionUiState.Ready
+        if (current == null) _connectionPhase.value = ConnectionPhase.CONNECTING
         work?.cancel()
         _state.value = current?.copy(busy = true) ?: RemoteSessionUiState.Loading
         work = scope.launch {
@@ -252,10 +260,11 @@ public class RemoteSessionStore internal constructor(
                     agentFilter = current?.agentFilter ?: SessionAgentFilter.ALL,
                     hasMore = current?.hasMore ?: false,
                 )
+                markConnected()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -302,6 +311,7 @@ public class RemoteSessionStore internal constructor(
 
     private fun createSession(intent: RemoteSessionIntent.CreateSession) {
         val current = _state.value as? RemoteSessionUiState.Ready
+        if (current == null) _connectionPhase.value = ConnectionPhase.CONNECTING
         work?.cancel()
         _state.value = current?.copy(busy = true) ?: RemoteSessionUiState.Loading
         work = scope.launch {
@@ -311,7 +321,7 @@ public class RemoteSessionStore internal constructor(
                 // workspace seconds before this, and a stale path would file the
                 // session under the workspace the user just navigated away from.
                 if (!resolveWorkspacePath()) {
-                    _state.value = RemoteSessionUiState.Failed(RemoteSessionFailureReason.NO_WORKSPACE)
+                    failKnown(RemoteSessionFailureReason.NO_WORKSPACE, current)
                     return@launch
                 }
                 val created = transport.send<CreateSessionResponse>(
@@ -324,7 +334,7 @@ public class RemoteSessionStore internal constructor(
                 )
                 val sessionId = created.resolvedSessionId?.trim().orEmpty()
                 if (sessionId.isEmpty()) {
-                    _state.value = RemoteSessionUiState.Failed(RemoteSessionFailureReason.PROTOCOL_MISMATCH)
+                    failKnown(RemoteSessionFailureReason.PROTOCOL_MISMATCH, current)
                     return@launch
                 }
                 intent.modelId?.trim()?.takeIf(String::isNotEmpty)?.let { modelId ->
@@ -352,10 +362,11 @@ public class RemoteSessionStore internal constructor(
                     agentFilter = current?.agentFilter ?: SessionAgentFilter.ALL,
                     hasMore = page.hasMore,
                 )
+                markConnected()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -388,7 +399,7 @@ public class RemoteSessionStore internal constructor(
                 throw cancelled
             } catch (error: Throwable) {
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -415,7 +426,7 @@ public class RemoteSessionStore internal constructor(
                 throw cancelled
             } catch (error: Throwable) {
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -430,6 +441,7 @@ public class RemoteSessionStore internal constructor(
         val current = _state.value
         if (current is RemoteSessionUiState.Ready) {
             _state.value = current.copy(timeline = timelineStore.snapshot())
+            markConnected()
         }
         if (snapshot.shouldSyncAfterTurnEnded) syncAfterTurnEnded(snapshot.sessionId)
     }
@@ -533,7 +545,7 @@ public class RemoteSessionStore internal constructor(
             } catch (error: Throwable) {
                 timelineStore.markOptimisticMessageFailed(local.id)
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -605,7 +617,7 @@ public class RemoteSessionStore internal constructor(
                 throw cancelled
             } catch (error: Throwable) {
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -623,7 +635,7 @@ public class RemoteSessionStore internal constructor(
                 throw cancelled
             } catch (error: Throwable) {
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                _state.value = remoteSessionFailure(error)
+                handleFailure(error, current)
             }
         }
     }
@@ -654,13 +666,47 @@ public class RemoteSessionStore internal constructor(
         }
 
         override fun onError(error: Throwable) {
-            if (_state.value is RemoteSessionUiState.Ready) {
-                _state.value = remoteSessionFailure(error)
-            }
+            handleFailure(error, _state.value as? RemoteSessionUiState.Ready)
         }
 
         override fun canPoll(sessionId: String): Boolean =
             _state.value is RemoteSessionUiState.Ready && timelineStore.snapshot().sessionId == sessionId
+    }
+
+    /**
+     * A dropped transport must not replace an already-rendered transcript with a
+     * list error. The poll loop keeps running, so its next successful response is
+     * also the recovery probe and [updateTimeline] moves the phase back to live.
+     */
+    private fun handleFailure(error: Throwable, current: RemoteSessionUiState.Ready?) {
+        val failed = remoteSessionFailure(error)
+        if (current == null) {
+            _state.value = failed
+            _connectionPhase.value = ConnectionPhase.FAILED
+            return
+        }
+        _state.value = current.copy(busy = false)
+        _connectionPhase.value = when (failed.reason) {
+            RemoteSessionFailureReason.NETWORK,
+            RemoteSessionFailureReason.TIMEOUT,
+            RemoteSessionFailureReason.TRANSPORT,
+            -> ConnectionPhase.RECONNECTING
+
+            else -> ConnectionPhase.FAILED
+        }
+    }
+
+    private fun failKnown(reason: RemoteSessionFailureReason, current: RemoteSessionUiState.Ready?) {
+        if (current == null) {
+            _state.value = RemoteSessionUiState.Failed(reason)
+        } else {
+            _state.value = current.copy(busy = false)
+        }
+        _connectionPhase.value = ConnectionPhase.FAILED
+    }
+
+    private fun markConnected() {
+        _connectionPhase.value = ConnectionPhase.CONNECTED
     }
 
     private class RoomPoller(private val transport: RemoteCommandTransport) : ChatSessionPoller {

@@ -13,7 +13,7 @@ public fun AccountStore.Companion.create(
     log: CoreLog,
 ): AccountStore = AccountStore.create(
     scope = scope,
-    backend = AccountStore.backend(log),
+    backend = AccountStore.backend(log, emptySet()),
     secureStore = iosSecureStore(service),
     deviceId = deviceId,
     deviceName = deviceName,

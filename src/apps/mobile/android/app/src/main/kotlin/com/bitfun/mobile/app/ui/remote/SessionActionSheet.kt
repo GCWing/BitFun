@@ -2,11 +2,14 @@ package com.bitfun.mobile.app.ui.remote
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,10 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,9 +38,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.settings.statusText
 import com.bitfun.mobile.core.feature.session.SessionActionCapabilities
@@ -76,7 +78,6 @@ internal fun SessionActionSheet(
     title: String,
     status: String,
     capabilities: SessionActionCapabilities,
-    onRename: () -> Unit,
     onViewDetails: () -> Unit,
     onArchive: () -> Unit,
     onExport: () -> Unit,
@@ -90,61 +91,101 @@ internal fun SessionActionSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
-        modifier = Modifier.testTag(SESSION_ACTIONS_TEST_TAG),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        dragHandle = null,
+        modifier = Modifier
+            .testTag(SESSION_ACTIONS_TEST_TAG)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            ),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 10.dp)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
                     Text(
                         stringResource(R.string.session_actions),
-                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         title.ifBlank { stringResource(R.string.sidebar_untitled) },
-                        style = MaterialTheme.typography.titleSmall,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_symbol_xmark),
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
 
             if (confirmingDelete) {
                 Text(
                     stringResource(R.string.session_delete_confirm),
-                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    FilledTonalButton(
-                        onClick = { confirmingDelete = false },
+                    ConfirmationButton(
+                        label = stringResource(R.string.common_cancel),
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.common_cancel)) }
-                    Button(
+                        onClick = { confirmingDelete = false },
+                    )
+                    ConfirmationButton(
+                        label = stringResource(R.string.session_delete),
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                        modifier = Modifier.weight(1f),
                         onClick = {
                             onDelete()
                             onDismiss()
                         },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError,
-                        ),
-                        modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.session_delete)) }
+                    )
                 }
                 return@Column
             }
@@ -154,15 +195,6 @@ internal fun SessionActionSheet(
                     onViewDetails()
                     onDismiss()
                 }
-            }
-            // Renaming has no counterpart in the source's surface — HarmonyOS
-            // has no rename at all — but the intent and the desktop command
-            // both exist and Android already shipped it. Keeping it here rather
-            // than as a second naked button beside the row is the alignment;
-            // dropping a working action to match an absence would not be.
-            ActionRow(R.drawable.ic_symbol_square_and_pencil, stringResource(R.string.session_rename)) {
-                onRename()
-                onDismiss()
             }
             if (capabilities.canArchive) {
                 val archived = status.equals("archived", ignoreCase = true)
@@ -193,6 +225,36 @@ internal fun SessionActionSheet(
                 ) { confirmingDelete = true }
             }
         }
+    }
+}
+
+@Composable
+private fun ConfirmationButton(
+    label: String,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(containerColor)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = contentColor,
+            fontSize = 14.sp,
+            fontWeight = if (containerColor == MaterialTheme.colorScheme.error) {
+                FontWeight.Medium
+            } else {
+                FontWeight.Normal
+            },
+            maxLines = 1,
+        )
     }
 }
 
@@ -228,7 +290,7 @@ private fun ActionRow(
         )
         Text(
             label,
-            style = MaterialTheme.typography.bodyLarge,
+            fontSize = 15.sp,
             color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

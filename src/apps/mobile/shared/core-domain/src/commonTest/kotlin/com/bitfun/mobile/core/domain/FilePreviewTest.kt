@@ -68,4 +68,44 @@ class FilePreviewTest {
         assertEquals(FilePreviewFailureReason.TOO_LARGE, FilePreviewPolicy.failure("file too large").reason)
         assertEquals(FilePreviewFailureReason.LOAD_FAILED, FilePreviewPolicy.failure("backend detail").reason)
     }
+
+    /**
+     * The renderer is chosen the same way as HarmonyOS'
+     * `RemoteFilePreviewController.rendererFor`, including the two cases where
+     * the MIME type on its own gives the wrong answer.
+     */
+    @Test
+    fun theRendererFollowsTheNameWhereTheTypeIsNotEnough() {
+        assertEquals(FilePreviewRenderer.IMAGE, FilePreviewPolicy.rendererFor("logo.png", "image/png"))
+        // SVG is an image the preview can only show as its source.
+        assertEquals(FilePreviewRenderer.TEXT, FilePreviewPolicy.rendererFor("logo.svg", "image/svg+xml"))
+        // Desktops report Markdown as plain text, so the extension decides.
+        assertEquals(FilePreviewRenderer.MARKDOWN, FilePreviewPolicy.rendererFor("README.md", "text/plain"))
+        assertEquals(FilePreviewRenderer.MARKDOWN, FilePreviewPolicy.rendererFor("guide.mdx", ""))
+        assertEquals(FilePreviewRenderer.MARKDOWN, FilePreviewPolicy.rendererFor("notes", "text/markdown"))
+        assertEquals(FilePreviewRenderer.TEXT, FilePreviewPolicy.rendererFor("main.rs", "application/octet-stream"))
+        // A build file with no extension at all.
+        assertEquals(FilePreviewRenderer.TEXT, FilePreviewPolicy.rendererFor("/repo/Dockerfile", ""))
+        assertEquals(FilePreviewRenderer.TEXT, FilePreviewPolicy.rendererFor("data.json", "application/json"))
+        assertEquals(FilePreviewRenderer.UNSUPPORTED, FilePreviewPolicy.rendererFor("app.apk", "application/zip"))
+    }
+
+    /**
+     * A desktop that calls a binary `text/plain` would otherwise fill the
+     * preview with replacement characters.
+     */
+    @Test
+    fun bytesThatAreNotTextAreRecognisedAsSuch() {
+        val binary = byteArrayOf(0x7F, 0x45, 0x4C, 0x46, 0x00, 0x01)
+        assertTrue(FilePreviewPolicy.looksBinary(binary))
+        assertFalse(FilePreviewPolicy.looksBinary("fn main() {}\n".encodeToByteArray()))
+
+        val source = "fn main() {\n\tprintln!(\"hi\");\r\n}\n".encodeToByteArray()
+        assertFalse(FilePreviewPolicy.looksUndecodable(source, source.decodeToString()))
+        // Tabs, newlines, and carriage returns are text; other controls are not.
+        val controls = ByteArray(100) { if (it % 4 == 0) 0x01 else 0x61 }
+        assertTrue(FilePreviewPolicy.looksUndecodable(controls, controls.decodeToString()))
+        assertTrue(FilePreviewPolicy.looksUndecodable(byteArrayOf(0x61), "a\uFFFD"))
+        assertFalse(FilePreviewPolicy.looksUndecodable(ByteArray(0), ""))
+    }
 }

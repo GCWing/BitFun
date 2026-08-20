@@ -22,11 +22,23 @@ import androidx.compose.ui.unit.dp
  * nothing at all — the subject of the screen instead of one of three equal
  * things in a row. Shared rather than copied so the two screens cannot drift
  * apart by a dp.
+ *
+ * @param glyphWidth and [glyphHeight] are the box the glyph is *fitted* into,
+ * matching HarmonyOS' `TemplateIcon`, which fits its asset with
+ * `ImageFit.Contain`. Neither one is the drawn size on its own: a drawable is
+ * scaled by the smaller of the two ratios and stays centred. Passing the
+ * source's non-square numbers to a drawable that keeps this set's square 24x24
+ * viewport therefore shrinks the whole glyph to the shorter side — a 23x7 box
+ * draws a 24x24 vector at 7x7. Give the glyph its own aspect in the drawable,
+ * as `ic_symbol_ellipsis` and `ic_symbol_chevron_left_wide` do, or pass a
+ * square box.
  */
 @Composable
 internal fun CircleControl(
     @DrawableRes icon: Int,
     glyphSize: Int,
+    glyphWidth: Int = glyphSize,
+    glyphHeight: Int = glyphSize,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier,
@@ -36,14 +48,14 @@ internal fun CircleControl(
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
+        shadowElevation = 3.dp,
         modifier = modifier.size(44.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 painterResource(icon),
                 contentDescription = contentDescription,
-                modifier = Modifier.size(glyphSize.dp),
+                modifier = Modifier.size(width = glyphWidth.dp, height = glyphHeight.dp),
             )
         }
     }

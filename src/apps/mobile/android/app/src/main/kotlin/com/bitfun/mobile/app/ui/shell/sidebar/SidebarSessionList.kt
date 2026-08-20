@@ -56,6 +56,7 @@ internal fun SidebarSessionList(
     onToggleArchived: () -> Unit,
     onOpenSession: (SidebarSessionRow) -> Unit,
     onOpenActions: (SidebarSessionRow) -> Unit,
+    workspaceContent: @Composable () -> Unit,
     modifier: Modifier,
 ) {
     LazyColumn(
@@ -129,6 +130,8 @@ internal fun SidebarSessionList(
                 }
             }
         }
+
+        item(key = "workspace-section") { workspaceContent() }
 
         // Room for the footer, which floats over the bottom of this list rather
         // than pushing it up — the same 84dp the source reserves.

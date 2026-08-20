@@ -5,7 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.speech.RecognizerIntent
+import android.util.Base64
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,16 +19,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -43,27 +45,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.session.RenameSessionDialog
+import com.bitfun.mobile.app.ui.common.CircleControl
 import com.bitfun.mobile.app.ui.settings.ModelServiceScreen
 import com.bitfun.mobile.app.viewmodel.GeneralChatViewModel
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatFailureReason
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatIntent
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
+import com.bitfun.mobile.core.feature.session.ComposerImage
 import com.bitfun.mobile.core.feature.session.ConversationRowKind
 import com.bitfun.mobile.core.feature.session.ModelOption
 import com.bitfun.mobile.core.feature.session.conversationRows
+import java.util.UUID
 
 internal const val GENERAL_CHAT_TEST_TAG: String = "general-chat"
+// Keep the shell-level automation id while the control is now owned by the
+// surface header rather than by a platform TopAppBar.
+internal const val GENERAL_CHAT_SIDEBAR_TEST_TAG: String = "shell-menu"
 internal const val GENERAL_CHAT_MENU_TEST_TAG: String = "general-chat-menu"
 internal const val GENERAL_CHAT_MODEL_TEST_TAG: String = "general-chat-model"
+
+/** Matches the remote composer and HarmonyOS image picker. */
+private const val MAX_GENERAL_CHAT_IMAGE_BYTES = 8 * 1024 * 1024
 
 /**
  * The general-chat surface, the counterpart of `ConversationView` for a
@@ -72,13 +84,14 @@ internal const val GENERAL_CHAT_MODEL_TEST_TAG: String = "general-chat-model"
  * It renders the same rows through the same bubbles and the same composer as the
  * remote session: both surfaces project the same shared timeline, and letting
  * them diverge visually is how the two clients drift apart. What differs is the
- * header menu — rename, export and delete are this store's own operations — and
+ * header menu — rename and delete are this store's own operations — and
  * the composer's capabilities.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GeneralChatScreen(
     modifier: Modifier,
+    onOpenSidebar: (() -> Unit)? = null,
     viewModel: GeneralChatViewModel = viewModel(factory = GeneralChatViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -98,7 +111,15 @@ internal fun GeneralChatScreen(
     val title = state.sessions.firstOrNull { it.id == state.sessionId }
         ?.title
         ?.takeIf(String::isNotBlank)
-        ?: untitled
+        ?: stringResource(R.string.app_name)
+    val visibleRows = remember(rows) { rows.filter { it.kind != ConversationRowKind.EMPTY } }
+    val uploadedFileCount = visibleRows.sumOf { it.images.size }
+    // Read in composition, not in the menu callback -- see `ConversationView`.
+    val uploadedFilesMessage = if (uploadedFileCount > 0) {
+        stringResource(R.string.session_uploaded_files_count, uploadedFileCount)
+    } else {
+        stringResource(R.string.session_uploaded_files_empty)
+    }
     val composerModels = remember(
         state.models,
         state.activeModelId,
@@ -137,6 +158,29 @@ internal fun GeneralChatScreen(
         }
     }
 
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+            if (
+                bytes != null &&
+                bytes.size <= MAX_GENERAL_CHAT_IMAGE_BYTES &&
+                state.images.size < MAX_COMPOSER_IMAGES
+            ) {
+                viewModel.dispatch(
+                    GeneralChatIntent.SetImages(
+                        state.images + ComposerImage(
+                            id = "android-" + UUID.randomUUID(),
+                            dataUrl = "data:" + mime + ";base64," +
+                                Base64.encodeToString(bytes, Base64.NO_WRAP),
+                            mimeType = mime,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
     // An export's share sheet is raised by `MobileScreen`, which is mounted
     // whichever surface is showing: the drawer can export a conversation this
     // screen is not on, and two consumers would raise two choosers.
@@ -146,140 +190,137 @@ internal fun GeneralChatScreen(
 
     Column(modifier = modifier.fillMaxSize().testTag(GENERAL_CHAT_TEST_TAG)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onOpenSidebar != null) {
+                CircleControl(
+                    icon = R.drawable.ic_symbol_menu_lines,
+                    glyphSize = 22,
+                    contentDescription = stringResource(R.string.shell_open_sidebar),
+                    onClick = onOpenSidebar,
+                    modifier = Modifier.testTag(GENERAL_CHAT_SIDEBAR_TEST_TAG),
+                )
+            } else {
+                Box(Modifier.size(44.dp))
+            }
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = 8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .clickable(enabled = state.sessions.any { it.id == state.sessionId }) {
+                        renaming = true
+                    },
+                textAlign = TextAlign.Center,
             )
-            TextButton(
-                onClick = { showModelService = true },
-                modifier = Modifier.testTag(GENERAL_CHAT_MODEL_TEST_TAG),
-            ) {
-                Text(
-                    // The model that would answer, not the local form's name —
-                    // an account model is an answer too, and labelling the button
-                    // "not configured" beside a chat that works would send the
-                    // user into a form they never needed to open.
-                    state.models.firstOrNull { it.id == state.activeModelId }?.label
-                        ?: stringResource(R.string.model_service_not_configured),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Box {
-                IconButton(
-                    onClick = { menuOpen = true },
-                    modifier = Modifier.testTag(GENERAL_CHAT_MENU_TEST_TAG),
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_symbol_ellipsis),
+            if (visibleRows.isNotEmpty()) {
+                Box {
+                    // The same box `ConversationHeader` gives the glyph: this
+                    // header is the general-chat face of the one HarmonyOS
+                    // draws for every conversation, so the dots are the source's
+                    // 23x7 rather than a square that would fit them smaller.
+                    CircleControl(
+                        icon = R.drawable.ic_symbol_ellipsis,
+                        glyphSize = 20,
+                        glyphWidth = 23,
+                        glyphHeight = 7,
                         contentDescription = stringResource(R.string.general_chat_menu),
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.testTag(GENERAL_CHAT_MENU_TEST_TAG),
                     )
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    // Every one of these acts on a stored conversation; a session
-                    // that has never been sent to has no row to rename, pin,
-                    // archive, share or delete.
+                    // Every session mutation remains disabled until a stored
+                    // conversation exists; the shared menu only changes the
+                    // presentation, not that capability rule.
                     val stored = state.sessions.any { it.id == state.sessionId }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.session_rename)) },
-                        enabled = stored,
-                        onClick = {
-                            menuOpen = false
-                            renaming = true
-                        },
-                    )
-                    // Pinning and archiving are the two the source keeps in this
-                    // menu rather than in the row's sheet: both are statements
-                    // about the conversation you are reading, made while you read
-                    // it, and the sidebar is where you see the result.
                     val current = state.sessions.firstOrNull { it.id == state.sessionId }
                     val archived = current?.status.equals(ARCHIVED, ignoreCase = true)
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (current?.pinned == true) {
-                                        R.string.session_unpin
-                                    } else {
-                                        R.string.session_pin
-                                    },
+                    BitFunHeaderActionMenu(
+                        expanded = menuOpen,
+                        onDismiss = { menuOpen = false },
+                        sectionTitle = stringResource(R.string.session_section),
+                        actions = listOf(
+                            BitFunHeaderAction(
+                                icon = R.drawable.ic_symbol_checkmark_circle,
+                                label = stringResource(
+                                    if (current?.pinned == true) R.string.session_unpin
+                                    else R.string.session_pin,
                                 ),
-                            )
-                        },
-                        enabled = stored,
-                        onClick = {
-                            menuOpen = false
-                            viewModel.dispatch(
-                                GeneralChatIntent.PinSession(
-                                    state.sessionId,
-                                    current?.pinned != true,
-                                ),
-                            )
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
+                                enabled = stored,
+                                selected = current?.pinned == true,
+                                onClick = {
+                                    viewModel.dispatch(
+                                        GeneralChatIntent.PinSession(
+                                            state.sessionId,
+                                            current?.pinned != true,
+                                        ),
+                                    )
+                                },
+                            ),
+                            BitFunHeaderAction(
+                                icon = R.drawable.ic_symbol_cloud,
+                                label = stringResource(R.string.session_uploaded_files),
+                                onClick = {
+                                    Toast
+                                        .makeText(context, uploadedFilesMessage, Toast.LENGTH_SHORT)
+                                        .show()
+                                },
+                            ),
+                            BitFunHeaderAction(
+                                icon = R.drawable.ic_symbol_archivebox,
+                                label = stringResource(
                                     if (archived) R.string.session_unarchive else R.string.session_archive,
                                 ),
-                            )
-                        },
-                        enabled = stored,
-                        onClick = {
-                            menuOpen = false
-                            viewModel.dispatch(
-                                GeneralChatIntent.ArchiveSession(state.sessionId, !archived),
-                            )
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.general_chat_export)) },
-                        enabled = stored,
-                        onClick = {
-                            menuOpen = false
-                            viewModel.dispatch(
-                                GeneralChatIntent.ExportSession(
-                                    state.sessionId,
-                                    untitled,
-                                    userLabel,
-                                    assistantLabel,
-                                ),
-                            )
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.session_delete)) },
-                        enabled = stored,
-                        onClick = {
-                            menuOpen = false
-                            confirmDelete = true
-                        },
+                                enabled = stored,
+                                dividerBefore = true,
+                                onClick = {
+                                    viewModel.dispatch(GeneralChatIntent.ArchiveSession(state.sessionId, !archived))
+                                },
+                            ),
+                            BitFunHeaderAction(
+                                icon = R.drawable.ic_symbol_trash,
+                                label = stringResource(R.string.session_delete),
+                                enabled = stored,
+                                onClick = { confirmDelete = true },
+                            ),
+                        ),
                     )
                 }
+            } else {
+                Box(Modifier.size(44.dp))
             }
         }
 
-        if (!state.configured) {
-            UnconfiguredNotice(onConfigure = { showModelService = true })
-        }
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(rows, key = { it.id }) { row ->
-                if (row.kind == ConversationRowKind.EMPTY) {
-                    ConversationEmptyState(Modifier)
-                } else {
+        if (visibleRows.isEmpty()) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!state.configured) {
+                    Text(
+                        stringResource(R.string.general_chat_unconfigured),
+                        fontSize = 17.sp,
+                        lineHeight = 24.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(visibleRows, key = { it.id }) { row ->
                     ChatMessageBubble(
                         row = row,
                         enabled = !state.busy,
@@ -302,6 +343,9 @@ internal fun GeneralChatScreen(
                         // a general-chat turn produces no cards to mark anyway.
                         previewingRemotePath = "",
                         previewLoading = false,
+                        download = com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState.None,
+                        onDownloadFile = { _, _ -> },
+                        downloadEnabled = false,
                         modifier = Modifier,
                     )
                 }
@@ -319,7 +363,7 @@ internal fun GeneralChatScreen(
 
         ComposerBar(
             draft = state.draft,
-            images = emptyList(),
+            images = state.images,
             busy = state.busy,
             streaming = state.timeline.activeTurn != null,
             // Never consulted: general chat's capabilities do not require a
@@ -330,8 +374,14 @@ internal fun GeneralChatScreen(
             capabilities = ChatComposerCapabilities.GeneralChat,
             placeholder = stringResource(R.string.message_input_label),
             onDraftChange = { viewModel.dispatch(GeneralChatIntent.UpdateDraft(it)) },
-            onRemoveImage = {},
-            onAttach = {},
+            onRemoveImage = { id ->
+                viewModel.dispatch(GeneralChatIntent.SetImages(state.images.filterNot { it.id == id }))
+            },
+            onAttach = {
+                photoPicker.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            },
             onOpenModels = { showModelService = true },
             onSelectModel = { viewModel.dispatch(GeneralChatIntent.SelectModel(it)) },
             onSend = { viewModel.dispatch(GeneralChatIntent.Send) },

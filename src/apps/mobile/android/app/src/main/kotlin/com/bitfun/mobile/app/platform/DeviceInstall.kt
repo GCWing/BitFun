@@ -8,6 +8,11 @@ import java.util.UUID
 private const val PREFS = "bitfun_install"
 private const val KEY_INSTALL_ID = "install_id"
 
+internal val LEGACY_MOBILE_DEVICE_NAMES: Set<String> = setOf(
+    "HarmonyOS Phone",
+    "HarmonyOS Watch",
+)
+
 /**
  * The identity this install presents to the desktop.
  *

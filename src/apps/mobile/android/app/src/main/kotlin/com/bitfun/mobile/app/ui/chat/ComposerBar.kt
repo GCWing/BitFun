@@ -1,5 +1,14 @@
 package com.bitfun.mobile.app.ui.chat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,6 +55,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -53,6 +63,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
+import com.bitfun.mobile.app.ui.theme.BitFunEaseOut
+import com.bitfun.mobile.app.ui.theme.MotionQuickMillis
+import com.bitfun.mobile.app.ui.theme.MotionStructureMillis
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
 import com.bitfun.mobile.core.feature.session.ChatComposerPolicy
@@ -142,45 +155,94 @@ internal fun ComposerBar(
         phase = phase,
         showVoiceInput = capabilities.showVoiceInput,
     )
+    val structureSpec = tween<androidx.compose.ui.unit.Dp>(
+        durationMillis = MotionStructureMillis,
+        easing = BitFunEaseOut,
+    )
+    val radius by animateDpAsState(
+        if (expanded || images.isNotEmpty()) 18.dp else 26.dp,
+        structureSpec,
+        label = "composer-radius",
+    )
+    val contentTopPadding by animateDpAsState(
+        if (expanded) 4.dp else 0.dp,
+        structureSpec,
+        label = "composer-top-padding",
+    )
+    val contentBottomPadding by animateDpAsState(
+        if (expanded) 2.dp else 0.dp,
+        structureSpec,
+        label = "composer-bottom-padding",
+    )
+    val inputRowHeight by animateDpAsState(
+        if (expanded) ExpandedInputRowHeight else CollapsedBarHeight,
+        structureSpec,
+        label = "composer-input-row-height",
+    )
+    val actionSpacing by animateDpAsState(
+        if (expanded) 0.dp else 5.dp,
+        structureSpec,
+        label = "composer-action-spacing",
+    )
+    val actionRowOffset = with(LocalDensity.current) { 8.dp.roundToPx() }
+    val actionEnter = fadeIn(tween(MotionQuickMillis, easing = BitFunEaseOut)) +
+        slideInVertically(tween(MotionQuickMillis, easing = BitFunEaseOut)) { actionRowOffset }
+    val actionExit = fadeOut(tween(MotionQuickMillis, easing = BitFunEaseOut)) +
+        slideOutVertically(tween(MotionQuickMillis, easing = BitFunEaseOut)) { actionRowOffset }
+    val compactControlEnter = fadeIn(tween(MotionQuickMillis, easing = BitFunEaseOut)) +
+        expandHorizontally(tween(MotionQuickMillis, easing = BitFunEaseOut))
+    val compactControlExit = fadeOut(tween(MotionQuickMillis, easing = BitFunEaseOut)) +
+        shrinkHorizontally(tween(MotionQuickMillis, easing = BitFunEaseOut))
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp)
             .testTag(COMPOSER_TEST_TAG),
     ) {
-        if (images.isNotEmpty()) {
-            AttachmentStrip(images = images, enabled = !busy, onRemove = onRemoveImage)
-        }
-
         Surface(
-            shape = RoundedCornerShape(if (expanded) 18.dp else 26.dp),
+            shape = RoundedCornerShape(radius),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 2.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.padding(
                     PaddingValues(
                         start = 8.dp,
                         end = 8.dp,
-                        top = if (expanded) 4.dp else 0.dp,
-                        bottom = if (expanded) 2.dp else 0.dp,
+                        top = contentTopPadding,
+                        bottom = contentBottomPadding,
                     ),
                 ),
             ) {
+                if (capabilities.supportsAttachments && images.isNotEmpty()) {
+                    AttachmentStrip(
+                        images = images,
+                        enabled = !busy,
+                        onRemove = onRemoveImage,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(if (expanded) 0.dp else 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(actionSpacing),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (expanded) ExpandedInputRowHeight else CollapsedBarHeight),
+                        .height(inputRowHeight),
                 ) {
                     // While expanded both side controls move to the row below,
                     // so the field gets the full width for what is being typed.
-                    if (!expanded && capabilities.showAddButton) {
-                        AddButton(enabled = !busy && images.size < MAX_COMPOSER_IMAGES, onClick = onAttach)
+                    AnimatedVisibility(
+                        visible = !expanded && capabilities.supportsAttachments && capabilities.showAddButton,
+                        enter = compactControlEnter,
+                        exit = compactControlExit,
+                    ) {
+                        AddButton(
+                            enabled = !busy && images.size < MAX_COMPOSER_IMAGES,
+                            onClick = onAttach,
+                        )
                     }
                     ComposerField(
                         draft = draft,
@@ -191,7 +253,11 @@ internal fun ComposerBar(
                         onFocusChange = { focused = it },
                         modifier = Modifier.weight(1f),
                     )
-                    if (!expanded) {
+                    AnimatedVisibility(
+                        visible = !expanded,
+                        enter = compactControlEnter,
+                        exit = compactControlExit,
+                    ) {
                         PrimaryActionButton(
                             action = action,
                             onVoice = onVoice,
@@ -201,7 +267,11 @@ internal fun ComposerBar(
                     }
                 }
 
-                if (expanded) {
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = actionEnter,
+                    exit = actionExit,
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -210,7 +280,7 @@ internal fun ComposerBar(
                             .height(ExpandedActionRowHeight)
                             .padding(start = 2.dp),
                     ) {
-                        if (capabilities.showAddButton) {
+                        if (capabilities.supportsAttachments && capabilities.showAddButton) {
                             AddButton(
                                 enabled = !busy && images.size < MAX_COMPOSER_IMAGES,
                                 onClick = onAttach,
@@ -548,8 +618,10 @@ private fun AttachmentStrip(
     images: List<ComposerImage>,
     enabled: Boolean,
     onRemove: (String) -> Unit,
+    modifier: Modifier,
 ) {
     LazyRow(
+        modifier = modifier.height(64.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(end = 4.dp),
     ) {
@@ -584,8 +656,7 @@ private fun AttachmentStrip(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .size(22.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(BadgeScrim)
                         .clickable(enabled = enabled) { onRemove(image.id) }
