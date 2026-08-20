@@ -4139,10 +4139,10 @@ async function refreshGoals() {
 }
 
 // ── toolbar wiring ────────────────────────────────────────
-// The top bar only carries the brand now: refresh is implicit (heartbeat +
-// boot + retry), GitHub credentials are prompted by the publish flow itself
+// There is no header bar anymore: refresh is implicit (heartbeat + boot +
+// retry), GitHub credentials are prompted by the publish flow itself
 // (openTokenDialog), and per-task deletion lives on each goal card — the
-// header refresh/token/reset buttons were removed to keep the chrome minimal.
+// former top bar carried only the brand, so it was removed entirely.
 document.getElementById('btn-token-save').addEventListener('click', saveGitHubToken);
 document.getElementById('btn-token-clear').addEventListener('click', clearGitHubToken);
 document.getElementById('btn-gh-login').addEventListener('click', runGhLogin);
