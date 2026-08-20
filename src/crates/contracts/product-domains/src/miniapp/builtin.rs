@@ -161,7 +161,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-bitfun-loopx",
-        version: 3,
+        version: 1,
         meta_json: include_str!("builtin/assets/bitfun-loopx/meta.json"),
         html: include_str!("builtin/assets/bitfun-loopx/index.html"),
         css: include_str!("builtin/assets/bitfun-loopx/style.css"),
@@ -389,6 +389,56 @@ mod tests {
             assert!(!app.ui_js.trim().is_empty());
             assert!(!app.worker_js.trim().is_empty());
             assert!(builtin_content_hash(app).starts_with("sha256:"));
+        }
+    }
+
+    #[test]
+    fn builtin_miniapp_meta_and_deps_parse_into_product_types() {
+        use crate::miniapp::types::{EsmDep, MiniAppMeta};
+
+        for app in BUILTIN_APPS {
+            let meta: MiniAppMeta = serde_json::from_str(app.meta_json).unwrap_or_else(|e| {
+                panic!("builtin '{}' meta.json does not parse as MiniAppMeta: {e}", app.id)
+            });
+            assert_eq!(meta.id, app.id, "builtin '{}' meta id must match the bundle id", app.id);
+            assert!(
+                !meta.name.trim().is_empty(),
+                "builtin '{}' meta name must not be empty",
+                app.id
+            );
+            assert!(
+                !meta.icon.trim().is_empty(),
+                "builtin '{}' meta icon must not be empty",
+                app.id
+            );
+            let i18n = meta.i18n.as_ref().unwrap_or_else(|| {
+                panic!("builtin '{}' meta.json must carry i18n locales", app.id)
+            });
+            assert!(
+                i18n.locales.contains_key("zh-CN"),
+                "builtin '{}' i18n must cover zh-CN",
+                app.id
+            );
+            assert!(
+                i18n.locales.contains_key("en-US"),
+                "builtin '{}' i18n must cover en-US",
+                app.id
+            );
+
+            let deps: Vec<EsmDep> = serde_json::from_str(app.esm_dependencies_json)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "builtin '{}' esm_dependencies.json does not parse as an ESM dep list: {e}",
+                        app.id
+                    )
+                });
+            for dep in &deps {
+                assert!(
+                    !dep.name.trim().is_empty(),
+                    "builtin '{}' has an ESM dependency without a name",
+                    app.id
+                );
+            }
         }
     }
 
