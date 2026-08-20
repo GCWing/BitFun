@@ -3227,6 +3227,52 @@
       ]
     },
     {
+      "id": "acp-mode-selector",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "label",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "option",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "open",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"open\"]"
+          }
+        },
+        {
+          "id": "selected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "flow-chat-header",
       "parts": [
         {
