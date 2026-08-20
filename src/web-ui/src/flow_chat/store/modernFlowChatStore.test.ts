@@ -24,6 +24,7 @@ vi.mock('../tool-cards/toolCardMetadata', () => ({
     'TerminalControl',
     'SessionControl',
     'ExecControl',
+    'AgentWait',
     'view_image',
     'ReadCanvas',
     'ControlHub',
@@ -660,6 +661,110 @@ describe('sessionToVirtualItems explore grouping', () => {
           expect.objectContaining({ id: 'tool-1' }),
           expect.objectContaining({ id: 'tool-2', status: 'running' }),
         ],
+      },
+    });
+  });
+
+  it('keeps the explore tail open while a later round is still provisional', () => {
+    const firstRound = makeRound({ id: 'round-1' });
+    const provisionalRound = (items: ModelRound['items']): ModelRound => makeRound({
+      id: 'round-2',
+      items,
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+    });
+
+    const makeSessionWithRounds = (round: ModelRound) => makeSession({
+      sessionId: `provisional-tail-${round.items.length}`,
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [firstRound, round],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const thinkingOnly = sessionToVirtualItems(makeSessionWithRounds(
+      provisionalRound([{
+        id: 'thinking-2',
+        type: 'thinking',
+        content: 'Waiting for the next action',
+        isStreaming: true,
+        isCollapsed: false,
+        timestamp: 1002,
+        status: 'streaming',
+      }]),
+    ));
+    expect(thinkingOnly[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        wasCutByCritical: false,
+        isGroupStreaming: false,
+      },
+    });
+
+    const thinkingAndText = sessionToVirtualItems(makeSessionWithRounds(
+      provisionalRound([
+        {
+          id: 'thinking-2',
+          type: 'thinking',
+          content: 'Waiting for the next action',
+          isStreaming: true,
+          isCollapsed: false,
+          timestamp: 1002,
+          status: 'streaming',
+        },
+        {
+          id: 'text-2',
+          type: 'text',
+          content: 'I am checking the background agent.',
+          isStreaming: true,
+          timestamp: 1003,
+          status: 'streaming',
+        },
+      ]),
+    ));
+    expect(thinkingAndText[1]).toMatchObject({
+      type: 'explore-group',
+      data: { wasCutByCritical: false },
+    });
+
+    const withTool = sessionToVirtualItems(makeSessionWithRounds(
+      provisionalRound([
+        {
+          id: 'thinking-2',
+          type: 'thinking',
+          content: 'Waiting for the next action',
+          isStreaming: true,
+          isCollapsed: false,
+          timestamp: 1002,
+          status: 'streaming',
+        },
+        {
+          id: 'text-2',
+          type: 'text',
+          content: 'I am checking the background agent.',
+          isStreaming: false,
+          timestamp: 1003,
+          status: 'completed',
+        },
+        makeTool('tool-2', 'AgentWait', 'running'),
+      ]),
+    ));
+    expect(withTool[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        wasCutByCritical: false,
+        isLastGroupInTurn: true,
+        isGroupStreaming: true,
+        groupId: 'round-1',
       },
     });
   });

@@ -178,6 +178,34 @@ function isExploreOnlyRound(round: ModelRound): boolean {
 }
 
 /**
+ * Identify a hard boundary that should close an earlier explore group.
+ *
+ * Streaming thinking/text is provisional: the same round can still receive a
+ * collapsible tool and become part of the live explore tail. Only a
+ * non-collapsible tool, explicit grouping suppression, or settled visible
+ * narrative should cut the preceding group.
+ */
+function isHardCriticalRound(round: ModelRound): boolean {
+  if (round.renderHints?.disableExploreGrouping === true) {
+    return true;
+  }
+
+  const hasNonCollapsibleTool = round.items.some(item => (
+    item.type === 'tool' && !isCollapsibleTool(getEffectiveToolName(item as FlowToolItem))
+  ));
+  if (hasNonCollapsibleTool) {
+    return true;
+  }
+
+  return (
+    isTerminalRoundStatus(round.status) &&
+    !round.isStreaming &&
+    round.isComplete !== false &&
+    hasTrailingVisibleText(round)
+  );
+}
+
+/**
  * Compute statistics for a single ModelRound
  */
 function computeRoundStats(round: ModelRound): ExploreGroupStats {
@@ -468,8 +496,11 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           // Turn completion by itself is deliberately not a cut. The live tail
           // keeps its final action visible; a later conversation item is what
           // makes the group compact.
+          const hasHardCriticalRoundAfter = rounds
+            .slice(group.endIndex + 1)
+            .some(isHardCriticalRound);
           const wasCutByCritical =
-            group.endIndex < rounds.length - 1 ||
+            hasHardCriticalRoundAfter ||
             options.collapseTrailingExploreGroup;
 
           const groupId = group.rounds[0]?.id ?? `explore-group-${turn.id}-${group.startIndex}`;

@@ -141,15 +141,17 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
 
     log.debug('explore group cut by critical', { groupId });
 
-    applyExpandedState(true, false, () => {
-      onCollapseGroup?.(groupId);
-    });
+    // The collapsed value is derived from wasCutByCritical. Do not persist an
+    // automatic collapse as explicit user state: a provisional later round
+    // can become explore-only again and return this group to the live tail.
+    applyExpandedState(true, false, () => {});
   }, [
     applyExpandedState,
     groupId,
     hasExplicitState,
+    isExpanded,
+    turnId,
     wasCutByCritical,
-    onCollapseGroup,
   ]);
   
   // Auto-scroll to bottom while the group is still the tail and new items arrive.
