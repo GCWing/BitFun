@@ -25,7 +25,7 @@
     "node": {
       "enabled": true,
       "max_memory_mb": 256,
-      "timeout_ms": 330000
+      "timeout_ms": 1200000
     }
   },
   "ai_context": null,
