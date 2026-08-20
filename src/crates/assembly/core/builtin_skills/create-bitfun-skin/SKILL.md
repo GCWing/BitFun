@@ -105,6 +105,8 @@ Treat the bundled registry as the offline authority. Confirm it before targeting
 python scripts/sync_registry.py <bitfun-repo> --check
 ```
 
+The check compares the exported Appearance contract, not provenance-only commit or timestamp fields. Unrelated BitFun commits do not invalidate a compatible snapshot.
+
 Refresh it only from a clean checkout after BitFun changes Appearance descriptors:
 
 ```powershell

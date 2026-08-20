@@ -117,7 +117,7 @@ The package rejects unsafe ZIP paths, symlinks, undeclared files, unsupported me
 
 ## Registry provenance
 
-`appearance-registry.json` is a self-contained production registry snapshot. Consumers of this skill do not need BitFun source code for offline authoring. Query the snapshot through the script instead of editing it by hand. When a checkout is available, run `python scripts/sync_registry.py <bitfun-repo> --check` before relying on the snapshot.
+`appearance-registry.json` is a self-contained production registry snapshot. Consumers of this skill do not need BitFun source code for offline authoring. Query the snapshot through the script instead of editing it by hand. When a checkout is available, run `python scripts/sync_registry.py <bitfun-repo> --check` before relying on the snapshot. The check compares exported contract content and ignores provenance-only commit or timestamp differences.
 
 Maintainers synchronize it with `scripts/sync_registry.py`. Provenance includes the source revision, dirty state, tree evidence hash, and generation timestamp; a matching commit hash alone does not prove that a dirty working tree is synchronized.
 
