@@ -40,7 +40,7 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Theme, CSS variable, widget payload, mobile, installer, or CLI/TUI color changes | `pnpm run theme:color-audit:all` |
 | Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing/reconnect notes when behavior changed |
 | Product definition, schema, resolver, or Desktop/CLI product build adapter | `pnpm run product:test`, plus `pnpm run product:check` for the default definition |
-| Shared Rust logic in `core`, `transport`, adapters, or services | `cargo check --workspace`, plus nearest focused `cargo test` when behavior changed |
+| Shared Rust logic in `core`, `transport`, adapters, or services | Nearest module `AGENTS.md`; otherwise `cargo check -p <owning-package>` with the minimum feature set, plus the nearest focused `cargo test` when behavior changed |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
 | Behavior covered by desktop smoke/functional flows | Nearest focused E2E/smoke check; rely on CI for broad build/test unless build behavior changed |
 | `src/crates/adapters/ai-adapters` | Relevant Rust checks above; add `cargo test -p bitfun-agent-stream` only when stream contracts changed |

@@ -4,7 +4,8 @@
 
 Thanks for your interest in BitFun! BitFun is a multi-platform AI programming environment powered by Rust and TypeScript, with shared core logic across Desktop/CLI/Server. This guide explains how to contribute effectively.
 
-This file is the **human contribution entry**: how to set up, open PRs, and what we welcome.  
+This file is the **human contribution entry**: how to set up, open PRs, and what we welcome.
+
 **Code-change norms, architecture, and verification** live in [`AGENTS.md`](AGENTS.md) — do not treat this file as a third command or verification encyclopedia.
 
 ## Code of Conduct
@@ -169,7 +170,7 @@ Common local checks:
 | Repository metadata or GitHub config | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
 | Frontend runtime or UI | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
-| Rust shared runtime or services | `cargo check --workspace`, plus a focused `cargo test` when behavior changed |
+| Rust shared runtime or services | Nearest module `AGENTS.md`; otherwise `cargo check -p <owning-package>` with the minimum feature set, plus a focused `cargo test` when behavior changed |
 | Desktop/Tauri integration | `cargo check -p bitfun-desktop` |
 | i18n resources or contract | use the matching i18n row in `AGENTS.md` |
 

@@ -15,7 +15,7 @@ BitFun 是 Rust workspace 与 React 前端组成的多端项目。
 2. 桌面端日常开发用 `pnpm run desktop:dev`；只改前端、想更快冷启动时再用 `pnpm run desktop:preview:debug`。常用命令见 [`docs/guideline/common-commands.zh-CN.md`](docs/guideline/common-commands.zh-CN.md)。
 3. 改完 Rust 优先跑 `pnpm run fmt:rs`（只格式化已改或已暂存的 `.rs`）。只有刻意做更大范围格式化时才用 `cargo fmt`。
 4. 先看下方 **按任务路由** / **规范类型地图**，再按 [`docs/guideline/verification.zh-CN.md`](docs/guideline/verification.zh-CN.md) 选最小检查。
-5. Rust workspace 依赖在根清单中统一版本，消费 crate 只声明自身所需 feature；测试专用 feature 放入 `dev-dependencies`，受 crate feature 控制的服务能力只在对应 feature 中启用。第三方默认 feature 若不是所有 consumer 的稳定契约，应在 `[workspace.dependencies]` 统一关闭；仓内 crate 的 `default` 已由边界契约保证为空时，不在每条依赖边重复写 `default-features = false`，ACP 这类保留兼容默认的 crate 仍由窄 consumer 显式关闭。被复制到独立 Docker 构建上下文的 manifest 继续维护显式版本和默认策略。禁止使用 `tokio/full` 绕过依赖边界。
+5. Rust workspace 依赖在根清单中统一版本，消费 crate 只声明自身所需 feature；测试专用 feature 放入 `dev-dependencies`，受 crate feature 控制的服务能力只在对应 feature 中启用。第三方默认 feature 若不是所有 consumer 的稳定契约，应在 `[workspace.dependencies]` 统一关闭；仓内 crate 的 `default` 已由边界契约保证为空时，不在每条依赖边重复写 `default-features = false`，ACP 这类保留兼容默认的 crate 仍由窄 consumer 显式关闭。被复制到独立 Docker 构建上下文的 manifest 继续维护显式版本和默认策略。根 workspace 与 workspace members 一律禁止使用 `tokio/full`。
 
 ## 如何使用本文件
 

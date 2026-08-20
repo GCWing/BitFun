@@ -23,7 +23,7 @@
 - 不要把临时过程草稿跟踪进 docs/。可长期保留的规格/设计放 docs/specs/，实施计划放
   docs/plans/，临时过程文档仅保留在本地（或未跟踪的 *.local.md）。架构事实写回
   docs/architecture/，用户可见说明放到所属应用 README。
-- 已废弃的 docs/superpowers/**、docs/features/**、docs/development/** 路径不要再新增文件。
+- 已废弃的 `docs/superpowers/**`、`docs/features/**`、`docs/development/**` 路径不得新增权威正文。只有已发布产品或长期公共 URL 仍指向旧路径时，才可保留最小兼容页；兼容页只能链接权威新位置，并登记在 `docs/README.md`。
 
 ## 本仓文档范围
 
@@ -32,12 +32,13 @@
 - 改本仓代码时必读的边界与操作约定
 - 架构约束、验证矩阵、命令列表
 - 随 PR 推进的规格与实施计划（进行中或已稳定）
+- 为已跟踪 Spec 或 Plan 提供依据的长期调研与技术审阅；它们是非规范参考，必须标注证据日期
 - 模块旁 `AGENTS.md` / `LOGGING.md`
 
 把随 PR 演进的进行中 Spec 与实施计划纳入版本控制，是当前有意采用的流程政策。临时提示词、调研草稿、
 评审草稿和个人笔记不属于仓库文档，必须保持未跟踪；本地需要文件名时使用 `.local.md` 后缀。
 
-飞书远程连接配置与发布签名校验保留在本仓
+飞书远程连接配置与发布签名校验是明确列出的、与代码耦合的操作指南例外，保留在本仓
 [`docs/guideline/feishu-bot-setup.zh-CN.md`](feishu-bot-setup.zh-CN.md)
 （[English](feishu-bot-setup.md)）与
 [`docs/guideline/verify-downloads.zh-CN.md`](verify-downloads.zh-CN.md)
@@ -58,15 +59,17 @@ docs/
     templates/
 ```
 
+以上四个目录是唯一权威文档桶。已废弃路径下的兼容页不拥有正文，只负责指向权威新位置。
+
 ## 文件夹边界
 
 | 目录 | 必须放什么 | 明确禁止放什么 |
 |---|---|---|
 | `docs/architecture/` | 稳定的跨模块架构边界、owner/依赖规则、已接受设计权威、ADR | 实施任务清单、临时评审记录、用户配置指南、性能数据快照、模块局部编码规则 |
-| `docs/guideline/` | 仓库操作和改代码规则：命令、验证、宿主/平台约束、日志、i18n 操作、test-id、文档治理、自身治理说明 | 产品需求、功能实施计划、用户手册、从 `architecture/` 复制的稳定产品架构 |
-| `docs/specs/` | draft/in-progress Spec、功能设计、已稳定单特性设计 | 第二套稳定跨模块架构权威、个人草稿、生成证据、用户/运维指南、实施任务清单 |
+| `docs/guideline/` | 仓库操作和改代码规则，以及索引中明确列出的代码耦合操作指南 | 产品需求、功能实施计划、一般用户手册、从 `architecture/` 复制的稳定产品架构 |
+| `docs/specs/` | draft/in-progress Spec、功能设计、已稳定单特性设计、已索引的非规范调研与技术审阅 | 第二套稳定跨模块架构权威、个人草稿、原始生成证据、用户/运维指南、实施任务清单 |
 | `docs/plans/` | 可独立执行的实施计划和 `-completed.md` 收尾记录 | 需求、设计正文、个人草稿、稳定架构 |
-| `docs/` 根 | 只跟踪 `README.md`；开发者工作区可存在未跟踪的 `*.local.md` 草稿 | 跟踪的专题文章、跟踪的 `.local.md`、重复索引、生成产物 |
+| `docs/` 根 / 已废弃路径 | `README.md`、未跟踪的 `*.local.md`，以及已登记的兼容页 | 新权威正文、跟踪的专题文章、跟踪的 `.local.md`、重复索引、生成产物 |
 
 最近的目录 README 负责完整文章清单和本目录边界。Spec 中发现的稳定结论必须迁入既有
 architecture 权威，原文改为链接，不能保留竞争性的第二份规则正文。
@@ -80,6 +83,7 @@ AGENTS.md  →  目录 README / 单篇权威文档  →  （最多再跳一次�
 - 从匹配的入口/索引到权威正文最多两跳。
 - 每个含多篇文章、持续维护的文档目录必须有 README，写清范围、排除项和完整文章索引。
 - 除模板外，每篇受治理文档必须至少有一个索引或任务路由入站引用；新增/重命名文档必须同步更新最近索引。
+- 兼容页单独登记在 `docs/README.md`，内容只包含权威目标和保留原因。
 - 高频单篇可由 AGENTS 直接链接（如 `product-architecture.md`、`verification.md`）。
 - 索引只放路由摘要，不复制规范正文。
 
@@ -94,7 +98,7 @@ AGENTS.md  →  目录 README / 单篇权威文档  →  （最多再跳一次�
 
 ## 格式
 
-- 页首写清：用途、适用范围、状态（draft/stable）、权威语言、相关链接。
+- 页首写清：用途、适用范围、状态（draft/stable/reference）、权威语言、相关链接。
 - 能链到权威文档就不要把正文再抄一份。
 - 文件名用英文 kebab-case。
 - 普通文档的双语对使用 `<name>.md` 与 `<name>.zh-CN.md`。根及模块级规范入口继续使用仓库约定的

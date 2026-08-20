@@ -1,6 +1,7 @@
 # BitFun 可配置开发体验与工程治理架构设计
 
 > 产品输入：[sdlc-governance-product-requirements.md](../specs/sdlc-governance-product-requirements.md)
+> 研究输入：[sdlc-governance-external-research.md](../specs/sdlc-governance-external-research.md)（非规范参考，引用前复核）
 > 范围：把产品需求转为架构边界、领域模型、配置优先级和模块职责。用户画像、体验路径和功能需求以产品需求文档为准。
 > 子模块：[security-boundary.md](security-boundary.md)、[quality-data-plane.md](quality-data-plane.md)、[evidence-pack.md](evidence-pack.md)、[artifact-graph.md](artifact-graph.md)、[project-profile-integration.md](project-profile-integration.md)、[agent-workflow-design.md](agent-workflow-design.md)
 
@@ -10,6 +11,7 @@
 
 | 文档 | 角色 | 主要内容 |
 |---|---|---|
+| [sdlc-governance-external-research.md](../specs/sdlc-governance-external-research.md) | 非规范调研参考 | 外部产品、论文、标准与趋势信号；使用前复核时效性 |
 | [sdlc-governance-product-requirements.md](../specs/sdlc-governance-product-requirements.md) | 产品需求 | 产品定位、用户画像、体验路径、产品规格、关键边界、平台差异和成功指标 |
 | [sdlc-governance-agent-workflow-adjustment.md](../specs/sdlc-governance-agent-workflow-adjustment.md) | 非权威候选调整提案 | 智能体工作流、并发 GUI、Review 范围控制、token 成本和任务完成度平衡；采纳前需回填权威文档 |
 | [sdlc-governance-agent-workflow-staged-plan.md](../plans/sdlc-governance-agent-workflow-staged-plan.md) | 场景收敛计划 | 将工作流、审查、并发和成本控制压回真实用户场景，不新增独立阶段路线 |
@@ -24,7 +26,7 @@
 
 ## 阅读建议
 
-1. 先读调研文档（itfun_doc），确认市场正在从单点 AI IDE 走向仓库指令、路径规则、沙箱、异步智能体和可选审查/治理。
+1. 先读[调研文档](../specs/sdlc-governance-external-research.md)，确认市场正在从单点 AI IDE 走向仓库指令、路径规则、沙箱、异步智能体和可选审查/治理；外部事实使用前须复核。
 2. 再读产品需求，确认 BitFun 的默认体验、用户画像、产品规格、关键边界、平台差异和成功指标。
 3. 需要架构边界时读本文及同目录子模块设计。
 4. 需要落地顺序时读实施计划。

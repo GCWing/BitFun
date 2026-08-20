@@ -6,8 +6,9 @@ Status: stable.
 Authority language: English unless a page says otherwise.
 
 This directory contains repository operations and code-change constraints. It
-must not contain product requirements, feature plans, user manuals, or copies
-of stable architecture bodies.
+must not contain product requirements, feature plans, general user manuals, or
+copies of stable architecture bodies. The Feishu setup and download-verification
+pages below are explicit code-coupled operational-guide exceptions.
 
 | Topic | Authority | Chinese mirror |
 |---|---|---|

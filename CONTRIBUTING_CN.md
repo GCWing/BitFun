@@ -4,7 +4,8 @@
 
 感谢你对 BitFun 的兴趣！BitFun 是一个由 Rust 与 TypeScript 驱动的多端 AI 编程环境，桌面端/CLI/Server 共享核心逻辑。本指南说明如何高效参与贡献。
 
-本文是**人类贡献入口**：如何搭建、如何开 PR、我们欢迎什么。  
+本文是**人类贡献入口**：如何搭建、如何开 PR、我们欢迎什么。
+
 **改代码规范、架构与验证**见 [`AGENTS.md`](AGENTS.md)——不要把本文当成第三套命令或验证百科。
 
 ## 行为准则
@@ -157,7 +158,7 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 | 仓库元信息或 GitHub 配置 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
 | 前端运行时或 UI | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
-| Rust 共享 runtime 或 services | `cargo check --workspace`；行为变化时再加 focused `cargo test` |
+| Rust 共享 runtime 或 services | 先用最近模块 `AGENTS.md` 的命令；若未提供，则以最小 feature 运行 `cargo check -p <owning-package>`，行为变化时再加 focused `cargo test` |
 | Desktop/Tauri 集成 | `cargo check -p bitfun-desktop` |
 | i18n 资源或契约 | 使用 `AGENTS.md` 中匹配的 i18n 验证行 |
 

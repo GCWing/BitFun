@@ -1,8 +1,8 @@
 # In-repo docs governance
 
-Purpose: how to place, write, and index documentation inside the BitFun **code** repository.  
-Scope: `docs/`, root `AGENTS` / `CONTRIBUTING`, and nearest module `AGENTS.md`.  
-Status: stable (target layout fixed: `architecture/`, `guideline/`, `specs/`, `plans/`)  
+Purpose: how to place, write, and index documentation inside the BitFun **code** repository.
+Scope: `docs/`, root `AGENTS` / `CONTRIBUTING`, and nearest module `AGENTS.md`.
+Status: stable (target layout fixed: `architecture/`, `guideline/`, `specs/`, `plans/`).
 Authority language: Chinese — see [`docs-governance.zh-CN.md`](docs-governance.zh-CN.md). This file is the English summary for AI / ops readers.
 
 ## Non-negotiable preservation rules
@@ -32,8 +32,11 @@ Authority language: Chinese — see [`docs-governance.zh-CN.md`](docs-governance
   keep temporary process artifacts local (or untracked `*.local.md`). Move
   durable architecture facts into `docs/architecture/`, and put user-facing
   guidance in the owning app README.
-- Do not add new files under retired paths such as `docs/superpowers/**`,
-  `docs/features/**`, or `docs/development/**`.
+- Do not add new authority content under retired paths such as
+  `docs/superpowers/**`, `docs/features/**`, or `docs/development/**`. A minimal
+  compatibility stub may remain only when a released product or durable public
+  URL still targets the old path; it must link to the canonical page and be
+  listed in `docs/README.md`.
 
 ## In-repo documentation scope
 
@@ -42,6 +45,8 @@ This code repository should track:
 - Boundaries and ops needed to change this codebase
 - Architecture constraints, verification matrix, command catalog
 - In-progress / stable specs and implementation plans that evolve with PRs
+- Indexed, durable research or technical audits that support a tracked spec or
+  plan; these are non-normative references and must record their evidence date
 - Nearest `AGENTS.md` / `LOGGING.md`
 
 Tracking in-progress specs and implementation plans is an intentional current
@@ -49,8 +54,9 @@ workflow policy. Ephemeral prompts, research scratch, review drafts, and
 personal notes are not repository documentation: keep them untracked and use a
 `.local.md` suffix when a local filename helps.
 
-Feishu remote-connect setup and release signature verification stay in this
-code repo under [`docs/guideline/feishu-bot-setup.md`](feishu-bot-setup.md)
+Feishu remote-connect setup and release signature verification are explicit
+code-coupled operational-guide exceptions. They stay in this code repo under
+[`docs/guideline/feishu-bot-setup.md`](feishu-bot-setup.md)
 ([中文](feishu-bot-setup.zh-CN.md)) and
 [`docs/guideline/verify-downloads.md`](verify-downloads.md)
 ([中文](verify-downloads.zh-CN.md)). `RemoteConnectDialog.tsx` and root
@@ -71,15 +77,19 @@ docs/
     templates/
 ```
 
+These four directories are the only authoritative documentation buckets.
+Compatibility stubs under retired paths own no content and only point to a
+canonical page.
+
 ## Directory boundaries
 
 | Directory | Must contain | Must not contain |
 |---|---|---|
 | `docs/architecture/` | Stable cross-module architecture boundaries, owner/dependency rules, accepted design authorities, ADRs | Implementation task lists, temporary review notes, user setup guides, benchmark dumps, module-local coding rules |
-| `docs/guideline/` | Repository operations and code-change rules: commands, verification, host/platform constraints, logging, i18n operations, test-id policy, docs governance, self-governance notes | Product requirements, feature implementation plans, user manuals, stable product architecture duplicated from `architecture/` |
-| `docs/specs/` | Draft/in-progress specs, feature designs, stable single-feature designs | A second stable cross-cutting architecture authority, personal scratch files, generated evidence, user/operator guides, implementation task lists |
+| `docs/guideline/` | Repository operations and code-change rules, plus explicitly indexed code-coupled operational guides | Product requirements, feature implementation plans, general user manuals, stable product architecture duplicated from `architecture/` |
+| `docs/specs/` | Draft/in-progress specs, feature designs, stable single-feature designs, indexed non-normative research and technical audits | A second stable cross-cutting architecture authority, personal scratch files, raw generated evidence, user/operator guides, implementation task lists |
 | `docs/plans/` | Independently executable implementation plans and `-completed.md` closeout records | Requirements, design bodies, personal scratch files, stable architecture |
-| `docs/` root | `README.md` only; local untracked `*.local.md` scratch may exist in a developer workspace | Tracked topical articles, tracked `.local.md` files, duplicate indexes, generated output |
+| `docs/` root / retired paths | `README.md`, local untracked `*.local.md`, and indexed compatibility stubs only | New authority content, tracked topical articles, tracked `.local.md` files, duplicate indexes, generated output |
 
 The nearest directory README owns the exact article list and local boundary.
 Stable conclusions discovered in a spec move to the existing architecture authority;
@@ -96,6 +106,8 @@ AGENTS.md  →  directory README / single authority  →  (at most one more hop)
   that states scope, exclusions, and a complete article index.
 - Every governed page except templates must have at least one inbound index or
   task route; new/renamed pages must update the nearest index in the same change.
+- Compatibility stubs are indexed separately in `docs/README.md` and contain
+  only a canonical destination plus their compatibility reason.
 - High-frequency single pages may be linked directly from AGENTS (for example
   `product-architecture.md`, `verification.md`).
 - Indexes contain routing summaries only; do not fork normative bodies.
@@ -111,7 +123,7 @@ AGENTS.md  →  directory README / single authority  →  (at most one more hop)
 
 ## Format
 
-- Page header: purpose, scope, status (`draft`/`stable`), authority language, related links.
+- Page header: purpose, scope, status (`draft`/`stable`/`reference`), authority language, related links.
 - Link to authorities instead of pasting long bodies into indexes.
 - Filenames: English kebab-case.
 - Ordinary locale pairs use `<name>.md` and `<name>.zh-CN.md`. Root and module
@@ -143,4 +155,3 @@ They cross-link each other; CONTRIBUTING must not maintain a third full command 
 - Documentation map: [`docs/README.md`](../README.md)
 - Norms entry: [`AGENTS.md`](../../AGENTS.md) / [`AGENTS-CN.md`](../../AGENTS-CN.md)
 - Contributing: [`CONTRIBUTING.md`](../../CONTRIBUTING.md) / [`CONTRIBUTING_CN.md`](../../CONTRIBUTING_CN.md)
-

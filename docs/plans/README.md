@@ -7,17 +7,19 @@ and `-completed.md` closeout records. Stable architecture moves to
 `docs/architecture/`; feature specs and designs stay in `docs/specs/`;
 personal task notes remain untracked.
 
-**Authority for status / one-liners:** Chinese index [`../specs/README.md`](../specs/README.md).  
-This file is an English convenience list of files under `plans/`.  
+Related feature status and one-liners live in the Chinese specs index
+[`../specs/README.md`](../specs/README.md). This table owns plan status.
+
 Template: [`templates/plan.md`](templates/plan.md).
 
-| Plan | Status (see specs index) |
+| Plan | Status |
 |---|---|
 | [`product-architecture-evolution-plan.md`](product-architecture-evolution-plan.md) | in-progress |
 | [`core-decomposition-plan.md`](core-decomposition-plan.md) | completed ([`core-decomposition-completed.md`](core-decomposition-completed.md)) |
 | [`opencode-extension-compatibility-plan.md`](opencode-extension-compatibility-plan.md) | in-progress |
 | [`desktop-window-fullscreen-plan.md`](desktop-window-fullscreen-plan.md) | in-progress |
 | [`edit-constraint-guard-plan.md`](edit-constraint-guard-plan.md) | in-progress |
+| [`2026-08-14-compile-and-dependency-governance-plan.md`](2026-08-14-compile-and-dependency-governance-plan.md) | in-progress |
 | [`2026-07-14-cli-peer-host-plan.md`](2026-07-14-cli-peer-host-plan.md) | completed |
 | [`2026-07-14-cli-login-tui-plan.md`](2026-07-14-cli-login-tui-plan.md) | in-progress |
 | [`2026-07-21-subscription-auth-as-model-api-plan.md`](2026-07-21-subscription-auth-as-model-api-plan.md) | in-progress |

@@ -34,7 +34,7 @@
 | 主题、CSS 变量、widget payload、mobile、installer 或 CLI/TUI 颜色改动 | `pnpm run theme:color-audit:all` |
 | Mobile web 的 UI、状态、配对、断开或重连 | `pnpm --dir src/mobile-web run type-check`；行为有变时补充手动配对 / 重连说明 |
 | 产品定义、schema、resolver，或 Desktop/CLI 产品构建适配 | `pnpm run product:test`；默认定义再加 `pnpm run product:check` |
-| `core` / `transport` / adapter / 共享服务中的 Rust | `cargo check --workspace`；行为有变再加最近的聚焦 `cargo test` |
+| `core` / `transport` / adapter / 共享服务中的 Rust | 先用最近模块 `AGENTS.md` 的命令；若未提供，则以最小 feature 运行 `cargo check -p <owning-package>`，行为有变再加最近的聚焦 `cargo test` |
 | 桌面集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为有变再加聚焦桌面测试 |
 | 已有桌面 smoke / 功能流覆盖的行为 | 优先最近的聚焦 E2E / smoke；除非影响构建，宽范围交给 CI |
 | `src/crates/adapters/ai-adapters` | 按上方相关 Rust 检查；仅当流契约变化时加 `cargo test -p bitfun-agent-stream` |

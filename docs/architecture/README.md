@@ -1,4 +1,4 @@
-﻿# Architecture index
+# Architecture index
 
 Purpose: complete topic map for stable architecture docs under `docs/architecture/`.
 Scope: product runtime boundaries and cross-cutting design authorities.
