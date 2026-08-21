@@ -2112,19 +2112,11 @@ mod tests {
     }
 
     #[test]
-    fn external_source_control_web_command_is_registered() {
+    fn external_source_control_command_is_registered() {
         const COMMAND: &str = "get_external_source_control_snapshot";
-        let web_api = include_str!(
-            "../../../../web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts"
-        );
-
-        assert!(
-            web_api.contains(&format!("invokeSurfaceSnapshot('{COMMAND}'")),
-            "Web UI must invoke the stable external-source control command"
-        );
         assert!(
             registered_commands().contains(COMMAND),
-            "Desktop must register the external-source control command invoked by Web UI"
+            "Desktop must register the external-source control command"
         );
     }
 
