@@ -449,6 +449,386 @@ export function findReqwestDependencyFeatureViolations(packages) {
   });
 }
 
+function dependencyProfile(features, options = {}) {
+  return {
+    features,
+    kind: options.kind ?? null,
+    optional: options.optional ?? false,
+    target: options.target ?? null,
+    useDefaultFeatures: options.useDefaultFeatures ?? true,
+    allowDependencyFeatureAlias: options.allowDependencyFeatureAlias ?? false,
+    ownerFeatureCapabilities: options.ownerFeatureCapabilities,
+  };
+}
+
+const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
+  ['axum', {
+    label: 'Axum',
+    packages: new Map([
+      ['bitfun-ai-adapters', dependencyProfile(['json'], { kind: 'dev' })],
+      ['bitfun-core', dependencyProfile(['json'], { optional: true })],
+      ['bitfun-desktop', dependencyProfile(['json'])],
+      ['bitfun-miniapp-market-server', dependencyProfile(['json'])],
+      ['bitfun-miniapp-market-service', dependencyProfile(['json'])],
+      ['bitfun-relay-server', dependencyProfile([])],
+      ['bitfun-relay-service', dependencyProfile(['json', 'ws'])],
+      ['bitfun-server', dependencyProfile(['json', 'ws'])],
+      ['bitfun-skin-market-server', dependencyProfile(['json'])],
+      ['bitfun-skin-market-service', dependencyProfile(['json'])],
+      ['bitfun-webdriver', dependencyProfile(['json'])],
+    ]),
+  }],
+  ['git2', {
+    label: 'Git2',
+    packages: new Map([
+      ['bitfun-services-core', dependencyProfile(['vendored-libgit2'], {
+        optional: true,
+        useDefaultFeatures: false,
+      })],
+      ['bitfun-services-integrations', dependencyProfile(['vendored-libgit2'], {
+        optional: true,
+        useDefaultFeatures: false,
+      })],
+    ]),
+  }],
+  ['image', {
+    label: 'Image',
+    packages: new Map([
+      ['bitfun-cli', dependencyProfile(['gif', 'jpeg', 'png', 'webp'], {
+        useDefaultFeatures: false,
+      })],
+      ['bitfun-core', dependencyProfile(['bmp', 'gif', 'jpeg', 'png', 'webp'], {
+        optional: true,
+        useDefaultFeatures: false,
+      })],
+      ['bitfun-desktop', dependencyProfile(['jpeg', 'png'], {
+        useDefaultFeatures: false,
+      })],
+      ['bitfun-miniapp-market-service', dependencyProfile(['jpeg', 'png', 'webp'], {
+        useDefaultFeatures: false,
+      })],
+      ['bitfun-services-integrations', dependencyProfile([], {
+        allowDependencyFeatureAlias: true,
+        optional: true,
+        useDefaultFeatures: false,
+        ownerFeatureCapabilities: new Map([
+          ['miniapp-market', ['gif', 'jpeg', 'png', 'webp']],
+          ['remote-connect', ['bmp', 'gif', 'jpeg', 'png', 'webp']],
+        ]),
+      })],
+      ['bitfun-skin-market-service', dependencyProfile(['gif', 'jpeg', 'png', 'webp'], {
+        useDefaultFeatures: false,
+      })],
+      ['bitfun-webdriver', dependencyProfile(['png'], {
+        useDefaultFeatures: false,
+      })],
+    ]),
+  }],
+  ['tokio-tungstenite', {
+    label: 'Tokio Tungstenite',
+    packages: new Map([
+      ['bitfun-core', dependencyProfile([], { optional: true })],
+      ['bitfun-services-integrations', dependencyProfile([], {
+        optional: true,
+        ownerFeatureCapabilities: new Map([
+          ['remote-connect', ['rustls-tls-native-roots']],
+        ]),
+      })],
+    ]),
+  }],
+  ['tower-http', {
+    label: 'Tower HTTP',
+    packages: new Map([
+      ['bitfun-core', dependencyProfile(['cors'], { optional: true })],
+      ['bitfun-desktop', dependencyProfile(['fs'])],
+      ['bitfun-miniapp-market-service', dependencyProfile(['fs', 'set-header', 'trace'])],
+      ['bitfun-relay-server', dependencyProfile(['fs'])],
+      ['bitfun-relay-service', dependencyProfile(['cors'])],
+      ['bitfun-server', dependencyProfile(['cors'])],
+      ['bitfun-skin-market-service', dependencyProfile(['fs'])],
+    ]),
+  }],
+]);
+
+function externalDependencyReference(reference, dependencyName) {
+  if (reference === dependencyName || reference === `dep:${dependencyName}`) {
+    return { activates: true, capability: null };
+  }
+  const match = reference.match(/^([^/?]+)(\?)?\/(.+)$/);
+  if (match?.[1] !== dependencyName) {
+    return null;
+  }
+  return { activates: !match[2], capability: match[3] };
+}
+
+function effectiveExternalDependencyState(
+  feature,
+  featureGraph,
+  dependencyName,
+  visiting = new Set(),
+) {
+  if (visiting.has(feature)) {
+    return { activates: false, capabilities: new Set() };
+  }
+  visiting.add(feature);
+  let activates = false;
+  const capabilities = new Set();
+  for (const reference of featureGraph[feature] ?? []) {
+    const external = externalDependencyReference(reference, dependencyName);
+    if (external) {
+      activates ||= external.activates;
+      if (external.capability) {
+        capabilities.add(external.capability);
+      }
+      continue;
+    }
+    if (Object.hasOwn(featureGraph, reference)) {
+      const nested = effectiveExternalDependencyState(
+        reference,
+        featureGraph,
+        dependencyName,
+        visiting,
+      );
+      activates ||= nested.activates;
+      for (const capability of nested.capabilities) {
+        capabilities.add(capability);
+      }
+    }
+  }
+  visiting.delete(feature);
+  return { activates, capabilities };
+}
+
+function featureOwnedDependencyViolations(pkg, dependencyName, label, profile) {
+  const ownerProfiles = profile.ownerFeatureCapabilities;
+  if (!ownerProfiles) {
+    return [];
+  }
+  const violations = [];
+  const ownerFeatures = new Set(ownerProfiles.keys());
+  const featureGraph = pkg.features ?? {};
+
+  for (const [feature, expectedCapabilities] of ownerProfiles) {
+    const state = effectiveExternalDependencyState(feature, featureGraph, dependencyName);
+    if (!state.activates) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} must explicitly enable ${label}`,
+      });
+    }
+    const actual = [...state.capabilities].sort();
+    const expected = [...expectedCapabilities].sort();
+    const missing = expected.filter((capability) => !actual.includes(capability));
+    const unexpected = actual.filter((capability) => !expected.includes(capability));
+    if (missing.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} missing ${label} capabilities: ${missing.join(', ')}`,
+      });
+    }
+    if (unexpected.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} has unexpected ${label} capabilities: ${unexpected.join(', ')}`,
+      });
+    }
+  }
+
+  for (const [feature, references] of Object.entries(featureGraph)) {
+    if (ownerFeatures.has(feature)) {
+      continue;
+    }
+    if (feature === dependencyName && profile.allowDependencyFeatureAlias) {
+      const state = effectiveExternalDependencyState(feature, featureGraph, dependencyName);
+      if (!state.activates) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name}:${feature} shared ${label} activation alias must activate the dependency`,
+        });
+      }
+      if (state.capabilities.size > 0) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message:
+            `${pkg.name}:${feature} shared ${label} activation alias must not select capabilities: `
+            + [...state.capabilities].sort().join(', '),
+        });
+      }
+      continue;
+    }
+    if (references.some((reference) => externalDependencyReference(reference, dependencyName))) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} enables ${label} outside its reviewed owner features`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+function thirdPartyDependencyProfileViolations(pkg, dependencyName, policy, profile) {
+  const violations = [];
+  const dependencies = (pkg.dependencies ?? []).filter(
+    (dependency) => dependency.name === dependencyName,
+  );
+  if (dependencies.length !== 1) {
+    return [{
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} must declare exactly one reviewed ${policy.label} dependency`,
+    }];
+  }
+  const dependency = dependencies[0];
+  if (
+    (dependency.kind ?? null) !== profile.kind
+    || (dependency.rename ?? null) !== null
+    || (dependency.target ?? null) !== profile.target
+    || dependency.optional !== profile.optional
+  ) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} ${policy.label} dependency does not match its reviewed owner shape`,
+    });
+  }
+  if ((dependency.uses_default_features !== false) !== profile.useDefaultFeatures) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} ${policy.label} dependency default-feature policy does not match its owner profile`,
+    });
+  }
+  const actual = new Set(dependency.features ?? []);
+  const expected = new Set(profile.features);
+  const missing = [...expected].filter((feature) => !actual.has(feature));
+  const unexpected = [...actual].filter((feature) => !expected.has(feature));
+  if (missing.length > 0) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} ${policy.label} dependency missing features: ${missing.join(', ')}`,
+    });
+  }
+  if (unexpected.length > 0) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} ${policy.label} dependency has unexpected features: ${unexpected.join(', ')}`,
+    });
+  }
+  violations.push(...featureOwnedDependencyViolations(
+    pkg,
+    dependencyName,
+    policy.label,
+    profile,
+  ));
+  return violations;
+}
+
+export function findThirdPartyCapabilityFeatureViolations(packages) {
+  const violations = [];
+  for (const pkg of packages) {
+    for (const [dependencyName, policy] of THIRD_PARTY_CAPABILITY_PROFILES) {
+      if (!(pkg.dependencies ?? []).some((dependency) => dependency.name === dependencyName)) {
+        continue;
+      }
+      const profile = policy.packages.get(pkg.name);
+      if (!profile) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name} ${policy.label} dependency is missing a reviewed owner profile`,
+        });
+        continue;
+      }
+      violations.push(...thirdPartyDependencyProfileViolations(
+        pkg,
+        dependencyName,
+        policy,
+        profile,
+      ));
+    }
+  }
+  return violations;
+}
+
+const RESOLVED_THIRD_PARTY_CAPABILITY_POLICIES = new Map([
+  ['git2', {
+    forbiddenFeatures: new Set(['https', 'vendored-openssl']),
+  }],
+  ['libgit2-sys', {
+    forbiddenFeatures: new Set(['https', 'openssl-sys', 'vendored-openssl']),
+  }],
+  ['image', {
+    versionPrefix: '0.25.',
+    ignoredVersionPrefixes: ['0.24.'],
+    // macOS clipboard support currently adds TIFF through arboard. The other
+    // formats are the codecs selected by reviewed BitFun owners.
+    allowedFeatures: new Set(['bmp', 'gif', 'jpeg', 'png', 'tiff', 'webp']),
+  }],
+]);
+
+export function findResolvedThirdPartyCapabilityFeatureViolations(records, { root }) {
+  const violations = [];
+
+  for (const [dependencyName, policy] of RESOLVED_THIRD_PARTY_CAPABILITY_POLICIES) {
+    const namedRecords = records.filter((record) => record.name === dependencyName);
+    const governedRecords = policy.versionPrefix
+      ? namedRecords.filter((record) => record.version.startsWith(policy.versionPrefix))
+      : namedRecords;
+    for (const record of namedRecords) {
+      if (
+        !policy.versionPrefix
+        || record.version.startsWith(policy.versionPrefix)
+        || policy.ignoredVersionPrefixes?.some((prefix) => record.version.startsWith(prefix))
+      ) {
+        continue;
+      }
+      violations.push({
+        path: join(root, 'Cargo.toml'),
+        line: 1,
+        message: `resolved ${dependencyName} ${record.version} uses an unreviewed version family`,
+      });
+    }
+    if (policy.versionPrefix && namedRecords.length > 0 && governedRecords.length === 0) {
+      violations.push({
+        path: join(root, 'Cargo.toml'),
+        line: 1,
+        message:
+          `resolved ${dependencyName} graph has no evidence for reviewed version family `
+          + policy.versionPrefix,
+      });
+      continue;
+    }
+
+    for (const record of governedRecords) {
+      const features = record.features ?? [];
+      const unexpected = policy.forbiddenFeatures
+        ? features.filter((feature) => policy.forbiddenFeatures.has(feature))
+        : features.filter((feature) => !policy.allowedFeatures.has(feature));
+      if (unexpected.length === 0) {
+        continue;
+      }
+      violations.push({
+        path: join(root, 'Cargo.toml'),
+        line: 1,
+        message:
+          `resolved ${dependencyName} ${record.version} feature union enables unreviewed capabilities: `
+          + unexpected.join(', '),
+      });
+    }
+  }
+
+  return violations;
+}
+
 export function findRuntimeServicesTestSupportFeatureViolations(packages) {
   const violations = [];
 
@@ -689,6 +1069,57 @@ export function findServicesCorePlatformDependencyFeatureViolations(packages) {
         line: 1,
         message:
           'windows API capabilities must be selected by services-core owner features, not the dependency declaration',
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findServicesIntegrationsPlatformDependencyFeatureViolations(packages) {
+  const expectedFeatures = new Set([
+    'Win32_Foundation',
+    'Win32_Storage_FileSystem',
+  ]);
+  const violations = [];
+
+  for (const pkg of packages) {
+    if (pkg.name !== 'bitfun-services-integrations') {
+      continue;
+    }
+    const dependencies = (pkg.dependencies ?? []).filter(
+      (dependency) => dependency.name === 'windows',
+    );
+    const dependency = dependencies[0];
+    if (
+      dependencies.length !== 1
+      || (dependency.kind ?? null) !== null
+      || (dependency.rename ?? null) !== null
+      || dependency.optional !== true
+      || dependency.target !== 'cfg(windows)'
+    ) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name} must declare exactly one reviewed Windows dependency`,
+      });
+      continue;
+    }
+    const actual = new Set(dependency.features ?? []);
+    const missing = [...expectedFeatures].filter((feature) => !actual.has(feature));
+    const unexpected = [...actual].filter((feature) => !expectedFeatures.has(feature));
+    if (missing.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name} Windows dependency missing API capabilities: ${missing.join(', ')}`,
+      });
+    }
+    if (unexpected.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name} Windows dependency has unexpected Windows API capabilities: ${unexpected.join(', ')}`,
       });
     }
   }
@@ -2182,8 +2613,11 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
     ...findRuntimeServicesTestSupportFeatureViolations(packages),
     ...findTokioDependencyFeatureViolations(packages),
     ...findReqwestDependencyFeatureViolations(packages),
+    ...findThirdPartyCapabilityFeatureViolations(packages),
+    ...findResolvedThirdPartyCapabilityFeatureViolations(resolvedPackageFeatures, { root }),
     ...findResolvedReqwestNativeTlsViolations(resolvedPackageFeatures, { root }),
     ...findServicesCorePlatformDependencyFeatureViolations(packages),
+    ...findServicesIntegrationsPlatformDependencyFeatureViolations(packages),
   ];
 }
 
