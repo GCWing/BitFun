@@ -503,12 +503,13 @@ async fn close_all_plugin_host_ptys() {
 }
 
 pub(crate) fn instance_directories_equal(requested: &str, expected: &Path) -> bool {
+    let Ok(expected) = dunce::canonicalize(expected) else {
+        return false;
+    };
+    let expected = comparable_instance_directory(&expected.to_string_lossy());
     let matches = |candidate: &str| {
         dunce::canonicalize(candidate)
-            .map(|path| {
-                comparable_instance_directory(&path.to_string_lossy())
-                    == comparable_instance_directory(&expected.to_string_lossy())
-            })
+            .map(|path| comparable_instance_directory(&path.to_string_lossy()) == expected)
             .unwrap_or(false)
     };
     matches(requested)

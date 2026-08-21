@@ -554,6 +554,7 @@ mod tests {
     use terminal_core::{SessionResponse, SessionSource, ShellType};
 
     fn instance(directory: PathBuf, instance_id: &str, project_id: &str) -> PluginHostInstance {
+        let directory = dunce::canonicalize(directory).expect("canonical temporary workspace");
         PluginHostInstance {
             canonical_directory: directory.to_string_lossy().into_owned(),
             directory: directory.clone(),
@@ -587,7 +588,7 @@ mod tests {
         assert_eq!(value["id"], "project-a");
         assert_eq!(
             value["worktree"],
-            directory.path().to_string_lossy().as_ref()
+            context.worktree.to_string_lossy().as_ref()
         );
         assert!(value.get("vcsDir").is_none());
         assert!(value.get("vcs").is_none());
