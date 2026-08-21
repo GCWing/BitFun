@@ -11,6 +11,7 @@ use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext,
     ValidationResult,
 };
+#[cfg(feature = "remote-workspace")]
 use crate::service::remote_ssh::{
     global_port_forward_manager, list_remote_listening_ports, PortForwardRequest, SSHAuthMethod,
     SSHConnectionConfig, SSHConnectionManager, SSHConnectionOptions,
@@ -60,6 +61,7 @@ impl PortForwardToolInput {
 }
 
 /// An SSH endpoint parsed out of a `[user@]host[:port]` string.
+#[cfg_attr(not(feature = "remote-workspace"), allow(dead_code))]
 struct ParsedEndpoint {
     user: Option<String>,
     host: String,
@@ -95,6 +97,7 @@ fn parse_endpoint(target: &str) -> Option<ParsedEndpoint> {
     })
 }
 
+#[cfg(feature = "remote-workspace")]
 fn current_username() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
@@ -109,6 +112,7 @@ impl PortForwardTool {
     }
 
     /// Connection bound to this session, when there is one.
+    #[cfg(feature = "remote-workspace")]
     fn workspace_connection_id(context: &ToolUseContext) -> Option<String> {
         let workspace = context.workspace.as_ref()?;
         if !workspace.is_remote() {
@@ -122,6 +126,7 @@ impl PortForwardTool {
     /// Saved connections win over `~/.ssh/config` so an explicitly configured
     /// profile (with its stored credentials) is preferred over re-deriving one,
     /// and a bare endpoint is the last resort.
+    #[cfg(feature = "remote-workspace")]
     async fn resolve_target(
         manager: &SSHConnectionManager,
         target: Option<&str>,
@@ -168,6 +173,7 @@ impl PortForwardTool {
     /// The id is derived from the endpoint so repeated calls reuse one session
     /// instead of stacking a new one per tool call. Nothing is persisted to the
     /// user's saved connections.
+    #[cfg(feature = "remote-workspace")]
     async fn connect_ad_hoc(manager: &SSHConnectionManager, target: &str) -> BitFunResult<String> {
         let endpoint = parse_endpoint(target).ok_or_else(|| {
             BitFunError::tool(format!(
@@ -296,6 +302,14 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
 
     fn default_exposure(&self) -> ToolExposure {
         ToolExposure::Deferred
+    }
+
+    /// Hidden in builds without remote SSH support. The tool stays in the
+    /// provider plan so registry construction is total, but a build with no SSH
+    /// transport has nothing for it to forward over, and offering a tool that
+    /// can only fail is worse than not offering it.
+    async fn is_available_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
+        cfg!(feature = "remote-workspace")
     }
 
     fn input_schema(&self) -> Value {
@@ -437,6 +451,18 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
         }
     }
 
+    #[cfg(not(feature = "remote-workspace"))]
+    async fn call_impl(
+        &self,
+        _input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        Err(BitFunError::tool(
+            "This build has no remote SSH support, so ports cannot be forwarded".to_string(),
+        ))
+    }
+
+    #[cfg(feature = "remote-workspace")]
     async fn call_impl(
         &self,
         input: &Value,
@@ -568,6 +594,7 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
 }
 
 /// Reach the SSH manager that owns this process's connections.
+#[cfg(feature = "remote-workspace")]
 async fn resolve_ssh_manager() -> BitFunResult<SSHConnectionManager> {
     let manager = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
         .ok_or_else(|| BitFunError::tool("Remote SSH services are not initialized".to_string()))?;
@@ -614,10 +641,12 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn the_tool_is_offered_outside_remote_workspaces() {
         // A session that reached a host with `ssh` in a shell still needs to
-        // forward its ports, so availability must not depend on the workspace.
+        // forward its ports, so availability must not depend on the workspace —
+        // only on the build carrying an SSH transport at all.
         let tool = PortForwardTool::new();
         assert!(tool.is_available_in_context(None).await);
     }

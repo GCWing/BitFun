@@ -10,17 +10,17 @@
  * cases detection cannot cover (a specific local port, a non-loopback remote
  * host).
  *
- * The table keeps the remote port and the local address in separate columns
+ * The rows keep the remote port and the local address in separate columns
  * because they routinely differ: the remote port is what the user thinks in,
  * the local port is an allocation that moves when the number is taken.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Button, Input, Checkbox } from '@/component-library';
+import { Modal, Button, IconButton, Input, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { AlertTriangle, Copy, ExternalLink, Plus, RefreshCw, X, Check } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Network, Plus, RefreshCw, X } from 'lucide-react';
 import { sshApi } from './sshApi';
 import type { PortForward, RemoteListeningPort } from './types';
 import './PortForwardDialog.scss';
@@ -28,7 +28,7 @@ import './PortForwardDialog.scss';
 const log = createLogger('PortForwardDialog');
 
 /**
- * How often the table refreshes its counters while the dialog is open.
+ * How often the rows refresh their counters while the dialog is open.
  *
  * The backend keeps the numbers in atomics and snapshots on demand, so polling
  * costs one cheap command; anything faster just makes the digits flicker.
@@ -224,265 +224,278 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
       title={t('ssh.portForward.title')}
       titleExtra={
         connectionName ? (
-          <span className="ssh-port-forward__target">{connectionName}</span>
+          <span className="port-forward-dialog__target">{connectionName}</span>
         ) : undefined
       }
-      size="medium"
+      size="large"
+      contentInset
+      contentClassName="port-forward-dialog__modal"
       showCloseButton
       testId="ssh-port-forward-dialog"
     >
-      <div className="ssh-port-forward" data-bf-component="ssh-remote" data-bf-part="portForward">
-        {/* Discovery first: it answers "which port?" without making anyone look it up. */}
-        <section className="ssh-port-forward__section">
-          <header className="ssh-port-forward__section-head">
-            <h4>{t('ssh.portForward.detectedTitle')}</h4>
-            <button
-              type="button"
-              className="ssh-port-forward__icon-button"
-              onClick={() => void detect()}
-              disabled={isDetecting}
-              title={t('ssh.portForward.detect')}
-              aria-label={t('ssh.portForward.detect')}
-              data-testid="ssh-port-forward-detect"
-            >
-              <RefreshCw
-                size={13}
-                className={isDetecting ? 'ssh-port-forward__spin' : undefined}
-                aria-hidden="true"
-              />
-            </button>
-          </header>
-
-          {isDetecting && detectedPorts === null ? (
-            <p className="ssh-port-forward__muted">{t('ssh.portForward.detecting')}</p>
-          ) : detectedPorts && detectedPorts.length > 0 ? (
-            <div className="ssh-port-forward__chips">
-              {detectedPorts.map((port) => {
-                const alreadyForwarded = forwardedRemotePorts.has(port.port);
-                return (
-                  <button
-                    key={`${port.port}-${port.bindAddress}`}
-                    type="button"
-                    className="ssh-port-forward__chip"
-                    data-state={alreadyForwarded ? 'forwarded' : 'idle'}
-                    disabled={alreadyForwarded || busyPort === port.port}
-                    title={
-                      alreadyForwarded
-                        ? t('ssh.portForward.detectedAlreadyForwarded')
-                        : t('ssh.portForward.detectedUse')
-                    }
-                    onClick={() => void handleForwardDetected(port)}
-                    data-testid="ssh-port-forward-chip"
-                    data-port={port.port}
-                  >
-                    {alreadyForwarded ? (
-                      <Check size={12} aria-hidden="true" />
-                    ) : (
-                      <Plus size={12} aria-hidden="true" />
-                    )}
-                    <span className="ssh-port-forward__chip-port">{port.port}</span>
-                    {port.process && (
-                      <span className="ssh-port-forward__chip-process">{port.process}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="ssh-port-forward__muted">{t('ssh.portForward.detectedEmpty')}</p>
-          )}
-        </section>
+      <div
+        className="port-forward-dialog"
+        data-bf-component="ssh-remote"
+        data-bf-part="portForward"
+      >
+        <div className="port-forward-dialog__intro" data-bf-part="portForwardIntro">
+          <Network size={18} aria-hidden="true" />
+          <p>{t('ssh.portForward.intro')}</p>
+        </div>
 
         {error && (
           <div
-            className="ssh-port-forward__error"
+            className="port-forward-dialog__error"
             role="alert"
             data-bf-component="ssh-remote"
             data-bf-part="portForwardError"
           >
-            <AlertTriangle size={14} aria-hidden="true" />
+            <AlertTriangle size={16} aria-hidden="true" />
             <span>{error}</span>
           </div>
         )}
 
-        <section className="ssh-port-forward__section">
-          <header className="ssh-port-forward__section-head">
-            <h4>{t('ssh.portForward.activeTitle')}</h4>
-          </header>
+        {/* Discovery first: it answers "which port?" without making anyone look it up. */}
+        <section className="port-forward-dialog__section">
+          <div className="port-forward-dialog__section-header">
+            <span>{t('ssh.portForward.detectedTitle')}</span>
+            <IconButton
+              type="button"
+              size="small"
+              variant="ghost"
+              disabled={isDetecting}
+              tooltip={t('ssh.portForward.detect')}
+              aria-label={t('ssh.portForward.detect')}
+              data-testid="ssh-port-forward-detect"
+            onClick={() => void detect()}
+            >
+              <RefreshCw
+                size={14}
+                className={isDetecting ? 'port-forward-dialog__spin' : undefined}
+                aria-hidden="true"
+              />
+            </IconButton>
+          </div>
+
+          <div className="port-forward-dialog__section-body">
+            {isDetecting && detectedPorts === null ? (
+              <p className="port-forward-dialog__empty">{t('ssh.portForward.detecting')}</p>
+            ) : detectedPorts && detectedPorts.length > 0 ? (
+              <div className="port-forward-dialog__chips">
+                {detectedPorts.map((port) => {
+                  const alreadyForwarded = forwardedRemotePorts.has(port.port);
+                  return (
+                    <button
+                      key={`${port.port}-${port.bindAddress}`}
+                      type="button"
+                      className="port-forward-dialog__chip"
+                      data-state={alreadyForwarded ? 'forwarded' : 'idle'}
+                      disabled={alreadyForwarded || busyPort === port.port}
+                      title={
+                        alreadyForwarded
+                          ? t('ssh.portForward.detectedAlreadyForwarded')
+                          : t('ssh.portForward.detectedUse')
+                      }
+                      onClick={() => void handleForwardDetected(port)}
+                      data-testid="ssh-port-forward-chip"
+                      data-port={port.port}
+                    >
+                      {alreadyForwarded ? (
+                        <Check size={12} aria-hidden="true" />
+                      ) : (
+                        <Plus size={12} aria-hidden="true" />
+                      )}
+                      <span className="port-forward-dialog__chip-port">{port.port}</span>
+                      {port.process && (
+                        <span className="port-forward-dialog__chip-process">{port.process}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="port-forward-dialog__empty">{t('ssh.portForward.detectedEmpty')}</p>
+            )}
+          </div>
+        </section>
+
+        <section className="port-forward-dialog__section" data-bf-part="portForwardTable">
+          <div className="port-forward-dialog__section-header">
+            <span>{t('ssh.portForward.activeTitle')}</span>
+          </div>
 
           {forwards.length === 0 ? (
-            <p className="ssh-port-forward__muted">{t('ssh.portForward.empty')}</p>
+            <div className="port-forward-dialog__section-body">
+              <p className="port-forward-dialog__empty">{t('ssh.portForward.empty')}</p>
+            </div>
           ) : (
-            <div
-              className="ssh-port-forward__table"
-              data-bf-component="ssh-remote"
-              data-bf-part="portForwardTable"
-            >
-              <table>
-                <thead>
-                  <tr>
-                    <th>{t('ssh.portForward.columnRemotePort')}</th>
-                    <th>{t('ssh.portForward.columnLocalAddress')}</th>
-                    <th>{t('ssh.portForward.columnLabel')}</th>
-                    <th>{t('ssh.portForward.columnStatus')}</th>
-                    <th aria-label={t('ssh.portForward.columnActions')} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {forwards.map((forward) => (
-                    <tr key={forward.id} data-testid="ssh-port-forward-row">
-                      <td className="ssh-port-forward__cell-port">
-                        {forward.remotePort}
-                        {forward.remoteHost !== '127.0.0.1' && (
-                          <span className="ssh-port-forward__cell-host">{forward.remoteHost}</span>
-                        )}
-                      </td>
-                      <td className="ssh-port-forward__cell-address">
-                        <code>{localAddressOf(forward)}</code>
-                        {forward.requestedLocalPort !== undefined &&
-                          forward.requestedLocalPort !== null && (
-                            <span className="ssh-port-forward__moved">
-                              {t('ssh.portForward.portMoved', {
-                                requested: forward.requestedLocalPort,
-                                bound: forward.localPort,
-                              })}
-                            </span>
-                          )}
-                        {forward.localHost === '0.0.0.0' && (
-                          <span className="ssh-port-forward__lan">
-                            {t('ssh.portForward.exposedOnLanBadge')}
-                          </span>
-                        )}
-                      </td>
-                      <td className="ssh-port-forward__cell-label">{forward.label ?? '—'}</td>
-                      <td className="ssh-port-forward__cell-status">
-                        {forward.lastError ? (
-                          <span
-                            className="ssh-port-forward__status ssh-port-forward__status--warn"
-                            title={forward.lastError}
-                          >
-                            <AlertTriangle size={12} aria-hidden="true" />
-                            {t('ssh.portForward.statusWarning')}
-                          </span>
-                        ) : (
-                          <span className="ssh-port-forward__status">
-                            {t('ssh.portForward.statusActive', {
-                              active: forward.activeConnections,
-                            })}
-                          </span>
-                        )}
-                      </td>
-                      <td className="ssh-port-forward__cell-actions">
-                        <button
-                          type="button"
-                          className="ssh-port-forward__icon-button"
-                          title={t('ssh.portForward.openInBrowser')}
-                          aria-label={t('ssh.portForward.openInBrowser')}
-                          onClick={() => handleOpen(forward)}
+            <div className="port-forward-dialog__rows">
+              {forwards.map((forward) => (
+                <div
+                  key={forward.id}
+                  className="port-forward-dialog__row"
+                  data-testid="ssh-port-forward-row"
+                >
+                  <div className="port-forward-dialog__row-copy">
+                    <code className="port-forward-dialog__remote">
+                      {forward.remoteHost !== '127.0.0.1'
+                        ? `${forward.remoteHost}:${forward.remotePort}`
+                        : forward.remotePort}
+                    </code>
+                    <span className="port-forward-dialog__arrow" aria-hidden="true">
+                      →
+                    </span>
+                    <code className="port-forward-dialog__local">{localAddressOf(forward)}</code>
+                    <span className="port-forward-dialog__meta">
+                      {forward.label && (
+                        <span className="port-forward-dialog__label">{forward.label}</span>
+                      )}
+                      {forward.lastError ? (
+                        <span
+                          className="port-forward-dialog__status port-forward-dialog__status--warn"
+                          title={forward.lastError}
                         >
-                          <ExternalLink size={13} aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          className="ssh-port-forward__icon-button"
-                          title={t('ssh.portForward.copyAddress')}
-                          aria-label={t('ssh.portForward.copyAddress')}
-                          onClick={() => handleCopy(forward)}
-                        >
-                          <Copy size={13} aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          className="ssh-port-forward__icon-button ssh-port-forward__icon-button--danger"
-                          title={t('ssh.portForward.stop')}
-                          aria-label={t('ssh.portForward.stop')}
-                          onClick={() => void handleStop(forward.id)}
-                          data-testid="ssh-port-forward-stop"
-                        >
-                          <X size={13} aria-hidden="true" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          <AlertTriangle size={12} aria-hidden="true" />
+                          {t('ssh.portForward.statusWarning')}
+                        </span>
+                      ) : (
+                        <span className="port-forward-dialog__status">
+                          {t('ssh.portForward.statusActive', {
+                            active: forward.activeConnections,
+                          })}
+                        </span>
+                      )}
+                    </span>
+                    {forward.requestedLocalPort !== undefined &&
+                      forward.requestedLocalPort !== null && (
+                        <span className="port-forward-dialog__note port-forward-dialog__note--warn">
+                          {t('ssh.portForward.portMoved', {
+                            requested: forward.requestedLocalPort,
+                            bound: forward.localPort,
+                          })}
+                        </span>
+                      )}
+                    {forward.localHost === '0.0.0.0' && (
+                      <span className="port-forward-dialog__note">
+                        {t('ssh.portForward.exposedOnLanBadge')}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="port-forward-dialog__row-actions">
+                    <IconButton
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      tooltip={t('ssh.portForward.openInBrowser')}
+                      aria-label={t('ssh.portForward.openInBrowser')}
+                      onClick={() => handleOpen(forward)}
+                    >
+                      <ExternalLink size={14} aria-hidden="true" />
+                    </IconButton>
+                    <IconButton
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      tooltip={t('ssh.portForward.copyAddress')}
+                      aria-label={t('ssh.portForward.copyAddress')}
+                      onClick={() => handleCopy(forward)}
+                    >
+                      <Copy size={14} aria-hidden="true" />
+                    </IconButton>
+                    <IconButton
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      tooltip={t('ssh.portForward.stop')}
+                      aria-label={t('ssh.portForward.stop')}
+                      onClick={() => void handleStop(forward.id)}
+                      data-testid="ssh-port-forward-stop"
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </IconButton>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
 
         {/* The escape hatch: a specific local port, or a host detection cannot see. */}
-        <section className="ssh-port-forward__section ssh-port-forward__section--manual">
-          <header className="ssh-port-forward__section-head">
-            <h4>{t('ssh.portForward.manualTitle')}</h4>
-          </header>
-
-          <div
-            className="ssh-port-forward__form"
-            data-bf-component="ssh-remote"
-            data-bf-part="portForwardForm"
-          >
-            <label className="ssh-port-forward__field">
-              <span>{t('ssh.portForward.remotePortLabel')}</span>
-              <Input
-                ref={remotePortInputRef}
-                inputSize="small"
-                value={remotePort}
-                placeholder="3000"
-                error={!remotePortParsed.valid}
-                onChange={(event) => setRemotePort(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && canSubmit) void handleAdd();
-                }}
-                data-testid="ssh-port-forward-remote-port"
-              />
-            </label>
-
-            <label className="ssh-port-forward__field">
-              <span>{t('ssh.portForward.localPortLabel')}</span>
-              <Input
-                inputSize="small"
-                value={localPort}
-                placeholder={t('ssh.portForward.localPortPlaceholder')}
-                error={!localPortParsed.valid}
-                onChange={(event) => setLocalPort(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && canSubmit) void handleAdd();
-                }}
-                data-testid="ssh-port-forward-local-port"
-              />
-            </label>
-
-            <label className="ssh-port-forward__field ssh-port-forward__field--grow">
-              <span>{t('ssh.portForward.labelLabel')}</span>
-              <Input
-                inputSize="small"
-                value={label}
-                placeholder={t('ssh.portForward.labelPlaceholder')}
-                onChange={(event) => setLabel(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && canSubmit) void handleAdd();
-                }}
-              />
-            </label>
-
-            <Button
-              variant="secondary"
-              size="small"
-              disabled={!canSubmit}
-              onClick={() => void handleAdd()}
-              data-testid="ssh-port-forward-add"
-            >
-              {t('ssh.portForward.add')}
-            </Button>
+        <section className="port-forward-dialog__section">
+          <div className="port-forward-dialog__section-header">
+            <span>{t('ssh.portForward.manualTitle')}</span>
           </div>
 
-          <Checkbox
-            size="small"
-            checked={exposeOnLan}
-            onChange={(event) => setExposeOnLan(event.target.checked)}
-            label={t('ssh.portForward.exposeOnLan')}
-            title={t('ssh.portForward.exposeOnLanHint')}
-          />
+          <div className="port-forward-dialog__section-body">
+            <div
+              className="port-forward-dialog__form"
+              data-bf-component="ssh-remote"
+              data-bf-part="portForwardForm"
+            >
+              <label className="port-forward-dialog__field">
+                <span>{t('ssh.portForward.remotePortLabel')}</span>
+                <Input
+                  ref={remotePortInputRef}
+                  inputSize="small"
+                  value={remotePort}
+                  placeholder="3000"
+                  error={!remotePortParsed.valid}
+                  onChange={(event) => setRemotePort(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canSubmit) void handleAdd();
+                  }}
+                  data-testid="ssh-port-forward-remote-port"
+                />
+              </label>
+
+              <label className="port-forward-dialog__field">
+                <span>{t('ssh.portForward.localPortLabel')}</span>
+                <Input
+                  inputSize="small"
+                  value={localPort}
+                  placeholder={t('ssh.portForward.localPortPlaceholder')}
+                  error={!localPortParsed.valid}
+                  onChange={(event) => setLocalPort(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canSubmit) void handleAdd();
+                  }}
+                  data-testid="ssh-port-forward-local-port"
+                />
+              </label>
+
+              <label className="port-forward-dialog__field port-forward-dialog__field--grow">
+                <span>{t('ssh.portForward.labelLabel')}</span>
+                <Input
+                  inputSize="small"
+                  value={label}
+                  placeholder={t('ssh.portForward.labelPlaceholder')}
+                  onChange={(event) => setLabel(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canSubmit) void handleAdd();
+                  }}
+                />
+              </label>
+
+              <Button
+                variant="secondary"
+                size="small"
+                disabled={!canSubmit}
+                onClick={() => void handleAdd()}
+                data-testid="ssh-port-forward-add"
+              >
+                {t('ssh.portForward.add')}
+              </Button>
+            </div>
+
+            <Checkbox
+              size="small"
+              checked={exposeOnLan}
+              onChange={(event) => setExposeOnLan(event.target.checked)}
+              label={t('ssh.portForward.exposeOnLan')}
+              description={t('ssh.portForward.exposeOnLanHint')}
+            />
+          </div>
         </section>
       </div>
     </Modal>

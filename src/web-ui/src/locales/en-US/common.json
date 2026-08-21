@@ -1689,6 +1689,7 @@
     "portForward": {
       "menuEntry": "Forward a Port",
       "title": "Port Forwarding",
+      "intro": "Reach a port listening on the remote host from this machine. Nothing is forwarded automatically — only the mappings you add here.",
       "detectedTitle": "Listening on the remote",
       "detecting": "Detecting remote ports…",
       "detect": "Detect again",

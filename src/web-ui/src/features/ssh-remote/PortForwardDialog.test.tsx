@@ -55,6 +55,28 @@ vi.mock('@/component-library', () => ({
       {children}
     </button>
   ),
+  IconButton: ({
+    children,
+    onClick,
+    disabled,
+    'aria-label': ariaLabel,
+    'data-testid': testId,
+  }: React.PropsWithChildren<{
+    onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    disabled?: boolean;
+    'aria-label'?: string;
+    'data-testid'?: string;
+  }>) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      data-testid={testId}
+    >
+      {children}
+    </button>
+  ),
   Input: React.forwardRef<
     HTMLInputElement,
     {
