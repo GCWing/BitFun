@@ -1,9 +1,4 @@
-import {
-  ArrowRight,
-  ArrowSquareOut,
-  DownloadSimple,
-  MagnifyingGlass,
-} from '@phosphor-icons/react';
+import { ArrowRight, MagnifyingGlass } from '@phosphor-icons/react';
 import {
   useCallback,
   useEffect,
@@ -12,8 +7,8 @@ import {
 } from 'react';
 import { skinMarketApi, SkinMarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate } from './format';
+import { GetBitfunCta } from './GetBitfunCta';
 import type { Locale, Translate } from './i18n';
-import { BITFUN_RELEASES_URL } from './links';
 import { PosterImage } from './PosterImage';
 import type {
   AppearanceListingSummary,
@@ -160,16 +155,7 @@ export function CatalogPage({
           <h1 id="market-heading">{t('headline')}</h1>
           <p>{t('intro')}</p>
         </div>
-        <aside className="install-note" aria-labelledby="desktop-install-title">
-          <DownloadSimple size={22} weight="regular" aria-hidden="true" />
-          <a href={BITFUN_RELEASES_URL} target="_blank" rel="noreferrer">
-            <strong id="desktop-install-title">
-              {t('desktopInstallTitle')}
-              <ArrowSquareOut size={16} weight="regular" aria-hidden="true" />
-            </strong>
-            <p>{t('desktopInstallNote')}</p>
-          </a>
-        </aside>
+        <GetBitfunCta placement="catalog" t={t} />
       </section>
 
       <section className="catalog shell" aria-labelledby="catalog-heading">

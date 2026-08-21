@@ -439,42 +439,70 @@ img {
   line-height: 1.55;
 }
 
-.install-note {
+/* An appearance package only applies inside the desktop client, so the catalog
+   and every listing carry the same visible route to the download page. */
+.get-bitfun {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 14px;
-  padding: 20px 0 3px;
-  border-top: 1px solid var(--border-strong);
+  padding: 19px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text-soft);
-}
-
-.install-note > svg {
-  color: var(--accent);
-}
-
-.install-note > a {
-  color: inherit;
   text-decoration: none;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
-.install-note strong {
-  display: flex;
+.get-bitfun:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-strong);
+}
+
+.get-bitfun__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: var(--control-radius);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.get-bitfun__copy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.get-bitfun__copy strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.get-bitfun__copy > span {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.get-bitfun__action {
+  display: inline-flex;
   width: fit-content;
   align-items: center;
   gap: 6px;
-  margin-bottom: 7px;
-  color: var(--text);
-  font-size: 15px;
-}
-
-.install-note > a:hover strong {
-  color: var(--accent-strong);
-}
-
-.install-note p {
-  margin: 0;
+  margin-top: 2px;
+  color: var(--accent-text);
   font-size: 14px;
-  line-height: 1.55;
+  font-weight: 720;
+}
+
+.get-bitfun__action svg {
+  transition: transform 150ms ease;
+}
+
+.get-bitfun:hover .get-bitfun__action svg {
+  transform: translateX(3px);
 }
 
 .catalog {
@@ -1046,41 +1074,23 @@ img {
   margin-top: 28px;
 }
 
-.desktop-guidance {
+.import-hint {
   display: grid;
   grid-template-columns: auto 1fr;
+  align-items: center;
   gap: 11px;
-  margin-top: 23px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
+  margin: 20px 0 0;
   color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.desktop-guidance > svg {
+.import-hint > svg {
   color: var(--accent);
 }
 
-.desktop-guidance a {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  color: inherit;
-  font-size: 12px;
-  line-height: 1.5;
-  text-decoration: none;
-}
-
-.desktop-guidance strong {
-  display: flex;
-  width: fit-content;
-  align-items: center;
-  gap: 5px;
-  color: var(--text);
-  font-size: 13px;
-}
-
-.desktop-guidance a:hover strong {
-  color: var(--accent-strong);
+.get-bitfun--listing {
+  margin-top: 22px;
 }
 
 .detail-fact-strip {
@@ -2091,7 +2101,7 @@ img {
     line-height: 1;
   }
 
-  .install-note {
+  .get-bitfun--catalog {
     max-width: 540px;
   }
 

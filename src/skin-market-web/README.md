@@ -8,6 +8,9 @@ Appearance packages.
 - Routes: `/skin/`, `/skin/appearances/:slug`, `/skin/submissions`, and `/skin/admin`
 - Features: catalog search and filters, release details and downloads, personal submission status and withdrawal, plus administrator review and publishing
 - Installation remains a BitFun Desktop action through Settings > Appearance.
+- Visitors without the desktop client reach `https://openbitfun.com/download`
+  from the catalog masthead and from every appearance page (`src/GetBitfunCta.tsx`,
+  `src/links.ts`).
 
 The site is self-contained and does not import the main Web UI locale or theme catalogs.
 GitHub identity is shared with the MiniApp market through its same-origin auth
