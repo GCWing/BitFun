@@ -1,69 +1,44 @@
 {
-  "configCenter": {
-    "selectConfig": "Select Configuration",
-    "searchPlaceholder": "Search settings…",
-    "searchNoResults": "No matching settings",
-    "searchClear": "Clear search",
-    "beta": "Beta",
-    "unseenItems": "Not seen yet",
-    "searchAliases": {
-      "archivedSessions": [],
-      "keyboard": [],
-      "sessionPersonalization": [],
-      "sessionPermissions": [],
-      "quickActions": [],
-      "review": [],
-      "memories": [],
-      "usageStatistics": []
-    },
-    "tabDescriptions": {
-      "basics": "Logging, terminal shell, notifications, and launch at login.",
-      "appearance": "Language, visual appearance, and UI font size.",
-      "models": "AI models, API keys, providers, proxy, and session title.",
-      "usageStatistics": "Historical model call statistics: requests, tokens, and cache hit rates by model, provider, and endpoint.",
-      "worktrees": "Defaults for isolated Git worktrees and parallel sessions.",
-      "sessionPersonalization": "Agent companion.",
-      "sessionPermissions": "Tool permissions, execution, desktop control, and browser access.",
-      "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
-      "voiceInput": "Local microphone input and speech-to-text model.",
-      "review": "Review strategy, coverage depth, capacity, cost, and latency controls.",
-      "memories": "Automatic memory generation, injection, retention windows, and memory models.",
-      "mcpTools": "MCP servers and tool integrations.",
-      "externalSources": "Load compatible commands and extensions from other AI applications.",
-      "hooks": "Run your own commands at Agent lifecycle points. Codex-compatible.",
-      "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
-      "editor": "Editor font, display, and formatting.",
-      "lsp": "Language servers and code intelligence.",
-      "keyboard": "Shortcuts and key bindings.",
-      "archivedSessions": "View, restore, or permanently delete archived sessions."
+  "navigation": {
+    "search": {
+      "placeholder": "Search settings…",
+      "empty": "No matching settings"
     },
     "categories": {
-      "general": "General",
-      "smartCapabilities": "Smart Configuration",
-      "devkit": "Dev Kit"
+      "application": "App & Interface",
+      "ai": "AI & Models",
+      "workspace": "Sessions & Workspace",
+      "tools": "Tools & Integrations",
+      "data": "Data & Maintenance"
     },
-    "tabs": {
-      "basics": "Basics",
-      "appearance": "Appearance",
-      "models": "Models",
-      "usageStatistics": "Usage Statistics",
-      "worktrees": "Worktrees",
-      "sessionPersonalization": "Personalization",
-      "sessionPermissions": "Permissions",
-      "quickActions": "Quick Actions",
-      "voiceInput": "Voice Input",
-      "review": "Review",
-      "memories": "Memory",
-      "skills": "Skills",
-      "mcpTools": "MCP",
-      "externalSources": "External AI Apps",
-      "hooks": "Agent Hooks",
-      "acpAgents": "ACP Agents",
-      "agents": "Agents",
+    "pages": {
+      "general": { "label": "General", "description": "Startup, updates, window behavior, sleep, and notifications." },
+      "appearance": { "label": "Appearance", "description": "Language, themes, effects, appearance packages, and interface typography." },
+      "pet": { "label": "Pet", "description": "Display surface, character packages, import, and preview." },
+      "input": { "label": "Input & Shortcuts", "description": "Voice input and keyboard shortcuts." },
+      "terminal": { "label": "Terminal", "description": "Default shell and terminal panel placement." },
+      "development": { "label": "Terminal & Editor", "description": "Terminal shell behavior and the code editing experience." },
+      "models": { "label": "Models", "description": "Default models, providers, subscriptions, catalog, and network proxy." },
+      "memory": { "label": "Memory", "description": "Memory generation, use, extraction, and consolidation." },
+      "sessionWorkspace": { "label": "Session & Workspace", "description": "Session titles and current workspace search." },
+      "worktrees": { "label": "Worktrees", "description": "Git worktree isolation and parallel-session defaults." },
+      "executionControl": { "label": "Execution, Permissions & Control", "description": "Tool execution and permissions, review capacity, desktop control, and browser connections." },
+      "execution": { "label": "Execution & Permissions", "description": "Tool permissions, execution policy, review capacity, and recovery." },
+      "deviceControl": { "label": "Desktop & Browser", "description": "Computer Use, OS grants, and browser connections." },
+      "automation": { "label": "Automation", "description": "Quick actions and Agent lifecycle hooks." },
+      "mcp": { "label": "MCP", "description": "Manage MCP servers, connections, and exposed tools." },
+      "acp": { "label": "ACP Agents", "description": "Configure external agents that connect through Agent Client Protocol." },
+      "usage": { "label": "Usage Statistics", "description": "Model requests, token usage, and cache hit rates." },
+      "archivedSessions": { "label": "Archived Sessions", "description": "View, restore, or permanently delete archived sessions." },
+      "diagnostics": { "label": "Logs & Diagnostics", "description": "Log levels, runtime information, and troubleshooting." }
+    },
+    "views": {
+      "voice": "Voice Input",
+      "shortcuts": "Shortcuts",
       "editor": "Editor",
-      "lsp": "LSP",
-      "keyboard": "Keyboard",
-      "archivedSessions": "Archived Sessions"
+      "terminal": "Terminal",
+      "quick-actions": "Quick Actions",
+      "hooks": "Hooks"
     }
   },
   "general": {

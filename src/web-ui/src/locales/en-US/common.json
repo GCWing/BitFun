@@ -42,7 +42,6 @@
     "openMenu": "Open Menu",
     "closeMenu": "Close Menu",
     "selectProjectDirectory": "Select a project directory to open",
-    "configCenter": "Settings",
     "expandLeftPanel": "Expand Left Panel",
     "collapseLeftPanel": "Collapse Left Panel",
     "expandRightPanel": "Expand Right Panel",
@@ -96,6 +95,7 @@
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
       "ecosystemCompatibility": "Ecosystem Compatibility — manage compatible capabilities and extensions from other AI apps",
+      "ecosystemCompatibilityUnseen": "Ecosystem Compatibility — new compatible applications were found",
       "tools": "What it can use — built-in tools & MCP services",
       "addWorkspace": "Add workspace",
       "addSessionGroup": "Add a project or personal assistant"
@@ -158,7 +158,7 @@
         "openInsights": "Open insights",
         "openSettings": "Open settings",
         "openKeyboardShortcuts": "Open keyboard shortcuts",
-        "openExternalSources": "Open extensions and compatibility"
+        "openIntegrations": "Open ecosystem compatibility"
       },
       "actionDescriptions": {
         "newSession": "Start a conversation using the canonical session flow",
@@ -174,7 +174,7 @@
         "openInsights": "Review activity and usage insights",
         "openSettings": "Configure BitFun",
         "openKeyboardShortcuts": "Review and customize keyboard shortcuts",
-        "openExternalSources": "Manage external AI apps and compatibility"
+        "openIntegrations": "Manage compatible capabilities and runtimes from external AI apps"
       },
       "badges": {
         "userMessage": "You",
@@ -1364,7 +1364,6 @@
     "unknownTime": "Unknown time"
   },
   "tabs": {
-    "configCenter": "Config Center",
     "diff": "Diff",
     "fixPreview": "Fix Preview",
     "gitDiff": "Git Diff",

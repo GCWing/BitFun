@@ -9,6 +9,8 @@ pub const ACP_TOOL_SUFFIX: &str = "__prompt";
 pub struct AcpExternalAgentToolDefinitionInput<'a> {
     pub client_id: &'a str,
     pub display_name: Option<&'a str>,
+    pub subagent_description: Option<&'a str>,
+    pub best_for: Option<&'a str>,
     pub read_only: bool,
 }
 
@@ -51,15 +53,46 @@ pub fn build_acp_external_agent_tool_definition(
         .display_name
         .map(str::to_string)
         .unwrap_or_else(|| input.client_id.to_string());
+    let subagent_description = normalized_profile_text(input.subagent_description, 320);
+    let best_for = normalized_profile_text(input.best_for, 320);
+    let (description, short_description) = match (
+        subagent_description.as_deref(),
+        best_for.as_deref(),
+    ) {
+        (None, None) => (
+            format!(
+                "Send a prompt to the external ACP agent '{}'. Use this when another local ACP-compatible agent is better suited for a delegated task.",
+                display_name
+            ),
+            format!("Delegate a task to the external ACP agent '{}'.", display_name),
+        ),
+        (role, suitable_tasks) => {
+            let role_fact = role
+                .map(|value| format!(" Role: {value}."))
+                .unwrap_or_default();
+            let suitable_fact = suitable_tasks
+                .map(|value| format!(" Best suited for: {value}."))
+                .unwrap_or_default();
+            let short_profile = role.or(suitable_tasks).unwrap_or_default();
+            (
+                format!(
+                    "Send a prompt to the external ACP agent '{}'.{}{} Delegate tasks that match this configured profile.",
+                    display_name, role_fact, suitable_fact
+                ),
+                format!(
+                    "Delegate to '{}': {}",
+                    display_name,
+                    truncate_text(short_profile, 120)
+                ),
+            )
+        }
+    };
     AcpExternalAgentToolDefinition {
         client_id: input.client_id.to_string(),
         tool_name: build_acp_external_agent_tool_name(input.client_id),
         user_facing_name: format!("{display_name} (ACP)"),
-        description: format!(
-            "Send a prompt to the external ACP agent '{}'. Use this when another local ACP-compatible agent is better suited for a delegated task.",
-            display_name
-        ),
-        short_description: format!("Delegate a task to the external ACP agent '{}'.", display_name),
+        description,
+        short_description,
         read_only: input.read_only,
         display_name,
     }
@@ -151,10 +184,20 @@ pub fn build_acp_external_agent_tool_result(
 }
 
 fn truncate_prompt(prompt: &str) -> String {
-    const LIMIT: usize = 160;
-    if prompt.chars().count() <= LIMIT {
-        prompt.to_string()
+    truncate_text(prompt, 160)
+}
+
+fn normalized_profile_text(value: Option<&str>, limit: usize) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| truncate_text(value, limit))
+}
+
+fn truncate_text(value: &str, limit: usize) -> String {
+    if value.chars().count() <= limit {
+        value.to_string()
     } else {
-        format!("{}...", prompt.chars().take(LIMIT).collect::<String>())
+        format!("{}...", value.chars().take(limit).collect::<String>())
     }
 }

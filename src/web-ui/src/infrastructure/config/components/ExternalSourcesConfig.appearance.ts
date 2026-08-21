@@ -36,7 +36,5 @@ export const externalSourcesConfigAppearanceDescriptor: AppearanceSurfaceDescrip
     { id: 'application' },
     { id: 'appAttention' },
     { id: 'applicationToggle' },
-    { id: 'hooksSection' },
-    { id: 'hooksSummary' },
   ],
 };

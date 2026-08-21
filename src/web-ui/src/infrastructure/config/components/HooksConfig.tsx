@@ -316,7 +316,6 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
         <ConfigPageSection title={t('activation.title')} description={t('activation.description')}>
           <ConfigPageRow
             label={t('fields.enabled.label')}
-            description={t('fields.enabled.description')}
             align="center"
           >
             <Switch
@@ -489,7 +488,6 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
         >
           <ConfigPageRow
             label={t('compatibility.reference.label')}
-            description={t('compatibility.reference.description')}
             align="center"
           >
             <Button variant="secondary" size="small" onClick={openCodexHooksDoc}>

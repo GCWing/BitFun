@@ -1,5 +1,5 @@
 import type { WorkspaceInfo } from '@/shared/types';
-import type { ConfigTab } from '@/app/scenes/settings/settingsConfig';
+import type { SettingsDestination } from '@/app/scenes/settings/settingsTypes';
 import type { ProductActionId } from './productActionCatalog';
 
 export type GlobalSearchScope = 'all' | 'actions' | 'content';
@@ -36,7 +36,7 @@ export type GlobalSearchTarget =
       fileName: string;
       lineNumber?: number;
     }
-  | { kind: 'settings'; tab: ConfigTab };
+  | { kind: 'settings'; destination: SettingsDestination };
 
 export interface GlobalSearchItem {
   id: string;

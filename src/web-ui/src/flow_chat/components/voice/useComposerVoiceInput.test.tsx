@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   recorderStop: vi.fn(async () => undefined),
   finishInputSession: vi.fn(),
   cancelInputSession: vi.fn(async () => undefined),
+  downloadModel: vi.fn(),
+  cancelModelDownload: vi.fn(async () => undefined),
+  modelStatusListener: undefined as ((status: Record<string, unknown>) => void) | undefined,
   notificationInfo: vi.fn(),
   notificationError: vi.fn(),
 }));
@@ -39,7 +42,13 @@ vi.mock('@/infrastructure/api', () => ({
         expectedBytes: 1,
       }],
     })),
-    onModelStatusChanged: vi.fn(() => () => undefined),
+    onModelStatusChanged: vi.fn((listener: (status: Record<string, unknown>) => void) => {
+      mocks.modelStatusListener = listener;
+      return () => undefined;
+    }),
+    onModelProgress: vi.fn(() => () => undefined),
+    downloadModel: mocks.downloadModel,
+    cancelModelDownload: mocks.cancelModelDownload,
     startInputSession: vi.fn(async () => ({ sessionId: 'voice-session-1' })),
     appendAudioChunk: vi.fn(async () => undefined),
     finishInputSession: mocks.finishInputSession,
@@ -76,7 +85,7 @@ vi.mock('@/app/stores/sceneStore', () => ({
 
 vi.mock('@/app/scenes/settings/settingsStore', () => ({
   useSettingsStore: {
-    getState: () => ({ setActiveTab: vi.fn() }),
+    getState: () => ({ openDestination: vi.fn() }),
   },
 }));
 
@@ -137,6 +146,20 @@ describe('useComposerVoiceInput completion modes', () => {
     mocks.recorderStop.mockClear();
     mocks.finishInputSession.mockClear();
     mocks.cancelInputSession.mockClear();
+    mocks.downloadModel.mockReset();
+    mocks.downloadModel.mockImplementation(async () => ({
+      modelId: 'sensevoice-test-model',
+      displayName: 'SenseVoice test',
+      provider: 'test',
+      version: 'test',
+      description: 'Test speech model',
+      languages: ['auto', 'en'],
+      state: 'installed',
+      installedBytes: 165 * 1024 * 1024,
+      expectedBytes: 165 * 1024 * 1024,
+    }));
+    mocks.cancelModelDownload.mockClear();
+    mocks.modelStatusListener = undefined;
     mocks.notificationInfo.mockClear();
     mocks.notificationError.mockClear();
     activateInput = vi.fn();
@@ -250,5 +273,39 @@ describe('useComposerVoiceInput completion modes', () => {
 
     expect(controller?.phase).toBe('idle');
     expect(mocks.notificationError).toHaveBeenCalledWith('input.voiceInput.unsupported');
+  });
+
+  it('downloads a missing local model in place and continues into recording', async () => {
+    await act(async () => {
+      mocks.modelStatusListener?.({
+        modelId: 'sensevoice-test-model',
+        displayName: 'SenseVoice test',
+        provider: 'test',
+        version: 'test',
+        description: 'Test speech model',
+        languages: ['auto', 'en'],
+        state: 'not_installed',
+        installedBytes: 0,
+        expectedBytes: 165 * 1024 * 1024,
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      controller?.toggle();
+      await Promise.resolve();
+    });
+    expect(controller?.phase).toBe('setup');
+    expect(controller?.setupMessage).toBe('input.voiceInput.setupRequired');
+
+    await act(async () => {
+      controller?.installAndStart();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.downloadModel).toHaveBeenCalledWith('sensevoice-test-model');
+    expect(controller?.phase).toBe('recording');
   });
 });

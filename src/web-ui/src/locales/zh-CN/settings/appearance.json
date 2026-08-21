@@ -1,6 +1,6 @@
 {
   "title": "外观",
-  "subtitle": "界面语言、外观包与全局字体大小",
+  "subtitle": "界面语言、视觉外观、动态效果、外观包与全局字体大小",
   "effects": {
     "title": "动态效果",
     "hint": "控制界面中的视觉反馈。",
@@ -11,7 +11,7 @@
   },
   "package": {
     "title": "外观包",
-    "description": "导入声明式 BitFun 外观包，资源仅保存在当前设备。",
+    "description": "从列表选择外观包；悬停微缩图可查看大图，资源仅保存在当前设备。",
     "import": "导入外观包",
     "importSuccess": "已导入 {{name}}",
     "importFailed": "无法导入外观包，请查看问题详情。",

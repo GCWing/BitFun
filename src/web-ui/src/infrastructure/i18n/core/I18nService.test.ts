@@ -43,10 +43,10 @@ describe('I18nService shared namespace contract', () => {
     for (const namespace of WEB_UI_BOOTSTRAP_NAMESPACES) {
       expect(i18n.hasResourceBundle(DEFAULT_LOCALE, namespace)).toBe(true);
     }
-    expect(i18n.hasResourceBundle(DEFAULT_LOCALE, 'settings/basics')).toBe(false);
+    expect(i18n.hasResourceBundle(DEFAULT_LOCALE, 'settings/application')).toBe(false);
 
-    await service.loadNamespace('settings/basics');
+    await service.loadNamespace('settings/application');
 
-    expect(i18n.hasResourceBundle(DEFAULT_LOCALE, 'settings/basics')).toBe(true);
+    expect(i18n.hasResourceBundle(DEFAULT_LOCALE, 'settings/application')).toBe(true);
   });
 });

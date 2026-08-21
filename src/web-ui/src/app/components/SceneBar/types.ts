@@ -15,6 +15,7 @@ export type SceneTabId =
   | 'profile'
   | 'agents'
   | 'skills'
+  | 'ecosystem-compatibility'
   | 'miniapps'
   | 'pages'
   | 'browser'

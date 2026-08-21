@@ -1,7 +1,7 @@
 {
   "page": {
     "title": "快捷動作",
-    "subtitle": "程式碼完成後的一鍵 AI 動作，從聊天視窗左上角的閃電圖示觸發，AI 會自主端到端完成。"
+    "subtitle": "在聊天中快速執行常用 AI 指令。"
   },
   "loading": "載入中...",
   "quickActions": {
@@ -18,13 +18,11 @@
   },
   "sections": {
     "builtin": {
-      "title": "內建動作",
-      "description": "開箱即用的 Git 工作流程動作，可編輯指令、啟用或停用。"
+      "title": "內建動作"
     },
     "custom": {
       "title": "自訂動作",
-      "description": "新增你自己的快捷指令，點擊後直接傳給 AI 執行。",
-      "empty": "還沒有自訂動作，在下方新增第一個吧。"
+      "empty": "還沒有自訂動作。"
     }
   },
   "edit": {
@@ -43,7 +41,7 @@
     "labelPlaceholder": "例：產生單元測試",
     "promptField": "觸發指令",
     "promptPlaceholder": "例：請為目前程式碼變更產生單元測試",
-    "promptHint": "點擊選單項時，此指令會直接傳送給 AI，由 AI 自主完成。",
+    "promptHint": "觸發動作時，此指令會傳送給 AI 執行。",
     "cancel": "取消",
     "saveEdit": "儲存",
     "confirmAdd": "新增"

@@ -78,7 +78,7 @@ export async function activateGlobalSearchTarget(
       });
       return;
     case 'settings':
-      useSettingsStore.getState().openTab(target.tab);
+      useSettingsStore.getState().openDestination(target.destination);
       useSceneStore.getState().openScene('settings');
       return;
   }

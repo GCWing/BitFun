@@ -588,11 +588,14 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
 });
 
 auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal', { concurrency: false }, () => {
-  const localePath = 'src/web-ui/src/locales/zh-TW/settings/acp-agents.json';
+  const localePath = 'src/web-ui/src/locales/zh-TW/settings/lsp.json';
   const reportPath = 'scripts/.tmp-i18n-l10n-signal-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   const source = readText(localePath);
-  const fixture = source.replace('"learnMore": "瞭解更多"', '"learnMore": "了解更多"');
+  const fixture = source.replace(
+    '"suffix": "瞭解如何開發和貢獻 LSP 插件。"',
+    '"suffix": "了解如何开发和贡献 LSP 插件。"',
+  );
 
   assert.notEqual(fixture, source, 'test fixture should introduce same-text zh-TW terminology debt');
   fs.rmSync(absoluteReportPath, { force: true });
@@ -606,8 +609,8 @@ auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal
       assert.ok(
         report.l10nQualityCandidates.some((entry) => (
           entry.surface === 'web-ui' &&
-          entry.namespace === 'settings/acp-agents' &&
-          entry.key === 'actions.learnMore' &&
+          entry.namespace === 'settings/lsp' &&
+          entry.key === 'help.morePlugins.suffix' &&
           entry.locale === 'zh-TW' &&
           entry.comparisonLocale === 'zh-CN' &&
           entry.signal?.type === 'terminology' &&
@@ -618,8 +621,8 @@ auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal
       assert.ok(
         report.sameTextLocaleInventory.some((entry) => (
           entry.surface === 'web-ui' &&
-          entry.namespace === 'settings/acp-agents' &&
-          entry.key === 'actions.learnMore' &&
+          entry.namespace === 'settings/lsp' &&
+          entry.key === 'help.morePlugins.suffix' &&
           entry.locale === 'zh-TW' &&
           entry.comparisonLocale === 'zh-CN' &&
           entry.signalType === 'terminology' &&
@@ -735,8 +738,6 @@ auditIntegrationTest('web-ui uses shared terms for stable navigation and feature
       'flow-chat:welcome.workspace',
       'scenes/skills:suite.modes.claw',
       'settings:title',
-      'settings:configCenter.title',
-      'settings/review:overview.badge',
       'settings:workspace.title',
       'settings/lsp:tabs.settings',
     ]);
@@ -762,8 +763,6 @@ auditIntegrationTest('web-ui uses shared terms for stable navigation and feature
       'toolCards.sessionMessage.workspace',
       'welcome.workspace',
       'suite.modes.claw',
-      'configCenter.title',
-      'overview.badge',
       'workspace.title',
     ];
     const webUiSourceFiles = listFiles(path.join(root, 'src', 'web-ui', 'src'), (file) => (

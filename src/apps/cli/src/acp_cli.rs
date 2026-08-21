@@ -66,6 +66,7 @@ impl ExternalAcpClient {
             env: HashMap::new(),
             enabled: true,
             readonly: false,
+            subagent: Default::default(),
             permission_mode: AcpClientPermissionMode::Ask,
         }
     }

@@ -1,6 +1,6 @@
 {
   "title": "ACP Agents",
-  "subtitle": "Manage ACP-compatible agents for FlowChat sessions.",
+  "subtitle": "Manage external agents connected through ACP.",
   "actions": {
     "add": "Add",
     "addConfig": "Add config",
@@ -10,8 +10,8 @@
     "viewError": "View error",
     "viewInstructions": "View instructions",
     "save": "Save",
-    "refresh": "Refresh",
-    "learnMore": "Learn More",
+    "refresh": "Recheck",
+    "learnMore": "ACP docs",
     "editJson": "Edit JSON",
     "closeJson": "Close JSON",
     "saveJson": "Save JSON",
@@ -21,12 +21,18 @@
     "predownloadAcp": "Predownload ACP"
   },
   "json": {
-    "title": "Raw JSON",
-    "description": "Advanced editor for the acpClients config. Each client is spawned over stdio by the desktop app."
+    "title": "JSON config",
+    "description": "Edit the acpClients config directly."
+  },
+  "presets": {
+    "opencode": { "description": "Native ACP support." },
+    "dsh": { "description": "Uses BitFun's bundled ACP bridge and the model settings from dsh." },
+    "omp": { "description": "Native ACP support." },
+    "claudeCode": { "description": "Connects through the official ACP adapter." },
+    "codex": { "description": "Connects through the official ACP adapter." }
   },
   "registry": {
     "title": "Agents",
-    "description": "Installed agents appear in the workspace action menu. Remote workspaces reuse the same list and check the remote host before showing status.",
     "searchPlaceholder": "Search agents...",
     "filterLabel": "ACP agent filter",
     "filters": {
@@ -66,8 +72,8 @@
     "loading": "Loading ACP agents…"
   },
   "remote": {
-    "title": "Remote Servers",
-    "description": "Saved SSH servers reuse the same ACP agent list and probe each remote host automatically.",
+    "title": "SSH servers",
+    "description": "Check ACP agents on saved SSH servers.",
     "empty": "No saved SSH servers.",
     "emptyVisible": "No visible SSH servers.",
     "noAgents": "Add an ACP agent before checking remote servers.",

@@ -14,7 +14,11 @@ import {
 } from './types';
 import { PanelContent, TabData } from '@/app/components/panels/base/types';
 import type { LineRange } from '@/component-library/components/Markdown';
-import { normalizeSettingsTarget } from '@/app/scenes/settings/settingsConfig';
+import {
+  isLegacyEcosystemCompatibilityDestination,
+  resolveSettingsDestination,
+} from '@/app/scenes/settings/settingsDestination';
+import type { SettingsDestination } from '@/app/scenes/settings/settingsTypes';
 
 const panelController = new PanelController();
 
@@ -239,11 +243,21 @@ export const quickActions = {
 
    
    
-  openSettings: (section?: string) => {
+  openSettings: (destination?: SettingsDestination | string) => {
+    if (isLegacyEcosystemCompatibilityDestination(destination)) {
+      void import('@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore')
+        .then(({ openEcosystemCompatibility }) => {
+          openEcosystemCompatibility({ ownerSurface: 'external-sources' });
+        });
+      return;
+    }
     import('@/app/scenes/settings/settingsStore').then(({ useSettingsStore }) => {
-      if (section) {
-        const target = normalizeSettingsTarget(section);
-        useSettingsStore.getState().openTab(target.tab, target.focus);
+      if (destination) {
+        useSettingsStore.getState().openDestination(
+          typeof destination === 'string'
+            ? resolveSettingsDestination(destination)
+            : destination,
+        );
       }
     });
     window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'settings' } }));

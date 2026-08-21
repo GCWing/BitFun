@@ -1,6 +1,7 @@
 import type { AppearanceRegistry } from '../registry/AppearanceRegistry';
 import { appearancePackageValidator } from '../schema/AppearancePackageValidator';
 import { AppearancePackageValidationError } from '../schema/AppearancePackageValidationError';
+import { migrateAppearancePackage } from '../schema/migrateAppearancePackage';
 import { getAppearanceCompositionLayers } from '../builtins/composeAppearancePackage';
 import type {
   AppearanceDiagnostic,
@@ -178,7 +179,15 @@ export class AppearanceCompiler {
         this.normalizeResolvedStyle(this.serializeStyle(definition.style, context)),
       ]),
     );
-    const compositionLayers = getAppearanceCompositionLayers(input as AppearancePackage);
+    const rawCompositionLayers = getAppearanceCompositionLayers(pkg);
+    const compositionLayers = rawCompositionLayers ? {
+      base: migrateAppearancePackage(
+        rawCompositionLayers.base as unknown as Record<string, unknown>,
+      ) as unknown as AppearancePackage,
+      override: migrateAppearancePackage(
+        rawCompositionLayers.override as unknown as Record<string, unknown>,
+      ) as unknown as AppearancePackage,
+    } : undefined;
     const componentResult = this.compileSurfaceLayers(
       compositionLayers
         ? [compositionLayers.base.components ?? {}, compositionLayers.override.components ?? {}]

@@ -1,0 +1,32 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
+export const runtimeSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'runtime-settings',
+  parts: [
+    { id: 'root' },
+    { id: 'content' },
+    { id: 'control' },
+    { id: 'petPicker' },
+    { id: 'petChooser' },
+    { id: 'petTrigger' },
+    { id: 'petList' },
+    { id: 'petGroup' },
+    { id: 'petOption' },
+    { id: 'petOptionMain' },
+    { id: 'petActions' },
+    { id: 'platformNote' },
+    { id: 'modalFooter' },
+    { id: 'restartModal' },
+  ],
+  facets: [
+    {
+      id: 'view',
+      attribute: 'data-bf-view',
+      values: ['pet', 'session-workspace', 'execution', 'execution-control', 'device-control'],
+    },
+  ],
+  states: [
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+  ],
+};

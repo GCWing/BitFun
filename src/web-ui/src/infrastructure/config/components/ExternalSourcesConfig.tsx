@@ -69,8 +69,6 @@ import {
 } from './external-sources';
 import './ExternalSourcesConfig.scss';
 
-const LazyHooksConfig = React.lazy(() => import('./HooksConfig'));
-
 const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
 
 const AGENT_DIAGNOSTIC_SETTING_KEYS: Record<string, string> = {
@@ -373,15 +371,18 @@ function activeAgentAvailabilityChanges(
 }
 
 export interface ExternalSourcesConfigProps {
-  initialFocus?: 'hooks';
-  focusRequestId?: number;
+  presentation?: 'full' | 'governance';
+  onSnapshotChange?: (snapshot: ExternalSourceCatalogSnapshot) => void;
 }
 
 const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
-  initialFocus,
-  focusRequestId = 0,
+  presentation = 'full',
+  onSnapshotChange,
 }) => {
-  const { t } = useTranslation('settings/external-sources');
+  const { t } = useTranslation('settings/external-apps');
+  const governancePresentation = presentation === 'governance';
+  const pageTitle = governancePresentation ? t('governance.title') : t('title');
+  const pageSubtitle = governancePresentation ? t('governance.subtitle') : t('subtitle');
   const { workspace, workspacePath } = useCurrentWorkspace();
   const peerDevice = usePeerDeviceModeOptional();
   const translateRef = useRef(t);
@@ -407,9 +408,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
   } | null>(null);
   const [agentChangeNotice, setAgentChangeNotice] = useState<AgentChangeNotice | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [hooksOpen, setHooksOpen] = useState(initialFocus === 'hooks');
-  const hooksSummaryRef = useRef<HTMLElement>(null);
-  const handledHookFocusRequestRef = useRef<number | null>(null);
   const snapshotRef = useRef<ExternalSourceCatalogSnapshot | null>(null);
   const agentChangeNoticeRef = useRef<AgentChangeNotice | null>(null);
   const requestSequence = useRef(0);
@@ -442,23 +440,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       agentChangeNoticeRef.current = null;
     }
   }, [requestScope]);
-
-  useEffect(() => {
-    if (initialFocus === 'hooks'
-      && handledHookFocusRequestRef.current !== focusRequestId) {
-      setHooksOpen(true);
-    }
-  }, [focusRequestId, initialFocus]);
-
-  useEffect(() => {
-    if (initialFocus !== 'hooks'
-      || !hooksOpen
-      || handledHookFocusRequestRef.current === focusRequestId
-      || !hooksSummaryRef.current) return;
-    handledHookFocusRequestRef.current = focusRequestId;
-    hooksSummaryRef.current.scrollIntoView({ block: 'start' });
-    hooksSummaryRef.current.focus();
-  }, [error, focusRequestId, hooksOpen, initialFocus, loading, snapshot]);
 
   const applySnapshot = useCallback((
     next: ExternalSourceCatalogSnapshot,
@@ -526,7 +507,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
 
     snapshotRef.current = selected;
     setSnapshotState({ scope, snapshot: selected });
-  }, []);
+    if (requestScopeRef.current === scope) onSnapshotChange?.(selected);
+  }, [onSnapshotChange]);
 
   const acceptReadSnapshot = useCallback((
     next: ExternalSourceCatalogSnapshot,
@@ -1455,8 +1437,14 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
 
   if (loading && !snapshot) {
     return (
-      <ConfigPageLayout className="bitfun-external-sources-config">
-        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+      <ConfigPageLayout
+        className={`bitfun-external-sources-config${governancePresentation ? ' bitfun-external-sources-config--governance' : ''}`}
+        data-presentation={presentation}
+      >
+        <ConfigPageHeader
+          title={pageTitle}
+          subtitle={pageSubtitle}
+        />
         <ConfigPageContent>
           <ConfigPageLoading text={t('loading')} />
         </ConfigPageContent>
@@ -1476,37 +1464,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       || error?.recoveryActions.some((action) => (
         action.type === 'refresh' || action.type === 'retry'
       )),
-  );
-  const hookManagement = (
-    <details
-      className="bitfun-external-sources-config__hooks"
-      data-bf-component="external-sources-config"
-      data-bf-part="hooksSection"
-      open={hooksOpen}
-      onToggle={(event) => setHooksOpen(event.currentTarget.open)}
-    >
-      <summary
-        ref={hooksSummaryRef}
-        className="bitfun-external-sources-config__hooks-summary"
-        data-bf-component="external-sources-config"
-        data-bf-part="hooksSummary"
-        aria-expanded={hooksOpen}
-      >
-        <span>{t('hooksManagement.title')}</span>
-        <ChevronRight
-          className="bitfun-external-sources-config__disclosure-icon"
-          size={16}
-          aria-hidden="true"
-        />
-      </summary>
-      {hooksOpen ? (
-        <React.Suspense
-          fallback={<ConfigPageLoading text={t('hooksManagement.loading')} />}
-        >
-          <LazyHooksConfig embedded />
-        </React.Suspense>
-      ) : null}
-    </details>
   );
   const safeModeSection = safeModeEnabled !== undefined ? (
     <ConfigPageSection
@@ -1538,10 +1495,15 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
   ) : null;
 
   return (
-    <ConfigPageLayout className="bitfun-external-sources-config" data-bf-component="external-sources-config" data-bf-part="root">
+    <ConfigPageLayout
+      className={`bitfun-external-sources-config${governancePresentation ? ' bitfun-external-sources-config--governance' : ''}`}
+      data-bf-component="external-sources-config"
+      data-bf-part="root"
+      data-presentation={presentation}
+    >
       <ConfigPageHeader
-        title={t('title')}
-        subtitle={t('subtitle')}
+        title={pageTitle}
+        subtitle={pageSubtitle}
         extra={(
           <Tooltip
             content={refreshing ? t('actions.refreshing') : t('actions.refresh')}
@@ -1588,7 +1550,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 ) : null}
               </div>
             </ConfigPageSection>
-            {hookManagement}
           </>
         ) : (
           <>
@@ -1705,7 +1666,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
               </div>
             ) : null}
             {safeModeEnabled ? safeModeSection : null}
-            {snapshot ? (
+            {snapshot && !governancePresentation ? (
               <ExternalAppsOverview
                 applications={applications}
                 t={t}
@@ -1717,24 +1678,27 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 onOpenPolicy={openAdvancedPolicy}
               />
             ) : null}
-            {hookManagement}
             {snapshot ? (
               <details
-                className="bitfun-external-sources-config__advanced"
-                open={advancedOpen}
-                onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+                className={`bitfun-external-sources-config__advanced${governancePresentation ? ' is-governance' : ''}`}
+                open={governancePresentation || advancedOpen}
+                onToggle={governancePresentation
+                  ? undefined
+                  : (event) => setAdvancedOpen(event.currentTarget.open)}
               >
-                <summary
-                  className="bitfun-external-sources-config__advanced-summary"
-                  aria-expanded={advancedOpen}
-                >
-                  <span>{t('applications.advanced.title')}</span>
-                  <ChevronRight
-                    className="bitfun-external-sources-config__disclosure-icon"
-                    size={16}
-                    aria-hidden="true"
-                  />
-                </summary>
+                {!governancePresentation ? (
+                  <summary
+                    className="bitfun-external-sources-config__advanced-summary"
+                    aria-expanded={advancedOpen}
+                  >
+                    <span>{t('applications.advanced.title')}</span>
+                    <ChevronRight
+                      className="bitfun-external-sources-config__disclosure-icon"
+                      size={16}
+                      aria-hidden="true"
+                    />
+                  </summary>
+                ) : null}
             {safeModeEnabled === false ? safeModeSection : null}
             {snapshot && policy ? (
               <ConfigPageSection

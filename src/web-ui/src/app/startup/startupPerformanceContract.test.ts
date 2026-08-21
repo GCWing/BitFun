@@ -410,29 +410,43 @@ describe('startup performance contract', () => {
     expect(lazyTerminalOutputSource).toContain("import('./TerminalOutputRenderer')");
   });
 
-  it('keeps settings config panels lazy by active tab', () => {
+  it('keeps settings pages lazy by active page', () => {
     const sceneSource = readSource('../scenes/settings/SettingsScene.tsx');
-    const registrySource = readSource('../scenes/settings/settingsContentRegistry.ts');
+    const registrySource = readSource('../scenes/settings/settingsRegistry.ts');
+    const viewPageSources = [
+      readSource('../scenes/settings/pages/InputSettingsPage.tsx'),
+      readSource('../scenes/settings/pages/DevelopmentSettingsPage.tsx'),
+      readSource('../scenes/settings/pages/AutomationSettingsPage.tsx'),
+    ];
     const lazyPanelSpecifiers = [
-      '../../../infrastructure/config/components/AIModelConfig',
+      '../../../infrastructure/config/components/ModelSettingsPage',
+      '../../../infrastructure/config/components/ApplicationSettingsPages',
+      '../../../infrastructure/config/components/AppearanceSettingsPage',
+      '../../../infrastructure/config/components/MemorySettingsPage',
+      '../../../infrastructure/config/components/RuntimeSettingsPages',
+      '../../../infrastructure/config/components/WorktreeSettingsPage',
+      '../../../infrastructure/config/components/UsageStatisticsConfig',
       '../../../infrastructure/config/components/McpToolsConfig',
       '../../../infrastructure/config/components/AcpAgentsConfig',
-      '../../../infrastructure/config/components/ExternalSourcesConfig',
-      '../../../infrastructure/config/components/EditorConfig',
-      '../../../infrastructure/config/components/BasicsConfig',
-      '../../../infrastructure/config/components/AppearanceConfig',
-      '../../../infrastructure/config/components/ReviewConfig',
-      '../../../infrastructure/config/components/MemoriesConfig',
-      '../../../infrastructure/config/components/QuickActionsConfig',
-      '../../../infrastructure/config/components/VoiceInputConfig',
-      '../../../infrastructure/config/components/SessionConfig',
       './components/ArchivedSessionsConfig',
-      './components/KeyboardShortcutsTab',
+      './pages/InputSettingsPage',
+      './pages/DevelopmentSettingsPage',
+      './pages/AutomationSettingsPage',
     ];
     const sceneImports = staticImportSpecifiers(sceneSource);
     const registryImports = staticImportSpecifiers(registrySource);
+    const lazyViewSpecifiers = [
+      '@/infrastructure/config/components/VoiceInputConfig',
+      '../components/KeyboardShortcutsTab',
+      '@/infrastructure/config/components/EditorConfig',
+      '@/infrastructure/config/components/ApplicationSettingsPages',
+      '@/infrastructure/config/components/QuickActionsConfig',
+      '@/infrastructure/config/components/HooksConfig',
+    ];
+    const viewDynamicImports = viewPageSources.flatMap(dynamicImportSpecifiers);
+    const viewStaticImports = viewPageSources.flatMap(staticImportSpecifiers);
 
-    expect(sceneImports).toContain('./settingsContentRegistry');
+    expect(sceneImports).toContain('./settingsRegistry');
     expect(sceneSource).toContain('<Suspense');
     expect(dynamicImportSpecifiers(registrySource)).toEqual(
       expect.arrayContaining(lazyPanelSpecifiers)
@@ -441,8 +455,22 @@ describe('startup performance contract', () => {
       expect(sceneImports).not.toContain(panelSpecifier);
       expect(registryImports).not.toContain(panelSpecifier);
     }
-    expect(registrySource).toContain('export const AIModelConfig = lazy(loadAIModelConfig)');
-    expect(registrySource).toContain('basics: loadBasicsConfig');
+    expect(viewDynamicImports).toEqual(expect.arrayContaining(lazyViewSpecifiers));
+    for (const viewSpecifier of lazyViewSpecifiers) {
+      expect(viewStaticImports).not.toContain(viewSpecifier);
+    }
+    expect(registrySource).toContain('component: lazy(definition.load)');
+    expect(registrySource).toContain("id: 'application.general'");
+  });
+
+  it('keeps ecosystem governance lazy until its owner surface is opened', () => {
+    const sceneSource = readSource(
+      '../scenes/ecosystem-compatibility/EcosystemCompatibilityScene.tsx'
+    );
+    const ownerSpecifier = '@/infrastructure/config/components/ExternalSourcesConfig';
+
+    expect(dynamicImportSpecifiers(sceneSource)).toContain(ownerSpecifier);
+    expect(staticImportSpecifiers(sceneSource)).not.toContain(ownerSpecifier);
   });
 
   it('keeps tool-card metadata separate from heavy card implementations', () => {

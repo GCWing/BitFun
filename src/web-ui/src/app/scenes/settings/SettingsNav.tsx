@@ -1,16 +1,3 @@
-/**
- * SettingsNav — scene-specific left-side navigation for the Settings scene.
- *
- * Layout:
- *   ┌──────────────────────┐
- *   │  Settings            │  header: title
- *   ├──────────────────────┤
- *   │  Search…             │  filter config tabs
- *   ├──────────────────────┤
- *   │  Category / results  │
- *   └──────────────────────┘
- */
-
 import React, {
   startTransition,
   useCallback,
@@ -21,325 +8,217 @@ import React, {
 } from 'react';
 import type { i18n as I18nApi } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { Search, Badge } from '@/component-library';
+import { Search } from '@/component-library';
 import { getInteractionMotion } from '@/shared/utils/motionPreference';
+import {
+  SETTINGS_CATEGORIES,
+  SETTINGS_PAGE_MANIFESTS,
+  preloadSettingsPage,
+  type SettingsSearchPhrase,
+} from './settingsRegistry';
 import { useSettingsStore } from './settingsStore';
-import { SETTINGS_CATEGORIES } from './settingsConfig';
-import type { ConfigTab } from './settingsConfig';
-import { SETTINGS_TAB_SEARCH_CONTENT } from './settingsTabSearchContent';
-import { preloadSettingsTabContent } from './settingsContentRegistry';
+import type { SettingsDestination, SettingsPageId } from './settingsTypes';
 import './SettingsNav.scss';
 
 const SEARCH_DEBOUNCE_MS = 150;
 type SettingsT = (key: string, options?: Record<string, unknown>) => unknown;
 
 export interface SettingsSearchRow {
-  tabId: ConfigTab;
-  categoryId: string;
+  destination: SettingsDestination;
   categoryLabel: string;
-  tabLabel: string;
+  pageLabel: string;
+  viewLabel?: string;
   description: string;
   haystack: string;
 }
 
-function resolveTabPageContentHaystack(i18n: I18nApi, tabId: ConfigTab): string {
-  const phrases = SETTINGS_TAB_SEARCH_CONTENT[tabId];
-  if (!phrases?.length) return '';
-  const lang = i18n.language;
+function translateString(t: SettingsT, key: string, fallback: string): string {
+  const value = t(key, { defaultValue: fallback });
+  return typeof value === 'string' ? value : fallback;
+}
+
+function resolvePhrases(i18n: I18nApi, phrases: readonly SettingsSearchPhrase[]): string {
   const parts: string[] = [];
-  for (const { ns, key } of phrases) {
-    const tNs = i18n.getFixedT(lang, ns);
-    const text = tNs(key, { defaultValue: '' });
-    if (typeof text === 'string' && text.trim()) {
-      parts.push(text);
-    }
+  for (const { namespace, key } of phrases) {
+    const value = i18n.getFixedT(i18n.language, namespace)(key, { defaultValue: '' });
+    if (typeof value === 'string' && value.trim() && value !== key) parts.push(value);
   }
   return parts.join(' ');
 }
 
-function translateString(t: SettingsT, key: string, defaultValue: string): string {
-  const value = t(key, { defaultValue });
-  return typeof value === 'string' ? value : defaultValue;
-}
+function buildSettingsSearchIndex(t: SettingsT, i18n: I18nApi): SettingsSearchRow[] {
+  const categoryLabels = new Map(SETTINGS_CATEGORIES.map((category) => [
+    category.id,
+    translateString(t, category.labelKey, category.id),
+  ]));
 
-function readSearchAliases(t: SettingsT, tabId: ConfigTab): string[] {
-  const aliases = t(`configCenter.searchAliases.${tabId}`, {
-    defaultValue: [],
-    returnObjects: true,
-  });
-  return Array.isArray(aliases)
-    ? aliases.filter((alias): alias is string => typeof alias === 'string')
-    : [];
-}
+  return SETTINGS_PAGE_MANIFESTS.flatMap((page) => {
+    const categoryLabel = categoryLabels.get(page.categoryId) ?? page.categoryId;
+    const pageLabel = translateString(t, page.labelKey, page.id);
+    const description = translateString(t, page.descriptionKey, '');
+    const pageContent = resolvePhrases(i18n, page.searchPhrases);
+    const base = [categoryLabel, pageLabel, description, page.id, ...page.keywords, pageContent];
 
-function buildSettingsSearchIndex(
-  t: SettingsT,
-  i18n: I18nApi
-): SettingsSearchRow[] {
-  const rows: SettingsSearchRow[] = [];
-  for (const cat of SETTINGS_CATEGORIES) {
-    const categoryLabel = translateString(t, cat.nameKey, cat.id);
-    for (const tabDef of cat.tabs) {
-      const tabLabel = translateString(t, tabDef.labelKey, tabDef.id);
-      const description = tabDef.descriptionKey
-        ? translateString(t, tabDef.descriptionKey, '')
-        : '';
-      const kw = (tabDef.keywords ?? []).join(' ');
-      const aliases = readSearchAliases(t, tabDef.id).join(' ');
-      const pageContent = resolveTabPageContentHaystack(i18n, tabDef.id);
-      const haystack = [categoryLabel, tabLabel, description, kw, aliases, tabDef.id, pageContent]
-        .join(' ')
-        .toLowerCase();
-      rows.push({
-        tabId: tabDef.id,
-        categoryId: cat.id,
+    if (!page.views?.length) {
+      return [{
+        destination: { pageId: page.id },
         categoryLabel,
-        tabLabel,
+        pageLabel,
         description,
-        haystack,
-      });
+        haystack: base.join(' ').toLowerCase(),
+      }];
     }
-  }
-  return rows;
-}
 
-function useSettingsSearch(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  i18n: I18nApi,
-  debouncedQuery: string
-): SettingsSearchRow[] {
-  const index = useMemo(
-    () => buildSettingsSearchIndex(t, i18n),
-    [t, i18n]
-  );
-
-  return useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase();
-    if (!q) return [];
-    return index.filter((row) => row.haystack.includes(q));
-  }, [index, debouncedQuery]);
+    return page.views.map((view) => {
+      const viewLabel = translateString(t, view.labelKey, view.id);
+      return {
+        destination: { pageId: page.id, viewId: view.id },
+        categoryLabel,
+        pageLabel,
+        viewLabel,
+        description,
+        haystack: [
+          ...base,
+          viewLabel,
+          view.id,
+          ...view.keywords,
+          resolvePhrases(i18n, view.searchPhrases),
+        ].join(' ').toLowerCase(),
+      };
+    });
+  });
 }
 
 function highlightFirstMatch(text: string, query: string): React.ReactNode {
-  const q = query.trim();
-  if (!q) return text;
-  const lower = text.toLowerCase();
-  const qi = q.toLowerCase();
-  const idx = lower.indexOf(qi);
-  if (idx < 0) return text;
+  const needle = query.trim();
+  if (!needle) return text;
+  const index = text.toLowerCase().indexOf(needle.toLowerCase());
+  if (index < 0) return text;
   return (
     <>
-      {text.slice(0, idx)}
-      <mark data-bf-component="settings-nav" data-bf-part="highlight" className="bitfun-settings-nav__search-highlight">
-        {text.slice(idx, idx + qi.length)}
+      {text.slice(0, index)}
+      <mark
+        className="bitfun-settings-nav__search-highlight"
+        data-bf-component="settings-nav"
+        data-bf-part="highlight"
+      >
+        {text.slice(index, index + needle.length)}
       </mark>
-      {text.slice(idx + qi.length)}
+      {text.slice(index + needle.length)}
     </>
   );
 }
 
-function useSettingsNav() {
+const SettingsNav: React.FC = () => {
   const { t, i18n } = useTranslation('settings');
-  const activeTab = useSettingsStore((s) => s.activeTab);
-  const setActiveTab = useSettingsStore((s) => s.setActiveTab);
-  const searchQuery = useSettingsStore((s) => s.searchQuery);
-  const setSearchQuery = useSettingsStore((s) => s.setSearchQuery);
-  const unseenTabs = useSettingsStore((s) => s.unseenTabs);
-
+  const activePageId = useSettingsStore((state) => state.activePageId);
+  const activeViewId = useSettingsStore((state) => state.activeViewId);
+  const openDestination = useSettingsStore((state) => state.openDestination);
+  const searchQuery = useSettingsStore((state) => state.searchQuery);
+  const setSearchQuery = useSettingsStore((state) => state.setSearchQuery);
   const [draftQuery, setDraftQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const activationRequestRef = useRef(0);
 
   useEffect(() => {
-    const id = window.setTimeout(() => {
-      setSearchQuery(draftQuery);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(id);
+    const timer = window.setTimeout(() => setSearchQuery(draftQuery), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
   }, [draftQuery, setSearchQuery]);
 
-  const results = useSettingsSearch(t, i18n, searchQuery);
+  const searchIndex = useMemo(() => buildSettingsSearchIndex(t, i18n), [i18n, t]);
+  const results = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return query ? searchIndex.filter((row) => row.haystack.includes(query)) : [];
+  }, [searchIndex, searchQuery]);
   const isSearchMode = draftQuery.trim().length > 0;
 
   useEffect(() => {
-    setHighlightedIndex((prev) => {
-      if (results.length === 0) return -1;
-      if (prev >= results.length) return results.length - 1;
-      return prev;
+    setHighlightedIndex((current) => {
+      if (!results.length) return -1;
+      return current >= results.length ? results.length - 1 : current;
     });
   }, [results.length]);
-
-  /** Sync store / highlight when library Search clears via button or Escape (after onChange). */
-  const handleSearchComponentClear = useCallback(() => {
-    setSearchQuery('');
-    setHighlightedIndex(-1);
-  }, [setSearchQuery]);
 
   const clearSearch = useCallback(() => {
     setDraftQuery('');
     setSearchQuery('');
     setHighlightedIndex(-1);
-    searchInputRef.current?.focus();
   }, [setSearchQuery]);
 
-  const activateTab = useCallback(
-    (tab: ConfigTab, motion = getInteractionMotion()) => {
-      const requestId = ++activationRequestRef.current;
-      const commit = () => {
-        if (activationRequestRef.current !== requestId) return;
-        // A cached lazy panel still suspends for one promise microtask on its
-        // first mount; inside a transition React keeps the painted panel until
-        // the new one is ready instead of committing the skeleton fallback.
-        startTransition(() => {
-          setActiveTab(tab, motion);
-          clearSearch();
-        });
-      };
-      void preloadSettingsTabContent(tab).then(commit, commit);
-    },
-    [setActiveTab, clearSearch]
-  );
+  const activate = useCallback((destination: SettingsDestination, clear = false) => {
+    const requestId = ++activationRequestRef.current;
+    const motion = getInteractionMotion();
+    const commit = () => {
+      if (requestId !== activationRequestRef.current) return;
+      startTransition(() => {
+        openDestination(destination, motion);
+        if (clear) clearSearch();
+      });
+    };
+    void preloadSettingsPage(destination.pageId).then(commit, commit);
+  }, [clearSearch, openDestination]);
 
-  const handleTabClick = useCallback(
-    (tab: ConfigTab) => {
-      const motion = getInteractionMotion();
-      const requestId = ++activationRequestRef.current;
-      const commit = () => {
-        if (activationRequestRef.current !== requestId) return;
-        startTransition(() => {
-          setActiveTab(tab, motion);
-        });
-      };
-      void preloadSettingsTabContent(tab).then(commit, commit);
-    },
-    [setActiveTab]
-  );
-
-  const preloadTab = useCallback((tab: ConfigTab) => {
-    void preloadSettingsTabContent(tab).catch(() => {});
+  const preload = useCallback((pageId: SettingsPageId) => {
+    void preloadSettingsPage(pageId).catch(() => undefined);
   }, []);
 
-  const handleSearchKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        clearSearch();
-        return;
-      }
-      if (e.key === 'ArrowDown' && results.length > 0) {
-        e.preventDefault();
-        setHighlightedIndex(0);
-        queueMicrotask(() => resultsRef.current?.focus());
-        return;
-      }
-      if (e.key === 'Enter' && results.length === 1) {
-        e.preventDefault();
-        activateTab(results[0].tabId, 'instant');
-      }
-    },
-    [clearSearch, results, activateTab, resultsRef]
-  );
+  const handleSearchKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearSearch();
+    } else if (event.key === 'ArrowDown' && results.length > 0) {
+      event.preventDefault();
+      setHighlightedIndex(0);
+      queueMicrotask(() => resultsRef.current?.focus());
+    } else if (event.key === 'Enter' && results.length === 1) {
+      event.preventDefault();
+      activate(results[0].destination, true);
+    }
+  }, [activate, clearSearch, results]);
 
-  const handleResultsKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!isSearchMode || results.length === 0) return;
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        clearSearch();
-        return;
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setHighlightedIndex((i) => Math.min(i + 1, results.length - 1));
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setHighlightedIndex((i) => {
-          if (i <= 0) {
-            searchInputRef.current?.focus();
-            return -1;
-          }
-          return i - 1;
-        });
-        return;
-      }
-      if (e.key === 'Enter' && highlightedIndex >= 0 && highlightedIndex < results.length) {
-        e.preventDefault();
-        activateTab(results[highlightedIndex].tabId, 'instant');
-      }
-    },
-    [isSearchMode, results, highlightedIndex, activateTab, clearSearch]
-  );
-
-  const displayQuery = searchQuery.trim();
-
-  return {
-    t,
-    activeTab,
-    unseenTabs,
-    handleTabClick,
-    preloadTab,
-    draftQuery,
-    setDraftQuery,
-    searchInputRef,
-    resultsRef,
-    results,
-    isSearchMode,
-    displayQuery,
-    highlightedIndex,
-    setHighlightedIndex,
-    handleSearchComponentClear,
-    activateTab,
-    handleSearchKeyDown,
-    handleResultsKeyDown,
-  };
-}
-
-const SettingsNav: React.FC = () => {
-  const {
-    t,
-    activeTab,
-    unseenTabs,
-    handleTabClick,
-    preloadTab,
-    draftQuery,
-    setDraftQuery,
-    searchInputRef,
-    resultsRef,
-    results,
-    isSearchMode,
-    displayQuery,
-    highlightedIndex,
-    setHighlightedIndex,
-    handleSearchComponentClear,
-    activateTab,
-    handleSearchKeyDown,
-    handleResultsKeyDown,
-  } = useSettingsNav();
+  const handleResultsKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!results.length) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearSearch();
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setHighlightedIndex((index) => Math.min(index + 1, results.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHighlightedIndex((index) => {
+        if (index <= 0) {
+          searchInputRef.current?.focus();
+          return -1;
+        }
+        return index - 1;
+      });
+    } else if (event.key === 'Enter' && highlightedIndex >= 0) {
+      event.preventDefault();
+      activate(results[highlightedIndex].destination, true);
+    }
+  }, [activate, clearSearch, highlightedIndex, results]);
 
   return (
-    <div data-bf-component="settings-nav" data-bf-part="root" className="bitfun-settings-nav" data-testid="settings-nav">
-      <div data-bf-component="settings-nav" data-bf-part="header" className="bitfun-settings-nav__header">
-        <span className="bitfun-settings-nav__title">
-          {t('shared:features.settings')}
-        </span>
+    <div className="bitfun-settings-nav" data-testid="settings-nav" data-bf-component="settings-nav" data-bf-part="root">
+      <div className="bitfun-settings-nav__header" data-bf-component="settings-nav" data-bf-part="header">
+        <span className="bitfun-settings-nav__title">{t('shared:features.settings')}</span>
       </div>
 
-      <div data-bf-component="settings-nav" data-bf-part="search" className="bitfun-settings-nav__search">
+      <div className="bitfun-settings-nav__search" data-bf-component="settings-nav" data-bf-part="search">
         <Search
           ref={searchInputRef}
           className="bitfun-settings-nav__search-field"
           size="small"
           value={draftQuery}
           onChange={setDraftQuery}
-          onClear={handleSearchComponentClear}
+          onClear={clearSearch}
           onKeyDown={handleSearchKeyDown}
           enterToSearch={false}
-          placeholder={t('configCenter.searchPlaceholder')}
-          inputAriaLabel={t('configCenter.searchPlaceholder')}
+          placeholder={t('navigation.search.placeholder')}
+          inputAriaLabel={t('navigation.search.placeholder')}
           ariaControls="settings-nav-results"
           ariaExpanded={isSearchMode}
           clearable
@@ -349,120 +228,90 @@ const SettingsNav: React.FC = () => {
       <div
         ref={resultsRef}
         id="settings-nav-results"
+        className="bitfun-settings-nav__sections"
         data-bf-component="settings-nav"
         data-bf-part="sections"
-        className="bitfun-settings-nav__sections"
         role={isSearchMode ? 'listbox' : undefined}
-        tabIndex={isSearchMode && results.length > 0 ? 0 : undefined}
+        tabIndex={isSearchMode && results.length ? 0 : undefined}
         onKeyDown={handleResultsKeyDown}
-        aria-activedescendant={
-          isSearchMode && highlightedIndex >= 0
-            ? `settings-nav-result-${results[highlightedIndex]?.tabId}`
-            : undefined
-        }
+        aria-activedescendant={isSearchMode && highlightedIndex >= 0
+          ? `settings-nav-result-${highlightedIndex}`
+          : undefined}
       >
         {isSearchMode ? (
-          <>
-            {results.length === 0 ? (
-              <div data-bf-component="settings-nav" data-bf-part="searchEmpty" className="bitfun-settings-nav__search-empty" role="status">
-                {t('configCenter.searchNoResults')}
-              </div>
-            ) : (
-              <div data-bf-component="settings-nav" data-bf-part="searchResults" className="bitfun-settings-nav__search-results">
-                {results.map((row, index) => {
-                  const line = `${row.categoryLabel} › ${row.tabLabel}`;
-                  const active = activeTab === row.tabId;
-                  const highlighted = highlightedIndex === index;
-                  return (
-                    <button data-bf-component="settings-nav" data-bf-part="searchResult"
-                      data-bf-state={[active && 'active', highlighted && 'selected'].filter(Boolean).join(' ') || undefined}
-                      key={row.tabId}
-                      type="button"
-                      id={`settings-nav-result-${row.tabId}`}
-                      role="option"
-                      aria-selected={active}
-                      className={[
-                        'bitfun-settings-nav__search-result-item',
-                        active && 'is-active',
-                        highlighted && 'is-highlighted',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      onClick={() => activateTab(row.tabId)}
-                      onMouseEnter={() => {
-                        setHighlightedIndex(index);
-                        preloadTab(row.tabId);
-                      }}
-                      onFocus={() => preloadTab(row.tabId)}
-                    >
-                      <span className="bitfun-settings-nav__search-result-line">
-                        {highlightFirstMatch(line, displayQuery)}
-                      </span>
-                      {row.description ? (
-                        <span className="bitfun-settings-nav__search-result-desc">
-                          {highlightFirstMatch(row.description, displayQuery)}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        ) : (
-          SETTINGS_CATEGORIES.map((category) => (
-            <div data-bf-component="settings-nav" data-bf-part="category" key={category.id} className="bitfun-settings-nav__category">
-              <div data-bf-component="settings-nav" data-bf-part="categoryHeader" className="bitfun-settings-nav__category-header">
-                <span className="bitfun-settings-nav__category-label">
-                  {t(category.nameKey, { defaultValue: category.id })}
-                </span>
-              </div>
-
-              <div data-bf-component="settings-nav" data-bf-part="items" className="bitfun-settings-nav__items">
-                {category.tabs.map((tabDef) => (
+          results.length ? (
+            <div className="bitfun-settings-nav__search-results" data-bf-component="settings-nav" data-bf-part="searchResults">
+              {results.map((row, index) => {
+                const active = activePageId === row.destination.pageId
+                  && (!row.destination.viewId || row.destination.viewId === activeViewId);
+                const selected = index === highlightedIndex;
+                const path = [row.categoryLabel, row.pageLabel, row.viewLabel].filter(Boolean).join(' › ');
+                return (
                   <button
-                    data-bf-component="settings-nav"
-                    data-bf-part="item"
-                    data-bf-state={activeTab === tabDef.id ? 'active' : undefined}
-                    key={tabDef.id}
+                    key={`${row.destination.pageId}:${row.destination.viewId ?? ''}`}
+                    id={`settings-nav-result-${index}`}
                     type="button"
-                    data-testid="settings-nav-tab"
-                    data-settings-tab={tabDef.id}
+                    role="option"
+                    aria-selected={active}
+                    data-bf-component="settings-nav"
+                    data-bf-part="searchResult"
+                    data-bf-state={[active && 'active', selected && 'selected'].filter(Boolean).join(' ') || undefined}
                     className={[
-                      'bitfun-settings-nav__item',
-                      activeTab === tabDef.id && 'is-active',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    onClick={() => handleTabClick(tabDef.id)}
-                    onPointerEnter={() => preloadTab(tabDef.id)}
-                    onFocus={() => preloadTab(tabDef.id)}
+                      'bitfun-settings-nav__search-result-item',
+                      active && 'is-active',
+                      selected && 'is-highlighted',
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => activate(row.destination, true)}
+                    onMouseEnter={() => {
+                      setHighlightedIndex(index);
+                      preload(row.destination.pageId);
+                    }}
+                    onFocus={() => preload(row.destination.pageId)}
                   >
-                    <span className="bitfun-settings-nav__item-label">
-                      {t(tabDef.labelKey, { defaultValue: tabDef.id })}
+                    <span className="bitfun-settings-nav__search-result-line">
+                      {highlightFirstMatch(path, searchQuery)}
                     </span>
-                    {unseenTabs.includes(tabDef.id) ? (
-                      <span
-                        data-bf-component="settings-nav"
-                        data-bf-part="itemUnseen"
-                        className="bitfun-settings-nav__item-unseen"
-                        // The label carries the meaning; the dot alone would be
-                        // invisible to assistive technology and colour-only.
-                        aria-label={t('configCenter.unseenItems')}
-                        role="status"
-                      />
-                    ) : null}
-                    {tabDef.beta ? (
-                      <Badge variant="warning" className="bitfun-settings-nav__item-beta">
-                        {t('configCenter.beta')}
-                      </Badge>
-                    ) : null}
+                    <span className="bitfun-settings-nav__search-result-desc">
+                      {highlightFirstMatch(row.description, searchQuery)}
+                    </span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          ))
-        )}
+          ) : (
+            <div className="bitfun-settings-nav__search-empty" role="status" data-bf-component="settings-nav" data-bf-part="searchEmpty">
+              {t('navigation.search.empty')}
+            </div>
+          )
+        ) : SETTINGS_CATEGORIES.map((category) => (
+          <div key={category.id} className="bitfun-settings-nav__category" data-bf-component="settings-nav" data-bf-part="category">
+            <div className="bitfun-settings-nav__category-header" data-bf-component="settings-nav" data-bf-part="categoryHeader">
+              <span className="bitfun-settings-nav__category-label">{t(category.labelKey)}</span>
+            </div>
+            <div className="bitfun-settings-nav__items" data-bf-component="settings-nav" data-bf-part="items">
+              {category.pages.map((page) => (
+                <button
+                  key={page.id}
+                  type="button"
+                  data-testid="settings-nav-page"
+                  data-settings-page={page.id}
+                  data-bf-component="settings-nav"
+                  data-bf-part="item"
+                  data-bf-state={activePageId === page.id ? 'active' : undefined}
+                  className={[
+                    'bitfun-settings-nav__item',
+                    activePageId === page.id && 'is-active',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => activate({ pageId: page.id })}
+                  onPointerEnter={() => preload(page.id)}
+                  onFocus={() => preload(page.id)}
+                >
+                  <span className="bitfun-settings-nav__item-label">{t(page.labelKey)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

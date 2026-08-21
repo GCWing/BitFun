@@ -1,0 +1,80 @@
+// @vitest-environment jsdom
+
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+import AppearanceSettingsPage from './AppearanceSettingsPage';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: (namespace: string) => ({
+    t: (key: string) => `${namespace}:${key}`,
+  }),
+}));
+
+vi.mock('@/component-library', () => ({
+  ConfigPageLoading: () => null,
+  ConfigPageMessage: () => null,
+  Select: ({ triggerTestId }: { triggerTestId?: string }) => (
+    <button type="button" data-testid={triggerTestId} />
+  ),
+  Switch: ({
+    checked,
+    onChange,
+    'data-testid': testId,
+  }: {
+    checked?: boolean;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+    'data-testid'?: string;
+  }) => (
+    <input type="checkbox" checked={checked} onChange={onChange} data-testid={testId} />
+  ),
+}));
+
+vi.mock('@/infrastructure/appearance', () => ({
+  SYSTEM_APPEARANCE_ID: 'system',
+  useAppearance: () => ({
+    selectedAppearanceId: 'system',
+    appearances: [],
+    select: vi.fn(),
+    initialized: true,
+    status: 'ready',
+  }),
+}));
+
+vi.mock('@/infrastructure/i18n', () => ({
+  useLanguageSelector: () => ({
+    currentLanguage: 'zh-CN',
+    supportedLocales: [{ id: 'zh-CN', nativeName: '简体中文' }],
+    selectLanguage: vi.fn(),
+    isChanging: false,
+  }),
+}));
+
+vi.mock('@/infrastructure/mouse-glow', () => ({
+  useMouseGlowPreference: () => ({ enabled: true, setEnabled: vi.fn() }),
+}));
+
+vi.mock('@/infrastructure/font-preference', () => ({
+  FontPreferencePanel: () => <div data-testid="appearance-font-section" />,
+}));
+
+vi.mock('./AppearancePackageConfigSection', () => ({
+  AppearancePackageConfigSection: () => <div data-testid="appearance-package-config" />,
+}));
+
+describe('AppearanceSettingsPage', () => {
+  it('keeps motion and appearance package management inside the appearance section', () => {
+    document.body.innerHTML = renderToStaticMarkup(<AppearanceSettingsPage />);
+
+    const appearanceSection = document.querySelector(
+      '[data-testid="appearance-settings-section"] .bitfun-config-page-section',
+    );
+    const motionControl = document.querySelector('[data-testid="appearance-mouse-glow-switch"]');
+    const packageManagement = document.querySelector('[data-testid="appearance-package-config"]');
+
+    expect(appearanceSection).not.toBeNull();
+    expect(motionControl?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
+    expect(packageManagement?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
+    expect(packageManagement?.closest('.appearance-settings__package-row')).not.toBeNull();
+  });
+});

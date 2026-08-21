@@ -31,7 +31,6 @@ import WorkspaceSessionFilterMenu from './components/WorkspaceSessionFilterMenu'
 import MiniAppEntry from './components/MiniAppEntry';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
 import { useSceneStore } from '../../stores/sceneStore';
-import { useSettingsStore } from '../../scenes/settings/settingsStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -46,6 +45,7 @@ import {
   getGlobalSearchShortcutLabel,
   subscribeGlobalSearchShortcut,
 } from '@/app/global-search/globalSearchShortcut';
+import { useExternalAppAwareness } from '@/infrastructure/config/components/external-sources/useExternalAppAwareness';
 
 import './NavPanel.scss';
 
@@ -71,7 +71,6 @@ const MainNav: React.FC<MainNavProps> = ({
 
   const { openScene } = useSceneManager();
   const activeTabId = useSceneStore(s => s.activeTabId);
-  const activeSettingsTab = useSettingsStore(s => s.activeTab);
   const { t } = useI18n('common');
   const searchShortcutLabel = useSyncExternalStore(
     subscribeGlobalSearchShortcut,
@@ -259,17 +258,21 @@ const MainNav: React.FC<MainNavProps> = ({
   }, []);
 
   const handleOpenEcosystemCompatibility = useCallback(() => {
-    void activateProductAction('settings.external-sources.open');
+    void activateProductAction('surface.ecosystemCompatibility.open');
   }, []);
 
   const isAgentsActive = activeTabId === 'agents';
   const isSkillsActive = activeTabId === 'skills';
+  const isEcosystemCompatibilityActive = activeTabId === 'ecosystem-compatibility';
+  const hasUnseenEcosystemCompatibility = useExternalAppAwareness(
+    isEcosystemCompatibilityActive,
+  );
 
   useEffect(() => {
-    if (isAgentsActive || isSkillsActive) {
+    if (isAgentsActive || isSkillsActive || isEcosystemCompatibilityActive) {
       setIsExtensionsOpen(true);
     }
-  }, [isAgentsActive, isSkillsActive]);
+  }, [isAgentsActive, isEcosystemCompatibilityActive, isSkillsActive]);
 
   const workspaceMenuPortal = workspaceMenuOpen ? createPortal(
     <div
@@ -378,13 +381,14 @@ const MainNav: React.FC<MainNavProps> = ({
   const addSessionGroupTooltip = t('nav.tooltips.addSessionGroup');
   const agentsTooltip = t('nav.tooltips.agents');
   const skillsTooltip = t('nav.tooltips.skills');
-  const ecosystemCompatibilityTooltip = t('nav.tooltips.ecosystemCompatibility');
+  const ecosystemCompatibilityTooltip = hasUnseenEcosystemCompatibility
+    ? t('nav.tooltips.ecosystemCompatibilityUnseen')
+    : t('nav.tooltips.ecosystemCompatibility');
   const assistantManagerLabel = t('nav.items.assistant');
   const taskBoardLabel = t('nav.items.todos');
   const extensionsLabel = t('nav.sections.extensions');
   const isAssistantManagerActive = activeTabId === 'assistant' || activeTabId === 'profile';
   const isTaskBoardActive = activeTabId === 'todos';
-  const isEcosystemCompatibilityActive = activeTabId === 'settings' && activeSettingsTab === 'external-sources';
   return (
     <>
       {/* ── Search and New Session ─────────────────── */}
@@ -598,6 +602,14 @@ const MainNav: React.FC<MainNavProps> = ({
                     <Network size={15} />
                   </span>
                   <span>{t('nav.items.ecosystemCompatibility')}</span>
+                  {hasUnseenEcosystemCompatibility ? (
+                    <span
+                      className="bitfun-nav-panel__top-action-unseen"
+                      data-bf-component="nav-panel"
+                      data-bf-part="topActionUnseen"
+                      aria-hidden="true"
+                    />
+                  ) : null}
                 </button>
               </Tooltip>
             </div>

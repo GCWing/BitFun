@@ -22,7 +22,6 @@ import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning, confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
-import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type { SessionMetadata } from '@/shared/types/session-history';
 import { i18nService } from '@/infrastructure/i18n';
@@ -110,7 +109,6 @@ const ArchivedRow: React.FC<ArchivedRowProps> = ({ entry, onRestore, onDelete, t
 const ArchivedSessionsConfig: React.FC = () => {
   const { t } = useTranslation('common');
   const { openedWorkspacesList } = useWorkspaceContext();
-  const activeTab = useSettingsStore(s => s.activeTab);
 
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<ArchivedEntry[]>([]);
@@ -150,12 +148,10 @@ const ArchivedSessionsConfig: React.FC = () => {
     setLoading(false);
   }, [openedWorkspacesList]);
 
-  // Re-fetch whenever this tab becomes active, or the workspace list changes
+  // This view only mounts while selected, so mounting is the activation boundary.
   useEffect(() => {
-    if (activeTab === 'archived-sessions') {
-      void loadArchived();
-    }
-  }, [activeTab, loadArchived]);
+    void loadArchived();
+  }, [loadArchived]);
 
   // Re-fetch when a session is archived elsewhere while this page is open
   useEffect(() => {

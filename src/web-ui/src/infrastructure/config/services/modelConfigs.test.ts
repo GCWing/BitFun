@@ -44,7 +44,7 @@ describe('modelConfigs', () => {
     expect(getProviderDisplayName({
       base_url: 'https://open.bigmodel.cn/api/paas/v4',
       model_name: 'glm-5',
-    })).toBe('settings/ai-model:providers.zhipu.name');
+    })).toBe('settings/models:providers.zhipu.name');
   });
 
   it('recognizes the full TokenDance chat completions URL', async () => {
@@ -53,7 +53,7 @@ describe('modelConfigs', () => {
     expect(getProviderDisplayName({
       base_url: 'https://tokendance.space/gateway/v1/chat/completions',
       model_name: 'glm-5.2',
-    })).toBe('settings/ai-model:providers.tokendance.name');
+    })).toBe('settings/models:providers.tokendance.name');
   });
 
   it('allocates readable model config IDs with collision and selector handling', async () => {

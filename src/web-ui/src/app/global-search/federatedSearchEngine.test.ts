@@ -57,7 +57,7 @@ describe('runFederatedSearch', () => {
           },
           {
             id: 'action:b', providerId: 'first', group: 'actions', title: 'B', score: 90,
-            target: { kind: 'action', actionId: 'settings.keyboard.open' },
+            target: { kind: 'action', actionId: 'settings.shortcuts.open' },
           },
           {
             id: 'action:c', providerId: 'first', group: 'actions', title: 'C', score: 80,

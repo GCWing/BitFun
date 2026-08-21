@@ -1,43 +1,42 @@
 {
   "title": "Agent Hooks",
-  "subtitle": "在 Agent 生命週期的固定節點執行你自己的命令 —— 工具呼叫前後、權限確認前後，以及工作階段與回合的邊界。",
+  "subtitle": "在 Agent 生命週期事件中執行自訂命令。",
   "loading": "正在載入 Hook 設定...",
   "activation": {
     "title": "啟用",
-    "description": "每次對應事件觸發時，Hook 都會以你的使用者權限執行。啟用任何非你本人撰寫的 Hook 之前，請先審閱它。"
+    "description": "Hooks 會以你的使用者權限執行，請只啟用你信任的命令。"
   },
   "fields": {
     "enabled": {
-      "label": "啟用 Hooks",
-      "description": "總開關。關閉後，任何事件都不會執行 Hook。"
+      "label": "啟用 Hooks"
     },
     "projectHooks": {
       "label": "啟用專案 Hook 檔案",
-      "description": "讀取工作區內的 Hook 檔案。它執行的是儲存庫中的命令，請只對你信任的儲存庫開啟。"
+      "description": "讀取並執行工作區內的 .bitfun/config/hooks.json；僅對可信任的儲存庫開啟。"
     }
   },
   "locations": {
     "title": "Hook 宣告位置",
-    "description": "Hook 宣告在 hooks.json 檔案中，不在本設定文件裡。兩個層級是疊加關係，使用者層優先執行。修改後無需重新啟動 BitFun。",
+    "description": "修改 hooks.json 後立即生效，無需重新啟動 BitFun。",
     "userFile": {
       "label": "使用者 Hook 檔案",
-      "description": "BitFun 使用者設定目錄下的 config/hooks.json（Linux 為 ~/.config/bitfun，macOS 為 ~/Library/Application Support/bitfun，Windows 為 %APPDATA%\\bitfun）。"
+      "description": "BitFun 使用者設定目錄中的 config/hooks.json。"
     },
     "projectFile": {
       "label": "專案 Hook 檔案",
-      "description": "工作區內的 .bitfun/config/hooks.json。僅在開啟「啟用專案 Hook 檔案」時讀取。"
+      "description": "目前工作區中的 .bitfun/config/hooks.json；需開啟「啟用專案 Hook 檔案」。"
     }
   },
   "imports": {
     "title": "已匯入的 Hooks",
-    "description": "先檢閱相容的 Claude Code 和 Codex 命令 Hook，再於此管理 BitFun 的本機快照。",
+    "description": "檢閱並管理從 Claude Code 或 Codex 匯入的 Hooks。",
     "masterDisabled": "匯入內容會保留，但總開關關閉時不會執行。",
     "refresh": "重新整理",
     "remoteUnsupported": "遠端工作區暫不支援匯入 Hooks。",
     "loading": "正在載入已匯入的 Hooks...",
     "loadFailed": "無法載入已匯入的 Hooks。",
     "refreshFailed": "無法重新整理已匯入的 Hooks。",
-    "empty": "目前沒有已匯入的 Hook。可在 hooks.json 中新增，或重新整理以檢查 Claude Code 與 Codex。",
+    "empty": "沒有已匯入的 Hook。可重新整理以檢查 Claude Code 與 Codex。",
     "review": "檢閱",
     "update": "檢閱更新",
     "remove": "移除",
@@ -80,10 +79,9 @@
   },
   "compatibility": {
     "title": "Codex 相容",
-    "description": "hooks.json 文件結構、事件名稱、stdin 上的 JSON 載荷、結束碼語義以及 stdout 上的 JSON 決策結構均與 Codex Hooks 一致，因此 Codex 的 Hook 指令碼可以直接在這裡執行。",
+    "description": "BitFun 使用 Codex Hooks 合約，可直接執行相容的 Hook 指令碼。",
     "reference": {
       "label": "事件與載荷參考",
-      "description": "事件名稱、載荷欄位和決策結構以 Codex 的 Hooks 文件為準。",
       "open": "開啟文件"
     }
   },

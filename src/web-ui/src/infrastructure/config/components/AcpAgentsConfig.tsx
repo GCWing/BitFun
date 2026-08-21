@@ -29,6 +29,7 @@ import {
   type AcpClientInfo,
   type AcpClientPermissionMode,
   type AcpClientRequirementProbe,
+  type AcpClientSubagentConfig,
   type AcpRequirementProbeItem,
 } from '../../api/service-api/ACPClientAPI';
 import { systemAPI } from '../../api/service-api/SystemAPI';
@@ -72,6 +73,7 @@ interface AcpClientConfig {
   env: Record<string, string>;
   enabled: boolean;
   readonly: boolean;
+  subagent: AcpClientSubagentConfig;
   permissionMode: AcpClientPermissionMode;
 }
 
@@ -82,7 +84,6 @@ interface AcpClientConfigFile {
 interface AcpClientPreset {
   id: string;
   name: string;
-  description: string;
   version?: string;
   command: string;
   args: string[];
@@ -101,7 +102,6 @@ const PRESETS: AcpClientPreset[] = [
   {
     id: 'opencode',
     name: 'opencode',
-    description: 'Native ACP coding agent.',
     command: 'opencode',
     args: ['acp'],
   },
@@ -111,28 +111,24 @@ const PRESETS: AcpClientPreset[] = [
   {
     id: 'dsh',
     name: 'DeepSeek Harness',
-    description: 'DeepSeek Harness with BitFun\'s bundled ACP bridge. Uses the model and API key configured in dsh.',
     command: 'dsh',
     args: ['--profile', 'bitfun-acp'],
   },
   {
     id: 'omp',
     name: 'Oh My Pi',
-    description: 'Native ACP coding agent (omp acp).',
     command: 'omp',
     args: ['acp'],
   },
   {
     id: 'claude-code',
     name: 'Claude Code',
-    description: 'Claude Code via the official ACP adapter.',
     command: 'npx',
     args: ['--yes', '@agentclientprotocol/claude-agent-acp@latest'],
   },
   {
     id: 'codex',
     name: 'Codex',
-    description: 'OpenAI Codex via the official ACP adapter.',
     command: 'npx',
     args: ['--yes', '@agentclientprotocol/codex-acp@latest'],
   },
@@ -178,6 +174,7 @@ function defaultConfigForPreset(preset: AcpClientPreset): AcpClientConfig {
     env: {},
     enabled: true,
     readonly: false,
+    subagent: { enabled: true },
     permissionMode: 'ask',
   };
 }
@@ -209,6 +206,7 @@ function normalizeConfigValue(value: unknown): AcpClientConfigFile {
       env: normalizeEnvObject(item.env),
       enabled: item.enabled !== false,
       readonly: item.readonly === true,
+      subagent: normalizeSubagentConfig(item.subagent),
       permissionMode: normalizePermissionMode(item.permissionMode),
     };
   }
@@ -225,6 +223,23 @@ function normalizeEnvObject(value: unknown): Record<string, string> {
 
 function normalizePermissionMode(value: unknown): AcpClientPermissionMode {
   return value === 'allow_once' || value === 'reject_once' ? value : 'ask';
+}
+
+function normalizeSubagentConfig(value: unknown): AcpClientSubagentConfig {
+  const candidate = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const description = typeof candidate.description === 'string'
+    ? candidate.description.trim()
+    : '';
+  const bestFor = typeof candidate.bestFor === 'string'
+    ? candidate.bestFor.trim()
+    : '';
+  return {
+    enabled: candidate.enabled !== false,
+    ...(description ? { description } : {}),
+    ...(bestFor ? { bestFor } : {}),
+  };
 }
 
 function formatConfig(config: AcpClientConfigFile): string {
@@ -455,6 +470,23 @@ const AcpAgentsConfig: React.FC = () => {
       .sort((a, b) => a.localeCompare(b));
   }, [clients, config.acpClients]);
 
+  const getPresetDescription = useCallback((presetId: string) => {
+    switch (presetId) {
+      case 'opencode':
+        return t('presets.opencode.description');
+      case 'dsh':
+        return t('presets.dsh.description');
+      case 'omp':
+        return t('presets.omp.description');
+      case 'claude-code':
+        return t('presets.claudeCode.description');
+      case 'codex':
+        return t('presets.codex.description');
+      default:
+        return '';
+    }
+  }, [t]);
+
   const registryPresets = useMemo(() => {
     const search = registrySearch.trim().toLowerCase();
     return PRESETS.filter(preset => {
@@ -478,12 +510,20 @@ const AcpAgentsConfig: React.FC = () => {
       return [
         preset.name,
         preset.id,
-        preset.description,
+        getPresetDescription(preset.id),
         preset.command,
         ...preset.args,
       ].join(' ').toLowerCase().includes(search);
     });
-  }, [clientsById, config.acpClients, probesById, probingRequirements, registryFilter, registrySearch]);
+  }, [
+    clientsById,
+    config.acpClients,
+    getPresetDescription,
+    probesById,
+    probingRequirements,
+    registryFilter,
+    registrySearch,
+  ]);
 
   const visibleCustomClientRows = useMemo(() => {
     const search = registrySearch.trim().toLowerCase();
@@ -1022,6 +1062,12 @@ const AcpAgentsConfig: React.FC = () => {
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
+        extra={(
+          <Button variant="ghost" size="small" onClick={openLearnMore}>
+            {t('actions.learnMore')}
+            <ExternalLink size={14} />
+          </Button>
+        )}
       />
 
       <ConfigPageContent data-bf-component="acp-agents-config" data-bf-part="content">
@@ -1059,23 +1105,6 @@ const AcpAgentsConfig: React.FC = () => {
               >
                 <FileJson size={14} />
                 {showJsonEditor ? t('actions.closeJson') : t('actions.editJson')}
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => { void refreshRequirementProbes({ force: true }); }}
-                isLoading={probingRequirements}
-              >
-                <RefreshCw size={14} />
-                {t('actions.refresh')}
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={openLearnMore}
-              >
-                {t('actions.learnMore')}
-                <ExternalLink size={14} />
               </Button>
               {dirty && (
                 <Button
@@ -1138,7 +1167,20 @@ const AcpAgentsConfig: React.FC = () => {
             </ConfigPageSection>
           )}
 
-          <ConfigPageSection title={t('registry.title')} description={t('registry.description')}>
+          <ConfigPageSection
+            title={t('registry.title')}
+            extra={(
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => { void refreshRequirementProbes({ force: true }); }}
+                isLoading={probingRequirements}
+              >
+                <RefreshCw size={14} />
+                {t('actions.refresh')}
+              </Button>
+            )}
+          >
           {loading ? (
             <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
               {t('clients.loading')}
@@ -1220,7 +1262,9 @@ const AcpAgentsConfig: React.FC = () => {
                       </span>
                       <div className="bitfun-acp-agents__registry-copy">
                         <span className="bitfun-acp-agents__registry-name">{preset.name}</span>
-                        <p className="bitfun-acp-agents__registry-description">{preset.description}</p>
+                        <p className="bitfun-acp-agents__registry-description">
+                          {getPresetDescription(preset.id)}
+                        </p>
                       </div>
                     </div>
                     <div
@@ -1510,8 +1554,11 @@ const AcpAgentsConfig: React.FC = () => {
                       probe: requirementProbe,
                     });
                     const displayName = effectiveConfig?.name || preset?.name || clientId;
-                    const description = preset?.description ??
-                      (effectiveConfig ? [effectiveConfig.command, ...effectiveConfig.args].join(' ') : clientId);
+                    const description = preset
+                      ? getPresetDescription(preset.id)
+                      : effectiveConfig
+                        ? [effectiveConfig.command, ...effectiveConfig.args].join(' ')
+                        : clientId;
                     const installingRemote = installingRemoteClientIds.has(`${connection.id}:${clientId}`);
 
                     return {

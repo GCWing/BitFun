@@ -4,6 +4,12 @@ import type { ImageContextData as ImageInputContextData } from './ImageContextTy
 export type AcpClientPermissionMode = 'ask' | 'allow_once' | 'reject_once';
 export type AcpClientStatus = 'configured' | 'starting' | 'running' | 'stopped' | 'failed';
 
+export interface AcpClientSubagentConfig {
+  enabled: boolean;
+  description?: string;
+  bestFor?: string;
+}
+
 export interface AcpClientInfo {
   id: string;
   name: string;
@@ -11,6 +17,8 @@ export interface AcpClientInfo {
   args: string[];
   enabled: boolean;
   readonly: boolean;
+  /** Missing on older hosts; absence preserves the historical enabled behavior. */
+  subagent?: AcpClientSubagentConfig;
   permissionMode: AcpClientPermissionMode;
   status: AcpClientStatus;
   toolName: string;
@@ -36,6 +44,10 @@ export interface AcpClientRequirementProbe {
 export interface AcpClientIdRequest {
   clientId: string;
   remoteConnectionId?: string;
+}
+
+export interface UpdateAcpClientSubagentConfigRequest extends AcpClientSubagentConfig {
+  clientId: string;
 }
 
 export interface CreateAcpFlowSessionRequest {
@@ -321,6 +333,38 @@ export class ACPClientAPI {
     ACPClientAPI.invalidateClientListCache();
     ACPClientAPI.invalidateRequirementProbeCache();
     window.dispatchEvent(new Event('bitfun:acp-clients-changed'));
+  }
+
+  static async updateClientSubagentConfig(
+    request: UpdateAcpClientSubagentConfigRequest
+  ): Promise<void> {
+    const rawConfig = JSON.parse(await ACPClientAPI.loadJsonConfig()) as unknown;
+    if (!rawConfig || typeof rawConfig !== 'object' || Array.isArray(rawConfig)) {
+      throw new Error('ACP client configuration is invalid');
+    }
+
+    const config = rawConfig as Record<string, unknown>;
+    const rawClients = config.acpClients;
+    if (!rawClients || typeof rawClients !== 'object' || Array.isArray(rawClients)) {
+      throw new Error('ACP client configuration has no client registry');
+    }
+
+    const clients = rawClients as Record<string, unknown>;
+    const rawClient = clients[request.clientId];
+    if (!rawClient || typeof rawClient !== 'object' || Array.isArray(rawClient)) {
+      throw new Error(`ACP client '${request.clientId}' is not configured`);
+    }
+
+    const description = request.description?.trim();
+    const bestFor = request.bestFor?.trim();
+    const client = rawClient as Record<string, unknown>;
+    client.subagent = {
+      enabled: request.enabled,
+      ...(description ? { description } : {}),
+      ...(bestFor ? { bestFor } : {}),
+    };
+
+    await ACPClientAPI.saveJsonConfig(JSON.stringify(config, null, 2));
   }
 
   static async submitPermissionResponse(

@@ -6,13 +6,13 @@
       "maxTotal": 0
     },
     "sharedTermDuplicates": {
-      "maxTotal": 172,
+      "maxTotal": 171,
       "bySurface": {
         "core": 15,
         "installer": 0,
         "mobile-web": 0,
         "relay-static-homepage": 0,
-        "web-ui": 157
+        "web-ui": 156
       },
       "bySharedKey": {
         "agents.claw": 3,
@@ -24,7 +24,7 @@
         "features.codeAgent": 1,
         "features.deepReview": 0,
         "features.remoteControl": 0,
-        "features.settings": 1,
+        "features.settings": 0,
         "features.workspace": 2,
         "modes.assistant": 1,
         "modes.expert": 2,

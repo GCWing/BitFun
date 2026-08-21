@@ -182,6 +182,9 @@
 
   &__sections {
     flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-5;
     overflow-y: auto;
     overflow-x: hidden;
     padding: $size-gap-2 0;
@@ -196,10 +199,6 @@
 
   // ── Category group ─────────────────────────────────────
 
-  &__category:not(:last-child) {
-    margin-bottom: $size-gap-3;
-  }
-
   &__category-header {
     display: flex;
     align-items: center;
@@ -212,7 +211,7 @@
   &__category-label {
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: calc(var(--bf-appearance-token-font-size-xs) - 1px);
     font-weight: 500;
     letter-spacing: 0.015em;
     line-height: 1.25;
@@ -236,26 +235,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: left;
-  }
-
-  &__item-beta {
-    flex-shrink: 0;
-    margin-left: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
-    line-height: 1;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-  }
-
-  /* Marks a tab holding something the user has not seen yet. */
-  &__item-unseen {
-    flex-shrink: 0;
-    width: 6px;
-    height: 6px;
-    margin-left: $size-gap-2;
-    border-radius: 50%;
-    background: var(--bf-appearance-token-color-accent-500);
   }
 
   &__item {

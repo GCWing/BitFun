@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Puzzle, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/component-library';
-import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import {
@@ -114,7 +114,6 @@ const ExternalMcpOverview: React.FC = () => {
   const { t: tShared } = useTranslation('shared');
   const { workspace, workspacePath } = useCurrentWorkspace();
   const peerDevice = usePeerDeviceModeOptional();
-  const setSettingsTab = useSettingsStore((state) => state.setActiveTab);
   const requestIdRef = useRef(0);
   const importRequestIdRef = useRef(0);
   const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
@@ -469,7 +468,7 @@ const ExternalMcpOverview: React.FC = () => {
           <IconButton
             variant="ghost"
             size="small"
-            onClick={() => setSettingsTab('external-sources')}
+            onClick={() => openEcosystemCompatibility({ ownerSurface: 'external-sources' })}
             tooltip={t('external.manage')}
             aria-label={t('external.manage')}
           >

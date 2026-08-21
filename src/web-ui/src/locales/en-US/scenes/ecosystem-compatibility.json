@@ -1,0 +1,169 @@
+{
+  "title": "Ecosystem Compatibility",
+  "loading": "Checking compatibility…",
+  "partialLoad": "Some status could not be read: {{sources}} {{acp}}. Other available content is still shown.",
+  "retry": "Retry",
+  "loadAreas": {
+    "externalSources": "external sources",
+    "acpClients": "ACP agents"
+  },
+  "search": {
+    "label": "Search compatible products, protocols, or capabilities",
+    "placeholder": "Search products, protocols, or capabilities",
+    "empty": "No compatible products match this search."
+  },
+  "host": {
+    "label": "Execution host",
+    "local": "This computer",
+    "remote": "Remote · {{name}}",
+    "switchLabel": "Switch execution host",
+    "switchAction": "Execution host switching"
+  },
+  "groups": {
+    "connected": "Connected or discovered",
+    "available": "Available to add",
+    "other": "Other"
+  },
+  "status": {
+    "connected": "Connected",
+    "detected": "Discovered",
+    "configured": "Configured",
+    "available": "Available",
+    "development": "In development"
+  },
+  "productSummary": {
+    "assets": "{{count}} compatible items found",
+    "acpClients": "{{count}} ACP configurations",
+    "available": "Available to configure",
+    "development": "Compatibility is in development"
+  },
+  "sidebar": {
+    "label": "Compatible products",
+    "hint": "Select a product to see how you can use it and what content you can import."
+  },
+  "header": {
+    "sourceLocation": "Configuration source",
+    "executionHost": "Execution host",
+    "currentState": "Current status",
+    "adapterRevision": "Adapter v{{revision}}",
+    "acpRuntime": "ACP",
+    "notDetected": "No configuration found",
+    "notAvailable": "Unavailable",
+    "checksLabel": "Updates & checks",
+    "checksSummary": "{{sourceCount}} sources · {{assetCount}} items · {{runtimeCount}} ACP"
+  },
+  "governance": {
+    "openAction": "Sources & safety",
+    "closeAction": "Back to compatibility",
+    "managerLabel": "External source governance",
+    "managerScope": "These controls apply to compatible sources on the current execution host. Product summaries remain read-only.",
+    "loadingManager": "Loading source governance…"
+  },
+  "comingSoon": {
+    "title": "In development",
+    "notice": "“{{name}}” is in development."
+  },
+  "capabilities": {
+    "account": "Accounts",
+    "settings": "Settings & preferences",
+    "command": "Commands",
+    "tool": "Tools",
+    "subagent": "Subagents",
+    "skill": "Skills",
+    "mcp": "MCP",
+    "hook": "Hooks",
+    "memory": "Memories",
+    "plugin": "Plugins",
+    "pet": "Pets"
+  },
+  "import": {
+    "title": "Import and reuse",
+    "description": "See what content from {{name}} works with BitFun. Import available items directly; other items show their current support status.",
+    "columns": {
+      "item": "Item",
+      "type": "Type",
+      "source": "Source",
+      "state": "Support",
+      "action": "Action"
+    },
+    "states": {
+      "ready": "Ready to import",
+      "readyRename": "Ready · auto-rename",
+      "checking": "Checking",
+      "imported": "Imported",
+      "reusable": "Ready to use",
+      "adapted": "Supported",
+      "notDetected": "Not found",
+      "notAdapted": "Not adapted",
+      "unsupportedContext": "Cannot import in this environment",
+      "unavailable": "Currently unavailable"
+    },
+    "importAction": "Import",
+    "importingAction": "Importing",
+    "undetectedItem": "No {{type}} found",
+    "undetectedDescription": "No available content was found",
+    "notAdaptedDescription": "BitFun does not support {{name}} {{type}} yet",
+    "ownerAdaptedDescription": "{{type}} is already available in BitFun and does not need to be imported",
+    "notifications": {
+      "success": "Imported {{name}} into BitFun",
+      "stale": "The source changed. Review the latest state and try again.",
+      "failed": "Failed to import {{name}}"
+    }
+  },
+  "run": {
+    "title": "Use in BitFun",
+    "description": "Start a dedicated {{name}} session, or set it up as a subagent for the main Agent to call on suitable tasks.",
+    "session": {
+      "title": "Create standalone session",
+      "description": "Let {{name}} handle tasks in its own ongoing session."
+    },
+    "subagent": {
+      "title": "Configure as subagent",
+      "responsibilityFallback": "No responsibility has been added yet.",
+      "bestForSummary": "Best for: {{value}}",
+      "bestForFallback": "No suitable tasks have been defined",
+      "configureAction": "Configure",
+      "editAction": "$t(shared:tools.edit)",
+      "editorTitle": "Subagent profile for {{name}}",
+      "editorDescription": "The main Agent uses this profile to decide whether and when to delegate to this agent.",
+      "enabledLabel": "Allow the main Agent to call it",
+      "responsibilityLabel": "What it does",
+      "responsibilityPlaceholder": "For example: implements complex code changes across files and verifies the result",
+      "bestForLabel": "What it is best for",
+      "bestForPlaceholder": "For example: large refactors, difficult debugging, or implementation that benefits from separate context",
+      "profileNote": "Clearer guidance helps the main Agent call it for the right tasks.",
+      "saveAction": "Save profile",
+      "savingAction": "Saving",
+      "cancelAction": "Cancel",
+      "states": {
+        "configured": "Configured",
+        "defaultProfile": "Using default description",
+        "disabled": "Disabled",
+        "clientDisabled": "ACP disabled",
+        "unsupportedHost": "Unsupported by this host version"
+      },
+      "notifications": {
+        "saved": "Updated the subagent profile for {{name}}",
+        "failed": "Failed to save the subagent profile for {{name}}"
+      }
+    },
+    "openManager": "Manage ACP agents",
+    "hideManager": "Hide ACP manager",
+    "managerLabel": "ACP agent management",
+    "managerScope": "Install, enable, or adjust ACP agents below.",
+    "loadingManager": "Loading ACP agent management…",
+    "startSession": "New session",
+    "starting": "Creating a {{name}} session…",
+    "workspaceRequired": "Open a workspace before creating an ACP session.",
+    "configurationRequired": "{{name}} is not ready. Check its ACP configuration first.",
+    "notConfiguredTitle": "{{name}} is not ready",
+    "notConfiguredDescription": "Install and enable {{name}}, then start a session or set it up as a subagent here.",
+    "clientStatus": {
+      "configured": "Configured",
+      "starting": "Starting",
+      "running": "$t(shared:statuses.running)",
+      "stopped": "Stopped",
+      "failed": "Failed to start"
+    }
+  }
+}

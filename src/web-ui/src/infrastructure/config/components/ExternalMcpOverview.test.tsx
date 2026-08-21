@@ -3,7 +3,6 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import ExternalMcpOverview from './ExternalMcpOverview';
 
 const getSnapshotMock = vi.hoisted(() => vi.fn());
@@ -12,6 +11,7 @@ const applyMcpImportMock = vi.hoisted(() => vi.fn());
 const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project', kind: 'normal' }));
 const peerState = vi.hoisted(() => ({ deviceId: '' }));
 const warnMock = vi.hoisted(() => vi.fn());
+const openEcosystemCompatibilityMock = vi.hoisted(() => vi.fn());
 const apiErrorState = vi.hoisted(() => ({
   ExternalSourceApiError: class ExternalSourceApiError extends Error {
     constructor(
@@ -63,6 +63,9 @@ vi.mock('@/shared/utils/logger', () => ({
     warn: warnMock,
     error: vi.fn(),
   }),
+}));
+vi.mock('@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore', () => ({
+  openEcosystemCompatibility: openEcosystemCompatibilityMock,
 }));
 
 const snapshot = {
@@ -158,7 +161,7 @@ describe('ExternalMcpOverview', () => {
     workspaceState.path = 'D:/workspace/project';
     workspaceState.kind = 'normal';
     peerState.deviceId = '';
-    useSettingsStore.setState({ activeTab: 'mcp-tools', searchQuery: '' });
+    openEcosystemCompatibilityMock.mockReset();
   });
 
   afterEach(async () => {
@@ -184,7 +187,7 @@ describe('ExternalMcpOverview', () => {
     expect(container.textContent).toContain('<workspace>/.opencode/opencode.json');
   });
 
-  it('links the native MCP page to the external integration owner', async () => {
+  it('links the native MCP page to ecosystem source governance', async () => {
     await act(async () => {
       root.render(<ExternalMcpOverview />);
       await Promise.resolve();
@@ -194,7 +197,9 @@ describe('ExternalMcpOverview', () => {
     await act(async () => {
       (container.querySelector('[aria-label="external.manage"]') as HTMLButtonElement).click();
     });
-    expect(useSettingsStore.getState().activeTab).toBe('external-sources');
+    expect(openEcosystemCompatibilityMock).toHaveBeenCalledWith({
+      ownerSurface: 'external-sources',
+    });
   });
 
   it('previews before applying and delegates later enablement to MCP settings', async () => {

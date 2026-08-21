@@ -155,16 +155,20 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
   wide = false,
   balanced = false,
 }) => {
+  const hasControl = children !== null && children !== undefined && children !== false;
   const cls = [
     'bitfun-config-page-row',
     `bitfun-config-page-row--${align}`,
     multiline && 'bitfun-config-page-row--multiline',
     wide && 'bitfun-config-page-row--wide',
     balanced && 'bitfun-config-page-row--balanced',
+    !hasControl && 'bitfun-config-page-row--no-control',
     className,
   ].filter(Boolean).join(' ');
 
-  const gridStyle: React.CSSProperties | undefined = wide
+  const gridStyle: React.CSSProperties | undefined = !hasControl
+    ? { gridTemplateColumns: 'minmax(0, 1fr)' }
+    : wide
     ? { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 8fr)' }
     : balanced
     ? { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 3fr)' }
@@ -188,9 +192,11 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
           <div className="bitfun-config-page-row__description" data-bf-component="config" data-bf-part="rowDescription">{description}</div>
         ) : null}
       </div>
-      <div className="bitfun-config-page-row__control" data-bf-component="config" data-bf-part="rowControl">
-        {children}
-      </div>
+      {hasControl ? (
+        <div className="bitfun-config-page-row__control" data-bf-component="config" data-bf-part="rowControl">
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 };

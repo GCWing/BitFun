@@ -1,0 +1,169 @@
+{
+  "title": "生态兼容",
+  "loading": "正在检查兼容状态…",
+  "partialLoad": "部分状态未能读取：{{sources}} {{acp}}。已保留其余可用内容。",
+  "retry": "重试",
+  "loadAreas": {
+    "externalSources": "外部来源",
+    "acpClients": "ACP Agent"
+  },
+  "search": {
+    "label": "搜索兼容产品、协议或能力",
+    "placeholder": "搜索产品、协议或能力",
+    "empty": "没有匹配的兼容产品。"
+  },
+  "host": {
+    "label": "执行主机",
+    "local": "本机",
+    "remote": "远程 · {{name}}",
+    "switchLabel": "切换执行主机",
+    "switchAction": "执行主机切换"
+  },
+  "groups": {
+    "connected": "已连接或发现",
+    "available": "可添加",
+    "other": "其他"
+  },
+  "status": {
+    "connected": "已连接",
+    "detected": "已发现",
+    "configured": "已配置",
+    "available": "可添加",
+    "development": "开发中"
+  },
+  "productSummary": {
+    "assets": "发现 {{count}} 项兼容内容",
+    "acpClients": "{{count}} 个 ACP 配置",
+    "available": "可配置",
+    "development": "兼容能力正在开发中"
+  },
+  "sidebar": {
+    "label": "兼容产品",
+    "hint": "选择产品，查看可用方式和可导入内容。"
+  },
+  "header": {
+    "sourceLocation": "配置来源",
+    "executionHost": "执行主机",
+    "currentState": "当前状态",
+    "adapterRevision": "适配 v{{revision}}",
+    "acpRuntime": "ACP",
+    "notDetected": "当前未发现配置",
+    "notAvailable": "暂不可用",
+    "checksLabel": "更新与检测",
+    "checksSummary": "{{sourceCount}} 个来源 · {{assetCount}} 项内容 · {{runtimeCount}} 个 ACP"
+  },
+  "governance": {
+    "openAction": "来源与安全",
+    "closeAction": "返回兼容概览",
+    "managerLabel": "外部来源治理",
+    "managerScope": "这些控制项作用于当前执行主机上的兼容来源；产品兼容概览保持只读。",
+    "loadingManager": "正在加载来源治理…"
+  },
+  "comingSoon": {
+    "title": "开发中",
+    "notice": "“{{name}}”正在开发中。"
+  },
+  "capabilities": {
+    "account": "账号",
+    "settings": "配置与偏好",
+    "command": "命令",
+    "tool": "工具",
+    "subagent": "子 Agent",
+    "skill": "Skill",
+    "mcp": "MCP",
+    "hook": "Hooks",
+    "memory": "记忆",
+    "plugin": "插件",
+    "pet": "宠物"
+  },
+  "import": {
+    "title": "导入与复用",
+    "description": "查看 {{name}} 可与 BitFun 配合使用的内容。可导入的内容可以直接添加，其余内容会显示当前支持状态。",
+    "columns": {
+      "item": "内容",
+      "type": "类型",
+      "source": "来源",
+      "state": "支持状态",
+      "action": "操作"
+    },
+    "states": {
+      "ready": "可导入",
+      "readyRename": "可导入 · 自动改名",
+      "checking": "正在检查",
+      "imported": "已导入",
+      "reusable": "可直接使用",
+      "adapted": "已支持",
+      "notDetected": "未发现",
+      "notAdapted": "未适配",
+      "unsupportedContext": "当前环境不可导入",
+      "unavailable": "暂不可导入"
+    },
+    "importAction": "导入",
+    "importingAction": "导入中",
+    "undetectedItem": "未发现{{type}}",
+    "undetectedDescription": "当前没有发现可用内容",
+    "notAdaptedDescription": "BitFun 暂不支持使用 {{name}} 的{{type}}",
+    "ownerAdaptedDescription": "{{type}}已可在 BitFun 中直接使用，无需导入",
+    "notifications": {
+      "success": "{{name}} 已导入 BitFun",
+      "stale": "来源内容已更新，请确认最新状态后重试",
+      "failed": "导入 {{name}} 失败"
+    }
+  },
+  "run": {
+    "title": "在 BitFun 中使用",
+    "description": "可用 {{name}} 新建独立会话，也可将它设为子 Agent，由主 Agent 在合适的任务中调用。",
+    "session": {
+      "title": "创建独立会话",
+      "description": "由 {{name}} 独立处理任务并持续对话。"
+    },
+    "subagent": {
+      "title": "配置为子 Agent",
+      "responsibilityFallback": "尚未填写职责说明。",
+      "bestForSummary": "适合：{{value}}",
+      "bestForFallback": "尚未填写适用任务",
+      "configureAction": "配置",
+      "editAction": "$t(shared:tools.edit)",
+      "editorTitle": "{{name}} 的子 Agent 配置",
+      "editorDescription": "这些说明会成为主 Agent 判断是否以及何时调用它的依据。",
+      "enabledLabel": "允许主 Agent 调用",
+      "responsibilityLabel": "它负责什么",
+      "responsibilityPlaceholder": "例如：负责复杂代码实现、跨文件修改和结果验证",
+      "bestForLabel": "它适合什么任务",
+      "bestForPlaceholder": "例如：大型重构、疑难问题定位、需要独立上下文的实现任务",
+      "profileNote": "说明越具体，主 Agent 越容易在合适的任务中调用它。",
+      "saveAction": "保存配置",
+      "savingAction": "保存中",
+      "cancelAction": "取消",
+      "states": {
+        "configured": "已配置",
+        "defaultProfile": "使用默认说明",
+        "disabled": "未启用",
+        "clientDisabled": "ACP 未启用",
+        "unsupportedHost": "当前主机版本不支持"
+      },
+      "notifications": {
+        "saved": "已更新 {{name}} 的子 Agent 配置",
+        "failed": "保存 {{name}} 的子 Agent 配置失败"
+      }
+    },
+    "openManager": "管理 ACP Agent",
+    "hideManager": "收起 ACP 管理",
+    "managerLabel": "ACP Agent 管理",
+    "managerScope": "在下方安装、启用或调整 ACP Agent。",
+    "loadingManager": "正在加载 ACP Agent 管理…",
+    "startSession": "新建会话",
+    "starting": "正在创建 {{name}} 会话…",
+    "workspaceRequired": "请先打开一个工作区，再创建 ACP 会话。",
+    "configurationRequired": "{{name}} 尚未就绪，请先检查 ACP 配置。",
+    "notConfiguredTitle": "{{name}} 尚未就绪",
+    "notConfiguredDescription": "安装并启用 {{name}} 后，即可在这里新建会话或将它配置为子 Agent。",
+    "clientStatus": {
+      "configured": "已配置",
+      "starting": "正在启动",
+      "running": "$t(shared:statuses.running)",
+      "stopped": "已停止",
+      "failed": "启动失败"
+    }
+  }
+}

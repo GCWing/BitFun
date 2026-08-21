@@ -22,7 +22,7 @@ type LazyNavComponent = ReturnType<typeof lazy<ComponentType>>;
 const loadSettingsNav = async () => {
   const [navModule] = await Promise.all([
     import('./settings/SettingsNav'),
-    import('./settings/settingsTabI18n').then((m) => m.preloadSettingsShellI18n()),
+    import('./settings/settingsRegistry').then((module) => module.preloadSettingsShell()),
   ]);
   return navModule;
 };

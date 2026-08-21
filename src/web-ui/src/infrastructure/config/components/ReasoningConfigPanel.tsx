@@ -38,7 +38,7 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
   onCancel,
   onApply,
 }) => {
-  const { t } = useTranslation('settings/ai-model');
+  const { t } = useTranslation('settings/models');
   const [draft, setDraft] = useState(() => cloneReasoningConfig(value));
   const [editorInvalid, setEditorInvalid] = useState(false);
   const projectionRequestId = useRef(0);

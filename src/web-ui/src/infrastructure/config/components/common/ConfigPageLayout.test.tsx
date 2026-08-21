@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import {
   ConfigPageLayout,
   ConfigPageContent,
+  ConfigPageRow,
   ConfigPageSection,
   ConfigPageSectionStack,
 } from './ConfigPageLayout';
@@ -80,23 +81,38 @@ describe('ConfigPageLayout', () => {
     expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(false);
   });
 
+  it('lets copy use the full row when there is no control', () => {
+    act(() => {
+      root.render(
+        <ConfigPageRow label="User hook file" description="A long platform-specific path">
+          {null}
+        </ConfigPageRow>,
+      );
+    });
+
+    const row = container.querySelector('.bitfun-config-page-row');
+    expect(row?.classList.contains('bitfun-config-page-row--no-control')).toBe(true);
+    expect((row as HTMLElement | null)?.style.gridTemplateColumns).toBe('minmax(0, 1fr)');
+    expect(row?.querySelector('.bitfun-config-page-row__control')).toBeNull();
+  });
+
   it('forwards a feature-owned Appearance contract to the real layout nodes', () => {
     act(() => {
       root.render(
         <ConfigPageLayout
           data-testid="feature-root"
-          data-bf-component="ai-model-config"
+          data-bf-component="model-settings"
           data-bf-part="root"
         >
           <ConfigPageContent
             data-testid="feature-content"
-            data-bf-component="ai-model-config"
+            data-bf-component="model-settings"
             data-bf-part="providerSelection"
           >
             <ConfigPageSection
               title="Models"
               data-testid="feature-section"
-              data-bf-component="ai-model-config"
+              data-bf-component="model-settings"
               data-bf-part="providerGroup"
             >
               <div>Body</div>
@@ -106,7 +122,7 @@ describe('ConfigPageLayout', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="feature-root"]')?.getAttribute('data-bf-component')).toBe('ai-model-config');
+    expect(container.querySelector('[data-testid="feature-root"]')?.getAttribute('data-bf-component')).toBe('model-settings');
     expect(container.querySelector('[data-testid="feature-content"]')?.getAttribute('data-bf-part')).toBe('providerSelection');
     expect(container.querySelector('[data-testid="feature-section"]')?.getAttribute('data-bf-part')).toBe('providerGroup');
   });

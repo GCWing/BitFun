@@ -393,8 +393,11 @@ describeWithJsdom('AgentsScene', () => {
         ?.click();
     });
 
-    const skillsTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((tab) => tab.textContent?.includes('agentsOverview.skills'));
+    expect(container.querySelector('[data-testid="agent-detail-configuration"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="agent-detail-overview"]')).toBeNull();
+    expect(container.querySelector('.agent-card__detail-view-tabs')).toBeNull();
+
+    const skillsTab = container.querySelector<HTMLButtonElement>('[data-detail-section="skills"]');
     expect(skillsTab).toBeTruthy();
 
     await act(async () => {
@@ -456,6 +459,10 @@ describeWithJsdom('AgentsScene', () => {
 
     await act(async () => {
       card?.click();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-detail-section="tools"]')?.click();
     });
 
     const summary = container.querySelector('[data-testid="agent-detail-tool-summary"]');

@@ -61,7 +61,7 @@ describe('handleAgentCompanionPetCommand', () => {
   it('opens the companion personalization settings', async () => {
     await handleAgentCompanionPetCommand({ type: 'open-pet-settings' });
 
-    expect(openSettingsMock).toHaveBeenCalledWith('session-personalization');
+    expect(openSettingsMock).toHaveBeenCalledWith({ pageId: 'application.pet' });
     expect(invokeMock).toHaveBeenCalledWith('show_main_window');
   });
 

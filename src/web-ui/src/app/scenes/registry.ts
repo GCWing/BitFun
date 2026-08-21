@@ -23,6 +23,7 @@ import {
   BarChart3,
   CalendarClock,
   ExternalLink,
+  Network,
 } from 'lucide-react';
 import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
 
@@ -104,6 +105,15 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     label: 'Skills',
     labelKey: 'scenes.skills',
     Icon: Puzzle,
+    pinned: false,
+    singleton: true,
+    defaultOpen: false,
+  },
+  {
+    id: 'ecosystem-compatibility' as SceneTabId,
+    label: 'Ecosystem Compatibility',
+    labelKey: 'nav.items.ecosystemCompatibility',
+    Icon: Network,
     pinned: false,
     singleton: true,
     defaultOpen: false,

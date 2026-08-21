@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import enUS from '@/locales/en-US/settings/external-sources.json';
+import enUS from '@/locales/en-US/settings/external-apps.json';
 import type { ExternalSourcePresentationGroup } from '../../externalSourcePresentation';
 import { ExternalSourceSection } from './ExternalSourceSection';
 

@@ -49,7 +49,7 @@ import { codeReviewToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/C
 import { createAgentPageAppearanceDescriptor } from '@/app/scenes/agents/components/CreateAgentPage.appearance';
 import { keyboardShortcutsAppearanceDescriptor } from '@/app/scenes/settings/components/KeyboardShortcutsTab.appearance';
 import { taskToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/TaskToolDisplay.appearance';
-import { basicsConfigAppearanceDescriptor } from '@/infrastructure/config/components/BasicsConfig.appearance';
+import { applicationSettingsAppearanceDescriptor } from '@/infrastructure/config/components/ApplicationSettingsPages.appearance';
 import { markdownEditorAppearanceDescriptor } from '@/tools/editor/components/MarkdownEditor.appearance';
 import { planViewerAppearanceDescriptor } from '@/tools/editor/components/PlanViewer.appearance';
 import { appLayoutAppearanceDescriptor } from '@/app/layout/AppLayout.appearance';
@@ -74,7 +74,7 @@ import { askUserQuestionCardAppearanceDescriptor } from '@/flow_chat/tool-cards/
 import { createPlanDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/CreatePlanDisplay.appearance';
 import { execProcessToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ExecProcessToolCardView.appearance';
 import { editorConfigAppearanceDescriptor } from '@/infrastructure/config/components/EditorConfig.appearance';
-import { appearanceConfigAppearanceDescriptor } from '@/infrastructure/config/components/AppearanceConfig.appearance';
+import { appearanceSettingsAppearanceDescriptor } from '@/infrastructure/config/components/AppearanceSettingsPage.appearance';
 import { lspConfigAppearanceDescriptor } from '@/infrastructure/config/components/LspConfig.appearance';
 import { configAppearanceDescriptor } from '@/infrastructure/config/appearance';
 import { fontPreferenceAppearanceDescriptor } from '@/infrastructure/font-preference/appearance';
@@ -113,6 +113,7 @@ import { panelViewAppearanceDescriptor } from '@/app/scenes/panel-view/appearanc
 import { profileAppearanceDescriptor } from '@/app/scenes/profile/appearance';
 import { sessionAppearanceDescriptor } from '@/app/scenes/session/appearance';
 import { settingsAppearanceDescriptor } from '@/app/scenes/settings/appearance';
+import { ecosystemCompatibilityAppearanceDescriptor } from '@/app/scenes/ecosystem-compatibility/appearance';
 import { skillsAppearanceDescriptor } from '@/app/scenes/skills/appearance';
 import { terminalAppearanceDescriptor } from '@/app/scenes/terminal/appearance';
 import { aboutDialogAppearanceDescriptor } from '@/app/components/AboutDialog/appearance';
@@ -133,12 +134,12 @@ import { todosSceneAppearanceDescriptor } from '@/app/scenes/todos/appearance';
 import { flexiblePanelAppearanceDescriptor } from '@/app/components/panels/base/FlexiblePanel.appearance';
 import { btwSessionPanelAppearanceDescriptor } from '@/flow_chat/components/btw/BtwSessionPanel.appearance';
 import { modernFlowChatAppearanceDescriptor, virtualMessageListAppearanceDescriptor } from '@/flow_chat/components/modern/appearance';
-import { aiModelConfigAppearanceDescriptor } from '@/infrastructure/config/components/AIModelConfig.appearance';
+import { modelSettingsAppearanceDescriptor } from '@/infrastructure/config/components/ModelSettingsPage.appearance';
 import { reasoningConfigPanelAppearanceDescriptor } from '@/infrastructure/config/components/ReasoningConfigPanel.appearance';
 import { reasoningPresetEditorAppearanceDescriptor } from '@/infrastructure/config/components/ReasoningPresetEditor.appearance';
 import { externalSourcesConfigAppearanceDescriptor } from '@/infrastructure/config/components/ExternalSourcesConfig.appearance';
 import { acpAgentsConfigAppearanceDescriptor } from '@/infrastructure/config/components/AcpAgentsConfig.appearance';
-import { sessionConfigAppearanceDescriptor } from '@/infrastructure/config/components/SessionConfig.appearance';
+import { runtimeSettingsAppearanceDescriptor } from '@/infrastructure/config/components/RuntimeSettingsPages.appearance';
 import { sessionTitleConfigAppearanceDescriptor } from '@/infrastructure/config/components/SessionTitleConfig.appearance';
 import { mcpToolsConfigAppearanceDescriptor } from '@/infrastructure/config/components/McpToolsConfig.appearance';
 import { externalMcpOverviewAppearanceDescriptor } from '@/infrastructure/config/components/ExternalMcpOverview.appearance';
@@ -156,6 +157,12 @@ import { tiptapEditorAppearanceDescriptor } from '@/tools/editor/meditor/compone
 import { workspaceProjectPermissionsDialogAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceProjectPermissionsDialog.appearance';
 import { workspaceSessionBatchModalAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceSessionBatchModal.appearance';
 import { archivedSessionsConfigAppearanceDescriptor } from '@/app/scenes/settings/components/ArchivedSessionsConfig.appearance';
+import { settingsViewPageAppearanceDescriptor } from '@/app/scenes/settings/components/SettingsViewPage.appearance';
+import {
+  automationSettingsPageAppearanceDescriptor,
+  developmentSettingsPageAppearanceDescriptor,
+  inputSettingsPageAppearanceDescriptor,
+} from '@/app/scenes/settings/pages/appearance';
 import { settingsNavAppearanceDescriptor } from '@/app/scenes/settings/SettingsNav.appearance';
 import { backgroundCommandOutputPanelAppearanceDescriptor } from '@/flow_chat/components/background-command/BackgroundCommandOutputPanel.appearance';
 import { chatInputPixelPetAppearanceDescriptor } from '@/flow_chat/components/ChatInputPixelPet.appearance';
@@ -280,7 +287,7 @@ import {
   dispatchTargetPickerAppearanceDescriptor,
 } from '@/features/dispatch/appearance';
 import { voiceInputConfigAppearanceDescriptor } from '@/infrastructure/config/components/VoiceInputConfig.appearance';
-import { worktreesConfigAppearanceDescriptor } from '@/infrastructure/config/components/WorktreesConfig.appearance';
+import { worktreeSettingsAppearanceDescriptor } from '@/infrastructure/config/components/WorktreeSettingsPage.appearance';
 import { usageStatisticsConfigAppearanceDescriptor } from '@/infrastructure/config/components/UsageStatisticsConfig.appearance';
 import { turnCompletionNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnCompletionNoticeItem.appearance';
 import { turnFailureNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnFailureNoticeItem.appearance';
@@ -340,7 +347,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(createAgentPageAppearanceDescriptor)
     .registerComponent(keyboardShortcutsAppearanceDescriptor)
     .registerComponent(taskToolDisplayAppearanceDescriptor)
-    .registerComponent(basicsConfigAppearanceDescriptor)
+    .registerComponent(applicationSettingsAppearanceDescriptor)
     .registerComponent(markdownEditorAppearanceDescriptor)
     .registerComponent(planViewerAppearanceDescriptor)
     .registerComponent(appLayoutAppearanceDescriptor)
@@ -365,7 +372,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(createPlanDisplayAppearanceDescriptor)
     .registerComponent(execProcessToolCardAppearanceDescriptor)
     .registerComponent(editorConfigAppearanceDescriptor)
-    .registerComponent(appearanceConfigAppearanceDescriptor)
+    .registerComponent(appearanceSettingsAppearanceDescriptor)
     .registerComponent(lspConfigAppearanceDescriptor)
     .registerComponent(configAppearanceDescriptor)
     .registerComponent(fontPreferenceAppearanceDescriptor)
@@ -436,12 +443,12 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(btwSessionPanelAppearanceDescriptor)
     .registerComponent(modernFlowChatAppearanceDescriptor)
     .registerComponent(virtualMessageListAppearanceDescriptor)
-    .registerComponent(aiModelConfigAppearanceDescriptor)
+    .registerComponent(modelSettingsAppearanceDescriptor)
     .registerComponent(reasoningConfigPanelAppearanceDescriptor)
     .registerComponent(reasoningPresetEditorAppearanceDescriptor)
     .registerComponent(externalSourcesConfigAppearanceDescriptor)
     .registerComponent(acpAgentsConfigAppearanceDescriptor)
-    .registerComponent(sessionConfigAppearanceDescriptor)
+    .registerComponent(runtimeSettingsAppearanceDescriptor)
     .registerComponent(sessionTitleConfigAppearanceDescriptor)
     .registerComponent(mcpToolsConfigAppearanceDescriptor)
     .registerComponent(externalMcpOverviewAppearanceDescriptor)
@@ -455,6 +462,10 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(archivedSessionsConfigAppearanceDescriptor)
     .registerComponent(usageStatisticsConfigAppearanceDescriptor)
     .registerComponent(settingsNavAppearanceDescriptor)
+    .registerComponent(settingsViewPageAppearanceDescriptor)
+    .registerComponent(automationSettingsPageAppearanceDescriptor)
+    .registerComponent(developmentSettingsPageAppearanceDescriptor)
+    .registerComponent(inputSettingsPageAppearanceDescriptor)
     .registerComponent(backgroundCommandOutputPanelAppearanceDescriptor)
     .registerComponent(chatInputPixelPetAppearanceDescriptor)
     .registerComponent(fileMentionPickerAppearanceDescriptor)
@@ -548,7 +559,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(dispatchResultDialogAppearanceDescriptor)
     .registerComponent(dispatchTargetPickerAppearanceDescriptor)
     .registerComponent(voiceInputConfigAppearanceDescriptor)
-    .registerComponent(worktreesConfigAppearanceDescriptor)
+    .registerComponent(worktreeSettingsAppearanceDescriptor)
     .registerComponent(turnCompletionNoticeAppearanceDescriptor)
     .registerComponent(turnFailureNoticeAppearanceDescriptor)
     .registerComponent(virtualItemAppearanceDescriptor)
@@ -568,6 +579,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerScene(profileAppearanceDescriptor)
     .registerScene(sessionAppearanceDescriptor)
     .registerScene(settingsAppearanceDescriptor)
+    .registerScene(ecosystemCompatibilityAppearanceDescriptor)
     .registerScene(skillsAppearanceDescriptor)
     .registerScene(terminalAppearanceDescriptor)
     .registerScene(todosSceneAppearanceDescriptor)

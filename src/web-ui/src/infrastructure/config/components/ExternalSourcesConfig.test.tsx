@@ -8,7 +8,6 @@ import ExternalSourcesConfig from './ExternalSourcesConfig';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const getSnapshotMock = vi.hoisted(() => vi.fn());
-const hookPanelMountedMock = vi.hoisted(() => vi.fn());
 const setSourceEnabledMock = vi.hoisted(() => vi.fn());
 const setSafeModeMock = vi.hoisted(() => vi.fn());
 const setConflictChoiceMock = vi.hoisted(() => vi.fn());
@@ -91,13 +90,6 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     revealSourceLocation: revealSourceLocationMock,
   },
 }));
-vi.mock('./HooksConfig', () => ({
-  default: (props: { embedded?: boolean }) => {
-    hookPanelMountedMock(props.embedded);
-    return null;
-  },
-}));
-
 const snapshot = {
   hostCapabilities: {
     canRefresh: true,
@@ -324,6 +316,32 @@ describe('ExternalSourcesConfig', () => {
     });
   });
 
+  it('projects governance controls without duplicating the ecosystem application overview', async () => {
+    const onSnapshotChange = vi.fn();
+    await act(async () => {
+      root.render(
+        <ExternalSourcesConfig
+          presentation="governance"
+          onSnapshotChange={onSnapshotChange}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const page = container.querySelector('.bitfun-external-sources-config--governance');
+    const advanced = page?.querySelector<HTMLDetailsElement>(
+      '.bitfun-external-sources-config__advanced',
+    );
+    expect(page?.getAttribute('data-presentation')).toBe('governance');
+    expect(page?.querySelector('.bitfun-config-page-header__title')?.textContent)
+      .toBe('governance.title');
+    expect(page?.querySelector('.bitfun-external-sources-config__apps')).toBeNull();
+    expect(advanced?.open).toBe(true);
+    expect(advanced?.querySelector('.bitfun-external-sources-config__advanced-summary')).toBeNull();
+    expect(onSnapshotChange).toHaveBeenCalledWith(snapshot);
+  });
+
   it('opens the existing owner controls from the application permission hint', async () => {
     const scrolledElements: Element[] = [];
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
@@ -502,108 +520,6 @@ describe('ExternalSourcesConfig', () => {
     const masterSwitch = policyCard?.querySelector<HTMLInputElement>('input[type="checkbox"]');
     expect(scrolledElements).toContain(policyCard);
     expect(document.activeElement).toBe(masterSwitch);
-  });
-
-  it('defers Hook owner reads until the Hook disclosure opens', async () => {
-    await import('./HooksConfig');
-    getSnapshotMock.mockResolvedValue({
-      ...snapshot,
-      integrationPolicy,
-      sources: [{
-        ...snapshot.sources[0],
-        record: { ...snapshot.sources[0].record, ecosystemId: 'opencode' },
-      }],
-      commandConflicts: [],
-      diagnostics: [],
-    });
-
-    await act(async () => {
-      root.render(<ExternalSourcesConfig />);
-      await Promise.resolve();
-    });
-
-    expect(hookPanelMountedMock).not.toHaveBeenCalled();
-    const hookSummary = Array.from(container.querySelectorAll('summary')).find(
-      (summary) => summary.textContent?.includes('hooksManagement.title'),
-    );
-    expect(hookSummary).toBeDefined();
-    const hookDisclosure = hookSummary?.closest('details');
-    await act(async () => {
-      if (hookDisclosure) {
-        hookDisclosure.open = true;
-        hookDisclosure.dispatchEvent(new Event('toggle'));
-      }
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(hookPanelMountedMock).toHaveBeenCalledWith(true);
-  });
-
-  it('opens and focuses Hook management after a legacy Hook deep link', async () => {
-    await import('./HooksConfig');
-    Element.prototype.scrollIntoView = vi.fn();
-    getSnapshotMock.mockResolvedValue({
-      ...snapshot,
-      integrationPolicy,
-      sources: [{
-        ...snapshot.sources[0],
-        record: { ...snapshot.sources[0].record, ecosystemId: 'opencode' },
-      }],
-      commandConflicts: [],
-      diagnostics: [],
-    });
-
-    await act(async () => {
-      root.render(<ExternalSourcesConfig initialFocus="hooks" focusRequestId={1} />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    const hookDisclosure = container.querySelector<HTMLDetailsElement>(
-      '.bitfun-external-sources-config__hooks',
-    );
-    expect(hookDisclosure?.open).toBe(true);
-    expect(hookPanelMountedMock).toHaveBeenCalledWith(true);
-    expect(document.activeElement).toBe(hookDisclosure?.querySelector('summary'));
-
-    await act(async () => {
-      hookDisclosure!.open = false;
-      hookDisclosure!.dispatchEvent(new Event('toggle'));
-      await Promise.resolve();
-    });
-    expect(hookDisclosure?.open).toBe(false);
-
-    await act(async () => {
-      root.render(<ExternalSourcesConfig initialFocus="hooks" focusRequestId={2} />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(hookDisclosure?.open).toBe(true);
-    expect(document.activeElement).toBe(hookDisclosure?.querySelector('summary'));
-  });
-
-  it('keeps Hook management reachable when the external-source host is unavailable', async () => {
-    await import('./HooksConfig');
-    Element.prototype.scrollIntoView = vi.fn();
-    getSnapshotMock.mockRejectedValueOnce({
-      code: 'host_unavailable',
-      message: 'external sources unavailable',
-    });
-
-    await act(async () => {
-      root.render(<ExternalSourcesConfig initialFocus="hooks" focusRequestId={1} />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain('unavailable.hostDescription');
-    const hookDisclosure = container.querySelector<HTMLDetailsElement>(
-      '.bitfun-external-sources-config__hooks',
-    );
-    expect(hookDisclosure?.open).toBe(true);
-    expect(hookPanelMountedMock).toHaveBeenCalledWith(true);
-    expect(document.activeElement).toBe(hookDisclosure?.querySelector('summary'));
   });
 
   it('restores custom application mode after an authoritative disabled round trip', async () => {

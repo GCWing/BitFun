@@ -1,6 +1,6 @@
 {
-  "title": "ACP Agents",
-  "subtitle": "管理可在 FlowChat 会话里运行的 ACP Agent。",
+  "title": "ACP Agent",
+  "subtitle": "管理通过 ACP 连接的外部 Agent。",
   "actions": {
     "add": "添加",
     "addConfig": "添加配置",
@@ -10,8 +10,8 @@
     "viewError": "查看错误",
     "viewInstructions": "查看说明",
     "save": "保存",
-    "refresh": "刷新",
-    "learnMore": "了解更多",
+    "refresh": "重新检测",
+    "learnMore": "ACP 文档",
     "editJson": "编辑 JSON",
     "closeJson": "关闭 JSON",
     "saveJson": "保存 JSON",
@@ -21,12 +21,18 @@
     "predownloadAcp": "预下载 ACP"
   },
   "json": {
-    "title": "原始 JSON",
-    "description": "高级编辑器，对应 acpClients 配置。桌面端会通过 stdio 启动这些客户端。"
+    "title": "JSON 配置",
+    "description": "直接编辑 acpClients 配置。"
+  },
+  "presets": {
+    "opencode": { "description": "原生支持 ACP。" },
+    "dsh": { "description": "通过 BitFun 内置 ACP 桥接，沿用 dsh 的模型与 API 密钥。" },
+    "omp": { "description": "原生支持 ACP。" },
+    "claudeCode": { "description": "通过官方 ACP 适配器连接。" },
+    "codex": { "description": "通过官方 ACP 适配器连接。" }
   },
   "registry": {
     "title": "Agent 列表",
-    "description": "已安装的 Agent 会出现在工作区操作菜单里。远程工作区会复用同一份列表，并先在远端主机检测状态。",
     "searchPlaceholder": "搜索 Agent...",
     "filterLabel": "ACP Agent 筛选",
     "filters": {
@@ -66,8 +72,8 @@
     "loading": "正在加载 ACP Agent…"
   },
   "remote": {
-    "title": "远程服务器",
-    "description": "已保存的 SSH 服务器会复用同一份 ACP Agent 列表，并自动检测每台远端主机的状态。",
+    "title": "SSH 服务器",
+    "description": "检测已保存 SSH 服务器上的 ACP Agent。",
     "empty": "没有已保存的 SSH 服务器。",
     "emptyVisible": "没有显示中的 SSH 服务器。",
     "noAgents": "请先添加 ACP Agent，再检测远程服务器。",

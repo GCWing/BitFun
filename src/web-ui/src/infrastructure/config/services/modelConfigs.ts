@@ -47,10 +47,10 @@ export function getProviderDisplayName(config: ProviderConfigLike): string {
 
   const inferredTemplate = inferProviderTemplate(config);
   if (inferredTemplate) {
-    return t(`settings/ai-model:providers.${inferredTemplate.id}.name`);
+    return t(`settings/models:providers.${inferredTemplate.id}.name`);
   }
 
-  return extractProviderSegmentFromBaseUrl(config.base_url) || t('settings/ai-model:providerSelection.customTitle');
+  return extractProviderSegmentFromBaseUrl(config.base_url) || t('settings/models:providerSelection.customTitle');
 }
 
 export function getModelDisplayName(config: ProviderConfigLike): string {
@@ -160,7 +160,7 @@ class ModelConfigManager {
           apiKey: model.api_key,
           modelName: model.model_name,
           format: model.provider as ApiFormat,
-          description: model.description || t('settings/ai-model:messages.defaultDescription', { name: model.name }),
+          description: model.description || t('settings/models:messages.defaultDescription', { name: model.name }),
           isBuiltIn: false,
           contextWindow: model.context_window,
           maxTokens: model.max_tokens,
@@ -298,7 +298,7 @@ class ModelConfigManager {
 
     const cloned = this.addConfig({
       ...config,
-      name: t('settings/ai-model:messages.cloneName', { name: config.name }),
+      name: t('settings/models:messages.cloneName', { name: config.name }),
       isBuiltIn: false
     });
     return cloned;
@@ -319,7 +319,7 @@ class ModelConfigManager {
       baseUrl: template.baseUrl,
       modelName,
       format: template.format,
-      description: t('settings/ai-model:messages.templateDescription', { description: template.description, modelName }),
+      description: t('settings/models:messages.templateDescription', { description: template.description, modelName }),
       isBuiltIn: false,
       category,
       capabilities: getCapabilitiesByCategory(category),
@@ -341,13 +341,13 @@ export const getAllTemplates = (): ProviderTemplate[] => {
 export const getFormatDisplayName = (format: ApiFormat): string => {
   switch (format) {
     case 'openai':
-      return t('settings/ai-model:formats.openaiCompatible');
+      return t('settings/models:formats.openaiCompatible');
     case 'responses':
-      return t('settings/ai-model:formats.responsesApi');
+      return t('settings/models:formats.responsesApi');
     case 'anthropic':
-      return t('settings/ai-model:formats.claudeApi');
+      return t('settings/models:formats.claudeApi');
     case 'gemini':
-      return t('settings/ai-model:formats.geminiApi');
+      return t('settings/models:formats.geminiApi');
     default:
       return format;
   }
