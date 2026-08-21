@@ -6,6 +6,7 @@ WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches/ patches/
 COPY src/skin-market-web/package.json src/skin-market-web/package.json
 RUN --mount=type=cache,id=bitfun-skin-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --ignore-scripts --filter bitfun-skin-market-web
