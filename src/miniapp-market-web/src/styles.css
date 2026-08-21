@@ -534,6 +534,89 @@ main {
   color: var(--accent);
 }
 
+/* A .bfminiapp package only runs inside the desktop client, so the catalog and
+   every listing carry the same visible route to the official download page. */
+.get-bitfun {
+  max-width: 100%;
+  margin-top: 22px;
+  padding: 13px 15px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.get-bitfun-listing {
+  margin-top: 16px;
+}
+
+.get-bitfun:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.get-bitfun-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.get-bitfun-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.get-bitfun-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.get-bitfun-copy strong {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 640;
+}
+
+.get-bitfun-copy > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.get-bitfun-action {
+  width: fit-content;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.get-bitfun-action svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 150ms ease;
+}
+
+.get-bitfun:hover .get-bitfun-action svg {
+  transform: translateX(2px);
+}
+
 .catalog {
   padding: 52px 0 84px;
 }
