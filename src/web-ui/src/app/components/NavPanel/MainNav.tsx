@@ -14,7 +14,7 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, CalendarClock, ChevronDown, Search } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, CalendarClock, ChevronDown, Search, Network } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
@@ -45,7 +45,7 @@ import {
 } from '@/app/utils/projectSessionWorkspace';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
-import { useSSHRemoteContext, SSHConnectionDialog, RemoteFileBrowser } from '@/features/ssh-remote';
+import { useSSHRemoteContext, SSHConnectionDialog, RemoteFileBrowser, PortForwardDialog } from '@/features/ssh-remote';
 import { useSessionModeStore } from '../../stores/sessionModeStore';
 import NavSearchDialog from './NavSearchDialog';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
@@ -68,6 +68,7 @@ const MainNav: React.FC<MainNavProps> = ({
 }) => {
   const sshRemote = useSSHRemoteContext();
   const [isSSHConnectionDialogOpen, setIsSSHConnectionDialogOpen] = useState(false);
+  const [isPortForwardDialogOpen, setIsPortForwardDialogOpen] = useState(false);
 
   useEffect(() => {
     if (sshRemote.showFileBrowser) {
@@ -328,6 +329,11 @@ const MainNav: React.FC<MainNavProps> = ({
     setIsSSHConnectionDialogOpen(true);
   }, [closeWorkspaceMenu]);
 
+  const handleOpenPortForward = useCallback(() => {
+    closeWorkspaceMenu();
+    setIsPortForwardDialogOpen(true);
+  }, [closeWorkspaceMenu]);
+
   const handleSelectRemoteWorkspace = useCallback(async (path: string) => {
     try {
       await sshRemote.openWorkspace(path);
@@ -465,6 +471,20 @@ const MainNav: React.FC<MainNavProps> = ({
         </svg>
         <span>{t('ssh.remote.connect')}</span>
       </button>
+      {sshRemote.isConnected && sshRemote.connectionId && (
+        <button
+          type="button"
+          className="bitfun-nav-panel__workspace-menu-item"
+          data-bf-component="nav-panel"
+          data-bf-part="workspaceMenuItem"
+          role="menuitem"
+          onClick={handleOpenPortForward}
+          data-testid="nav-workspace-menu-port-forward"
+        >
+          <Network size={13} aria-hidden="true" />
+          <span>{t('ssh.portForward.menuEntry')}</span>
+        </button>
+      )}
       <div className="bitfun-nav-panel__workspace-menu-divider" data-bf-component="nav-panel" data-bf-part="workspaceMenuDivider" role="separator" />
       <div className="bitfun-nav-panel__workspace-menu-section-title" data-bf-component="nav-panel" data-bf-part="workspaceMenuTitle">
         <History size={12} aria-hidden="true" />
@@ -822,6 +842,14 @@ const MainNav: React.FC<MainNavProps> = ({
         open={isSSHConnectionDialogOpen}
         onClose={() => setIsSSHConnectionDialogOpen(false)}
       />
+      {sshRemote.connectionId && (
+        <PortForwardDialog
+          open={isPortForwardDialogOpen}
+          connectionId={sshRemote.connectionId}
+          connectionName={sshRemote.connectionConfig?.name}
+          onClose={() => setIsPortForwardDialogOpen(false)}
+        />
+      )}
       {sshRemote.showFileBrowser && sshRemote.connectionId && (
         <RemoteFileBrowser
           connectionId={sshRemote.connectionId}
