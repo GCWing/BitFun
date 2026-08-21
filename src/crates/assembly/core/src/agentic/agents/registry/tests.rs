@@ -368,6 +368,36 @@ fn every_builtin_mode_with_control_hub_can_also_schedule_with_cron() {
 }
 
 #[test]
+fn builtin_modes_carrying_the_environment_tools_can_forward_a_port_they_opened() {
+    // The allowlist is what the deferred catalog is built from, so a tool
+    // missing here is invisible to the model however it is registered — the
+    // Agent then reinvents the feature as hand-written `ssh -L` instructions
+    // for the user to run.
+    //
+    // Cron is the marker for "carries the environment-control set" rather than
+    // ExecCommand, which even the deliberately narrow modes have: `minimal` is
+    // a fixed six-tool manifest and `Ultra` is a planner whose workers do the
+    // running, and neither carries Git or Cron either.
+    for spec in builtin_agent_specs()
+        .into_iter()
+        .filter(|spec| spec.category == AgentCategory::Mode)
+    {
+        let mode = (spec.factory)();
+        let default_tools = mode.default_tools();
+        let runs_commands = default_tools.iter().any(|tool| tool == "ExecCommand");
+        let schedules = default_tools.iter().any(|tool| tool == "Cron");
+        if !(runs_commands && schedules) {
+            continue;
+        }
+        assert!(
+            default_tools.iter().any(|tool| tool == "PortForward"),
+            "builtin mode {} can run commands but cannot forward a port it opened",
+            mode.id()
+        );
+    }
+}
+
+#[test]
 fn agent_list_and_delete_are_exposed_only_to_swarm_planners() {
     for spec in builtin_agent_specs() {
         let agent = (spec.factory)();

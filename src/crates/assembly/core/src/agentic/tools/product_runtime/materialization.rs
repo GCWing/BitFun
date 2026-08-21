@@ -169,3 +169,50 @@ pub(in crate::agentic::tools) fn create_product_tool_registry_from_plan(
     Ok(ToolRuntimeAssembly::with_tool_decorator(tool_decorator)
         .create_registry_from_static_provider_entries(entries, &ProductConcreteToolFactory)?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::tools::framework::ToolExposure;
+    use bitfun_tool_packs::product_tool_provider_group_plan;
+
+    /// Every tool name the provider plan advertises must materialize.
+    ///
+    /// Registry construction treats an unknown name as a hard error, so a tool
+    /// that is listed but not built takes down every session in a build that
+    /// requests its feature group — the failure is total, not local to the tool.
+    #[test]
+    fn every_planned_tool_name_materializes() {
+        let factory = ProductConcreteToolFactory;
+        for provider in product_tool_provider_group_plan() {
+            for tool_name in provider.tool_names() {
+                let Some(group) = tool_feature_group(tool_name) else {
+                    panic!("{tool_name} has no feature owner");
+                };
+                if unavailable_feature_groups(&[group]).is_empty() {
+                    assert!(
+                        factory.materialize_tool(tool_name).is_some(),
+                        "{tool_name} is planned under provider {} but does not materialize",
+                        provider.provider_id()
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(all(feature = "tools-agent-control", feature = "remote-workspace"))]
+    #[test]
+    fn port_forward_materializes_as_a_deferred_tool() {
+        let tool = ProductConcreteToolFactory
+            .materialize_tool("PortForward")
+            .expect("PortForward should materialize when its feature group is present");
+        assert_eq!(tool.name(), "PortForward");
+        // Deferred keeps it out of the default manifest; the model finds it
+        // through the GetToolSpec catalog, which is built from this exposure.
+        assert!(matches!(tool.default_exposure(), ToolExposure::Deferred));
+        assert!(
+            !tool.short_description().trim().is_empty(),
+            "the catalog entry is how the model learns this tool exists"
+        );
+    }
+}

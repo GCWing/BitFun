@@ -132,6 +132,11 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "ExecCommand".to_string(),
         "WriteStdin".to_string(),
         "ExecControl".to_string(),
+        // The companion to ExecCommand for remote work: a server started on
+        // an SSH host is unreachable from the user's machine until a forward
+        // exists, and an Agent that cannot see this tool reinvents it with
+        // hand-written `ssh -L` instructions the user has to run themselves.
+        "PortForward".to_string(),
         "Grep".to_string(),
         "Glob".to_string(),
         "WebSearch".to_string(),

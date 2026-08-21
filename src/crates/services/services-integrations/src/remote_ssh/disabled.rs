@@ -461,6 +461,10 @@ impl SSHConnectionManager {
         false
     }
 
+    pub async fn ensure_connected(&self, _connection_id: &str) -> anyhow::Result<()> {
+        Err(unsupported())
+    }
+
     pub async fn execute_command(
         &self,
         _connection_id: &str,

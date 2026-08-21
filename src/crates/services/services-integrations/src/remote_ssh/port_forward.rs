@@ -1040,6 +1040,20 @@ LISTEN 0 4096 127.0.0.1:4000 0.0.0.0:* users:((\"api\",pid=12,fd=7))\n";
     }
 
     #[tokio::test]
+    async fn the_global_registry_is_one_shared_instance() {
+        // The UI and the Agent tool each take their own handle. If these were
+        // separate registries, a forward made on one surface would be invisible
+        // and unstoppable from the other, and the listener would outlive any
+        // way to find it.
+        let first = global_port_forward_manager();
+        let second = global_port_forward_manager();
+        assert!(
+            Arc::ptr_eq(&first.forwards, &second.forwards),
+            "every caller must share one forward registry"
+        );
+    }
+
+    #[tokio::test]
     async fn stopping_an_unknown_forward_succeeds() {
         let manager = PortForwardManager::new();
         manager
