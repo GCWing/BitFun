@@ -6,6 +6,14 @@
       "title": "基础",
       "description": "控制是否生成新记忆，以及是否在会话中使用已整理的记忆。"
     },
+    "models": {
+      "title": "模型",
+      "description": "选择用于抽取和整理记忆的模型。"
+    },
+    "advanced": {
+      "title": "高级设置",
+      "description": "调整记忆抽取和整理的限制参数，通常无需修改。"
+    },
     "extraction": {
       "title": "抽取",
       "description": "控制哪些已完成会话会进入记忆抽取。"
@@ -16,6 +24,10 @@
     }
   },
   "fields": {
+    "memoryEnabled": {
+      "label": "记忆",
+      "description": "启用后将自动生成记忆，并在会话中使用记忆。"
+    },
     "generateMemories": {
       "label": "自动生成记忆",
       "description": "后台从已结束的本地会话中抽取并整理可复用记忆。"
@@ -26,7 +38,7 @@
     },
     "generateForBtwSessions": {
       "label": "从 BTW 会话生成记忆",
-      "description": "允许新创建的持久化 BTW 会话贡献全局记忆，需要同时开启自动生成记忆。"
+      "description": "允许 BTW 会话贡献全局记忆。"
     },
     "externalContextPolicy": {
       "label": "外部上下文处理",
