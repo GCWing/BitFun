@@ -6,6 +6,7 @@ import type {
   AgentProfileConfigItem,
   DiagnosticsBundleInfo,
   GlobalSkillSettings,
+  GlobalToolSettings,
   ModeSkillInfo,
   RuntimeLoggingInfo,
   ConfigValidationResult,
@@ -52,6 +53,22 @@ export interface ReplaceModeSkillSelectionParams {
 }
 
 export interface ResetModeSkillSelectionParams {
+  modeId: string;
+  workspacePath?: string;
+}
+
+export interface SetGlobalToolDisabledParams {
+  toolName: string;
+  disabled: boolean;
+}
+
+export interface ReplaceModeToolSelectionParams {
+  modeId: string;
+  enabledToolNames: string[];
+  workspacePath?: string;
+}
+
+export interface ResetModeToolSelectionParams {
   modeId: string;
   workspacePath?: string;
 }
@@ -396,6 +413,53 @@ export class ConfigAPI {
       });
     } catch (error) {
       throw createTauriCommandError('reset_mode_skill_selection', error, {
+        modeId,
+        workspacePath,
+      });
+    }
+  }
+
+  async setGlobalToolDisabled({
+    toolName,
+    disabled,
+  }: SetGlobalToolDisabledParams): Promise<GlobalToolSettings> {
+    try {
+      return await api.invoke('set_global_tool_disabled', {
+        request: { toolName, disabled },
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_global_tool_disabled', error, { toolName, disabled });
+    }
+  }
+
+  async replaceModeToolSelection({
+    modeId,
+    enabledToolNames,
+    workspacePath,
+  }: ReplaceModeToolSelectionParams): Promise<string> {
+    try {
+      return await api.invoke('replace_mode_tool_selection', {
+        request: { modeId, enabledToolNames, workspacePath },
+      });
+    } catch (error) {
+      throw createTauriCommandError('replace_mode_tool_selection', error, {
+        modeId,
+        enabledToolNames,
+        workspacePath,
+      });
+    }
+  }
+
+  async resetModeToolSelection({
+    modeId,
+    workspacePath,
+  }: ResetModeToolSelectionParams): Promise<string> {
+    try {
+      return await api.invoke('reset_mode_tool_selection', {
+        request: { modeId, workspacePath },
+      });
+    } catch (error) {
+      throw createTauriCommandError('reset_mode_tool_selection', error, {
         modeId,
         workspacePath,
       });

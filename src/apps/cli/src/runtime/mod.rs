@@ -139,10 +139,6 @@ impl CliRuntimeContext {
         &self.agent_runtime
     }
 
-    pub(crate) fn agent_event_source(&self) -> AgentEventSource {
-        self._agent_event_queue_owner.runtime_source()
-    }
-
     pub(crate) fn compatibility(&self) -> &CoreAgentRuntimeCompatibility {
         &self.compatibility
     }

@@ -101,6 +101,7 @@ import { welcomeAppearanceDescriptor } from '@/app/scenes/welcome/appearance';
 import { shellAppearanceDescriptor } from '@/app/scenes/shell/appearance';
 import { agentsAppearanceDescriptor } from '@/app/scenes/agents/appearance';
 import { assistantAppearanceDescriptor } from '@/app/scenes/assistant/appearance';
+import { workflowClawAppearanceDescriptor } from '@/app/scenes/workflow-claw/appearance';
 import { browserAppearanceDescriptor } from '@/app/scenes/browser/appearance';
 import { fileViewerAppearanceDescriptor } from '@/app/scenes/file-viewer/appearance';
 import { gitAppearanceDescriptor } from '@/app/scenes/git/appearance';
@@ -112,10 +113,12 @@ import { profileAppearanceDescriptor } from '@/app/scenes/profile/appearance';
 import { sessionAppearanceDescriptor } from '@/app/scenes/session/appearance';
 import { settingsAppearanceDescriptor } from '@/app/scenes/settings/appearance';
 import { skillsAppearanceDescriptor } from '@/app/scenes/skills/appearance';
+import { toolsAppearanceDescriptor } from '@/app/scenes/tools/appearance';
 import { terminalAppearanceDescriptor } from '@/app/scenes/terminal/appearance';
 import { aboutDialogAppearanceDescriptor } from '@/app/components/AboutDialog/appearance';
 import { navPanelAppearanceDescriptor } from '@/app/components/NavPanel/appearance';
 import { sessionsSectionAppearanceDescriptor } from '@/app/components/NavPanel/sections/sessions/appearance';
+import { groupChatsSectionAppearanceDescriptor } from '@/app/components/NavPanel/sections/group-chats/GroupChatsSection.appearance';
 import { contentCanvasAppearanceDescriptor } from '@/app/components/panels/content-canvas/appearance';
 import { filesPanelAppearanceDescriptor } from '@/app/components/panels/FilesPanel.appearance';
 import { reviewPlatformAppearanceDescriptor } from '@/app/components/panels/review-platform/appearance';
@@ -138,6 +141,8 @@ import { mcpToolsConfigAppearanceDescriptor } from '@/infrastructure/config/comp
 import { externalMcpOverviewAppearanceDescriptor } from '@/infrastructure/config/components/ExternalMcpOverview.appearance';
 import { voiceInputDiagnosticsAppearanceDescriptor } from '@/infrastructure/config/components/VoiceInputDiagnostics.appearance';
 import { assistantCardAppearanceDescriptor } from '@/app/scenes/profile/views/AssistantCard.appearance';
+import { workflowClawCardAppearanceDescriptor } from '@/app/scenes/workflow-claw/WorkflowClawCard.appearance';
+import { workflowClawGalleryAppearanceDescriptor } from '@/app/scenes/workflow-claw/WorkflowClawGallery.appearance';
 import { miniAppCustomizePanelAppearanceDescriptor } from '@/app/scenes/miniapps/customization/MiniAppCustomizePanel.appearance';
 import { userMessageEditComposerAppearanceDescriptor } from '@/flow_chat/components/modern/UserMessageEditComposer.appearance';
 import { monacoAppearanceAdapter } from '../adapters/MonacoAppearanceAdapter';
@@ -206,6 +211,14 @@ import { gitGraphViewAppearanceDescriptor } from '@/app/scenes/git/views/GraphVi
 import { navBarAppearanceDescriptor } from '@/app/components/NavBar/NavBar.appearance';
 import { splashScreenAppearanceDescriptor } from '@/app/components/SplashScreen/SplashScreen.appearance';
 import { chatPaneAppearanceDescriptor } from '@/app/scenes/session/ChatPane.appearance';
+import { groupChatViewAppearanceDescriptor } from '@/app/scenes/session/GroupChatView.appearance';
+import { groupLogViewAppearanceDescriptor } from '@/app/scenes/session/GroupLogView.appearance';
+import {
+  groupMemberPickerDialogAppearanceDescriptor,
+  groupForkDialogAppearanceDescriptor,
+  groupMemberListDialogAppearanceDescriptor,
+} from '@/app/scenes/session/GroupChatViewDialogs.appearance';
+import { createGroupChatDialogAppearanceDescriptor } from '@/app/components/NavPanel/components/CreateGroupChatDialog.appearance';
 import { auxPaneAppearanceDescriptor } from '@/app/scenes/session/AuxPane.appearance';
 import { bottomTerminalPaneAppearanceDescriptor } from '@/app/scenes/session/BottomTerminalPane.appearance';
 import { scheduledJobsModalAppearanceDescriptor } from '@/app/components/scheduled-jobs/ScheduledJobsModal.appearance';
@@ -218,6 +231,12 @@ import { miniAppCardAppearanceDescriptor } from '@/app/scenes/miniapps/component
 import { agentCardAppearanceDescriptor } from '@/app/scenes/agents/components/AgentCard.appearance';
 import { coreAgentCardAppearanceDescriptor } from '@/app/scenes/agents/components/CoreAgentCard.appearance';
 import { agentCapabilityTooltipAppearanceDescriptor } from '@/app/scenes/agents/components/AgentCapabilityTooltip.appearance';
+import { agentTeamCardAppearanceDescriptor } from '@/app/scenes/agents/components/AgentTeamCard.appearance';
+import { agentTeamComposerAppearanceDescriptor } from '@/app/scenes/agents/components/AgentTeamComposer.appearance';
+import { agentTeamTabBarAppearanceDescriptor } from '@/app/scenes/agents/components/AgentTeamTabBar.appearance';
+import { agentGalleryAppearanceDescriptor } from '@/app/scenes/agents/components/AgentGallery.appearance';
+import { capabilityBarAppearanceDescriptor } from '@/app/scenes/agents/components/CapabilityBar.appearance';
+import { reviewTeamPageAppearanceDescriptor } from '@/app/scenes/agents/components/ReviewTeamPage.appearance';
 import { gitNavAppearanceDescriptor } from '@/app/scenes/git/GitNav.appearance';
 import { fileViewerNavAppearanceDescriptor } from '@/app/scenes/file-viewer/FileViewerNav.appearance';
 import { assistantQuickInputAppearanceDescriptor } from '@/app/scenes/profile/views/AssistantQuickInput.appearance';
@@ -277,6 +296,9 @@ import { usageStatisticsConfigAppearanceDescriptor } from '@/infrastructure/conf
 import { turnCompletionNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnCompletionNoticeItem.appearance';
 import { turnFailureNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnFailureNoticeItem.appearance';
 import { virtualItemAppearanceDescriptor } from '@/flow_chat/components/modern/VirtualItemRenderer.appearance';
+import { beeColonyMonitorAppearanceDescriptor } from '@/app/layout/BeeColonyMonitor.appearance';
+import { createLegionPageAppearanceDescriptor } from '@/app/scenes/agents/components/CreateLegionPage.appearance';
+import { legionCardAppearanceDescriptor } from '@/app/scenes/agents/components/LegionCard.appearance';
 import { AppearanceRegistry } from './AppearanceRegistry';
 
 export function createDefaultAppearanceRegistry(): AppearanceRegistry {
@@ -329,6 +351,9 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(sessionFilesBadgeAppearanceDescriptor)
     .registerComponent(codeReviewToolCardAppearanceDescriptor)
     .registerComponent(createAgentPageAppearanceDescriptor)
+    .registerComponent(createLegionPageAppearanceDescriptor)
+    .registerComponent(legionCardAppearanceDescriptor)
+    .registerComponent(beeColonyMonitorAppearanceDescriptor)
     .registerComponent(keyboardShortcutsAppearanceDescriptor)
     .registerComponent(taskToolDisplayAppearanceDescriptor)
     .registerComponent(basicsConfigAppearanceDescriptor)
@@ -380,6 +405,12 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(navBarAppearanceDescriptor)
     .registerComponent(splashScreenAppearanceDescriptor)
     .registerComponent(chatPaneAppearanceDescriptor)
+    .registerComponent(groupChatViewAppearanceDescriptor)
+    .registerComponent(groupLogViewAppearanceDescriptor)
+    .registerComponent(createGroupChatDialogAppearanceDescriptor)
+    .registerComponent(groupMemberPickerDialogAppearanceDescriptor)
+    .registerComponent(groupForkDialogAppearanceDescriptor)
+    .registerComponent(groupMemberListDialogAppearanceDescriptor)
     .registerComponent(auxPaneAppearanceDescriptor)
     .registerComponent(bottomTerminalPaneAppearanceDescriptor)
     .registerComponent(scheduledJobsModalAppearanceDescriptor)
@@ -392,6 +423,12 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(agentCardAppearanceDescriptor)
     .registerComponent(coreAgentCardAppearanceDescriptor)
     .registerComponent(agentCapabilityTooltipAppearanceDescriptor)
+    .registerComponent(agentTeamCardAppearanceDescriptor)
+    .registerComponent(agentTeamComposerAppearanceDescriptor)
+    .registerComponent(agentTeamTabBarAppearanceDescriptor)
+    .registerComponent(agentGalleryAppearanceDescriptor)
+    .registerComponent(capabilityBarAppearanceDescriptor)
+    .registerComponent(reviewTeamPageAppearanceDescriptor)
     .registerComponent(gitNavAppearanceDescriptor)
     .registerComponent(fileViewerNavAppearanceDescriptor)
     .registerComponent(assistantQuickInputAppearanceDescriptor)
@@ -408,6 +445,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(aboutDialogAppearanceDescriptor)
     .registerComponent(navPanelAppearanceDescriptor)
     .registerComponent(sessionsSectionAppearanceDescriptor)
+    .registerComponent(groupChatsSectionAppearanceDescriptor)
     .registerComponent(contentCanvasAppearanceDescriptor)
     .registerComponent(filesPanelAppearanceDescriptor)
     .registerComponent(reviewPlatformAppearanceDescriptor)
@@ -431,6 +469,8 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(externalMcpOverviewAppearanceDescriptor)
     .registerComponent(voiceInputDiagnosticsAppearanceDescriptor)
     .registerComponent(assistantCardAppearanceDescriptor)
+    .registerComponent(workflowClawCardAppearanceDescriptor)
+    .registerComponent(workflowClawGalleryAppearanceDescriptor)
     .registerComponent(miniAppCustomizePanelAppearanceDescriptor)
     .registerComponent(userMessageEditComposerAppearanceDescriptor)
     .registerComponent(tiptapEditorAppearanceDescriptor)
@@ -541,6 +581,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerScene(shellAppearanceDescriptor)
     .registerScene(agentsAppearanceDescriptor)
     .registerScene(assistantAppearanceDescriptor)
+    .registerScene(workflowClawAppearanceDescriptor)
     .registerScene(browserAppearanceDescriptor)
     .registerScene(fileViewerAppearanceDescriptor)
     .registerScene(gitAppearanceDescriptor)
@@ -553,6 +594,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerScene(sessionAppearanceDescriptor)
     .registerScene(settingsAppearanceDescriptor)
     .registerScene(skillsAppearanceDescriptor)
+    .registerScene(toolsAppearanceDescriptor)
     .registerScene(terminalAppearanceDescriptor)
     .registerScene(todosSceneAppearanceDescriptor)
     .registerRenderer(cssTokenAppearanceAdapter)

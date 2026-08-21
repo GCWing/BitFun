@@ -2077,6 +2077,9 @@ impl SdkHostConnection {
         .await;
     }
 
+    // SDK error envelope carries all negotiated error facets; kept flat to
+    // avoid a per-error wrapper type.
+    #[allow(clippy::too_many_arguments)]
     async fn send_uncertain_error(
         &self,
         id: Option<RequestId>,

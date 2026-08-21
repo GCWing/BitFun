@@ -22,8 +22,10 @@ pub use app_language::{
 };
 pub use factory::ConfigFactory;
 pub use global::{
-    get_global_config_service, initialize_global_config, reload_global_config,
-    subscribe_config_updates, ConfigUpdateEvent, GlobalConfigManager,
+    external_instruction_sources_enabled, get_global_config_service, initialize_global_config,
+    reload_global_config, set_external_instruction_sources_enabled,
+    set_workspace_instruction_files_enabled, subscribe_config_updates,
+    workspace_instruction_files_enabled, ConfigUpdateEvent, GlobalConfigManager,
 };
 pub use manager::{ConfigManager, ConfigManagerSettings, ConfigStatistics};
 #[cfg(feature = "agent-runtime")]

@@ -66,15 +66,14 @@ fn decode_file_uri(uri: &str) -> Option<String> {
     let rest = trimmed.strip_prefix("file://")?;
     let path_part = if rest.starts_with('/') {
         rest.to_string()
-    } else if let Some(slash_idx) = rest.find('/') {
+    } else {
+        let slash_idx = rest.find('/')?;
         let host = &rest[..slash_idx];
         if host.eq_ignore_ascii_case("localhost") {
             rest[slash_idx..].to_string()
         } else {
             return None;
         }
-    } else {
-        return None;
     };
 
     let decoded = urlencoding::decode(&path_part)
@@ -131,6 +130,9 @@ mod windows_clipboard {
     }
 
     pub(super) fn get_clipboard_files() -> Result<Vec<String>, String> {
+        // SAFETY: All clipboard calls are user32/shell32 FFI with no unsafe
+        // pointer dereferences in this block; hdrop from GetClipboardData is
+        // null-checked before use and the clipboard is closed via the guard.
         unsafe {
             if IsClipboardFormatAvailable(CF_HDROP) == 0 {
                 return Ok(Vec::new());
@@ -143,6 +145,8 @@ mod windows_clipboard {
             struct ClipboardGuard;
             impl Drop for ClipboardGuard {
                 fn drop(&mut self) {
+                    // SAFETY: CloseClipboard takes no arguments and matches the
+                    // OpenClipboard call in the enclosing function.
                     unsafe {
                         CloseClipboard();
                     }

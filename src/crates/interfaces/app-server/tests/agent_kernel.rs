@@ -126,10 +126,30 @@ fn build_runtime() -> bitfun_agent_runtime::sdk::AgentRuntime {
 
 /// Wrap the test runtime with a fresh `AgentEventSource` backed by an isolated
 /// `EventQueue`, so the app-server's event forwarder has something to drain.
+///
+/// A context-reload port is wired in (as in the production app-server host)
+/// so the negotiated capability surface matches what the real host advertises,
+/// including `session/reloadContext`.
 fn build_app_runtime() -> BitfunAppRuntime {
     let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     let event_source = AgentEventSource::new(event_queue);
     BitfunAppRuntime::new(build_runtime(), event_source)
+        .with_context_reload(Arc::new(NoopContextReloadProvider))
+}
+
+/// No-op `AgentContextReloadPort` mock for the negotiation test; the test only
+/// asserts the advertised capability surface and never invokes the method.
+#[derive(Debug, Default)]
+struct NoopContextReloadProvider;
+
+#[async_trait]
+impl ports::AgentContextReloadPort for NoopContextReloadProvider {
+    async fn reload_session_context(
+        &self,
+        _request: ports::AgentContextReloadRequest,
+    ) -> PortResult<()> {
+        Ok(())
+    }
 }
 
 /// Like [`build_app_runtime`] but also hands back the backing `EventQueue` so a
@@ -266,6 +286,10 @@ impl AgentSessionRestorePort for SessionControlProvider {
                 turn_count: 4,
                 created_at_ms: 10,
                 last_active_at_ms: 20,
+                parent_session_id: None,
+                status: None,
+                display_state: None,
+                is_daemon: false,
             },
             state: SessionState::Processing {
                 current_turn_id: "turn-active".to_string(),
@@ -386,6 +410,10 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for Phase2Provider {
                 turn_count: 1,
                 created_at_ms: 10,
                 last_active_at_ms: 20,
+                parent_session_id: None,
+                status: None,
+                display_state: None,
+                is_daemon: false,
             },
             state: SessionState::Processing {
                 current_turn_id: "turn-active".to_string(),
@@ -836,6 +864,7 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                         turn_id: "turn-active".to_string(),
                         content: "keep going".to_string(),
                         display_content: None,
+                        prepended_reminders: Vec::new(),
                         attachments: Vec::new(),
                         metadata: serde_json::Map::new(),
                     },
@@ -1456,6 +1485,7 @@ async fn list_sessions_maps_missing_port_to_internal_error() {
                             workspace_path: ".".to_string(),
                             remote_connection_id: None,
                             remote_ssh_host: None,
+                            include_hidden: false,
                         },
                     )))
                     .await;

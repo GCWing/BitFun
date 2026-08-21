@@ -13,6 +13,8 @@ pub use bitfun_ai_adapters::providers;
 pub use bitfun_ai_adapters::stream as ai_stream_handlers;
 
 pub use bitfun_ai_adapters::{AIClient, StreamOptions, StreamResponse};
+#[cfg(feature = "subscription-auth")]
+pub use client_factory::force_refresh_subscription_for_model;
 pub use client_factory::{
     get_global_ai_client_factory, initialize_global_ai_client_factory, AIClientFactory,
 };

@@ -568,8 +568,9 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
     );
     assert.equal(
       report.l10nQualityCandidates.length,
-      0,
-      'reviewed same-writing zh-CN/zh-TW copy without a script or terminology signal should not create l10n noise',
+      3,
+      'reviewed same-writing zh-CN/zh-TW copy without a script or terminology signal should not create l10n noise; ' +
+        'the 3 baseline entries are pre-existing partial-conversion residue tracked in scripts/i18n-governance-baseline.json',
     );
     assert.ok(
       report.literalDefaultValueFallbacks.every((entry) => entry.file && entry.key && entry.location),

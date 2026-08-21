@@ -2287,7 +2287,7 @@ fn remote_model_catalog_version_fits_javascript_number_precision() {
         session_reasoning_preset: None,
     });
 
-    assert!(catalog.version <= (1_u64 << 53) - 1);
+    assert!(catalog.version < (1_u64 << 53));
 }
 
 #[test]

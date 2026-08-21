@@ -36,10 +36,23 @@ pub fn build_session_metadata_page(
     cursor: Option<&str>,
     limit: usize,
 ) -> SessionMetadataPage {
+    build_session_metadata_page_with_options(indexed_sessions, cursor, limit, false)
+}
+
+/// Paginated session metadata builder. With `include_hidden`, sessions hidden
+/// from user lists (Subagent/Ephemeral) participate in pagination for full
+/// conversation management.
+pub fn build_session_metadata_page_with_options(
+    indexed_sessions: Vec<SessionMetadata>,
+    cursor: Option<&str>,
+    limit: usize,
+    include_hidden: bool,
+) -> SessionMetadataPage {
     let visible_sessions = indexed_sessions
         .into_iter()
         .filter(|metadata| {
-            !metadata.should_hide_from_user_lists() && metadata.status != SessionStatus::Archived
+            (include_hidden || !metadata.should_hide_from_user_lists())
+                && metadata.status != SessionStatus::Archived
         })
         .collect::<Vec<_>>();
     let visible_ids = visible_sessions
@@ -49,6 +62,8 @@ pub fn build_session_metadata_page(
 
     let mut top_level_sessions = Vec::new();
     let mut children_by_parent: HashMap<String, Vec<SessionMetadata>> = HashMap::new();
+    let mut orphan_ids: HashSet<String> = HashSet::new();
+    let mut orphan_kinds: HashMap<String, String> = HashMap::new();
     for metadata in visible_sessions {
         if let Some(parent_id) = session_parent_id(&metadata) {
             if visible_ids.contains(&parent_id) {
@@ -58,9 +73,47 @@ pub fn build_session_metadata_page(
                     .push(metadata);
                 continue;
             }
+            // R-AD-08: the parent is missing from the visible set. Promote to
+            // a top-level row but carry the orphan marker so the frontend can
+            // group it under the orphan section instead of presenting it as a
+            // normal root (mirrors the SessionControl tree `orphaned` marker).
+            orphan_ids.insert(metadata.session_id.clone());
+            orphan_kinds.insert(metadata.session_id.clone(), "DanglingChild".to_string());
         }
-
         top_level_sessions.push(metadata);
+    }
+
+    // DetachedChild: sessions with a `session-{parent}` creator marker but no
+    // relationship whose parent is also missing. Conservative — only marker
+    // creators are treated as lineage facts (same rule as the GC classifier).
+    for metadata in &top_level_sessions {
+        if orphan_ids.contains(&metadata.session_id) {
+            continue;
+        }
+        if metadata.relationship.is_some() {
+            continue;
+        }
+        let Some(creator) = metadata.created_by.as_deref() else {
+            continue;
+        };
+        let Some(parent_id) = creator.strip_prefix("session-") else {
+            continue;
+        };
+        let parent_id = parent_id.trim();
+        if parent_id.is_empty() || parent_id == metadata.session_id {
+            continue;
+        }
+        if !visible_ids.contains(parent_id) {
+            orphan_ids.insert(metadata.session_id.clone());
+            orphan_kinds.insert(metadata.session_id.clone(), "DetachedChild".to_string());
+        }
+    }
+
+    for metadata in top_level_sessions.iter_mut() {
+        if orphan_ids.contains(&metadata.session_id) {
+            metadata.orphaned = true;
+            metadata.orphan_kind = orphan_kinds.get(&metadata.session_id).cloned();
+        }
     }
 
     let total_top_level_count = top_level_sessions.len();
@@ -158,4 +211,94 @@ fn session_metadata_page_cursor(metadata: &SessionMetadata) -> String {
         session_id: metadata.session_id.clone(),
     })
     .unwrap_or_else(|_| metadata.session_id.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::types::{SessionRelationship, SessionRelationshipKind};
+
+    fn metadata(id: &str, created_by: Option<&str>, parent: Option<&str>) -> SessionMetadata {
+        let mut m = SessionMetadata::new(
+            id.to_string(),
+            format!("Session {}", id),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+        m.created_by = created_by.map(str::to_string);
+        m.relationship = parent.map(|pid| SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some(pid.to_string()),
+            ..Default::default()
+        });
+        m
+    }
+
+    #[test]
+    fn dangling_child_is_marked_orphaned() {
+        let page = build_session_metadata_page(
+            vec![metadata("child-1", None, Some("ghost-parent"))],
+            None,
+            10,
+        );
+        assert_eq!(page.total_top_level_count, 1);
+        let session = &page.sessions[0];
+        assert!(session.orphaned);
+        assert_eq!(session.orphan_kind.as_deref(), Some("DanglingChild"));
+    }
+
+    #[test]
+    fn child_with_live_parent_is_not_orphaned() {
+        let page = build_session_metadata_page(
+            vec![
+                metadata("parent-1", None, None),
+                metadata("child-1", None, Some("parent-1")),
+            ],
+            None,
+            10,
+        );
+        assert_eq!(page.total_top_level_count, 1);
+        assert_eq!(page.sessions.len(), 2);
+        assert!(!page.sessions[0].orphaned);
+        assert!(!page.sessions[1].orphaned);
+    }
+
+    #[test]
+    fn detached_child_with_missing_creator_parent_is_marked_orphaned() {
+        let page = build_session_metadata_page(
+            vec![metadata("detached-1", Some("session-ghost"), None)],
+            None,
+            10,
+        );
+        let session = &page.sessions[0];
+        assert!(session.orphaned);
+        assert_eq!(session.orphan_kind.as_deref(), Some("DetachedChild"));
+    }
+
+    #[test]
+    fn non_marker_creator_is_never_orphaned() {
+        let page =
+            build_session_metadata_page(vec![metadata("user-1", Some("alice"), None)], None, 10);
+        assert!(!page.sessions[0].orphaned);
+        assert_eq!(page.sessions[0].orphan_kind, None);
+    }
+
+    #[test]
+    fn orphan_marker_does_not_break_pagination() {
+        // 20 sessions (last is an orphan): a page of 5 must still page and the
+        // orphan marker must survive across pages.
+        let mut sessions = (0..19)
+            .map(|i| metadata(&format!("root-{}", i), None, None))
+            .collect::<Vec<_>>();
+        sessions.push(metadata("orphan-1", None, Some("ghost")));
+        let page = build_session_metadata_page(sessions, None, 20);
+        assert_eq!(page.total_top_level_count, 20);
+        let orphan = page
+            .sessions
+            .iter()
+            .find(|m| m.session_id == "orphan-1")
+            .expect("orphan present");
+        assert!(orphan.orphaned);
+        assert_eq!(orphan.orphan_kind.as_deref(), Some("DanglingChild"));
+    }
 }

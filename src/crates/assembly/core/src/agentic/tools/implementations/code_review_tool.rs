@@ -16,6 +16,18 @@ use bitfun_agent_runtime::deep_review::{
 use log::warn;
 use serde_json::{json, Value};
 
+/// Human-readable serde_json variant name for diagnostics logging.
+fn json_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
+}
+
 /// Code review tool definition
 pub struct CodeReviewTool;
 
@@ -474,6 +486,16 @@ impl CodeReviewTool {
         run_manifest: Option<&Value>,
         compression_contract: Option<&CompressionContract>,
     ) {
+        // All key-indexed writes below assume an object root. Reset non-object
+        // inputs (e.g. a JSON array) to an empty object and fail closed instead
+        // of panicking inside serde_json's IndexMut.
+        if !input.is_object() {
+            warn!(
+                "CodeReview tool received a non-object input (type: {}), resetting to an empty object and failing closed",
+                json_type_name(input)
+            );
+            *input = json!({});
+        }
         let summary_is_valid =
             input
                 .get("summary")
@@ -779,6 +801,40 @@ mod tests {
         assert_eq!(input["summary"]["risk_level"], "high");
         assert_eq!(input["summary"]["recommended_action"], "request_changes");
         assert_eq!(input["evidence_status"], "failed");
+    }
+
+    #[test]
+    fn non_object_input_fails_closed_without_panicking() {
+        for mut input in [json!([1, 2, 3]), json!("review"), json!(42), json!(null)] {
+            CodeReviewTool::validate_and_fill_defaults(&mut input, false, None, None);
+
+            assert_eq!(input["evidence_status"], "failed");
+            assert_eq!(input["summary"]["risk_level"], "high");
+            assert_eq!(input["summary"]["recommended_action"], "request_changes");
+            assert!(input["issues"].as_array().is_some());
+            assert!(input["positive_points"].as_array().is_some());
+            assert_eq!(input["review_mode"], "standard");
+        }
+    }
+
+    #[tokio::test]
+    async fn call_impl_with_array_input_returns_failed_review_without_panicking() {
+        let tool = CodeReviewTool::new();
+        let context = tool_context(None);
+
+        let result = tool
+            .call_impl(&json!([1, 2, 3]), &context)
+            .await
+            .expect("array input should be handled without panicking");
+
+        let ToolResult::Result { data, .. } = &result[0] else {
+            panic!("expected tool result");
+        };
+        assert_eq!(data["evidence_status"], "failed");
+        assert_eq!(
+            data["summary"]["overall_assessment"],
+            "Review result is incomplete or invalid"
+        );
     }
 
     #[test]

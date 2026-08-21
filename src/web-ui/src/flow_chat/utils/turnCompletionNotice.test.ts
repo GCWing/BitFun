@@ -9,6 +9,15 @@ describe('getTurnCompletionNotice', () => {
     } as any)).toBeNull();
   });
 
+  // R-GC-23: 'completed' mirrors DialogTurn.status into finishReason for local
+  // turn builders (e.g. group chat message projection) - a normal completion.
+  it('treats finishReason "completed" as a normal finish', () => {
+    expect(getTurnCompletionNotice({
+      status: 'completed',
+      finishReason: 'completed',
+    } as any)).toBeNull();
+  });
+
   it('returns null for non-completed turns', () => {
     expect(getTurnCompletionNotice({
       status: 'processing',

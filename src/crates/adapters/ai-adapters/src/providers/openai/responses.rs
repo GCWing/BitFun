@@ -375,6 +375,8 @@ mod tests {
         let client = test_client();
         let request_context = ModelRequestContext {
             prompt_cache_route_key: Some("lineage-1".to_string()),
+            session_id: None,
+            conversation_request_id: None,
         };
         let request_body = build_request_body_with_context(
             &client,

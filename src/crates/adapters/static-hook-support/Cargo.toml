@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-static-hook-support"
 version.workspace = true
 authors.workspace = true

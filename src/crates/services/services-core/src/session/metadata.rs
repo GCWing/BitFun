@@ -27,6 +27,7 @@ pub struct SessionMetadataBuildFacts<'a> {
     pub workspace_hostname: Option<&'a str>,
     pub new_session_memory_mode: SessionMemoryMode,
     pub existing: Option<&'a SessionMetadata>,
+    pub is_daemon: bool,
 }
 
 pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMetadata {
@@ -90,6 +91,16 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
         workspace_hostname: facts.workspace_hostname.map(str::to_string),
         unread_completion: existing.and_then(|value| value.unread_completion.clone()),
         needs_user_attention: existing.and_then(|value| value.needs_user_attention.clone()),
+        display_state: existing.and_then(|value| value.display_state.clone()),
+        runtime_state: existing.and_then(|value| value.runtime_state.clone()),
+        is_daemon: existing
+            .map(|value| value.is_daemon)
+            .unwrap_or(facts.is_daemon),
+        // R-AD-08: orphan markers are computed by the page/list builders from
+        // the full visible set; a freshly built metadata record is never an
+        // orphan on its own.
+        orphaned: false,
+        orphan_kind: None,
     }
 }
 
@@ -99,7 +110,7 @@ fn build_session_relationship(
 ) -> Option<SessionRelationship> {
     let mut relationship = existing.and_then(normalized_session_relationship);
     let kind = match session_kind {
-        SessionKind::Subagent => SessionRelationshipKind::Subagent,
+        SessionKind::Subagent | SessionKind::EphemeralSubagent => SessionRelationshipKind::Subagent,
         SessionKind::EphemeralChild => SessionRelationshipKind::Btw,
         SessionKind::Standard => return relationship,
     };
@@ -185,6 +196,7 @@ pub fn normalized_session_relationship(metadata: &SessionMetadata) -> Option<Ses
         parent_tool_call_id,
         subagent_type,
         continuation_policy,
+        depth: None,
     })
 }
 
@@ -472,6 +484,7 @@ mod tests {
             parent_tool_call_id: Some("tool".to_string()),
             subagent_type: Some("ReviewSecurity".to_string()),
             continuation_policy: Some(SessionContinuationPolicy::FreshOnly),
+            ..Default::default()
         };
 
         set_session_relationship(&mut metadata, relationship.clone());
@@ -557,6 +570,7 @@ mod tests {
             workspace_hostname: Some("host"),
             new_session_memory_mode: crate::session::SessionMemoryMode::Enabled,
             existing: Some(&existing),
+            is_daemon: false,
         });
 
         assert_eq!(built.created_at, 10);
@@ -589,6 +603,7 @@ mod tests {
                 parent_tool_call_id: Some("tool-1".to_string()),
                 subagent_type: Some("review".to_string()),
                 continuation_policy: None,
+                ..Default::default()
             })
         );
     }
@@ -614,6 +629,7 @@ mod tests {
             workspace_hostname: None,
             new_session_memory_mode: crate::session::SessionMemoryMode::Disabled,
             existing: None,
+            is_daemon: false,
         });
 
         assert_eq!(
@@ -652,6 +668,7 @@ mod tests {
             workspace_hostname: None,
             new_session_memory_mode: crate::session::SessionMemoryMode::Enabled,
             existing: None,
+            is_daemon: false,
         });
 
         assert_eq!(built.workspace_path.as_deref(), Some("/worktrees/wt-1"));

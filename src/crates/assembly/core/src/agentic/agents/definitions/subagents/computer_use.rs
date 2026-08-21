@@ -2,7 +2,9 @@
 //!
 //! Dedicated agent for perceiving and operating the user's local computer.
 
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
+use crate::agentic::agents::{
+    subagent_default_tools, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+};
 use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
@@ -22,19 +24,17 @@ impl ComputerUseMode {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
         tool_exposure_overrides.insert("ControlHub".to_string(), ToolExposure::Direct);
         tool_exposure_overrides.insert("ComputerUse".to_string(), ToolExposure::Direct);
+        // 执行者工具模板改 agentic 全工具：ComputerUse 也要全工具底子，
+        // 在 subagent_default_tools() 之上叠加桌面自动化专属工具（ControlHub/
+        // ComputerUse/AskUserQuestion），避免一用就卡。
+        let mut default_tools = subagent_default_tools();
+        for tool in ["AskUserQuestion", "ControlHub", "ComputerUse"] {
+            if !default_tools.contains(&tool.to_string()) {
+                default_tools.push(tool.to_string());
+            }
+        }
         Self {
-            default_tools: vec![
-                "AskUserQuestion".to_string(),
-                "TodoWrite".to_string(),
-                "Skill".to_string(),
-                "view_image".to_string(),
-                "analyze_image".to_string(),
-                "ExecCommand".to_string(),
-                "WriteStdin".to_string(),
-                "ExecControl".to_string(),
-                "ControlHub".to_string(),
-                "ComputerUse".to_string(),
-            ],
+            default_tools,
             tool_exposure_overrides,
         }
     }
@@ -94,7 +94,13 @@ mod tests {
         assert_eq!(agent.prompt_template_name(None), "computer_use_mode");
         assert!(agent.default_tools().contains(&"ControlHub".to_string()));
         assert!(agent.default_tools().contains(&"ComputerUse".to_string()));
-        assert!(!agent.default_tools().contains(&"Write".to_string()));
+        assert!(agent
+            .default_tools()
+            .contains(&"AskUserQuestion".to_string()));
+        // 工具模板改 agentic 全工具后，基础工作工具（Write 等）
+        // 一并纳入，不再是最小集合。
+        assert!(agent.default_tools().contains(&"Write".to_string()));
+        assert!(agent.default_tools().contains(&"Read".to_string()));
         assert!(!agent.is_readonly());
     }
 

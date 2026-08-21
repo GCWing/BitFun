@@ -28,9 +28,15 @@ const TOP_LEVEL_METADATA_KEYS = new Set([
   'lastFinishedAt',
 ]);
 
+export type OrphanKind = 'DanglingChild' | 'DetachedChild';
+
+export function normalizeOrphanKind(value: unknown): OrphanKind | undefined {
+  return value === 'DanglingChild' || value === 'DetachedChild' ? value : undefined;
+}
+
 type SessionRelationshipInput = Pick<
   Session,
-  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType' | 'depth'
 >;
 
 export interface ResolvedSessionRelationship {
@@ -80,7 +86,7 @@ export function normalizeSessionRelationship(
   input?: Partial<SessionRelationshipInput> | null
 ): Pick<
   Session,
-  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType' | 'depth'
 > {
   const sessionKind = normalizeSessionKind(input?.sessionKind);
   const parentSessionId = normalizeString(
@@ -102,6 +108,7 @@ export function normalizeSessionRelationship(
       btwOrigin: undefined,
       parentToolCallId: undefined,
       subagentType: undefined,
+      depth: undefined,
     };
   }
 
@@ -118,6 +125,7 @@ export function normalizeSessionRelationship(
     btwOrigin: origin,
     parentToolCallId,
     subagentType,
+    depth: input?.depth,
   };
 }
 
@@ -146,11 +154,38 @@ export function resolveSessionRelationship(
   };
 }
 
+export interface ResolvedOrphanStatus {
+  /** When true the session has no surviving parent and is grouped under the orphan section. */
+  isOrphaned: boolean;
+  /** Optional backend orphan classification carried through metadata (R-AD-08). */
+  kind?: OrphanKind;
+}
+
+export function resolveSessionOrphanStatus(
+  input?: Partial<Pick<Session, 'orphaned' | 'orphanKind'>>
+): ResolvedOrphanStatus {
+  const isOrphaned = input?.orphaned === true;
+  return {
+    isOrphaned,
+    kind: isOrphaned ? normalizeOrphanKind(input?.orphanKind) : undefined,
+  };
+}
+
+export function deriveSessionOrphanStatusFromMetadata(
+  metadata?: Pick<SessionMetadata, 'orphaned' | 'orphanKind'> | null
+): ResolvedOrphanStatus {
+  const isOrphaned = metadata?.orphaned === true;
+  return {
+    isOrphaned,
+    kind: isOrphaned ? normalizeOrphanKind(metadata?.orphanKind) : undefined,
+  };
+}
+
 export function deriveSessionRelationshipFromMetadata(
   metadata?: Pick<SessionMetadata, 'customMetadata' | 'relationship'> | null
 ): Pick<
   Session,
-  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType' | 'depth'
 > {
   const relationship = metadata?.relationship;
   const relationshipKind = normalizeSessionKind(relationship?.kind);
@@ -160,6 +195,7 @@ export function deriveSessionRelationshipFromMetadata(
       parentSessionId: normalizeString(relationship?.parentSessionId) ?? undefined,
       parentToolCallId: normalizeString(relationship?.parentToolCallId),
       subagentType: normalizeString(relationship?.subagentType),
+      depth: relationship?.depth ?? undefined,
       btwOrigin: {
         requestId: normalizeString(relationship?.parentRequestId),
         parentSessionId: normalizeString(relationship?.parentSessionId),
@@ -178,6 +214,7 @@ export function deriveSessionRelationshipFromMetadata(
     parentSessionId: customMetadata?.parentSessionId ?? undefined,
     parentToolCallId: normalizeString(customMetadata?.parentToolCallId),
     subagentType: normalizeString(customMetadata?.subagentType),
+    depth: undefined,
     btwOrigin:
       sessionKind !== 'normal'
         ? {
@@ -360,6 +397,7 @@ export function buildSessionMetadata(
     | 'titleI18nParams'
     | 'hasUnreadCompletion'
     | 'needsUserAttention'
+    | 'displayState'
     | 'deepReviewRunManifest'
     | 'reviewTargetEvidence'
   >,
@@ -435,6 +473,12 @@ export function buildSessionMetadata(
     // `undefined ?? existingMetadata.unreadCompletion` would restore the old value.
     unreadCompletion: session.hasUnreadCompletion,
     needsUserAttention: session.needsUserAttention,
+    // Always use the in-memory session value as the source of truth (same
+    // rationale as unreadCompletion/needsUserAttention above): the store sets
+    // `displayState: undefined` to clear a stale projection, and a `??` fallback
+    // to existingMetadata would restore the old value and prevent the clear from
+    // reaching disk.
+    displayState: session.displayState,
     deepReviewRunManifest:
       session.deepReviewRunManifest ?? existingMetadata?.deepReviewRunManifest,
     reviewTargetEvidence:

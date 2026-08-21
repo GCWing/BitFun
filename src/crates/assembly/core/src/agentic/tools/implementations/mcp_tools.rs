@@ -16,6 +16,26 @@ use std::sync::Arc;
 
 const DEFAULT_RENDER_CHAR_LIMIT: usize = 32_000;
 
+/// Resolve the configured MCP render cap
+/// (`ai.thresholds.tool_timeout.mcp_render_chars`), falling back to
+/// `DEFAULT_RENDER_CHAR_LIMIT = 32_000` when unset or invalid.
+async fn configured_mcp_render_chars() -> usize {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return DEFAULT_RENDER_CHAR_LIMIT;
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return DEFAULT_RENDER_CHAR_LIMIT;
+    };
+    let chars = thresholds.tool_timeout.mcp_render_chars;
+    if chars == 0 {
+        return DEFAULT_RENDER_CHAR_LIMIT;
+    }
+    chars
+}
+
 fn tool_error(message: impl Into<String>) -> BitFunError {
     BitFunError::tool(message.into())
 }
@@ -355,9 +375,7 @@ impl Tool for ListMCPResourcesTool {
     }
 }
 
-pub struct ReadMCPResourceTool {
-    max_render_chars: usize,
-}
+pub struct ReadMCPResourceTool {}
 
 impl Default for ReadMCPResourceTool {
     fn default() -> Self {
@@ -367,9 +385,7 @@ impl Default for ReadMCPResourceTool {
 
 impl ReadMCPResourceTool {
     pub fn new() -> Self {
-        Self {
-            max_render_chars: DEFAULT_RENDER_CHAR_LIMIT,
-        }
+        Self {}
     }
 }
 
@@ -475,7 +491,9 @@ impl Tool for ReadMCPResourceTool {
             .ok_or_else(|| tool_error(format!("MCP server not connected: {}", server_id)))?;
         let result = connection.read_resource(uri).await?;
         let content_count = result.contents.len();
-        let rendered = render_resource_contents(&result.contents, self.max_render_chars);
+        // 阈值参数配置化：ai.thresholds.tool_timeout.mcp_render_chars
+        let render_chars = configured_mcp_render_chars().await;
+        let rendered = render_resource_contents(&result.contents, render_chars);
 
         Ok(vec![ToolResult::ok(
             json!({
@@ -610,9 +628,7 @@ impl Tool for ListMCPPromptsTool {
     }
 }
 
-pub struct GetMCPPromptTool {
-    max_render_chars: usize,
-}
+pub struct GetMCPPromptTool {}
 
 impl Default for GetMCPPromptTool {
     fn default() -> Self {
@@ -622,9 +638,7 @@ impl Default for GetMCPPromptTool {
 
 impl GetMCPPromptTool {
     pub fn new() -> Self {
-        Self {
-            max_render_chars: DEFAULT_RENDER_CHAR_LIMIT,
-        }
+        Self {}
     }
 }
 
@@ -787,7 +801,8 @@ impl Tool for GetMCPPromptTool {
                 name: name.to_string(),
                 messages: result.messages.clone(),
             });
-        let (rendered_text, truncated) = truncate_text(&prompt_text, self.max_render_chars);
+        let (rendered_text, truncated) =
+            truncate_text(&prompt_text, configured_mcp_render_chars().await);
         let mut rendered = rendered_text;
         if truncated {
             rendered

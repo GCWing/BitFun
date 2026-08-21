@@ -18,6 +18,13 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('@/app/hooks/useApp', () => ({
+  useApp: () => ({
+    toggleChatFullWidth: vi.fn(),
+  }),
+  useChatFullWidth: () => false,
+}));
+
 vi.mock('@/component-library', async () => {
   const ReactModule = await import('react');
 

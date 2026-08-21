@@ -1,0 +1,30 @@
+{
+  "context_user_info": "{\"uid\":\"test-uid-0001\",\"encrypt_user_info\":\"enc-test\",\"key\":\"key-test\"}",
+  "request": {
+    "url": "https://gateway.qoder.com.cn/algo/api/v2/model/list?Encode=1",
+    "path": "/api/v2/model/list?Encode=1",
+    "method": "GET",
+    "authMode": "auth",
+    "headers": {
+      "Accept": "application/json",
+      "Accept-Encoding": "identity",
+      "Authorization": "Bearer COSY.eyJ2ZXJzaW9uIjoidjEiLCJyZXF1ZXN0SWQiOiI0MGE2OTkyMi1hMzVkLTRjYTMtOTkwZi1iY2YyZjhjNTBiYjkiLCJpbmZvIjoiZW5jLXRlc3QiLCJjb3N5VmVyc2lvbiI6IjEuMS4yMyIsImlkZVZlcnNpb24iOiIifQ==.ccc9b41839c04872cd96e5d615c93c74",
+      "Content-Type": "application/json",
+      "Cosy-Business-Product": "cli",
+      "Cosy-Business-Type": "agent",
+      "Cosy-ClientIp": "ad05505d-0918-4a5d-bbf5-d7acf9abdd9d",
+      "Cosy-ClientType": "5",
+      "Cosy-Data-Policy": "disagree",
+      "Cosy-Date": "1787241177",
+      "Cosy-Key": "key-test",
+      "Cosy-MachineId": "ad05505d-0918-4a5d-bbf5-d7acf9abdd9d",
+      "Cosy-MachineToken": "ad05505d-0918-4a5d-bbf5-d7acf9abdd9d",
+      "Cosy-MachineType": "5",
+      "Cosy-Scene": "assistant",
+      "Cosy-User": "test-uid-0001",
+      "Cosy-Version": "1.1.23",
+      "Login-Version": "v2"
+    },
+    "body": null
+  }
+}

@@ -83,10 +83,20 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
 
 pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
     match tool_name {
-        "LS" | "Read" | "Glob" | "Grep" | "Write" | "Edit" | "Delete" | "ExecCommand"
-        | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" => {
-            Some(ToolPackFeatureGroup::Basic)
-        }
+        "LS"
+        | "Read"
+        | "Glob"
+        | "Grep"
+        | "Write"
+        | "Edit"
+        | "Delete"
+        | "ExecCommand"
+        | "WriteStdin"
+        | "ExecControl"
+        | "GetTime"
+        | "ListModels"
+        | "WorkspaceScan"
+        | "KnowledgeBaseSearch" => Some(ToolPackFeatureGroup::Basic),
         "Git" | "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
         "ListMCPResources" | "ReadMCPResource" | "ListMCPPrompts" | "GetMCPPrompt" => {
             Some(ToolPackFeatureGroup::Mcp)
@@ -101,10 +111,41 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
         "CreateCanvas" | "ReadCanvas" | "UpdateCanvas" | "PatchCanvas" => {
             Some(ToolPackFeatureGroup::Canvas)
         }
-        "Task" | "AgentWait" | "LaunchReviewAgent" | "Skill" | "AskUserQuestion" | "TodoWrite"
-        | "get_goal" | "create_goal" | "update_goal" | "CreatePlan" | "submit_code_review"
-        | "GetToolSpec" | "CallDeferredTool" | "SessionControl" | "SessionMessage"
-        | "SessionHistory" | "Cron" => Some(ToolPackFeatureGroup::AgentControl),
+        "Task"
+        | "AgentWait"
+        | "LaunchReviewAgent"
+        | "Skill"
+        | "AskUserQuestion"
+        | "TodoWrite"
+        | "get_goal"
+        | "create_goal"
+        | "update_goal"
+        | "CreatePlan"
+        | "PlanList"
+        | "PlanRead"
+        | "PlanUpdate"
+        | "LegionControl"
+        | "acp_control"
+        | "acp_message"
+        | "acp_history"
+        | "submit_code_review"
+        | "GetToolSpec"
+        | "CallDeferredTool"
+        | "SessionControl"
+        | "SessionMessage"
+        | "SessionHistory"
+        | "Cron"
+        | "create_group_chat"
+        | "invite_group_member"
+        | "remove_group_member"
+        | "send_group_message"
+        | "get_group_history"
+        | "list_group_chats"
+        | "fork_group_chat"
+        | "group_member_status"
+        | "delete_group_chat"
+        | "update_group_member_tools"
+        | "update_group_wiring" => Some(ToolPackFeatureGroup::AgentControl),
         _ => None,
     }
 }
@@ -170,6 +211,8 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "analyze_image",
             "Glob",
             "Grep",
+            "WorkspaceScan",
+            "KnowledgeBaseSearch",
             "Write",
             "Edit",
             "Delete",
@@ -194,6 +237,9 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "create_goal",
             "update_goal",
             "CreatePlan",
+            "PlanList",
+            "PlanRead",
+            "PlanUpdate",
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
@@ -208,7 +254,27 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.session",
         feature_groups: CORE_SESSION_FEATURE_GROUPS,
-        tool_names: &["SessionControl", "SessionMessage", "SessionHistory", "Cron"],
+        tool_names: &[
+            "SessionControl",
+            "LegionControl",
+            "SessionMessage",
+            "SessionHistory",
+            "acp_control",
+            "acp_message",
+            "acp_history",
+            "Cron",
+            "create_group_chat",
+            "invite_group_member",
+            "remove_group_member",
+            "send_group_message",
+            "get_group_history",
+            "list_group_chats",
+            "fork_group_chat",
+            "group_member_status",
+            "delete_group_chat",
+            "update_group_member_tools",
+            "update_group_wiring",
+        ],
     },
     ToolProviderGroupPlan {
         provider_id: "core.integration",
@@ -465,6 +531,8 @@ mod tests {
                 "analyze_image",
                 "Glob",
                 "Grep",
+                "WorkspaceScan",
+                "KnowledgeBaseSearch",
                 "Write",
                 "Edit",
                 "Delete",
@@ -483,6 +551,9 @@ mod tests {
                 "create_goal",
                 "update_goal",
                 "CreatePlan",
+                "PlanList",
+                "PlanRead",
+                "PlanUpdate",
                 "submit_code_review",
                 "GetToolSpec",
                 "CallDeferredTool",
@@ -492,9 +563,24 @@ mod tests {
                 "UpdateCanvas",
                 "PatchCanvas",
                 "SessionControl",
+                "LegionControl",
                 "SessionMessage",
                 "SessionHistory",
+                "acp_control",
+                "acp_message",
+                "acp_history",
                 "Cron",
+                "create_group_chat",
+                "invite_group_member",
+                "remove_group_member",
+                "send_group_message",
+                "get_group_history",
+                "list_group_chats",
+                "fork_group_chat",
+                "group_member_status",
+                "delete_group_chat",
+                "update_group_member_tools",
+                "update_group_wiring",
                 "WebSearch",
                 "WebFetch",
                 "ListMCPResources",

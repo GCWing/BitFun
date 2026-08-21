@@ -33,6 +33,7 @@ unsafe extern "system" fn keep_wrapper_alive(ctrl_type: u32) -> windows::core::B
 fn hand_off(primary: &Path) -> i32 {
     use windows::Win32::System::Console::SetConsoleCtrlHandler;
 
+    // SAFETY: the handler is a static Rust fn; the pointer is valid for the process lifetime.
     if let Err(error) = unsafe { SetConsoleCtrlHandler(Some(keep_wrapper_alive), true) } {
         eprintln!("Error: failed to initialize deprecated launcher: {error}");
         return 1;

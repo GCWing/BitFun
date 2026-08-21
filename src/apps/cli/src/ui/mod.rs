@@ -48,7 +48,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
-    backend::CrosstermBackend,
+    backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -96,7 +96,10 @@ impl TerminalGuard {
         let operation_result = operation();
 
         let mut resumed = init_terminal()?;
-        if let Err(error) = resumed.clear() {
+        // Same as startup.rs: `Terminal::clear()` in ratatui 0.30 queries the cursor
+        // position (DSR `ESC[6n`), which can time out in PTY test environments; clear the
+        // backend directly instead.
+        if let Err(error) = resumed.backend_mut().clear() {
             drop(resumed);
             return Err(error.into());
         }

@@ -328,6 +328,7 @@ enum ReferenceDocumentReadError {
     TransientIo,
 }
 
+#[allow(clippy::type_complexity)] // bounded read result + raw YAML mapping projection
 fn read_reference_document(
     document: &LocalConfigDocument,
 ) -> Result<Option<(String, Map<String, Value>)>, ReferenceDocumentReadError> {

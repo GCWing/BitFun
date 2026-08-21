@@ -108,6 +108,7 @@ impl CustomAgentDefinitionError {
 }
 
 impl CustomAgentDefinition {
+    #[allow(clippy::too_many_arguments)] // field-level constructor; matches from_front_matter_fields
     pub fn new(
         id: String,
         name: String,
@@ -174,16 +175,9 @@ impl CustomAgentDefinition {
             return Err(CustomAgentDefinitionError::ReviewModeRequiresSubagent);
         }
 
-        let readonly = match kind {
-            CustomAgentKind::Mode => readonly.unwrap_or(DEFAULT_CUSTOM_MODE_READONLY),
-            CustomAgentKind::Subagent => {
-                if review {
-                    true
-                } else {
-                    readonly.unwrap_or(DEFAULT_CUSTOM_SUBAGENT_READONLY)
-                }
-            }
-        };
+        // readonly is decided solely by the explicit field (or the per-kind
+        // default); review is a semantic marker only and never participates.
+        let readonly = readonly.unwrap_or_else(|| review_readonly_policy(kind, review));
 
         let model_is_explicit = model.is_some();
         let model = custom_agent_model_or_default(kind, model).to_string();
@@ -333,6 +327,38 @@ pub fn default_custom_agent_user_context_policy(kind: CustomAgentKind) -> UserCo
     }
 }
 
+/// Rules source for the review/readonly semantics.
+///
+/// `review` is a semantic marker (prompt injection / display) and never
+/// participates in the tool-set decision. `readonly` is the only field that
+/// decides whether writable tools are stripped. Every layer (definition,
+/// setter, API, registry, frontend) must consult this policy instead of
+/// deriving readonly from review. The returned value is the per-kind default
+/// readonly; an explicit readonly field always wins.
+pub const fn review_readonly_policy(kind: CustomAgentKind, _review: bool) -> bool {
+    match kind {
+        CustomAgentKind::Mode => DEFAULT_CUSTOM_MODE_READONLY,
+        CustomAgentKind::Subagent => DEFAULT_CUSTOM_SUBAGENT_READONLY,
+    }
+}
+
+/// Shared helper used by the rules source: partitions the given tools into
+/// kept and stripped sets. Stripping happens only when `readonly` is true.
+pub fn readonly_tool_stripping(
+    tools: Vec<String>,
+    readonly: bool,
+    readonly_tools: &[String],
+) -> (Vec<String>, Vec<String>) {
+    if !readonly {
+        return (tools, Vec::new());
+    }
+    let readonly_tools_set: HashSet<&str> = readonly_tools.iter().map(String::as_str).collect();
+    let (kept, stripped): (Vec<_>, Vec<_>) = tools
+        .into_iter()
+        .partition(|tool| readonly_tools_set.contains(tool.as_str()));
+    (kept, stripped)
+}
+
 pub fn custom_agent_possible_dirs(roots: &CustomAgentDiscoveryRoots) -> Vec<CustomAgentDirEntry> {
     let mut entries = Vec::new();
 
@@ -438,20 +464,9 @@ pub fn validate_custom_agent_definition(
         .into_iter()
         .partition(|tool| valid_tools_set.contains(tool.as_str()));
 
-    let writable_review_tools;
-    if definition.kind == CustomAgentKind::Subagent && definition.review {
-        definition.readonly = true;
-        let readonly_tools_set: HashSet<&str> =
-            context.readonly_tools.iter().map(String::as_str).collect();
-        let (review_tools, writable_tools): (Vec<_>, Vec<_>) = valid_tools
-            .into_iter()
-            .partition(|tool| readonly_tools_set.contains(tool.as_str()));
-        definition.tools = review_tools;
-        writable_review_tools = writable_tools;
-    } else {
-        definition.tools = valid_tools;
-        writable_review_tools = Vec::new();
-    }
+    let (tools, writable_review_tools) =
+        readonly_tool_stripping(valid_tools, definition.readonly, context.readonly_tools);
+    definition.tools = tools;
 
     let model_fallback = if context.valid_models.contains(&definition.model) {
         None
@@ -501,11 +516,7 @@ fn list_custom_agent_markdown_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 pub fn custom_agent_readonly_should_save(kind: CustomAgentKind, readonly: bool) -> bool {
-    readonly
-        != match kind {
-            CustomAgentKind::Mode => DEFAULT_CUSTOM_MODE_READONLY,
-            CustomAgentKind::Subagent => DEFAULT_CUSTOM_SUBAGENT_READONLY,
-        }
+    readonly != review_readonly_policy(kind, false)
 }
 
 pub fn custom_agent_review_should_save(kind: CustomAgentKind, review: bool) -> bool {
@@ -851,5 +862,88 @@ mod tests {
 
         assert!(policy.includes(UserContextSection::WorkspaceContext));
         assert!(policy.includes(UserContextSection::MemorySummary));
+    }
+
+    #[test]
+    fn review_readonly_policy_is_sole_source_for_readonly_defaults() {
+        // R-WF-21 rules source: review never participates in the readonly
+        // decision. The policy returns the per-kind default regardless of
+        // the review marker.
+        assert_eq!(
+            review_readonly_policy(CustomAgentKind::Mode, true),
+            DEFAULT_CUSTOM_MODE_READONLY
+        );
+        assert_eq!(
+            review_readonly_policy(CustomAgentKind::Mode, false),
+            DEFAULT_CUSTOM_MODE_READONLY
+        );
+        assert_eq!(
+            review_readonly_policy(CustomAgentKind::Subagent, true),
+            DEFAULT_CUSTOM_SUBAGENT_READONLY
+        );
+        assert_eq!(
+            review_readonly_policy(CustomAgentKind::Subagent, false),
+            DEFAULT_CUSTOM_SUBAGENT_READONLY
+        );
+        // M2: serialization contract converges on the rules source constants.
+        assert!(!custom_agent_readonly_should_save(
+            CustomAgentKind::Subagent,
+            review_readonly_policy(CustomAgentKind::Subagent, false)
+        ));
+    }
+
+    #[test]
+    fn readonly_tool_stripping_runs_only_for_readonly_definitions() {
+        // The stripping helper must leave tools untouched when readonly is
+        // false, even for review subagents (rules source bypass guard).
+        let tools = vec!["Read".to_string(), "Write".to_string(), "Edit".to_string()];
+        let readonly_tools = ["Read".to_string()];
+
+        let (kept, stripped) = readonly_tool_stripping(tools.clone(), false, &readonly_tools);
+        assert_eq!(kept, tools);
+        assert!(stripped.is_empty());
+
+        let (kept, stripped) = readonly_tool_stripping(tools, true, &readonly_tools);
+        assert_eq!(kept, ["Read"]);
+        assert_eq!(stripped, ["Write", "Edit"]);
+    }
+
+    #[test]
+    fn review_readonly_combination_round_trips_without_forcing_readonly() {
+        // Serialization contract (M2): a review:true + readonly:false
+        // definition keeps readonly:false after save/load; from_front_matter
+        // must not derive readonly from review.
+        let parsed = CustomAgentDefinition::from_front_matter_fields(
+            Some("ReviewWritable"),
+            Some("ReviewWritable"),
+            Some("Review with writable tools"),
+            Some(CustomAgentKind::Subagent),
+            Some(vec!["Read".to_string(), "Write".to_string()]),
+            Some(false),
+            Some(true),
+            Some("fast"),
+            None,
+            "Review and fix.".to_string(),
+            CustomAgentLevel::User,
+        )
+        .expect("review writable subagent should build");
+        assert!(!parsed.definition.readonly);
+        assert!(parsed.definition.review);
+        assert_eq!(parsed.definition.tools, ["Read", "Write"]);
+
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should move forward")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("custom-agent-review-{stamp}.md"));
+        custom_agent_save_markdown_file(&path, &parsed.definition).expect("markdown should save");
+        let contents = std::fs::read_to_string(&path).expect("markdown should read");
+        let reloaded = custom_agent_read_markdown_str(&contents, CustomAgentLevel::User)
+            .expect("markdown should reload");
+        let _ = std::fs::remove_file(&path);
+
+        assert!(!reloaded.definition.readonly);
+        assert!(reloaded.definition.review);
+        assert_eq!(reloaded.definition.tools, ["Read", "Write"]);
     }
 }

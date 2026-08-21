@@ -678,6 +678,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
             let package = workspace.join(".bitfun/plugins/acme.demo");
             let source_path = package.join(files[0].0);
             fs::create_dir_all(user.join("plugins")).expect("create user plugins");
+            fs::create_dir_all(user.join("runtime")).expect("create user runtime");
             let mut manifest_files = Vec::new();
             for (relative_path, contents) in files {
                 let path = package.join(relative_path);

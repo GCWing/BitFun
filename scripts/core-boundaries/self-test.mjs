@@ -1,6 +1,11 @@
 // Self-tests for the core boundary checker configuration and parsers.
 
 import { crateLayoutRules } from './rules/crate-layout.mjs';
+import {
+  collectPluginRootReexports,
+  collectTopLevelRustPublicSymbols,
+  hasPluginWildcardReexport,
+} from './rules/source/public-api-check.mjs';
 
 export function runManifestParserSelfTest({
   isManifestDependencyDeclaration,
@@ -20,14 +25,12 @@ export function runManifestParserSelfTest({
   requiredContentRules,
   forbiddenContentRules,
   forbiddenContentUnderRules,
+  localCustomizationSymbols,
   publicApiAllowlistRules,
   publicApiContractSlices,
   facadeOnlyFiles,
   forbiddenRuleTextForPath,
   regexSourceContainsContract,
-  collectTopLevelRustPublicSymbols,
-  collectPluginRootReexports,
-  hasPluginWildcardReexport,
   createFacadeLineChecker,
   escapeRegex,
   validateExplicitIntegrationTestTopology,
@@ -440,6 +443,7 @@ export function runManifestParserSelfTest({
       [
         'dep:bitfun-core-types',
         'dep:bitfun-events',
+        'dep:bitfun-runtime-ports',
         'dep:chrono',
         'dep:fs2',
         'dep:libc',
@@ -5743,5 +5747,27 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     throw new Error(
       'agent-runtime-ipc must keep the exact feature-free bitfun-transport dependency',
     );
+  }
+  runLocalCustomizationSymbolSelfTest({ localCustomizationSymbols });
+}
+
+export function runLocalCustomizationSymbolSelfTest({ localCustomizationSymbols }) {
+  const seen = new Set();
+  for (const entry of localCustomizationSymbols) {
+    if (!entry.path || !(entry.anchor instanceof RegExp)) {
+      throw new Error(`local customization symbol entry must declare path + anchor regex: ${entry.note ?? ''}`);
+    }
+    const key = `${entry.path}|${entry.anchor.source}`;
+    if (seen.has(key)) {
+      throw new Error(`duplicate local customization symbol anchor: ${entry.note ?? ''}`);
+    }
+    seen.add(key);
+    if (!entry.note) {
+      throw new Error(`local customization symbol entry must carry a R-AD-01 note: ${entry.path}`);
+    }
+  }
+  // GroupChat 契约符号 R-GC-01~07 移除后收缩 34→15
+  if (localCustomizationSymbols.length < 15) {
+    throw new Error(`local customization symbol manifest must cover the 15 kept symbols, got ${localCustomizationSymbols.length}`);
   }
 }

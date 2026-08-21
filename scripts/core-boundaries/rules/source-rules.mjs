@@ -1,5 +1,6 @@
 // Source boundary rule entrypoint. Keep detailed rules in focused modules.
 
+export { checkLocalCustomizationSymbols, localCustomizationSymbols } from './local-customization-symbols.mjs';
 export { facadeOnlyFiles } from './source/facade-rules.mjs';
 export {
   forbiddenContentRules,

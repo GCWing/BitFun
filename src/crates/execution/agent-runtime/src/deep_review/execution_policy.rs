@@ -92,6 +92,18 @@ pub struct DeepReviewExecutionPolicy {
     /// Adaptive manifests share `max_reviewer_calls` across ReviewWorker and
     /// ReviewJudge so the visible review has one bounded spawned-call budget.
     pub shared_spawned_review_budget: bool,
+    /// Configured default max queue wait (secs) from
+    /// `ai.thresholds.deep_review.max_queue_wait_secs`. `None` keeps the
+    /// legacy default (`DEFAULT_MAX_QUEUE_WAIT_SECONDS = 1200`).
+    pub configured_queue_wait_seconds: Option<u64>,
+    /// Configured default auto-retry elapsed guard (secs) from
+    /// `ai.thresholds.deep_review.auto_retry_elapsed_guard_secs`. `None`
+    /// keeps the legacy default (`DEFAULT_AUTO_RETRY_ELAPSED_GUARD_SECONDS = 180`).
+    pub configured_auto_retry_elapsed_guard_seconds: Option<u64>,
+    /// Configured default max parallel reviewer instances from
+    /// `ai.thresholds.deep_review.max_parallel_instances`. `None` keeps the
+    /// legacy default (`DEFAULT_MAX_PARALLEL_INSTANCES = 4`).
+    pub configured_max_parallel_instances: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,6 +142,9 @@ impl Default for DeepReviewExecutionPolicy {
             max_retries_per_role: DEFAULT_MAX_RETRIES_PER_ROLE,
             max_reviewer_calls: DEFAULT_MAX_SAME_ROLE_INSTANCES * reviewer_agent_type_count(),
             shared_spawned_review_budget: false,
+            configured_queue_wait_seconds: None,
+            configured_auto_retry_elapsed_guard_seconds: None,
+            configured_max_parallel_instances: None,
         }
     }
 }
@@ -189,6 +204,9 @@ impl DeepReviewExecutionPolicy {
                 legacy_max_reviewer_calls,
             ),
             shared_spawned_review_budget: false,
+            configured_queue_wait_seconds: None,
+            configured_auto_retry_elapsed_guard_seconds: None,
+            configured_max_parallel_instances: None,
         }
     }
 

@@ -180,7 +180,6 @@ fn consume_selected_native_command_once(
 fn retain_selected_native_command_for_input(selected_command: &mut Option<String>, input: &str) {
     let still_selected = selected_command.as_deref().is_some_and(|selected| {
         input
-            .trim_start()
             .split_whitespace()
             .next()
             .map(|token| token.trim_start_matches('/'))

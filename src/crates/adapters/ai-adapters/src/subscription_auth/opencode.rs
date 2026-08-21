@@ -374,9 +374,11 @@ fn offerings_from_remote_config(config: RemoteConfig) -> Vec<SubscriptionApiOffe
                 .iter_mut()
                 .find(|candidate| candidate.plan == plan && candidate.format == format)
             {
-                offering
-                    .models
-                    .push(SubscriptionOfferingModel { id, display_name });
+                offering.models.push(SubscriptionOfferingModel {
+                    id,
+                    display_name,
+                    supports_reasoning: None,
+                });
             }
         }
     }

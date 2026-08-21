@@ -1564,17 +1564,47 @@ function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
   for (const group of resourceGroups) {
     const simplified = group.valueByLocale.get('zh-CN');
     const traditional = group.valueByLocale.get('zh-TW');
-    if (!simplified || !traditional || simplified !== traditional || !hasHanText(traditional)) {
-      continue;
-    }
-    const signal = getZhTwSameTextSignal(traditional);
-    if (!signal) {
-      continue;
-    }
-    if (allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'))) {
+    if (!simplified || !traditional || !hasHanText(traditional)) {
       continue;
     }
 
+    // Case 1: the zh-TW string is byte-identical to zh-CN (classic copy
+    // residue). Also catches strings that are identical except for a few
+    // already-converted chars (partial conversion) via the script signals.
+    if (simplified !== traditional) {
+      const signal = getZhTwSameTextSignal(traditional);
+      if (!signal) {
+        continue;
+      }
+      if (allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'))) {
+        continue;
+      }
+
+      governanceReport.l10nQualityCandidates.push({
+        surface: group.surface,
+        namespace: group.namespace,
+        key: group.key,
+        resourceKey: group.resourceKey,
+        locale: 'zh-TW',
+        comparisonLocale: 'zh-CN',
+        value: traditional,
+        files: group.files,
+        reason: 'matches-comparison-locale',
+        signal,
+      });
+      continue;
+    }
+
+    // Case 2: partial conversion residue - the zh-TW string differs from
+    // zh-CN (so the old check skipped it) but still contains simplified-only
+    // script variants that a proper zh-TW string must never carry.
+    if (allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'))) {
+      continue;
+    }
+    const residueSignal = getZhTwSameTextSignal(traditional);
+    if (!residueSignal) {
+      continue;
+    }
     governanceReport.l10nQualityCandidates.push({
       surface: group.surface,
       namespace: group.namespace,
@@ -1584,8 +1614,8 @@ function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
       comparisonLocale: 'zh-CN',
       value: traditional,
       files: group.files,
-      reason: 'matches-comparison-locale',
-      signal,
+      reason: 'partial-conversion-residue',
+      signal: residueSignal,
     });
   }
 }

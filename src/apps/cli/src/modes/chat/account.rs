@@ -59,7 +59,6 @@ impl ChatMode {
         }) else {
             return false;
         };
-        let progress = progress;
         let devices = if matches!(
             progress.status,
             SettingsSyncStatus::Syncing | SettingsSyncStatus::Done

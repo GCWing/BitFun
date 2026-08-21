@@ -17,6 +17,7 @@ pub(crate) fn resolve_mode_model_id(ai_config: &AIConfig) -> Option<String> {
 /// Resolve the Runtime-owned Session selector to the concrete catalog model
 /// used by CLI display surfaces. A missing selector is limited to the fresh
 /// Session fallback; it does not become Session authority in the Client.
+#[cfg(test)]
 pub(crate) fn resolve_session_model_display_id(
     ai_config: &AIConfig,
     session_selector: Option<&str>,

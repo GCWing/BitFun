@@ -1,6 +1,7 @@
 use crate::client::quirks::{
-    apply_openai_compatible_toggle, is_deepseek_reasoning_effort_model, is_deepseek_url,
-    is_glm_52_reasoning_effort_model, is_zhipuai_url, normalize_deepseek_reasoning_effort,
+    apply_openai_compatible_toggle, is_codebuddy_url, is_deepseek_reasoning_effort_model,
+    is_deepseek_url, is_glm_52_reasoning_effort_model, is_zhipuai_url,
+    normalize_codebuddy_reasoning_effort, normalize_deepseek_reasoning_effort,
     normalize_glm_52_reasoning_effort,
 };
 use crate::client::utils::{dedupe_remote_models, normalize_base_url_for_discovery};
@@ -58,8 +59,34 @@ pub(crate) fn compile_chat_reasoning_action(
         || is_deepseek_reasoning_effort_model(&execution_model);
     let is_glm_52_reasoning_target = is_glm_52_reasoning_effort_model(&execution_model)
         && (execution_provider.eq_ignore_ascii_case("zhipuai") || is_zhipuai_url(url));
+    // CodeBuddy's Tencent gateway uses an OpenAI-compatible body: a boolean
+    // `enable_thinking` toggle plus a `reasoning_effort` tier. It must take
+    // precedence over model-name detection because a deepseek/glm model served
+    // through copilot.tencent.com still speaks the CodeBuddy field shape.
+    let is_codebuddy_reasoning_target = is_codebuddy_url(url);
 
     match action {
+        ReasoningPresetAction::Toggle { enabled } if is_codebuddy_reasoning_target => {
+            request_body["enable_thinking"] = serde_json::json!(enabled);
+            if !*enabled {
+                request_body
+                    .as_object_mut()
+                    .map(|body| body.remove("reasoning_effort"));
+            }
+            Ok(true)
+        }
+        ReasoningPresetAction::Effort { value } if is_codebuddy_reasoning_target => {
+            let normalized = normalize_codebuddy_reasoning_effort(value).ok_or_else(|| {
+                anyhow!(
+                    "CodeBuddy reasoning effort '{}' is unsupported for model '{}'",
+                    value,
+                    execution_model
+                )
+            })?;
+            request_body["enable_thinking"] = serde_json::json!(true);
+            request_body["reasoning_effort"] = serde_json::json!(normalized);
+            Ok(true)
+        }
         ReasoningPresetAction::Toggle { enabled } if is_deepseek_reasoning_target => {
             request_body["thinking"] = serde_json::json!({
                 "type": if *enabled { "enabled" } else { "disabled" }
@@ -143,6 +170,41 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
         return list_codex_chatgpt_models(client, &url).await;
     }
 
+    // CodeBuddy's Tencent backend (`copilot.tencent.com`) exposes no public
+    // OpenAI `/models` endpoint. Fetch the dynamic model catalog through the
+    // subscription auth layer (enterprise endpoint → /v3/config → static
+    // fallback), mirroring the official client's ModelsProductProvider chain.
+    if url.contains("copilot.tencent.com") {
+        #[cfg(feature = "subscription-auth")]
+        {
+            let options = crate::subscription_auth::SubscriptionHttpOptions::default();
+            return crate::subscription_auth::list_codebuddy_models(&options).await;
+        }
+        #[cfg(not(feature = "subscription-auth"))]
+        {
+            return Ok(static_codebuddy_models());
+        }
+    }
+
+    // Qoder's inference gateway exposes no public OpenAI `/models` endpoint.
+    // Fetch the live catalog with a wasm-signed gateway request (mirroring the
+    // Qoder CN CLI `listModelsFromRemote`). Qoder has no no-token login entry,
+    // so failures propagate to the caller instead of a stale static list. Both
+    // the international gateway (`api2-v2.qoder.sh`) and the China-region
+    // gateway (`gateway.qoder.com.cn`) are matched.
+    if url.contains("api2-v2.qoder.sh") || url.contains("gateway.qoder.com.cn") {
+        #[cfg(feature = "subscription-auth")]
+        {
+            let options = crate::subscription_auth::SubscriptionHttpOptions::default();
+            let models = crate::subscription_auth::list_qoder_models(&options).await?;
+            return Ok(models);
+        }
+        #[cfg(not(feature = "subscription-auth"))]
+        {
+            return Ok(static_qoder_models());
+        }
+    }
+
     let response = apply_headers(client, client.client.get(&url))
         .send()
         .await?
@@ -156,6 +218,7 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
             .map(|model| RemoteModelInfo {
                 id: model.id,
                 display_name: None,
+                supports_reasoning: None,
             })
             .collect(),
     ))
@@ -198,6 +261,68 @@ const DEFAULT_CODEX_MODELS: &[&str] = &[
 pub(crate) fn is_known_codex_reasoning_model(model_id: &str) -> bool {
     let model_id = model_id.trim().to_ascii_lowercase();
     model_id == "gpt-5-codex" || DEFAULT_CODEX_MODELS.contains(&model_id.as_str())
+}
+
+/// CodeBuddy backend model catalog (mirrors the official client's model list).
+/// The Tencent gateway accepts these real model ids only; arbitrary ids are
+/// rejected, so the discovery surface must not invent names.
+const CODEBUDDY_MODELS: &[&str] = &[
+    "glm-5.2",
+    "glm-5.1",
+    "glm-5v-turbo",
+    "kimi-k2.7",
+    "kimi-k2.6",
+    "kimi-k2.5",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+    "minimax-m3-pay",
+    "hy3-preview-agent",
+    "auto",
+];
+
+pub(crate) fn static_codebuddy_models() -> Vec<RemoteModelInfo> {
+    CODEBUDDY_MODELS
+        .iter()
+        .map(|id| RemoteModelInfo {
+            id: (*id).to_string(),
+            display_name: None,
+            supports_reasoning: None,
+        })
+        .collect()
+}
+
+/// Qoder backend model catalog. Mirrors the Qoder CN CLI (`qoderclicn`) model
+/// list for China-region accounts (see `qoder-cn-proxy` README): the CN
+/// surface exposes these ids and rejects names from the international catalog
+/// (e.g. `ultimate`/`performance` are not valid CN router ids).
+///
+/// Used only when the `subscription-auth` feature is disabled; with it enabled
+/// the live gateway catalog is fetched through the wasm-signed request.
+#[cfg(not(feature = "subscription-auth"))]
+const QODER_MODELS: &[&str] = &[
+    "qoder-cn",
+    "auto",
+    "qwen3.8-max-preview",
+    "qwen3.7-max",
+    "qwen3.7-plus",
+    "glm-5.2",
+    "kimi-k2.7-code",
+    "minimax-m2.7",
+    "qwen3.6-flash",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+];
+
+#[cfg(not(feature = "subscription-auth"))]
+fn static_qoder_models() -> Vec<RemoteModelInfo> {
+    QODER_MODELS
+        .iter()
+        .map(|id| RemoteModelInfo {
+            id: (*id).to_string(),
+            display_name: None,
+            supports_reasoning: None,
+        })
+        .collect()
 }
 
 const FORWARD_COMPAT_CODEX_MODELS: &[(&str, &[&str])] = &[
@@ -346,6 +471,7 @@ fn codex_model_infos(model_ids: Vec<String>) -> Vec<RemoteModelInfo> {
             .map(|id| RemoteModelInfo {
                 id,
                 display_name: None,
+                supports_reasoning: None,
             })
             .collect(),
     )

@@ -32,7 +32,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
   onOpenDetails,
 }) => {
   const { t } = useTranslation('scenes/agents');
-  const badge = getAgentBadge(t, agent.agentKind, agent.source ?? agent.subagentSource);
+  const badge = getAgentBadge(t, agent.agentKind, agent.source ?? agent.subagentSource, agent.id);
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
   const openDetails = () => onOpenDetails(agent);

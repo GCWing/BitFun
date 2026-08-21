@@ -148,9 +148,12 @@ impl ProductToolCatalogProvider {
         exposure_overrides: &AgentToolPolicyOverrides,
         context: &ToolUseContext,
     ) -> (Vec<String>, AgentToolPolicyOverrides) {
+        // Context-level restrictions gate tool visibility, so subagent deny
+        // lists stay visible to the model through the catalog.
+        let restrictions = context.runtime_tool_restrictions.clone();
         let allowed_tools = allowed_tools
             .iter()
-            .filter(|tool_name| context.runtime_tool_restrictions.is_tool_allowed(tool_name))
+            .filter(|tool_name| restrictions.is_tool_allowed(tool_name))
             .cloned()
             .collect::<Vec<_>>();
         if Self::deferred_tool_loading_enabled(context) {
@@ -297,12 +300,12 @@ async fn contextual_tool_snapshot(context: &ToolUseContext) -> Vec<ToolRef> {
             context.workspace_root(),
             context.is_remote(),
         );
-        return tools
+        tools
             .into_iter()
             .filter_map(|tool| {
                 crate::external_tools::resolve_external_tool_for_workspace(tool, route_root)
             })
-            .collect();
+            .collect()
     }
     #[cfg(not(feature = "external-sources"))]
     {

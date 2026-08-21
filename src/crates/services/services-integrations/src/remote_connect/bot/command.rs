@@ -1,6 +1,10 @@
 use super::state::BotDisplayMode;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BotCommand {
+    /// Empty input (empty / whitespace-only).  Produced by `parse_command`
+    /// instead of an empty `ChatMessage` so empty requests never reach the
+    /// session and burn a model credit (P0 black-hole fallback).
+    Empty,
     /// Show welcome (unpaired) or main menu (paired).  Triggered by
     /// `/start`, `/menu`, `/m`, `菜单`, or `0` at the top level.
     Menu,
@@ -63,6 +67,13 @@ fn strip_numeric_reply_suffix(s: &str) -> &str {
 pub fn parse_command(text: &str) -> BotCommand {
     let normalized = normalize_im_command_text(text);
     let trimmed = normalized.trim();
+    // Empty / whitespace-only input is not a command and must NOT be turned
+    // into an empty `ChatMessage` — that would be forwarded to the session
+    // and burn a model request (P0 credit black hole, see type-contract
+    // `飞书空请求拦截-type-contract-20260814.md` shared-layer fallback).
+    if trimmed.is_empty() {
+        return BotCommand::Empty;
+    }
     if let Some(rest) = trimmed.strip_prefix("/cancel_task") {
         let arg = rest.trim();
         return if arg.is_empty() {
@@ -202,6 +213,15 @@ mod tests {
             parse_command("hello"),
             BotCommand::ChatMessage(text) if text == "hello"
         ));
+    }
+
+    #[test]
+    fn empty_or_whitespace_input_returns_empty_command() {
+        // Empty input must NOT construct an empty ChatMessage (P0 credit
+        // black-hole fallback): parse_command returns `BotCommand::Empty`.
+        assert!(matches!(parse_command(""), BotCommand::Empty));
+        assert!(matches!(parse_command("   "), BotCommand::Empty));
+        assert!(matches!(parse_command("\t\n  "), BotCommand::Empty));
     }
 }
 

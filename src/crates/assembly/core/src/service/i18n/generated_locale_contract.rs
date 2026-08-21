@@ -89,6 +89,11 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
+        key: "agents.master",
+        value: "主人",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
         key: "connectionMethods.bitfunServer",
         value: "BitFun Server",
     },
@@ -259,6 +264,11 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
+        key: "agents.master",
+        value: "主人",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
         key: "connectionMethods.bitfunServer",
         value: "BitFun Server",
     },
@@ -426,6 +436,11 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::EnUS,
         key: "agents.default",
         value: "Default Assistant",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
+        key: "agents.master",
+        value: "Master",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,

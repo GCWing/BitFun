@@ -247,7 +247,7 @@ fn append_configured_path(
         },
         |path| {
             should_descend_instruction_glob(path)
-                && directory_matchers.as_ref().map_or(true, |matchers| {
+                && directory_matchers.as_ref().is_none_or(|matchers| {
                     path.strip_prefix(&prune_root).ok().is_some_and(|relative| {
                         let depth = relative.components().count();
                         matchers
@@ -448,6 +448,7 @@ mod tests {
         let config_dir = temp.path().join("config");
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(workspace.join(".git")).expect("workspace git boundary");
         std::fs::create_dir_all(&workspace).expect("workspace directory");
         std::fs::write(workspace.join("file.md"), "file\n").expect("file instruction");
         std::fs::write(workspace.join("inline.md"), "inline\n").expect("inline instruction");
@@ -477,6 +478,7 @@ mod tests {
         let config_dir = temp.path().join("config");
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(workspace.join(".git")).expect("workspace git boundary");
         std::fs::create_dir_all(&workspace).expect("workspace directory");
         for name in ["legacy.md", "global.md", "shared.md", "project.md"] {
             std::fs::write(workspace.join(name), format!("{name}\n")).expect("instruction");
@@ -573,6 +575,7 @@ mod tests {
         let outside = temp.path().join("explicit.md");
         std::fs::create_dir_all(&config_dir).expect("config directory");
         std::fs::create_dir_all(&home_dir).expect("home directory");
+        std::fs::create_dir_all(workspace.join(".git")).expect("workspace git boundary");
         std::fs::create_dir_all(workspace.join("rules/nested")).expect("rules directory");
         std::fs::write(workspace.join("rules/b.md"), "b\n").expect("b rule");
         std::fs::write(workspace.join("rules/a.md"), "a\n").expect("a rule");
@@ -732,6 +735,7 @@ mod tests {
         let config_dir = temp.path().join("config");
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(workspace.join(".git")).expect("workspace git boundary");
         std::fs::create_dir_all(&workspace).expect("workspace directory");
         std::fs::write(workspace.join("root.md"), "root\n").expect("root rule");
         let mut unrelated = workspace.join("unrelated");
@@ -758,6 +762,7 @@ mod tests {
         let config_dir = temp.path().join("config");
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(workspace.join(".git")).expect("workspace git boundary");
         std::fs::create_dir_all(workspace.join("team-alpha")).expect("matching directory");
         std::fs::write(workspace.join("team-alpha/rule.md"), "matching\n").expect("matching rule");
         let unrelated = workspace.join("vendor");
@@ -785,6 +790,7 @@ mod tests {
         let config_dir = temp.path().join("config");
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(workspace.join(".git")).expect("workspace git boundary");
         std::fs::write(config_dir.join("AGENTS.md"), "global\n").expect("global rule");
         let mut too_deep = workspace.join("docs");
         for index in 0..33 {
@@ -810,6 +816,7 @@ mod tests {
         let config_dir = temp.path().join("config");
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(workspace.join(".git")).expect("workspace git boundary");
         std::fs::create_dir_all(&workspace).expect("workspace directory");
         for index in 0..257 {
             let name = format!("rules/{index:03}.md");

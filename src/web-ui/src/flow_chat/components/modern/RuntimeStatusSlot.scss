@@ -37,7 +37,7 @@
 
   &--footer &__content {
     width: 100%;
-    max-width: 900px;
+    max-width: var(--bf-appearance-token-flowchat-content-max-width);
     margin: 0 auto;
     padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
     box-sizing: border-box;

@@ -508,6 +508,9 @@ impl FeishuBot {
                 } else {
                     parsed.text
                 };
+                if text.trim().is_empty() && images.is_empty() {
+                    return;
+                }
                 bot.handle_incoming_message(&parsed.chat_id, &text, images)
                     .await;
             });
@@ -532,6 +535,9 @@ impl FeishuBot {
         text: &str,
         images: Vec<ImageAttachment>,
     ) {
+        if text.trim().is_empty() && images.is_empty() {
+            return;
+        }
         if !self.runtime_fence.is_lifecycle_current() {
             return;
         }
@@ -678,6 +684,58 @@ impl FeishuBot {
 #[cfg(test)]
 mod tests {
     use super::feishu_provider;
+    use super::FeishuBot;
+    use crate::service::remote_connect::remote_server::ImageAttachment;
+    use bitfun_services_integrations::remote_connect::bot::feishu::FeishuConfig;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::sync::OnceLock;
+
+    static FORWARD_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    fn test_bot() -> Arc<FeishuBot> {
+        static BOT: OnceLock<Arc<FeishuBot>> = OnceLock::new();
+        BOT.get_or_init(|| {
+            let bot = FeishuBot::new(FeishuConfig {
+                app_id: "test_app".to_string(),
+                app_secret: "test_secret".to_string(),
+            });
+            Arc::new(bot)
+        })
+        .clone()
+    }
+
+    fn image_attachment() -> ImageAttachment {
+        ImageAttachment {
+            name: "image_1.png".to_string(),
+            data_url: "data:image/png;base64,AA==".to_string(),
+        }
+    }
+
+    /// Drive one full turn through the real command router with a freshly
+    /// paired chat state. Real model forwarding needs global singletons
+    /// (coordinator/scheduler), so the assertion contract is:
+    /// - empty text without images must be stopped by the guard (0 results);
+    /// - non-empty text / image-only placeholder must still be processed and
+    ///   produce a non-empty `HandleResult` (guard must NOT over-filter).
+    async fn run_turn(
+        chat_id: &str,
+        text: &str,
+        images: Vec<ImageAttachment>,
+    ) -> (usize, bool, usize) {
+        use super::super::command_router::BotChatState;
+        use super::super::command_router::{handle_command, parse_command};
+        let mut state = BotChatState::new(chat_id.to_string());
+        state.paired = true;
+        let cmd = parse_command(text);
+        let result = handle_command(&mut state, cmd, images).await;
+        let forwarded = result.forward_to_session.is_some();
+        let has_content = !result.reply.trim().is_empty()
+            || !result.menu.title.trim().is_empty()
+            || result.menu.body.is_some_and(|b| !b.trim().is_empty())
+            || !result.menu.items.is_empty();
+        (usize::from(forwarded), has_content, result.actions.len())
+    }
 
     #[test]
     fn parse_text_message_event() {
@@ -720,6 +778,82 @@ mod tests {
         assert_eq!(
             parsed,
             Some(("oc_actual".to_string(), "/switch_workspace".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_whitespace_only_text_is_rejected() {
+        let event = serde_json::json!({
+            "header": { "event_type": "im.message.receive_v1" },
+            "event": {
+                "message": {
+                    "message_type": "text",
+                    "chat_id": "oc_blank",
+                    "content": "{\"text\":\"   \"}"
+                }
+            }
+        });
+
+        assert!(feishu_provider::parse_message_event_full(&event).is_none());
+    }
+
+    #[tokio::test]
+    async fn empty_text_without_images_does_not_forward() {
+        FORWARD_COUNT.store(0, Ordering::SeqCst);
+        let bot = test_bot();
+        bot.handle_incoming_message("oc_empty", "   ", vec![]).await;
+        // Guard intercepts at the handle_incoming_message entry: the turn
+        // never reaches the router, so no forward is produced and no state
+        // (chat_states entry) is created for this chat.
+        assert_eq!(FORWARD_COUNT.load(Ordering::SeqCst), 0);
+        let states = bot.chat_states.read().await;
+        assert!(
+            !states.contains_key("oc_empty"),
+            "guard must return before touching chat state"
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_text_with_images_uses_image_placeholder() {
+        FORWARD_COUNT.store(0, Ordering::SeqCst);
+        let bot = test_bot();
+        let images = vec![image_attachment()];
+        let text = {
+            let language = super::super::locale::current_bot_language().await;
+            if language.is_chinese() {
+                "\u{7528}\u{6237}\u{53d1}\u{9001}\u{4e86}\u{4e00}\u{5f20}\u{56fe}\u{7247}"
+                    .to_string()
+            } else {
+                "[User sent an image]".to_string()
+            }
+        };
+        bot.handle_incoming_message("oc_image_only", &text, images.clone())
+            .await;
+        assert_eq!(FORWARD_COUNT.load(Ordering::SeqCst), 0);
+        // Image-only placeholder text is NOT empty → must be processed.
+        let (forwarded, has_content, _) = run_turn("oc_image_only", &text, images).await;
+        assert_eq!(forwarded, 0);
+        assert!(
+            has_content,
+            "image placeholder must still be processed (needs a session prompt)"
+        );
+    }
+
+    #[tokio::test]
+    async fn non_empty_text_forwards_normally() {
+        FORWARD_COUNT.store(0, Ordering::SeqCst);
+        let bot = test_bot();
+        bot.handle_incoming_message("oc_text", "hello", vec![])
+            .await;
+        assert_eq!(FORWARD_COUNT.load(Ordering::SeqCst), 0);
+        // Non-empty text is not intercepted: it reaches the router and gets a
+        // real (non-empty) HandleResult; real model forwarding is out of scope
+        // here because it depends on global singletons.
+        let (forwarded, has_content, _) = run_turn("oc_text", "hello", vec![]).await;
+        assert_eq!(forwarded, 0);
+        assert!(
+            has_content,
+            "non-empty text must be processed normally (not dropped by the guard)"
         );
     }
 }

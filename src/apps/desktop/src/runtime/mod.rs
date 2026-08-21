@@ -4,15 +4,21 @@ use std::sync::Arc;
 use bitfun_agent_runtime::sdk::SessionEventJournal;
 use bitfun_agent_runtime::sdk::{AgentRuntime, PermissionRequestEvent};
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
+use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::service::remote_ssh::SSHConnectionManager;
 use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
 use tokio::sync::RwLock;
 
+mod acp_client_port;
+mod acp_session_lifecycle;
 mod session_application;
 mod session_host_effects;
 
 use session_host_effects::ProductionDesktopSessionHostEffects;
+
+pub(crate) use acp_client_port::DesktopAcpClientPort;
+pub(crate) use acp_session_lifecycle::AcpSessionLifecycleSubscriber;
 
 pub(crate) use session_application::{
     DesktopSessionApplication, DesktopSessionApplicationError, DesktopSessionScopeRequest,
@@ -31,6 +37,7 @@ pub struct DesktopRuntimeContext {
 }
 
 impl DesktopRuntimeContext {
+    #[allow(clippy::too_many_arguments)] // full desktop delivery profile wiring; kept flat at the single call site
     pub(crate) fn build(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
@@ -38,6 +45,7 @@ impl DesktopRuntimeContext {
         workspace_service: Arc<WorkspaceService>,
         ssh_manager: Arc<RwLock<Option<SSHConnectionManager>>>,
         acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
+        _ai_client_factory: Arc<AIClientFactory>,
         session_event_journal: Arc<SessionEventJournal>,
     ) -> Result<Self, String> {
         let host_effects = Arc::new(ProductionDesktopSessionHostEffects::new(acp_client_service));

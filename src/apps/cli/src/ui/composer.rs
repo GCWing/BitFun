@@ -350,10 +350,8 @@ fn reconcile_source_edit<T: TrackedComposerSource>(
                 source.end().saturating_add_signed(delta),
             );
             true
-        } else if edit_start >= source.end() {
-            true
         } else {
-            false
+            edit_start >= source.end()
         }
     });
 }

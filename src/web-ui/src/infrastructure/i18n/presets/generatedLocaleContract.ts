@@ -51,7 +51,8 @@ export const SHARED_TERMS_BY_LOCALE = {
       "code": "代码会话",
       "cowork": "协作会话",
       "claw": "Claw",
-      "default": "默认助手"
+      "default": "默认助手",
+      "master": "主人"
     },
     "tools": {
       "explore": "探索",
@@ -101,7 +102,8 @@ export const SHARED_TERMS_BY_LOCALE = {
       "code": "Code Session",
       "cowork": "Cowork Session",
       "claw": "Claw",
-      "default": "Default Assistant"
+      "default": "Default Assistant",
+      "master": "Master"
     },
     "tools": {
       "explore": "Explore",
@@ -151,7 +153,8 @@ export const SHARED_TERMS_BY_LOCALE = {
       "code": "程式碼會話",
       "cowork": "協作會話",
       "claw": "Claw",
-      "default": "預設助手"
+      "default": "預設助手",
+      "master": "主人"
     },
     "tools": {
       "explore": "探索",

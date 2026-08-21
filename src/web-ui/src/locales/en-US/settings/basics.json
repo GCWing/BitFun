@@ -250,5 +250,52 @@
       "saveSuccess": "Notification settings saved",
       "saveFailed": "Failed to save notification settings"
     }
+  },
+  "knowledgeBase": {
+    "sections": {
+      "title": "Knowledge Base",
+      "hint": "Local knowledge base root used by the KnowledgeBaseSearch tool. The desktop and CLI hosts inject it into BITFUN_KNOWLEDGE_BASE_ROOT at startup."
+    },
+    "rootLabel": "Knowledge base root",
+    "rootDescription": "Directory containing the L0/L1/L3/L4 knowledge layers. Empty keeps KnowledgeBaseSearch disabled.",
+    "rootPlaceholder": "e.g. C:/path/to/knowledge-base",
+    "actions": {
+      "saveLabel": "Save",
+      "saveDescription": "Persist the root directory; the next host startup injects it into the environment.",
+      "save": "Save"
+    },
+    "messages": {
+      "loading": "Loading...",
+      "loadFailed": "Failed to load knowledge base root",
+      "saved": "Knowledge base root saved",
+      "cleared": "Knowledge base root cleared",
+      "saveFailed": "Failed to save knowledge base root"
+    }
+  },
+  "legion": {
+    "sections": {
+      "title": "Workflow deployment limits",
+      "hint": "Node caps and deployment frequency for workflow deployments. Changes apply immediately."
+    },
+    "maxNodes": {
+      "label": "Max nodes per topology",
+      "description": "Maximum nodes a single workflow deployment may contain (default 20)."
+    },
+    "maxTotalNodes": {
+      "label": "Max total nodes across deployments",
+      "description": "Maximum total workflow node sessions a single creator session may own (default 60)."
+    },
+    "frequency": {
+      "label": "Max deployments per hour",
+      "description": "Maximum deployments allowed per creator session within a 1-hour sliding window (default 10; 0 disables the limit)."
+    },
+    "messages": {
+      "loading": "Loading...",
+      "loadFailed": "Failed to load workflow deployment limits",
+      "saved": "Workflow deployment limits saved",
+      "saveFailed": "Failed to save workflow deployment limits",
+      "invalidNodeCap": "Max nodes per topology must be at least 1",
+      "invalidTotalCap": "Max total nodes must be at least 1"
+    }
   }
 }

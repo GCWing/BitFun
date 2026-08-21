@@ -142,9 +142,36 @@
     }
   }
 
+  // Full-width tiled chat linkage: when the aux panel is wide (right panel
+  // stretched toward its maximum), the sub-agent conversation reading column
+  // expands with the panel instead of capping at the 900px A4-like width.
+  // Entered via chatFullWidth (the class is also applied while chat full-width
+  // is active) and by the panel's own width once it exceeds the reading width.
+  &--chat-full-width {
+    .virtual-item-wrapper {
+      max-width: none;
+    }
+
+    .btw-session-panel__runtime-status .runtime-status-slot__content {
+      max-width: none;
+    }
+  }
+
+  // Adaptive: a stretched aux panel (e.g. right panel dragged beyond the
+  // reading width) also widens the sub-agent conversation column.
+  @media (min-width: 941px) {
+    .virtual-item-wrapper {
+      max-width: none;
+    }
+
+    .btw-session-panel__runtime-status .runtime-status-slot__content {
+      max-width: none;
+    }
+  }
+
   &__runtime-status .runtime-status-slot__content {
     width: 100%;
-    max-width: 900px;
+    max-width: var(--bf-appearance-token-flowchat-content-max-width);
     margin: 0 auto;
     padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
     box-sizing: border-box;

@@ -1,11 +1,25 @@
 use bitfun_agent_runtime::prompt::{
     render_project_layout, render_prompt_environment_info, render_runtime_context_reminder,
-    render_user_context_reminder, render_workspace_context, PrependedPromptReminders,
-    ProjectLayoutFacts, PromptEnvironmentFacts, PromptRelatedPath, RemoteExecutionHints,
-    RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts, ToolListingSections,
-    UserContextPolicy, UserContextSection, WorkspaceContextFacts, WorktreeContextFacts,
+    render_runtime_facts_reminder, render_user_context_reminder, render_workspace_context,
+    PrependedPromptReminders, ProjectLayoutFacts, PromptEnvironmentFacts, PromptRelatedPath,
+    RemoteExecutionHints, RuntimeContextFacts, RuntimeContextNeeds, RuntimeFactsInput,
+    RuntimeShellFacts, ToolListingSections, UserContextPolicy, UserContextSection,
+    WorkspaceContextFacts, WorktreeContextFacts,
 };
 use bitfun_core_types::{SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle};
+
+fn sample_runtime_facts_input(context_usage_ratio: Option<f32>) -> RuntimeFactsInput {
+    RuntimeFactsInput {
+        local_time_rfc3339: "2026-08-05T10:30:00+08:00".to_string(),
+        utc_time_rfc3339: "2026-08-05T02:30:00Z".to_string(),
+        weekday_name: "Wednesday".to_string(),
+        weekday_number: 3,
+        local_hhmm: "10:30".to_string(),
+        timezone_offset: "+08:00".to_string(),
+        context_usage_ratio,
+        compression_preview_ratio: Some(0.9),
+    }
+}
 
 #[test]
 fn user_context_policy_preserves_order_and_deduplicates_sections() {
@@ -90,6 +104,7 @@ fn prepended_prompt_reminders_keep_runtime_injection_order() {
         skill_listing: Some("skills".to_string()),
         agent_listing: Some("agents".to_string()),
         runtime_context: Some("runtime-context".to_string()),
+        runtime_facts: Some("runtime-facts".to_string()),
         user_context: Some("user-context".to_string()),
     };
 
@@ -100,12 +115,97 @@ fn prepended_prompt_reminders_keep_runtime_injection_order() {
             "skills",
             "agents",
             "runtime-context",
+            "runtime-facts",
             "user-context"
         ]
     );
     assert!(PrependedPromptReminders::default()
         .ordered_reminders()
         .is_empty());
+}
+
+#[test]
+fn runtime_facts_reminder_renders_time_and_offset_facts() {
+    let reminder = render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.35)));
+
+    assert!(reminder.starts_with("[Runtime Facts]"));
+    assert!(reminder.contains("当前本地时间: 2026-08-05T10:30:00+08:00（周3 Wednesday）"));
+    assert!(reminder.contains("UTC 时间: 2026-08-05T02:30:00Z"));
+    assert!(reminder.contains("时区偏移: +08:00"));
+    assert!(reminder.contains("当前上下文占比: 35%"));
+}
+
+#[test]
+fn runtime_facts_reminder_formats_usage_percent_with_rounding_and_clamping() {
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.35)))
+            .contains("当前上下文占比: 35%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.0)))
+            .contains("当前上下文占比: 0%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.004)))
+            .contains("当前上下文占比: 0%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.999)))
+            .contains("当前上下文占比: 100%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(1.5)))
+            .contains("当前上下文占比: 100%")
+    );
+}
+
+#[test]
+fn runtime_facts_reminder_tiered_guidance_covers_high_usage_compression_and_normal() {
+    // P-02: the 30% hallucination guardrail and compression preview lines were
+    // removed by the owner ruling. The reminder now always emits the bare usage
+    // percentage next to the clock; the tiered guidance text must not reappear.
+    let high = render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.35)));
+    assert!(high.contains("当前上下文占比: 35%"));
+    assert!(!high.contains("上下文已超 30%"));
+    assert!(!high.contains("即将自动压缩"));
+    assert!(!high.contains("DeepSeek 峰谷定价"));
+
+    let preview = render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.9)));
+    assert!(preview.contains("当前上下文占比: 90%"));
+    assert!(!preview.contains("即将自动压缩"));
+    assert!(!preview.contains("上下文已超 30%"));
+
+    let normal = render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.05)));
+    assert!(normal.contains("当前上下文占比: 5%"));
+    assert!(!normal.contains("上下文已超 30%"));
+    assert!(!normal.contains("即将自动压缩"));
+}
+
+#[test]
+fn runtime_facts_reminder_omits_usage_lines_when_ratio_is_absent() {
+    let reminder = render_runtime_facts_reminder(&sample_runtime_facts_input(None));
+
+    assert!(!reminder.contains("当前上下文占比"));
+    assert!(!reminder.contains("上下文已超 30%"));
+    assert!(!reminder.contains("即将自动压缩"));
+    assert!(reminder.contains("当前本地时间"));
+}
+
+#[test]
+fn runtime_facts_reminder_omits_compression_preview_text() {
+    // P-02: the compression preview was removed by the owner ruling. Setting a
+    // preview ratio (or leaving it missing) must not emit the old preview text.
+    let mut input = sample_runtime_facts_input(Some(0.95));
+    input.compression_preview_ratio = None;
+    let reminder = render_runtime_facts_reminder(&input);
+    assert!(!reminder.contains("即将自动压缩"));
+    assert!(reminder.contains("当前上下文占比: 95%"));
+
+    let mut input = sample_runtime_facts_input(Some(0.5));
+    input.compression_preview_ratio = Some(0.9);
+    let reminder = render_runtime_facts_reminder(&input);
+    assert!(!reminder.contains("即将自动压缩"));
+    assert!(reminder.contains("当前上下文占比: 50%"));
 }
 
 #[test]

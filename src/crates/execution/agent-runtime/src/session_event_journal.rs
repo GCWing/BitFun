@@ -585,7 +585,7 @@ fn prune_terminal_projections(sessions: &mut HashMap<String, SessionProjection>)
     if retained.len() <= MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS {
         return;
     }
-    retained.sort_unstable_by(|left, right| right.1.cmp(&left.1));
+    retained.sort_unstable_by_key(|(_, last_touched)| std::cmp::Reverse(*last_touched));
     for (session_id, _) in retained
         .into_iter()
         .skip(MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS)

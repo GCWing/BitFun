@@ -237,6 +237,53 @@
       "saveFailed": "儲存通知設置失敗"
     }
   },
+  "knowledgeBase": {
+    "sections": {
+      "title": "知識庫",
+      "hint": "KnowledgeBaseSearch 工具使用的本機知識庫根目錄。桌面端與 CLI 啟動時將其注入 BITFUN_KNOWLEDGE_BASE_ROOT。"
+    },
+    "rootLabel": "知識庫根目錄",
+    "rootDescription": "存放 L0/L1/L3/L4 知識層的目錄。留空則 KnowledgeBaseSearch 保持停用。",
+    "rootPlaceholder": "例如 C:/path/to/knowledge-base",
+    "actions": {
+      "saveLabel": "儲存",
+      "saveDescription": "持久化根目錄；下次宿主啟動時注入環境變數。",
+      "save": "儲存"
+    },
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取知識庫根目錄",
+      "saved": "知識庫根目錄已儲存",
+      "cleared": "知識庫根目錄已清除",
+      "saveFailed": "儲存知識庫根目錄失敗"
+    }
+  },
+  "legion": {
+    "sections": {
+      "title": "工作流部署參數",
+      "hint": "工作流部署的節點上限與頻率限制，修改後立即生效"
+    },
+    "maxNodes": {
+      "label": "單拓撲節點上限",
+      "description": "單次 LegionControl 部署最多允許的節點數（預設 20）。"
+    },
+    "maxTotalNodes": {
+      "label": "跨部署總量上限",
+      "description": "同一建立者會話名下所有工作流節點會話的總量上限（預設 60）。"
+    },
+    "frequency": {
+      "label": "每小時部署次數上限",
+      "description": "同一建立者會話在 1 小時滑動視窗內最多允許的部署次數（預設 10；設為 0 表示不限制）。"
+    },
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取工作流部署參數",
+      "saved": "工作流部署參數已儲存",
+      "saveFailed": "儲存工作流部署參數失敗",
+      "invalidNodeCap": "單拓撲節點上限必須至少為 1",
+      "invalidTotalCap": "跨部署總量上限必須至少為 1"
+    }
+  },
   "autoUpdate": {
     "sections": {
       "title": "更新",

@@ -1551,9 +1551,9 @@ mod tests {
         classify_docker_access, decide_task_status, deploy_body_script_with_image,
         install_docker_body_script, interactive_driver_script, parse_preflight,
         prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
-        split_poll_stdout, stage_scripts_command, to_unix_script, validate_relay_image_descriptor,
-        verify_minisign, DockerAccessMode, RelayImageDescriptor, RelayTaskStatus,
-        RELAY_IMAGE_REPOSITORY, RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
+        split_poll_stdout, to_unix_script, validate_relay_image_descriptor, verify_minisign,
+        DockerAccessMode, RelayImageDescriptor, RelayTaskStatus, RELAY_IMAGE_REPOSITORY,
+        RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
     };
 
     fn test_image_descriptor() -> RelayImageDescriptor {

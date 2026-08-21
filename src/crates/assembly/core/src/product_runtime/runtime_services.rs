@@ -7,9 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[cfg(feature = "ssh-remote")]
-use bitfun_runtime_ports::PortResult;
-#[cfg(feature = "ssh-remote")]
-use bitfun_runtime_ports::{PortError, PortErrorKind, RemoteExecPort};
+use bitfun_runtime_ports::{PortError, PortErrorKind, PortResult, RemoteExecPort};
 #[cfg(feature = "remote-connect")]
 use bitfun_runtime_ports::{RemoteProjectionPort, RemoteWorkspacePort};
 use bitfun_runtime_ports::{SessionStorePort, TerminalPort};

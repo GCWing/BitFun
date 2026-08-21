@@ -933,6 +933,10 @@ mod tests {
                 turn_count: 3,
                 created_at_ms: 12_345,
                 last_active_at_ms: 20_000,
+                is_daemon: false,
+                parent_session_id: None,
+                status: None,
+                display_state: None,
             },
             state: SessionState::Idle,
         });

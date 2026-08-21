@@ -1465,26 +1465,43 @@ async fn collect_workspace_command_result(
     )
     .await?;
     Ok(SSHCommandResult {
-        stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        stdout: String::from_utf8_lossy(&stdout.data).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr.data).into_owned(),
         exit_code: exit
             .and_then(|exit| exit.exit_code)
             .unwrap_or(fallback_exit_code),
         interrupted,
-        timed_out,
+        timed_out: timed_out || stdout.timed_out || stderr.timed_out,
     })
+}
+
+/// Collected stream output with an explicit timeout marker (P2-S7).
+///
+/// `timed_out` distinguishes "the command produced no output" from "the
+/// stream was still open after the drain grace and got truncated" so callers
+/// (e.g. remote listing/read tool paths) can decide whether a partial result
+/// is trustworthy.
+struct CollectedWorkspaceOutput {
+    data: Vec<u8>,
+    timed_out: bool,
 }
 
 async fn collect_workspace_reader(
     mut task: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
     task_error: &'static str,
     allow_incomplete: bool,
-) -> anyhow::Result<Vec<u8>> {
+) -> anyhow::Result<CollectedWorkspaceOutput> {
     match tokio::time::timeout(Duration::from_secs(3), &mut task).await {
-        Ok(result) => Ok(result.context(task_error)??),
+        Ok(result) => Ok(CollectedWorkspaceOutput {
+            data: result.context(task_error)??,
+            timed_out: false,
+        }),
         Err(_) if allow_incomplete => {
             task.abort();
-            Ok(Vec::new())
+            Ok(CollectedWorkspaceOutput {
+                data: Vec::new(),
+                timed_out: true,
+            })
         }
         Err(_) => {
             task.abort();
@@ -3034,9 +3051,9 @@ impl SSHConnectionManager {
                 .or_else(|| entry.as_ref().and_then(|entry| entry.port))
                 .unwrap_or(22);
             let identity_file = entry.as_ref().and_then(|entry| entry.identity_file.clone());
-            let auth = if identity_file.is_some() {
+            let auth = if let Some(identity_file) = identity_file {
                 SSHAuthMethod::PrivateKey {
-                    key_path: identity_file.expect("identity_file.is_some was checked"),
+                    key_path: identity_file,
                     passphrase: None,
                     certificate_path: entry
                         .as_ref()

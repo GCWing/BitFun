@@ -13,14 +13,14 @@ impl AnthropicMessageConverter {
     ///
     /// Note: Anthropic requires system messages to be handled separately, not in the messages array
     pub fn convert_messages(messages: Vec<Message>) -> (Option<String>, Vec<Value>) {
-        let mut system_message = None;
+        let mut system_sections = Vec::new();
         let mut anthropic_messages = Vec::new();
 
         for msg in messages {
             match msg.role.as_str() {
                 "system" => {
                     if let Some(content) = msg.content {
-                        system_message = Some(content);
+                        system_sections.push(content);
                     }
                 }
                 "user" => {
@@ -39,6 +39,16 @@ impl AnthropicMessageConverter {
                 }
             }
         }
+
+        // Collect every system section and join with a blank line so multiple
+        // system messages are preserved instead of being overwritten by the
+        // last one (previous behavior). Each section keeps its own
+        // `<system_reminder>` shell when the caller used one.
+        let system_message = if system_sections.is_empty() {
+            None
+        } else {
+            Some(system_sections.join("\n\n"))
+        };
 
         // Canonicalize consecutive turns into a single content-block message.
         let mut merged_messages = Self::merge_consecutive_messages(anthropic_messages);
@@ -257,6 +267,49 @@ mod tests {
         assert_eq!(content[0]["type"], json!("thinking"));
         assert_eq!(content[0]["thinking"], json!(""));
         assert_eq!(content[0]["signature"], json!("sig_1"));
+    }
+
+    #[test]
+    fn joins_multiple_system_messages_with_blank_line() {
+        // 多个 system 消息必须全部保留并按空行合并，而不是被最后一个覆盖。
+        let (system, messages) = AnthropicMessageConverter::convert_messages(vec![
+            Message {
+                role: "system".to_string(),
+                content: Some("<system_reminder>\nfirst\n</system_reminder>".to_string()),
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+                is_error: None,
+                tool_image_attachments: None,
+                model_response_replay: None,
+            },
+            Message {
+                role: "system".to_string(),
+                content: Some("<system_reminder>\nsecond\n</system_reminder>".to_string()),
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+                is_error: None,
+                tool_image_attachments: None,
+                model_response_replay: None,
+            },
+            Message::user("real user text".to_string()),
+        ]);
+
+        let system = system.expect("system sections should be present");
+        assert!(system.contains("first"), "first system section preserved");
+        assert!(system.contains("second"), "second system section preserved");
+        assert!(
+            system.contains("<system_reminder>\nfirst\n</system_reminder>\n\n<system_reminder>"),
+            "sections joined with blank line, shells preserved"
+        );
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"], json!("user"));
     }
 
     #[test]

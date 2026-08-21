@@ -1,20 +1,24 @@
 use anyhow::{anyhow, Context, Result};
+#[cfg(unix)]
 use flate2::read::GzDecoder;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
+#[cfg(unix)]
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
+#[cfg(unix)]
 use tar::Archive;
 
 const GITHUB_MANIFEST: &str =
     "https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json";
 const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries.json";
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+#[cfg(unix)]
 const DEPRECATION_WARNING: &str = "Warning: `bitfun-cli` is deprecated; use `bitfun` instead.";
 
 /// Source-selection tuning. Mirrors the relay deploy path in
@@ -1163,6 +1167,7 @@ fn install_archive(_archive: &[u8], _current_exe: &Path) -> Result<()> {
     Err(anyhow!("CLI self-update is only available on Linux"))
 }
 
+#[cfg(unix)]
 fn find_package_dir(root: &Path) -> Result<PathBuf> {
     for entry in fs::read_dir(root).context("inspect CLI update archive")? {
         let path = entry?.path();
@@ -1175,6 +1180,7 @@ fn find_package_dir(root: &Path) -> Result<PathBuf> {
     ))
 }
 
+#[cfg(unix)]
 fn validate_entrypoint_pair(primary: &Path, legacy: &Path) -> Result<()> {
     let primary_status = Command::new(primary)
         .arg("--version")
@@ -1198,6 +1204,7 @@ fn validate_entrypoint_pair(primary: &Path, legacy: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn validate_plugin_host_resources(directory: &Path) -> Result<()> {
     for entry in ["extension-host.js"] {
         let path = directory.join(entry);
@@ -1211,6 +1218,7 @@ fn validate_plugin_host_resources(directory: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn copy_plugin_host_resources(source: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(destination).with_context(|| {
         format!(

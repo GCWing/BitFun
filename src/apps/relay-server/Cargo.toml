@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-relay-server"
 version = "0.2.19" # x-release-please-version
 authors = ["BitFun Team"]
@@ -37,6 +38,10 @@ unsafe_op_in_unsafe_fn = "warn"
 unexpected_cfgs = "warn"
 unreachable_pub = "warn"
 unused_lifetimes = "warn"
+# MSVC link.exe emits localized stdout ("正在创建库 ... .lib") + LNK4098
+# (LIBCMT/default-lib conflict) for every native link; platform build
+# artifacts, not source warnings (lint ignores `-D warnings` by design).
+linker_messages = "allow"
 
 [lints.clippy]
 correctness = { level = "deny", priority = -1 }

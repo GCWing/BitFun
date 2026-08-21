@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-runtime-ports"
 version.workspace = true
 authors.workspace = true
@@ -46,10 +47,20 @@ default = []
 agent-api = ["dep:bitfun-core-types"]
 plugin-runtime = []
 script-tool-runtime = []
+# Local fork: acp_client_port.rs (ACP client contract) is unconditionally
+# needed by coordinator/tool implementations; upstream split tokio behind
+# feature gates, so this feature keeps the local module compiled by default
+# consumers (enabled via the tool-runtime-handles aggregate).
+acp-client = ["dep:tokio"]
 workspace-ports = ["dep:anyhow", "dep:tokio-util"]
 terminal-port = ["dep:tokio"]
 remote-exec-port = ["dep:tokio"]
 tool-runtime-handles = [
+    # Local fork: acp_client_port.rs (ACP client contract) is unconditionally
+    # needed by coordinator/tool implementations; upstream split tokio behind
+    # feature gates, so this aggregate keeps the local module compiled for
+    # agent-runtime consumers (enabled via workspace feature composition).
+    "acp-client",
     "workspace-ports",
     "terminal-port",
     "remote-exec-port",

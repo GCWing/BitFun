@@ -30,6 +30,28 @@ import './NurseryView.scss';
 
 const log = createLogger('AssistantDefaultsPage');
 const ASSISTANT_MODE_ID = 'Claw';
+// Marker for "user has actively configured on this page" (localStorage). Used
+// for default-select-all judgment: only auto-select-all on first entry when
+// the user has never toggled anything; after user interaction (including
+// reset) do not auto-refill, to avoid reset-scene enabled==default misfire.
+const ASSISTANT_CONFIGURED_FLAG_KEY = 'assistant-defaults:user-configured';
+
+function markAssistantConfigured(): void {
+  try {
+    localStorage.setItem(ASSISTANT_CONFIGURED_FLAG_KEY, '1');
+  } catch {
+    // Ignore localStorage unavailable (privacy mode etc.) - degrade: if not
+    // set, next visit still falls back to enabled==default judgment.
+  }
+}
+
+function isAssistantConfigured(): boolean {
+  try {
+    return localStorage.getItem(ASSISTANT_CONFIGURED_FLAG_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 interface ToolInfo {
   name: string;
@@ -172,7 +194,7 @@ const AssistantDefaultsPage: React.FC = () => {
     return map;
   }, [userSelectableTools]);
 
-  // All known MCP server ids — union of detected tool servers + registered servers
+  // All known MCP server ids - union of detected tool servers + registered servers
   const mcpServerIds = useMemo(() => {
     const fromTools = new Set(mcpToolsByServer.keys());
     const fromRegistry = new Set(mcpServers.map((s) => s.id));
@@ -194,6 +216,48 @@ const AssistantDefaultsPage: React.FC = () => {
         setAvailableTools(tools);
         setModeSkills(skillList ?? []);
         setMcpServers(servers ?? []);
+        // Default select-all (user can disable): only when the user has never
+        // configured anything on this page (explicit interaction marker absent,
+        // and enabled_tools matches default_tools exactly = no added/removed
+        // effects), merge all user-selectable tools (builtin + MCP) into
+        // enabled_tools and persist once - new Claw sessions get the full tool
+        // set (WorkspaceScan/TodoWrite/goal family/Plan family/MCP all on), and
+        // the user can later disable any tool manually. In reset scenes the
+        // marker is already set, so no refill happens.
+        if (
+          !isAssistantConfigured() &&
+          modeConf &&
+          modeConf.enabled_tools.length > 0 &&
+          modeConf.default_tools.length > 0
+        ) {
+          const defaultsMatch = modeConf.default_tools.every((name) => modeConf.enabled_tools.includes(name))
+            && modeConf.enabled_tools.every((name) => modeConf.default_tools.includes(name));
+          if (defaultsMatch) {
+            const selectable = tools.filter((tool) => isUserSelectableToolName(tool.name));
+            const enabledSet = new Set(modeConf.enabled_tools);
+            let changed = false;
+            for (const tool of selectable) {
+              if (!enabledSet.has(tool.name)) {
+                enabledSet.add(tool.name);
+                changed = true;
+              }
+            }
+            if (changed) {
+              const newConfig: AgentProfileConfigItem = {
+                ...modeConf,
+                enabled_tools: [...enabledSet],
+              };
+              try {
+                await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, newConfig);
+                setAssistantModeConfig(newConfig);
+                const { globalEventBus } = await import('@/infrastructure/event-bus');
+                globalEventBus.emit('mode:config:updated');
+              } catch (e) {
+                log.error('Failed to persist default-select-all config', e);
+              }
+            }
+          }
+        }
       } catch (e) {
         log.error('Failed to load assistant defaults config', e);
       } finally {
@@ -213,6 +277,7 @@ const AssistantDefaultsPage: React.FC = () => {
 
   const handleToolToggle = useCallback(async (toolName: string) => {
     if (!assistantModeConfig || !isUserSelectableToolName(toolName)) return;
+    markAssistantConfigured();
     setToolsLoading((prev) => ({ ...prev, [toolName]: true }));
     const current = assistantModeConfig.enabled_tools ?? [];
     const isEnabled = current.includes(toolName);
@@ -233,6 +298,7 @@ const AssistantDefaultsPage: React.FC = () => {
   }, [assistantModeConfig, t]);
 
   const handleResetTools = useCallback(async () => {
+    markAssistantConfigured();
     try {
       await configAPI.resetAgentProfileConfig(ASSISTANT_MODE_ID);
       const [modeConf, skills] = await Promise.all([
@@ -252,6 +318,7 @@ const AssistantDefaultsPage: React.FC = () => {
 
   const handleGroupToggleAll = useCallback(async (toolNames: string[]) => {
     if (!assistantModeConfig) return;
+    markAssistantConfigured();
     const selectableToolNames = toolNames.filter(isUserSelectableToolName);
     if (selectableToolNames.length === 0) return;
     const current = assistantModeConfig.enabled_tools ?? [];
@@ -273,6 +340,7 @@ const AssistantDefaultsPage: React.FC = () => {
   }, [assistantModeConfig, t]);
 
   const handleSkillToggle = useCallback(async (skill: ModeSkillInfo) => {
+    markAssistantConfigured();
     const loadingKey = skill.key;
     setSkillsLoading((prev) => ({ ...prev, [loadingKey]: true }));
     const nextDisabled = skill.effectiveEnabled;
@@ -322,7 +390,7 @@ const AssistantDefaultsPage: React.FC = () => {
     ));
   }, []);
 
-  // ── Render helpers ───────────────────────────────────────────────────────
+  // -- Render helpers --------------------------------------------------------
 
   const renderToolList = (tools: ToolInfo[], isMcp: boolean) => (
     <div className="tc-tool-list" data-bf-component="assistant-defaults-page" data-bf-part="toolList">
@@ -556,7 +624,7 @@ const AssistantDefaultsPage: React.FC = () => {
               <span className="tc-template-detail__badge">{t('nursery.template.readonlyTool')}</span>
             )}
             <p className="tc-template-detail__desc">
-              {tool.description?.trim() ? tool.description : '—'}
+              {tool.description?.trim() ? tool.description : '-'}
             </p>
             <div className="tc-template-detail__actions">
               <Switch
@@ -644,7 +712,7 @@ const AssistantDefaultsPage: React.FC = () => {
             <p className="tc-template-detail__meta">{runtimeStatusLabel}</p>
           ) : null}
           <p className="tc-template-detail__desc">
-            {skill.description?.trim() ? skill.description : '—'}
+            {skill.description?.trim() ? skill.description : '-'}
           </p>
           <div className="tc-template-detail__actions">
             <Switch

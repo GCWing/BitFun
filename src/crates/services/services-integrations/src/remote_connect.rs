@@ -3695,6 +3695,7 @@ mod tests {
     }
 
     #[derive(Default)]
+    #[allow(clippy::type_complexity)] // (String, String, Option<Option<String>>) mirrors the wire update tuple
     struct FakeSessionHost {
         created_requests: Mutex<Vec<AgentSessionCreateRequest>>,
         list_identities: Mutex<Vec<RemoteSessionWorkspaceIdentity>>,
@@ -4227,6 +4228,7 @@ mod tests {
     }
 
     #[derive(Default)]
+    #[allow(dead_code)]
     struct FakeInteractionHost;
 
     #[async_trait::async_trait]

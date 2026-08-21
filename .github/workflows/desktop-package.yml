@@ -46,6 +46,7 @@ jobs:
   prepare:
     name: Prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.meta.outputs.version }}
       release_tag: ${{ steps.meta.outputs.release_tag }}
@@ -140,11 +141,15 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     needs: prepare
     if: needs.prepare.outputs.relay_image_only != 'true'
+    # Release packaging: full release-profile build + bundles per platform.
+    # 6h default is far too long for a wedged job; cap it at 120m.
+    timeout-minutes: 120
     env:
       NODE_OPTIONS: --max-old-space-size=6144
       BITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
       BITFUN_RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
-      TAURI_UPDATER_ENDPOINT: ${{ github.repository != 'GCWing/BitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
+      # 本侧定制：stable 直链 latest.json（updater 常规路径）
+      TAURI_UPDATER_ENDPOINT: ${{ github.repository != 'GCWing/BitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || format('https://github.com/{0}/releases/latest/download/latest.json', github.repository) }}
       TAURI_UPDATER_FALLBACK_ENDPOINT: ${{ github.repository != 'GCWing/BitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
       TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
       # Same trust root, compiled into the Desktop binary so one-click relay
@@ -346,6 +351,7 @@ jobs:
   publish-relay-image:
     name: Publish Relay Server Image
     needs: [prepare, linux-binaries]
+    timeout-minutes: 60
     if: >-
       always() &&
       ((needs.prepare.outputs.upload_to_release == 'true' &&
@@ -358,7 +364,7 @@ jobs:
       contents: write
       packages: write
     env:
-      IMAGE: ghcr.io/gcwing/bitfun-relay-server
+      IMAGE: ghcr.io/${{ github.repository_owner }}/bitfun-relay-server
 
     steps:
       - name: Checkout
@@ -384,7 +390,7 @@ jobs:
           set -euo pipefail
           mkdir -p linux-release-assets
           gh release download "${RELEASE_TAG}" \
-            --repo GCWing/BitFun \
+            --repo "${{ github.repository }}" \
             --dir linux-release-assets \
             --pattern 'bitfun-relay-server-*.tar.gz' \
             --pattern 'bitfun-relay-server-*.tar.gz.sha256'
@@ -432,7 +438,7 @@ jobs:
             if [[ "${IMAGE_ONLY}" == "true" ]]; then
               # Backfilling an older release must not roll the floating tag
               # backwards. GitHub's latest endpoint excludes prereleases.
-              latest_release="$(gh api repos/GCWing/BitFun/releases/latest --jq .tag_name)"
+              latest_release="$(gh api repos/${{ github.repository }}/releases/latest --jq .tag_name)"
               if [[ "${RELEASE_TAG}" == "${latest_release}" ]]; then
                 echo "${IMAGE}:latest"
               fi
@@ -538,6 +544,7 @@ jobs:
   upload-release-assets:
     name: Upload Release Assets
     needs: [prepare, package, linux-binaries, publish-relay-image]
+    timeout-minutes: 30
     if: >-
       always() &&
       needs.prepare.outputs.upload_to_release == 'true' &&
@@ -637,7 +644,7 @@ jobs:
             --assets-dir linux-release-assets \
             --version "${{ needs.prepare.outputs.version }}" \
             --tag "${{ needs.prepare.outputs.release_tag }}" \
-            --repo "GCWing/BitFun" \
+            --repo "${{ github.repository }}" \
             --out linux-release-assets/linux-binaries.json
 
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
@@ -748,7 +755,7 @@ jobs:
         if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
             -o linux-binaries.published.json
           test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"
           while IFS= read -r cli_url; do
@@ -760,13 +767,13 @@ jobs:
         if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
             -o relay-image.published.json
           test "$(jq -r '.tag' relay-image.published.json)" = "${{ needs.prepare.outputs.release_tag }}"
-          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/gcwing/bitfun-relay-server"
+          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/${{ github.repository_owner }}/bitfun-relay-server"
           jq -e '.digest | test("^sha256:[0-9a-f]{64}$")' relay-image.published.json >/dev/null
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
             -o /dev/null
 
       - name: Resolve beta channel promotion

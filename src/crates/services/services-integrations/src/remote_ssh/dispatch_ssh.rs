@@ -2541,10 +2541,7 @@ async fn probe_release_throughput(client: &reqwest::Client, url: &str) -> u64 {
         return 0;
     }
     let mut received = 0u64;
-    loop {
-        let Some(remaining) = RELEASE_PROBE_WINDOW.checked_sub(started.elapsed()) else {
-            break;
-        };
+    while let Some(remaining) = RELEASE_PROBE_WINDOW.checked_sub(started.elapsed()) {
         if remaining.is_zero() {
             break;
         }
@@ -3613,6 +3610,7 @@ mod tests {
 
     /// Mirrors a real `bitfun`: answers `--version` and has a `dispatch`
     /// subcommand.
+    #[allow(dead_code)] // used only by unix-gated fixtures below
     const DISPATCH_CAPABLE_PRIMARY: &str = "#!/bin/bash\n\
          if [ \"${1:-}\" = dispatch ]; then\n\
          if [ \"${2:-}\" = probe ]; then\n\
@@ -3623,6 +3621,7 @@ mod tests {
          echo \"bitfun 1.2.3\"\n";
 
     /// Has the dispatch command but predates safe worker profile selection.
+    #[allow(dead_code)] // used only by unix-gated fixtures below
     const UNSAFE_DISPATCH_PRIMARY: &str = "#!/bin/bash\n\
          if [ \"${1:-}\" = dispatch ]; then\n\
          if [ \"${2:-}\" = probe ]; then echo '{\"capabilities\":[]}' ; fi\n\
@@ -3632,6 +3631,7 @@ mod tests {
 
     /// Mirrors a release that predates dispatch: the binary is healthy and
     /// reports the right version, but clap rejects the subcommand.
+    #[allow(dead_code)] // used only by unix-gated fixtures below
     const DISPATCH_LESS_PRIMARY: &str = "#!/bin/bash\n\
          if [ \"${1:-}\" = dispatch ]; then\n\
          echo \"error: unrecognized subcommand 'dispatch'\" >&2\n\
@@ -3639,6 +3639,7 @@ mod tests {
          fi\n\
          echo \"bitfun 1.2.3\"\n";
 
+    #[allow(dead_code)] // used only by unix-gated fixtures below
     const SIBLING_RESOLVING_COMPANION: &str = "#!/bin/bash\n\
          echo 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.' >&2\n\
          here=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n\

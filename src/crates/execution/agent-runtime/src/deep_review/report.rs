@@ -255,6 +255,9 @@ pub fn push_reliability_signal_if_missing(input: &mut Value, signal: Value) {
     let Some(kind) = signal.get("kind").and_then(Value::as_str) else {
         return;
     };
+    if !input.is_object() {
+        return;
+    }
     if has_reliability_signal(input, kind) {
         return;
     }
@@ -503,6 +506,9 @@ fn target_evidence_status(run_manifest: Option<&Value>) -> Option<&'static str> 
 }
 
 pub fn apply_review_evidence_guardrail(input: &mut Value, run_manifest: Option<&Value>) {
+    if !input.is_object() {
+        return;
+    }
     if input
         .get("evidence_status")
         .and_then(Value::as_str)
@@ -538,6 +544,9 @@ pub fn apply_review_evidence_guardrail(input: &mut Value, run_manifest: Option<&
 }
 
 pub fn apply_review_runtime_limitation(input: &mut Value, detail: &str) {
+    if !input.is_object() {
+        return;
+    }
     if input.get("evidence_status").and_then(Value::as_str) != Some("failed") {
         input["evidence_status"] = json!("limited");
     }
@@ -553,6 +562,9 @@ pub fn apply_review_runtime_limitation(input: &mut Value, detail: &str) {
 }
 
 pub fn apply_review_runtime_stale(input: &mut Value) {
+    if !input.is_object() {
+        return;
+    }
     if input.get("evidence_status").and_then(Value::as_str) != Some("failed") {
         input["evidence_status"] = json!("stale");
     }
@@ -661,6 +673,23 @@ mod tests {
         fill_deep_review_runtime_tracker_signal(&mut input, 0);
 
         assert!(input.get("reliability_signals").is_none());
+    }
+
+    #[test]
+    fn report_writes_on_non_object_input_are_safe_noops() {
+        let mut input = json!([1, 2, 3]);
+
+        push_reliability_signal_if_missing(
+            &mut input,
+            json!({ "kind": "cache_hit", "severity": "info" }),
+        );
+        fill_deep_review_runtime_tracker_signal(&mut input, 3);
+        apply_review_evidence_guardrail(&mut input, None);
+        apply_review_runtime_limitation(&mut input, "test limitation");
+        apply_review_runtime_stale(&mut input);
+        fill_deep_review_reliability_signals(&mut input, None, None);
+
+        assert_eq!(input, json!([1, 2, 3]));
     }
 
     #[test]

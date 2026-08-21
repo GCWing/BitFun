@@ -231,6 +231,15 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-domain-inspector-main-tooltip-background': 'rgba(15, 23, 42, 0.95)',
     '--bf-appearance-token-domain-inspector-tooltip-text': '#e2e8f0',
     '--bf-appearance-token-domain-inspector-tooltip-shadow': 'rgba(0, 0, 0, 0.5)',
+    '--bf-appearance-token-domain-agent-team-accent-0': colors.accent[600],
+    '--bf-appearance-token-domain-agent-team-accent-1': '#6eb88c',
+    '--bf-appearance-token-domain-agent-team-accent-2': purple[500],
+    '--bf-appearance-token-domain-agent-team-accent-3': '#c9944d',
+    '--bf-appearance-token-domain-agent-team-accent-4': '#e879a0',
+    '--bf-appearance-token-domain-agent-team-accent-5': '#5ea3a3',
+    '--bf-appearance-token-domain-agent-team-role-leader': '#60a5fa',
+    '--bf-appearance-token-domain-agent-team-role-member': '#6eb88c',
+    '--bf-appearance-token-domain-agent-team-role-reviewer': '#c9944d',
     '--bf-appearance-token-language-blue': '#3178c6',
     '--bf-appearance-token-language-cyan': '#00add8',
     '--bf-appearance-token-language-yellow': '#f7df1e',
@@ -291,6 +300,11 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-flowchat-control-pad-x': '0.75rem',
     '--bf-appearance-token-flowchat-content-inline-pad': '3rem',
     '--bf-appearance-token-flowchat-content-inline-pad-mobile': '1.5rem',
+    // Reading column max-width (single source of truth, converged to 900px
+    // hardcode on 2026-08-08): referenced uniformly by VirtualItemRenderer
+    // (message column) / ExploreRegion (explore collapse group) / ChatInput
+    // (input box + file edit bar) / BtwSessionPanel to avoid 900px drift.
+    '--bf-appearance-token-flowchat-content-max-width': '900px',
     '--bf-appearance-token-flowchat-card-gap': '0.42rem',
     '--bf-appearance-token-flowchat-card-radius': effects.radius.base,
     '--bf-appearance-token-flowchat-card-pad-y': '0.625rem',

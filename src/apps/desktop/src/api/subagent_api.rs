@@ -9,7 +9,6 @@ use bitfun_core::service::config::SubagentModelSelection;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::path::PathBuf;
 use tauri::State;
 
@@ -260,38 +259,6 @@ pub struct CreateSubagentRequest {
     pub workspace_path: Option<String>,
 }
 
-fn readonly_tool_names(state: &AppState) -> HashSet<String> {
-    state
-        .tool_registry
-        .iter()
-        .filter(|tool| tool.is_readonly())
-        .map(|tool| tool.name().to_string())
-        .collect()
-}
-
-fn ensure_review_tools_are_readonly(
-    state: &AppState,
-    agent_name: &str,
-    tools: &[String],
-) -> Result<(), String> {
-    let readonly_tools = readonly_tool_names(state);
-    let writable_tools: Vec<&str> = tools
-        .iter()
-        .map(String::as_str)
-        .filter(|tool| !readonly_tools.contains(*tool))
-        .collect();
-
-    if writable_tools.is_empty() {
-        return Ok(());
-    }
-
-    Err(format!(
-        "Review Sub-Agent '{}' can only use read-only tools; remove writable tools: {}",
-        agent_name,
-        writable_tools.join(", ")
-    ))
-}
-
 fn validate_agent_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Name cannot be empty".to_string());
@@ -369,15 +336,10 @@ pub async fn create_subagent(
     }
 
     let review = request.review.unwrap_or(false);
-    if review {
-        ensure_review_tools_are_readonly(&state, name, &tools)?;
-    }
 
-    let readonly = if review {
-        true
-    } else {
-        request.readonly.unwrap_or(true)
-    };
+    // readonly is decided solely by the explicit field (falling back to the
+    // subagent default); review is a semantic marker and never forces it.
+    let readonly = request.readonly.unwrap_or(true);
     let mut subagent = CustomSubagent::new(
         name.to_string(),
         request.description.trim().to_string(),
@@ -387,7 +349,7 @@ pub async fn create_subagent(
         path_str.clone(),
         kind,
     );
-    subagent.set_review(review);
+    subagent.set_review(review, readonly);
     subagent.save_to_file(None).map_err(|e| e.to_string())?;
     state
         .agent_registry

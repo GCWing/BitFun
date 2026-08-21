@@ -64,9 +64,18 @@ pub struct WebToolNetworkProvider;
 
 impl WebToolNetworkProvider {
     pub async fn fetch_text(url: &str) -> Result<WebFetchResponse, WebToolNetworkError> {
+        Self::fetch_text_with_timeout(url, WEB_FETCH_TIMEOUT_SECS).await
+    }
+
+    /// Same as [`Self::fetch_text`] but with an explicit timeout in seconds
+    /// (阈值参数配置化：`ai.thresholds.tool_timeout.web_fetch_secs`).
+    pub async fn fetch_text_with_timeout(
+        url: &str,
+        timeout_secs: u64,
+    ) -> Result<WebFetchResponse, WebToolNetworkError> {
         let client = reqwest::Client::builder()
             .user_agent(USER_AGENT_VALUE)
-            .timeout(Duration::from_secs(WEB_FETCH_TIMEOUT_SECS))
+            .timeout(Duration::from_secs(timeout_secs.max(1)))
             .build()
             .map_err(|error| WebToolNetworkError::BuildClient(error.to_string()))?;
 
@@ -105,8 +114,17 @@ impl WebToolNetworkProvider {
     }
 
     pub async fn search_exa(request: ExaSearchRequest<'_>) -> Result<String, WebToolNetworkError> {
+        Self::search_exa_with_timeout(request, EXA_TIMEOUT_SECS).await
+    }
+
+    /// Same as [`Self::search_exa`] but with an explicit timeout in seconds
+    /// (阈值参数配置化：`ai.thresholds.tool_timeout.exa_secs`).
+    pub async fn search_exa_with_timeout(
+        request: ExaSearchRequest<'_>,
+        timeout_secs: u64,
+    ) -> Result<String, WebToolNetworkError> {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(EXA_TIMEOUT_SECS))
+            .timeout(Duration::from_secs(timeout_secs.max(1)))
             .build()
             .map_err(|error| WebToolNetworkError::BuildClient(error.to_string()))?;
 

@@ -70,11 +70,16 @@ function defaultSelectedTools(
   tools: SubagentEditorToolInfo[],
   kind: CustomAgentKind,
   review: boolean,
+  readonly: boolean,
 ): Set<string> {
   const defaultTools =
     kind === 'mode' ? DEFAULT_CUSTOM_MODE_TOOLS : DEFAULT_CUSTOM_SUBAGENT_TOOLS;
+  // M6: initialization uses the same rules-source filter as the interactive
+  // path — the tool set depends on readonly, not on review.
   const selectableToolNames = new Set(
-    filterToolsForReviewMode(tools, kind === 'subagent' && review).map((tool) => tool.name),
+    filterToolsForReviewMode(tools, review, kind === 'subagent' && readonly).map(
+      (tool) => tool.name,
+    ),
   );
 
   return new Set(
@@ -157,7 +162,7 @@ const CreateAgentPage: React.FC = () => {
     setReadonly(defaultReadonlyForKind(kind));
     setReview(false);
     setUserContextPolicy(new Set(defaultPolicyForKind(kind)));
-    setSelectedTools(defaultSelectedTools(toolInfos, kind, false));
+    setSelectedTools(defaultSelectedTools(toolInfos, kind, false, defaultReadonlyForKind(kind)));
     setToolsEditing(false);
     setPendingTools(null);
   }, [isEdit, kind, toolInfos]);
@@ -171,9 +176,9 @@ const CreateAgentPage: React.FC = () => {
       if (prev.size > 0) {
         return prev;
       }
-      return defaultSelectedTools(toolInfos, kind, review);
+      return defaultSelectedTools(toolInfos, kind, review, readonly);
     });
-  }, [isEdit, kind, review, toolInfos]);
+  }, [isEdit, kind, readonly, review, toolInfos]);
 
   useEffect(() => {
     if (!isEdit || !editingAgentId) {
@@ -263,6 +268,8 @@ const CreateAgentPage: React.FC = () => {
 
   const handleReviewChange = useCallback(
     (nextReview: boolean) => {
+      // F4: review is a semantic marker only — it never changes readonly or
+      // the tool set. The tool set is decided solely by the readonly field.
       setReview(nextReview);
       const next = normalizeReviewModeState({
         review: nextReview,
@@ -279,18 +286,24 @@ const CreateAgentPage: React.FC = () => {
 
   const handleReadonlyChange = useCallback(
     (nextReadonly: boolean) => {
-      if (review) {
-        setReadonly(true);
-        return;
-      }
+      // F4: toggling readonly strips/restores writable tools via the rules
+      // source; review has no influence.
       setReadonly(nextReadonly);
+      const next = normalizeReviewModeState({
+        review,
+        readonly: nextReadonly,
+        selectedTools,
+        availableTools: toolInfos,
+      });
+      setSelectedTools(next.selectedTools);
+      setPendingTools((current) => current ? new Set(next.selectedTools) : null);
     },
-    [review],
+    [review, selectedTools, toolInfos],
   );
 
   const selectableTools = useMemo(
-    () => filterToolsForReviewMode(toolInfos, kind === 'subagent' && review),
-    [kind, review, toolInfos],
+    () => filterToolsForReviewMode(toolInfos, review, kind === 'subagent' && readonly),
+    [kind, readonly, review, toolInfos],
   );
   const selectableGroupTools = useMemo(() => selectableTools.map((tool) => ({
     name: tool.name,
@@ -672,7 +685,6 @@ const CreateAgentPage: React.FC = () => {
                     </label>
                     <Switch
                       checked={readonly}
-                      disabled={kind === 'subagent' && review}
                       onChange={(event) => handleReadonlyChange(event.target.checked)}
                       size="small"
                     />
@@ -697,7 +709,7 @@ const CreateAgentPage: React.FC = () => {
                       <label className="th-create-panel__label">
                         {t('agentsOverview.form.tools')}
                         <span className="th-create-panel__label-hint">
-                          {kind === 'subagent' && review
+                          {kind === 'subagent' && readonly
                             ? t('agentsOverview.form.reviewToolsHint')
                             : t('agentsOverview.form.toolsHint', {
                                 optionalLabel: t('agentsOverview.form.toolsOptional'),

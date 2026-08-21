@@ -638,6 +638,7 @@ impl TokenUsageService {
 }
 
 #[cfg(feature = "token-usage-statistics")]
+#[allow(clippy::type_complexity)] // (DateTime<Utc>, DateTime<Utc>) window pair is explicit and self-documenting
 fn resolve_time_bounds(
     query: &TokenUsageQuery,
     now: DateTime<Utc>,
@@ -666,6 +667,7 @@ fn resolve_time_bounds(
 }
 
 #[cfg(feature = "token-usage-statistics")]
+#[allow(clippy::type_complexity)] // same explicit window pair as resolve_time_bounds
 fn time_bounds_at(
     time_range: &TimeRange,
     time_zone: Tz,

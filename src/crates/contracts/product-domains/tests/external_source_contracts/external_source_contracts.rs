@@ -1212,7 +1212,7 @@ fn external_mcp_timeouts_are_positive_optional_millisecond_facts() {
 
     timeouts.validate().expect("positive timeouts are valid");
     assert_eq!(
-        serde_json::to_value(&timeouts).unwrap(),
+        serde_json::to_value(timeouts).unwrap(),
         serde_json::json!({
             "startupMs": 2_000,
             "executionMs": 30_000,

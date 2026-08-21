@@ -683,6 +683,43 @@ fn project_event_path(registered_root: &Path, backend_root: &Path, event_path: &
         .unwrap_or_else(|_| event_path.to_path_buf())
 }
 
+static GLOBAL_FILE_WATCH_SERVICE: std::sync::OnceLock<Arc<FileWatchService>> =
+    std::sync::OnceLock::new();
+
+pub fn get_global_file_watch_service() -> Arc<FileWatchService> {
+    GLOBAL_FILE_WATCH_SERVICE
+        .get_or_init(|| Arc::new(FileWatchService::new(FileWatcherConfig::default())))
+        .clone()
+}
+
+pub async fn start_file_watch(path: String, recursive: Option<bool>) -> Result<(), String> {
+    let watcher = get_global_file_watch_service();
+    let mut config = FileWatcherConfig::default();
+    if let Some(rec) = recursive {
+        config.watch_recursively = rec;
+    }
+
+    watcher.watch_path(&path, Some(config)).await
+}
+
+pub async fn stop_file_watch(path: String) -> Result<(), String> {
+    let watcher = get_global_file_watch_service();
+    watcher.unwatch_path(&path).await
+}
+
+pub async fn get_watched_paths() -> Result<Vec<String>, String> {
+    let watcher = get_global_file_watch_service();
+    Ok(watcher.get_watched_paths().await)
+}
+
+pub fn initialize_file_watch_service(emitter: Arc<dyn EventEmitter>) {
+    let watcher = get_global_file_watch_service();
+
+    tokio::spawn(async move {
+        watcher.set_emitter(emitter).await;
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -808,8 +845,10 @@ mod tests {
         let second = temp.path().join("second");
         fs::create_dir_all(&first).expect("first root");
         fs::create_dir_all(&second).expect("second root");
-        let mut config = FileWatcherConfig::default();
-        config.debounce_interval_ms = 0;
+        let config = FileWatcherConfig {
+            debounce_interval_ms: 0,
+            ..Default::default()
+        };
         let service = FileWatchService::new(config.clone());
         let mut events = service.subscribe();
         let mut failures = service.subscribe_health_failures();
@@ -860,9 +899,11 @@ mod tests {
     #[test]
     fn emitter_dispatch_can_rebind_after_runtime_shutdown() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let mut config = FileWatcherConfig::default();
-        config.debounce_interval_ms = 0;
-        config.ignore_hidden_files = false;
+        let config = FileWatcherConfig {
+            debounce_interval_ms: 0,
+            ignore_hidden_files: false,
+            ..Default::default()
+        };
         let service = FileWatchService::new(config.clone());
 
         let first_runtime = tokio::runtime::Builder::new_current_thread()
@@ -928,41 +969,4 @@ mod tests {
             }
         });
     }
-}
-
-static GLOBAL_FILE_WATCH_SERVICE: std::sync::OnceLock<Arc<FileWatchService>> =
-    std::sync::OnceLock::new();
-
-pub fn get_global_file_watch_service() -> Arc<FileWatchService> {
-    GLOBAL_FILE_WATCH_SERVICE
-        .get_or_init(|| Arc::new(FileWatchService::new(FileWatcherConfig::default())))
-        .clone()
-}
-
-pub async fn start_file_watch(path: String, recursive: Option<bool>) -> Result<(), String> {
-    let watcher = get_global_file_watch_service();
-    let mut config = FileWatcherConfig::default();
-    if let Some(rec) = recursive {
-        config.watch_recursively = rec;
-    }
-
-    watcher.watch_path(&path, Some(config)).await
-}
-
-pub async fn stop_file_watch(path: String) -> Result<(), String> {
-    let watcher = get_global_file_watch_service();
-    watcher.unwatch_path(&path).await
-}
-
-pub async fn get_watched_paths() -> Result<Vec<String>, String> {
-    let watcher = get_global_file_watch_service();
-    Ok(watcher.get_watched_paths().await)
-}
-
-pub fn initialize_file_watch_service(emitter: Arc<dyn EventEmitter>) {
-    let watcher = get_global_file_watch_service();
-
-    tokio::spawn(async move {
-        watcher.set_emitter(emitter).await;
-    });
 }

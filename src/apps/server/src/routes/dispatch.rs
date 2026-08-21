@@ -3,6 +3,14 @@
 //! This route owns no Agent Runtime and no target session. It only exposes the
 //! same platform-neutral controller used by Desktop, backed by saved SSH
 //! profiles and the observer-only outbound index.
+//!
+//! NOTE(Step 2a): like `routes/external_sources.rs`, this surface was wired
+//! through the old `websocket.rs::handle_command` path. Under browser-direct
+//! ACP-over-WS the browser connects straight to the in-process app-server, so
+//! these commands are temporarily dead (tracked for a later batch that brings
+//! them onto the app-server schema). Kept so the host capability plumbing stays
+//! intact for that follow-up; silenced as dead code in the meantime. The unit
+//! tests below pin the contract.
 
 use bitfun_core::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceOperationResult,
@@ -20,6 +28,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{AppState, DispatchHostState};
 
+#[allow(dead_code)] // wired through the old websocket handle_command path; see module note
 pub(crate) fn supports(method: &str) -> bool {
     matches!(
         method,
@@ -39,6 +48,7 @@ pub(crate) fn supports(method: &str) -> bool {
     )
 }
 
+#[allow(dead_code)] // wired through the old websocket handle_command path; see module note
 pub(crate) async fn dispatch(
     method: &str,
     params: serde_json::Value,
@@ -147,10 +157,12 @@ pub(crate) async fn dispatch(
     }
 }
 
+#[allow(dead_code)] // wired through the old websocket handle_command path; see module note
 fn store(host: &DispatchHostState) -> OutboundDispatchStore {
     OutboundDispatchStore::new(&host.path_manager)
 }
 
+#[allow(dead_code)] // wired through the old websocket handle_command path; see module note
 fn parse_request<T: DeserializeOwned>(
     params: &serde_json::Value,
 ) -> ExternalSourceOperationResult<T> {
@@ -164,6 +176,7 @@ fn parse_request<T: DeserializeOwned>(
     })
 }
 
+#[allow(dead_code)] // wired through the old websocket handle_command path; see module note
 fn encode(value: impl serde::Serialize) -> ExternalSourceOperationResult<serde_json::Value> {
     serde_json::to_value(value).map_err(|_| {
         ExternalSourceOperationError::new(
@@ -174,6 +187,7 @@ fn encode(value: impl serde::Serialize) -> ExternalSourceOperationResult<serde_j
     })
 }
 
+#[allow(dead_code)] // wired through the old websocket handle_command path; see module note
 fn operation_error(error: anyhow::Error) -> ExternalSourceOperationError {
     ExternalSourceOperationError::new(
         ExternalSourceOperationErrorCode::DependencyFailed,

@@ -13,6 +13,10 @@ fn base_input(action: SessionControlAction) -> SessionControlInput {
         session_id: None,
         session_name: None,
         agent_type: None,
+        short_name: None,
+        model_id: None,
+        worktree: None,
+        detail: None,
     }
 }
 
@@ -37,6 +41,7 @@ fn rejects_current_session_mutation_when_context_matches() {
         SessionControlValidationContext {
             current_session_id: Some("session_a"),
             has_workspace_root: true,
+            short_name_max_chars: None,
         },
     );
 
@@ -67,6 +72,7 @@ fn validates_create_requires_workspace_and_creator_session() {
         SessionControlValidationContext {
             current_session_id: Some("session_a"),
             has_workspace_root: true,
+            short_name_max_chars: None,
         },
     );
 
@@ -114,4 +120,25 @@ fn routes_cancel_through_scheduler_only_when_requester_and_scheduler_exist() {
         resolve_session_control_cancel_route(None, true),
         SessionControlCancelRoute::CoordinatorDirect
     );
+}
+
+#[test]
+fn create_parses_model_id_and_forwards_to_validation() {
+    let input: SessionControlInput = serde_json::from_value(json!({
+        "action": "create",
+        "workspace": std::env::temp_dir().to_string_lossy().to_string(),
+        "model_id": "claude-sonnet-4",
+    }))
+    .expect("create payload with model_id must parse");
+    assert_eq!(input.model_id.as_deref(), Some("claude-sonnet-4"));
+
+    let result = validate_session_control_input(
+        &input,
+        SessionControlValidationContext {
+            current_session_id: Some("session_a"),
+            has_workspace_root: true,
+            short_name_max_chars: None,
+        },
+    );
+    assert!(result.result, "{:?}", result.message);
 }

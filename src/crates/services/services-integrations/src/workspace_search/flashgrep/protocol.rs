@@ -123,6 +123,8 @@ pub(crate) struct SearchParams {
     pub query: QuerySpec,
     #[serde(default)]
     pub scope: PathScope,
+    #[serde(default)]
+    pub allow_scan_fallback: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -289,6 +291,7 @@ pub(crate) struct NotificationEnvelope {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)] // response/notification payloads differ structurally
 pub(crate) enum ServerMessage {
     Response(ResponseEnvelope),
     Notification(NotificationEnvelope),

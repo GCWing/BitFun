@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { versionInjectionPlugin } from "./vite.config.version-plugin";
@@ -38,8 +38,15 @@ export default defineConfig(({ mode, command }) => {
     plugins: [
       react(),
       bitfunCanvasRuntimeBundlePlugin(),
-      versionInjectionPlugin()
+      versionInjectionPlugin(),
     ],
+
+    // Vitest runs in the Node runtime; see src/test/setup.ts for the
+    // in-memory localStorage polyfill (Node >= 22 exposes a method-less
+    // webstorage shell that breaks zustand persist and storage helpers).
+    test: {
+      setupFiles: ["./src/test/setup.ts"],
+    },
 
     // Path resolution
     resolve: {

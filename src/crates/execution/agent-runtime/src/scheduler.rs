@@ -4,15 +4,16 @@ use crate::events::turn_outcome_kind;
 use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continuation_plan};
 use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
-    AgentInputAttachment, AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
-    DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource,
-    RoundInjection, RoundInjectionKind, RoundInjectionTarget, RoundInjectionToolPreemption,
-    ThreadGoal,
+    AgentDialogPrependedReminder, AgentInputAttachment, AgentSessionReplyRoute,
+    DialogQueuePriority, DialogRoundInjectionSource, DialogSessionStateFact, DialogSteerOutcome,
+    DialogSubmissionPolicy, DialogTriggerSource, RoundInjection, RoundInjectionKind,
+    RoundInjectionTarget, RoundInjectionToolPreemption, ThreadGoal,
+    MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
 };
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const DEFAULT_MAX_DIALOG_QUEUE_DEPTH: usize = 20;
 
@@ -30,6 +31,7 @@ pub struct ActiveDialogTurn {
 }
 
 impl ActiveDialogTurn {
+    #[allow(clippy::too_many_arguments)] // state constructor; mirrors the struct fields
     pub fn new(
         turn_id: String,
         workspace_path: Option<String>,
@@ -127,6 +129,7 @@ pub struct ActiveDialogTurnStore {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // matched turn is inherently larger than control outcomes
 pub enum ActiveDialogTurnTakeResult {
     Matched(ActiveDialogTurn),
     Absent,
@@ -170,6 +173,13 @@ impl ActiveDialogTurnStore {
             .is_some_and(|turn| turn.turn_id() == turn_id && turn.is_agent_session_request())
     }
 
+    /// User input of the currently active turn for session_id, if any.
+    pub fn active_turn_user_input(&self, session_id: &str) -> Option<String> {
+        self.inner
+            .get(session_id)
+            .map(|turn| turn.user_input().to_string())
+    }
+
     pub fn suppression_key_for_requester(
         &self,
         target_session_id: &str,
@@ -208,6 +218,51 @@ impl DialogReplySuppressionSet {
         self.inner
             .remove(&(session_id.to_string(), turn_id.to_string()))
             .is_some()
+    }
+
+    /// Remove every entry belonging to `session_id`, regardless of turn id.
+    ///
+    /// Session-end cleanup: a recycled session id must not inherit suppression
+    /// marks or retired-outcome tombstones from the previous session.
+    pub fn clear_session(&self, session_id: &str) {
+        self.inner
+            .retain(|(entry_session_id, _), _| entry_session_id != session_id);
+    }
+}
+
+/// Suppression marks for urgent-steered turns (R-ASYNC-01 项2, fixed by
+/// urgent-reply-01 方案 B). Unlike the generic [`DialogReplySuppressionSet`],
+/// each entry records the *injector* session id that steered the message into
+/// the running turn. At turn completion the consumer compares this injector
+/// against the turn's `reply_route`: when the route points back at the
+/// injector, the auto-reply is the *only* delivery channel the injector waits
+/// on (the UserSteering channel has no reply capability), so the mark must NOT
+/// suppress it. The mark only suppresses when the turn's reply route belongs
+/// to someone else (a duplicate auto-reply scenario).
+#[derive(Debug, Default)]
+pub struct InjectedTurnReplySuppressionSet {
+    inner: dashmap::DashMap<(String, String), String>,
+}
+
+impl InjectedTurnReplySuppressionSet {
+    pub fn mark(&self, session_id: &str, turn_id: &str, injector_session_id: &str) {
+        self.inner.insert(
+            (session_id.to_string(), turn_id.to_string()),
+            injector_session_id.to_string(),
+        );
+    }
+
+    /// Remove and return the recorded injector session id, if any.
+    pub fn take(&self, session_id: &str, turn_id: &str) -> Option<String> {
+        self.inner
+            .remove(&(session_id.to_string(), turn_id.to_string()))
+            .map(|(_, injector)| injector)
+    }
+
+    /// Remove every entry belonging to `session_id`, regardless of turn id.
+    pub fn clear_session(&self, session_id: &str) {
+        self.inner
+            .retain(|(entry_session_id, _), _| entry_session_id != session_id);
     }
 }
 
@@ -263,7 +318,7 @@ struct QueuedDialogTurn<T> {
 /// Per-session dialog-turn queue with product scheduler priority semantics.
 #[derive(Debug)]
 pub struct DialogTurnQueue<T> {
-    max_depth: usize,
+    max_depth: std::sync::atomic::AtomicUsize,
     inner: dashmap::DashMap<String, VecDeque<QueuedDialogTurn<T>>>,
 }
 
@@ -276,13 +331,24 @@ impl<T> Default for DialogTurnQueue<T> {
 impl<T> DialogTurnQueue<T> {
     pub fn with_max_depth(max_depth: usize) -> Self {
         Self {
-            max_depth,
+            max_depth: std::sync::atomic::AtomicUsize::new(max_depth),
             inner: dashmap::DashMap::new(),
         }
     }
 
-    pub const fn max_depth(&self) -> usize {
-        self.max_depth
+    /// Updates the queue depth cap at runtime (群聊阈值参数配置化, R-GC-26).
+    ///
+    /// Used to inject `group_chat.queue_limit` after construction; a value of
+    /// `0` is ignored so a misconfigured document cannot disable the cap.
+    pub fn set_max_depth(&self, max_depth: usize) {
+        if max_depth > 0 {
+            self.max_depth
+                .store(max_depth, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    pub fn max_depth(&self) -> usize {
+        self.max_depth.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn depth(&self, session_id: &str) -> usize {
@@ -300,10 +366,11 @@ impl<T> DialogTurnQueue<T> {
         priority: DialogQueuePriority,
     ) -> Result<usize, DialogTurnQueueError> {
         let mut queue = self.inner.entry(session_id.to_string()).or_default();
-        if queue.len() >= self.max_depth {
+        let max_depth = self.max_depth();
+        if queue.len() >= max_depth {
             return Err(DialogTurnQueueError::Full {
                 session_id: session_id.to_string(),
-                max_depth: self.max_depth,
+                max_depth,
             });
         }
 
@@ -351,6 +418,20 @@ impl<T> DialogTurnQueue<T> {
         turn
     }
 
+    /// Whether any queued turn for `session_id` satisfies `predicate`.
+    ///
+    /// Used to coalesce identical agent-driven follow-up turns: when the same
+    /// background-result notification is already queued, a duplicate submit is
+    /// skipped instead of spawning a second model request.
+    pub fn any_matching<F>(&self, session_id: &str, mut predicate: F) -> bool
+    where
+        F: FnMut(&T) -> bool,
+    {
+        self.inner
+            .get(session_id)
+            .is_some_and(|queue| queue.iter().any(|item| predicate(&item.turn)))
+    }
+
     pub fn requeue_front(&self, session_id: &str, turn: T, priority: DialogQueuePriority) {
         self.inner
             .entry(session_id.to_string())
@@ -378,6 +459,9 @@ pub enum AgentSessionReplyAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+// Buffer carries a full RoundInjection; kept unboxed for direct field access
+// at every match site.
+#[allow(clippy::large_enum_variant)]
 pub enum DialogSteeringAction {
     Reject {
         error: String,
@@ -440,7 +524,7 @@ impl BackgroundDeliveryAction {
 }
 
 pub fn build_thread_goal_resumed_delivery_plan(goal: &ThreadGoal) -> ThreadGoalDeliveryPlan {
-    let plan = build_thread_goal_continuation_plan(goal);
+    let plan = build_thread_goal_continuation_plan(goal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS);
     let injection_prompt = plan
         .prepended_reminders
         .first()
@@ -566,14 +650,95 @@ impl DialogRoundInjectionInterrupt {
 #[derive(Debug, Default)]
 pub struct SessionRoundInjectionBuffer {
     inner: dashmap::DashMap<String, Vec<RoundInjection>>,
+    /// Consumed UserSteering keys so a user message that was already injected
+    /// into this session is never injected again — the observable driver of the
+    /// 2-7x UserSteering duplicates.
+    ///
+    /// TOKEN-01: keys are `(session_id, steering_id)` when the injection
+    /// carried a dedup marker, and `(session_id, content)` as a content-based
+    /// fallback for legacy steering entries without an id. The id-keyed path
+    /// avoids content scanning (which risks prompt-cache prefix drift).
+    /// Cleared when the session is cleared/recycled (`clear`).
+    consumed_steering: dashmap::DashSet<(String, String)>,
+    /// Injection-id → content map for steering entries drained but not yet
+    /// acknowledged; `acknowledge_injection` looks the content up here and
+    /// records it into `consumed_steering`.
+    pending_steering_content: dashmap::DashMap<(String, String), String>,
+    /// Injection-id → steering-id map for steering entries drained but not yet
+    /// acknowledged. When the injection carries a dedup marker (TOKEN-01), the
+    /// acknowledgement records `(session, steering_id)` instead of the content
+    /// key, so duplicate pushes are suppressed by metadata, not by scanning
+    /// the prompt payload.
+    pending_steering_ids: dashmap::DashMap<(String, String), String>,
 }
 
+/// R-ASYNC-01（项1）：移除 buffer push 5s 窗口去重。
+/// 同 (session_id, agent_type) 键的多条后台通知不再合并——全部入队逐条注入。
+/// 消费确认（mark_steering_consumed / acknowledge_injection，TOKEN-01）保留。
 impl SessionRoundInjectionBuffer {
+    /// Push a round injection into the per-session pending buffer.
+    ///
+    /// R-ASYNC-01（项1）：不再按窗口/键去重——BackgroundResult 同键多条、
+    /// ThreadGoal 窗口内重复、UserSteering 同内容多条均逐条保留（移除排队合并，
+    /// 通知不再被丢弃）。UserSteering 消费确认（TOKEN-01）保留：已注入过
+    /// （acked）的同 steering_id/同内容不重复注入。
+    ///
+    /// The dedup happens at push time, before the engine drains the buffer at a
+    /// round boundary. It never mutates the injected text, the injection
+    /// position, or the per-kind template, so the provider-side prompt prefix
+    /// for the *kept* injection is byte-identical to the pre-fix behavior.
     pub fn push(&self, session_id: &str, message: RoundInjection) {
+        // UserSteering 消费确认：同内容/同 steering_id 已被本会话注入过
+        // （acked）→ 不重复注入。注入结构（模板/位置/顺序）零改动，仅抑制
+        // 已消费内容的重复投递。TOKEN-01：优先按 steering_id 元数据键判断，
+        // 无 id 的遗留条目回退内容键。
+        if message.kind == RoundInjectionKind::UserSteering
+            && self.steering_already_consumed(session_id, &message)
+        {
+            log::debug!(
+                "UserSteering already consumed; suppressing re-injection: session_id={}, content_len={}, steering_id={:?}",
+                session_id,
+                message.content.len(),
+                message.dedup_key()
+            );
+            return;
+        }
         self.inner
             .entry(session_id.to_string())
             .or_default()
             .push(message);
+    }
+
+    /// Record that a UserSteering was actually injected for the session, so
+    /// later duplicate pushes are suppressed. Keys are cleared when the
+    /// session is cleared/recycled (`clear`). TOKEN-01: prefers the steering
+    /// id metadata key when available, falling back to the content key for
+    /// legacy steering entries without an id.
+    pub fn mark_steering_consumed(
+        &self,
+        session_id: &str,
+        content: &str,
+        steering_id: Option<&str>,
+    ) {
+        let key = steering_id
+            .map(|id| format!("id:{id}"))
+            .unwrap_or_else(|| format!("content:{content}"));
+        self.consumed_steering.insert((session_id.to_string(), key));
+    }
+
+    /// Whether the (session, key) is currently marked consumed. TOKEN-01:
+    /// the id metadata key is authoritative when present; the content key
+    /// remains as a fallback for legacy entries.
+    fn steering_already_consumed(&self, session_id: &str, message: &RoundInjection) -> bool {
+        match message.dedup_key() {
+            Some(steering_id) => self
+                .consumed_steering
+                .contains(&(session_id.to_string(), format!("id:{steering_id}"))),
+            None => self.consumed_steering.contains(&(
+                session_id.to_string(),
+                format!("content:{}", message.content),
+            )),
+        }
     }
 
     /// Drain all messages eligible for the currently running turn. Exact-turn
@@ -588,9 +753,35 @@ impl SessionRoundInjectionBuffer {
         for msg in entry.drain(..) {
             match &msg.target {
                 RoundInjectionTarget::ExactTurn(target_turn_id) if target_turn_id == turn_id => {
+                    if msg.kind == RoundInjectionKind::UserSteering {
+                        self.pending_steering_content.insert(
+                            (session_id.to_string(), msg.id.clone()),
+                            msg.content.clone(),
+                        );
+                        if let Some(steering_id) = msg.dedup_key() {
+                            self.pending_steering_ids.insert(
+                                (session_id.to_string(), msg.id.clone()),
+                                steering_id.to_string(),
+                            );
+                        }
+                    }
                     taken.push(msg);
                 }
-                RoundInjectionTarget::CurrentRunningTurn => taken.push(msg),
+                RoundInjectionTarget::CurrentRunningTurn => {
+                    if msg.kind == RoundInjectionKind::UserSteering {
+                        self.pending_steering_content.insert(
+                            (session_id.to_string(), msg.id.clone()),
+                            msg.content.clone(),
+                        );
+                        if let Some(steering_id) = msg.dedup_key() {
+                            self.pending_steering_ids.insert(
+                                (session_id.to_string(), msg.id.clone()),
+                                steering_id.to_string(),
+                            );
+                        }
+                    }
+                    taken.push(msg);
+                }
                 RoundInjectionTarget::ExactTurn(_) => keep.push(msg),
             }
         }
@@ -607,6 +798,53 @@ impl SessionRoundInjectionBuffer {
             return;
         };
         entry.retain(|message| matches!(message.target, RoundInjectionTarget::ExactTurn(_)));
+    }
+
+    /// Look up the drained steering content / steering id for `injection_id`
+    /// and record it as consumed for the session, so a duplicate push is
+    /// suppressed. TOKEN-01: prefers the steering-id metadata key when the
+    /// injection carried a dedup marker; falls back to the content key for
+    /// legacy steering entries without an id.
+    pub fn acknowledge_injection(&self, session_id: &str, injection_id: &str) {
+        let steering_id = self
+            .pending_steering_ids
+            .remove(&(session_id.to_string(), injection_id.to_string()))
+            .map(|(_, id)| id);
+        if let Some((_, content)) = self
+            .pending_steering_content
+            .remove(&(session_id.to_string(), injection_id.to_string()))
+        {
+            self.mark_steering_consumed(session_id, &content, steering_id.as_deref());
+        }
+    }
+
+    /// Drain UserSteering entries still pending for `turn_id` that were never
+    /// consumed (the turn ended before a round boundary drained them). These
+    /// are returned so the scheduler can re-deliver them as a normal follow-up
+    /// turn instead of silently dropping a real user message.
+    pub fn drain_undelivered_steering(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Vec<RoundInjection> {
+        let Some(mut entry) = self.inner.get_mut(session_id) else {
+            return Vec::new();
+        };
+        let mut taken = Vec::new();
+        let mut keep = Vec::new();
+        for msg in entry.drain(..) {
+            let matches = match &msg.target {
+                RoundInjectionTarget::ExactTurn(target_turn_id) => target_turn_id == turn_id,
+                RoundInjectionTarget::CurrentRunningTurn => true,
+            };
+            if matches && msg.kind == RoundInjectionKind::UserSteering {
+                taken.push(msg);
+            } else {
+                keep.push(msg);
+            }
+        }
+        *entry = keep;
+        taken
     }
 
     pub fn remove_by_id(&self, session_id: &str, injection_id: &str) -> Option<RoundInjection> {
@@ -655,6 +893,12 @@ impl SessionRoundInjectionBuffer {
     /// Drop all messages for a session (e.g. session deleted or unrecoverable error).
     pub fn clear(&self, session_id: &str) {
         self.inner.remove(session_id);
+        self.consumed_steering
+            .retain(|(entry_session_id, _)| entry_session_id != session_id);
+        self.pending_steering_content
+            .retain(|(entry_session_id, _), _| entry_session_id != session_id);
+        self.pending_steering_ids
+            .retain(|(entry_session_id, _), _| entry_session_id != session_id);
     }
 
     pub fn pending_count(&self, session_id: &str) -> usize {
@@ -677,6 +921,27 @@ impl DialogRoundInjectionSource for SessionRoundInjectionBuffer {
 
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
         self.drain_for_turn(session_id, turn_id)
+    }
+
+    fn acknowledge_consumed(
+        &self,
+        session_id: &str,
+        _turn_id: &str,
+        injection_id: &str,
+        kind: RoundInjectionKind,
+    ) {
+        // UserSteering 消费确认：引擎注入完成（持久化进历史）后，把内容标记为
+        // 已消费——同一用户消息再次经 steering 通道推入时被 push 去重抑制，
+        // 杜绝 2-7 次重复注入。消费确认的记录与注入点分离：模板/结构/位置
+        // 零改动，仅记录"这个内容已注入过"。标记在 buffer 内部（push 侧查）。
+        if kind == RoundInjectionKind::UserSteering {
+            // The engine only acknowledges with an injection id; the content
+            // key is derived from the pending entries drained for this turn.
+            // We keep the steering content keyed by id -> content mapping on
+            // the buffer so the same message cannot re-enter through a new
+            // buffer entry (see `acknowledge_injection`).
+            self.acknowledge_injection(session_id, injection_id);
+        }
     }
 }
 
@@ -720,6 +985,7 @@ pub fn resolve_background_delivery_injection(
         attachments: Vec::new(),
         metadata: serde_json::Map::new(),
         created_at,
+        prepended_reminders: Vec::new(),
     }
 }
 
@@ -941,17 +1207,64 @@ pub fn resolve_turn_outcome_lifecycle_plan(
     }
 }
 
+/// Current UTC time formatted as ISO-8601 with second precision and a `Z`
+/// suffix (e.g. `2026-08-05T03:14:15Z`), matching the GetTime tool's `utc_time`
+/// shape (see `get_time_tool.rs` `to_rfc3339_opts(SecondsFormat::Secs, true)`).
+///
+/// std-only implementation: `bitfun-agent-runtime` deliberately has no
+/// `chrono` dependency, so the civil-date conversion uses Howard Hinnant's
+/// public-domain `civil_from_days` algorithm (from the C++ `<chrono>`
+/// compatibility paper), translated to Rust (not a Cargo dependency).
+pub fn utc_iso8601_now() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let total_seconds = now.as_secs() as i64;
+    let days = total_seconds.div_euclid(86_400);
+    let seconds_of_day = total_seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
+/// Days since 1970-01-01 to a civil (year, month, day) date.
+///
+/// Howard Hinnant's `civil_from_days` (public domain, C++ `<chrono>` paper),
+/// Rust translation, not a Cargo dependency.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let year = if month <= 2 { y + 1 } else { y };
+    (year, month, day)
+}
+
 pub fn resolve_agent_session_reply_action(
     responder_session_id: &str,
+    responder_role: Option<&str>,
+    responder_depth: Option<u32>,
     active_turn: &ActiveDialogTurn,
     outcome: &TurnOutcome,
     suppressed_cancelled_reply: bool,
+    suppress_injected_turn_reply: bool,
 ) -> AgentSessionReplyAction {
     if !active_turn.is_agent_session_request() {
         return AgentSessionReplyAction::NoReply;
     }
 
-    if should_skip_agent_session_reply(turn_outcome_kind(outcome), suppressed_cancelled_reply) {
+    if should_skip_agent_session_reply(
+        turn_outcome_kind(outcome),
+        suppressed_cancelled_reply,
+        suppress_injected_turn_reply,
+    ) {
         return AgentSessionReplyAction::SkipSuppressedCancelledReply;
     }
 
@@ -963,22 +1276,55 @@ pub fn resolve_agent_session_reply_action(
         .workspace_path()
         .unwrap_or("<unknown workspace>");
     let status = outcome.status();
+    let server_time = utc_iso8601_now();
+    let mut reminder_lines = vec![
+        "This message is an automated reply to a previous SessionMessage call, not a human user message."
+            .to_string(),
+        format!("From session: {responder_session_id}"),
+        format!("From workspace: {responder_workspace}"),
+        format!("Status: {status}"),
+        format!("Server time: {server_time}"),
+    ];
+    if let Some(role) = responder_role {
+        reminder_lines.push(format!("From role: {role}"));
+    }
+    if let Some(depth) = responder_depth {
+        reminder_lines.push(format!("From depth: {depth}"));
+    }
+    // Rewrite the forwarded request metadata with the *responder* identity so
+    // the reply message never carries the original sender's badge (R-23).
+    let mut reply_metadata = match active_turn.user_message_metadata() {
+        Some(serde_json::Value::Object(map)) => map.clone(),
+        _ => serde_json::Map::new(),
+    };
+    reply_metadata.retain(|key, _| !key.starts_with("sender"));
+    reply_metadata.insert(
+        "senderSessionId".to_string(),
+        serde_json::json!(responder_session_id),
+    );
+    // Server-side timestamp for audit/timeline cross-checks. The forwarding
+    // side only strips `sender*` keys, so this key passes through untouched.
+    reply_metadata.insert("serverTime".to_string(), serde_json::json!(server_time));
+    if let Some(role) = responder_role {
+        reply_metadata.insert("senderRole".to_string(), serde_json::json!(role));
+    }
+    if let Some(depth) = responder_depth {
+        reply_metadata.insert("senderDepth".to_string(), serde_json::json!(depth));
+    }
     AgentSessionReplyAction::Forward(AgentSessionReplyPlan {
         target_session_id: reply_route.source_session_id.clone(),
         target_workspace_path: reply_route.source_workspace_path.clone(),
         target_remote_connection_id: reply_route.source_remote_connection_id.clone(),
         target_remote_ssh_host: reply_route.source_remote_ssh_host.clone(),
         user_input: outcome.reply_text(),
-        reminder_text: format!(
-            "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
-From session: {responder_session_id}\n\
-From workspace: {responder_workspace}\n\
-Status: {status}"
-        ),
-        user_message_metadata: active_turn.user_message_metadata().cloned(),
+        reminder_text: reminder_lines.join("\n"),
+        user_message_metadata: Some(serde_json::Value::Object(reply_metadata)),
     })
 }
 
+// Public steering-resolution helper; the parameter set mirrors the dialog
+// turn wire fields and is intentionally kept flat.
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_dialog_steering_action(
     active_turn_id: Option<&str>,
     session_id: &str,
@@ -989,6 +1335,7 @@ pub fn resolve_dialog_steering_action(
     metadata: serde_json::Map<String, serde_json::Value>,
     steering_id: String,
     created_at: SystemTime,
+    prepended_reminders: Vec<AgentDialogPrependedReminder>,
 ) -> DialogSteeringAction {
     if active_turn_id != Some(turn_id) {
         return DialogSteeringAction::Reject {
@@ -1010,6 +1357,7 @@ pub fn resolve_dialog_steering_action(
             attachments,
             metadata,
             created_at,
+            prepended_reminders,
         },
         outcome: DialogSteerOutcome::Buffered {
             session_id: session_id.to_string(),
@@ -1035,6 +1383,227 @@ mod tests {
             DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
             None,
         )
+    }
+
+    fn injection(kind: RoundInjectionKind, content: &str) -> RoundInjection {
+        RoundInjection {
+            id: uuid_like(),
+            kind,
+            execution_policy: kind.default_execution_policy(),
+            target: RoundInjectionTarget::CurrentRunningTurn,
+            content: content.to_string(),
+            display_content: content.to_string(),
+            attachments: Vec::new(),
+            metadata: serde_json::Map::new(),
+            created_at: SystemTime::now(),
+            prepended_reminders: Vec::new(),
+        }
+    }
+
+    fn uuid_like() -> String {
+        format!("injection-{}", std::process::id())
+    }
+
+    #[test]
+    fn subagent_steering_is_drained_only_by_its_own_session_and_turn() {
+        // 防回退：子代理 ExecutionContext.round_injection 启用后，引擎会以
+        // 子代理自身的 (session_id, turn_id) 调 take_pending → drain_for_turn。
+        // ExactTurn 定向 + session_id 键隔离保证：子代理只消费指向自己的
+        // steering，父会话条目永不误吞（coordinator.rs 子代理上下文
+        // round_injection 原为 None 导致 steering 永不消费的回归防线）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut steering = injection(RoundInjectionKind::UserSteering, "steer the subagent");
+        steering.id = "subagent-steer-1".to_string();
+        steering.target = RoundInjectionTarget::ExactTurn("subagent-turn".to_string());
+        buffer.push("subagent-session", steering);
+
+        // 父会话有一条指向父会话 turn 的 steering，不得被子代理消费。
+        let mut parent_steering = injection(RoundInjectionKind::UserSteering, "steer the parent");
+        parent_steering.id = "parent-steer-1".to_string();
+        parent_steering.target = RoundInjectionTarget::ExactTurn("parent-turn".to_string());
+        buffer.push("parent-session", parent_steering);
+
+        // 子代理消费自己 session 的 ExactTurn 条目。
+        let subagent_pending = buffer.drain_for_turn("subagent-session", "subagent-turn");
+        assert_eq!(subagent_pending.len(), 1);
+        assert_eq!(subagent_pending[0].id, "subagent-steer-1");
+
+        // 父会话条目仍然保留（未被误吞），父会话可正常消费。
+        assert_eq!(
+            buffer.pending_count("parent-session"),
+            1,
+            "parent session steering must survive the subagent drain"
+        );
+        let parent_pending = buffer.drain_for_turn("parent-session", "parent-turn");
+        assert_eq!(parent_pending.len(), 1);
+        assert_eq!(parent_pending[0].id, "parent-steer-1");
+    }
+
+    #[test]
+    fn subagent_drain_does_not_consume_parent_turn_steering_for_same_session_key() {
+        // 防回退：即便父子共用一个 session_id 键（理论上不存在，子代理会话
+        // 拥有独立 session_id），ExactTurn 定向仍保证子代理 turn 不消费指向
+        // 父 turn 的条目——drain_for_turn 对不匹配的 ExactTurn 条目保留。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut parent_steering = injection(RoundInjectionKind::UserSteering, "parent turn msg");
+        parent_steering.id = "parent-steer-1".to_string();
+        parent_steering.target = RoundInjectionTarget::ExactTurn("parent-turn".to_string());
+        buffer.push("shared-session", parent_steering);
+
+        let drained = buffer.drain_for_turn("shared-session", "subagent-turn");
+        assert!(
+            drained.is_empty(),
+            "steering targeting a different (parent) turn must be retained"
+        );
+        assert_eq!(buffer.pending_count("shared-session"), 1);
+        let parent_pending = buffer.drain_for_turn("shared-session", "parent-turn");
+        assert_eq!(parent_pending.len(), 1);
+        assert_eq!(parent_pending[0].id, "parent-steer-1");
+    }
+
+    #[test]
+    fn consumed_steering_is_not_reinjected_after_acknowledge() {
+        let buffer = SessionRoundInjectionBuffer::default();
+        // 用户消息注入（drain）后经 acknowledge 标记已消费：同一内容再次
+        // 经 steering 通道推入必须被抑制（2-7 次重复注入的根因）。
+        let mut steering = injection(RoundInjectionKind::UserSteering, "check tests");
+        steering.id = "steer-1".to_string();
+        buffer.push("session-1", steering.clone());
+        let drained = buffer.drain_for_turn("session-1", "turn-1");
+        assert_eq!(drained.len(), 1);
+        buffer.acknowledge_injection("session-1", "steer-1");
+
+        // 同内容重复推入：被消费确认抑制。
+        buffer.push("session-1", steering);
+        let drained_again = buffer.drain_for_turn("session-1", "turn-2");
+        assert!(
+            drained_again.is_empty(),
+            "consumed steering must not be re-injected"
+        );
+    }
+
+    #[test]
+    fn distinct_steering_survives_after_one_is_consumed() {
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut first = injection(RoundInjectionKind::UserSteering, "first message");
+        first.id = "steer-1".to_string();
+        buffer.push("session-1", first);
+        buffer.drain_for_turn("session-1", "turn-1");
+        buffer.acknowledge_injection("session-1", "steer-1");
+
+        // 不同内容的消息不受已消费标记影响，必须正常注入。
+        let second = injection(RoundInjectionKind::UserSteering, "second message");
+        buffer.push("session-1", second);
+        let drained = buffer.drain_for_turn("session-1", "turn-2");
+        assert_eq!(drained.len(), 1);
+        assert_eq!(drained[0].content, "second message");
+    }
+
+    #[test]
+    fn undelivered_steering_is_retrievable_after_turn_end() {
+        let buffer = SessionRoundInjectionBuffer::default();
+        // turn 结束时仍未消费的 UserSteering 必须可被取出转交 follow-up，
+        // 而不是静默丢弃（真实用户消息零丢失）。
+        let mut steering = injection(RoundInjectionKind::UserSteering, "still pending");
+        steering.target = RoundInjectionTarget::ExactTurn("turn-1".to_string());
+        buffer.push("session-1", steering);
+
+        let undelivered = buffer.drain_undelivered_steering("session-1", "turn-1");
+        assert_eq!(undelivered.len(), 1);
+        assert_eq!(undelivered[0].content, "still pending");
+        // 取出后缓冲为空：不残留。
+        assert_eq!(buffer.pending_count("session-1"), 0);
+    }
+
+    #[test]
+    fn consumed_steering_id_suppresses_reinjection_without_content_scanning() {
+        // TOKEN-01 防回退标记：消费确认记录 steering_id 元数据键。同一
+        // steering 事件（同一 steering_id）在后续轮/turn 再次推入时必须被
+        // 抑制——即便内容被包装文本包裹（content 键无法匹配，id 键仍命中）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut steering = injection(RoundInjectionKind::UserSteering, "check tests");
+        steering.id = "steer-001".to_string();
+        buffer.push("session-1", steering.clone());
+        let drained = buffer.drain_for_turn("session-1", "turn-1");
+        assert_eq!(drained.len(), 1);
+        buffer.acknowledge_injection("session-1", "steer-001");
+
+        // 同一 steering_id 再次 push（例如跨 turn 残留转交后回灌）：被 id 键抑制。
+        let mut re_pushed = injection(RoundInjectionKind::UserSteering, "check tests");
+        re_pushed.id = "steer-001".to_string();
+        buffer.push("session-1", re_pushed);
+        let drained_again = buffer.drain_for_turn("session-1", "turn-2");
+        assert!(
+            drained_again.is_empty(),
+            "same steering_id must not be re-injected"
+        );
+    }
+
+    #[test]
+    fn distinct_steering_ids_survive_after_one_is_consumed_by_id() {
+        // TOKEN-01 防回退标记：id 键去重不得误伤不同 steering 事件（不同
+        // steering_id），即使它们恰好携带相同内容（真实用户两次相同输入）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut first = injection(RoundInjectionKind::UserSteering, "repeat me");
+        first.id = "steer-1".to_string();
+        buffer.push("session-1", first);
+        buffer.drain_for_turn("session-1", "turn-1");
+        buffer.acknowledge_injection("session-1", "steer-1");
+
+        let mut second = injection(RoundInjectionKind::UserSteering, "repeat me");
+        second.id = "steer-2".to_string();
+        buffer.push("session-1", second);
+        let drained = buffer.drain_for_turn("session-1", "turn-2");
+        assert_eq!(drained.len(), 1);
+        assert_eq!(drained[0].id, "steer-2");
+    }
+
+    #[test]
+    fn legacy_content_key_fallback_suppresses_after_acknowledge() {
+        // TOKEN-01 防回退标记回退路径：无 steering_id 的遗留条目仍按内容键
+        // 抑制，行为与修复前一致（不因引入 id 键而退化）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let steering = injection(RoundInjectionKind::UserSteering, "legacy steering");
+        buffer.push("session-1", steering.clone());
+        let drained = buffer.drain_for_turn("session-1", "turn-1");
+        assert_eq!(drained.len(), 1);
+        buffer.acknowledge_injection("session-1", &drained[0].id);
+
+        buffer.push("session-1", steering);
+        let drained_again = buffer.drain_for_turn("session-1", "turn-2");
+        assert!(
+            drained_again.is_empty(),
+            "legacy content key must still suppress duplicates"
+        );
+    }
+
+    #[test]
+    fn injection_buffer_keeps_distinct_user_steering_messages() {
+        let buffer = SessionRoundInjectionBuffer::default();
+        // Distinct user messages must never be collapsed.
+        buffer.push(
+            "session-1",
+            injection(RoundInjectionKind::UserSteering, "first message"),
+        );
+        buffer.push(
+            "session-1",
+            injection(RoundInjectionKind::UserSteering, "second message"),
+        );
+        let pending = buffer.drain_for_turn("session-1", "turn-1");
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending[0].content, "first message");
+        assert_eq!(pending[1].content, "second message");
+    }
+
+    #[test]
+    fn dialog_turn_queue_any_matching_sees_queued_turns() {
+        let queue = DialogTurnQueue::<&'static str>::default();
+        queue
+            .enqueue("session-1", "alpha", DialogQueuePriority::Normal)
+            .expect("enqueue");
+        assert!(queue.any_matching("session-1", |turn| *turn == "alpha"));
+        assert!(!queue.any_matching("session-1", |turn| *turn == "beta"));
+        assert!(!queue.any_matching("other-session", |turn| *turn == "alpha"));
     }
 
     #[test]
@@ -1074,6 +1643,34 @@ mod tests {
             Some(2)
         );
         assert!(queue.inner.is_empty());
+    }
+
+    #[test]
+    fn dialog_turn_queue_set_max_depth_injects_configured_cap() {
+        let queue: DialogTurnQueue<usize> = DialogTurnQueue::default();
+        assert_eq!(queue.max_depth(), DEFAULT_MAX_DIALOG_QUEUE_DEPTH);
+
+        // R-GC-26: group_chat.queue_limit injection path.
+        queue.set_max_depth(7);
+        assert_eq!(queue.max_depth(), 7);
+
+        // A zero value must be ignored so a misconfigured document cannot
+        // disable the cap (defense in depth).
+        queue.set_max_depth(0);
+        assert_eq!(queue.max_depth(), 7);
+
+        // The cap is enforced by enqueue.
+        let queue = DialogTurnQueue::with_max_depth(2);
+        queue
+            .enqueue("s", 1, DialogQueuePriority::Normal)
+            .expect("first");
+        queue
+            .enqueue("s", 2, DialogQueuePriority::Normal)
+            .expect("second");
+        assert!(matches!(
+            queue.enqueue("s", 3, DialogQueuePriority::Normal),
+            Err(DialogTurnQueueError::Full { .. })
+        ));
     }
 
     #[test]
@@ -1208,5 +1805,66 @@ mod tests {
             GoalContinuationAfterTurnAction::SkipNoActiveTurn
         );
         assert!(plan.dispatch_next());
+    }
+
+    #[test]
+    fn dialog_steering_rejects_when_target_turn_is_not_running() {
+        let action = resolve_dialog_steering_action(
+            Some("turn-running"),
+            "session-1",
+            "turn-finished",
+            "urgent correction".to_string(),
+            None,
+            Vec::new(),
+            serde_json::Map::new(),
+            "steering-1".to_string(),
+            SystemTime::now(),
+            Vec::new(),
+        );
+
+        let DialogSteeringAction::Reject { error } = action else {
+            panic!("steering a non-running turn must be rejected");
+        };
+        assert!(error.contains("no longer running"));
+    }
+
+    #[test]
+    fn dialog_steering_buffers_user_steering_for_the_active_turn() {
+        let action = resolve_dialog_steering_action(
+            Some("turn-running"),
+            "session-1",
+            "turn-running",
+            "urgent correction".to_string(),
+            Some("display text".to_string()),
+            Vec::new(),
+            serde_json::Map::new(),
+            "steering-1".to_string(),
+            SystemTime::now(),
+            Vec::new(),
+        );
+
+        let DialogSteeringAction::Buffer { injection, outcome } = action else {
+            panic!("steering the active turn must be buffered");
+        };
+        assert_eq!(injection.kind, RoundInjectionKind::UserSteering);
+        assert_eq!(
+            injection.execution_policy,
+            RoundInjectionKind::UserSteering.default_execution_policy()
+        );
+        assert_eq!(
+            injection.target,
+            RoundInjectionTarget::ExactTurn("turn-running".to_string())
+        );
+        assert_eq!(injection.content, "urgent correction");
+        assert_eq!(injection.display_content.as_str(), "display text");
+
+        let DialogSteerOutcome::Buffered {
+            session_id,
+            turn_id,
+            steering_id,
+        } = outcome;
+        assert_eq!(session_id, "session-1");
+        assert_eq!(turn_id, "turn-running");
+        assert_eq!(steering_id, "steering-1");
     }
 }

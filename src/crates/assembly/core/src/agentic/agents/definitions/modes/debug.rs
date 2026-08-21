@@ -66,10 +66,10 @@ impl DebugMode {
             let detected = ProjectDetector::detect(Path::new(workspace_path))
                 .await
                 .unwrap_or_default();
-            return DebugProjectInfo {
+            DebugProjectInfo {
                 languages: detected.languages,
                 project_types: detected.project_types,
-            };
+            }
         }
 
         #[cfg(not(feature = "lsp"))]

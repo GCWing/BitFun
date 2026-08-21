@@ -14,13 +14,21 @@
   width: 100%;
   height: auto;
   min-height: 0;
-  max-width: 900px;
+  max-width: var(--bf-appearance-token-flowchat-content-max-width);
   z-index: $z-overlay;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   padding: 0 $size-gap-2;
   pointer-events: auto !important;
+
+  // Full-width tiled chat: the composer stretches edge to edge with the chat
+  // pane (still horizontally centered) instead of capping at 900px.
+  &:has(.bitfun-chat-input--chat-full-width) {
+    max-width: none;
+    padding-left: $size-gap-4;
+    padding-right: $size-gap-4;
+  }
 
   /* Reserve the band between the input card bottom edge and workspace strip (larger = more gap above strip text). */
   &:has(.bitfun-chat-input-workspace-strip) {
@@ -602,7 +610,13 @@
 
     .session-file-modifications-bar {
       width: 100%;
-      max-width: 900px;
+      max-width: var(--bf-appearance-token-flowchat-content-max-width);
+    }
+
+    // Full-width tiled chat: inner rows (file modifications bar) stretch with
+    // the composer instead of capping at 900px.
+    &:has(.bitfun-chat-input--chat-full-width) .session-file-modifications-bar {
+      max-width: none;
     }
 
     & > * {
@@ -718,6 +732,7 @@
 
   &__target-switcher {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.125rem;
     padding-bottom: 7px;

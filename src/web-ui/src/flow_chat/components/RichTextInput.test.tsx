@@ -546,4 +546,52 @@ describeWithJsdom('RichTextInput external sync', () => {
       startOffset: 6,
     });
   });
+
+  it('@@ prefix opens member mode while plain @ keeps file mention (R-GC-15)', async () => {
+    const onMentionStateChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onMentionStateChange={onMentionStateChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+
+    // Plain '@' -> original file-mention logic (memberMode unset, zero regression).
+    await updateEditorText(editor as HTMLDivElement, 'ask @test');
+    expect(onMentionStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      query: 'test',
+      startOffset: 4,
+    });
+    expect(
+      (onMentionStateChange.mock.calls.at(-1)?.[0] as { memberMode?: boolean }).memberMode
+    ).toBeUndefined();
+
+    // '@@' -> memberMode=true (group member + @all picker). The final trigger
+    // is the 2nd '@' (offset 5), whose preceding char is also '@' -> memberMode;
+    // query is the text after it.
+    await updateEditorText(editor as HTMLDivElement, 'ask @@test');
+    expect(onMentionStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      query: 'test',
+      startOffset: 5,
+      memberMode: true,
+    });
+
+    // '@@' followed by a plain '@' -> memberMode off (mutually exclusive; no
+    // two pickers at once).
+    await updateEditorText(editor as HTMLDivElement, 'ask @file');
+    const last = onMentionStateChange.mock.calls.at(-1)?.[0] as { memberMode?: boolean };
+    expect(last.isActive).toBe(true);
+    expect(last.memberMode).toBeUndefined();
+  });
 });

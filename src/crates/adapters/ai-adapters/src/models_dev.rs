@@ -12,7 +12,8 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::client::quirks::{
-    is_deepseek_reasoning_effort_model, is_glm_52_reasoning_effort_model, is_zhipuai_url,
+    is_codebuddy_url, is_deepseek_reasoning_effort_model, is_glm_52_reasoning_effort_model,
+    is_zhipuai_url,
 };
 use crate::providers::anthropic::request::{
     anthropic_thinking_capability, AnthropicThinkingCapability,
@@ -836,6 +837,18 @@ fn adapter_reasoning_support(
     let provider = provider.trim().to_ascii_lowercase();
     let execution_provider = execution_provider.trim().to_ascii_lowercase();
     let execution_model = execution_model.trim().to_ascii_lowercase();
+    // CodeBuddy exposes reasoning through an OpenAI-compatible body: a
+    // boolean `enable_thinking` toggle plus a `reasoning_effort` tier string.
+    // Adapter-inferred support exposes both the on/off toggle and the
+    // conservative high/max effort tiers (matching the models.dev facts for
+    // the common CodeBuddy models: glm-5.2 and deepseek-v4-*).
+    if is_codebuddy_url(base_url) {
+        return AdapterReasoningSupport {
+            effort: true,
+            toggle: true,
+            ..Default::default()
+        };
+    }
     if provider == "deepseek" || base_url.to_ascii_lowercase().contains("api.deepseek.com") {
         return AdapterReasoningSupport {
             effort: true,
@@ -942,6 +955,24 @@ fn adapter_fallback_descriptors(
     let source = ReasoningPresetSource::AdapterFallback;
 
     match provider_id {
+        // CodeBuddy surfaces reasoning through an OpenAI-compatible body: a
+        // boolean `enable_thinking` toggle plus a `reasoning_effort` tier. Expose
+        // both the on/off pair and the conservative high/max effort tiers, which
+        // match the models.dev facts for the common CodeBuddy reasoning models
+        // (glm-5.2, deepseek-v4-*).
+        "openai" if is_codebuddy_url(base_url) && support.toggle => {
+            let mut descriptors = toggle_descriptors(source, provider, model_id.as_str());
+            if support.effort {
+                descriptors.extend(effort_descriptors(
+                    &[Some("high".into()), Some("max".into())],
+                    false,
+                    source,
+                    provider,
+                    model_id.as_str(),
+                ));
+            }
+            descriptors
+        }
         // Keep these tables deliberately conservative. A future model is not
         // assumed compatible merely because the protocol has an effort field.
         "openai" if support.effort => {
@@ -1093,6 +1124,11 @@ fn adapter_fallback_provider_id(provider: &str, base_url: &str) -> Option<&'stat
     if let Some(provider_id) = auto_provider_id(provider, base_url) {
         return Some(provider_id);
     }
+    if is_codebuddy_url(base_url) {
+        // CodeBuddy is OpenAI-compatible (`/v2/chat/completions`); model
+        // discovery and reasoning toggle reuse the OpenAI-compatible path.
+        return Some("openai");
+    }
 
     let provider = provider.trim().to_ascii_lowercase();
     let endpoint = reqwest::Url::parse(base_url.trim()).ok()?;
@@ -1182,6 +1218,9 @@ fn toggle_descriptors(
     ]
 }
 
+// Budget descriptor builder mirrors the four source fields plus limits;
+// kept flat for call-site readability.
+#[allow(clippy::too_many_arguments)]
 fn budget_descriptors(
     min: Option<u32>,
     max: Option<u32>,
@@ -2140,6 +2179,58 @@ mod tests {
             .presets
             .iter()
             .any(|preset| preset.id == "medium"));
+    }
+
+    #[test]
+    fn codebuddy_auto_model_gets_toggle_and_effort_presets_with_on_default() {
+        // CodeBuddy models are not in models.dev and their host does not match
+        // an auto-binding provider, so reasoning capability is adapter-inferred
+        // as an on/off toggle plus high/max effort tiers. A configured
+        // `default_preset: "on"` must resolve against the generated presets.
+        let configured = ReasoningConfig {
+            catalog: ReasoningCatalogBinding::Auto,
+            default_preset: Some("on".to_string()),
+            presets: Vec::new(),
+        };
+        let projection = project_reasoning_catalog(
+            "openai",
+            "glm-5.2",
+            "https://copilot.tencent.com/v2/chat/completions",
+            Some(&configured),
+            None,
+        );
+
+        assert_eq!(
+            projection
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["off", "on", "high", "max"]
+        );
+        assert!(projection
+            .presets
+            .iter()
+            .all(|preset| preset.source == ReasoningPresetSource::AdapterFallback));
+        assert_eq!(projection.default_preset.as_deref(), Some("on"));
+        let on = projection
+            .presets
+            .iter()
+            .find(|preset| preset.id == "on")
+            .expect("generated on");
+        assert!(matches!(
+            on.actions.as_slice(),
+            [ReasoningPresetAction::Toggle { enabled: true }]
+        ));
+        let high = projection
+            .presets
+            .iter()
+            .find(|preset| preset.id == "high")
+            .expect("generated high");
+        assert!(matches!(
+            high.actions.as_slice(),
+            [ReasoningPresetAction::Effort { value }] if value == "high"
+        ));
     }
 
     #[test]

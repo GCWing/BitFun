@@ -302,11 +302,10 @@ fn prompt_command_shell_path_bytes(path: &Path) -> Vec<u8> {
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;
-        return path
-            .as_os_str()
+        path.as_os_str()
             .encode_wide()
             .flat_map(u16::to_le_bytes)
-            .collect();
+            .collect()
     }
     #[cfg(not(any(unix, windows)))]
     path.to_string_lossy().as_bytes().to_vec()
@@ -3798,6 +3797,7 @@ impl WorkspaceExternalSourceService {
         self.rebuild_product_snapshot(command_snapshot).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn expand_command(
         self: &Arc<Self>,
         name: &str,
@@ -4054,10 +4054,12 @@ impl WorkspaceExternalSourceService {
             if was_available {
                 continue;
             }
-            let mut config = FileWatcherConfig::default();
-            config.watch_recursively = root.recursive;
-            config.ignore_hidden_files = false;
-            config.debounce_interval_ms = 350;
+            let config = FileWatcherConfig {
+                watch_recursively: root.recursive,
+                ignore_hidden_files: false,
+                debounce_interval_ms: 350,
+                ..Default::default()
+            };
             let path = root.path.to_string_lossy().to_string();
             match watcher.watch_path(&path, Some(config)).await {
                 Ok(()) => {
@@ -4430,7 +4432,7 @@ fn sanitize_external_snapshot_locations(
             .unwrap_or(ExternalSourceScope::WorkspaceLocal);
         remember_location(scope, directory);
     }
-    replacements.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
+    replacements.sort_by_key(|item| std::cmp::Reverse(item.0.len()));
     let sanitize_message = |message: &mut String| {
         for (raw, safe) in &replacements {
             if message.contains(raw) {
@@ -7318,6 +7320,7 @@ pub async fn set_external_source_enabled(
         .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn expand_external_prompt_command(
     workspace_root: Option<&Path>,
     name: &str,

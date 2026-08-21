@@ -1,9 +1,27 @@
+//! WebView2 process-failure recovery.
+//!
+//! The decision engine (constants, enums, pure functions) is used by the
+//! Windows-only install path and by the unit tests below; on non-Windows
+//! builds nothing outside `#[cfg(test)]` references it, so the dead-code lint
+//! would otherwise fire. All of it is intentional: the recovery decision rules
+//! stay platform-neutral and unit-testable on every host.
+#[cfg(any(target_os = "windows", test))]
 use serde::{Deserialize, Serialize};
+#[cfg(any(target_os = "windows", test))]
 use std::time::Duration;
 
+// The decision engine below is platform-neutral: the Windows install path
+// (`mod windows`) and the unit tests in `mod tests` are its only consumers.
+// On non-Windows builds nothing outside `#[cfg(test)]` references it, so the
+// dead-code lint would otherwise fire. The engine stays unit-testable on every
+// host; the cfg mirrors exactly where it is used.
+#[cfg(any(target_os = "windows", test))]
 const RENDERER_FAILURE_WINDOW: Duration = Duration::from_secs(10 * 60);
+
+#[cfg(any(target_os = "windows", test))]
 const RESTART_FAILURE_WINDOW: Duration = Duration::from_secs(10 * 60);
 
+#[cfg(any(target_os = "windows", test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FailureKind {
     BrowserExited,
@@ -13,6 +31,7 @@ enum FailureKind {
     Other,
 }
 
+#[cfg(any(target_os = "windows", test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RecoveryAction {
     Reload,
@@ -21,6 +40,7 @@ enum RecoveryAction {
     Observe,
 }
 
+#[cfg(any(target_os = "windows", test))]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct RecoveryHistory {
@@ -28,6 +48,7 @@ struct RecoveryHistory {
     restart_attempts_ms: Vec<u64>,
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn decide_recovery(
     history: &mut RecoveryHistory,
     failure: FailureKind,
@@ -50,6 +71,7 @@ fn decide_recovery(
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn restart_or_block(history: &mut RecoveryHistory, now_ms: u64) -> RecoveryAction {
     let window_ms = RESTART_FAILURE_WINDOW.as_millis() as u64;
     history
@@ -63,6 +85,7 @@ fn restart_or_block(history: &mut RecoveryHistory, now_ms: u64) -> RecoveryActio
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn restart_after_failed_reload(history: &mut RecoveryHistory, now_ms: u64) -> RecoveryAction {
     restart_or_block(history, now_ms)
 }
@@ -82,13 +105,23 @@ mod windows {
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         COREWEBVIEW2_PROCESS_FAILED_KIND, COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
         COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_GPU_PROCESS_EXITED,
         COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
         COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE,
     };
     use webview2_com::ProcessFailedEventHandler;
 
     const RECOVERY_STATE_FILE: &str = "webview-recovery.json";
-    const DUPLICATE_EVENT_GUARD: Duration = Duration::from_secs(2);
+    /// How long to wait after a Reload before probing whether the renderer
+    /// actually came back. WebView2 needs time to rebuild the render process
+    /// and load the page; probing too early would false-positive on the
+    /// transitional blank state.
+    const RELOAD_VERIFICATION_DELAY: Duration = Duration::from_secs(4);
+    /// Marker returned by the probe script when the document is fully rendered.
+    const RELOAD_PROBE_ALIVE_MARKER: &str = "renderer-alive";
+    /// How long to wait for the renderer to answer the probe before treating
+    /// the reload as failed and escalating to a restart.
+    const RELOAD_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
     static RECOVERY_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
     static RECOVERY_CONTEXT: OnceLock<RecoveryContext> = OnceLock::new();
@@ -114,36 +147,43 @@ mod windows {
         prune_expired_restart_attempts(context);
 
         let app_for_handler = app.clone();
-        if let Err(error) = window.with_webview(move |platform_webview| unsafe {
-            let webview = match platform_webview.controller().CoreWebView2() {
-                Ok(webview) => webview,
-                Err(error) => {
-                    log::warn!("Failed to access WebView2 for process recovery: {}", error);
-                    return;
-                }
-            };
-            let handler = ProcessFailedEventHandler::create(Box::new(move |_sender, args| {
-                let Some(args) = args else {
-                    log::warn!("WebView2 process failure did not include event arguments");
-                    return Ok(());
+        if let Err(error) = window.with_webview(move |platform_webview| {
+            // SAFETY: the WebView2 COM interfaces (controller / ICoreWebView2 /
+            // event handler) are only touched while the owning webview window
+            // is alive, which `with_webview` guarantees for this closure. The
+            // handler is registered on the live webview and stays reachable by
+            // WebView2 for the webview's lifetime.
+            unsafe {
+                let webview = match platform_webview.controller().CoreWebView2() {
+                    Ok(webview) => webview,
+                    Err(error) => {
+                        log::warn!("Failed to access WebView2 for process recovery: {}", error);
+                        return;
+                    }
                 };
-                let mut native_kind = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
-                args.ProcessFailedKind(&mut native_kind)?;
-                handle_failure(
-                    &app_for_handler,
-                    map_failure_kind(native_kind),
-                    native_kind.0,
-                );
-                Ok(())
-            }));
-            let mut token = 0i64;
-            if let Err(error) = webview.add_ProcessFailed(&handler, &mut token) {
-                log::warn!(
-                    "Failed to register WebView2 process recovery handler: {}",
-                    error
-                );
-            } else {
-                log::info!("Registered WebView2 process recovery handler");
+                let handler = ProcessFailedEventHandler::create(Box::new(move |_sender, args| {
+                    let Some(args) = args else {
+                        log::warn!("WebView2 process failure did not include event arguments");
+                        return Ok(());
+                    };
+                    let mut native_kind = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
+                    args.ProcessFailedKind(&mut native_kind)?;
+                    handle_failure(
+                        &app_for_handler,
+                        map_failure_kind(native_kind),
+                        native_kind.0,
+                    );
+                    Ok(())
+                }));
+                let mut token = 0i64;
+                if let Err(error) = webview.add_ProcessFailed(&handler, &mut token) {
+                    log::warn!(
+                        "Failed to register WebView2 process recovery handler: {}",
+                        error
+                    );
+                } else {
+                    log::info!("Registered WebView2 process recovery handler");
+                }
             }
         }) {
             log::warn!(
@@ -199,14 +239,60 @@ mod windows {
                     handle_failed_reload(app, now_ms);
                     return;
                 }
-                std::thread::spawn(|| {
-                    std::thread::sleep(DUPLICATE_EVENT_GUARD);
+                // Reload 返回 Ok 只代表调用入队，不保证画面恢复：renderer
+                // 崩溃后 reload 可能排队失败或重建出的页面渲染失败（黑屏），
+                // 且不会再有 ProcessFailed 事件触发升级（2026-08-10 黑屏实测）。
+                // 延迟后主动探测渲染是否恢复，未恢复则升级 Restart。
+                let app_for_verification = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(RELOAD_VERIFICATION_DELAY);
+                    let recovered = probe_renderer_alive(&app_for_verification);
+                    if recovered {
+                        log::info!("WebView2 renderer recovered after reload");
+                    } else {
+                        log::warn!(
+                            "WebView2 renderer did not recover after reload; escalating to restart"
+                        );
+                        handle_failed_reload(&app_for_verification, current_time_ms());
+                    }
                     RECOVERY_IN_PROGRESS.store(false, Ordering::SeqCst);
                 });
             }
             RecoveryAction::Restart => request_automatic_restart(app),
             RecoveryAction::Block => show_escape_dialog(app.clone()),
             RecoveryAction::Observe => RECOVERY_IN_PROGRESS.store(false, Ordering::SeqCst),
+        }
+    }
+
+    /// Probe whether the main webview's renderer is actually alive after a
+    /// reload. Runs `document.readyState` through the Tauri eval-with-callback
+    /// channel, which round-trips through the renderer: a dead renderer makes
+    /// the eval fail immediately (or never delivers the callback), and a live
+    /// renderer reports back the actual readyState. Only `complete` counts as
+    /// recovered — a page stuck reloading stays in a transitional state and
+    /// escalates to a restart.
+    fn probe_renderer_alive(app: &tauri::AppHandle) -> bool {
+        let Some(window) = app.get_webview_window("main") else {
+            log::warn!("WebView2 renderer probe failed: main window not found");
+            return false;
+        };
+        let (sender, receiver) = std::sync::mpsc::channel::<bool>();
+        let script = format!(
+            "(function() {{ try {{ return document.readyState === 'complete' ? '{}' : document.readyState; }} catch (e) {{ return 'probe-error'; }} }})()",
+            RELOAD_PROBE_ALIVE_MARKER
+        );
+        if let Err(error) = window.eval_with_callback(script, move |result| {
+            let _ = sender.send(result.contains(RELOAD_PROBE_ALIVE_MARKER));
+        }) {
+            log::warn!("WebView2 renderer probe eval failed: {}", error);
+            return false;
+        }
+        match receiver.recv_timeout(RELOAD_PROBE_TIMEOUT) {
+            Ok(alive) => alive,
+            Err(error) => {
+                log::warn!("WebView2 renderer probe timed out: {}", error);
+                false
+            }
         }
     }
 
@@ -241,7 +327,7 @@ mod windows {
         log::warn!("Requesting controlled application restart for WebView2 recovery");
         crate::crash_diagnostics::mark_clean_shutdown("webview_recovery_restart");
         crate::save_main_window_state(app);
-        crate::perform_process_exit_cleanup();
+        tauri::async_runtime::spawn(crate::perform_process_exit_cleanup());
         app.request_restart();
     }
 
@@ -267,7 +353,7 @@ mod windows {
                 _ => {
                     crate::crash_diagnostics::mark_clean_shutdown("webview_recovery_exit");
                     crate::save_main_window_state(&app);
-                    crate::perform_process_exit_cleanup();
+                    tauri::async_runtime::spawn(crate::perform_process_exit_cleanup());
                     app.exit(1);
                 }
             });
@@ -276,7 +362,7 @@ mod windows {
     fn request_user_restart(app: &tauri::AppHandle) {
         crate::crash_diagnostics::mark_clean_shutdown("webview_recovery_user_restart");
         crate::save_main_window_state(app);
-        crate::perform_process_exit_cleanup();
+        tauri::async_runtime::spawn(crate::perform_process_exit_cleanup());
         app.request_restart();
     }
 
@@ -289,6 +375,12 @@ mod windows {
             FailureKind::RendererUnresponsive
         } else if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED {
             FailureKind::FrameRendererExited
+        } else if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_GPU_PROCESS_EXITED {
+            // GPU 进程崩溃会导致 WebView 画面黑屏（主进程存活、页面无法渲染），
+            // 且 WebView2 不会自动修复 GPU 状态（WebView2Feedback #3817 实证）。
+            // 按 renderer 崩溃同等对待：首次 Reload，窗口内重复则升级 Restart。
+            // 此前 GPU 崩溃落入 Other → Observe（什么都不做）= 黑屏盲区。
+            FailureKind::RendererExited
         } else {
             FailureKind::Other
         }

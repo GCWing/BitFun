@@ -787,6 +787,7 @@ mod tests {
             error_detail: None,
             recovery: None,
             recovery_epoch: None,
+            todos: None,
             status: crate::service::session::TurnStatus::Completed,
         };
 

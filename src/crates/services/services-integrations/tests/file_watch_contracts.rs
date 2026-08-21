@@ -62,9 +62,11 @@ fn file_watch_worker_does_not_extend_tokio_runtime_lifetime() {
 #[tokio::test]
 async fn file_watch_publishes_debounced_batches_to_backend_subscribers() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let mut config = FileWatcherConfig::default();
-    config.debounce_interval_ms = 40;
-    config.ignore_hidden_files = false;
+    let config = FileWatcherConfig {
+        debounce_interval_ms: 40,
+        ignore_hidden_files: false,
+        ..Default::default()
+    };
     let service = FileWatchService::new(config.clone());
     let mut events = service.subscribe();
     service
@@ -90,10 +92,12 @@ async fn file_watch_can_include_build_named_directories_for_semantic_sources() {
     let temp = tempfile::tempdir().expect("tempdir");
     let build_skill = temp.path().join("build");
     fs::create_dir_all(&build_skill).expect("build-named skill directory");
-    let mut config = FileWatcherConfig::default();
-    config.debounce_interval_ms = 40;
-    config.ignore_hidden_files = false;
-    config.ignore_common_build_directories = false;
+    let config = FileWatcherConfig {
+        debounce_interval_ms: 40,
+        ignore_hidden_files: false,
+        ignore_common_build_directories: false,
+        ..Default::default()
+    };
     let service = FileWatchService::new(config.clone());
     let mut events = service.subscribe();
     service
@@ -128,9 +132,11 @@ async fn a_narrow_duplicate_registration_does_not_downgrade_recursive_watch() {
     let temp = tempfile::tempdir().expect("tempdir");
     let nested = temp.path().join("nested");
     fs::create_dir_all(&nested).expect("nested directory");
-    let mut recursive = FileWatcherConfig::default();
-    recursive.debounce_interval_ms = 40;
-    recursive.ignore_hidden_files = false;
+    let mut recursive = FileWatcherConfig {
+        debounce_interval_ms: 40,
+        ignore_hidden_files: false,
+        ..Default::default()
+    };
     let service = FileWatchService::new(recursive.clone());
     let mut events = service.subscribe();
     service
@@ -183,9 +189,11 @@ async fn re_registering_a_recreated_root_resumes_watching() {
     let temp = tempfile::tempdir().expect("tempdir");
     let root = temp.path().join("root");
     fs::create_dir_all(&root).expect("root directory");
-    let mut config = FileWatcherConfig::default();
-    config.debounce_interval_ms = 40;
-    config.ignore_hidden_files = false;
+    let config = FileWatcherConfig {
+        debounce_interval_ms: 40,
+        ignore_hidden_files: false,
+        ..Default::default()
+    };
     let service = FileWatchService::new(config.clone());
     let mut events = service.subscribe();
     service
@@ -222,9 +230,11 @@ async fn re_registering_a_recreated_root_resumes_watching() {
 #[tokio::test]
 async fn atomic_rename_keeps_the_non_temporary_destination_path() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let mut config = FileWatcherConfig::default();
-    config.debounce_interval_ms = 40;
-    config.ignore_hidden_files = false;
+    let config = FileWatcherConfig {
+        debounce_interval_ms: 40,
+        ignore_hidden_files: false,
+        ..Default::default()
+    };
     let service = FileWatchService::new(config.clone());
     let mut events = service.subscribe();
     service

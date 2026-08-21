@@ -80,23 +80,57 @@ pub fn phase2_workspace_diff_file(root: &Path) -> PathBuf {
 }
 
 pub fn rollout_summary_file_name(row: &MemoryRow) -> String {
-    format!("{}.md", rollout_summary_file_stem(row))
+    rollout_summary_file_name_with_slug_max_len(row, ROLLOUT_SLUG_MAX_LEN_DEFAULT)
 }
 
-fn rollout_summary_file_stem(row: &MemoryRow) -> String {
-    rollout_summary_file_stem_from_parts(
-        &row.session_id,
-        row.source_updated_at_unix_secs,
-        row.rollout_slug.as_deref(),
+/// R-THR-01 批2 2-7：配置化变体——slug 上限由调用方从
+/// `ai.thresholds.memories.rollout_slug_max_len` 解析。
+pub fn rollout_summary_file_name_with_slug_max_len(row: &MemoryRow, slug_max_len: usize) -> String {
+    format!(
+        "{}.md",
+        rollout_summary_file_stem_with_slug_max_len(row, slug_max_len)
     )
 }
 
-fn rollout_summary_file_stem_from_parts(
+/// Default rollout slug length cap. Legacy `ROLLOUT_SLUG_MAX_LEN = 60`
+/// (workspace.rs local const; surfaced for configuration defaults).
+pub const ROLLOUT_SLUG_MAX_LEN_DEFAULT: usize = 60;
+
+/// Resolve the configured rollout slug max length
+/// (`ai.thresholds.memories.rollout_slug_max_len`), falling back to the legacy
+/// `ROLLOUT_SLUG_MAX_LEN = 60` when unset or invalid (R-THR-01 批2 2-7).
+pub async fn configured_rollout_slug_max_len() -> usize {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return ROLLOUT_SLUG_MAX_LEN_DEFAULT;
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return ROLLOUT_SLUG_MAX_LEN_DEFAULT;
+    };
+    let limit = thresholds.memories.rollout_slug_max_len;
+    if limit == 0 {
+        return ROLLOUT_SLUG_MAX_LEN_DEFAULT;
+    }
+    limit
+}
+
+fn rollout_summary_file_stem_with_slug_max_len(row: &MemoryRow, slug_max_len: usize) -> String {
+    rollout_summary_file_stem_from_parts_with_slug_max_len(
+        &row.session_id,
+        row.source_updated_at_unix_secs,
+        row.rollout_slug.as_deref(),
+        slug_max_len,
+    )
+}
+
+fn rollout_summary_file_stem_from_parts_with_slug_max_len(
     session_id: &str,
     source_updated_at_unix_secs: i64,
     rollout_slug: Option<&str>,
+    rollout_slug_max_len: usize,
 ) -> String {
-    const ROLLOUT_SLUG_MAX_LEN: usize = 60;
     const SHORT_HASH_ALPHABET: &[u8; 62] =
         b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const SHORT_HASH_SPACE: u32 = 14_776_336;
@@ -142,9 +176,9 @@ fn rollout_summary_file_stem_from_parts(
         return file_prefix;
     };
 
-    let mut slug = String::with_capacity(ROLLOUT_SLUG_MAX_LEN);
+    let mut slug = String::with_capacity(rollout_slug_max_len);
     for ch in raw_slug.chars() {
-        if slug.len() >= ROLLOUT_SLUG_MAX_LEN {
+        if slug.len() >= rollout_slug_max_len {
             break;
         }
 
@@ -350,6 +384,10 @@ async fn rebuild_raw_memories(root: &Path, rows: &[MemoryRow]) -> BitFunResult<(
         body.push_str("No raw memories yet.\n");
     } else {
         body.push_str("Merged stage-1 raw memories (stable ascending session-id order):\n\n");
+        // R-THR-01 批2 2-7：slug 上限配置化。
+        let slug_max_len = crate::agentic::memories::workspace::configured_rollout_slug_max_len()
+            .await
+            .max(1);
         for row in sorted_rows(rows) {
             writeln!(body, "## Session `{}`", row.session_id).map_err(format_error)?;
             writeln!(
@@ -363,7 +401,7 @@ async fn rebuild_raw_memories(root: &Path, rows: &[MemoryRow]) -> BitFunResult<(
             writeln!(
                 body,
                 "rollout_summary_file: {}",
-                rollout_summary_file_name(row)
+                rollout_summary_file_name_with_slug_max_len(row, slug_max_len)
             )
             .map_err(format_error)?;
             writeln!(body).map_err(format_error)?;
@@ -378,14 +416,19 @@ async fn rebuild_raw_memories(root: &Path, rows: &[MemoryRow]) -> BitFunResult<(
 
 async fn sync_rollout_summaries(root: &Path, rows: &[MemoryRow]) -> BitFunResult<()> {
     let dir = rollout_summaries_dir(root);
+    // R-THR-01 批2 2-7：slug 上限配置化。
+    let slug_max_len = configured_rollout_slug_max_len().await.max(1);
     let keep = rows
         .iter()
-        .map(rollout_summary_file_name)
+        .map(|row| rollout_summary_file_name_with_slug_max_len(row, slug_max_len))
         .collect::<HashSet<_>>();
     prune_rollout_summaries(&dir, &keep).await?;
 
     for row in sorted_rows(rows) {
-        let path = dir.join(rollout_summary_file_name(row));
+        let path = dir.join(rollout_summary_file_name_with_slug_max_len(
+            row,
+            slug_max_len,
+        ));
         let mut body = String::new();
         writeln!(body, "session_id: {}", row.session_id).map_err(format_error)?;
         writeln!(

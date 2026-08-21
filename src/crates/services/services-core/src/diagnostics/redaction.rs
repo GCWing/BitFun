@@ -173,5 +173,23 @@ fn unix_path_re() -> &'static Regex {
 }
 
 fn sensitive_key_pattern() -> &'static str {
-    r#"api[_-]?key|apikey|authorization|x-api-key|token|access[_-]?token|refresh[_-]?token|session[_-]?key|password|secret|prompt|system_prompt|original_prompt|suggested_prompt|copyable_prompt|content|text|partial_json|arguments|payload|raw_message|rawMessage|raw_error|outer_html|text_content|command|path|file|files|data"#
+    r#"api[_-]?key|apikey|authorization|x-api-key|x-user-id|x-enterprise-id|x-tenant-id|x-department-info|x-request-id|x-session-id|x-refresh-token|token|access[_-]?token|refresh[_-]?token|session[_-]?key|password|secret|prompt|system_prompt|original_prompt|suggested_prompt|copyable_prompt|content|text|partial_json|arguments|payload|raw_message|rawMessage|raw_error|outer_html|text_content|command|path|file|files|data"#
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redacts_subscription_identity_headers() {
+        let text = "X-User-Id: u-123\nX-Enterprise-Id: ent-9\nX-Tenant-Id: ent-9\nX-Department-Info: R&D\nX-Request-ID: req-1\nX-Session-ID: sess-1\nX-Refresh-Token: refresh-secret\n";
+        let result = redact_diagnostic_log_text_with_report(text);
+        assert!(result.redaction_count >= 6);
+        for secret in ["u-123", "ent-9", "req-1", "sess-1", "refresh-secret"] {
+            assert!(
+                !result.text.contains(secret),
+                "value {secret} must be redacted"
+            );
+        }
+    }
 }

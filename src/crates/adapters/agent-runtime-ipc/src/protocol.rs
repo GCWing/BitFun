@@ -9,6 +9,9 @@ pub const PROTOCOL_VERSION: u32 = 17;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+// Wire-protocol frame carries the (large) operation result inline; boxing
+// would not change the serialized form but would churn every match site.
+#[allow(clippy::large_enum_variant)]
 pub enum RuntimeIpcFrame {
     Initialize {
         request_id: u64,

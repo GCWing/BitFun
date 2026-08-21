@@ -198,6 +198,12 @@ fn explicit_config_directory_is_appended_to_the_default_global_directory() {
         project_config_enabled: false,
     });
 
+    // Anchor the project boundary at the workspace so the host environment's
+    // own git repository (e.g. a user home directory that is a git checkout)
+    // cannot leak into find_project_root and reclassify the explicit global
+    // directory as workspace-local.
+    fs::create_dir_all(temp.path().join("workspace/.git")).unwrap();
+
     let snapshot = provider
         .discover(&context(temp.path().join("workspace")))
         .unwrap();

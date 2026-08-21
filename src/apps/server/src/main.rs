@@ -29,12 +29,21 @@ use serde::Serialize;
 use std::{collections::HashSet, net::SocketAddr, path::PathBuf, sync::Arc};
 use tower_http::cors::CorsLayer;
 
+use bitfun_app_server::BitfunAppServer;
+
 mod app_server;
 mod bootstrap;
 mod routes;
 
+// Detached-dispatch host state. Wired through the old `websocket.rs::handle_command`
+// path; under browser-direct ACP-over-WS that surface is temporarily dead
+// (tracked for a later batch that brings external_sources + dispatch onto the
+// app-server schema, same as `routes/external_sources.rs`). Kept so the host
+// capability plumbing stays intact for that follow-up.
 pub(crate) struct DispatchHostState {
+    #[allow(dead_code)]
     path_manager: Arc<bitfun_core::infrastructure::PathManager>,
+    #[allow(dead_code)]
     ssh_manager: Arc<bitfun_core::service::remote_ssh::SSHConnectionManager>,
 }
 
@@ -47,7 +56,16 @@ pub struct AppState {
     #[allow(dead_code)]
     external_workspace_root: Option<PathBuf>,
     allowed_browser_origins: Arc<HashSet<String>>,
+    // Only read by the detached-dispatch route, which is temporarily dead under
+    // browser-direct ACP-over-WS (see `DispatchHostState` note). Kept for the
+    // follow-up that brings dispatch onto the app-server schema.
+    #[allow(dead_code)]
     dispatch_host: Option<Arc<DispatchHostState>>,
+    /// In-process agent runtime surface, present only when the host is started
+    /// with `--with-runtime`. Kept dormant (None) for the default read-only
+    /// HTTP shell so a bare `bitfun-server` never silently boots an Agent
+    /// Runtime; `/ws` connections are rejected until runtime mode is explicit.
+    app_server: Option<BitfunAppServer>,
 }
 
 const DEFAULT_ALLOWED_BROWSER_ORIGINS: [&str; 2] =
@@ -64,6 +82,14 @@ struct ServerArgs {
     /// When omitted, only BitFun's local Web development origins are allowed.
     #[arg(long = "allowed-origin", value_name = "ORIGIN")]
     allowed_origins: Vec<String>,
+
+    /// Explicitly assemble the Agent Runtime and serve it over `/ws`.
+    ///
+    /// The HTTP shell is dormant by default: without this flag the server only
+    /// exposes health, info, and detached dispatch, and rejects WebSocket
+    /// upgrades instead of silently starting a full Agent Runtime.
+    #[arg(long)]
+    with_runtime: bool,
 }
 
 /// Health check response
@@ -103,41 +129,31 @@ async fn main() -> Result<()> {
         })
         .transpose()?;
 
-    // Initialize the full agentic stack (coordinator, scheduler, token usage,
-    // MCP/config/filesystem services, event queue). This binding is held alive
-    // for the lifetime of the server so its services outlive every websocket
-    // connection; the app-server client and spawned tasks hold their own Arc
-    // clones of the coordinator, scheduler, and event queue.
-    let server_state = bootstrap::initialize(
-        external_workspace_root
-            .as_ref()
-            .map(|path| path.to_string_lossy().into_owned()),
-    )
-    .await?;
-
-    // Build the agent runtime the same way the Desktop session application does,
-    // then build an in-process `BitfunAppServer` for it. Each WebSocket
-    // connection is handed straight to `BitfunAppServer::serve` over a WS-bridged
-    // `Lines` transport (browser-direct ACP-over-WS, Step 2), so the browser
-    // connects directly to the in-process app-server over native JSON-RPC — no
-    // shared in-process client, no custom WS envelope.
-    let agent_runtime =
-        bitfun_core::product_runtime::CoreProductAgentRuntime::build_session_surface(
-            server_state.coordinator.clone(),
-            server_state.scheduler.clone(),
-            server_state.token_usage_service.clone(),
+    // The HTTP shell is dormant by default: the full Agent Runtime is assembled
+    // only when the host is explicitly started with `--with-runtime` (aligns
+    // the Server Host with its dormant-Runtime intent and with
+    // configuration-driven lazy activation). The full-runtime bootstrap lives
+    // in `app_server::build_lazy` so this read-only shell never silently boots
+    // an Agent Runtime, and the contract test pins that boundary.
+    let app_server = if args.with_runtime {
+        let (app_server, server_state) = app_server::build_lazy(
+            external_workspace_root
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned()),
         )
-        .map_err(|error| anyhow::anyhow!("Failed to build agent runtime: {error}"))?;
-    // The event source wraps the same `EventQueue` the coordinator publishes to;
-    // each connection's `serve` main loop subscribes independently and projects
-    // runtime events to the frontend shape before pushing them to the browser.
-    let event_source =
-        bitfun_agent_runtime::sdk::AgentEventSource::new(server_state.event_queue.clone());
-    let bitfun_app_server = app_server::build(agent_runtime, event_source);
-
-    tracing::info!(
-        "App-server ready; each WebSocket connection drives one in-process serve over native JSON-RPC"
-    );
+        .await?;
+        // Keep the runtime services alive for the server's lifetime.
+        let _runtime_holder = server_state;
+        tracing::info!(
+            "App-server ready; each WebSocket connection drives one in-process serve over native JSON-RPC"
+        );
+        Some(app_server)
+    } else {
+        tracing::info!(
+            "Runtime dormant: start with --with-runtime to serve the Agent Runtime over /ws"
+        );
+        None
+    };
 
     let configured_origins = if args.allowed_origins.is_empty() {
         DEFAULT_ALLOWED_BROWSER_ORIGINS
@@ -184,6 +200,7 @@ async fn main() -> Result<()> {
             path_manager,
             ssh_manager,
         })),
+        app_server,
     };
 
     let app = Router::new()
@@ -196,10 +213,6 @@ async fn main() -> Result<()> {
                 .allow_methods([Method::GET])
                 .allow_origin(cors_origins),
         )
-        // The BitFunAppServer is cloned per WebSocket connection through an axum
-        // Extension (cheap Arc clone); each connection spawns its own `serve`
-        // over a WS-bridged `Lines` transport.
-        .layer(axum::Extension(bitfun_app_server))
         .with_state(app_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));

@@ -328,6 +328,7 @@ pub(crate) async fn list_models(_client: &AIClient) -> Result<Vec<RemoteModelInf
             models.push(RemoteModelInfo {
                 id: model,
                 display_name: None,
+                supports_reasoning: None,
             });
         }
     }
@@ -336,6 +337,7 @@ pub(crate) async fn list_models(_client: &AIClient) -> Result<Vec<RemoteModelInf
         models.push(RemoteModelInfo {
             id: (*id).to_string(),
             display_name: Some((*display_name).to_string()),
+            supports_reasoning: None,
         });
     }
 

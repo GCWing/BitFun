@@ -150,12 +150,40 @@ impl CoreSessionStorePort {
         }
 
         let projects_root = path_manager.projects_root();
+        // 双侧 canonicalize（消除 symlink/junction 差异，修复 macOS /var -> /private/var 不对称）。
+        // canonicalize 失败（目录不存在 / IO 错误）时显式降级：回退原始路径比较，
+        // 保持既有行为（is_confined_to_managed_root 的 root 不存在 -> true 陷阱分支继续生效）。
+        let canonical_root = dunce::canonicalize(projects_root.as_path()).ok();
         let has_local_shape = path
             .parent()
             .and_then(|runtime_root| runtime_root.parent())
-            .is_some_and(|candidate| candidate == projects_root.as_path());
-        (has_local_shape && Self::is_confined_to_managed_root(&projects_root, path))
-            .then_some(SessionStorageKind::Local)
+            .is_some_and(|candidate| {
+                let canonical_candidate = dunce::canonicalize(candidate).ok();
+                let shape_matches = match (&canonical_root, &canonical_candidate) {
+                    (Some(canonical_root), Some(canonical_candidate)) => {
+                        canonical_candidate == canonical_root
+                    }
+                    _ => candidate == projects_root.as_path(),
+                };
+                let confined_root: &Path =
+                    canonical_root.as_deref().unwrap_or(projects_root.as_path());
+                let confined_path: &Path = canonical_candidate
+                    .as_deref()
+                    .unwrap_or(candidate);
+                #[cfg(test)]
+                eprintln!(
+                    "[ci-probe] resolved_sessions_dir_kind: path={}, projects_root={}, canonical_root={:?}, candidate={}, canonical_candidate={:?}, shape_matches={}, confined={}",
+                    path.display(),
+                    projects_root.display(),
+                    canonical_root.as_ref().map(|p| p.display().to_string()),
+                    candidate.display(),
+                    canonical_candidate.as_ref().map(|p| p.display().to_string()),
+                    shape_matches,
+                    Self::is_confined_to_managed_root(confined_root, confined_path),
+                );
+                shape_matches && Self::is_confined_to_managed_root(confined_root, confined_path)
+            });
+        has_local_shape.then_some(SessionStorageKind::Local)
     }
 }
 
@@ -318,6 +346,27 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+        let _ = std::fs::remove_dir_all(test_root);
+    }
+
+    #[tokio::test]
+    async fn resolved_sessions_dir_kind_accepts_canonical_and_raw_local_shapes() {
+        let (port, test_root) = test_port();
+        let projects_root = port.path_manager().projects_root();
+        let sessions_dir = projects_root.join("rwf26-test-slug").join("sessions");
+        std::fs::create_dir_all(&sessions_dir).expect("create sessions dir");
+
+        let path_manager = port.path_manager();
+        let raw_kind =
+            CoreSessionStorePort::resolved_sessions_dir_kind(&path_manager, &sessions_dir);
+        let canonical_dir = dunce::canonicalize(&sessions_dir).expect("canonicalize sessions dir");
+        let canonical_kind =
+            CoreSessionStorePort::resolved_sessions_dir_kind(&path_manager, &canonical_dir);
+
+        assert_eq!(raw_kind, Some(SessionStorageKind::Local));
+        assert_eq!(canonical_kind, Some(SessionStorageKind::Local));
+        assert_eq!(raw_kind, canonical_kind);
+
         let _ = std::fs::remove_dir_all(test_root);
     }
 }

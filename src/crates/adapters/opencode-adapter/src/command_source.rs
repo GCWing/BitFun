@@ -136,7 +136,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
         let configured_shell = parsed_layers
             .iter()
             .filter_map(|(_, parsed)| parsed.configured_shell.as_deref())
-            .last()
+            .next_back()
             .map(str::to_string);
 
         for (layer, parsed) in parsed_layers {

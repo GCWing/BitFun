@@ -127,7 +127,7 @@ interface GroupManagerModalProps {
   onSaveGroups: (groups: UserToolGroup[]) => Promise<void>;
 }
 
-const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
+export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
   isOpen,
   onClose,
   tools,

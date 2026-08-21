@@ -406,6 +406,8 @@ impl DesktopComputerUseHost {
         }
         let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
         let mut rect = RECT::default();
+        // SAFETY: GetWindowRect writes into a stack-allocated RECT; the HWND was
+        // built from a non-zero raw handle checked above.
         if unsafe { GetWindowRect(hwnd, &mut rect) }.is_err() {
             return None;
         }

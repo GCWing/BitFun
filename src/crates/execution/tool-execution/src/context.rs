@@ -174,7 +174,9 @@ mod tests {
             extension_custom_data: Some(&extension_custom_data),
         });
 
-        assert_eq!(custom_data["delegation_allow_subagent_spawn"], json!(false));
+        // DelegationPolicy::spawn_child() permits nesting while the child depth
+        // stays below MAX_FISSION_DEPTH=10, so the depth-1 child may still spawn.
+        assert_eq!(custom_data["delegation_allow_subagent_spawn"], json!(true));
         assert_eq!(custom_data["delegation_nesting_depth"], json!(1));
         assert_eq!(custom_data["turn_index"], json!(7));
         assert_eq!(custom_data["acp_transport"], json!(true));
@@ -254,6 +256,8 @@ mod tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                allowed_operation_classes: Default::default(),
+                denied_operation_classes: Default::default(),
             },
         });
 

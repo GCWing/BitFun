@@ -63,6 +63,8 @@ pub struct SessionRelationship {
     pub subagent_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub continuation_policy: Option<SessionContinuationPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub depth: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -297,6 +299,50 @@ pub struct SessionMetadata {
         alias = "needsUserAttention"
     )]
     pub needs_user_attention: Option<String>,
+
+    /// Display/management state (seven-state projection) carried through the
+    /// persisted metadata so the frontend main-nav projection survives a
+    /// restart without re-deriving it from runtime state.
+    /// Mirrors the backend `SessionDisplayState` string values: 'standby' |
+    /// 'processing' | 'completed' | 'hung' | 'interrupted' |
+    /// 'pending_attention' | 'viewed'.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "display_state",
+        alias = "displayState"
+    )]
+    pub display_state: Option<String>,
+
+    /// Cached runtime state (serialized SessionState) populated on save so list
+    /// callers can avoid an extra per‑session state‑file read.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "runtime_state",
+        alias = "runtimeState"
+    )]
+    pub runtime_state: Option<serde_json::Value>,
+
+    /// Daemon session marker.
+    /// Daemon sessions are invisible to SessionControl(list) and cannot be
+    /// deleted via SessionControl(delete).
+    #[serde(default)]
+    pub is_daemon: bool,
+
+    /// R-AD-08: transient orphan marker computed by the page/list builders,
+    /// never persisted as authoritative metadata. When true the session's
+    /// parent is missing from the scanned set; the frontend groups it under
+    /// the orphan section. `orphan_kind` narrows the reason
+    /// (DanglingChild / DetachedChild).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub orphaned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orphan_kind: Option<String>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Session status
@@ -545,6 +591,10 @@ pub struct DialogTurnData {
     /// authoritative terminal payload.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recovery_epoch: Option<u32>,
+
+    /// Todo list for this dialog turn (for persisting the turn's todo state)
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "todos")]
+    pub todos: Option<serde_json::Value>,
 
     /// Turn status
     pub status: TurnStatus,
@@ -1093,6 +1143,11 @@ impl SessionMetadata {
             workspace_hostname: None,
             unread_completion: None,
             needs_user_attention: None,
+            display_state: None,
+            runtime_state: None,
+            is_daemon: false,
+            orphaned: false,
+            orphan_kind: None,
         }
     }
 
@@ -1120,7 +1175,10 @@ impl SessionMetadata {
     }
 
     pub fn is_subagent(&self) -> bool {
-        matches!(self.session_kind, SessionKind::Subagent)
+        matches!(
+            self.session_kind,
+            SessionKind::Subagent | SessionKind::EphemeralSubagent
+        )
     }
 
     pub fn is_standard(&self) -> bool {
@@ -1130,7 +1188,7 @@ impl SessionMetadata {
     pub fn is_internal_hidden(&self) -> bool {
         matches!(
             self.session_kind,
-            SessionKind::Subagent | SessionKind::EphemeralChild
+            SessionKind::Subagent | SessionKind::EphemeralChild | SessionKind::EphemeralSubagent
         )
     }
 
@@ -1201,6 +1259,7 @@ impl DialogTurnData {
             error_detail: None,
             recovery: None,
             recovery_epoch: None,
+            todos: None,
             status: TurnStatus::InProgress,
         }
     }
@@ -1501,6 +1560,7 @@ mod tests {
             parent_tool_call_id: None,
             subagent_type: None,
             continuation_policy: Some(SessionContinuationPolicy::FreshOnly),
+            ..Default::default()
         });
 
         let json = serde_json::to_value(&metadata).expect("metadata should serialize");

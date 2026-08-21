@@ -96,6 +96,7 @@ impl ContextCompressor {
         runtime_messages: &[Message],
         context_window: usize,
         recent_target_tokens: usize,
+        max_retained_user_tokens: Option<usize>,
     ) -> BitFunResult<Option<CompressionPlan>> {
         let runtime_messages = if runtime_messages.iter().any(|message| {
             message
@@ -174,7 +175,11 @@ impl ContextCompressor {
         let mut summary_request_messages = runtime_messages[..system_message_count].to_vec();
         summary_request_messages.extend(summary_messages.clone());
 
-        let retained_user_token_budget = (context_window / 10).min(Self::MAX_RETAINED_USER_TOKENS);
+        let retained_user_token_budget = (context_window / 10).min(
+            max_retained_user_tokens
+                .unwrap_or(Self::MAX_RETAINED_USER_TOKENS)
+                .max(1),
+        );
         let (retained_user_messages, retained_user_tokens) =
             Self::retain_historical_user_messages(&summary_messages, retained_user_token_budget);
         debug!(
@@ -410,17 +415,20 @@ impl ContextCompressor {
         String::from(
             r#"You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.
 
-Include:
-- Current progress and key decisions made
-- Important context, constraints, or user preferences
-- What remains to be done (clear next steps)
-- Any critical data, examples, or references needed to continue
+OUTPUT STRUCTURE (strict, in this order):
+1. ONE-LINE STATE: single sentence stating current overall status.
+2. CLOSED/COMPLETED: list of finished items, one line each, with key commit/hash if relevant.
+3. IN FLIGHT / CURRENT FOCUS: active items, next action, and who owns it.
+4. OWNER'S TODO: pending items requiring human or commander action.
+5. RESUME PATH: ordered list of authoritative source files (path + one-line purpose) to read for full detail.
 
-Be concise, structured, and focused on helping the next LLM seamlessly continue the work.
-
-Note: Preserve durable, task-specific state, but do not reproduce information that can be obtained again from its source:
-- Do not paste large file contents, long code blocks, command output, logs, tool results, or other bulky source material. Record the file path or source reference, plus a one-sentence description of its purpose or relevant contents. Include only a small exact snippet when it is essential and cannot be reliably reconstructed.
-- Do not copy Skill instructions or other reloadable guidance. Record the Skill name, why it is relevant, and that the next LLM should reload it when needed.
+RULES:
+- MAXIMUM BREVITY: extreme concision. Keep only core semantics; never lose essential meaning. Do not add filler, fluff, or any unnecessary word.
+- AUTHORITATIVE SOURCES: preserve references to single-source-of-truth files (path + one-sentence purpose). Do not duplicate their content; the next LLM reads the file.
+- NO STALE/REDUNDANT INFO: drop anything outdated, redundant, or already persisted in files. Do not reproduce information obtainable from its source.
+- DO NOT paste large file contents, long code blocks, command output, logs, or tool results. Record path + one-sentence purpose; include only a small exact snippet when essential.
+- DO NOT copy Skill instructions or reloadable guidance. Record the Skill name, why it is relevant, and that the next LLM should reload it when needed.
+- CONFIDENCE LABELS: when stating a fact, mark its source tier: [VERIFIED]/[UPSTREAM]/[USER]/[COMMANDER]/[EXECUTOR]/[PREDECESSOR]. Unverified/unattributed claims are forbidden — if unknown, say unknown. [VERIFIED] must be reproducible.
 
 IMPORTANT: This is a summary-only turn. Do not call tools or perform additional work. Respond with the handoff summary as plain text. Any tool call will be rejected and you will fail the task.
 "#,
@@ -484,7 +492,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, recent_target)
+            .plan_compression("session", &messages, 128_000, recent_target, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -511,7 +519,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, recent_target)
+            .plan_compression("session", &messages, 128_000, recent_target, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -571,11 +579,11 @@ mod tests {
         let atomic_tokens = assistant.estimate_tokens_with_reasoning(true)
             + result.estimate_tokens_with_reasoning(true);
         let too_small = compressor
-            .plan_compression("session", &messages, 128_000, atomic_tokens - 1)
+            .plan_compression("session", &messages, 128_000, atomic_tokens - 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let exact = compressor
-            .plan_compression("session", &messages, 128_000, atomic_tokens)
+            .plan_compression("session", &messages, 128_000, atomic_tokens, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -596,14 +604,14 @@ mod tests {
         ];
 
         let first = compressor
-            .plan_compression("session", &messages, 128_000, 1)
+            .plan_compression("session", &messages, 128_000, 1, None)
             .expect("planning succeeds")
             .expect("first plan exists");
         let next_target = first
             .next_recent_target_tokens
             .expect("another atomic unit can be retained");
         let second = compressor
-            .plan_compression("session", &messages, 128_000, next_target)
+            .plan_compression("session", &messages, 128_000, next_target, None)
             .expect("planning succeeds")
             .expect("second plan exists");
 
@@ -632,7 +640,7 @@ mod tests {
             assistant3.clone(),
         ];
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, recent_target)
+            .plan_compression("session", &messages, 128_000, recent_target, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let mut result = compressor
@@ -717,7 +725,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, 1)
+            .plan_compression("session", &messages, 128_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -775,7 +783,7 @@ mod tests {
         ];
 
         let plan = compressor
-            .plan_compression("session", &messages, 128_000, 100)
+            .plan_compression("session", &messages, 128_000, 100, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -824,11 +832,11 @@ mod tests {
         ];
 
         let smaller = compressor
-            .plan_compression("session", &messages, 50_000, 1)
+            .plan_compression("session", &messages, 50_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let larger = compressor
-            .plan_compression("session", &messages, 200_000, 1)
+            .plan_compression("session", &messages, 200_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
 
@@ -904,7 +912,7 @@ mod tests {
             Message::assistant("Recent evidence".to_string()),
         ];
         let plan = compressor
-            .plan_compression("session", &messages, 8_000, 1)
+            .plan_compression("session", &messages, 8_000, 1, None)
             .expect("planning succeeds")
             .expect("plan exists");
         let compressed = compressor

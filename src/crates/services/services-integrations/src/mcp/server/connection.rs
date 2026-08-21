@@ -551,6 +551,57 @@ impl MCPConnection {
     }
 }
 
+/// MCP connection pool.
+pub struct MCPConnectionPool {
+    connections: Arc<RwLock<HashMap<String, Arc<MCPConnection>>>>,
+}
+
+impl MCPConnectionPool {
+    /// Creates a new connection pool.
+    pub fn new() -> Self {
+        Self {
+            connections: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Adds a connection.
+    pub async fn add_connection(&self, server_id: String, connection: Arc<MCPConnection>) {
+        let mut connections = self.connections.write().await;
+        connections.insert(server_id, connection);
+    }
+
+    /// Gets a connection.
+    pub async fn get_connection(&self, server_id: &str) -> Option<Arc<MCPConnection>> {
+        let connections = self.connections.read().await;
+        connections.get(server_id).cloned()
+    }
+
+    /// Removes a connection.
+    pub async fn remove_connection(&self, server_id: &str) {
+        let mut connections = self.connections.write().await;
+        connections.remove(server_id);
+    }
+
+    /// Returns all connection IDs.
+    pub async fn get_all_server_ids(&self) -> Vec<String> {
+        let connections = self.connections.read().await;
+        connections.keys().cloned().collect()
+    }
+}
+
+impl Default for MCPConnectionPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl MCPToolCatalogClient for MCPConnection {
+    async fn list_mcp_tools(&self) -> MCPRuntimeResult<Vec<crate::mcp::protocol::MCPTool>> {
+        Ok(self.list_tools(None).await?.tools)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -702,56 +753,5 @@ mod tests {
         assert!(connection.pending_requests.read().await.is_empty());
 
         let _ = child.kill().await;
-    }
-}
-
-/// MCP connection pool.
-pub struct MCPConnectionPool {
-    connections: Arc<RwLock<HashMap<String, Arc<MCPConnection>>>>,
-}
-
-impl MCPConnectionPool {
-    /// Creates a new connection pool.
-    pub fn new() -> Self {
-        Self {
-            connections: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-
-    /// Adds a connection.
-    pub async fn add_connection(&self, server_id: String, connection: Arc<MCPConnection>) {
-        let mut connections = self.connections.write().await;
-        connections.insert(server_id, connection);
-    }
-
-    /// Gets a connection.
-    pub async fn get_connection(&self, server_id: &str) -> Option<Arc<MCPConnection>> {
-        let connections = self.connections.read().await;
-        connections.get(server_id).cloned()
-    }
-
-    /// Removes a connection.
-    pub async fn remove_connection(&self, server_id: &str) {
-        let mut connections = self.connections.write().await;
-        connections.remove(server_id);
-    }
-
-    /// Returns all connection IDs.
-    pub async fn get_all_server_ids(&self) -> Vec<String> {
-        let connections = self.connections.read().await;
-        connections.keys().cloned().collect()
-    }
-}
-
-impl Default for MCPConnectionPool {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait::async_trait]
-impl MCPToolCatalogClient for MCPConnection {
-    async fn list_mcp_tools(&self) -> MCPRuntimeResult<Vec<crate::mcp::protocol::MCPTool>> {
-        Ok(self.list_tools(None).await?.tools)
     }
 }

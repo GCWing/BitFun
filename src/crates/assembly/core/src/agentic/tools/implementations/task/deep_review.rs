@@ -98,6 +98,7 @@ impl LaunchReviewAgentTool {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn wait_for_deep_review_provider_capacity_retry(
         session_id: &str,
         dialog_turn_id: &str,
@@ -135,6 +136,7 @@ impl LaunchReviewAgentTool {
         deep_review_task_adapter::record_provider_capacity_retry_success(dialog_turn_id, reason);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn emit_deep_review_queue_state(
         session_id: &str,
         dialog_turn_id: &str,

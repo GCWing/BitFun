@@ -138,6 +138,11 @@ interface ModernFlowChatContainerProps {
   onTabOpen?: (tabInfo: any, sessionId?: string, panelType?: string) => void;
   onOpenVisualization?: (type: string, data: any) => void;
   onSwitchToChatPanel?: () => void;
+  /**
+   * Host-owned content rendered inside the original FlowChatHeader left
+   * action group (R-GC-24: group chat reuses the original top bar).
+   */
+  headerLeftActionsContent?: React.ReactNode;
 }
 
 interface FlowChatTurnSummary {
@@ -299,6 +304,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   onTabOpen,
   onOpenVisualization,
   onSwitchToChatPanel,
+  headerLeftActionsContent,
 }) => {
   const { t } = useTranslation('flow-chat');
   const canonicalVirtualItems = useVirtualItems();
@@ -2647,6 +2653,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onRequestBackgroundCommandInput={handleRequestBackgroundCommandInput}
           onStopBackgroundCommand={handleStopBackgroundCommand}
           onStopAllBackgroundCommands={handleStopAllBackgroundCommands}
+          leftActionsContent={headerLeftActionsContent}
         />
 
         <BackgroundCommandInputDialog

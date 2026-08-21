@@ -369,7 +369,7 @@ impl BrowserLauncher {
                 BrowserKind::Arc => Path::new("Arc/User Data"),
                 BrowserKind::Unknown(_) => return None,
             };
-            return Some(local_app_data.join(relative));
+            Some(local_app_data.join(relative))
         }
 
         #[cfg(target_os = "linux")]

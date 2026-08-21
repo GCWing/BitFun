@@ -226,7 +226,7 @@ fn mcp_server_timeout_config_is_optional_positive_milliseconds() {
     };
     timeouts.validate().expect("positive timeouts are valid");
     assert_eq!(
-        serde_json::to_value(&timeouts).unwrap(),
+        serde_json::to_value(timeouts).unwrap(),
         serde_json::json!({
             "startupMs": 250,
             "catalogMs": 1_000,

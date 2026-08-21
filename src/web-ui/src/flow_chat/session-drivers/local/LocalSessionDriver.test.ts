@@ -15,7 +15,7 @@ vi.mock('@/infrastructure/api/service-api/ACPClientAPI', () => ({
 }));
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
-  agentAPI: { startDialogTurn: mockStartAgenticDialogTurn },
+  agentAPI: { startDialogTurn: mockStartAgenticDialogTurn, getAvailableModes: async () => [] },
 }));
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({ sessionAPI: {} }));

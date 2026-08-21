@@ -132,12 +132,14 @@ impl ExternalHookCatalogCoordinator {
                 last_error: None,
             });
         }
-        let mut snapshot = ExternalHookCatalogSnapshotV1::default();
-        snapshot.discovery_pending = !generations.is_empty();
-        snapshot.providers = generations
-            .iter()
-            .map(|provider| provider.identity.clone())
-            .collect();
+        let snapshot = ExternalHookCatalogSnapshotV1 {
+            discovery_pending: !generations.is_empty(),
+            providers: generations
+                .iter()
+                .map(|provider| provider.identity.clone())
+                .collect(),
+            ..ExternalHookCatalogSnapshotV1::default()
+        };
         Ok(Self {
             state: Mutex::new(HookCatalogState {
                 context,

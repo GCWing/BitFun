@@ -8,13 +8,16 @@ use super::layout::SessionStorageLayout;
 use super::metadata::{
     build_session_index_snapshot, remove_session_index_entry, upsert_session_index_entry,
 };
-use super::page::{build_session_metadata_page, empty_session_metadata_page};
+use super::page::{
+    build_session_metadata_page, build_session_metadata_page_with_options,
+    empty_session_metadata_page,
+};
 use super::types::{SessionMetadata, StoredSessionIndexFile, StoredSessionMetadataFile};
 use super::SessionMetadataPage;
 use crate::file_lock::{FileLock, FileLockError, FileLockMode};
 use crate::json_store::{JsonFileStore, JsonFileStoreError};
 use bitfun_core_types::validate_session_id;
-use log::warn;
+use log::{error, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -24,6 +27,14 @@ use tokio::fs;
 use tokio::sync::Mutex;
 
 static SESSION_INDEX_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+
+/// How many times `remove_dir_all` is retried when deleting a session
+/// directory. Windows can transiently hold file handles (antivirus scan,
+/// delayed close) that make an immediate deletion fail; the retries absorb
+/// that window instead of losing the deletion.
+const RETRY_REMOVE_DIR_ATTEMPTS: u32 = 5;
+/// Delay between directory-removal retries.
+const RETRY_REMOVE_DIR_DELAY: std::time::Duration = std::time::Duration::from_millis(50);
 
 #[derive(Debug, Error)]
 pub enum SessionMetadataStoreError {
@@ -163,12 +174,33 @@ impl SessionMetadataStore {
             .map_err(SessionMetadataStoreError::from)
     }
 
+    /// Scan every metadata directory under the sessions root, skipping
+    /// directories whose metadata.json is unreadable or damaged.
+    ///
+    /// Best-effort by contract: a single damaged session must not take down
+    /// the whole listing/index rebuild (the remaining healthy sessions are
+    /// still returned). Damaged sessions are surfaced explicitly — an
+    /// `error!`-level log per scan (upgraded from `warn!`, d4-P2-6) so the
+    /// "session silently disappeared" case is observable in product logs, and
+    /// the count is exposed through [`Self::scan_metadata_dirs_reporting`]
+    /// for callers that want to react (e.g. quarantine or repair).
     async fn scan_metadata_dirs(&self) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
+        Ok(self.scan_metadata_dirs_reporting().await?.0)
+    }
+
+    /// Like [`Self::scan_metadata_dirs`] but also returns the session ids
+    /// whose metadata could not be loaded (damaged/unreadable). Healthy
+    /// sessions are unaffected; the damaged ids let a caller surface or
+    /// quarantine the problem instead of silently dropping those sessions.
+    async fn scan_metadata_dirs_reporting(
+        &self,
+    ) -> Result<(Vec<SessionMetadata>, Vec<String>), SessionMetadataStoreError> {
         if !self.sessions_root().exists() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
 
-        let mut metadata_list = Vec::new();
+        // Collect session IDs first (directory listing), then load metadata in parallel.
+        let mut session_ids = Vec::new();
         let mut entries = fs::read_dir(self.sessions_root())
             .await
             .map_err(|source| SessionMetadataStoreError::ReadSessionsRoot { source })?;
@@ -185,22 +217,46 @@ impl SessionMetadataStore {
             if !file_type.is_dir() {
                 continue;
             }
+            session_ids.push(entry.file_name().to_string_lossy().to_string());
+        }
 
-            let session_id = entry.file_name().to_string_lossy().to_string();
-            match self.load_metadata(&session_id).await {
+        // Load metadata in parallel to reduce directory rebuild latency.
+        let handles: Vec<_> = session_ids
+            .iter()
+            .map(|sid| {
+                let sid = sid.clone();
+                async move {
+                    let metadata = self.load_metadata(&sid).await;
+                    (sid, metadata)
+                }
+            })
+            .collect();
+
+        let results = futures::future::join_all(handles).await;
+
+        let mut metadata_list = Vec::new();
+        let mut damaged_ids = Vec::new();
+        for (session_id, result) in results {
+            match result {
                 Ok(Some(metadata)) => metadata_list.push(metadata),
                 Ok(None) => {}
                 Err(error) => {
-                    warn!(
+                    // d4-P2-6: damaged per-session metadata must not be
+                    // silently skipped. Error-level so the "session
+                    // disappeared from every list" case is explicitly
+                    // observable; best-effort listing of healthy sessions is
+                    // preserved.
+                    error!(
                         "Failed to rebuild session index entry: session_id={}, error={}",
                         session_id, error
                     );
+                    damaged_ids.push(session_id);
                 }
             }
         }
 
         metadata_list.sort_by_key(|metadata| std::cmp::Reverse(metadata.last_active_at));
-        Ok(metadata_list)
+        Ok((metadata_list, damaged_ids))
     }
 
     async fn count_metadata_dirs(&self) -> Result<usize, SessionMetadataStoreError> {
@@ -327,6 +383,20 @@ impl SessionMetadataStore {
     }
 
     pub async fn list_metadata(&self) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
+        self.list_metadata_with_options(false).await
+    }
+
+    /// Lists session metadata. With `include_internal` the visible index is
+    /// bypassed and every metadata directory is scanned (same semantics as
+    /// `list_metadata_including_internal`), so hidden Subagent/Ephemeral
+    /// sessions become visible for full conversation management.
+    pub async fn list_metadata_with_options(
+        &self,
+        include_internal: bool,
+    ) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
+        if include_internal {
+            return self.list_metadata_including_internal().await;
+        }
         if !self.sessions_root().exists() {
             return Ok(Vec::new());
         }
@@ -367,6 +437,26 @@ impl SessionMetadataStore {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<SessionMetadataPage, SessionMetadataStoreError> {
+        self.list_metadata_page_with_options(cursor, limit, false)
+            .await
+    }
+
+    /// Paginated variant of [`list_metadata_with_options`]. With
+    /// `include_internal` the visible index is bypassed and the page is built
+    /// from a full metadata scan so hidden sessions participate in pagination.
+    pub async fn list_metadata_page_with_options(
+        &self,
+        cursor: Option<&str>,
+        limit: usize,
+        include_internal: bool,
+    ) -> Result<SessionMetadataPage, SessionMetadataStoreError> {
+        if include_internal {
+            let mut sessions = self.scan_metadata_dirs().await?;
+            sessions.sort_by_key(|metadata| std::cmp::Reverse(metadata.last_active_at));
+            return Ok(build_session_metadata_page_with_options(
+                sessions, cursor, limit, true,
+            ));
+        }
         if !self.sessions_root().exists() {
             return Ok(empty_session_metadata_page());
         }
@@ -489,9 +579,29 @@ impl SessionMetadataStore {
                     root,
                 });
             }
-            fs::remove_dir_all(&dir)
-                .await
-                .map_err(|source| SessionMetadataStoreError::DeleteSessionDir { source })?;
+            // Windows (and some filesystems) can transiently fail to remove a
+            // directory whose files were just written: handles may still be
+            // closing or antivirus/indexing may hold a short-lived handle.
+            // Retry a few times with a small delay before giving up so the
+            // deletion is not silently lost.
+            let mut last_error: Option<std::io::Error> = None;
+            for attempt in 0..RETRY_REMOVE_DIR_ATTEMPTS {
+                match fs::remove_dir_all(&dir).await {
+                    Ok(()) => {
+                        last_error = None;
+                        break;
+                    }
+                    Err(source) => {
+                        last_error = Some(source);
+                        if attempt + 1 < RETRY_REMOVE_DIR_ATTEMPTS {
+                            tokio::time::sleep(RETRY_REMOVE_DIR_DELAY).await;
+                        }
+                    }
+                }
+            }
+            if let Some(source) = last_error {
+                return Err(SessionMetadataStoreError::DeleteSessionDir { source });
+            }
         }
 
         self.remove_index_entry_locked(session_id, if metadata_file_removed { -1 } else { 0 })
@@ -912,6 +1022,41 @@ mod tests {
                 .list_metadata_including_internal()
                 .await
                 .expect("all metadata")
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn metadata_store_with_options_includes_hidden_sessions() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        let mut hidden = metadata("hidden", 30);
+        hidden.session_kind = bitfun_core_types::SessionKind::Subagent;
+        store
+            .save_metadata(&hidden)
+            .await
+            .expect("save hidden metadata");
+
+        assert!(store
+            .list_metadata_with_options(false)
+            .await
+            .expect("visible list")
+            .is_empty());
+        assert_eq!(
+            store
+                .list_metadata_with_options(true)
+                .await
+                .expect("full list")
+                .len(),
+            1
+        );
+        assert_eq!(
+            store
+                .list_metadata_page_with_options(None, 10, true)
+                .await
+                .expect("full page")
+                .sessions
                 .len(),
             1
         );

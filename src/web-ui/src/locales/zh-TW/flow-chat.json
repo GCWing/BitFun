@@ -73,7 +73,23 @@
       "collapsed": "收起",
       "compact": "緊湊",
       "comfortable": "舒適",
-      "expanded": "展開"
+      "expanded": "展開",
+      "fullWidth": "全寬平鋪"
+    },
+    "fullWidth": {
+      "enter": "全寬平鋪對話",
+      "exit": "退出全寬平鋪"
+    },
+    "gridTemplate": {
+      "label": "網格模板",
+      "four": "四宮格 (2×2)",
+      "six": "六宮格 (2×3)",
+      "nine": "九宮格 (3×3)",
+      "sixteen": "十六宮格 (4×4)",
+      "exit": "退出網格"
+    },
+    "grid9": {
+      "toggle": "切換九宮格檢視"
     },
     "resizer": {
       "leftAriaLabel": "調整左側面板大小",
@@ -81,6 +97,15 @@
       "rightAriaLabel": "調整右側面板大小",
       "terminalBottomAriaLabel": "調整底部終端面板大小",
       "title": "拖拽調整面板大小 | 雙擊切換模式 | 目前: {{mode}}"
+    },
+    "beeColony": {
+      "title": "蜂群架構監視器",
+      "loading": "載入中...",
+      "notReady": "蜂群架構 MiniApp 尚未就緒",
+      "retryHint": "請確認 MiniApp 已編譯並部署，然後重新開啟面板。",
+      "restore": "還原",
+      "maximize": "最大化",
+      "close": "關閉"
     }
   },
   "runtimeStatus": {
@@ -349,7 +374,7 @@
         "complete": "證據充分後由代理呼叫 update_goal 標記為「已完成」"
       },
       "note": {
-        "active": "目標仍為進行中時，每輪對話結束會自動續跑（最多 100 次），直到代理呼叫 update_goal 標為已完成或達到上限。",
+        "active": "目標仍為進行中時，每輪對話結束會自動續跑（最多 10 次），直到代理呼叫 update_goal 標為已完成或達到上限。",
         "complete": "目標已標記完成。如需繼續其他工作，可編輯或清除目標。",
         "paused": "目標已暫停，續跑與完成檢查已停止。",
         "blocked": "目標已阻塞，需你介入或環境變化後再 /goal resume。",
@@ -832,6 +857,12 @@
     "targetBtw": "目前側問",
     "sendingToMain": "主會話：{{title}}",
     "sendingToBtw": "側問會話：{{title}}",
+    "conversationLevel": {
+      "main": "主會話",
+      "child": "子會話",
+      "senior": "士官",
+      "childWithSeq": "子會話 {{seq}}"
+    },
     "modeDescriptions": {
       "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
       "Multitask": "多工模式：將工作拆成正交分支，並在合適時主動並行調度子 Agent 推進",
@@ -950,6 +981,7 @@
     "cancel": "停止",
     "openThread": "開啟子會話",
     "threadLabel": "子會話",
+    "deletedThreadLabel": "已刪除會話",
     "emptyThreadLabel": "暫未開啟{{label}}",
     "origin": "來自",
     "parent": "父會話",
@@ -1298,7 +1330,8 @@
     "backgroundCommandStopping": "正在終止命令",
     "backgroundCommandStopAll": "全部終止",
     "backgroundCommandStopFailed": "終止背景命令失敗。",
-    "pullRequests": "拉取請求"
+    "pullRequests": "拉取請求",
+    "dragToAuxiliary": "拖拽會話到右側排列"
   },
   "backgroundCommandInput": {
     "title": "輸入命令內容",
@@ -1881,7 +1914,8 @@
       "reviewCheckUnavailable": "這項補充檢查未能完成，主要審核仍可繼續。",
       "reviewPartialTimeout": "已逾時，但傳回了部分詳情",
       "reviewTimedOut": "已逾時",
-      "reviewStopped": "已停止"
+      "reviewStopped": "已停止",
+      "deletedSessionLabel": "會話已刪除"
     },
     "taskDetailPanel": {
       "untitled": "未命名任務",
@@ -2538,7 +2572,16 @@
   },
   "subagent": {
     "showingLines": "目前僅顯示 {{shown}} / {{total}} 行",
-    "showAll": "顯示全部"
+    "showAll": "顯示全部",
+    "completedNotification": "子代理任務已完成",
+    "errorNotification": "子代理任務執行失敗",
+    "interruptedNotification": "子代理任務已取消",
+    "status": {
+      "completed": "任務完成",
+      "error": "執行出錯",
+      "cancelled": "任務已取消"
+    },
+    "deletedSession": "會話已刪除"
   },
   "pendingQueue": {
     "title": "待發送 ({{count}})",

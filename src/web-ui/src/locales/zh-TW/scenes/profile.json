@@ -132,6 +132,18 @@
   "nursery": {
     "backToGallery": "助理",
 
+    "workflowClaw": {
+      "gallery": {
+        "title": "工作流 Claw",
+        "subtitle": "工作流成員 Claw 獨立列表，與普通助理隔離",
+        "zoneTitle": "工作流成員",
+        "zoneSubtitle": "部署到工作流中的成員 Claw",
+        "emptyTitle": "暫無工作流成員",
+        "emptySubtitle": "部署工作流後，成員 Claw 會顯示在這裡",
+        "create": "新建工作流"
+      }
+    },
+
     "gallery": {
       "title":              "助理",
       "subtitle":           "建立、設定助理，或隨時開始新會話",

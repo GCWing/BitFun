@@ -16,6 +16,12 @@ describe('settings deep-link targets', () => {
     });
   });
 
+  it('normalizes the legacy session-config target once in normalizeSettingsTab', () => {
+    expect(normalizeSettingsTarget('session-config')).toEqual({
+      tab: 'session-personalization',
+    });
+  });
+
   it('keeps Hook management discoverable through the owning settings entry', () => {
     const externalSources = SETTINGS_CATEGORIES
       .flatMap((category) => category.tabs)

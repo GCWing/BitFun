@@ -34,6 +34,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             workspace_id,
             remote_connection_id,
             remote_ssh_host,
+            parent_session_id,
+            subagent_type,
         } => Some(AgenticFrontendEvent::new(
             "agentic://session-created",
             json!({
@@ -46,6 +48,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "workspaceId": workspace_id,
                 "remoteConnectionId": remote_connection_id,
                 "remoteSshHost": remote_ssh_host,
+                "parentSessionId": parent_session_id,
+                "subagentType": subagent_type,
             }),
         )),
         AgenticEvent::SessionDeleted { session_id } => Some(AgenticFrontendEvent::new(
@@ -422,6 +426,10 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "reason": reason,
             }),
         )),
+        // Internal-only lifecycle signal (R-WF-25): the frontend already
+        // consumes the `backend-event-backgroundcommandlifecycle` event for
+        // background activity display, so no frontend projection is needed.
+        AgenticEvent::BackgroundCommandLifecycleChanged { .. } => None,
         AgenticEvent::DeepReviewQueueStateChanged {
             session_id,
             turn_id,
@@ -514,6 +522,50 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             }),
         )),
         AgenticEvent::SystemError { .. } => None,
+        AgenticEvent::ReviewPropagationNeeded { .. } => None,
+        AgenticEvent::SubagentTurnCompleted {
+            session_id,
+            subagent_dialog_turn_id,
+            parent_session_id,
+            parent_dialog_turn_id,
+            parent_tool_call_id,
+            agent_type,
+            status,
+            output_text,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://subagent-turn-completed",
+            {
+                let mut p = serde_json::Map::new();
+                p.insert("sessionId".to_string(), json!(session_id));
+                p.insert(
+                    "subagentDialogTurnId".to_string(),
+                    json!(subagent_dialog_turn_id),
+                );
+                p.insert("parentSessionId".to_string(), json!(parent_session_id));
+                p.insert(
+                    "parentDialogTurnId".to_string(),
+                    json!(parent_dialog_turn_id),
+                );
+                p.insert("parentToolCallId".to_string(), json!(parent_tool_call_id));
+                if let Some(at) = agent_type {
+                    p.insert("agentType".to_string(), json!(at));
+                }
+                p.insert("status".to_string(), json!(status));
+                // R-AR-04（2026-08-14）投影契约：Coordinator emits
+                // SubagentTurnCompleted with output_text = Some(full reply),
+                // assembled by the same background_subagent_follow_up_message
+                // as the notification turn (single source, no second full-text
+                // assembly / dual feed). outputText therefore carries the full
+                // reply and is projected directly — the parent event card shows
+                // the full reply immediately, with no "has replied" wait window
+                // (previously the projection only appeared after the subagent
+                // session was hydrated in the frontend store).
+                if let Some(text) = output_text {
+                    p.insert("outputText".to_string(), json!(text));
+                }
+                serde_json::Value::Object(p)
+            },
+        )),
     }
 }
 
@@ -521,8 +573,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
 mod tests {
     use super::*;
     use crate::{
-        DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus,
-        ModelRoundAttemptDiagnostic,
+        agentic::SubagentCompletionStatus, DeepReviewQueueReason, DeepReviewQueueState,
+        DeepReviewQueueStatus, ModelRoundAttemptDiagnostic,
     };
     use bitfun_core_types::{
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
@@ -548,6 +600,8 @@ mod tests {
             workspace_id: Some("workspace-wt-1".to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,
+            parent_session_id: Some("parent-session".to_string()),
+            subagent_type: Some("Explore".to_string()),
         })
         .expect("projected");
 
@@ -555,6 +609,8 @@ mod tests {
         assert_eq!(projected.payload["projectWorkspacePath"], "/repo");
         assert_eq!(projected.payload["executionTarget"]["worktreeId"], "wt-1");
         assert_eq!(projected.payload["workspaceId"], "workspace-wt-1");
+        assert_eq!(projected.payload["parentSessionId"], "parent-session");
+        assert_eq!(projected.payload["subagentType"], "Explore");
     }
 
     #[test]
@@ -797,5 +853,29 @@ mod tests {
         assert_eq!(projected.payload["sessionId"], "session-1");
         assert_eq!(projected.payload["previousPresetId"], "high");
         assert_eq!(projected.payload["reason"], "reasoning_catalog_updated");
+    }
+
+    #[test]
+    fn subagent_turn_completed_projects_full_reply_output_text() {
+        // R-AR-04（2026-08-14）：SubagentTurnCompleted 事件 output_text 携带
+        // 全文（与通知同源组装），投影层将 outputText 直接投影为全文。
+        let projected = project_agentic_frontend_event(AgenticEvent::SubagentTurnCompleted {
+            session_id: "child-session".to_string(),
+            subagent_dialog_turn_id: "child-turn".to_string(),
+            parent_session_id: "parent-session".to_string(),
+            parent_dialog_turn_id: "parent-turn".to_string(),
+            parent_tool_call_id: "task-tool".to_string(),
+            agent_type: Some("agentic".to_string()),
+            status: SubagentCompletionStatus::Completed,
+            output_text: Some("FULL_REPLY_MARKER\nline two".to_string()),
+        })
+        .expect("projected");
+
+        assert_eq!(projected.event_name, "agentic://subagent-turn-completed");
+        assert_eq!(projected.payload["sessionId"], "child-session");
+        assert_eq!(
+            projected.payload["outputText"],
+            "FULL_REPLY_MARKER\nline two"
+        );
     }
 }

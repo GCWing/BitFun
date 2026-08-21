@@ -11,11 +11,14 @@
     "title": "专业智能体",
     "subtitle": "查看与管理核心模式、Agent 与 Sub-Agent，配置工具与 Skills。",
     "searchPlaceholder": "搜索 Agent 名称或描述…",
-    "newAgent": "新建 Agent"
+    "newAgent": "新建 Agent",
+    "newLegion": "新建工作流"
   },
   "nav": {
     "coreAgents": "核心智能体",
-    "agents": "Agent"
+    "agents": "Agent",
+    "legions": "工作流",
+    "teams": "Agent Team"
   },
   "filters": {
     "source": "来源",
@@ -62,6 +65,7 @@
       "userSubagent": "用户 Sub-Agent",
       "projectSubagent": "项目 Sub-Agent",
       "externalSubagent": "外部 Sub-Agent",
+      "workflow": "工作流",
       "disabled": "已禁用"
     },
     "actions": {
@@ -228,6 +232,10 @@
       "deleteMessage": "确定删除「{{name}}」？不会影响任何 Agent 的工具选择。",
       "deleteConfirm": "删除",
       "saveFailed": "保存工具分组失败",
+      "suiteTitle": "工具",
+      "suiteSubtitle": "按模式管理各 Agent 可用的工具 — 开关状态实时生效",
+      "saveFirst": "请先保存未提交的更改",
+      "refreshFailed": "刷新工具配置失败：{{error}}",
       "validation": {
         "nameRequired": "请输入分组名称",
         "nameDuplicate": "已存在同名分组",
@@ -326,6 +334,112 @@
         "只检查用户指定的改动和文件。",
         "提供有具体依据的问题、修复建议或后续步骤。"
       ]
+    },
+    "default": {
+      "name": "代码审核团队",
+      "summary": "专业深度代码审核团队，内置业务逻辑、性能、安全、架构和质检固定角色。",
+      "members": "{{count}} 名成员",
+      "tags": [
+        "质量",
+        "性能",
+        "架构"
+      ]
+    },
+    "detail": {
+      "open": "打开团队",
+      "back": "返回专业智能体",
+      "openSettings": "审核设置",
+      "loading": "正在加载代码审核团队...",
+      "title": "代码审核团队",
+      "subtitle": "配置深度审核及 /DeepReview 使用的代码审核团队。每个审核员默认使用快速模型，你也可以单独修改。",
+      "summaryTitle": "团队概览",
+      "summaryDescription": "多个审核员会并行覆盖目标范围，最后由质检员汇总为最终结论。",
+      "membersTitle": "团队成员",
+      "membersDescription": "选择成员可查看职责、模型和策略覆盖。固定角色会始终保留在团队中。",
+      "membersCount": "{{count}} 名成员",
+      "lockedCount": "{{count}} 个固定角色",
+      "extraCount": "{{count}} 个额外 Sub-Agent",
+      "localOnly": "代码审核",
+      "localOnlyDescription": "在 BitFun 内以只读 Sub-Agent 运行，并把结果回传到当前审核线程。",
+      "parallelLabel": "并行审核",
+      "parallelDescription": "逻辑、性能、安全、架构和额外审核员会并行工作，再由质检员验证结果。",
+      "warningLabel": "审核更重",
+      "warning": "建议用于风险更高的改动；它可能比普通审核耗时更久并消耗更多 token。",
+      "qualityGate": "质检复核",
+      "executionPolicyTitle": "审核执行策略",
+      "executionPolicyDescription": "控制审核深度、超时，以及大范围目标如何拆分给并行只读审核员。",
+      "policySummaryTitle": "当前策略",
+      "policySummaryIntro": "这里展示的实时策略来自审核设置，团队策略变更后会同步更新。",
+      "policySummaryEyebrow": "已配置行为",
+      "policySummaryDescription": "{{strategy}}审核会为每位审核员使用 {{reviewerTimeout}} 超时，为质检员使用 {{judgeTimeout}} 超时；每类角色在 {{splitThreshold}} 后拆分，并将同角色并发限制为 {{maxSameRoleInstances}}。",
+      "policySummaryAction": "打开审核设置以编辑当前策略",
+      "policyMetricsLabel": "当前策略值",
+      "policyStrategyLabel": "策略",
+      "reviewerTimeout": "审核员超时",
+      "reviewerTimeoutDescription": "单个审核员的超时时间，单位为秒。设为 0 表示不设置硬性截止时间。",
+      "judgeTimeout": "质检员超时",
+      "judgeTimeoutDescription": "质检复核的超时时间，单位为秒。设为 0 表示一直等待质检员完成。",
+      "fileSplitThreshold": "文件拆分阈值",
+      "fileSplitThresholdDescription": "目标文件数超过该值时，每类审核员可拆分为多个实例。设为 0 表示关闭拆分。",
+      "maxSameRoleInstances": "同角色最大实例数",
+      "maxSameRoleInstancesDescription": "启用文件拆分时，每个审核角色最多可并行运行的实例数。",
+      "seconds": "秒",
+      "secondsValue": "{{seconds}} 秒",
+      "noTimeout": "不限制",
+      "fileCountValue": "{{count}} 个文件",
+      "splitDisabled": "不拆分",
+      "instancesValue": "最多 {{count}} 个",
+      "memberDetailTitle": "成员详情",
+      "memberDetailDescription": "团队运行时，每个审核员都会保留自己的独立上下文。",
+      "responsibilities": "职责范围",
+      "model": "使用模型",
+      "modelDescription": "只修改当前审核员使用的模型。深度审核默认使用快速模型，保存后会立即生效。",
+      "remove": "移除成员",
+      "removeDescription": "将这个额外 Sub-Agent 从代码审核团队中移除。固定角色不可删除。",
+      "addTitle": "添加额外 Sub-Agent",
+      "addDescription": "把其他只读 Sub-Agent 加入深度代码审核团队，固定角色会始终保留。",
+      "addLabel": "候选成员",
+      "addHint": "只有只读 Sub-Agent 可以加入初始审核流程；每个额外审核员的结果仍会由质检员统一复核。",
+      "addPlaceholder": "选择一个 Sub-Agent",
+      "addButton": "加入团队",
+      "emptyCandidates": "当前没有可添加的额外只读 Sub-Agent。",
+      "memberTypes": {
+        "locked": "固定",
+        "core": "核心角色",
+        "extra": "额外 Sub-Agent",
+        "builtin": "内置",
+        "user": "用户级",
+        "project": "项目级"
+      },
+      "messages": {
+        "modelUpdated": "已更新 {{name}} 的模型配置。",
+        "memberAdded": "已将额外审核员加入团队。",
+        "memberRemoved": "已将额外审核员移出团队。",
+        "saveFailed": "保存代码审核团队配置失败。"
+      }
+    },
+    "strategy": {
+      "teamTitle": "审核策略",
+      "teamDescription": "选择整个代码审核团队的默认审核深度。单个审核员可以在成员详情中单独覆盖。",
+      "memberTitle": "审核员策略",
+      "memberDescription": "只有当某个角色需要不同于团队默认值的审核深度时，才建议单独覆盖。",
+      "impact": "大约 {{token}} token 消耗，{{runtime}} 耗时。",
+      "inheritLabel": "继承团队（{{level}}）",
+      "inheritSummary": "该审核员使用团队级审核策略。",
+      "modelFallbackShort": "已回退",
+      "modelFallbackDescription": "已配置的模型 {{configuredModel}} 当前不可用，因此该审核员会使用 {{model}}。",
+      "quick": {
+        "label": "快速",
+        "summary": "面向指定 diff 或范围的快速筛查，只保留高置信问题。"
+      },
+      "normal": {
+        "label": "正常",
+        "summary": "适合日常代码审核的均衡深度，兼顾覆盖面和证据质量。"
+      },
+      "deep": {
+        "label": "深度",
+        "summary": "适合高风险、大范围或发布前变更的多轮深度审核。"
+      }
     }
   },
   "agentDescriptions": {
@@ -333,6 +447,7 @@
     "Cowork": "协作模式：与您并肩工作，在关键步骤征求您的确认",
     "ComputerUse": "计算机使用模式：能够操作浏览器、桌面应用和文件系统",
     "DeepResearch": "深度研究智能体：对复杂主题进行系统性调研和分析",
+    "Workflow": "多智能体工作流指挥官：通过分形部署拓扑编排智能体会话——拆解任务、创建会话、经 SessionMessage 派发、执行质量闸门",
     "Explore": "探索智能体：快速浏览代码库，理解项目结构和关键文件",
     "FileFinder": "文件查找智能体：根据需求定位相关文件和代码片段",
     "CodeReview": "代码审查智能体：对代码进行质量检查和改进建议",
@@ -345,5 +460,230 @@
     "Debug": "调试模式：系统性地诊断和修复代码中的错误",
     "Claw": "抓取模式：从外部源提取和整合信息",
     "Team": "团队模式：协调多个智能体协同完成复杂任务"
+  },
+  "legionsZone": {
+    "title": "工作流",
+    "subtitle": "已保存的工作流预设",
+    "loadFailed": "加载工作流预设失败："
+  },
+  "legionPattern": {
+    "gate": "闸门",
+    "back": "返回",
+    "choosePattern": "选择编排模式",
+    "orchestrationPatterns": "工作流编排模式",
+    "overview": "概览",
+    "complexity": "复杂度 L{{level}}",
+    "nodesCount": "{{count}} 个节点",
+    "edgesCount": "{{count}} 条连线",
+    "nodes": "节点（{{count}}）",
+    "edges": "连线（{{count}}）",
+    "noEdges": "无连线",
+    "canvas": "画布预览",
+    "usePattern": "使用此模式",
+    "savePreset": "保存预设",
+    "planning": "规划中",
+    "saved": "工作流编排模式「{{name}}」已保存",
+    "saveFailed": "保存工作流编排模式失败",
+    "roleAnnotation": "仅展示",
+    "roleAnnotationTooltip": "该角色标签仅用于工作流编排的组织语义。部署出的会话实际权限恒由标准子代理角色解析（Executor）决定，绝不依据此标签。",
+    "meta": {
+      "gate": "个闸门"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2": "L2",
+      "l3": "L3",
+      "l4": "L4",
+      "l5": "L5",
+      "l6": "L6",
+      "l7": "L7"
+    }
+  },
+  "teamsZone": {
+    "title": "Agent Teams",
+    "subtitle": "查看 Agent Team 配置、能力覆盖和成员结构，并快速进入编辑器。",
+    "create": "创建 Agent Team",
+    "newTeamName": "新 Agent Team",
+    "empty": {
+      "noTeams": "当前还没有团队",
+      "noMatch": "没有匹配的团队"
+    }
+  },
+  "composer": {
+    "emptyTeam": "请选择或新建一个 Agent Team",
+    "emptyMembers": "暂无成员，从左侧 Agent 图鉴添加",
+    "memberCount": "{{count}} 名成员",
+    "viewMode": {
+      "formation": "阵型",
+      "list": "列表"
+    },
+    "role": {
+      "leader": "主导",
+      "member": "执行",
+      "reviewer": "审查"
+    },
+    "strategy": {
+      "collaborative": "协作执行",
+      "sequential": "顺序执行",
+      "free": "自由执行"
+    },
+    "columns": {
+      "agent": "Agent",
+      "role": "角色",
+      "tools": "工具",
+      "model": "模型"
+    },
+    "remove": "移出",
+    "rename": "点击编辑",
+    "saveTeam": "保存",
+    "cancelEdit": "取消"
+  },
+  "gallery": {
+    "title": "Agent 图鉴",
+    "search": "搜索 Agent...",
+    "filter": {
+      "joined": "已加入",
+      "all": "全部"
+    },
+    "empty": "没有匹配的 Agent",
+    "footer": "{{shown}} / {{total}} · {{enabled}} 已启用",
+    "removeFromTeam": "移出团队",
+    "addToTeam": "加入团队",
+    "joinedTeam": "已加入团队",
+    "addCurrentTeam": "加入当前团队",
+    "toolCount": "{{count}} 个工具",
+    "modelLabel": "模型"
+  },
+  "tabbar": {
+    "newTeam": "新建 Agent Team",
+    "fromTemplate": "从模板创建",
+    "templateTitle": "选择模板",
+    "blankCreate": "空白创建",
+    "cancel": "取消",
+    "create": "创建",
+    "deleteTeam": "删除团队",
+    "deleteConfirm": "确定删除团队「{{name}}」？此操作不可恢复。",
+    "form": {
+      "namePlaceholder": "Agent Team 名称",
+      "descriptionPlaceholder": "描述（可选）"
+    }
+  },
+  "home": {
+    "filterAll": "全部",
+    "filterAgent": "独立 Agent",
+    "filterTeam": "工作团队",
+    "search": "搜索名称、描述...",
+    "solo": "独立",
+    "team": "团队",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "members": "{{count}} 名成员",
+    "createTeam": "创建 Agent Team",
+    "quickCreate": "快速创建",
+    "globalCap": "全局能力",
+    "backToOverview": "返回总览",
+    "strategyCollab": "协作",
+    "strategySeq": "顺序",
+    "strategyFree": "自由"
+  },
+  "teamCard": {
+    "badges": {
+      "example": "示例",
+      "sharedContext": "共享上下文"
+    },
+    "actions": {
+      "expand": "展开详情"
+    },
+    "sections": {
+      "members": "成员",
+      "capabilities": "能力"
+    }
+  },
+  "formation": {
+    "empty": "从左侧选择 Agent 加入团队",
+    "emptySub": "点击 Agent 卡片上的 + 按钮",
+    "hint": "点击节点上的连线端口可新建连线，点击连线起点圆点可删除连线",
+    "startWire": "开始连线",
+    "cancelWire": "取消连线",
+    "wireActive": "连线中（源：{{from}}）——点击另一节点完成，点击端口取消",
+    "removeEdge": "删除此连线",
+    "openSession": "打开会话",
+    "state": {
+      "standby": "待命",
+      "processing": "处理中",
+      "hung": "挂起",
+      "interrupted": "已中断",
+      "pending_attention": "待关注",
+      "viewed": "已查看"
+    }
+  },
+  "capability": {
+    "warning": "{{cats}} 能力缺失",
+    "coverage": "能力覆盖",
+    "none": "无覆盖"
+  },
+  "suite": {
+    "title": "工具",
+    "subtitle": "选择一个模式后，可一键控制各组工具的可用性；也可逐个调整后按组保存。",
+    "modeLabel": "模式",
+    "refreshTooltip": "刷新当前模式",
+    "refreshAction": "刷新",
+    "loading": "正在加载工具套件...",
+    "empty": "当前没有可用的工具。",
+    "sections": {
+      "myGroups": "我的分组",
+      "builtin": "内置分组",
+      "otherSkills": "其他工具"
+    },
+    "manageGroups": "管理工具分组",
+    "modes": {
+      "agentic": "agentic",
+      "cowork": "Cowork",
+      "team": "Team"
+    },
+    "modeDescriptions": {
+      "agentic": "偏编码的默认模式",
+      "cowork": "办公协作模式",
+      "claw": "助理模式",
+      "team": "团队模式"
+    },
+    "modeActions": {
+      "reset": "重置 {{mode}}",
+      "resetShort": "重置"
+    },
+    "groupActions": {
+      "save": "保存",
+      "enableGroup": "启用分组",
+      "disableGroup": "禁用分组"
+    },
+    "resetDialog": {
+      "title": "重置 {{mode}}？",
+      "message": "这会将该模式的工具可用性恢复为默认状态。",
+      "messageWithUnsaved": "这会将该模式的工具可用性恢复为默认状态，并丢弃当前未保存的改动。",
+      "confirm": "重置",
+      "cancel": "取消"
+    },
+    "groupState": {
+      "enabled": "可用",
+      "disabled": "不可用",
+      "partial": "部分"
+    },
+    "skillState": {
+      "enabled": "已为此模式启用",
+      "disabled": "已为此模式禁用",
+      "pending": "未保存",
+      "covered": "已覆盖 · {{source}}",
+      "coveredDetail": "已启用，但此模式会使用 {{source}} 中的同名工具。",
+      "globalDisabled": "已全局禁用"
+    },
+    "groupCount": "{{total}} 个",
+    "messages": {
+      "saveSuccess": "已更新 {{mode}} 工具可见性",
+      "saveFailed": "更新工具失败: {{error}}",
+      "resetSuccess": "已恢复 {{mode}} 工具默认设置",
+      "resetFailed": "重置工具失败: {{error}}",
+      "refreshFailed": "刷新工具失败: {{error}}",
+      "saveFirst": "请先保存当前工具改动。"
+    }
   }
 }

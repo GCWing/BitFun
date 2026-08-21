@@ -14,6 +14,7 @@ export type UiSessionMetadataField =
   | 'reviewActionState'
   | 'unreadCompletion'
   | 'needsUserAttention'
+  | 'displayState'
   | 'titleMetadata';
 
 export interface SessionMetadataPageRequest {
@@ -279,12 +280,14 @@ export class SessionAPI {
   async listSessions(
     workspacePath: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    includeHidden = false
   ): Promise<SessionMetadata[]> {
     try {
       return await api.invoke('list_persisted_sessions', {
         request: {
           workspace_path: workspacePath,
+          include_hidden: includeHidden,
           ...remoteSessionFields(remoteConnectionId, remoteSshHost),
         }
       });
@@ -294,13 +297,15 @@ export class SessionAPI {
   }
 
   async listSessionsPage(
-    request: SessionMetadataPageRequest
+    request: SessionMetadataPageRequest,
+    includeHidden = false
   ): Promise<SessionMetadataPage> {
     try {
       return await api.invoke('list_persisted_sessions_page', {
         request: {
           workspace_path: request.workspacePath,
           limit: request.limit,
+          include_hidden: includeHidden,
           ...(request.cursor ? { cursor: request.cursor } : {}),
           ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
         }
@@ -311,6 +316,29 @@ export class SessionAPI {
         limit: request.limit,
         cursor: request.cursor,
       });
+    }
+  }
+
+  /**
+   * List session ids recorded in the workspace deletion tombstone registry.
+   * The initialization path pulls this registry so deleted sessions (including
+   * subagents deleted while the tab was closed) are pre-marked and cannot be
+   * resurrected from residual disk metadata after a restart.
+   */
+  async listDeletedSessionIds(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<string[]> {
+    try {
+      return await api.invoke('list_deleted_session_ids', {
+        request: {
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_deleted_session_ids', error, { workspacePath });
     }
   }
 
@@ -562,6 +590,27 @@ export class SessionAPI {
       });
     } catch (error) {
       throw createTauriCommandError('delete_all_archived_sessions', error, { workspacePath });
+    }
+  }
+
+  async updateSessionMetadata(
+    sessionId: string,
+    metadataPatch: Partial<SessionMetadata>,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<void> {
+    try {
+      await api.invoke('update_session_metadata', {
+        request: {
+          session_id: sessionId,
+          workspace_path: workspacePath,
+          metadata_patch: metadataPatch,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('update_session_metadata', error, { sessionId, workspacePath });
     }
   }
 }

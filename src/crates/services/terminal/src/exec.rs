@@ -1947,7 +1947,7 @@ mod tests {
     async fn delayed_poll_returns_unread_output_after_process_exit() {
         let manager = ExecProcessManager::default();
         #[cfg(windows)]
-        let script = "echo first & powershell -NoProfile -Command \"Start-Sleep -Milliseconds 250\" & echo second";
+        let script = "echo first & powershell -NoProfile -Command Start-Sleep -Milliseconds 250 & echo second";
         #[cfg(not(windows))]
         let script = "echo first; sleep 0.25; echo second";
 
@@ -1993,7 +1993,7 @@ mod tests {
         let manager = ExecProcessManager::default();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         #[cfg(windows)]
-        let script = "echo lifecycle_first & powershell -NoProfile -Command \"Start-Sleep -Milliseconds 250\" & echo lifecycle_second";
+        let script = "echo lifecycle_first & powershell -NoProfile -Command Start-Sleep -Milliseconds 250 & echo lifecycle_second";
         #[cfg(not(windows))]
         let script = "echo lifecycle_first; sleep 0.25; echo lifecycle_second";
 
@@ -2096,7 +2096,7 @@ mod tests {
     async fn tty_poll_after_process_exit_returns_exit_code() {
         let manager = ExecProcessManager::default();
         #[cfg(windows)]
-        let script = "echo tty_first & powershell -NoProfile -Command \"Start-Sleep -Milliseconds 250\" & echo tty_second";
+        let script = "echo tty_first & powershell -NoProfile -Command Start-Sleep -Milliseconds 250 & echo tty_second";
         #[cfg(not(windows))]
         let script = "echo tty_first; sleep 0.25; echo tty_second";
 
@@ -2243,8 +2243,7 @@ mod tests {
     async fn control_kill_terminates_running_pipe_session() {
         let manager = ExecProcessManager::default();
         #[cfg(windows)]
-        let script =
-            "echo before_kill & powershell -NoProfile -Command \"Start-Sleep -Seconds 30\"";
+        let script = "echo before_kill & powershell -NoProfile -Command Start-Sleep -Seconds 30";
         #[cfg(not(windows))]
         let script = "echo before_kill; sleep 30";
 

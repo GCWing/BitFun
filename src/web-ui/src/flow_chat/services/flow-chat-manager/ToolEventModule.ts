@@ -9,6 +9,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn, ModelRound } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
+import { ensureModelRoundExists } from './TextChunkModule';
 import { normalizeParamsPartialFragment } from '../EventBatcher';
 import { effectiveToolInvocation } from '../../utils/toolInvocationIdentity';
 import { requestRuntimeProjectionRepair } from './PeerSessionRefreshModule';
@@ -159,7 +160,7 @@ export function processToolEvent(
     
     case 'Started': {
       flushPendingBatchedEvents(context);
-      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
+      handleStarted(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
       break;
     }
     
@@ -463,6 +464,9 @@ function handleEarlyDetected(
 
   const targetRoundId = ensureToolRoundId(store, sessionId, turnId, dialogTurn, roundId);
   if (!targetRoundId) {
+    // B1 defense: when the round is missing, lazily create it before appending
+    // the tool item so tool events are not silently dropped.
+    ensureModelRoundExists(context, sessionId, turnId, roundId);
     requestRuntimeProjectionRepair(sessionId);
     log.error('Tool EarlyDetected event references missing round (backend bug)', {
       sessionId,
@@ -471,6 +475,8 @@ function handleEarlyDetected(
       toolId: toolEvent.tool_id,
       toolName: toolEvent.tool_name,
     });
+    store.addModelRoundItem(sessionId, turnId, preparingToolItem, roundId);
+    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     return;
   }
 
@@ -528,6 +534,7 @@ function handleWaiting(
  * Handle tool started event
  */
 function handleStarted(
+  context: FlowChatContext,
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
@@ -586,6 +593,12 @@ function handleStarted(
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
       applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     } else {
+      // B1 defense: when the round is missing, lazily create it before appending
+      // the tool item so tool events are not silently dropped.
+      ensureModelRoundExists(context, sessionId, turnId, roundId);
+      store.addModelRoundItem(sessionId, turnId, toolItem, roundId);
+      pendingTerminalSessionIds.delete(toolEvent.tool_id);
+      applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
       requestRuntimeProjectionRepair(sessionId);
       log.error('Tool Started event references missing round (backend bug)', {
         sessionId,
@@ -967,4 +980,34 @@ export function handleToolTerminalReady(
     toolUseId: tool_use_id,
     terminalSessionId: terminal_session_id,
   });
+}
+
+/**
+ * UI-11: when a turn reaches a terminal state (completed / failed / cancelled),
+ * clean up the module-level pendingTerminalSessionIds entries belonging to that
+ * turn — if a tool was swallowed by the terminal state before reaching Started,
+ * its terminal_session_id never gets consumed, and the Map would grow unbounded.
+ */
+export function cleanupPendingTerminalSessionIdsForTurn(
+  sessionId: string,
+  turnId: string,
+): void {
+  if (pendingTerminalSessionIds.size === 0) {
+    return;
+  }
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  const turn = session?.dialogTurns.find(candidate => candidate.id === turnId);
+  if (!turn) {
+    return;
+  }
+
+  for (const round of turn.modelRounds) {
+    for (const item of round.items) {
+      if (item.type === 'tool' && typeof item.id === 'string') {
+        pendingTerminalSessionIds.delete(item.id);
+      }
+    }
+  }
 }

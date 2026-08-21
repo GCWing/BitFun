@@ -30,7 +30,6 @@ use crate::config::CliConfig;
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
 use anyhow::{anyhow, Result};
-use bitfun_core_types::model::ModelMutation;
 use bitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -369,8 +368,15 @@ impl StartupPage {
             || self.login_form.is_visible()
     }
 
-    pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
-        terminal.clear()?;
+    pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult>
+    where
+        B::Error: Send + Sync + 'static,
+    {
+        // ratatui 0.30 的 `Terminal::clear()` 会先查询光标位置（crossterm 发 DSR
+        // `ESC[6n` 等待应答），在无人应答的 PTY 测试环境中会超时失败。
+        // 直接清后端（`clear_region(All)`，语义与 0.29 的 `Terminal::clear()` 一致）
+        // 不查询光标位置；随后的首个 `terminal.draw` 即全量重绘，无需 back-buffer reset。
+        terminal.backend_mut().clear()?;
         let mut event_reader = crate::ui::input::EventReader::default();
 
         loop {
@@ -1427,7 +1433,6 @@ impl StartupPage {
         }) else {
             return;
         };
-        let progress = progress;
         // Refresh devices occasionally while syncing / after done.
         let devices = if matches!(
             progress.status,

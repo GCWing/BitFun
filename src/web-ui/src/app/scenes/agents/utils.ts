@@ -14,6 +14,10 @@ const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
   cowork: 'Cowork',
   computeruse: 'ComputerUse',
   deepresearch: 'DeepResearch',
+  // Legacy id "Legion" is a workflow orchestrator mode; the user-facing name
+  // and description flow through the backend registry ("Workflow") and the
+  // agentDescriptions override below, so the old legion wording never renders.
+  legion: 'Workflow',
 };
 
 interface AgentBadgeConfig {
@@ -48,6 +52,7 @@ function getAgentBadge(
   t: TFunction<'scenes/agents'>,
   agentKind?: AgentKind,
   source?: AgentSource,
+  agentId?: string,
 ): AgentBadgeConfig {
   if (agentKind === 'mode') {
     if (source === 'user') {
@@ -55,6 +60,11 @@ function getAgentBadge(
     }
     if (source === 'project') {
       return { variant: 'purple', label: t('agentCard.badges.projectMode') };
+    }
+    // Legacy workflow-orchestrator mode ("Legion" registry id) gets the
+    // workflow badge instead of the generic agent badge.
+    if (agentId && agentId.toLowerCase() === 'legion') {
+      return { variant: 'accent', label: t('agentCard.badges.workflow') };
     }
     return { variant: 'accent', label: t('agentCard.badges.agent') };
   }

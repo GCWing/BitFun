@@ -52,29 +52,21 @@ pub(crate) struct UiConfig {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub(crate) enum ThinkingMode {
     Show,
+    #[default]
     Hide,
-}
-
-impl Default for ThinkingMode {
-    fn default() -> Self {
-        Self::Hide
-    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub(crate) enum NotificationMethod {
+    #[default]
     Auto,
     Osc9,
     Bel,
-}
-
-impl Default for NotificationMethod {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -274,6 +266,7 @@ impl CliConfig {
         let lock_path = config_path.with_extension("toml.lock");
         let lock_file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .read(true)
             .write(true)
             .open(lock_path)?;

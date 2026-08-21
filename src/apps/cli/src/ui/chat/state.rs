@@ -519,10 +519,12 @@ mod presentation_state_tests {
     #[test]
     fn presentation_state_projects_config_and_toggles_exact_open_code_modes() {
         let mut view = ChatView::new(Theme::dark(), Vec::new());
-        let mut config = UiConfig::default();
-        config.timestamps = true;
-        config.thinking = ThinkingMode::Show;
-        config.tool_details = false;
+        let config = UiConfig {
+            timestamps: true,
+            thinking: ThinkingMode::Show,
+            tool_details: false,
+            ..Default::default()
+        };
 
         view.apply_presentation_config(&config);
         assert!(view.timestamps_visible());

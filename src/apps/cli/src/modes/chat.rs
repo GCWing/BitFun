@@ -371,6 +371,9 @@ impl std::fmt::Display for LineageInspectionTaskError {
     }
 }
 
+// Lineage operations carry a long-lived JoinHandle; kept unboxed for direct
+// join() calls at the single match site.
+#[allow(clippy::large_enum_variant)]
 enum PendingLineageOperation {
     Query {
         root_session_id: String,

@@ -156,20 +156,13 @@ async fn normalize_api_rejection(request: Request, next: axum::middleware::Next)
             "The HTTP method is not allowed for this Skin market API route.",
         )
         .into_response(),
-        status
-            if matches!(
-                status,
-                StatusCode::BAD_REQUEST
-                    | StatusCode::UNPROCESSABLE_ENTITY
-                    | StatusCode::UNSUPPORTED_MEDIA_TYPE
-            ) =>
-        {
-            SkinMarketError::bad_request(
-                "invalid_request",
-                "The Skin market API request is malformed or has an unsupported content type.",
-            )
-            .into_response()
-        }
+        StatusCode::BAD_REQUEST
+        | StatusCode::UNPROCESSABLE_ENTITY
+        | StatusCode::UNSUPPORTED_MEDIA_TYPE => SkinMarketError::bad_request(
+            "invalid_request",
+            "The Skin market API request is malformed or has an unsupported content type.",
+        )
+        .into_response(),
         _ => response,
     }
 }

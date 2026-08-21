@@ -1,6 +1,9 @@
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::implementations::session_control_tool::{
+    resolve_session_read_authorization, SessionHistoryAuthOptions,
+};
 use crate::service::session::SessionTranscriptExportOptions;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -60,6 +63,11 @@ This tool does not return full details directly. Instead, it exports a transcrip
 
 The transcript file starts with a compact index. Each index entry includes the turn number, a short preview, and line ranges you can use for targeted reads.
 
+Authorization boundary:
+- You may export the history of a session you created, a session in your own session tree (ancestors and descendants), or any session when you are the user-owner (Commander role).
+- Cross-workspace exports are always rejected: the target session must belong to the same workspace as the calling session.
+- Sessions in unrelated session trees (and other workspaces) are not readable. Do not attempt to export a session id you were not given or that does not belong to your workspace.
+
 Recommended workflow:
 1. Call this tool.
 2. Read only the index line range from the returned transcript path first.
@@ -69,6 +77,8 @@ Recommended workflow:
 Typical usage:
 - To review session history across a workspace, first use `SessionControl` to list the sessions in that workspace, then call this tool for the sessions you want to inspect.
 - To inspect the latest state of a specific session, call this tool with `turns=["-1:"]` to export only the last turn.
+- Use `Task` to spawn subagent sessions whose history you may want to inspect.
+- Use `SessionMessage` to send follow-up messages after reviewing a session's history.
 
 Minimal transcript example:
 <example>
@@ -218,12 +228,18 @@ Examples:
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let params: SessionHistoryInput = serde_json::from_value(input.clone())
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
 
         let session_id = self.resolve_session_id(&params.session_id)?;
+        let caller_session_id = context.session_id.as_ref().ok_or_else(|| {
+            BitFunError::tool(
+                "cannot export a session transcript without a caller session in tool context"
+                    .to_string(),
+            )
+        })?;
         let (display_workspace, session_storage_dir) =
             CoreServiceAgentRuntime::resolve_session_workspace_paths(&session_id)
                 .await
@@ -238,6 +254,36 @@ Examples:
             crate::agentic::coordination::get_global_coordinator().ok_or_else(|| {
                 BitFunError::service("Core coordinator is unavailable for SessionHistory export")
             })?;
+        // UX-P0-1 根因级修复：导出前执行读取授权（对齐 R4 共享授权门
+        // resolve_session_mutation_authorization 语义）。
+        // - 同 workspace 归属校验：caller 与 target 必须属于同一 workspace；
+        // - owner（Commander 角色或 RBAC 关闭）/ created_by / 树内祖先-后代
+        //   判定，限定仅本会话树祖先/后代可导出；
+        // - daemon 会话豁免（R-A.04 同源）。
+        // 调用者会话（当前正在运行）必然可解析其 workspace binding；解析
+        // 失败按 fail-closed 拒绝（不回退逻辑 workspace 根，避免与 target
+        // storage dir 错层比较造成误判）。
+        let caller_storage_dir =
+            CoreServiceAgentRuntime::resolve_session_workspace_paths(caller_session_id)
+                .await
+                .map(|(_, storage_dir)| storage_dir)
+                .ok_or_else(|| {
+                    BitFunError::tool(format!(
+                        "cannot export history of session '{}': caller session '{}' workspace could not be resolved",
+                        session_id, caller_session_id
+                    ))
+                })?;
+        resolve_session_read_authorization(
+            coordinator.get_session_manager(),
+            coordinator.session_tree(),
+            caller_session_id,
+            &caller_storage_dir,
+            &session_id,
+            &session_storage_dir,
+            "export history of",
+            SessionHistoryAuthOptions::read(),
+        )
+        .await?;
         let transcript = coordinator
             .export_visible_persisted_session_transcript(
                 &session_storage_dir,
@@ -287,5 +333,38 @@ mod tests {
             .await;
 
         assert!(validation.result, "{:?}", validation.message);
+    }
+
+    #[tokio::test]
+    async fn call_rejects_without_caller_session_in_context() {
+        // UX-P0-1 fail-closed：无 caller session 的 tool context 直接拒绝
+        // （读取授权要求调用者身份，缺失即拒绝，不回退为无授权导出）。
+        let tool = SessionHistoryTool::new();
+        let error = tool
+            .call_impl(
+                &json!({
+                    "session_id": "worker_1",
+                }),
+                &ToolUseContext {
+                    tool_call_id: None,
+                    agent_type: None,
+                    session_id: None,
+                    dialog_turn_id: None,
+                    workspace: None,
+                    loaded_deferred_tool_specs: Vec::new(),
+                    primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+                    custom_data: std::collections::HashMap::new(),
+                    computer_use_host: None,
+                    runtime_tool_restrictions: Default::default(),
+                    runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+                },
+            )
+            .await
+            .expect_err("call without a caller session must be rejected");
+
+        assert!(
+            error.to_string().contains("without a caller session"),
+            "{error}"
+        );
     }
 }

@@ -249,5 +249,52 @@
       "saveSuccess": "通知设置已保存",
       "saveFailed": "保存通知设置失败"
     }
+  },
+  "knowledgeBase": {
+    "sections": {
+      "title": "知识库",
+      "hint": "KnowledgeBaseSearch 工具使用的本地知识库根目录。桌面端与 CLI 启动时将其注入 BITFUN_KNOWLEDGE_BASE_ROOT。"
+    },
+    "rootLabel": "知识库根目录",
+    "rootDescription": "存放 L0/L1/L3/L4 知识层的目录。留空则 KnowledgeBaseSearch 保持禁用。",
+    "rootPlaceholder": "例如 C:/path/to/knowledge-base",
+    "actions": {
+      "saveLabel": "保存",
+      "saveDescription": "持久化根目录；下次宿主启动时注入环境变量。",
+      "save": "保存"
+    },
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取知识库根目录",
+      "saved": "知识库根目录已保存",
+      "cleared": "知识库根目录已清除",
+      "saveFailed": "保存知识库根目录失败"
+    }
+  },
+  "legion": {
+    "sections": {
+      "title": "工作流部署参数",
+      "hint": "工作流部署的节点上限与频率限制，修改后立即生效"
+    },
+    "maxNodes": {
+      "label": "单拓扑节点上限",
+      "description": "单次 LegionControl 部署最多允许的节点数（默认 20）。"
+    },
+    "maxTotalNodes": {
+      "label": "跨部署总量上限",
+      "description": "同一创建者会话名下所有工作流节点会话的总量上限（默认 60）。"
+    },
+    "frequency": {
+      "label": "每小时部署次数上限",
+      "description": "同一创建者会话在 1 小时滑动窗口内最多允许的部署次数（默认 10；设为 0 表示不限制）。"
+    },
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取工作流部署参数",
+      "saved": "工作流部署参数已保存",
+      "saveFailed": "保存工作流部署参数失败",
+      "invalidNodeCap": "单拓扑节点上限必须至少为 1",
+      "invalidTotalCap": "跨部署总量上限必须至少为 1"
+    }
   }
 }

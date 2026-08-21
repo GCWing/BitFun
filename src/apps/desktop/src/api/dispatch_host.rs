@@ -10,7 +10,6 @@ use std::time::Duration;
 use anyhow::{anyhow, Context};
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
 
 const TARGET_COMMAND_TIMEOUT: Duration = Duration::from_secs(110);
 const MAX_TARGET_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
@@ -53,7 +52,7 @@ fn target_cli_verb(command: &str) -> Option<&'static str> {
 
 async fn invoke_cli(executable: &Path, verb: &str, args: Value) -> anyhow::Result<Value> {
     let request = serde_json::to_vec(&args).context("serialize target dispatch request")?;
-    let mut child = Command::new(executable)
+    let mut child = bitfun_core::util::process_manager::create_tokio_command(executable)
         .arg("dispatch")
         .arg(verb)
         .stdin(std::process::Stdio::piped())

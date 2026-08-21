@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   cancelSession: vi.fn(),
   notificationError: vi.fn(),
   flowChatListeners: new Set<() => void>(),
+  isSessionConfirmedDeleted: vi.fn(() => false),
   dynamicReviewTurn: {
     status: 'processing',
     startTime: 1000,
@@ -138,8 +139,7 @@ vi.mock('../store/FlowChatStore', () => ({
       return () => mocks.flowChatListeners.delete(listener);
     },
     getState: () => ({
-      sessions: new Map([
-        ['parent-session', {
+      sessions: new Map([        ['parent-session', {
           sessionId: 'parent-session',
           workspacePath: 'D:\\workspace\\repo',
           remoteConnectionId: 'remote-1',
@@ -157,6 +157,30 @@ vi.mock('../store/FlowChatStore', () => ({
           sessionId: 'subagent-session-1',
           mode: 'Explore',
           config: { agentType: 'Explore', modelName: 'fast' },
+          dialogTurns: [],
+        }],
+        ['code-review-session-1', {
+          sessionId: 'code-review-session-1',
+          mode: 'CodeReview',
+          config: { agentType: 'CodeReview', modelName: 'fast' },
+          dialogTurns: [],
+        }],
+        ['legacy-review-security-session', {
+          sessionId: 'legacy-review-security-session',
+          mode: 'ReviewSecurity',
+          config: { agentType: 'ReviewSecurity', modelName: 'fast' },
+          dialogTurns: [],
+        }],
+        ['legacy-review-judge-session', {
+          sessionId: 'legacy-review-judge-session',
+          mode: 'ReviewJudge',
+          config: { agentType: 'ReviewJudge', modelName: 'fast' },
+          dialogTurns: [],
+        }],
+        ['custom-review-security-session', {
+          sessionId: 'custom-review-security-session',
+          mode: 'ReviewSecurity',
+          config: { agentType: 'ReviewSecurity', modelName: 'fast' },
           dialogTurns: [],
         }],
         ['review-session-running', {
@@ -237,6 +261,8 @@ vi.mock('../store/FlowChatStore', () => ({
       ]),
     }),
   },
+  isSessionConfirmedDeleted: (sessionId: string | null | undefined) =>
+    mocks.isSessionConfirmedDeleted(sessionId),
 }));
 
 let JSDOMCtor: (new (
@@ -1554,5 +1580,38 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).toContain('Cancel session: subagent-session-1');
     expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
     expect(taskCollapseStateManager.isCollapsed('task-tool-cancel')).toBe(true);
+  });
+
+  it('renders the deleted placeholder when the linked subagent session is confirmed deleted', async () => {
+    mocks.isSessionConfirmedDeleted.mockReturnValue(true);
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'Explore', 'Investigate a removed subagent'),
+      subagentSessionId: 'subagent-session-1',
+      toolCall: {
+        id: 'task-call-1',
+        input: {
+          description: 'Investigate a removed subagent',
+          prompt: 'Explore the removed subagent path',
+          subagent_type: 'Explore',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={toolItem}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    // Even though `subagent-session-1` still exists in the store snapshot
+    // (stale entry), the confirmed-deleted registry must win and render the
+    // placeholder instead of the live title/rail.
+    expect(container.querySelector('.task-deleted-session-badge')).toBeTruthy();
+    expect(container.querySelector('.task-header-rail__hit')).toBeNull();
+    expect(mocks.isSessionConfirmedDeleted).toHaveBeenCalledWith('subagent-session-1');
   });
 });

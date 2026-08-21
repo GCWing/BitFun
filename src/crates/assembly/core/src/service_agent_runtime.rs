@@ -459,6 +459,7 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
@@ -1642,6 +1643,7 @@ impl CoreServiceAgentRuntime {
         .map_err(|error| error.to_string())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn product_agent_runtime(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
@@ -1691,6 +1693,7 @@ impl CoreServiceAgentRuntime {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn sdk_host_product_agent_runtime(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
@@ -1716,6 +1719,7 @@ impl CoreServiceAgentRuntime {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn product_agent_runtime_with_dialog_turn(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
@@ -3092,6 +3096,7 @@ mod tests {
             recovery: None,
             recovery_epoch: None,
             status,
+            todos: None,
         }
     }
 }

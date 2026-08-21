@@ -20,7 +20,8 @@
     "code": "代码会话",
     "cowork": "协作会话",
     "claw": "Claw",
-    "default": "默认助手"
+    "default": "默认助手",
+    "master": "主人"
   },
   "tools": {
     "explore": "探索",

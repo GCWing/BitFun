@@ -39,6 +39,7 @@ const HOOK_PROVIDER_DISCOVERY_TIMEOUT: Duration = Duration::from_millis(100);
 pub(crate) struct WorkspaceExternalHookCatalogService {
     coordinator: Arc<ExternalHookCatalogCoordinator>,
     refresh_gate: tokio::sync::Mutex<()>,
+    #[allow(clippy::type_complexity)]
     preparations: tokio::sync::Mutex<
         BTreeMap<
             (SourceKey, String),

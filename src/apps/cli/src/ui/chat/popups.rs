@@ -265,6 +265,7 @@ impl ChatView {
         self.popup_stack.push(PopupType::AgentSelector);
     }
 
+    #[cfg(test)]
     pub(crate) fn show_agent_modes_only(
         &mut self,
         agents: Vec<AgentItem>,

@@ -65,6 +65,12 @@
       background: var(--bf-appearance-token-glass-red-hover);
       color: var(--bf-appearance-token-color-error);
     }
+
+    // 3x3 grid toggle: accent-tinted when the grid is active
+    &.canvas-tab-bar__grid9-btn.is-active {
+      color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-appearance-token-color-accent-100);
+    }
   }
 }
 
@@ -85,4 +91,45 @@
   border-radius: 1px;
   z-index: 10;
   pointer-events: none;
+}
+
+// Grid template dropdown (four/six/nine-cell presets)
+.canvas-tab-bar__grid9-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.canvas-tab-bar__grid9-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  min-width: 132px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bf-appearance-token-color-bg-elevated);
+  border: 1px solid var(--bf-appearance-token-border-base);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px var(--bf-appearance-token-color-overlay-black-12);
+}
+
+.canvas-tab-bar__grid9-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bf-appearance-token-element-bg-hover);
+    color: var(--bf-appearance-token-color-accent-500);
+  }
 }

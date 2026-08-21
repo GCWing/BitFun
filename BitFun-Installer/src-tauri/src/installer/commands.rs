@@ -402,7 +402,9 @@ unsafe fn windows_sys_get_disk_free_space(
             lpTotalNumberOfFreeBytes: *mut u64,
         ) -> i32;
     }
-    GetDiskFreeSpaceExW(path, free_bytes_available, total_bytes, total_free_bytes)
+    // SAFETY: callers guarantee the pointers reference valid kernel32
+    // arguments; the foreign function only writes through the out-pointers.
+    unsafe { GetDiskFreeSpaceExW(path, free_bytes_available, total_bytes, total_free_bytes) }
 }
 
 #[tauri::command]

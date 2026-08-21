@@ -680,7 +680,20 @@ async fn dispatch(
         BotCommand::NewClawSession => guarded_new(state, "Claw", s).await,
         BotCommand::ResumeSession => start_resume(state, 0, s).await,
         BotCommand::SwitchModel => start_switch_model(state, s).await,
-        BotCommand::ChatMessage(msg) => handle_chat(state, &msg, image_contexts, s).await,
+        BotCommand::ChatMessage(msg) => {
+            // Shared-layer empty-text fallback (P0 credit black hole):
+            // a whitespace-only `ChatMessage` must never be forwarded to the
+            // session.  Platform entry guards + `parse_command` returning
+            // `BotCommand::Empty` already stop empty input; this is the final
+            // shared in-router guard so every adapter is immune.
+            if msg.trim().is_empty() {
+                return result_from_menu(state, MenuView::default());
+            }
+            handle_chat(state, &msg, image_contexts, s).await
+        }
+        // Empty input (from `parse_command`) must never reach a session: it
+        // is dropped silently (no forward, no reply).  Shared-layer fallback.
+        BotCommand::Empty => result_from_menu(state, MenuView::default()),
         BotCommand::Menu
         | BotCommand::CancelTask(_)
         | BotCommand::NumberSelection(_)
@@ -2664,6 +2677,13 @@ async fn handle_chat(
     image_contexts: Vec<crate::agentic::image_analysis::ImageContextData>,
     s: &'static BotStrings,
 ) -> HandleResult {
+    // Shared-layer empty-content guard: empty / whitespace-only chat text
+    // must not be forwarded (P0 credit black hole).  Platform guards and
+    // `parse_command` already drop empty input; this keeps `handle_chat`
+    // safe even for direct callers (e.g. `handle_number` fallback).
+    if message.trim().is_empty() {
+        return result_from_menu(state, MenuView::default());
+    }
     // If there is a pending action, route the message to it (text answer for
     // questions, "ignore" for menu-style pendings).
     if let Some(pending) = state.pending_action.clone() {
@@ -2769,6 +2789,16 @@ pub async fn execute_forwarded_turn(
     message_sender: Option<BotMessageSender>,
     verbose_mode: bool,
 ) -> ForwardedTurnResult {
+    // Shared-layer empty-content guard: never submit an empty message to the
+    // dispatcher (P0 credit black hole).  This is the last line of defense
+    // after the platform entry guards, `parse_command` returning
+    // `BotCommand::Empty`, and the `handle_chat` guard.
+    if forward.content.trim().is_empty() {
+        return ForwardedTurnResult {
+            display_text: String::new(),
+            full_text: String::new(),
+        };
+    }
     use crate::service::remote_connect::remote_server::{
         get_or_init_global_dispatcher, TrackerEvent,
     };
@@ -2999,6 +3029,15 @@ mod parse_command_tests {
         // top-level "no pending" → main-menu fallback is implemented in
         // `handle_number`.
         assert!(matches!(parse_command("0"), BotCommand::NumberSelection(0)));
+    }
+
+    #[test]
+    fn empty_input_returns_empty_command() {
+        // Shared-layer empty-text fallback: empty input must NOT construct an
+        // empty `ChatMessage` (would be forwarded and burn a model request).
+        assert!(matches!(parse_command(""), BotCommand::Empty));
+        assert!(matches!(parse_command("   "), BotCommand::Empty));
+        assert!(matches!(parse_command("\t\n  "), BotCommand::Empty));
     }
 
     #[test]
@@ -3389,5 +3428,51 @@ mod handle_chat_tests {
             "cancel-task button must not be sent: {}",
             result.reply
         );
+    }
+
+    /// Shared-layer empty-content fallback: `handle_chat` with empty /
+    /// whitespace-only text must NOT construct a ForwardRequest (P0 credit
+    /// black hole — an empty message would otherwise be submitted to the
+    /// dispatcher and burn a model request).
+    #[tokio::test]
+    async fn chat_empty_content_is_not_forwarded() {
+        let mut state = BotChatState::new("peer".into());
+        state.paired = true;
+        state.current_assistant = Some("/tmp/a".into());
+        state.current_session_id = Some("s1".into());
+        let s = strings_for(BotLanguage::ZhCN);
+
+        for empty in ["", "   ", "\t\n "] {
+            let result = handle_chat(&mut state, empty, vec![], s).await;
+            assert!(
+                result.forward_to_session.is_none(),
+                "empty chat content must not be forwarded (input: {empty:?})"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod forwarded_turn_tests {
+    use super::*;
+
+    /// `execute_forwarded_turn` must refuse to submit empty content to the
+    /// dispatcher (final shared-layer guard; P0 credit black hole).
+    #[tokio::test]
+    async fn execute_forwarded_turn_empty_content_is_not_submitted() {
+        for empty in ["", "   ", "\t\n "] {
+            let forward = ForwardRequest {
+                session_id: "s1".to_string(),
+                content: empty.to_string(),
+                agent_type: "agentic".to_string(),
+                turn_id: "turn_empty".to_string(),
+                image_contexts: vec![],
+            };
+            let result = execute_forwarded_turn(forward, None, None, false).await;
+            assert!(
+                result.display_text.is_empty() && result.full_text.is_empty(),
+                "empty forwarded content must return immediately without a dispatch (input: {empty:?})"
+            );
+        }
     }
 }

@@ -12,8 +12,11 @@ import {
   buildCreateSessionRelationship,
   buildSessionMetadata,
   deriveLastFinishedAtFromMetadata,
+  deriveSessionOrphanStatusFromMetadata,
   deriveSessionRelationshipFromMetadata,
+  normalizeOrphanKind,
   normalizeSessionRelationship,
+  resolveSessionOrphanStatus,
   resolveSessionRelationship,
 } from './sessionMetadata';
 
@@ -32,7 +35,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     lastActiveAt: 1000,
     error: null,
     todos: [],
-    maxContextTokens: 128128,
+    maxContextTokens: 1048576,
     mode: 'agentic',
     workspacePath: '/workspace',
     parentSessionId: undefined,
@@ -670,6 +673,99 @@ describe('sessionMetadata', () => {
       const metadata = buildSessionMetadata(session, existingMetadata);
 
       expect(metadata.needsUserAttention).toBeUndefined();
+    });
+  });
+
+  describe('displayState persistence (R-WF-11)', () => {
+    it('persists displayState from session to metadata', () => {
+      const session = createSession({
+        displayState: 'interrupted' as Session['displayState'],
+      });
+
+      const metadata = buildSessionMetadata(session);
+
+      expect(metadata.displayState).toBe('interrupted');
+    });
+
+    it('persists hung displayState from session to metadata', () => {
+      const session = createSession({
+        displayState: 'hung' as Session['displayState'],
+      });
+
+      const metadata = buildSessionMetadata(session);
+
+      expect(metadata.displayState).toBe('hung');
+    });
+
+    it('clears displayState when session has displayState undefined', () => {
+      const session = createSession({
+        displayState: undefined,
+      });
+
+      const existingMetadata: SessionMetadata = {
+        sessionId: 'session-1',
+        sessionName: 'Session Title',
+        agentType: 'agentic',
+        modelName: 'gpt-test',
+        createdAt: 1000,
+        lastActiveAt: 1000,
+        turnCount: 0,
+        messageCount: 0,
+        toolCallCount: 0,
+        status: 'active',
+        tags: [],
+        customMetadata: {},
+        todos: [],
+        workspacePath: '/workspace',
+        displayState: 'viewed',
+      };
+
+      const metadata = buildSessionMetadata(session, existingMetadata);
+
+      // The cleared value (undefined) must NOT fall back to
+      // existingMetadata.displayState (same contract as unreadCompletion).
+      expect(metadata.displayState).toBeUndefined();
+    });
+  });
+
+  describe('orphan status (R-AD-08)', () => {
+    it('normalizes only known orphan kinds', () => {
+      expect(normalizeOrphanKind('DanglingChild')).toBe('DanglingChild');
+      expect(normalizeOrphanKind('DetachedChild')).toBe('DetachedChild');
+      expect(normalizeOrphanKind('Unknown')).toBeUndefined();
+      expect(normalizeOrphanKind(undefined)).toBeUndefined();
+    });
+
+    it('derives orphan status from metadata', () => {
+      expect(deriveSessionOrphanStatusFromMetadata({ orphaned: true, orphanKind: 'DanglingChild' })).toEqual({
+        isOrphaned: true,
+        kind: 'DanglingChild',
+      });
+      expect(deriveSessionOrphanStatusFromMetadata({ orphaned: true, orphanKind: 'DetachedChild' })).toEqual({
+        isOrphaned: true,
+        kind: 'DetachedChild',
+      });
+      expect(deriveSessionOrphanStatusFromMetadata({ orphaned: false })).toEqual({
+        isOrphaned: false,
+        kind: undefined,
+      });
+      expect(deriveSessionOrphanStatusFromMetadata(null)).toEqual({
+        isOrphaned: false,
+        kind: undefined,
+      });
+    });
+
+    it('derives orphan status from a runtime session', () => {
+      expect(resolveSessionOrphanStatus({ orphaned: true, orphanKind: 'DetachedChild' })).toEqual({
+        isOrphaned: true,
+        kind: 'DetachedChild',
+      });
+      expect(resolveSessionOrphanStatus({})).toEqual({ isOrphaned: false, kind: undefined });
+      // Kind is ignored when the session is not marked orphaned.
+      expect(resolveSessionOrphanStatus({ orphaned: false, orphanKind: 'DanglingChild' })).toEqual({
+        isOrphaned: false,
+        kind: undefined,
+      });
     });
   });
 });

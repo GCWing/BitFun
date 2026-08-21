@@ -1,7 +1,8 @@
 use crate::agentic::tools::file_permissions::file_permission_intents;
 use crate::agentic::tools::file_read_state_runtime::{
     get_review_read_coverage, local_file_modification_time_ms, local_file_revision,
-    record_file_read_state, record_review_read_receipt, review_read_receipts_enabled,
+    record_file_read_state, record_review_read_receipt, reset_review_read_spin_counters,
+    review_read_receipts_enabled,
 };
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -39,6 +40,9 @@ pub struct FileReadTool {
 
 /// Default cap on characters returned by a single Read call (excluding wrapper text).
 pub const DEFAULT_READ_MAX_TOTAL_CHARS: usize = 64_000;
+/// After this many already-served hits for the exact same range, the Read tool
+/// force-serves real content to break a review spin loop.
+const REPEAT_READ_FORCE_SERVE_THRESHOLD: usize = 3;
 #[cfg(feature = "document-read")]
 // anydoc is synchronous, so this bounds the caller's wait rather than terminating the parser.
 // The worker retains the global conversion permit until it actually exits, keeping failures closed.
@@ -94,6 +98,10 @@ impl FileReadTool {
                 "start_line": coverage.start_line,
                 "end_line": coverage.end_line,
                 "total_lines": coverage.total_lines,
+                // d5-P2-4：结构化暴露拦截计数，前端/诊断可直接读取，不再只
+                // 依赖 result_for_assistant 自然语言文本。
+                "repeat_served_count": coverage.repeat_served_count,
+                "file_served_count": coverage.file_served_count,
             }),
             result_for_assistant: Some(format!(
                 "{} lines {}-{} were already returned earlier in this review and the file revision is unchanged. Reuse the prior Read output; request only an unread range if more context is needed.",
@@ -179,6 +187,7 @@ impl FileReadTool {
         start_line: usize,
         limit: usize,
         context: &ToolUseContext,
+        max_total_chars: usize,
     ) -> BitFunResult<tool_runtime::fs::read_file::ReadFileResult> {
         let ws_shell = context.ws_shell().ok_or_else(|| {
             BitFunError::tool("Remote workspace shell is unavailable".to_string())
@@ -189,7 +198,7 @@ impl FileReadTool {
             start_line,
             limit,
             self.max_line_chars,
-            self.max_total_chars,
+            max_total_chars,
         )
         .map_err(BitFunError::tool)?;
 
@@ -249,6 +258,7 @@ impl FileReadTool {
         resolved_path: &str,
         limit: usize,
         context: &ToolUseContext,
+        max_total_chars: usize,
     ) -> BitFunResult<tool_runtime::fs::read_file::ReadFileResult> {
         let ws_shell = context.ws_shell().ok_or_else(|| {
             BitFunError::tool("Remote workspace shell is unavailable".to_string())
@@ -258,7 +268,7 @@ impl FileReadTool {
             resolved_path,
             limit,
             self.max_line_chars,
-            self.max_total_chars,
+            max_total_chars,
         )
         .map_err(BitFunError::tool)?;
 
@@ -308,6 +318,7 @@ impl FileReadTool {
     }
 
     #[cfg(feature = "document-read")]
+    #[allow(clippy::too_many_arguments)] // R-THR-01 批2 2-10：+max_total_chars 后 9 参数（调用方唯一，捆绑传参）
     async fn read_document_window(
         &self,
         resolved_path: &str,
@@ -317,6 +328,7 @@ impl FileReadTool {
         tail: bool,
         uses_remote_workspace_backend: bool,
         context: &ToolUseContext,
+        max_total_chars: usize,
     ) -> BitFunResult<(ReadFileResult, DocumentReadMetadata)> {
         let bytes = if uses_remote_workspace_backend {
             let ws_fs = context.ws_fs().ok_or_else(|| {
@@ -396,7 +408,7 @@ impl FileReadTool {
                 &converted.markdown,
                 limit,
                 self.max_line_chars,
-                self.max_total_chars,
+                max_total_chars,
             )
         } else {
             read_text(
@@ -404,7 +416,7 @@ impl FileReadTool {
                 start_line,
                 limit,
                 self.max_line_chars,
-                self.max_total_chars,
+                max_total_chars,
             )
         }
         .map_err(BitFunError::tool)?;
@@ -424,15 +436,16 @@ impl FileReadTool {
         resolved_path: &str,
         error: DocumentConversionError,
     ) -> BitFunError {
-        let ocr_hint = (error.code() == "unsupported"
+        let ocr_hint = if error.code() == "unsupported"
             && Path::new(resolved_path)
                 .extension()
                 .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf")))
-        .then_some(
-            " Text PDFs are supported, but scanned or image-only PDFs require an OCR workflow.",
-        )
-        .unwrap_or_default();
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+        {
+            " Text PDFs are supported, but scanned or image-only PDFs require an OCR workflow."
+        } else {
+            Default::default()
+        };
         BitFunError::tool(format!(
             "Failed to convert document {} to Markdown ({}): {}.{}",
             logical_path,
@@ -692,6 +705,10 @@ Usage:
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        // R-THR-01 批2 2-10：文件读取上限配置化（`ai.thresholds.file_read.max_total_chars`）。
+        // 配置服务不可用时回退构造默认（64_000）——零行为变化铁律。
+        let max_total_chars =
+            crate::service::config::types::configured_file_read_max_total_chars().await;
         let file_path = input
             .get("file_path")
             .and_then(|v| v.as_str())
@@ -736,13 +753,41 @@ Usage:
         } else {
             local_file_revision(Path::new(&resolved.resolved_path))
         };
+        // 强制放行标记：已读回执拦截 >= 3 次（精确范围或文件级）后本次真正
+        // 读取内容，需在结果前置「疑似空转」警告（用户可见信号 + 模型侧指引）。
+        let mut force_served_after_review_spin: Option<usize> = None;
         if let Some(coverage) = revision_before_read.and_then(|revision| {
             get_review_read_coverage(context, &resolved, revision, start_line, limit)
         }) {
-            return Ok(vec![Self::already_served_result(
-                &resolved.logical_path,
-                coverage,
-            )]);
+            // 防呆：同一段已被已读回执拦截 >= 3 次仍被反复请求，说明代理
+            // 上下文确实丢失了这段内容。此时强制放行真正读取一次，避免
+            // 审查空转（RECON-防呆机制-20260807）。阈值内仍返回已读提示，
+            // 保持省 token 的既有收益。
+            // 2026-08-08 扩展：文件级计数 file_served_count 兜底变范围规避
+            // （同 start 变 end / 同段变窗口——精确计数永不累计的空转形态），
+            // 任一计数 >= 3 即强制放行（RECON-机制未拦空转-20260808）。
+            if coverage.repeat_served_count < REPEAT_READ_FORCE_SERVE_THRESHOLD
+                && coverage.file_served_count < REPEAT_READ_FORCE_SERVE_THRESHOLD
+            {
+                return Ok(vec![Self::already_served_result(
+                    &resolved.logical_path,
+                    coverage,
+                )]);
+            }
+            log::warn!(
+                "Review read receipt served range {}:{}-{} {} times (file {} times); force-serving file content to break review spin (RECON-防呆机制-20260807)",
+                resolved.logical_path,
+                coverage.start_line,
+                coverage.end_line,
+                coverage.repeat_served_count,
+                coverage.file_served_count,
+            );
+            force_served_after_review_spin =
+                Some(coverage.file_served_count.max(coverage.repeat_served_count));
+            // d5-P1-2: 强制放行一次即清零——本次真正读取内容后重置该文件的
+            // 空转计数（保留已读 ranges），后续对同一修订的其他范围请求仍走
+            // 已读回执省 token，而不是对同一文件永久强制真读。
+            reset_review_read_spin_counters(context, &resolved);
         }
 
         #[cfg(feature = "document-read")]
@@ -756,6 +801,7 @@ Usage:
                     tail,
                     resolved.uses_remote_workspace_backend(),
                     context,
+                    max_total_chars,
                 )
                 .await?,
             )
@@ -771,14 +817,25 @@ Usage:
         } else if resolved.uses_remote_workspace_backend() {
             if tail {
                 (
-                    self.read_remote_tail_window(&resolved.resolved_path, limit, context)
-                        .await?,
+                    self.read_remote_tail_window(
+                        &resolved.resolved_path,
+                        limit,
+                        context,
+                        max_total_chars,
+                    )
+                    .await?,
                     None,
                 )
             } else {
                 (
-                    self.read_remote_window(&resolved.resolved_path, start_line, limit, context)
-                        .await?,
+                    self.read_remote_window(
+                        &resolved.resolved_path,
+                        start_line,
+                        limit,
+                        context,
+                        max_total_chars,
+                    )
+                    .await?,
                     None,
                 )
             }
@@ -788,7 +845,7 @@ Usage:
                     &resolved.resolved_path,
                     limit,
                     self.max_line_chars,
-                    self.max_total_chars,
+                    max_total_chars,
                 )
                 .map_err(BitFunError::tool)?,
                 None,
@@ -800,7 +857,7 @@ Usage:
                     start_line,
                     limit,
                     self.max_line_chars,
-                    self.max_total_chars,
+                    max_total_chars,
                 )
                 .map_err(BitFunError::tool)?,
                 None,
@@ -831,6 +888,16 @@ Usage:
 
         let presentation = build_read_file_presentation(&resolved.logical_path, &read_file_result);
         let mut result_for_assistant = presentation.result_for_assistant;
+        // 强制放行警告注入：已读回执已拦截 N 次（含不同行段）后本次强制返回
+        // 内容——用户可见「机制在起作用」的信号 + 模型侧明确指引，避免继续
+        // 盲目重读同一文件（RECON-机制未拦空转-20260808）。
+        if let Some(served_count) = force_served_after_review_spin {
+            let spin_warning = format!(
+                "注意：本文件已被已读回执拦截 {} 次（含不同行段），疑似空转。已强制返回内容。若内容仍不在上下文中，请压缩上下文或缩小审查范围后继续，勿重复读取同一文件。",
+                served_count
+            );
+            result_for_assistant = format!("{}\n\n{}", spin_warning, result_for_assistant);
+        }
         if let Some(metadata) = document_metadata.as_ref() {
             let extraction_note = if metadata.source_format == "pdf" {
                 " OCR is not performed, so scanned or image-only pages may be omitted."

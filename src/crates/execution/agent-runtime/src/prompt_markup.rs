@@ -97,6 +97,44 @@ pub fn is_system_reminder_only(raw: &str) -> bool {
         || trimmed.starts_with(&opening_tag(LEGACY_SYSTEM_REMINDER_TAG))
 }
 
+/// Source classification of a request-body prompt string for usage records.
+///
+/// Provider-side usage records store the OpenAI-compatible `role="user"`
+/// message content in the "User Prompt" column. System injections (internal
+/// reminders, static/dynamic prepended reminders, finalize cache anchors) are
+/// sent with `role="user"` but their content is wrapped in `<system_reminder>`
+/// tags (see `render_system_reminder`). Export/statistics pipelines should use
+/// this classifier to re-classify those rows instead of counting every
+/// `role="user"` row as a real user prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptSourceKind {
+    /// A real user prompt (no system-reminder-only markup, non-empty).
+    UserPrompt,
+    /// A system injection recognized by its `<system_reminder>` markup.
+    SystemReminder,
+    /// No content at all (empty/None rows in the export).
+    Empty,
+}
+
+/// Classify a request prompt string for usage-record export/statistics.
+///
+/// Mirrors `is_system_reminder_only` for the tagged-injection case, and adds
+/// the empty-content case that `is_system_reminder_only` leaves ambiguous
+/// (an empty string is neither a user prompt nor a tagged injection).
+pub fn classify_prompt_source(raw: Option<&str>) -> PromptSourceKind {
+    let Some(raw) = raw else {
+        return PromptSourceKind::Empty;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return PromptSourceKind::Empty;
+    }
+    if is_system_reminder_only(trimmed) {
+        return PromptSourceKind::SystemReminder;
+    }
+    PromptSourceKind::UserPrompt
+}
+
 pub fn strip_prompt_markup(raw: &str) -> String {
     let text = raw.trim();
     let inner = extract_tag_content(text, USER_QUERY_TAG)
@@ -172,5 +210,64 @@ mod tests {
         assert!(!is_system_reminder_only(
             "visible\n<system_reminder>x</system_reminder>"
         ));
+    }
+
+    #[test]
+    fn classifies_real_user_prompts_as_user_prompt() {
+        assert_eq!(
+            classify_prompt_source(Some("Actual prompt")),
+            PromptSourceKind::UserPrompt
+        );
+        assert_eq!(
+            classify_prompt_source(Some("继续")),
+            PromptSourceKind::UserPrompt
+        );
+        assert_eq!(
+            classify_prompt_source(Some("  with whitespace  ")),
+            PromptSourceKind::UserPrompt
+        );
+    }
+
+    #[test]
+    fn classifies_tagged_injections_as_system_reminder() {
+        assert_eq!(
+            classify_prompt_source(Some(
+                "<system_reminder>\nInternal steering\n</system_reminder>"
+            )),
+            PromptSourceKind::SystemReminder
+        );
+        assert_eq!(
+            classify_prompt_source(Some(
+                "<system-reminder>\nLegacy internal\n</system-reminder>"
+            )),
+            PromptSourceKind::SystemReminder
+        );
+        // A leading tag with trailing content is still an injection-only block.
+        assert_eq!(
+            classify_prompt_source(Some("<system_reminder>steering</system_reminder>")),
+            PromptSourceKind::SystemReminder
+        );
+    }
+
+    #[test]
+    fn classifies_empty_and_missing_rows_as_empty() {
+        assert_eq!(classify_prompt_source(None), PromptSourceKind::Empty);
+        assert_eq!(classify_prompt_source(Some("")), PromptSourceKind::Empty);
+        assert_eq!(
+            classify_prompt_source(Some("   \n\t ")),
+            PromptSourceKind::Empty
+        );
+    }
+
+    #[test]
+    fn classify_distinguishes_visible_text_from_injection() {
+        // Content that only *contains* a system reminder after visible text is
+        // a user prompt — the injection marker alone does not make it one.
+        assert_eq!(
+            classify_prompt_source(Some(
+                "answer\n<system_reminder>\ninternal\n</system_reminder>"
+            )),
+            PromptSourceKind::UserPrompt
+        );
     }
 }

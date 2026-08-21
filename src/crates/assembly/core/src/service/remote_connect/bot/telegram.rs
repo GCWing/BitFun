@@ -417,6 +417,14 @@ impl TelegramBot {
             return;
         }
 
+        // Entry guard (double insurance): empty text + no images must be
+        // dropped before it reaches the router / session (P0 credit black
+        // hole).  Shared-layer guards in parse_command / handle_chat /
+        // execute_forwarded_turn also protect feishu and weixin.
+        if text.trim().is_empty() && images.is_empty() {
+            return;
+        }
+
         let cmd = parse_command(text);
         let result = handle_command(state, cmd, images).await;
 

@@ -179,7 +179,8 @@ fn ensure_private_request_file(path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    #[cfg(unix)]
+    use super::ensure_private_request_file;
 
     #[test]
     fn token_shape_is_lowercase_hex() {

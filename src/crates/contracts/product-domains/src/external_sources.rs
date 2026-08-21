@@ -1555,18 +1555,14 @@ impl PromptCommandShellPreference {
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
+#[derive(Default)]
 pub enum PromptCommandExecutionTarget {
+    #[default]
     Inline,
     FreshExternalSubagent {
         ecosystem_id: EcosystemId,
         logical_id: String,
     },
-}
-
-impl Default for PromptCommandExecutionTarget {
-    fn default() -> Self {
-        Self::Inline
-    }
 }
 
 impl PromptCommandExecutionTarget {

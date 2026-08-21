@@ -13,6 +13,8 @@ pub use bitfun_core_types::{
     WorktreeSummary,
 };
 
+#[cfg(feature = "acp-client")]
+mod acp_client_port;
 #[cfg(feature = "workspace-ports")]
 mod local_workspace_snapshot;
 #[cfg(feature = "permission")]
@@ -21,6 +23,14 @@ mod permission;
 mod plugin;
 #[cfg(feature = "script-tool-runtime")]
 mod script_tool;
+#[cfg(feature = "acp-client")]
+pub use acp_client_port::{
+    acp_backend_error, acp_flow_client_id_from_session_id, looks_like_uuid,
+    AcpClientBitfunMessageRequest, AcpClientCancelRequest, AcpClientCreateRequest,
+    AcpClientCreateResult, AcpClientHistoryEntry, AcpClientHistoryRequest, AcpClientHistoryResult,
+    AcpClientListResult, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
+    AcpClientReleaseRequest, AcpClientStreamChunk, AcpClientStreamChunkSink, AcpClientSummary,
+};
 #[cfg(feature = "permission")]
 pub use bitfun_product_domains::tool_permissions::{
     deserialize_optional_permission_mode, resolve_child_permission_policy, resolve_permission_mode,
@@ -126,6 +136,9 @@ pub enum RuntimeServiceCapability {
     RemoteWorkspace,
     RemoteProjection,
     RemoteCapabilities,
+    /// ACP client port (local fork customization; injected through the
+    /// coordinator boundary, not through the typed RuntimeServices assembly).
+    AcpClient,
 }
 
 impl RuntimeServiceCapability {
@@ -146,6 +159,7 @@ impl RuntimeServiceCapability {
             Self::RemoteWorkspace => "remote_workspace",
             Self::RemoteProjection => "remote_projection",
             Self::RemoteCapabilities => "remote_capabilities",
+            Self::AcpClient => "acp_client",
         }
     }
 }
@@ -164,6 +178,7 @@ pub trait RuntimeServicePort: Send + Sync {
 mod agent_api;
 #[cfg(feature = "git-port")]
 mod git_port;
+mod local_customizations;
 #[cfg(feature = "remote-exec-port")]
 mod remote_exec_port;
 #[cfg(feature = "remote-workspace-ports")]
@@ -182,6 +197,7 @@ mod workspace_ports;
 pub use agent_api::*;
 #[cfg(feature = "git-port")]
 pub use git_port::*;
+pub use local_customizations::*;
 #[cfg(feature = "remote-exec-port")]
 pub use remote_exec_port::*;
 #[cfg(feature = "remote-workspace-ports")]
@@ -195,6 +211,13 @@ pub use terminal_port::*;
 pub use tool_runtime_handles::*;
 #[cfg(feature = "workspace-ports")]
 pub use workspace_ports::*;
+
+/// Maximum allowed fission depth for subagent delegation trees.
+///
+/// 本地定义（fork）：无条件编译的 `DelegationPolicy::spawn_child` 需要它。
+/// 权威值 `bitfun_core_types::session_tree::MAX_FISSION_DEPTH = 10`，此处镜像，
+/// 避免 agent-api feature 门控导致默认形态缺常量。
+pub const MAX_FISSION_DEPTH: u8 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -267,9 +290,12 @@ impl DelegationPolicy {
     }
 
     pub fn spawn_child(self) -> Self {
+        let new_depth = self.nesting_depth.saturating_add(1);
         Self {
-            allow_subagent_spawn: false,
-            nesting_depth: self.nesting_depth.saturating_add(1),
+            // 本地语义（fork）：深度 < MAX_FISSION_DEPTH 允许递归委派；
+            // 上游改为 spawn 后永远禁用，本地 task 契约测试要求保留深度递归。
+            allow_subagent_spawn: new_depth < MAX_FISSION_DEPTH,
+            nesting_depth: new_depth,
         }
     }
 }
@@ -367,11 +393,21 @@ mod tests {
         assert!(top_level.allow_subagent_spawn);
         assert_eq!(top_level.nesting_depth, 0);
 
+        // 本地语义（fork）：深度 < MAX_FISSION_DEPTH 时子级仍允许递归委派；
+        // 上游为 spawn 后永远禁用。本地 task 契约测试依赖深度递归。
         let child = top_level.spawn_child();
 
-        assert!(!child.allow_subagent_spawn);
+        assert!(child.allow_subagent_spawn);
         assert_eq!(child.nesting_depth, 1);
-        assert_eq!(child.spawn_child().nesting_depth, 2);
+
+        // 到达 MAX_FISSION_DEPTH 后禁止继续递归。
+        let mut deep = DelegationPolicy::top_level();
+        for _ in 0..MAX_FISSION_DEPTH {
+            deep = deep.spawn_child();
+        }
+        assert!(!deep.allow_subagent_spawn);
+        assert_eq!(deep.nesting_depth, MAX_FISSION_DEPTH);
+        assert_eq!(deep.spawn_child().nesting_depth, MAX_FISSION_DEPTH + 1);
     }
 
     #[test]

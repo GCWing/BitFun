@@ -13,6 +13,8 @@ import { useTabLifecycle, useKeyboardShortcuts, usePanelTabCoordinator } from '.
 import type { AnchorPosition } from './types';
 import { TAB_EVENTS } from './types';
 import { selectActiveBtwSessionTab } from '@/flow_chat/services/btwSessionPane';
+import { buildBtwSessionPanelContent } from '@/flow_chat/services/btwSessionPane';
+import { CHAT_SESSION_DRAG_MIME } from './editor-area/DropZone';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { isSamePath } from '@/shared/utils/pathUtils';
 import './ContentCanvas.scss';
@@ -61,12 +63,26 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   const primaryGroup = useCanvasStore(state => state.primaryGroup);
   const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
   const tertiaryGroup = useCanvasStore(state => state.tertiaryGroup);
+  const slot4Group = useCanvasStore(state => state.slot4Group);
+  const slot5Group = useCanvasStore(state => state.slot5Group);
+  const slot6Group = useCanvasStore(state => state.slot6Group);
+  const slot7Group = useCanvasStore(state => state.slot7Group);
+  const slot8Group = useCanvasStore(state => state.slot8Group);
+  const slot9Group = useCanvasStore(state => state.slot9Group);
+  const slot10Group = useCanvasStore(state => state.slot10Group);
+  const slot11Group = useCanvasStore(state => state.slot11Group);
+  const slot12Group = useCanvasStore(state => state.slot12Group);
+  const slot13Group = useCanvasStore(state => state.slot13Group);
+  const slot14Group = useCanvasStore(state => state.slot14Group);
+  const slot15Group = useCanvasStore(state => state.slot15Group);
+  const slot16Group = useCanvasStore(state => state.slot16Group);
   const layout = useCanvasStore(state => state.layout);
   const isMissionControlOpen = useCanvasStore(state => state.isMissionControlOpen);
   const setAnchorPosition = useCanvasStore(state => state.setAnchorPosition);
   const setAnchorSize = useCanvasStore(state => state.setAnchorSize);
   const closeMissionControl = useCanvasStore(state => state.closeMissionControl);
   const openMissionControl = useCanvasStore(state => state.openMissionControl);
+  const addTab = useCanvasStore(state => state.addTab);
   const activeBtwSessionTab = useCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
     | { childSessionId: string; parentSessionId: string; workspacePath?: string }
@@ -114,11 +130,11 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   // Keep the editor area mounted for hidden terminal tabs. Closing a terminal
   // tab backgrounds it without destroying the xterm instance.
   const hasRenderableTabs = useMemo(() => {
-    const groups = [primaryGroup, secondaryGroup, tertiaryGroup];
+    const groups = [primaryGroup, secondaryGroup, tertiaryGroup, slot4Group, slot5Group, slot6Group, slot7Group, slot8Group, slot9Group, slot10Group, slot11Group, slot12Group, slot13Group, slot14Group, slot15Group, slot16Group];
     return groups.some(group =>
       group.tabs.some(tab => !tab.isHidden || tab.content.type === 'terminal')
     );
-  }, [primaryGroup, secondaryGroup, tertiaryGroup]);
+  }, [primaryGroup, secondaryGroup, tertiaryGroup, slot4Group, slot5Group, slot6Group, slot7Group, slot8Group, slot9Group, slot10Group, slot11Group, slot12Group, slot13Group, slot14Group, slot15Group, slot16Group]);
 
   // Handle anchor close
   const handleAnchorClose = useCallback(() => {
@@ -149,7 +165,45 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   const renderContent = () => {
     // Show empty state when there are no visible tabs and no terminal keep-alive tabs.
     if (!hasRenderableTabs) {
-      return <EmptyState onClose={disablePopOut ? undefined : collapsePanel} />;
+      // The empty state is also a drop target for an L0 conversation dragged
+      // from the center pane: dropping anywhere in the empty right panel opens
+      // that conversation as a tab (center/right stay decoupled).
+      return (
+        <div
+          data-bf-component="content-canvas"
+          data-bf-part="emptyDropTarget"
+          className="canvas-content-canvas__empty-drop"
+          onDragOver={(e) => {
+            if (Array.from(e.dataTransfer.types).includes(CHAT_SESSION_DRAG_MIME)) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+            }
+          }}
+          onDrop={(e) => {
+            if (!Array.from(e.dataTransfer.types).includes(CHAT_SESSION_DRAG_MIME)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              const payload = JSON.parse(e.dataTransfer.getData(CHAT_SESSION_DRAG_MIME));
+              if (payload?.sessionId) {
+                const content = buildBtwSessionPanelContent(
+                  payload.sessionId,
+                  payload.sessionId,
+                  undefined,
+                  undefined,
+                  payload.title,
+                );
+                addTab(content, 'active', 'primary');
+                window.dispatchEvent(new CustomEvent('expand-right-panel'));
+              }
+            } catch {
+              // ignore malformed payloads
+            }
+          }}
+        >
+          <EmptyState onClose={disablePopOut ? undefined : collapsePanel} />
+        </div>
+      );
     }
 
     return (

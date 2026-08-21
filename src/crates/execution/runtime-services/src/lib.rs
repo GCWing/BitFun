@@ -161,6 +161,9 @@ impl RuntimeServices {
             RuntimeServiceCapability::RemoteWorkspace => self.remote_workspace.is_some(),
             RuntimeServiceCapability::RemoteProjection => self.remote_projection.is_some(),
             RuntimeServiceCapability::RemoteCapabilities => self.remote_capabilities.is_some(),
+            // The ACP client port is injected through the coordinator boundary
+            // (desktop host), not through the typed RuntimeServices assembly.
+            RuntimeServiceCapability::AcpClient => false,
         }
     }
 

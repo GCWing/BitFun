@@ -18,6 +18,7 @@ export type ConfigTab =
   | 'voice-input'
   | 'review'
   | 'memories'
+  | 'ai-thresholds'
   | 'mcp-tools'
   | 'external-sources'
   | 'hooks'
@@ -257,6 +258,25 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         ],
       },
       {
+        id: 'ai-thresholds',
+        labelKey: 'configCenter.tabs.aiThresholds',
+        descriptionKey: 'configCenter.tabDescriptions.aiThresholds',
+        keywords: [
+          'threshold',
+          'thresholds',
+          'limit',
+          'limits',
+          'timeout',
+          'retry',
+          'compression',
+          'concurrency',
+          'token',
+          'budget',
+          'cap',
+          'backoff',
+        ],
+      },
+      {
         id: 'external-sources',
         labelKey: 'configCenter.tabs.externalSources',
         descriptionKey: 'configCenter.tabDescriptions.externalSources',
@@ -342,7 +362,6 @@ const KNOWN_TABS: ConfigTab[] = SETTINGS_CATEGORIES.flatMap((c) => c.tabs.map((t
 export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'font' || section === 'fonts') return 'appearance';
   if (section === 'logging' || section === 'terminal') return 'basics';
-  if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
   if (section === 'session-config') return 'session-personalization';
   if (section === 'deep-review' || section === 'code-review' || section === 'review-team') return 'review';
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';

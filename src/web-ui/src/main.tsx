@@ -11,6 +11,25 @@ import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
 import { mouseGlowService } from "./infrastructure/mouse-glow/core/MouseGlowService";
 import "./app/styles/index.scss";
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Global plugin enablement checklist (W4 contract, 2026-08-13, plan v1.1 sec 4.1)
+//
+// Any global plugin / one-time initialization must be registered here (both the
+// production and the test side):
+//   1. Immer MapSet plugin (enableMapSet) - flow-chat stores keep Map-based
+//      state (contract §2.2); Immer draft
+//      mutation of Map requires this plugin; without it the runtime crashes with
+//      "The plugin for 'MapSet' has not been loaded into Immer".
+//      Production: the call below; Tests: test/setup.ts (consistency locked by
+//      the assertion in src/test/setup.ts - global-plugin-initialization-
+//      consistency - to prevent the production/test divergence regression).
+//
+// When adding a global plugin/initialization: (1) register it here (2) keep
+// test/setup.ts in sync (3) update the consistency assertion.
+// ═════════════════════════════════════════════════════════════════════════════
+import { enableMapSet } from "immer";
+enableMapSet();
+
 // Font: Noto Sans SC is loaded via a <link> tag in index.html.
 // File path: public/fonts/fonts.css, served as /fonts/fonts.css.
 
@@ -298,6 +317,13 @@ async function initializeAfterRender(): Promise<void> {
 
       const { registerNotificationContextMenu } = await import('./shared/notification-system');
       registerNotificationContextMenu();
+    })(),
+    (async () => {
+      // E2E test helper: expose scene store in dev mode for Playwright
+      if (import.meta.env.DEV) {
+        const { useSceneStore } = await import('./app/stores/sceneStore');
+        (window as any).__E2E_SCENE_STORE__ = useSceneStore;
+      }
     })(),
   ]);
 

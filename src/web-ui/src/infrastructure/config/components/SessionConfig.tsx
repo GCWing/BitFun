@@ -132,6 +132,10 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
   const [permissionModeControlVisibilitySaving, setPermissionModeControlVisibilitySaving] = useState(false);
   const [isGlobalPermissionRulesDialogOpen, setIsGlobalPermissionRulesDialogOpen] = useState(false);
+  const [externalInstructionSourcesEnabled, setExternalInstructionSourcesEnabled] = useState(false);
+  const [externalInstructionSourcesSaving, setExternalInstructionSourcesSaving] = useState(false);
+  const [workspaceInstructionFilesEnabled, setWorkspaceInstructionFilesEnabled] = useState(false);
+  const [workspaceInstructionFilesSaving, setWorkspaceInstructionFilesSaving] = useState(false);
 
   const { computerUseEnabled, setComputerUseEnabled } = useComputerUseEnabled();
   const [computerUseAccess, setComputerUseAccess] = useState(false);
@@ -244,6 +248,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         debugConfigData,
         computerUseCfg,
         browserControlPreferredBrowser,
+        loadedExternalInstructionSources,
+        loadedWorkspaceInstructionFiles,
         browserControlAutoConnect,
         loadedToolPermissionConfig,
         loadedPermissionModeControlVisibility,
@@ -257,6 +263,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
+        configManager.getConfig<boolean>('ai.external_instruction_sources'),
+        configManager.getConfig<boolean>('ai.workspace_instruction_files'),
         configManager.getConfig<boolean>('ai.browser_control_auto_connect_on_startup'),
         permissionConfigService.getConfig(),
         configManager.getOptionalConfig<boolean>(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH),
@@ -273,6 +281,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
+      setExternalInstructionSourcesEnabled(loadedExternalInstructionSources ?? false);
+      setWorkspaceInstructionFilesEnabled(loadedWorkspaceInstructionFiles ?? false);
       setBrowserAutoConnectOnStartup(browserControlAutoConnect === true);
       setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
       setShowPermissionModeControl(loadedPermissionModeControlVisibility !== false);
@@ -365,6 +375,38 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       notificationService.error(t('messages.saveFailed'));
     } finally {
       setPermissionModeControlVisibilitySaving(false);
+    }
+  };
+
+  const handleExternalInstructionSourcesToggle = async (enabled: boolean) => {
+    const previous = externalInstructionSourcesEnabled;
+    setExternalInstructionSourcesEnabled(enabled);
+    setExternalInstructionSourcesSaving(true);
+    try {
+      await configManager.setConfig('ai.external_instruction_sources', enabled);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save external instruction sources switch', error);
+      setExternalInstructionSourcesEnabled(previous);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setExternalInstructionSourcesSaving(false);
+    }
+  };
+
+  const handleWorkspaceInstructionFilesToggle = async (enabled: boolean) => {
+    const previous = workspaceInstructionFilesEnabled;
+    setWorkspaceInstructionFilesEnabled(enabled);
+    setWorkspaceInstructionFilesSaving(true);
+    try {
+      await configManager.setConfig('ai.workspace_instruction_files', enabled);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save workspace instruction files switch', error);
+      setWorkspaceInstructionFilesEnabled(previous);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setWorkspaceInstructionFilesSaving(false);
     }
   };
 
@@ -950,6 +992,48 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
         {variant === 'personalization' ? (
           <>
+
+        {/* ── External instruction sources ─────────────────────── */}
+        <ConfigPageSection
+          title={t('features.externalInstructionSources.title')}
+          description={t('features.externalInstructionSources.subtitle')}
+        >
+          <ConfigPageRow
+            label={t('features.externalInstructionSources.enable')}
+            description={t('features.externalInstructionSources.description')}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
+              <Switch
+                checked={externalInstructionSourcesEnabled}
+                disabled={externalInstructionSourcesSaving}
+                onChange={(e) => void handleExternalInstructionSourcesToggle(e.target.checked)}
+                size="small"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        {/* ── Workspace instruction files ──────────────────────── */}
+        <ConfigPageSection
+          title={t('features.workspaceInstructionFiles.title')}
+          description={t('features.workspaceInstructionFiles.subtitle')}
+        >
+          <ConfigPageRow
+            label={t('features.workspaceInstructionFiles.enable')}
+            description={t('features.workspaceInstructionFiles.description')}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
+              <Switch
+                checked={workspaceInstructionFilesEnabled}
+                disabled={workspaceInstructionFilesSaving}
+                onChange={(e) => void handleWorkspaceInstructionFilesToggle(e.target.checked)}
+                size="small"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
 
         {/* ── Agent companion (collapsed input) ─────────────────── */}
         <ConfigPageSection

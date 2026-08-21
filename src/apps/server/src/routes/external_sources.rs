@@ -157,6 +157,7 @@ mod tests {
             external_workspace_root,
             allowed_browser_origins: Default::default(),
             dispatch_host: None,
+            app_server: None,
         }
     }
 

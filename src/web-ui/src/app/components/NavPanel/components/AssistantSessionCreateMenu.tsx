@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown, Plus, Users } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -12,6 +12,8 @@ interface AssistantSessionCreateMenuProps {
   primaryAssistant: WorkspaceInfo | null;
   onCreatePrimary: () => void | Promise<void>;
   onCreateAssistant: (workspace: WorkspaceInfo) => void | Promise<void>;
+  /** R-GC-27: group chat entry merged into the assistant session create menu. */
+  onCreateGroupChat?: () => void | Promise<void>;
 }
 
 const getAssistantDisplayName = (workspace: WorkspaceInfo): string =>
@@ -22,6 +24,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
   primaryAssistant,
   onCreatePrimary,
   onCreateAssistant,
+  onCreateGroupChat,
 }) => {
   const { t } = useI18n('common');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -79,6 +82,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
 
   const createPrimaryLabel = t('nav.sessions.newPrimaryAssistantSession');
   const chooseAssistantLabel = t('nav.sessions.chooseAssistant');
+  const createGroupChatLabel = t('nav.groupChats.newGroupChat');
 
   return (
     <div
@@ -161,6 +165,22 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
               </button>
             );
           })}
+          {onCreateGroupChat ? (
+            <button
+              type="button"
+              className="bitfun-nav-panel__assistant-session-menu-item"
+              role="menuitem"
+              aria-label={createGroupChatLabel}
+              onClick={() => {
+                closeMenu();
+                void onCreateGroupChat();
+              }}
+              data-testid="nav-assistant-session-menu-group-chat"
+            >
+              <Users size={13} aria-hidden="true" />
+              <span className="bitfun-nav-panel__assistant-session-menu-name">{createGroupChatLabel}</span>
+            </button>
+          ) : null}
         </div>,
         getAppearanceOverlayHost(),
       ) : null}

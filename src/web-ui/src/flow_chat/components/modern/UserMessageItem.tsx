@@ -213,6 +213,36 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           label: t('steering.statusPending'),
         }
       : null;
+    // Sender identity badge for forwarded agent messages (R-23). Only present
+    // when the backend attached sender metadata; historical messages without
+    // it render no badge at all (graceful degradation).
+    // R-WF-08: group mode system prompt (turnRole=system, first turn) renders
+    // as a system badge (t('message.system') = "System") — the group's mode
+    // prompt is the first timeline entry and must be visually distinct.
+    const senderBadge = useMemo(() => {
+      const meta = message?.metadata;
+      if (!meta?.senderSessionId) return null;
+      if (meta.turnRole === 'system') {
+        return `[${t('message.system')}]`;
+      }
+      const role = typeof meta.senderRole === 'string' ? meta.senderRole : 'Agent';
+      const depth = typeof meta.senderDepth === 'number' ? ` L${meta.senderDepth}` : '';
+      const name =
+        typeof meta.senderName === 'string' && meta.senderName.trim()
+          ? ` ${meta.senderName.trim()}`
+          : '';
+      return `[${role}${depth}]${name}`;
+    }, [message?.metadata, t]);
+
+    // R-GC-14: group chat left/right indent offset (type-contract section 1.3 + 2).
+    // Group message = user_message.metadata.groupId present; "self" = current
+    // session id (in a group session the owner sessionId === groupId). Member
+    // messages (senderSessionId !== resolvedSessionId) offset right; owner /
+    // unknown senders keep the default left alignment.
+    const isGroupMessage = Boolean(message?.metadata?.groupId);
+    const isGroupSenderSelf =
+      typeof message?.metadata?.senderSessionId === 'string' &&
+      message.metadata.senderSessionId === resolvedSessionId;
 
     const { displayText, reproductionSteps } = useMemo(() => {
       const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
@@ -503,7 +533,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         data-bf-part="root"
         data-bf-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
         ref={containerRef}
-        className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
+        className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}${isGroupMessage && !isGroupSenderSelf ? ' user-message-item--group-other' : ''}${isGroupMessage && isGroupSenderSelf ? ' user-message-item--group-self' : ''}`}
         data-testid="chat-user-message"
         data-turn-id={turnId}
         data-status={resolvedTurnStatus || ''}
@@ -529,7 +559,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             onCancel={cancelEdit}
             presentation={composerPresentation}
             workspacePath={currentSession?.workspacePath}
-            workspaceId={currentSession?.workspaceId}
             remoteConnectionId={
               currentSession?.remoteConnectionId
               || currentSession?.config?.remoteConnectionId
@@ -554,7 +583,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               <div className="user-message-item__failed-body">
                 <div 
                   ref={contentRef}
-                  className="user-message-item__content"
+                  className={`user-message-item__content${senderBadge ? ' user-message-item__content--with-badge' : ''}`}
                   data-bf-component="user-message-item"
                   data-bf-part="content"
                   data-testid="chat-user-message-content"
@@ -567,7 +596,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 >
                   {composerPresentation ? (
                     <UserMessagePresentationContent presentation={composerPresentation} />
-                  ) : displayText}
+                  ) : (
+                    <>
+                      {senderBadge && (
+                        <span className="user-message-item__sender-badge">{senderBadge}</span>
+                      )}
+                      {displayText}
+                    </>
+                  )}
                 </div>
                 {steeringTag && (
                   <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">
@@ -579,7 +615,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               <>
                 <div 
                   ref={contentRef}
-                  className="user-message-item__content"
+                  className={`user-message-item__content${senderBadge ? ' user-message-item__content--with-badge' : ''}`}
                   data-bf-component="user-message-item"
                   data-bf-part="content"
                   data-testid="chat-user-message-content"
@@ -592,7 +628,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 >
                   {composerPresentation ? (
                     <UserMessagePresentationContent presentation={composerPresentation} />
-                  ) : displayText}
+                  ) : (
+                    <>
+                      {senderBadge && (
+                        <span className="user-message-item__sender-badge">{senderBadge}</span>
+                      )}
+                      {displayText}
+                    </>
+                  )}
                 </div>
                 {steeringTag && (
                   <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">

@@ -441,7 +441,7 @@ fn has_unclosed_windows_quote(value: &str) -> bool {
     for character in value.chars() {
         match character {
             '\\' => backslashes += 1,
-            '"' if backslashes % 2 == 0 => {
+            '"' if backslashes.is_multiple_of(2) => {
                 quoted = !quoted;
                 backslashes = 0;
             }
@@ -550,6 +550,7 @@ pub(crate) async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
                 workspace_path: workspace_path.to_string_lossy().to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             })
             .await?
             .first()

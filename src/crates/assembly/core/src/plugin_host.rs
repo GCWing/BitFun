@@ -646,6 +646,9 @@ fn plugin_config_fingerprint(
 }
 
 fn comparable_instance_directory(directory: &str) -> String {
+    // `mut` is only consumed by the #[cfg(windows)] branch; non-Windows
+    // builds would trip `-D warnings` (unused_mut) without the allow.
+    #[allow(unused_mut)]
     let mut comparable = directory.replace('\\', "/");
     #[cfg(windows)]
     comparable.make_ascii_lowercase();

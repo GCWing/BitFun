@@ -977,7 +977,10 @@ impl AccountRuntime {
                         let percent = if upload_total == 0 {
                             95
                         } else {
-                            20 + ((75 * done) / upload_total) as u8
+                            20 + (75usize
+                                .checked_mul(done)
+                                .map_or(0, |scaled| scaled / upload_total))
+                                as u8
                         };
                         self.emit_progress(
                             "exporting_sessions",

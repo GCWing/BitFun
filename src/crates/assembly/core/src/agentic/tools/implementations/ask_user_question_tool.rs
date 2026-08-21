@@ -5,8 +5,9 @@
 use async_trait::async_trait;
 use bitfun_agent_runtime::user_questions::{
     ask_user_question_available_in_context, build_answered_user_question_result,
-    build_cancelled_user_question_result, validate_ask_user_question_input, AskUserQuestionInput,
-    PendingUserQuestion, USER_INPUT_AVAILABLE_CONTEXT_KEY, USER_INPUT_MODEL_ROUND_CONTEXT_KEY,
+    build_cancelled_user_question_result, validate_ask_user_question_input_with_limit,
+    AskUserQuestionInput, PendingUserQuestion, USER_INPUT_AVAILABLE_CONTEXT_KEY,
+    USER_INPUT_MODEL_ROUND_CONTEXT_KEY,
 };
 use log::{debug, warn};
 use serde_json::{json, Value};
@@ -193,7 +194,14 @@ Usage notes:
             })?;
 
         // 2. Validate question format
-        if let Err(error) = validate_ask_user_question_input(&tool_input) {
+        // R-THR-01 批2 2-1：header 上限配置化（`ai.thresholds.user_questions.header_max_chars`）。
+        let header_max_chars =
+            crate::service::config::types::configured_user_questions_header_max_chars()
+                .await
+                .max(1);
+        if let Err(error) =
+            validate_ask_user_question_input_with_limit(&tool_input, header_max_chars)
+        {
             return Err(crate::util::errors::BitFunError::Validation(error));
         }
 

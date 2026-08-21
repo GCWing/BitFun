@@ -321,7 +321,10 @@ fn custom_agent_validation_filters_invalid_tools_and_falls_back_model() {
 }
 
 #[test]
-fn custom_agent_validation_forces_review_subagents_to_readonly_tools() {
+fn custom_agent_validation_keeps_review_subagent_tools_when_not_readonly() {
+    // R-WF-21 rules source: review is a semantic marker; readonly is the sole
+    // field that decides tool stripping. review:true + readonly:false keeps
+    // writable tools intact.
     let mut definition = CustomAgentDefinition::from_front_matter_fields(
         Some("ReviewExtra"),
         Some("ReviewExtra"),
@@ -352,10 +355,10 @@ fn custom_agent_validation_forces_review_subagents_to_readonly_tools() {
         },
     );
 
-    assert!(definition.readonly);
-    assert_eq!(definition.tools, ["Read"]);
+    assert!(!definition.readonly);
+    assert_eq!(definition.tools, ["Read", "Write"]);
     assert_eq!(report.invalid_tools, ["UnknownTool"]);
-    assert_eq!(report.writable_review_tools, ["Write"]);
+    assert!(report.writable_review_tools.is_empty());
     assert_eq!(
         custom_agent_review_writable_tools(
             &["Read".to_string(), "Write".to_string()],
@@ -363,6 +366,81 @@ fn custom_agent_validation_forces_review_subagents_to_readonly_tools() {
         ),
         ["Write"]
     );
+}
+
+#[test]
+fn custom_agent_validation_strips_writable_tools_for_readonly_subagents() {
+    // Zero regression: readonly:true still strips writable tools regardless of
+    // the review marker.
+    let mut definition = CustomAgentDefinition::from_front_matter_fields(
+        Some("ReadonlyReview"),
+        Some("ReadonlyReview"),
+        Some("Readonly review subagent"),
+        Some(CustomAgentKind::Subagent),
+        Some(vec![
+            "Read".to_string(),
+            "Write".to_string(),
+            "UnknownTool".to_string(),
+        ]),
+        Some(true),
+        Some(true),
+        Some("fast"),
+        None,
+        "Review the selected files.".to_string(),
+        CustomAgentLevel::User,
+    )
+    .expect("subagent definition should be valid")
+    .definition;
+
+    let report = validate_custom_agent_definition(
+        &mut definition,
+        &Default::default(),
+        CustomAgentValidationContext {
+            valid_tools: &["Read".to_string(), "Write".to_string()],
+            readonly_tools: &["Read".to_string()],
+            valid_models: &["fast".to_string()],
+        },
+    );
+
+    assert!(definition.readonly);
+    assert_eq!(definition.tools, ["Read"]);
+    assert_eq!(report.invalid_tools, ["UnknownTool"]);
+    assert_eq!(report.writable_review_tools, ["Write"]);
+}
+
+#[test]
+fn custom_agent_review_and_readonly_fields_round_trip_through_save() {
+    // M2 serialization contract: review:true + readonly:false must survive a
+    // save/load cycle with readonly staying false.
+    let dir = TestTempDir::new("bitfun-runtime-review-serialization");
+    let path = dir.join("review-writable.md");
+    let definition = CustomAgentDefinition::from_front_matter_fields(
+        Some("ReviewWritable"),
+        Some("ReviewWritable"),
+        Some("Review with writable tools"),
+        Some(CustomAgentKind::Subagent),
+        Some(vec!["Read".to_string(), "Write".to_string()]),
+        Some(false),
+        Some(true),
+        Some("fast"),
+        None,
+        "Review and fix.".to_string(),
+        CustomAgentLevel::User,
+    )
+    .expect("subagent definition should be valid")
+    .definition;
+
+    custom_agent_save_markdown_file(&path, &definition).expect("markdown should save");
+    let saved = fs::read_to_string(&path).expect("saved markdown should be readable");
+    assert!(saved.contains("readonly: false"));
+    assert!(saved.contains("review: true"));
+    assert!(saved.contains("- Write"));
+
+    let loaded = custom_agent_read_markdown_file(&path, CustomAgentLevel::User)
+        .expect("saved markdown should load");
+    assert!(!loaded.definition.readonly);
+    assert!(loaded.definition.review);
+    assert_eq!(loaded.definition.tools, ["Read", "Write"]);
 }
 
 #[test]

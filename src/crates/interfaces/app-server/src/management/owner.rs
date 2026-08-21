@@ -390,11 +390,11 @@ fn secret_update_value(
     update: Option<SecretUpdate>,
     existing: Option<String>,
 ) -> AppManagementResult<String> {
-    Ok(match update.unwrap_or(SecretUpdate::Preserve) {
+    match update.unwrap_or(SecretUpdate::Preserve) {
         SecretUpdate::Preserve => Ok(existing.unwrap_or_default()),
         SecretUpdate::Replace(value) => Ok(value),
         SecretUpdate::Clear => Ok(String::new()),
-    }?)
+    }
 }
 
 fn headers_update(
@@ -1523,8 +1523,8 @@ impl AppManagementService {
                 .find(|source| source.record.key == entry.definition.id.source)
                 .map(|source| source.record.display_name.clone())
                 .unwrap_or_else(|| "External AI app".to_string());
-            let action = external_mcp_action(&entry, &external);
-            let status = external_mcp_status(&entry, manager.as_ref()).await;
+            let action = external_mcp_action(entry, &external);
+            let status = external_mcp_status(entry, manager.as_ref()).await;
             let tool_count = entry.runtime_id.as_deref().map_or(0, |runtime_id| {
                 let prefix = format!("mcp_{runtime_id}_");
                 tools
@@ -1540,7 +1540,7 @@ impl AppManagementService {
                 tool_count,
                 source_label,
                 external: true,
-                detail: external_mcp_detail(&entry),
+                detail: external_mcp_detail(entry),
                 action,
             });
         }

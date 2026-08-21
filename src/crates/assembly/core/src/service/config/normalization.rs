@@ -121,8 +121,10 @@ pub async fn isolate_invalid_ai_models(
             continue;
         }
 
-        let mut isolated_ai = super::types::AIConfig::default();
-        isolated_ai.models = vec![config.ai.models[index].clone()];
+        let isolated_ai = super::types::AIConfig {
+            models: vec![config.ai.models[index].clone()],
+            ..Default::default()
+        };
 
         let validation = AIConfigProvider
             .validate_config(&serde_json::to_value(isolated_ai)?)

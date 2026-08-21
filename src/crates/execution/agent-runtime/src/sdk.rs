@@ -55,7 +55,10 @@ pub use crate::runtime::{
     RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
     SessionInteractionSnapshot, SessionSelector,
 };
-pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
+pub use crate::session_state::{
+    derive_display_state, session_state_label_for_state, ProcessingPhase, SessionDisplayState,
+    SessionState, DEFAULT_HUNG_TIMEOUT,
+};
 pub use crate::user_questions::{PendingUserQuestion, PendingUserQuestionSnapshot};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 pub use bitfun_core_types::SessionUsageReport;

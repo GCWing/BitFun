@@ -46,7 +46,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "訂閱賬號",
-    "sectionDescription": "OpenCode 帳號只需登入一次，即可分別使用 Zen 或 Go API 方案；同時支援 Codex 與 Antigravity",
+    "sectionDescription": "OpenCode 帳號只需登入一次，即可分別使用 Zen 或 Go API 方案；同時支援 Codex、Antigravity、CodeBuddy 與 Qoder",
     "rescan": "重新整理狀態",
     "import": "匯入使用",
     "login": "登入",
@@ -58,6 +58,11 @@
     "refreshFailed": "重新整理失敗：{{error}}",
     "loginSuccess": "登入成功",
     "loginFailed": "登入失敗：{{error}}",
+    "patLogin": "使用權杖登入",
+    "patLoginSuccess": "已使用個人存取權杖登入",
+    "patLoginFailed": "權杖登入失敗：{{error}}",
+    "patPlaceholder": "個人存取權杖（選用）",
+    "patRequired": "請輸入個人存取權杖",
     "logoutSuccess": "已登出",
     "logoutCleanupPending": "已登出，系統憑據清理仍在等待中，稍後會自動重試。",
     "logoutFailed": "登出失敗：{{error}}",
@@ -72,7 +77,9 @@
       "codex": "Codex（ChatGPT 訂閱）",
       "antigravity": "Antigravity（Google 訂閱）",
       "opencodeZen": "OpenCode 帳號 · Zen API",
-      "opencodeGo": "OpenCode 帳號 · Go API"
+      "opencodeGo": "OpenCode 帳號 · Go API",
+      "codebuddy": "CodeBuddy（騰訊 AI 訂閱）",
+      "qoder": "Qoder（Qoder 訂閱）"
     },
     "openCodePlans": {
       "zen": {

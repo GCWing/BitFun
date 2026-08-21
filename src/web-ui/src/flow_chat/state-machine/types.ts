@@ -28,6 +28,46 @@ export enum SessionExecutionState {
 }
 
 /**
+ * Session display/management state (seven-state projection).
+ *
+ * This is a distinct layer from the runtime {@link SessionExecutionState}
+ * above. The runtime state owns execution and retry semantics, while this
+ * enum is the user-facing projection used by the session sidebar, DAG member
+ * nodes, and Session tool queries. The two layers do not conflict.
+ */
+export enum SessionDisplayState {
+  /** Zero messages. */
+  STANDBY = 'standby',
+  /** A turn is actively executing. */
+  PROCESSING = 'processing',
+  /** Has conversation history and is idle. */
+  COMPLETED = 'completed',
+  /** Unresponsive beyond the watchdog timeout. */
+  HUNG = 'hung',
+  /** Interrupted. */
+  INTERRUPTED = 'interrupted',
+  /** Needs user attention (question mark). */
+  PENDING_ATTENTION = 'pending_attention',
+  /** Completed and already viewed (green dot cleared). */
+  VIEWED = 'viewed',
+}
+
+export const SESSION_DISPLAY_STATES: readonly SessionDisplayState[] = [
+  SessionDisplayState.STANDBY,
+  SessionDisplayState.PROCESSING,
+  SessionDisplayState.COMPLETED,
+  SessionDisplayState.HUNG,
+  SessionDisplayState.INTERRUPTED,
+  SessionDisplayState.PENDING_ATTENTION,
+  SessionDisplayState.VIEWED,
+] as const;
+
+/** True when a runtime execution state projects to a busy display state. */
+export function isBusyDisplayState(state: SessionDisplayState): boolean {
+  return state === SessionDisplayState.PROCESSING;
+}
+
+/**
  * Processing phase (only valid in PROCESSING state)
  * Used for UI detailed display, does not affect main state logic
  */
@@ -57,6 +97,10 @@ export enum SessionExecutionEvent {
   TOOL_REJECTED = 'tool_rejected',
   BACKEND_STREAM_COMPLETED = 'backend_stream_completed',
   FINISHING_SETTLED = 'finishing_settled',
+  /** A background ExecCommand child process is still running for the session
+   * after the dialog turn reported completion (R-WF-25). Keeps the session
+   * visually PROCESSING instead of settling to IDLE. */
+  BACKGROUND_COMMAND_RUNNING = 'background_command_running',
   USER_CANCEL = 'user_cancel',
   USER_CANCEL_FAILED = 'user_cancel_failed',
   ERROR_OCCURRED = 'error_occurred',

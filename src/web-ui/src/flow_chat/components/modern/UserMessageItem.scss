@@ -73,6 +73,15 @@
     margin-left: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
     margin-right: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
   }
+
+  // R-GC-14: group chat left/right indent offset (type-contract section 1.3/2)
+  // grouped by senderSessionId, using existing tokens only. Member messages
+  // (senderSessionId !== group session id) offset right; owner senders keep
+  // the default alignment.
+  &.user-message-item--group-other {
+    margin-left: calc(var(--bf-appearance-token-flowchat-content-inline-pad) * 2.2);
+    margin-right: var(--bf-appearance-token-flowchat-content-inline-pad);
+  }
 }
 
 .user-message-item__timestamp {
@@ -85,6 +94,7 @@
 
 .user-message-item__main {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--bf-appearance-token-flowchat-inline-gap);
 }
@@ -92,6 +102,27 @@
 // Bridges children to `.user-message-item__main` flex without an extra layout box.
 .user-message-item__main-contents-bridge {
   display: contents;
+}
+
+.user-message-item__sender-badge {
+  display: inline-block;
+  vertical-align: baseline;
+  /* Inline prefix on the first row: the badge lives inside the message text
+     flow, so the text starts right after it on the same line and wraps back
+     beneath it on later lines. Previously it sat beside the content as a flex
+     item and the -webkit-box content never wrapped under it ("occupies a
+     column / everything indents right"). */
+  margin: 0 0.4rem 0 0;
+  padding: 0.12rem 0.44rem;
+  border-radius: 999px;
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-weight: 600;
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+  letter-spacing: 0;
+  user-select: none;
+  color: var(--bf-appearance-token-color-accent-500);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
 }
 
 .user-message-item__steering-tag {
@@ -155,6 +186,20 @@
   max-height: 4.75em; /* Collapsed: up to 3 compact lines. */
   user-select: text;
   transition: none;
+}
+
+.user-message-item__content--with-badge {
+  /* The identity badge is part of the text flow (first inline element), so the
+     message text wraps beneath it on later lines. -webkit-box line-clamp
+     cannot mix an inline badge into its box tree, so drop it here and cap the
+     height instead (collapsed preview still reads as ~3 lines; expanded shows
+     everything). */
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: hidden;
+  text-overflow: unset;
+  max-height: 4.75em;
 }
 
 .user-message-item__reference {

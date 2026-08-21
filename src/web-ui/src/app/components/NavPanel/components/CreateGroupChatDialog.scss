@@ -1,0 +1,118 @@
+/**
+ * CreateGroupChatDialog styles — existing appearance tokens and size tokens
+ * only (no new style system). Layout reuses the WorkspaceSessionBatchModal
+ * row/state/actions semantics (existing shape).
+ */
+
+@use '../../../../component-library/styles/tokens.scss' as *;
+
+.group-chat-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-4;
+  min-width: 0;
+  color: var(--bf-appearance-token-color-text-primary);
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+
+  &__members {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+
+  &__members-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+
+  &__members-label {
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: 600;
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__member-list {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    padding: $size-gap-1;
+    gap: 2px;
+  }
+
+  &__member-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+    padding: 4px $size-gap-2;
+    border-radius: $size-radius-sm;
+    cursor: pointer;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+
+    &.is-selected {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+  }
+
+  &__member-name {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__inactive-badge {
+    flex: 0 0 auto;
+    margin-left: $size-gap-2;
+    padding: 0 $size-gap-1;
+    border-radius: $size-radius-sm;
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    white-space: nowrap;
+  }
+
+  &__state {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+    padding: $size-gap-3 $size-gap-2;
+    border: 1px dashed var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+}

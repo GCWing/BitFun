@@ -244,7 +244,9 @@ fn custom_subagent_markdown_io_writes_canonical_front_matter() {
     let loaded = custom_subagent_read_markdown_file(&path, CustomSubagentKind::Project)
         .expect("saved definition should load");
     assert_eq!(loaded, definition);
-    assert!(loaded.readonly, "review subagents must be readonly");
+    // R-WF-21 rules source: review no longer forces readonly. This definition
+    // was built with readonly:false, so it must stay false after the round trip.
+    assert!(!loaded.readonly, "review must not force readonly");
 }
 
 #[test]

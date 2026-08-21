@@ -2405,7 +2405,12 @@ mod tests {
             .insert(tool_name.clone(), mux.clone());
 
         router
-            .withdraw_failed_target(workspace_key, runtime_target_id, 7, &[tool_name.clone()])
+            .withdraw_failed_target(
+                workspace_key,
+                runtime_target_id,
+                7,
+                std::slice::from_ref(&tool_name),
+            )
             .await;
 
         assert!(matches!(
@@ -2440,7 +2445,12 @@ mod tests {
             },
         );
         router
-            .withdraw_failed_target(workspace_key, runtime_target_id, 7, &[tool_name.clone()])
+            .withdraw_failed_target(
+                workspace_key,
+                runtime_target_id,
+                7,
+                std::slice::from_ref(&tool_name),
+            )
             .await;
         assert!(matches!(
             router.workspace_routes(workspace_key).get(&tool_name),

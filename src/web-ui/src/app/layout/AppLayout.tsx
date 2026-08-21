@@ -54,6 +54,9 @@ const ToolbarMode = lazy(() =>
 const FloatingMiniChat = lazy(() =>
   import('./FloatingMiniChat').then(module => ({ default: module.FloatingMiniChat }))
 );
+const BeeColonyMonitor = lazy(() =>
+  import('./BeeColonyMonitor').then(module => ({ default: module.BeeColonyMonitor }))
+);
 const AboutDialog = lazy(() =>
   import('../components/AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -115,7 +118,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   } =
     useWindowControls({ isToolbarMode });
 
-  const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
+  const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel, toggleChatFullWidth } = useApp();
   const [windowModeHint, setWindowModeHint] = useState<WindowModeHint | null>(null);
   const windowModeHintTimerRef = useRef<number | null>(null);
 
@@ -580,6 +583,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     { priority: 5, description: 'keyboard.shortcuts.panel.toggleBoth' }
   );
 
+  // Full-width tiled chat: mod+Alt+T (VS Code does not bind this; chat scope
+  // reserves ctrl+alt+B already, so alt+T is free app-wide)
+  useShortcut(
+    'panel.toggleChatFullWidth',
+    { key: 'T', ctrl: true, alt: true, scope: 'app' },
+    () => toggleChatFullWidth(),
+    { priority: 5, description: 'keyboard.shortcuts.panel.toggleChatFullWidth' }
+  );
+
   // Toolbar cancel task
   React.useEffect(() => {
     const handleToolbarCancelTask = async () => {
@@ -781,6 +793,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         {!isWelcomeScene && !isAgentScene && (
           <Suspense fallback={null}>
             <FloatingMiniChat />
+          </Suspense>
+        )}
+
+        {/* Agent scenes: bee colony architecture monitor (self-gates to agentic tabs) */}
+        {!isWelcomeScene && isAgentScene && (
+          <Suspense fallback={null}>
+            <BeeColonyMonitor />
           </Suspense>
         )}
       </div>

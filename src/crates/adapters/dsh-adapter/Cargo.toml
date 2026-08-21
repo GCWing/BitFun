@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "DeepSeek Harness (dsh) bundle source projection adapter for BitFun"
+license.workspace = true
 autotests = false
 
 [lib]

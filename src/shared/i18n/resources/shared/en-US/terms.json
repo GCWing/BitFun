@@ -20,7 +20,8 @@
     "code": "Code Session",
     "cowork": "Cowork Session",
     "claw": "Claw",
-    "default": "Default Assistant"
+    "default": "Default Assistant",
+    "master": "Master"
   },
   "tools": {
     "explore": "Explore",

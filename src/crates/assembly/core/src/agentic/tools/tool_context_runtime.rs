@@ -17,6 +17,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolTask};
 use crate::agentic::tools::post_call_hooks;
+use crate::agentic::tools::restrictions::classify_tool_call;
 use crate::agentic::tools::restrictions::{
     is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
 };
@@ -348,6 +349,19 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
         deep_review_parent,
         &mut extension_custom_data,
     );
+    // Group chat correlation (R-GC-36): the coordinator forwards the group
+    // session id ("groupId") from the turn's user_message_metadata into
+    // context_vars. Propagate it into tool custom_data so SessionMessage
+    // forwarding can re-attach the group id when a member relays a message.
+    // Absent group context stays absent (None, no fallback).
+    if let Some(group_id) = context
+        .context_vars
+        .get("groupId")
+        .map(String::as_str)
+        .filter(|value| !value.trim().is_empty())
+    {
+        extension_custom_data.insert("groupId".to_string(), Value::String(group_id.to_string()));
+    }
     // Preserve the turn's already-resolved permission mode for Task
     // delegation. Without this projection, Task sees only the global default
     // when it forwards permission context to a fresh subagent.
@@ -504,10 +518,26 @@ impl ToolUseContext {
         }
     }
 
-    pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
-        self.runtime_tool_restrictions
+    pub fn enforce_tool_runtime_restrictions(
+        &self,
+        tool_name: &str,
+        input: &Value,
+    ) -> BitFunResult<()> {
+        // Resolve which restrictions to apply.
+        let restrictions: &ToolRuntimeRestrictions = &self.runtime_tool_restrictions;
+
+        // 1. Check tool name allow/deny lists.
+        restrictions
             .ensure_tool_allowed(tool_name)
-            .map_err(Into::into)
+            .map_err(BitFunError::from)?;
+
+        // 2. Classify the tool call into an operation class and check operation-level restrictions.
+        let op_class = classify_tool_call(tool_name, input);
+        restrictions
+            .ensure_operation_allowed(op_class, tool_name)
+            .map_err(BitFunError::from)?;
+
+        Ok(())
     }
 
     pub fn enforce_path_operation(
@@ -515,10 +545,10 @@ impl ToolUseContext {
         operation: ToolPathOperation,
         resolution: &ToolPathResolution,
     ) -> BitFunResult<()> {
-        let allowed_roots = self
-            .runtime_tool_restrictions
-            .path_policy
-            .roots_for(operation);
+        // 与 enforce_tool_runtime_restrictions 一致：直接用上下文的 path_policy 检查。
+        let restrictions: &ToolRuntimeRestrictions = &self.runtime_tool_restrictions;
+
+        let allowed_roots = restrictions.path_policy.roots_for(operation);
         if allowed_roots.is_empty() {
             return Ok(());
         }
@@ -828,6 +858,8 @@ mod context_facts_tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                allowed_operation_classes: BTreeSet::new(),
+                denied_operation_classes: BTreeSet::new(),
             },
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
@@ -873,6 +905,8 @@ mod context_facts_tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                allowed_operation_classes: BTreeSet::new(),
+                denied_operation_classes: BTreeSet::new(),
             },
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(
                 None,
@@ -1552,17 +1586,21 @@ mod task_context_tests {
                     tool_call_id: "parent_tool".to_string(),
                     session_id: "parent_session".to_string(),
                     dialog_turn_id: "parent_turn".to_string(),
+                    depth: None,
                 }),
                 permission_delegation: None,
                 delegation_policy: DelegationPolicy::top_level().spawn_child(),
                 deferred_tools: vec!["WebFetch".to_string()],
                 loaded_deferred_tool_specs: vec![loaded_spec("WebFetch")],
                 allowed_tools: vec!["WebFetch".to_string()],
+                user_enabled_tools: vec!["WebFetch".to_string()],
                 runtime_tool_restrictions: ToolRuntimeRestrictions {
                     allowed_tool_names: BTreeSet::from(["WebFetch".to_string()]),
                     denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                     denied_tool_messages: Default::default(),
                     path_policy: Default::default(),
+                    allowed_operation_classes: BTreeSet::new(),
+                    denied_operation_classes: BTreeSet::new(),
                 },
                 steering_interrupt: None,
                 workspace_services: None,

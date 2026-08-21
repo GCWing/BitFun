@@ -15,12 +15,12 @@ use self::types::AgentEntry;
 use self::types::{AgentCategory, SubAgentSource};
 use super::Agent;
 use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
-use log::{debug, warn};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 use std::sync::{Arc, OnceLock};
+use tokio::sync::RwLock;
 
 #[cfg(feature = "external-sources")]
 pub(crate) use external::external_subagent_runtime_key;
@@ -67,49 +67,82 @@ impl Default for AgentRegistry {
     }
 }
 
+/// Registry locks are tokio::sync::RwLock and the helpers below run in
+/// synchronous context (no await point), so they use try_read/try_write
+/// instead of await. A transient try-lock failure is normal when another
+/// thread happens to hold the lock for a few microseconds (parallel tests
+/// sharing the global registry, or concurrent runtime threads); we retry
+/// with a bounded yield spin. Only exceeding the spin cap still panics,
+/// which preserves detection of a guard held across an await point (a real
+/// bug). Guards must never be held across an await point.
+///
+/// The cap and backoff are tuned for heavy parallel contention: with many
+/// threads spinning for the same write lock (tokio multi-worker test
+/// runtimes sharing the process-global AgentRegistry), a small cap panics
+/// spuriously even though no guard is held across an await. The exponential
+/// backoff parks the calling thread briefly so the lock owner gets
+/// scheduler time to release the guard.
+const SPIN_RETRY_CAP: usize = 200_000;
+const SPIN_BASE_PARK_US: u64 = 16;
+
+fn spin_read<'a, T>(
+    lock: &'a tokio::sync::RwLock<T>,
+    what: &'a str,
+) -> tokio::sync::RwLockReadGuard<'a, T> {
+    let mut park_us = SPIN_BASE_PARK_US;
+    for spin in 0..SPIN_RETRY_CAP {
+        if let Ok(guard) = lock.try_read() {
+            return guard;
+        }
+        if spin & 0x3F == 0x3F {
+            std::thread::sleep(std::time::Duration::from_micros(park_us));
+            park_us = park_us.saturating_mul(2).min(1_000);
+        } else {
+            std::thread::yield_now();
+        }
+    }
+    panic!("{what} lock should not be contended (spin cap exceeded)")
+}
+
+fn spin_write<'a, T>(
+    lock: &'a tokio::sync::RwLock<T>,
+    what: &'a str,
+) -> tokio::sync::RwLockWriteGuard<'a, T> {
+    let mut park_us = SPIN_BASE_PARK_US;
+    for spin in 0..SPIN_RETRY_CAP {
+        if let Ok(guard) = lock.try_write() {
+            return guard;
+        }
+        if spin & 0x3F == 0x3F {
+            std::thread::sleep(std::time::Duration::from_micros(park_us));
+            park_us = park_us.saturating_mul(2).min(1_000);
+        } else {
+            std::thread::yield_now();
+        }
+    }
+    panic!("{what} lock should not be contended (spin cap exceeded)")
+}
+
 impl AgentRegistry {
-    fn read_agents(&self) -> std::sync::RwLockReadGuard<'_, HashMap<String, AgentEntry>> {
-        match self.agents.read() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                warn!("Agent registry read lock poisoned, recovering");
-                poisoned.into_inner()
-            }
-        }
+    fn read_agents(&self) -> tokio::sync::RwLockReadGuard<'_, HashMap<String, AgentEntry>> {
+        spin_read(&self.agents, "AgentRegistry agents")
     }
 
-    fn write_agents(&self) -> std::sync::RwLockWriteGuard<'_, HashMap<String, AgentEntry>> {
-        match self.agents.write() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                warn!("Agent registry write lock poisoned, recovering");
-                poisoned.into_inner()
-            }
-        }
+    fn write_agents(&self) -> tokio::sync::RwLockWriteGuard<'_, HashMap<String, AgentEntry>> {
+        spin_write(&self.agents, "AgentRegistry agents")
     }
 
+    // Synchronous helper; see spin_read for the lock-contention contract.
     fn read_project_subagents(
         &self,
-    ) -> std::sync::RwLockReadGuard<'_, HashMap<PathBuf, HashMap<String, AgentEntry>>> {
-        match self.project_subagents.read() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                warn!("Agent project registry read lock poisoned, recovering");
-                poisoned.into_inner()
-            }
-        }
+    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<PathBuf, HashMap<String, AgentEntry>>> {
+        spin_read(&self.project_subagents, "AgentRegistry project_subagents")
     }
 
     fn write_project_subagents(
         &self,
-    ) -> std::sync::RwLockWriteGuard<'_, HashMap<PathBuf, HashMap<String, AgentEntry>>> {
-        match self.project_subagents.write() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                warn!("Agent project registry write lock poisoned, recovering");
-                poisoned.into_inner()
-            }
-        }
+    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<PathBuf, HashMap<String, AgentEntry>>> {
+        spin_write(&self.project_subagents, "AgentRegistry project_subagents")
     }
 
     fn find_agent_entry(
@@ -190,24 +223,19 @@ impl AgentRegistry {
         })
     }
 
+    // Synchronous helper; see spin_read for the lock-contention contract.
     fn user_custom_agents_loaded(&self) -> bool {
-        match self.user_custom_agents_loaded.read() {
-            Ok(guard) => *guard,
-            Err(poisoned) => {
-                warn!("Agent custom-user loaded flag read lock poisoned, recovering");
-                *poisoned.into_inner()
-            }
-        }
+        *spin_read(
+            &self.user_custom_agents_loaded,
+            "AgentRegistry user_custom_agents_loaded",
+        )
     }
 
     fn set_user_custom_agents_loaded(&self, loaded: bool) {
-        match self.user_custom_agents_loaded.write() {
-            Ok(mut guard) => *guard = loaded,
-            Err(poisoned) => {
-                warn!("Agent custom-user loaded flag write lock poisoned, recovering");
-                *poisoned.into_inner() = loaded;
-            }
-        }
+        *spin_write(
+            &self.user_custom_agents_loaded,
+            "AgentRegistry user_custom_agents_loaded",
+        ) = loaded;
     }
 }
 

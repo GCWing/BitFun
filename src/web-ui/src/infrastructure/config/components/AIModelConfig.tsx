@@ -38,6 +38,12 @@ import {
   SubscriptionLoginCoordinator,
   type SubscriptionLoginOperation,
 } from './subscriptionLoginCoordinator';
+import {
+  SUBSCRIPTION_AUTH_OPTION_VALUES,
+  buildAuthSelectValue,
+  buildSubscriptionAccountDescription,
+  parseAuthSelectValue,
+} from './subscriptionAuthOptions';
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
@@ -49,6 +55,8 @@ const COLLAPSED_PROVIDER_COUNT = 6;
 interface RemoteModelOption {
   id: string;
   display_name?: string;
+  /** Reported by the discovery source (e.g. CodeBuddy `supportsReasoning`). */
+  supports_reasoning?: boolean;
 }
 
 interface SelectedModelDraft {
@@ -646,20 +654,6 @@ const AIModelConfig: React.FC = () => {
       ));
   }, [preferredProviderRegion, providerTemplates, t]);
 
-  const normalizedProviderQuery = providerQuery.trim().toLowerCase();
-  const matchedProviders = useMemo(() => (
-    normalizedProviderQuery
-      ? providers.filter(provider => provider.searchText.includes(normalizedProviderQuery))
-      : providers
-  ), [normalizedProviderQuery, providers]);
-  // Searching always reveals every hit; only the resting list stays short.
-  const canToggleProviderList = !normalizedProviderQuery
-    && matchedProviders.length > COLLAPSED_PROVIDER_COUNT;
-  const isProviderListCollapsed = canToggleProviderList && !showAllProviders;
-  const visibleProviders = isProviderListCollapsed
-    ? matchedProviders.slice(0, COLLAPSED_PROVIDER_COUNT)
-    : matchedProviders;
-
   // Current template with translations (must be at top level, before any conditional returns)
   const currentTemplate = useMemo(() => {
     if (!selectedProviderId) return null;
@@ -752,10 +746,17 @@ const AIModelConfig: React.FC = () => {
               .find(provider => provider.id === selectedProviderId)
               ?.models.find(model => model.id === modelName)
           : undefined;
+        const remoteReasoning = remoteModelOptions.find(
+          model => model.id === modelName
+        )?.supports_reasoning;
+        const defaultReasoning = remoteReasoning
+          ? { catalog: { source: 'auto' as const }, default_preset: 'on', presets: [] }
+          : undefined;
         return createModelDraft(modelName, draftBaseConfig, {
           configId: pinnedRowId,
           contextWindow: catalogModel?.limits?.context,
           category: catalogModel?.capabilities.attachment ? 'multimodal' : undefined,
+          reasoning: defaultReasoning,
         });
       })
     );
@@ -1013,6 +1014,8 @@ const AIModelConfig: React.FC = () => {
     const offeringModels = (offering?.models || []).map((model) => ({
       id: model.id,
       display_name: model.display_name || undefined,
+      supports_reasoning: model.supports_reasoning === true ? true
+        : model.supports_reasoning === false ? false : undefined,
     }));
     if (offeringModels.length > 0) {
       setRemoteModelOptions(offeringModels);
@@ -1361,6 +1364,30 @@ const AIModelConfig: React.FC = () => {
       notification.error(t('subscriptionAuth.refreshFailed', { error: String(e) }));
     }
   }, [notification, refreshSubscriptionAccounts, t]);
+
+  // Qoder PAT (Personal Access Token) login. The PAT is exchanged server-side
+  // for a short-lived job token before inference; it is never stored in code.
+  const [patInputs, setPatInputs] = useState<Partial<Record<SubscriptionProvider, string>>>({});
+  const [patLoggingIn, setPatLoggingIn] = useState<SubscriptionProvider | null>(null);
+
+  const handlePatLogin = useCallback(async (provider: SubscriptionProvider) => {
+    const pat = (patInputs[provider] || '').trim();
+    if (!pat) {
+      notification.warning(t('subscriptionAuth.patRequired'));
+      return;
+    }
+    setPatLoggingIn(provider);
+    try {
+      await aiApi.startSubscriptionPatLogin(provider, pat);
+      await refreshSubscriptionAccounts();
+      setPatInputs(prev => ({ ...prev, [provider]: '' }));
+      notification.success(t('subscriptionAuth.patLoginSuccess'));
+    } catch (e) {
+      notification.error(t('subscriptionAuth.patLoginFailed', { error: String(e) }));
+    } finally {
+      setPatLoggingIn(null);
+    }
+  }, [notification, patInputs, refreshSubscriptionAccounts, t]);
 
   
   const handleSelectProvider = (providerId: string) => {
@@ -1926,6 +1953,21 @@ const AIModelConfig: React.FC = () => {
 
   
   if (creationMode === 'selection') {
+    // Provider search/filter state is only consumed by this selection branch,
+    // so the derived values stay scoped to it instead of recomputing on every
+    // main-list render.
+    const normalizedProviderQuery = providerQuery.trim().toLowerCase();
+    const matchedProviders = normalizedProviderQuery
+      ? providers.filter(provider => provider.searchText.includes(normalizedProviderQuery))
+      : providers;
+    // Searching always reveals every hit; only the resting list stays short.
+    const canToggleProviderList = !normalizedProviderQuery
+      && matchedProviders.length > COLLAPSED_PROVIDER_COUNT;
+    const isProviderListCollapsed = canToggleProviderList && !showAllProviders;
+    const visibleProviders = isProviderListCollapsed
+      ? matchedProviders.slice(0, COLLAPSED_PROVIDER_COUNT)
+      : matchedProviders;
+
     return (
       <ConfigPageLayout className="bitfun-ai-model-config" data-bf-component="ai-model-config" data-bf-part="root" data-bf-view="selection">
         <ConfigPageHeader
@@ -2390,17 +2432,29 @@ const AIModelConfig: React.FC = () => {
         ? editingConfig.auth.plan || 'zen'
         : undefined;
     const authSelectValue = authIsSubscription
-      ? selectedSubscriptionProvider === 'opencode'
-        ? `subscription:opencode:${selectedOpenCodePlan || 'zen'}`
-        : `subscription:${selectedSubscriptionProvider || 'codex'}`
+      ? buildAuthSelectValue(selectedSubscriptionProvider || 'codex', selectedOpenCodePlan)
       : 'api_key';
-    const authOptions: SelectOption[] = [
-      { value: 'api_key', label: t('subscriptionAuth.options.apiKey') },
-      { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
-      { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
-      { value: 'subscription:opencode:zen', label: t('subscriptionAuth.options.opencodeZen') },
-      { value: 'subscription:opencode:go', label: t('subscriptionAuth.options.opencodeGo') },
-    ];
+    const authOptions: SelectOption[] = SUBSCRIPTION_AUTH_OPTION_VALUES.map((value) => {
+      if (value === 'api_key') {
+        return { value, label: t('subscriptionAuth.options.apiKey') };
+      }
+      if (value === 'subscription:opencode:zen') {
+        return { value, label: t('subscriptionAuth.options.opencodeZen') };
+      }
+      if (value === 'subscription:opencode:go') {
+        return { value, label: t('subscriptionAuth.options.opencodeGo') };
+      }
+      if (value === 'subscription:codebuddy') {
+        return { value, label: t('subscriptionAuth.options.codebuddy') };
+      }
+      if (value === 'subscription:qoder') {
+        return { value, label: t('subscriptionAuth.options.qoder') };
+      }
+      if (value === 'subscription:codex') {
+        return { value, label: t('subscriptionAuth.options.codex') };
+      }
+      return { value, label: t('subscriptionAuth.options.antigravity') };
+    });
     const matchedSubscription = selectedSubscriptionProvider
       ? subscriptionAccounts.find((account) => account.provider === selectedSubscriptionProvider)
       : undefined;
@@ -2412,15 +2466,12 @@ const AIModelConfig: React.FC = () => {
             value={authSelectValue}
             onChange={(value) => {
               const next = String(value);
-              if (next === 'api_key') {
+              const parsed = parseAuthSelectValue(next);
+              if (parsed.kind === 'api_key') {
                 setEditingConfig((prev) => ({ ...prev, auth: { type: 'api_key' } }));
                 return;
               }
-              const [, providerValue, planValue] = next.split(':');
-              const provider = providerValue as SubscriptionProvider;
-              const plan = provider === 'opencode'
-                ? (planValue || 'zen') as OpenCodePlan
-                : undefined;
+              const { provider, plan } = parsed;
               setEditingConfig((prev) => {
                 if (!prev) return prev;
                 if (provider !== 'opencode') {
@@ -3176,28 +3227,14 @@ const AIModelConfig: React.FC = () => {
               </div>
             )}
             {subscriptionAccounts.map((account) => {
-              const descriptionParts: string[] = [];
-              if (account.connected && account.account) {
-                descriptionParts.push(account.account);
-              }
-              if (account.connected && account.expires_at) {
-                descriptionParts.push(
-                  t('subscriptionAuth.expiresAt', {
-                    time: i18nService.formatDate(new Date(account.expires_at * 1000), {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    }),
-                  }),
-                );
-              } else if (account.connected) {
-                descriptionParts.push(t('subscriptionAuth.tokenValid'));
-              } else if (account.vault_unavailable) {
-                descriptionParts.push(t('subscriptionAuth.vaultUnavailable'));
-              } else if (account.reauthentication_required) {
-                descriptionParts.push(t('subscriptionAuth.reauthenticationRequired'));
-              } else {
-                descriptionParts.push(t('subscriptionAuth.notSignedIn'));
-              }
+              const descriptionParts = buildSubscriptionAccountDescription(
+                account,
+                t,
+                (unixSeconds) => i18nService.formatDate(new Date(unixSeconds * 1000), {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                }),
+              );
               const isLoggingIn = loggingInProvider === account.provider;
               const anyLoginInProgress = loggingInProvider !== null;
               const loginPanel = subscriptionLoginPanel?.provider === account.provider
@@ -3277,15 +3314,44 @@ const AIModelConfig: React.FC = () => {
                           {t('subscriptionAuth.retryVault')}
                         </Button>
                       ) : (
-                        <Button
-                          size="small"
-                          variant="primary"
-                          isLoading={isLoggingIn}
-                          disabled={anyLoginInProgress}
-                          onClick={() => void handleSubscriptionLogin(account.provider)}
-                        >
-                          {t('subscriptionAuth.login')}
-                        </Button>
+                        <>
+                          {account.provider !== 'qoder' && (
+                            <Button
+                              size="small"
+                              variant="primary"
+                              isLoading={isLoggingIn}
+                              disabled={anyLoginInProgress}
+                              onClick={() => void handleSubscriptionLogin(account.provider)}
+                            >
+                              {t('subscriptionAuth.login')}
+                            </Button>
+                          )}
+                          {account.provider === 'qoder' && (
+                            <>
+                              <Input
+                                type="password"
+                                placeholder={t('subscriptionAuth.patPlaceholder')}
+                                value={patInputs[account.provider] || ''}
+                                disabled={anyLoginInProgress}
+                                inputSize="small"
+                                onChange={(e) => setPatInputs(prev => ({
+                                  ...prev,
+                                  [account.provider]: e.target.value,
+                                }))}
+                                style={{ width: 220 }}
+                              />
+                              <Button
+                                size="small"
+                                variant="primary"
+                                isLoading={patLoggingIn === account.provider}
+                                disabled={anyLoginInProgress}
+                                onClick={() => void handlePatLogin(account.provider)}
+                              >
+                                {t('subscriptionAuth.patLogin')}
+                              </Button>
+                            </>
+                          )}
+                        </>
                       )}
                       {isLoggingIn && (
                         <Button

@@ -149,6 +149,14 @@ export function buildSessionLineageTree(
       if (persistedNode?.title.trim()) {
         liveNode.title = persistedNode.title;
       }
+      // Defensive merge: an opened subagent shell can lose relationship fields
+      // in live state; persisted metadata remains the relationship authority.
+      if (persistedNode?.parentSessionId && !liveNode.parentSessionId) {
+        liveNode.parentSessionId = persistedNode.parentSessionId;
+      }
+      if (persistedNode?.subagentType && !liveNode.subagentType) {
+        liveNode.subagentType = persistedNode.subagentType;
+      }
       nodes.set(session.sessionId, liveNode);
     }
   }

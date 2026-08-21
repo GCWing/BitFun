@@ -5,6 +5,7 @@
 mod definitions;
 mod prompt_builder;
 mod registry;
+pub mod team_presets;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
@@ -27,13 +28,14 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
-    TeamMode,
+    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, GroupMode, LegionMode,
+    MultitaskMode, PlanMode, TeamMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
-    ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent, ResearchSpecialistAgent,
+    AcpAgent, ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
+    ResearchSpecialistAgent,
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{
@@ -87,6 +89,11 @@ pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides 
     let mut overrides = AgentToolPolicyOverrides::default();
     overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
     overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
+    // 2026-08-04 user calibration: the plan tool family is a commander
+    // staple, so CreatePlan stays directly available in commander modes
+    // without a GetToolSpec unlock round-trip (its tool definition default
+    // exposure is Direct as well, see create_plan_tool.rs).
+    overrides.insert("CreatePlan".to_string(), ToolExposure::Direct);
     overrides
 }
 
@@ -119,8 +126,8 @@ fn append_provider_group_tools(tools: &mut Vec<String>, provider_id: &'static st
 pub fn shared_coding_mode_tools() -> Vec<String> {
     let mut tools = vec![
         "Task".to_string(),
+        "SessionMessage".to_string(),
         "ListModels".to_string(),
-        "AgentWait".to_string(),
         "Read".to_string(),
         "view_image".to_string(),
         "analyze_image".to_string(),
@@ -142,6 +149,9 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
         "CreatePlan".to_string(),
+        "PlanList".to_string(),
+        "PlanRead".to_string(),
+        "PlanUpdate".to_string(),
         "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
@@ -156,9 +166,59 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "PageDeploy".to_string(),
         "PagePublish".to_string(),
     ];
+    // R-GC-09（姬码锋 CEO 裁决）：群聊 9 工具默认可见——主 agent
+    // （Agentic/Multitask/Plan/Debug）与子代理共享集同一来源，主/子均
+    // 可见。逐名 contains 防重复，GROUP_CHAT_TOOL_NAMES 为单一权威源。
+    for tool_name in GROUP_CHAT_TOOL_NAMES {
+        if !tools.contains(&tool_name.to_string()) {
+            tools.push(tool_name.to_string());
+        }
+    }
     append_provider_group_tools(&mut tools, "core.canvas");
     tools
 }
+
+/// Unified tool set for all SubAgents (built-in + ACP + custom).
+/// Includes shared_coding_mode_tools() + SessionControl (fission core).
+///
+/// SessionHistory 刻意不在共享工具集内（UX-P0-1 收窄）：跨会话 transcript
+/// 读取是高敏感操作（含 tool_inputs/thinking），且工具本身有读取授权门
+/// （resolve_session_read_authorization）。
+pub fn subagent_default_tools() -> Vec<String> {
+    let mut tools = shared_coding_mode_tools();
+    if !tools.contains(&"SessionControl".to_string()) {
+        tools.push("SessionControl".to_string());
+    }
+    // R-GC-09 默认可见兜底：与 SessionControl 同级，逐名 contains 后 push，
+    // 防重复（shared_coding_mode_tools 已含时保持幂等）。
+    for tool_name in GROUP_CHAT_TOOL_NAMES {
+        if !tools.contains(&tool_name.to_string()) {
+            tools.push(tool_name.to_string());
+        }
+    }
+    tools
+}
+
+/// R-GC-09（契约 §六.6，姬码锋 CEO 裁决）+ R-WF-03（编排扩展）群聊工具名：
+/// 单一权威源。
+///
+/// 默认可见：经 `shared_coding_mode_tools()` 进入主 agent（Agentic/
+/// Multitask/Plan/Debug）共享工具集，`subagent_default_tools()` 兜底追加
+/// 保证子代理/Claw/Legion 可见；此常量不做内联展开，mode/agent 如需
+/// 关闭或定制仍可基于本常量过滤。
+pub const GROUP_CHAT_TOOL_NAMES: &[&str] = &[
+    "create_group_chat",
+    "invite_group_member",
+    "remove_group_member",
+    "send_group_message",
+    "get_group_history",
+    "list_group_chats",
+    "fork_group_chat",
+    "group_member_status",
+    "delete_group_chat",
+    "update_group_member_tools",
+    "update_group_wiring",
+];
 
 /// Agent trait defining the interface for all agents
 #[async_trait]
@@ -329,6 +389,9 @@ mod tests {
 
         assert!(tools.contains(&"ListModels".to_string()));
         assert!(tools.contains(&"CreatePlan".to_string()));
+        assert!(tools.contains(&"PlanList".to_string()));
+        assert!(tools.contains(&"PlanRead".to_string()));
+        assert!(tools.contains(&"PlanUpdate".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));
     }
@@ -348,6 +411,22 @@ mod tests {
         assert!(tools.contains(&"ReadCanvas".to_string()));
         assert!(tools.contains(&"UpdateCanvas".to_string()));
         assert!(tools.contains(&"PatchCanvas".to_string()));
+    }
+
+    #[test]
+    fn shared_coding_mode_tools_exclude_session_history() {
+        // UX-P0-1 收窄：SessionHistory 移出共享工具集，跨会话读取由工具内
+        // 授权门兜底。防回退回归断言。
+        let tools = shared_coding_mode_tools();
+        assert!(
+            !tools.contains(&"SessionHistory".to_string()),
+            "SessionHistory must not be in shared_coding_mode_tools (UX-P0-1 narrow)"
+        );
+        let subagents = crate::agentic::agents::subagent_default_tools();
+        assert!(
+            !subagents.contains(&"SessionHistory".to_string()),
+            "SessionHistory must not be in subagent_default_tools (UX-P0-1 narrow)"
+        );
     }
 
     #[test]
@@ -382,5 +461,45 @@ mod tests {
         assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(debug.tool_exposure_overrides(), &shared_overrides);
+    }
+
+    #[test]
+    fn group_chat_tools_visible_in_shared_and_subagent_defaults() {
+        // R-GC-09（姬码锋 CEO 裁决）：群聊 9 工具默认可见——主 agent 共享
+        // 工具集（shared_coding_mode_tools，Agentic/Multitask/Plan/Debug
+        // 继承）与子代理工具集（subagent_default_tools）都必须含 9 名。
+        let shared = shared_coding_mode_tools();
+        let subagents = super::subagent_default_tools();
+        for tool_name in super::GROUP_CHAT_TOOL_NAMES {
+            assert!(
+                shared.iter().any(|name| name == tool_name),
+                "{tool_name} must default into shared coding mode tools"
+            );
+            assert!(
+                subagents.iter().any(|name| name == tool_name),
+                "{tool_name} must default into subagent tools"
+            );
+        }
+        assert_eq!(super::GROUP_CHAT_TOOL_NAMES.len(), 11);
+    }
+
+    #[test]
+    fn group_chat_tools_not_duplicated_in_default_sets() {
+        // 防重复回归：shared_coding_mode_tools 与 subagent_default_tools 中
+        // 群聊 9 名各只出现一次（subagent 兜底 contains 后 push 幂等）。
+        let shared = shared_coding_mode_tools();
+        let subagents = super::subagent_default_tools();
+        for tool_name in super::GROUP_CHAT_TOOL_NAMES {
+            assert_eq!(
+                shared.iter().filter(|name| *name == tool_name).count(),
+                1,
+                "{tool_name} must appear exactly once in shared coding mode tools"
+            );
+            assert_eq!(
+                subagents.iter().filter(|name| *name == tool_name).count(),
+                1,
+                "{tool_name} must appear exactly once in subagent tools"
+            );
+        }
     }
 }

@@ -1,4 +1,5 @@
 use std::process::{Command, Stdio};
+#[cfg_attr(windows, allow(unused_imports))]
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -204,14 +205,61 @@ fn wait_for_process_group_exit(process_group: i32) -> bool {
 
 #[cfg(unix)]
 fn process_group_alive(process_group: i32) -> bool {
-    // SAFETY: signal 0 performs liveness/permission checking only.
-    if unsafe { libc::kill(-process_group, 0) } == 0 {
-        return true;
+    // macOS: kill(-pgid, 0) returns ESRCH for an orphaned process group
+    // whose only remaining members are TERM-resistant children, while
+    // Linux keeps reporting the group as alive while any member lives.
+    // Enumerate the group with pgrep instead and treat any live (non-zombie)
+    // member as proof the group still exists; a failed/empty query means the
+    // group disappeared during the check. (Apple's ps -g is a no-op unless
+    // the unix2003 compatibility mode is active, so pgrep -g is the reliable
+    // PGID probe on macOS.)
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("pgrep")
+            .args(["-g", &process_group.to_string()])
+            .output();
+        let Ok(output) = output else {
+            return false;
+        };
+        if !output.status.success() {
+            // pgrep exits 1 when no processes matched: a vanished or empty
+            // process group is not alive.
+            return false;
+        }
+        // pgrep lists PIDs; a zombie still matches, so cross-check each
+        // candidate with ps and require at least one live (non-zombie)
+        // member.
+        return String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| line.trim().parse::<u32>().ok())
+            .any(|member_pid| {
+                let state = Command::new("ps")
+                    .args(["-p", &member_pid.to_string(), "-o", "stat="])
+                    .output();
+                match state {
+                    Ok(output) if output.status.success() => {
+                        String::from_utf8_lossy(&output.stdout)
+                            .trim_start()
+                            .chars()
+                            .next()
+                            .is_some_and(|state| state != 'Z')
+                    }
+                    _ => false,
+                }
+            });
     }
-    matches!(
-        std::io::Error::last_os_error().raw_os_error(),
-        Some(libc::EPERM)
-    )
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // SAFETY: signal 0 performs liveness/permission checking only.
+        if unsafe { libc::kill(-process_group, 0) } == 0 {
+            return true;
+        }
+        matches!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EPERM)
+        )
+    }
 }
 
 #[cfg(unix)]
@@ -328,6 +376,7 @@ fn process_matches_action(_pid: u32, _action: &str, _job_id: &str) -> bool {
     false
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn arguments_match_action(args: &[String], action: &str, job_id: &str) -> bool {
     args.windows(4).any(|window| {
         window[0] == "dispatch"

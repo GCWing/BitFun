@@ -21,3 +21,26 @@ describe('recoverable interruption transitions', () => {
     )).toBe(SessionExecutionState.PROCESSING);
   });
 });
+
+describe('background command running transitions (R-WF-25)', () => {
+  it('revives an idle session to processing when a background command is alive', () => {
+    expect(getNextState(
+      SessionExecutionState.IDLE,
+      SessionExecutionEvent.BACKGROUND_COMMAND_RUNNING,
+    )).toBe(SessionExecutionState.PROCESSING);
+  });
+
+  it('keeps processing when already processing', () => {
+    expect(getNextState(
+      SessionExecutionState.PROCESSING,
+      SessionExecutionEvent.BACKGROUND_COMMAND_RUNNING,
+    )).toBe(SessionExecutionState.PROCESSING);
+  });
+
+  it('moves from finishing back to processing while a background command is alive', () => {
+    expect(getNextState(
+      SessionExecutionState.FINISHING,
+      SessionExecutionEvent.BACKGROUND_COMMAND_RUNNING,
+    )).toBe(SessionExecutionState.PROCESSING);
+  });
+});

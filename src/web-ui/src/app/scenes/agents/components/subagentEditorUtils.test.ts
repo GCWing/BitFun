@@ -17,15 +17,8 @@ const tools: SubagentEditorToolInfo[] = [
 ];
 
 describe('subagentEditorUtils', () => {
-  it('shows only readonly tools for review subagents', () => {
-    expect(filterToolsForReviewMode(tools, true).map((tool) => tool.name)).toEqual([
-      'GetFileDiff',
-      'Read',
-      'Grep',
-      'Glob',
-      'LS',
-    ]);
-    expect(filterToolsForReviewMode(tools, false).map((tool) => tool.name)).toEqual([
+  it('keeps the full tool set for review subagents that are not readonly', () => {
+    expect(filterToolsForReviewMode(tools, true, false).map((tool) => tool.name)).toEqual([
       'GetFileDiff',
       'Read',
       'Grep',
@@ -36,10 +29,40 @@ describe('subagentEditorUtils', () => {
     ]);
   });
 
-  it('forces review subagents to readonly and removes writable selected tools', () => {
+  it('shows only readonly tools when the readonly field is set', () => {
+    expect(filterToolsForReviewMode(tools, false, true).map((tool) => tool.name)).toEqual([
+      'GetFileDiff',
+      'Read',
+      'Grep',
+      'Glob',
+      'LS',
+    ]);
+    expect(filterToolsForReviewMode(tools, true, true).map((tool) => tool.name)).toEqual([
+      'GetFileDiff',
+      'Read',
+      'Grep',
+      'Glob',
+      'LS',
+    ]);
+  });
+
+  it('does not change readonly or tools for a review subagent that is not readonly', () => {
     const next = normalizeReviewModeState({
       review: true,
       readonly: false,
+      selectedTools: new Set(['Read', 'Write', 'Bash']),
+      availableTools: tools,
+    });
+
+    expect(next.readonly).toBe(false);
+    expect(Array.from(next.selectedTools)).toEqual(['Read', 'Write', 'Bash']);
+    expect(next.removedToolNames).toEqual([]);
+  });
+
+  it('removes writable selected tools only when the subagent is readonly', () => {
+    const next = normalizeReviewModeState({
+      review: false,
+      readonly: true,
       selectedTools: new Set(['Read', 'Write', 'Bash']),
       availableTools: tools,
     });

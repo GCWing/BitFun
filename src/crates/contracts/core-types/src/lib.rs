@@ -8,6 +8,7 @@ pub mod errors;
 pub mod lsp;
 pub mod model;
 pub mod session;
+pub mod session_tree;
 pub mod session_usage;
 pub mod speech;
 pub mod surface;
@@ -45,6 +46,6 @@ pub use surface::{
 pub use tool_image_attachment::ToolImageAttachment;
 pub use worktree::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
-    WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSessionSummary, WorktreeSettings,
-    WorktreeSummary,
+    WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSessionOptions,
+    WorktreeSessionSummary, WorktreeSettings, WorktreeSummary,
 };

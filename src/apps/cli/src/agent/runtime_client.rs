@@ -120,6 +120,9 @@ pub(crate) enum SessionMigrationNotice {
 }
 
 impl SessionMigrationNotice {
+    /// Local CLI migration notice rendering, retained for the shared-runtime
+    /// path after the upstream app-server CLI refactor dropped its call sites.
+    #[allow(dead_code)]
     pub(crate) fn user_message(&self) -> String {
         let (setting, previous_id, restored_id) = match self {
             Self::Mode {
@@ -164,6 +167,9 @@ fn session_migration_notices(
 #[derive(Debug)]
 pub(crate) struct SessionOperationError {
     message: String,
+    /// Whether the remote outcome was unknown after the operation returned.
+    /// Retained for the shared-runtime path after the upstream CLI refactor.
+    #[allow(dead_code)]
     outcome_unknown: bool,
 }
 
@@ -175,6 +181,9 @@ impl fmt::Display for SessionOperationError {
 
 impl std::error::Error for SessionOperationError {}
 
+/// Local error-shaping helpers retained for the shared-runtime path after the
+/// upstream app-server CLI refactor dropped their call sites.
+#[allow(dead_code)]
 impl SessionOperationError {
     fn runtime(error: RuntimeError) -> Self {
         let outcome_unknown = matches!(
@@ -307,6 +316,7 @@ impl CliWorkspacePaths {
         }
     }
 
+    #[allow(dead_code)]
     fn reset_execution_to_project(&mut self) -> PathBuf {
         let project = self.project();
         self.execution = Some(project.clone());
@@ -319,6 +329,7 @@ impl CliWorkspacePaths {
         project
     }
 
+    #[allow(dead_code)]
     fn workspace_diff_unavailable_reason(&self) -> Option<&'static str> {
         if self.remote_connection_id.is_some() || self.remote_ssh_host.is_some() {
             return Some("Workspace diff is unavailable for remote Sessions");
@@ -334,6 +345,7 @@ impl CliWorkspacePaths {
     }
 }
 
+#[allow(dead_code)]
 fn same_workspace_location(left: &Path, right: &Path) -> bool {
     left == right
         || dunce::canonicalize(left)
@@ -354,17 +366,21 @@ pub(crate) struct CliAgentRuntimeClient {
     /// Current turn ID (for cancellation)
     current_turn_id: Arc<Mutex<Option<String>>>,
     shared_agent_events: Option<SharedBroadcast<AgenticEventEnvelope>>,
+    #[allow(dead_code)]
     shared_permission_events:
         Option<SharedBroadcast<bitfun_agent_runtime::sdk::PermissionRequestEvent>>,
     shared_pending_permissions: Arc<RwLock<HashMap<String, PermissionRequest>>>,
 }
 
+#[allow(clippy::large_enum_variant)] // embedded runtime holds the full agent stack; boxing would churn every dispatch site
 enum CliAgentRuntimeBackend {
     Embedded(AgentRuntime),
+    #[allow(dead_code)]
     Shared(RuntimeIpcClient),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct CliAgentMode {
     pub(crate) id: String,
     pub(crate) description: String,
@@ -374,6 +390,10 @@ pub(crate) struct CliAgentMode {
 
 type SharedBroadcast<T> = Arc<RwLock<Option<broadcast::Sender<T>>>>;
 
+/// Local shared-runtime construction surface. The upstream app-server CLI
+/// refactor dropped the call sites of `new_shared` and friends; they are
+/// retained as the local shared-runtime capability surface.
+#[allow(dead_code)]
 impl CliAgentRuntimeClient {
     pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
         Self {
@@ -645,6 +665,7 @@ impl CliAgentRuntimeClient {
             workspace_path: workspace_path.to_string_lossy().to_string(),
             remote_connection_id: None,
             remote_ssh_host: None,
+            include_hidden: false,
         };
         match &self.backend {
             CliAgentRuntimeBackend::Embedded(runtime) => runtime
@@ -1336,6 +1357,7 @@ impl CliAgentRuntimeClient {
                 workspace_path: project_workspace.to_string_lossy().to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             })
             .await
         {
@@ -1447,6 +1469,10 @@ impl CliAgentRuntimeClient {
     }
 }
 
+/// Local shared-runtime client methods. The upstream app-server CLI refactor
+/// dropped the call sites of several of these; they are retained as the
+/// local shared-runtime capability surface until the local CLI wires them in.
+#[allow(dead_code)]
 impl CliAgentRuntimeClient {
     pub(crate) async fn ensure_session(&self, agent_type: &str) -> Result<String> {
         self.ensure_session_with_model(agent_type, None).await
@@ -1534,7 +1560,7 @@ impl CliAgentRuntimeClient {
                     } if accepted_session == session_id && accepted_turn == turn_id => {
                         Ok(accepted_turn)
                     }
-                    _ => return Err(unexpected_shared_result("compact_session")),
+                    _ => Err(unexpected_shared_result("compact_session")),
                 },
             }
         }
@@ -1722,6 +1748,7 @@ impl CliAgentRuntimeClient {
             turn_id: turn_id.clone(),
             content,
             display_content,
+            prepended_reminders: Vec::new(),
             // The CLI steer prompt is text; attachments ride turn submissions.
             attachments: Vec::new(),
             metadata: serde_json::Map::new(),
@@ -2037,6 +2064,7 @@ fn shared_receiver<T: Clone>(
         .ok_or_else(|| RuntimeError::Port(PortError::new(PortErrorKind::NotAvailable, message)))
 }
 
+#[allow(dead_code)]
 fn spawn_shared_event_bridge(
     mut source: broadcast::Receiver<RuntimeIpcClientEvent>,
     agent_sender: broadcast::Sender<AgenticEventEnvelope>,
@@ -2118,6 +2146,7 @@ fn spawn_shared_event_bridge(
     });
 }
 
+#[allow(dead_code)]
 fn shared_disconnect_message(reason: Option<RuntimeIpcStreamInvalidationReason>) -> String {
     if reason == Some(RuntimeIpcStreamInvalidationReason::FrameTooLarge) {
         format!(
@@ -2128,6 +2157,7 @@ fn shared_disconnect_message(reason: Option<RuntimeIpcStreamInvalidationReason>)
     }
 }
 
+#[allow(dead_code)]
 fn project_routed_permission_event(
     event: &mut bitfun_agent_runtime::sdk::PermissionRequestEvent,
     routed_session_id: &str,
@@ -2626,6 +2656,10 @@ mod tests {
             turn_count: 1,
             created_at_ms: 1,
             last_active_at_ms: 2,
+            is_daemon: false,
+            parent_session_id: None,
+            status: None,
+            display_state: None,
         }
     }
 
@@ -2825,6 +2859,10 @@ mod dual_backend_behavior_tests {
                 turn_count: 0,
                 created_at_ms: 1,
                 last_active_at_ms: 1,
+                is_daemon: false,
+                parent_session_id: None,
+                status: None,
+                display_state: None,
             }
         }
 

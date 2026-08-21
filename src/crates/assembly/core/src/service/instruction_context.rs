@@ -15,9 +15,15 @@ pub(crate) struct InstructionContextBuild {
 async fn load_user_instruction_files(workspace_root: &Path) -> (Vec<LocalInstructionFile>, bool) {
     #[cfg(feature = "external-sources")]
     {
+        // Runtime master switch (ai.external_instruction_sources): when off,
+        // external user instruction files (~/.claude/CLAUDE.md + rules/,
+        // OpenCode AGENTS.md, Codex AGENTS.md) are not read at all.
+        if !crate::service::config::external_instruction_sources_enabled() {
+            return (Vec::new(), true);
+        }
         let files =
             crate::instruction_sources::load_local_user_instruction_files(workspace_root).await;
-        return (files.files, files.cacheable);
+        (files.files, files.cacheable)
     }
     #[cfg(not(feature = "external-sources"))]
     {
@@ -29,7 +35,12 @@ async fn load_user_instruction_files(workspace_root: &Path) -> (Vec<LocalInstruc
 async fn load_user_conditional_instruction_files() -> Vec<LocalInstructionFile> {
     #[cfg(feature = "external-sources")]
     {
-        return crate::instruction_sources::load_local_user_conditional_instruction_sources().await;
+        // Same runtime gate as `load_user_instruction_files`: when the master
+        // switch is off, conditional user rules are not read either.
+        if !crate::service::config::external_instruction_sources_enabled() {
+            return Vec::new();
+        }
+        crate::instruction_sources::load_local_user_conditional_instruction_sources().await
     }
     #[cfg(not(feature = "external-sources"))]
     {
@@ -47,9 +58,23 @@ pub(crate) async fn build_workspace_instruction_files_context(
     )
 }
 
+/// Gate for the workspace instruction files master switch
+/// (`ai.workspace_instruction_files`). When off, no workspace instruction file
+/// content (project AGENTS.md / CLAUDE.md / opencode config references) is
+/// rendered into the User Context.
+fn workspace_instruction_files_enabled() -> bool {
+    crate::service::config::workspace_instruction_files_enabled()
+}
+
 pub(crate) async fn build_workspace_instruction_files_context_detailed(
     workspace_root: &Path,
 ) -> BitFunResult<InstructionContextBuild> {
+    if !workspace_instruction_files_enabled() {
+        return Ok(InstructionContextBuild {
+            content: None,
+            cacheable: true,
+        });
+    }
     let (user_instruction_files, user_instruction_files_cacheable) =
         load_user_instruction_files(workspace_root).await;
     let workspace_instruction_files =
@@ -71,6 +96,12 @@ pub(crate) async fn build_local_workspace_instruction_files_context_with_fs_deta
     fs: &dyn WorkspaceFileSystem,
     workspace_root_path: &str,
 ) -> BitFunResult<InstructionContextBuild> {
+    if !workspace_instruction_files_enabled() {
+        return Ok(InstructionContextBuild {
+            content: None,
+            cacheable: true,
+        });
+    }
     let (user_instruction_files, user_instruction_files_cacheable) =
         load_user_instruction_files(workspace_root).await;
     let workspace_instruction_files =
@@ -170,18 +201,21 @@ pub(crate) async fn load_workspace_conditional_instruction_files_with_fs(
     fs: &dyn WorkspaceFileSystem,
     workspace_root: &str,
 ) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
-    Ok(bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
-            fs,
-            workspace_root,
-        )
-        .await
-        .map_err(BitFunError::service)?)
+    bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
+        fs,
+        workspace_root,
+    )
+    .await
+    .map_err(BitFunError::service)
 }
 
 pub(crate) async fn build_workspace_instruction_files_context_with_fs(
     fs: &dyn WorkspaceFileSystem,
     workspace_root: &str,
 ) -> BitFunResult<Option<String>> {
+    if !workspace_instruction_files_enabled() {
+        return Ok(None);
+    }
     let instruction_files =
         bitfun_services_core::workspace_instructions::read_workspace_instruction_files_with_fs(
             fs,
@@ -249,14 +283,20 @@ mod tests {
     };
     use super::{render_workspace_instruction_files_section, WorkspaceInstructionFile};
     #[cfg(feature = "external-sources")]
-    use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
+    use crate::instruction_sources::test_support::{
+        lock_environment, EnvironmentGuard, InstructionSwitches,
+    };
     #[cfg(feature = "external-sources")]
     use bitfun_services_core::workspace::LocalWorkspaceFs;
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn local_user_instructions_precede_workspace_instructions_by_ecosystem_priority() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -298,8 +338,12 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn conditional_instructions_keep_user_then_workspace_precedence() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -344,8 +388,12 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn invalid_user_rule_does_not_hide_project_conditional_instructions() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -385,8 +433,12 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn opencode_global_config_resolves_relative_instructions_in_the_local_workspace() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -425,8 +477,12 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn invalid_user_source_does_not_hide_workspace_instructions() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -459,8 +515,12 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn a_user_configured_workspace_file_is_not_rendered_again_as_a_project_source() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -493,8 +553,12 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn port_backed_workspace_never_falls_back_to_local_user_sources() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -574,5 +638,165 @@ mod tests {
 
         assert_eq!(rendered.matches("<document name=").count(), 256);
         assert!(!rendered.contains("instruction 256"));
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
+    async fn disabled_external_instruction_sources_skip_all_external_user_files() {
+        let _environment = lock_environment();
+        // Workspace instructions on, external user sources off — exactly what
+        // this test asserts. The guard restores the previous values on drop.
+        let _switches = InstructionSwitches::set(Some(true), Some(false));
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(claude.join("rules")).expect("Claude rules directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "OpenCode user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(codex.join("AGENTS.md"), "Codex user\n").expect("Codex instructions");
+        std::fs::write(claude.join("CLAUDE.md"), "Claude user\n").expect("Claude instructions");
+        std::fs::write(
+            claude.join("rules/rust.md"),
+            "---\npaths:\n  - src/**/*.rs\n---\nUser rule\n",
+        )
+        .expect("user rule");
+        std::fs::write(workspace.join("AGENTS.md"), "Workspace project\n")
+            .expect("workspace instructions");
+        std::fs::create_dir_all(workspace.join(".claude/rules")).expect("workspace rules");
+        std::fs::write(
+            workspace.join(".claude/rules/project.md"),
+            "---\npaths:\n  - src/**/*.rs\n---\nProject rule\n",
+        )
+        .expect("project rule");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let build = build_workspace_instruction_files_context_detailed(&workspace)
+            .await
+            .expect("workspace instructions survive external switch off");
+        let rendered = build.content.expect("rendered instructions");
+        assert!(!rendered.contains("OpenCode user"));
+        assert!(!rendered.contains("Codex user"));
+        assert!(!rendered.contains("Claude user"));
+        assert!(!rendered.contains("User rule"));
+        assert!(rendered.contains("Workspace project"));
+
+        let files = load_local_conditional_instruction_files(&workspace)
+            .await
+            .expect("workspace conditional instructions survive external switch off");
+        assert_eq!(
+            files
+                .iter()
+                .map(|file| file.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![".claude/rules/project.md"]
+        );
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
+    async fn enabled_external_instruction_sources_still_load_user_files_by_default() {
+        let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "OpenCode user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(codex.join("AGENTS.md"), "Codex user\n").expect("Codex instructions");
+        std::fs::write(claude.join("CLAUDE.md"), "Claude user\n").expect("Claude instructions");
+        std::fs::write(workspace.join("AGENTS.md"), "Workspace project\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let rendered = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("instruction context")
+            .expect("rendered instructions");
+
+        assert!(rendered.contains("OpenCode user"));
+        assert!(rendered.contains("Codex user"));
+        assert!(rendered.contains("Claude user"));
+        assert!(rendered.contains("Workspace project"));
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
+    async fn stable_switch_state_keeps_rendered_context_byte_identical_across_builds() {
+        // Cache-prefix protection (DeepSeek prefix cache): with the same
+        // workspace, same switch state, and unchanged files, two builds must
+        // render byte-identical content in a stable order — a drift here would
+        // invalidate the provider-side prompt prefix cache.
+        let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "OpenCode user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(codex.join("AGENTS.md"), "Codex user\n").expect("Codex instructions");
+        std::fs::write(claude.join("CLAUDE.md"), "Claude user\n").expect("Claude instructions");
+        std::fs::write(workspace.join("AGENTS.md"), "Workspace project\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        // Same stable switch state for both builds (guard already enables both).
+        let first = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("first instruction context")
+            .expect("first rendered instructions");
+        let second = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("second instruction context")
+            .expect("second rendered instructions");
+
+        assert_eq!(
+            first, second,
+            "byte-identical prefix across repeated builds"
+        );
+
+        // Source order must stay stable: opencode → codex → claude → workspace.
+        let positions = [
+            first.find("OpenCode user").expect("OpenCode position"),
+            first.find("Codex user").expect("Codex position"),
+            first.find("Claude user").expect("Claude position"),
+            first.find("Workspace project").expect("workspace position"),
+        ];
+        assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }

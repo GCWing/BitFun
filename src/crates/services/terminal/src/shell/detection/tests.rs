@@ -178,8 +178,9 @@ fn windows_known_pwsh_locations_cover_user_package_and_both_program_files_views(
     assert_eq!(candidates[1].source, ShellDiscoverySource::UserInstall);
     assert_eq!(candidates[2].source, ShellDiscoverySource::PackageManager);
     assert_eq!(candidates[3].source, ShellDiscoverySource::SystemInstall);
-    assert!(candidates.iter().any(|candidate| candidate.path
-        == PathBuf::from(r"C:\Program Files (x86)\PowerShell\7\pwsh.exe")));
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.path == *r"C:\Program Files (x86)\PowerShell\7\pwsh.exe"));
 }
 
 #[cfg(windows)]

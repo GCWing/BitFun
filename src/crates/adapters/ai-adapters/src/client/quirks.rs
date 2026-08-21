@@ -6,6 +6,12 @@ pub(crate) fn is_siliconflow_url(url: &str) -> bool {
     url.contains("api.siliconflow.cn") || url.contains("api.siliconflow.com")
 }
 
+/// CodeBuddy's Tencent backend (`copilot.tencent.com`). Reasoning is toggled
+/// through the OpenAI-compatible `enable_thinking` body field.
+pub(crate) fn is_codebuddy_url(url: &str) -> bool {
+    url.contains("copilot.tencent.com")
+}
+
 pub(crate) fn is_deepseek_url(url: &str) -> bool {
     url.contains("api.deepseek.com")
 }
@@ -60,6 +66,18 @@ pub(crate) fn normalize_glm_52_reasoning_effort(effort: &str) -> Option<&'static
     }
 }
 
+/// Normalizes a reasoning effort string to the conservative CodeBuddy tier
+/// set (`high` / `max`), mirroring the `thinkingLevelMap` facts for the common
+/// CodeBuddy reasoning models (glm-5.2, deepseek-v4-*). Lower generic values
+/// collapse up to `high` because the Tencent gateway exposes only high/max.
+pub(crate) fn normalize_codebuddy_reasoning_effort(effort: &str) -> Option<&'static str> {
+    match effort.trim().to_ascii_lowercase().as_str() {
+        "high" | "low" | "medium" => Some("high"),
+        "max" | "xhigh" => Some("max"),
+        _ => None,
+    }
+}
+
 pub(crate) fn parse_glm_major_minor(model_name: &str) -> Option<(u32, u32)> {
     let lower = model_name.to_ascii_lowercase();
     let tail = lower.strip_prefix("glm-")?;
@@ -94,7 +112,7 @@ pub(crate) fn apply_openai_compatible_toggle(
     enabled: bool,
     url: &str,
 ) -> bool {
-    if is_dashscope_url(url) || is_siliconflow_url(url) {
+    if is_dashscope_url(url) || is_siliconflow_url(url) || is_codebuddy_url(url) {
         request_body["enable_thinking"] = serde_json::json!(enabled);
         return true;
     }

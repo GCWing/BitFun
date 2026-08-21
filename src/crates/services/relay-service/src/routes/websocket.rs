@@ -274,7 +274,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
         match msg_result {
             Ok(Message::Text(text)) => {
-                if !handle_text_message(
+                let keep_going = handle_text_message(
                     &text,
                     conn_id,
                     &state,
@@ -282,8 +282,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     &force_close_tx,
                     &mut token_expiry_task,
                 )
-                .await
-                {
+                .await;
+                if !keep_going {
                     break;
                 }
             }
@@ -858,6 +858,9 @@ async fn complete_pending_device_activation_if_authorized(
     Ok(true)
 }
 
+// Connection-lifecycle helper carrying the full device/auth context it
+// needs; kept flat for readability over parameter bundling.
+#[allow(clippy::too_many_arguments)]
 async fn activate_pending_device_if_authorized(
     db: &crate::db::DbPool,
     device_manager: &crate::relay::DeviceManager,

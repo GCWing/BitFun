@@ -262,4 +262,44 @@ mod tests {
         assert!(!state.is_loaded("WebFetch"));
         assert_eq!(state.into_loaded_specs(), vec![loaded_spec("Git")]);
     }
+
+    #[test]
+    fn product_loaded_spec_state_collection_upserts_same_tool_generation() {
+        // F2: a synthesized auto-reload result feeds the same collection
+        // channel as a model-initiated GetToolSpec result. The channel must
+        // upsert by tool name so a refreshed generation replaces the stale
+        // entry instead of accumulating duplicates.
+        let stale = Message::tool_result(ToolResult {
+            tool_id: "tool-1".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "tool_name": "WebFetch",
+                "catalog_generation": 41,
+            }),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+        let fresh = Message::tool_result(ToolResult {
+            tool_id: "tool-2".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "tool_name": "WebFetch",
+                "catalog_generation": 42,
+            }),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+
+        let loaded_specs =
+            collect_product_loaded_deferred_tool_specs(&[stale, fresh], &["WebFetch".to_string()]);
+
+        assert_eq!(loaded_specs, vec![loaded_spec("WebFetch")]);
+        assert_eq!(loaded_specs[0].catalog_generation, 42);
+    }
 }

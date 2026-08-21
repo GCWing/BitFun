@@ -215,6 +215,16 @@ pub struct ReviewReadCoverage {
     pub start_line: usize,
     pub end_line: usize,
     pub total_lines: usize,
+    /// Number of times this exact range has already been served (deduplicated).
+    /// Lets the Read tool break a review spin loop by force-serving content
+    /// after the same range is requested repeatedly (RECON-防呆机制-20260807).
+    pub repeat_served_count: usize,
+    /// Number of times this file has already been served as covered (any
+    /// covered range, including range-shifting variants). Lets the Read tool
+    /// break spin loops where the model keeps shifting the requested window
+    /// (same start, varying end) so exact-range counting never accumulates
+    /// (RECON-机制未拦空转-20260808).
+    pub file_served_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +232,15 @@ struct ReviewReadReceipt {
     revision: FileRevision,
     ranges: Vec<(usize, usize)>,
     total_lines: usize,
+    /// Per covered range: how many times a Read asked for a range already
+    /// fully covered by the receipt. Grows when the caller keeps requesting
+    /// the same covered range instead of advancing.
+    repeat_served: Vec<(usize, usize, usize)>,
+    /// File-level count of already-served (covered) hits regardless of the
+    /// requested window. Cleared together with `repeat_served` on revision
+    /// change. Covers range-shifting spin loops that exact-range counting
+    /// cannot see.
+    file_served: usize,
 }
 
 #[derive(Default)]
@@ -292,10 +311,14 @@ impl FileReadStateStore {
                 revision,
                 ranges: Vec::new(),
                 total_lines,
+                repeat_served: Vec::new(),
+                file_served: 0,
             });
         if receipt.revision != revision {
             receipt.revision = revision;
             receipt.ranges.clear();
+            receipt.repeat_served.clear();
+            receipt.file_served = 0;
         }
         receipt.total_lines = total_lines;
         receipt.ranges.push((start_line, end_line));
@@ -312,6 +335,19 @@ impl FileReadStateStore {
             merged.push((start, end));
         }
         receipt.ranges = merged;
+        // Drop repeat counters for ranges that are no longer disjoint after merge;
+        // surviving merged ranges keep their existing counters.
+        receipt.repeat_served = receipt
+            .repeat_served
+            .iter()
+            .filter(|(start, end, _)| {
+                receipt
+                    .ranges
+                    .iter()
+                    .any(|(merged_start, merged_end)| start == merged_start && end == merged_end)
+            })
+            .cloned()
+            .collect();
     }
 
     pub fn review_read_coverage(
@@ -333,17 +369,66 @@ impl FileReadStateStore {
         let end_line = start_line
             .saturating_add(limit.saturating_sub(1))
             .min(receipt.total_lines);
-        receipt
-            .ranges
-            .iter()
-            .any(|(covered_start, covered_end)| {
-                *covered_start <= start_line && *covered_end >= end_line
-            })
-            .then_some(ReviewReadCoverage {
-                start_line,
-                end_line,
-                total_lines: receipt.total_lines,
-            })
+        let covered = receipt.ranges.iter().any(|(covered_start, covered_end)| {
+            *covered_start <= start_line && *covered_end >= end_line
+        });
+        if !covered {
+            return None;
+        }
+        let total_lines = receipt.total_lines;
+        drop(receipt);
+        drop(session_receipts);
+
+        let mut repeat_served_count = 0usize;
+        let mut file_served_count = 0usize;
+        if let Some(session_receipts) = self.review_read_receipts.get_mut(session_id) {
+            if let Some(mut receipt) = session_receipts.get_mut(logical_path) {
+                if let Some((_, _, count)) = receipt
+                    .repeat_served
+                    .iter_mut()
+                    .find(|(start, end, _)| *start == start_line && *end == end_line)
+                {
+                    *count += 1;
+                    repeat_served_count = *count;
+                } else {
+                    receipt.repeat_served.push((start_line, end_line, 1));
+                    repeat_served_count = 1;
+                }
+                // 文件级计数：covered == true 即累加（不限范围）——覆盖
+                // 变范围规避（同 start 变 end / 同段变窗口）的空转形态。
+                receipt.file_served = receipt.file_served.saturating_add(1);
+                file_served_count = receipt.file_served;
+            }
+        }
+
+        Some(ReviewReadCoverage {
+            start_line,
+            end_line,
+            total_lines,
+            repeat_served_count,
+            file_served_count,
+        })
+    }
+
+    /// Reset the review-spin counters (`repeat_served` / `file_served`) for a
+    /// file after a force-serve.
+    ///
+    /// d5-P1-2: the Read tool force-serves real content once the counters
+    /// reach `REPEAT_READ_FORCE_SERVE_THRESHOLD`. After that real read the
+    /// counters must be cleared so the receipt keeps earning its token-saving
+    /// benefit on later ranges of the same revision ("放行一次即清零"), instead
+    /// of permanently force-serving every subsequent request until the file
+    /// revision changes. The ranges (what has actually been read) are kept.
+    pub fn reset_review_read_spin_counters(&self, session_id: &str, logical_path: &str) -> bool {
+        let Some(session_receipts) = self.review_read_receipts.get(session_id) else {
+            return false;
+        };
+        let Some(mut receipt) = session_receipts.get_mut(logical_path) else {
+            return false;
+        };
+        receipt.repeat_served.clear();
+        receipt.file_served = 0;
+        true
     }
 }
 
@@ -439,11 +524,155 @@ mod tests {
                 start_line: 1403,
                 end_line: 1429,
                 total_lines: 3000,
+                repeat_served_count: 1,
+                file_served_count: 1,
             })
         );
         assert!(store
             .review_read_coverage("review-session", "src/large.rs", revision, 2001, 20,)
             .is_none());
+    }
+
+    #[test]
+    fn review_read_receipt_counts_repeat_serves_for_spin_breaking() {
+        let store = FileReadStateStore::new();
+        let revision = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [1; 32],
+        };
+        store.record_review_read("review-session", "src/large.rs", revision, 1, 2000, 3000);
+
+        let first = store
+            .review_read_coverage("review-session", "src/large.rs", revision, 1403, 27)
+            .expect("first coverage");
+        assert_eq!(first.repeat_served_count, 1);
+        let second = store
+            .review_read_coverage("review-session", "src/large.rs", revision, 1403, 27)
+            .expect("second coverage");
+        assert_eq!(second.repeat_served_count, 2);
+        let third = store
+            .review_read_coverage("review-session", "src/large.rs", revision, 1403, 27)
+            .expect("third coverage");
+        assert_eq!(third.repeat_served_count, 3);
+        // A different range stays independent.
+        assert!(store
+            .review_read_coverage("review-session", "src/large.rs", revision, 2001, 20,)
+            .is_none());
+    }
+
+    #[test]
+    fn review_read_receipt_counts_file_level_for_range_shifting_spin() {
+        // RECON-机制未拦空转-20260808：变范围系列（同 start 变 end）规避精确
+        // 匹配计数（repeat_served 恒 1），文件级计数 file_served 兜底累加。
+        let store = FileReadStateStore::new();
+        let revision = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [1; 32],
+        };
+        store.record_review_read("review-session", "src/large.rs", revision, 1, 2000, 3000);
+
+        // 变范围系列：(296,365) → (296,335) → (296,305) → (296,340)
+        let cases: [(usize, usize); 4] = [(296, 365), (296, 335), (296, 305), (296, 340)];
+        for (index, (start, limit)) in cases.iter().enumerate() {
+            let expected_file = index + 1;
+            let coverage = store
+                .review_read_coverage(
+                    "review-session",
+                    "src/large.rs",
+                    revision,
+                    *start,
+                    limit - start + 1,
+                )
+                .expect("covered range");
+            // 精确计数：新范围恒 1（变范围规避仍在）。
+            assert_eq!(
+                coverage.repeat_served_count, 1,
+                "range {}-{} must not accumulate exact-range count",
+                start, limit
+            );
+            // 文件级计数：每次 covered 都累加。
+            assert_eq!(
+                coverage.file_served_count, expected_file,
+                "file-level count must accumulate across range shifts (hit {expected_file})"
+            );
+        }
+    }
+
+    #[test]
+    fn review_read_receipt_file_level_count_resets_on_revision_change() {
+        // 文件级计数随 revision 变更清零（与 repeat_served 同生命周期）。
+        let store = FileReadStateStore::new();
+        let original = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [1; 32],
+        };
+        store.record_review_read("review-session", "src/lib.rs", original, 1, 100, 300);
+        store.review_read_coverage("review-session", "src/lib.rs", original, 50, 51);
+        store.review_read_coverage("review-session", "src/lib.rs", original, 55, 46);
+
+        let changed = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [2; 32],
+        };
+        store.record_review_read("review-session", "src/lib.rs", changed, 1, 200, 300);
+        let first = store
+            .review_read_coverage("review-session", "src/lib.rs", changed, 50, 51)
+            .expect("post-revision coverage");
+        assert_eq!(
+            first.file_served_count, 1,
+            "file-level count must reset after revision change"
+        );
+        assert_eq!(first.repeat_served_count, 1);
+    }
+
+    #[test]
+    fn review_read_receipt_reset_clears_spin_counters_after_force_serve() {
+        // d5-P1-2: 强制放行（真实读取）后清零计数——同一修订下后续覆盖请求
+        // 重新从 1 计数，已读回执恢复省 token 能力，而不是永久强制真读。
+        let store = FileReadStateStore::new();
+        let revision = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [1; 32],
+        };
+        store.record_review_read("review-session", "src/large.rs", revision, 1, 2000, 3000);
+
+        // 累计到 3 次（触发强制放行的阈值）。
+        for _ in 0..3 {
+            store.review_read_coverage("review-session", "src/large.rs", revision, 1403, 27);
+        }
+        let before = store
+            .review_read_coverage("review-session", "src/large.rs", revision, 1403, 27)
+            .expect("coverage before reset");
+        assert_eq!(before.file_served_count, 4);
+        assert_eq!(before.repeat_served_count, 4);
+
+        // 强制放行后清零。
+        assert!(store.reset_review_read_spin_counters("review-session", "src/large.rs"));
+        let after = store
+            .review_read_coverage("review-session", "src/large.rs", revision, 1403, 27)
+            .expect("coverage after reset");
+        assert_eq!(
+            after.file_served_count, 1,
+            "file counter resets after force-serve"
+        );
+        assert_eq!(
+            after.repeat_served_count, 1,
+            "repeat counter resets after force-serve"
+        );
+
+        // 已读 ranges 保留：同范围仍被识别为 covered。
+        let another = store
+            .review_read_coverage("review-session", "src/large.rs", revision, 500, 20)
+            .expect("other covered range still served after reset");
+        assert_eq!(another.file_served_count, 2);
+
+        // 不存在的路径返回 false。
+        assert!(!store.reset_review_read_spin_counters("review-session", "src/other.rs"));
     }
 
     #[test]

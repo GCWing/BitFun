@@ -76,6 +76,7 @@ impl AgentSelectorState {
         );
     }
 
+    #[cfg(test)]
     pub(super) fn show_modes_only(
         &mut self,
         agents: Vec<AgentItem>,

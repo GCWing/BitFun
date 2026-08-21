@@ -618,6 +618,10 @@ fn summary(session_id: &str) -> AgentSessionSummary {
         turn_count: 0,
         created_at_ms: 1,
         last_active_at_ms: 1,
+        parent_session_id: None,
+        status: None,
+        display_state: None,
+        is_daemon: false,
     }
 }
 
@@ -710,6 +714,7 @@ fn steer_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
             turn_id: turn_id.to_string(),
             content: "check tests".to_string(),
             display_content: None,
+            prepended_reminders: Vec::new(),
             attachments: Vec::new(),
             metadata: serde_json::Map::new(),
         },
@@ -1474,16 +1479,17 @@ async fn rename_requires_the_controlled_idle_session() {
     )
     .await;
 
-    let calls = handler.calls.lock().expect("calls");
-    assert_eq!(
-        calls
-            .iter()
-            .filter(|operation| matches!(operation, RuntimeIpcOperation::RenameSession { .. }))
-            .count(),
-        1,
-        "only the controlled idle-session rename reaches the Runtime handler"
-    );
-    drop(calls);
+    {
+        let calls = handler.calls.lock().expect("calls");
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|operation| matches!(operation, RuntimeIpcOperation::RenameSession { .. }))
+                .count(),
+            1,
+            "only the controlled idle-session rename reaches the Runtime handler"
+        );
+    }
     drop(client);
     server.finish().await;
 }
@@ -1514,11 +1520,12 @@ async fn undo_can_cancel_the_controlled_active_turn_and_clears_its_projection() 
     .await;
     expect_response(&mut client, 5, rename_operation("session-a", "After undo")).await;
 
-    let calls = handler.calls.lock().expect("calls");
-    assert!(calls
-        .iter()
-        .any(|operation| matches!(operation, RuntimeIpcOperation::UndoSession { .. })));
-    drop(calls);
+    {
+        let calls = handler.calls.lock().expect("calls");
+        assert!(calls
+            .iter()
+            .any(|operation| matches!(operation, RuntimeIpcOperation::UndoSession { .. })));
+    }
     drop(client);
     server.finish().await;
 }

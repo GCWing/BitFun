@@ -327,10 +327,13 @@ fn export_dialog_writes_markdown_under_the_local_cli_directory() {
     let mut process = PtyProcess::spawn(environment.pty_command(), INITIAL_SIZE);
 
     process.expect_output("\x1b[?2004h", Duration::from_secs(30), "TUI did not start");
+    // The written prompt is buffered by the PTY while core services initialize, so a
+    // slow (but finite) startup must not be mistaken for a missed prompt. Keep the
+    // full 30s window like the other terminal contract tests (E-5b).
     process.write(b"export transcript contract");
     process.expect_output(
         "script contract",
-        Duration::from_secs(15),
+        Duration::from_secs(30),
         "startup prompt was not rendered",
     );
     process.write(b"\r");

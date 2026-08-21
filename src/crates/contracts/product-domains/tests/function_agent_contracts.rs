@@ -98,6 +98,8 @@ fn noop_waker() -> Waker {
     unsafe fn wake_by_ref(_: *const ()) {}
     unsafe fn drop(_: *const ()) {}
     static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
+    // SAFETY: The VTABLE's vtable functions never dereference the null data
+    // pointer, and the waker is only used to poll futures that never wake.
     unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
 }
 

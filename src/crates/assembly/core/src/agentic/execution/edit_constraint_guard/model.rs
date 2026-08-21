@@ -120,6 +120,10 @@ pub enum ExtractionStatus {
     Extracted,
     NoConstraints,
     Failed,
+    /// The message defines a fresh task scope (e.g. "only modify X"). Merging
+    /// such a record replaces previously accumulated constraints instead of
+    /// accumulating on top of them.
+    ScopeReplaced,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -241,12 +245,18 @@ impl EditConstraintState {
 
     pub fn merge_extraction(&mut self, extraction: ConstraintExtractionRecord) {
         self.schema_version = EDIT_CONSTRAINT_SCHEMA_VERSION;
-        self.constraints.retain(|constraint| {
-            !extraction
-                .revoked_constraint_ids
-                .iter()
-                .any(|constraint_id| constraint_id == &constraint.id)
-        });
+        if extraction.status == ExtractionStatus::ScopeReplaced {
+            // A fresh task scope supersedes every previously accumulated
+            // constraint. Only the new message's own constraints survive.
+            self.constraints.clear();
+        } else {
+            self.constraints.retain(|constraint| {
+                !extraction
+                    .revoked_constraint_ids
+                    .iter()
+                    .any(|constraint_id| constraint_id == &constraint.id)
+            });
+        }
         for constraint in &extraction.constraints {
             if !self.constraints.iter().any(|existing| {
                 existing.matcher == constraint.matcher

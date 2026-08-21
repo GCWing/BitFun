@@ -19,10 +19,9 @@ use crate::service::config::mode_config_canonicalizer::persist_agent_profile_fro
 use crate::service::config::types::AgentSubagentOverrideState;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::custom_agent::{
-    custom_agent_review_writable_tools, default_custom_agent_tools, load_custom_agent_definitions,
-    validate_custom_agent_definition, CustomAgentDefinition, CustomAgentDiscoveryRoots,
-    CustomAgentFrontMatterMetadata, CustomAgentKind, CustomAgentLevel,
-    CustomAgentValidationContext, CustomAgentValidationReport,
+    default_custom_agent_tools, load_custom_agent_definitions, validate_custom_agent_definition,
+    CustomAgentDefinition, CustomAgentDiscoveryRoots, CustomAgentFrontMatterMetadata,
+    CustomAgentKind, CustomAgentLevel, CustomAgentValidationContext, CustomAgentValidationReport,
 };
 use log::{debug, error, warn};
 use std::collections::HashMap;
@@ -232,7 +231,7 @@ impl AgentRegistry {
 
         if !report.writable_review_tools.is_empty() {
             warn!(
-                "[Custom subagent {}] Writable tools filtered out from review subagent: {:?}",
+                "[Custom subagent {}] Writable tools filtered out from readonly subagent: {:?}",
                 agent_id, report.writable_review_tools
             );
         }
@@ -243,24 +242,6 @@ impl AgentRegistry {
                 agent_id, model_fallback.original, model_fallback.fallback
             );
         }
-    }
-
-    fn ensure_review_tools_are_readonly(
-        agent_id: &str,
-        tools: &[String],
-        readonly_tools: &[String],
-    ) -> BitFunResult<()> {
-        let writable_tools = custom_agent_review_writable_tools(tools, readonly_tools);
-
-        if writable_tools.is_empty() {
-            return Ok(());
-        }
-
-        Err(BitFunError::agent(format!(
-            "Review Sub-Agent '{}' can only use read-only tools; remove writable tools: {}",
-            agent_id,
-            writable_tools.join(", ")
-        )))
     }
 
     /// Clear workspace-scoped project custom agents. User custom agents remain loaded globally.
@@ -633,6 +614,10 @@ impl AgentRegistry {
             definition.tools = tools
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| default_custom_agent_tools(CustomAgentKind::Mode));
+            // Negative boundary (M5): Mode updates never accept a review flag.
+            // The API layer (custom_agent_api.rs create/update) rejects
+            // `review: true` for modes before reaching the registry, so this
+            // branch intentionally has no review handling.
             definition.readonly = readonly.unwrap_or(old.data.readonly);
             definition.user_context_policy =
                 user_context_policy.unwrap_or_else(|| old.data.user_context_policy.clone());
@@ -659,9 +644,6 @@ impl AgentRegistry {
             let tools = tools
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| default_custom_agent_tools(CustomAgentKind::Subagent));
-            if review {
-                Self::ensure_review_tools_are_readonly(agent_id, &tools, &readonly_tools)?;
-            }
             let mut definition = old
                 .data
                 .to_definition(Some(definition_model), Some(definition_model_is_explicit));
@@ -669,11 +651,9 @@ impl AgentRegistry {
             definition.description = description;
             definition.prompt = prompt;
             definition.tools = tools;
-            definition.readonly = if review {
-                true
-            } else {
-                readonly.unwrap_or(old.data.readonly)
-            };
+            // readonly is decided solely by the explicit field (falling back
+            // to the current value); review is a semantic marker only.
+            definition.readonly = readonly.unwrap_or(old.data.readonly);
             definition.review = review;
             definition.user_context_policy =
                 user_context_policy.unwrap_or_else(|| old.data.user_context_policy.clone());
@@ -694,6 +674,7 @@ impl AgentRegistry {
         self.replace_custom_agent_entry(agent_id, workspace_root, replacement)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_custom_subagent_definition(
         &self,
         agent_id: &str,

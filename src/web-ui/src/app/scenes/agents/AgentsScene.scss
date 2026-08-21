@@ -39,6 +39,13 @@
     white-space: nowrap;
   }
 
+  .gallery-action-sep {
+    flex-shrink: 0;
+    width: 1px;
+    height: 14px;
+    background: var(--bf-appearance-token-border-subtle);
+  }
+
   &__subagent-model-select {
     width: min(280px, 100%);
     max-width: 100%;

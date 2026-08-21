@@ -2,7 +2,7 @@ use bitfun_agent_runtime::scheduler::{
     build_thread_goal_objective_updated_delivery_plan, build_thread_goal_resumed_delivery_plan,
     resolve_agent_session_reply_action, resolve_background_delivery_action,
     resolve_background_delivery_injection, resolve_background_delivery_injection_for_turn,
-    resolve_dialog_start_route, resolve_dialog_steering_action, ActiveDialogTurn,
+    resolve_dialog_start_route, resolve_dialog_steering_action, utc_iso8601_now, ActiveDialogTurn,
     ActiveDialogTurnStore, AgentSessionReplyAction, BackgroundDeliveryAction,
     BackgroundDeliveryFacts, BackgroundInjectionKind, DialogReplySuppressionSet,
     DialogRoundInjectionInterrupt, DialogStartRoute, DialogStartRouteFacts, DialogSteeringAction,
@@ -150,6 +150,7 @@ fn thread_goal() -> ThreadGoal {
         created_at: 1,
         updated_at: 2,
         auto_continuation_count: 2,
+        reference_files: Vec::new(),
     }
 }
 
@@ -446,7 +447,15 @@ fn agent_session_reply_action_forwards_completed_outcome_with_legacy_reminder_te
         final_response: "done".to_string(),
     };
 
-    let action = resolve_agent_session_reply_action("target-session", &turn, &outcome, false);
+    let action = resolve_agent_session_reply_action(
+        "target-session",
+        None,
+        None,
+        &turn,
+        &outcome,
+        false,
+        false,
+    );
 
     let AgentSessionReplyAction::Forward(plan) = action else {
         panic!("agent-session completion should forward a reply");
@@ -456,17 +465,26 @@ fn agent_session_reply_action_forwards_completed_outcome_with_legacy_reminder_te
     assert_eq!(plan.target_remote_connection_id.as_deref(), Some("conn-1"));
     assert_eq!(plan.target_remote_ssh_host.as_deref(), Some("host-1"));
     assert_eq!(plan.user_input, "done");
+    let Some(serde_json::Value::Object(metadata)) = plan.user_message_metadata else {
+        panic!("reply should carry user message metadata");
+    };
+    assert_eq!(metadata["kind"], serde_json::json!("session_message"));
     assert_eq!(
-        plan.user_message_metadata,
-        Some(serde_json::json!({"kind": "session_message"}))
+        metadata["senderSessionId"],
+        serde_json::json!("target-session")
     );
-    assert_eq!(
-        plan.reminder_text,
+    let metadata_server_time = metadata["serverTime"]
+        .as_str()
+        .expect("reply metadata should carry a serverTime string");
+    assert_utc_iso8601(metadata_server_time);
+    assert!(plan.reminder_text.starts_with(
         "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
 From session: target-session\n\
 From workspace: workspace\n\
-Status: completed"
-    );
+Status: completed\n\
+Server time: "
+    ));
+    assert_reminder_server_time_matches_metadata(&plan.reminder_text, metadata_server_time);
 }
 
 #[test]
@@ -476,7 +494,15 @@ fn agent_session_reply_action_suppresses_cancelled_auto_reply_when_requested() {
         turn_id: "turn-1".to_string(),
     };
 
-    let action = resolve_agent_session_reply_action("target-session", &turn, &outcome, true);
+    let action = resolve_agent_session_reply_action(
+        "target-session",
+        None,
+        None,
+        &turn,
+        &outcome,
+        true,
+        false,
+    );
 
     assert_eq!(
         action,
@@ -502,9 +528,118 @@ fn agent_session_reply_action_ignores_non_agent_session_turns() {
         final_response: "done".to_string(),
     };
 
-    let action = resolve_agent_session_reply_action("target-session", &turn, &outcome, false);
+    let action = resolve_agent_session_reply_action(
+        "target-session",
+        None,
+        None,
+        &turn,
+        &outcome,
+        false,
+        false,
+    );
 
     assert_eq!(action, AgentSessionReplyAction::NoReply);
+}
+
+#[test]
+fn agent_session_reply_action_includes_responder_identity() {
+    let turn = agent_session_turn("source-session");
+    let outcome = TurnOutcome::Completed {
+        turn_id: "turn-1".to_string(),
+        final_response: "done".to_string(),
+    };
+
+    let action = resolve_agent_session_reply_action(
+        "target-session",
+        Some("Commander"),
+        Some(0),
+        &turn,
+        &outcome,
+        false,
+        false,
+    );
+
+    let AgentSessionReplyAction::Forward(plan) = action else {
+        panic!("agent-session completion should forward a reply");
+    };
+    assert!(plan.reminder_text.contains("From role: Commander"));
+    assert!(plan.reminder_text.contains("From depth: 0"));
+    assert!(plan.reminder_text.contains("Server time: "));
+    let Some(serde_json::Value::Object(metadata)) = plan.user_message_metadata else {
+        panic!("reply should carry user message metadata");
+    };
+    assert_eq!(metadata["kind"], serde_json::json!("session_message"));
+    assert_eq!(
+        metadata["senderSessionId"],
+        serde_json::json!("target-session")
+    );
+    assert_eq!(metadata["senderRole"], serde_json::json!("Commander"));
+    assert_eq!(metadata["senderDepth"], serde_json::json!(0));
+    let metadata_server_time = metadata["serverTime"]
+        .as_str()
+        .expect("reply metadata should carry a serverTime string");
+    assert_utc_iso8601(metadata_server_time);
+    assert_reminder_server_time_matches_metadata(&plan.reminder_text, metadata_server_time);
+}
+
+#[test]
+fn agent_session_reply_action_rewrites_stale_sender_metadata() {
+    // Simulate a forwarded request whose metadata carries the original
+    // sender badge (e.g. commander -> executor). The reply must not echo
+    // the original sender identity back to the requester.
+    let mut metadata = serde_json::json!({
+        "kind": "session_message",
+        "senderSessionId": "commander-session",
+        "senderRole": "Commander",
+        "senderDepth": 0,
+        "senderName": "Assistant"
+    });
+    metadata["kind"] = serde_json::json!("session_message");
+    let active_turn = ActiveDialogTurn::new(
+        "turn-1".to_string(),
+        Some("workspace".to_string()),
+        Some("target-conn".to_string()),
+        Some("target-host".to_string()),
+        "agentic".to_string(),
+        "run task".to_string(),
+        Some(metadata),
+        DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+        Some(AgentSessionReplyRoute {
+            source_session_id: "source-session".to_string(),
+            source_workspace_path: "workspace".to_string(),
+            source_remote_connection_id: Some("conn-1".to_string()),
+            source_remote_ssh_host: Some("host-1".to_string()),
+        }),
+    );
+    let outcome = TurnOutcome::Completed {
+        turn_id: "turn-1".to_string(),
+        final_response: "done".to_string(),
+    };
+
+    let action = resolve_agent_session_reply_action(
+        "executor-session",
+        Some("Executor"),
+        Some(1),
+        &active_turn,
+        &outcome,
+        false,
+        false,
+    );
+
+    let AgentSessionReplyAction::Forward(plan) = action else {
+        panic!("agent-session completion should forward a reply");
+    };
+    let metadata = plan.user_message_metadata.unwrap();
+    assert_eq!(metadata["senderSessionId"], "executor-session");
+    assert_eq!(metadata["senderRole"], "Executor");
+    assert_eq!(metadata["senderDepth"], 1);
+    assert!(!metadata.as_object().unwrap().contains_key("senderName"));
+    assert_eq!(metadata["kind"], "session_message");
+    let metadata_server_time = metadata["serverTime"]
+        .as_str()
+        .expect("rewritten reply metadata should carry a serverTime string");
+    assert_utc_iso8601(metadata_server_time);
+    assert_reminder_server_time_matches_metadata(&plan.reminder_text, metadata_server_time);
 }
 
 #[test]
@@ -528,6 +663,7 @@ fn dialog_steering_action_buffers_exact_running_turn_with_display_fallback() {
         )]),
         "steer-id".to_string(),
         created_at,
+        Vec::new(),
     );
 
     let DialogSteeringAction::Buffer { injection, outcome } = action else {
@@ -576,6 +712,7 @@ fn dialog_steering_action_rejects_when_target_turn_is_not_running() {
         serde_json::Map::new(),
         "steer-id".to_string(),
         SystemTime::UNIX_EPOCH,
+        Vec::new(),
     );
 
     assert_eq!(
@@ -681,6 +818,7 @@ fn exact_turn_msg(turn_id: &str, content: &str) -> RoundInjection {
         attachments: Vec::new(),
         metadata: serde_json::Map::new(),
         created_at: SystemTime::now(),
+        prepended_reminders: Vec::new(),
     }
 }
 
@@ -695,6 +833,7 @@ fn current_turn_msg(content: &str) -> RoundInjection {
         attachments: Vec::new(),
         metadata: serde_json::Map::new(),
         created_at: SystemTime::now(),
+        prepended_reminders: Vec::new(),
     }
 }
 
@@ -715,4 +854,51 @@ fn agent_session_turn(source_session_id: &str) -> ActiveDialogTurn {
             source_remote_ssh_host: Some("host-1".to_string()),
         }),
     )
+}
+
+/// Validates the `2026-08-05T03:14:15Z` shape produced by
+/// `utc_iso8601_now` (ISO-8601 UTC, second precision, `Z` suffix).
+fn assert_utc_iso8601(value: &str) {
+    let bytes = value.as_bytes();
+    assert_eq!(
+        bytes.len(),
+        20,
+        "ISO-8601 second precision length, got: {value}"
+    );
+    assert_eq!(&bytes[4..5], b"-", "year-month separator, got: {value}");
+    assert_eq!(&bytes[7..8], b"-", "month-day separator, got: {value}");
+    assert_eq!(&bytes[10..11], b"T", "date-time separator, got: {value}");
+    assert_eq!(&bytes[13..14], b":", "hour-minute separator, got: {value}");
+    assert_eq!(
+        &bytes[16..17],
+        b":",
+        "minute-second separator, got: {value}"
+    );
+    assert_eq!(bytes[19], b'Z', "UTC suffix, got: {value}");
+    for [start, end] in [[0, 4], [5, 7], [8, 10], [11, 13], [14, 16], [17, 19]] {
+        assert!(
+            bytes[start..end].iter().all(u8::is_ascii_digit),
+            "digits expected in {start}..{end}, got: {value}"
+        );
+    }
+}
+
+#[test]
+fn utc_iso8601_now_returns_iso8601_utc_shape() {
+    assert_utc_iso8601(&utc_iso8601_now());
+}
+
+/// Asserts the `Server time:` line in `reminder_text` equals the
+/// `serverTime` metadata value, so audit logs and metadata stay aligned.
+fn assert_reminder_server_time_matches_metadata(reminder_text: &str, metadata_server_time: &str) {
+    let server_time_line = reminder_text
+        .lines()
+        .find(|line| line.starts_with("Server time: "))
+        .unwrap_or_else(|| {
+            panic!("reminder text should carry a Server time line: {reminder_text}")
+        });
+    assert_eq!(
+        &server_time_line["Server time: ".len()..],
+        metadata_server_time
+    );
 }

@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-core"
 version.workspace = true
 authors.workspace = true
@@ -204,6 +205,9 @@ agent-runtime = [
     "dep:bitfun-agent-stream",
     "dep:bitfun-agent-tools",
     "bitfun-agent-tools/computer-use-contract",
+    # Local fork: acp_agent.rs (definitions/subagents) needs the ACP tool
+    # bridge names, which upstream gates behind `acp-bridge`.
+    "bitfun-agent-tools/acp-bridge",
     "bitfun-runtime-ports/agent-api",
     "bitfun-runtime-ports/git-port",
     "bitfun-runtime-ports/remote-exec-port",

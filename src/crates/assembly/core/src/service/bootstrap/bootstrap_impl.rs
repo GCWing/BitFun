@@ -141,6 +141,88 @@ pub(crate) async fn initialize_workspace_persona_files(workspace_root: &Path) ->
     Ok(())
 }
 
+/// R-WF-07：为成员 Claw 物化三身份文件（SOUL/USER/IDENTITY，无 BOOTSTRAP）。
+///
+/// 成员身份由工作流节点直接实例化（node.role → IDENTITY、node.prompt/gate →
+/// SOUL、直属上级 → USER），不走引导对话：
+/// - 不创建 `BOOTSTRAP.md`（引导临时文件，bootstrap 完成即删——成员身份
+///   在建群时已物化，无需引导阶段）；
+/// - 已存在 `BOOTSTRAP.md`（例如残留/中途失败的引导）→ 直接删除；
+/// - 已有同名身份文件绝不覆盖（`ensure_markdown_placeholder` 语义），
+///   保证重复建群/幂等物化不丢已确立身份。
+pub(crate) async fn initialize_member_persona_files(
+    workspace_root: &Path,
+    role: &str,
+    prompt: &str,
+    gate: bool,
+    superior: &str,
+) -> BitFunResult<()> {
+    ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root).await;
+
+    let role = role.trim();
+    let prompt = prompt.trim();
+    let superior = superior.trim();
+    let gate_text = if gate { "true" } else { "false" };
+
+    let identity_content = if role.is_empty() {
+        IDENTITY_TEMPLATE.to_string()
+    } else {
+        format!(
+            "---\nname: {role}\ncreature: legion member\nvibe: focused\nemoji: \n---\n\n# IDENTITY.md - Who Am I?\n\n## Role\n\nI am the `{role}` member of this team.\n"
+        )
+    };
+    let soul_content = if prompt.is_empty() {
+        SOUL_TEMPLATE.to_string()
+    } else {
+        format!(
+            "# SOUL.md - Who You Are\n\n## Mission\n\n{prompt}\n\n## Gate\n\nThis member is gated (gate={gate_text}) and must respect the group workflow gate before acting.\n\n## Core Truths\n\n- Execute your assigned role precisely.\n- Follow your direct superior's direction.\n- Report results honestly and completely.\n"
+        )
+    };
+    let user_content = format!(
+        "# USER.md - About Your Human\n\nYour direct superior in the group is `{superior}`.\n\n## Context\n\nYou are a member of a group workflow. Follow the direct superior above and collaborate with your peers.\n"
+    );
+
+    let identity_created =
+        ensure_markdown_placeholder(&workspace_root.join(IDENTITY_FILE_NAME), &identity_content)
+            .await?;
+    let soul_created =
+        ensure_markdown_placeholder(&workspace_root.join(SOUL_FILE_NAME), &soul_content).await?;
+    let user_created =
+        ensure_markdown_placeholder(&workspace_root.join(USER_FILE_NAME), &user_content).await?;
+
+    // BOOTSTRAP.md = 引导临时文件：成员身份已直接物化，bootstrap 完成即删。
+    // 存在残留（中途失败的引导/旧引导）→ 删除；正常物化本就不创建。
+    let bootstrap_path = workspace_root.join(BOOTSTRAP_FILE_NAME);
+    let bootstrap_removed = if bootstrap_path.exists() {
+        match fs::remove_file(&bootstrap_path).await {
+            Ok(()) => true,
+            Err(e) => {
+                return Err(BitFunError::service(format!(
+                    "Failed to remove stale BOOTSTRAP.md at {}: {}",
+                    bootstrap_path.display(),
+                    e
+                )));
+            }
+        }
+    } else {
+        false
+    };
+
+    debug!(
+        "Initialized member persona files: path={}, role={}, gate={}, superior={}, identity_created={}, soul_created={}, user_created={}, bootstrap_removed={}",
+        workspace_root.display(),
+        role,
+        gate_text,
+        superior,
+        identity_created,
+        soul_created,
+        user_created,
+        bootstrap_removed
+    );
+
+    Ok(())
+}
+
 #[cfg(feature = "agent-runtime")]
 pub(crate) fn is_workspace_bootstrap_pending(workspace_root: &Path) -> bool {
     workspace_root.join(BOOTSTRAP_FILE_NAME).exists()
@@ -447,6 +529,122 @@ mod tests {
         fs::remove_dir_all(&workspace_root)
             .await
             .expect("Failed to remove temp workspace");
+    }
+
+    // ── R-WF-07：成员 Claw 三文件物化（SOUL/USER/IDENTITY，无 BOOTSTRAP）──
+
+    #[tokio::test]
+    async fn initialize_member_persona_files_writes_three_files_without_bootstrap() {
+        // R-WF-07 验收断言（Plan:153）：建群后每成员三身份文件齐全。
+        // 成员身份在建群时直接物化（非引导式），不留 BOOTSTRAP.md。
+        let workspace_root = unique_workspace("bitfun-member-persona");
+        fs::create_dir_all(&workspace_root)
+            .await
+            .expect("Failed to create temp member workspace");
+
+        super::initialize_member_persona_files(
+            &workspace_root,
+            "executor",
+            "write code",
+            true,
+            "commander",
+        )
+        .await
+        .expect("Failed to initialize member persona files");
+
+        for file_name in [SOUL_FILE_NAME, USER_FILE_NAME, IDENTITY_FILE_NAME] {
+            assert!(
+                workspace_root.join(file_name).exists(),
+                "Expected '{}' to be created",
+                file_name
+            );
+        }
+        assert!(
+            !workspace_root.join(BOOTSTRAP_FILE_NAME).exists(),
+            "BOOTSTRAP.md must not be created for a materialized member persona"
+        );
+
+        fs::remove_dir_all(&workspace_root)
+            .await
+            .expect("Failed to remove temp member workspace");
+    }
+
+    #[tokio::test]
+    async fn member_persona_files_carry_role_prompt_gate_and_superior() {
+        // node.role/prompt/gate → 三文件（IDENTITY/SOUL）；USER 写直属上级
+        //（Plan 原子步 4：USER 写直属上级）。
+        let workspace_root = unique_workspace("bitfun-member-content");
+        fs::create_dir_all(&workspace_root)
+            .await
+            .expect("Failed to create temp member workspace");
+
+        super::initialize_member_persona_files(
+            &workspace_root,
+            "executor",
+            "write code",
+            true,
+            "commander",
+        )
+        .await
+        .expect("Failed to initialize member persona files");
+
+        let identity = fs::read_to_string(workspace_root.join(IDENTITY_FILE_NAME))
+            .await
+            .expect("read IDENTITY.md");
+        assert!(
+            identity.contains("executor"),
+            "IDENTITY.md must carry the node role, got: {identity}"
+        );
+
+        let soul = fs::read_to_string(workspace_root.join(SOUL_FILE_NAME))
+            .await
+            .expect("read SOUL.md");
+        assert!(
+            soul.contains("write code"),
+            "SOUL.md must carry the node prompt, got: {soul}"
+        );
+        assert!(
+            soul.contains("gate") && soul.contains("true"),
+            "SOUL.md must carry the node gate, got: {soul}"
+        );
+
+        let user = fs::read_to_string(workspace_root.join(USER_FILE_NAME))
+            .await
+            .expect("read USER.md");
+        assert!(
+            user.contains("commander"),
+            "USER.md must name the direct superior, got: {user}"
+        );
+
+        fs::remove_dir_all(&workspace_root)
+            .await
+            .expect("Failed to remove temp member workspace");
+    }
+
+    #[tokio::test]
+    async fn member_persona_materialization_removes_stale_bootstrap() {
+        // BOOTSTRAP.md = 引导临时文件，bootstrap 完成即删（Plan 原子步 4）。
+        // 成员身份直接物化 → 物化后不残留任何 BOOTSTRAP。
+        let workspace_root = unique_workspace("bitfun-member-stale-bootstrap");
+        fs::create_dir_all(&workspace_root)
+            .await
+            .expect("Failed to create temp member workspace");
+        fs::write(workspace_root.join(BOOTSTRAP_FILE_NAME), "stale bootstrap")
+            .await
+            .expect("Failed to seed BOOTSTRAP.md");
+
+        super::initialize_member_persona_files(&workspace_root, "writer", "", false, "commander")
+            .await
+            .expect("Failed to initialize member persona files");
+
+        assert!(
+            !workspace_root.join(BOOTSTRAP_FILE_NAME).exists(),
+            "stale BOOTSTRAP.md must be deleted once the member persona is materialized"
+        );
+
+        fs::remove_dir_all(&workspace_root)
+            .await
+            .expect("Failed to remove temp member workspace");
     }
 
     #[tokio::test]

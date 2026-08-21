@@ -24,6 +24,7 @@ fn goal(status: ThreadGoalStatus) -> ThreadGoal {
         created_at: 1,
         updated_at: 2,
         auto_continuation_count: 0,
+        reference_files: Vec::new(),
     }
 }
 
@@ -49,6 +50,7 @@ fn set_thread_goal_creates_new_active_goal_with_trimmed_objective() {
         objective: Some("  finish migration  ".to_string()),
         status: Some(ThreadGoalStatus::Active),
         token_budget: Some(Some(5000)),
+        reference_files: None,
         replace_existing: false,
         now_epoch_seconds: 10,
         new_goal_id: "goal-new".to_string(),
@@ -64,6 +66,80 @@ fn set_thread_goal_creates_new_active_goal_with_trimmed_objective() {
 }
 
 #[test]
+fn reference_files_persist_through_create_update_and_serde_round_trip() {
+    let reference_files = vec!["docs/spec.md".to_string(), "plans/todo.md".to_string()];
+
+    // Creation carries the reference files onto the goal.
+    let created = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: None,
+        objective: Some("ship".to_string()),
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        reference_files: Some(reference_files.clone()),
+        replace_existing: false,
+        now_epoch_seconds: 10,
+        new_goal_id: "goal-new".to_string(),
+    })
+    .expect("goal should be created");
+    assert_eq!(created.goal.reference_files, reference_files);
+
+    // An objective-only update without reference files keeps the list.
+    let updated = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(created.goal.clone()),
+        objective: Some("ship v2".to_string()),
+        status: None,
+        token_budget: None,
+        reference_files: None,
+        replace_existing: false,
+        now_epoch_seconds: 11,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect("goal should be updated");
+    assert_eq!(updated.goal.objective, "ship v2");
+    assert_eq!(
+        updated.goal.reference_files, reference_files,
+        "objective update keeps reference files"
+    );
+
+    // Explicit replacement swaps the list.
+    let replaced = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(updated.goal.clone()),
+        objective: Some("ship v3".to_string()),
+        status: None,
+        token_budget: None,
+        reference_files: Some(vec!["CHANGELOG.md".to_string()]),
+        replace_existing: false,
+        now_epoch_seconds: 12,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect("goal should be updated");
+    assert_eq!(replaced.goal.reference_files, vec!["CHANGELOG.md"]);
+
+    // Serde round-trip preserves the field.
+    let json = serde_json::to_string(&replaced.goal).expect("serialize goal");
+    let restored: ThreadGoal = serde_json::from_str(&json).expect("deserialize goal");
+    assert_eq!(restored.reference_files, vec!["CHANGELOG.md"]);
+
+    // Legacy payloads without the field still parse (serde default).
+    let legacy = serde_json::json!({
+        "goalId": "g1",
+        "sessionId": "s1",
+        "objective": "legacy",
+        "status": "active",
+        "createdAt": 1,
+        "updatedAt": 2
+    });
+    let restored_legacy: ThreadGoal = serde_json::from_value(legacy).expect("legacy goal parses");
+    assert!(
+        restored_legacy.reference_files.is_empty(),
+        "missing referenceFiles defaults to an empty list"
+    );
+}
+
+#[test]
 fn set_thread_goal_updates_existing_objective_and_resets_continuation_count() {
     let mut existing = goal(ThreadGoalStatus::BudgetLimited);
     existing.objective = "old".to_string();
@@ -75,6 +151,7 @@ fn set_thread_goal_updates_existing_objective_and_resets_continuation_count() {
         objective: Some("new".to_string()),
         status: Some(ThreadGoalStatus::Active),
         token_budget: None,
+        reference_files: None,
         replace_existing: false,
         now_epoch_seconds: 11,
         new_goal_id: "unused".to_string(),
@@ -100,6 +177,7 @@ fn set_thread_goal_replaces_existing_goal_when_requested() {
         objective: Some("new objective".to_string()),
         status: Some(ThreadGoalStatus::Active),
         token_budget: Some(Some(1000)),
+        reference_files: None,
         replace_existing: true,
         now_epoch_seconds: 12,
         new_goal_id: "goal-new".to_string(),
@@ -122,6 +200,7 @@ fn set_thread_goal_rejects_invalid_budget_and_missing_update_target() {
         objective: Some("goal".to_string()),
         status: Some(ThreadGoalStatus::Active),
         token_budget: Some(Some(0)),
+        reference_files: None,
         replace_existing: false,
         now_epoch_seconds: 1,
         new_goal_id: "g1".to_string(),
@@ -137,6 +216,7 @@ fn set_thread_goal_rejects_invalid_budget_and_missing_update_target() {
         objective: None,
         status: Some(ThreadGoalStatus::Complete),
         token_budget: None,
+        reference_files: None,
         replace_existing: false,
         now_epoch_seconds: 1,
         new_goal_id: "g1".to_string(),
@@ -145,6 +225,111 @@ fn set_thread_goal_rejects_invalid_budget_and_missing_update_target() {
         .expect_err("status update requires existing goal")
         .to_string()
         .contains("no goal exists"));
+}
+
+#[test]
+fn set_thread_goal_resume_transition_activates_only_resumable_statuses() {
+    // Blocked -> resume (Active): succeeds and resets the auto-continuation
+    // counter so the resumed goal gets a fresh continuation budget.
+    let mut blocked = goal(ThreadGoalStatus::Blocked);
+    blocked.auto_continuation_count = MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
+    let resumed = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(blocked),
+        objective: None,
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        reference_files: None,
+        replace_existing: false,
+        now_epoch_seconds: 50,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect("blocked goal should resume");
+    assert_eq!(resumed.goal.status, ThreadGoalStatus::Active);
+    assert_eq!(resumed.goal.auto_continuation_count, 0);
+
+    // Paused -> resume: succeeds and preserves the continuation counter.
+    let mut paused = goal(ThreadGoalStatus::Paused);
+    paused.auto_continuation_count = 5;
+    let resumed_paused = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(paused),
+        objective: None,
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        reference_files: None,
+        replace_existing: false,
+        now_epoch_seconds: 51,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect("paused goal should resume");
+    assert_eq!(resumed_paused.goal.status, ThreadGoalStatus::Active);
+    assert_eq!(resumed_paused.goal.auto_continuation_count, 5);
+
+    // UsageLimited -> resume: succeeds.
+    let mut usage_limited = goal(ThreadGoalStatus::UsageLimited);
+    usage_limited.auto_continuation_count = 3;
+    let resumed_usage = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(usage_limited),
+        objective: None,
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        reference_files: None,
+        replace_existing: false,
+        now_epoch_seconds: 52,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect("usage-limited goal should resume");
+    assert_eq!(resumed_usage.goal.status, ThreadGoalStatus::Active);
+    assert_eq!(resumed_usage.goal.auto_continuation_count, 3);
+
+    // Active -> Active: idempotent and succeeds.
+    let active = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(goal(ThreadGoalStatus::Active)),
+        objective: None,
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        reference_files: None,
+        replace_existing: false,
+        now_epoch_seconds: 53,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect("active goal should stay active");
+    assert_eq!(active.goal.status, ThreadGoalStatus::Active);
+
+    // Complete -> resume: rejected.
+    let complete_error = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(goal(ThreadGoalStatus::Complete)),
+        objective: None,
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        reference_files: None,
+        replace_existing: false,
+        now_epoch_seconds: 54,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect_err("complete goal must not resume")
+    .to_string();
+    assert!(complete_error.contains("cannot resume goal from status complete"));
+
+    // BudgetLimited -> resume: rejected.
+    let budget_error = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".to_string(),
+        existing: Some(goal(ThreadGoalStatus::BudgetLimited)),
+        objective: None,
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        reference_files: None,
+        replace_existing: false,
+        now_epoch_seconds: 55,
+        new_goal_id: "unused".to_string(),
+    })
+    .expect_err("budget-limited goal must not resume")
+    .to_string();
+    assert!(budget_error.contains("cannot resume goal from status budgetLimited"));
 }
 
 #[test]
@@ -161,6 +346,7 @@ fn continuation_outcome_increments_active_goal_and_builds_plan() {
             turn_completed: true,
             now_epoch_seconds: 20,
         },
+        MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
     );
 
     let persisted = outcome
@@ -175,7 +361,7 @@ fn continuation_outcome_increments_active_goal_and_builds_plan() {
         .as_ref()
         .expect("active goal should schedule continuation")
         .display_message
-        .contains("1/100"));
+        .contains("1/10"));
 }
 
 #[test]
@@ -192,6 +378,7 @@ fn continuation_outcome_marks_active_goal_blocked_at_limit() {
             turn_completed: true,
             now_epoch_seconds: 30,
         },
+        MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
     );
 
     assert!(outcome.reached_auto_continuation_limit);
@@ -221,6 +408,7 @@ fn continuation_outcome_reports_budget_limit_once_when_tokens_cross_budget() {
             turn_completed: true,
             now_epoch_seconds: 40,
         },
+        MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
     );
 
     let persisted = outcome
@@ -252,8 +440,11 @@ fn prompt_and_tool_response_contracts_match_thread_goal_wire_shape() {
         true
     );
 
-    let plan = build_thread_goal_continuation_plan(&goal(ThreadGoalStatus::Active));
-    assert_eq!(plan.user_message_metadata["autoContinuationMax"], 100);
+    let plan = build_thread_goal_continuation_plan(
+        &goal(ThreadGoalStatus::Active),
+        MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+    );
+    assert_eq!(plan.user_message_metadata["autoContinuationMax"], 10);
 }
 
 #[test]
@@ -348,5 +539,5 @@ fn turn_filtering_and_retry_policies_preserve_goal_mode_semantics() {
         "insufficient_quota: billing hard limit"
     ));
     assert!(!is_usage_limit_message("tool failed"));
-    assert_eq!(MAX_GOAL_CONTINUATIONS, 100);
+    assert_eq!(MAX_GOAL_CONTINUATIONS, 10);
 }

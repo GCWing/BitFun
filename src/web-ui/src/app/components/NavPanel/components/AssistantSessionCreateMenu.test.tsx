@@ -59,6 +59,7 @@ describe('AssistantSessionCreateMenu', () => {
   const renderMenu = (
     onCreatePrimary = vi.fn(),
     onCreateAssistant = vi.fn(),
+    onCreateGroupChat: (() => void | Promise<void>) | null = vi.fn(),
   ) => {
     act(() => {
       root.render(
@@ -67,10 +68,11 @@ describe('AssistantSessionCreateMenu', () => {
           primaryAssistant={primaryAssistant}
           onCreatePrimary={onCreatePrimary}
           onCreateAssistant={onCreateAssistant}
+          onCreateGroupChat={onCreateGroupChat ?? undefined}
         />,
       );
     });
-    return { onCreatePrimary, onCreateAssistant };
+    return { onCreatePrimary, onCreateAssistant, onCreateGroupChat: onCreateGroupChat ?? undefined };
   };
 
   const click = (testId: string) => {
@@ -93,7 +95,7 @@ describe('AssistantSessionCreateMenu', () => {
 
     click('nav-assistant-session-menu-toggle');
     const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
-    expect(items.map(item => item.textContent)).toEqual(['MiraPrimary', 'Sage']);
+    expect(items.map(item => item.textContent)).toEqual(['MiraPrimary', 'Sage', 'New group chat']);
 
     click('nav-assistant-session-menu-item-secondary');
     expect(onCreateAssistant).toHaveBeenCalledWith(secondaryAssistant);
@@ -108,5 +110,27 @@ describe('AssistantSessionCreateMenu', () => {
     act(() => toggle!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
 
     expect(document.querySelector('[data-testid="nav-assistant-session-menu"]')).toBeNull();
+  });
+
+  it('lists the create-group-chat entry and invokes onCreateGroupChat (R-GC-27)', () => {
+    const { onCreateGroupChat, onCreateAssistant } = renderMenu();
+
+    click('nav-assistant-session-menu-toggle');
+    const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+    expect(items.map(item => item.textContent)).toEqual(['MiraPrimary', 'Sage', 'New group chat']);
+
+    click('nav-assistant-session-menu-group-chat');
+    expect(onCreateGroupChat).toHaveBeenCalledTimes(1);
+    expect(onCreateAssistant).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-testid="nav-assistant-session-menu"]')).toBeNull();
+  });
+
+  it('omits the create-group-chat entry when onCreateGroupChat is not provided', () => {
+    renderMenu(vi.fn(), vi.fn(), null);
+    click('nav-assistant-session-menu-toggle');
+
+    const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+    expect(items.map(item => item.textContent)).toEqual(['MiraPrimary', 'Sage']);
+    expect(document.querySelector('[data-testid="nav-assistant-session-menu-group-chat"]')).toBeNull();
   });
 });

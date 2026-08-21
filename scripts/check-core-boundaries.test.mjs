@@ -266,6 +266,7 @@ test('portable contract crates expose only capability-local feature slices', asy
     new Set([
       'default',
       'agent-api',
+      'acp-client',
       'git-port',
       'permission',
       'plugin-runtime',
@@ -288,6 +289,7 @@ test('portable contract crates expose only capability-local feature slices', asy
   assert.deepEqual(
     new Set(runtimePortFeatures['tool-runtime-handles']),
     new Set([
+      'acp-client',
       'workspace-ports',
       'terminal-port',
       'remote-exec-port',
@@ -347,7 +349,7 @@ test('runtime-ports async dependencies stay behind their exact port owners', () 
   );
   assert.deepEqual(
     ownersByDependency.get('tokio'),
-    new Set(['remote-exec-port', 'terminal-port']),
+    new Set(['acp-client', 'remote-exec-port', 'terminal-port']),
   );
 });
 
@@ -480,6 +482,7 @@ function pathDependency(repoCratePath, options = {}) {
 const RUNTIME_PORT_FEATURE_PROFILES = {
   default: [],
   'agent-api': ['dep:bitfun-core-types'],
+  'acp-client': ['dep:tokio'],
   'git-port': [],
   permission: ['dep:bitfun-product-domains'],
   'plugin-runtime': [],
@@ -488,7 +491,7 @@ const RUNTIME_PORT_FEATURE_PROFILES = {
   'runtime-event-port': [],
   'script-tool-runtime': [],
   'terminal-port': ['dep:tokio'],
-  'tool-runtime-handles': ['workspace-ports', 'terminal-port', 'remote-exec-port'],
+  'tool-runtime-handles': ['acp-client', 'workspace-ports', 'terminal-port', 'remote-exec-port'],
   ts: [
     'dep:ts-rs',
     'agent-api',
@@ -3467,6 +3470,7 @@ test('services-core capability profiles keep heavy owners out of the empty profi
   assert.deepEqual(profiles.get('local-storage'), [
     'dep:bitfun-core-types',
     'dep:bitfun-events',
+    'dep:bitfun-runtime-ports',
     'dep:chrono',
     'dep:fs2',
     'dep:libc',
@@ -4305,4 +4309,60 @@ test('capability contract consumers cannot remove reviewed dependency edges', as
   ]).map((violation) => violation.message);
   assert.ok(messages.some((message) => /bitfun-plugin-runtime-client.*missing reviewed.*normal.*edge/.test(message)));
   assert.ok(messages.some((message) => /bitfun-opencode-adapter.*missing reviewed.*dev.*edge/.test(message)));
+});
+
+test('local customization symbol manifest covers the 15 kept symbols', async () => {
+  const { localCustomizationSymbols } = await import(
+    './core-boundaries/rules/local-customization-symbols.mjs'
+  );
+  assert.ok(Array.isArray(localCustomizationSymbols));
+  // GroupChat 契约符号 R-GC-01~07 移除后收缩 34→15
+  assert.ok(localCustomizationSymbols.length >= 15);
+  const seen = new Set();
+  for (const entry of localCustomizationSymbols) {
+    assert.ok(entry.path, 'each entry must declare an owner file path');
+    assert.ok(entry.anchor instanceof RegExp, 'each entry must declare an anchor regex');
+    assert.ok(entry.note, 'each entry must carry a R-AD-01 note');
+    const key = `${entry.path}|${entry.anchor.source}`;
+    assert.ok(!seen.has(key), `duplicate anchor: ${entry.note}`);
+    seen.add(key);
+  }
+});
+
+test('removing a local customization symbol fails the boundary check', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { readFile, writeFile, access } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+
+  const target = new URL(
+    '../src/crates/contracts/runtime-ports/src/local_customizations.rs',
+    import.meta.url,
+  );
+  const original = await readFile(target, 'utf8');
+  const marker = 'pub const GROUP_MASTER_ACTOR: &str = "__master__";';
+  assert.ok(
+    original.includes(marker),
+    'test requires the GROUP_MASTER_ACTOR declaration to still be present',
+  );
+
+  try {
+    await writeFile(target, original.replace(marker, '// R-AD-04 test: symbol removed'), 'utf8');
+    const check = spawnSync(process.execPath, [fileURLToPath(ENTRYPOINT)], {
+      encoding: 'utf8',
+      env: { ...process.env, BITFUN_BOUNDARY_CHECK_SELF_TEST: undefined },
+    });
+    assert.notEqual(
+      check.status,
+      0,
+      'boundary check must fail when a registered local customization symbol is removed',
+    );
+    assert.match(
+      check.stderr,
+      /GROUP_MASTER_ACTOR/,
+      'failure output must name the removed local customization symbol',
+    );
+  } finally {
+    await writeFile(target, original, 'utf8');
+    await access(target);
+  }
 });

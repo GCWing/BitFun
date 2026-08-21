@@ -32,6 +32,7 @@ export const workbenchAppearanceDescriptor: AppearanceSurfaceDescriptor = {
         'pages',
         'browser',
         'assistant',
+        'workflow-claw',
         'insights',
         'shell',
         'panel-view',

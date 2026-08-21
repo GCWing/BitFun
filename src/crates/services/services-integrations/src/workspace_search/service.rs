@@ -16,6 +16,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use super::line_hydration::{hydrate_grouped_line_matches, HydratedLineMatches};
 use super::result_mapping::convert_search_results;
+use super::rg_fallback;
 use super::types::{
     ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
     GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchAutoIndexDecision,
@@ -73,6 +74,23 @@ impl WorkspaceSearchRuntimeHooks for DefaultWorkspaceSearchRuntimeHooks {
 
 const DEFAULT_TOP_K_TOKENS: usize = 6;
 const DEFAULT_SESSION_IDLE_GRACE: Duration = Duration::from_secs(45);
+const SESSION_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
+const SESSION_STATUS_TIMEOUT: Duration = Duration::from_secs(10);
+const SESSION_OPEN_TIMEOUT: Duration = Duration::from_secs(30);
+const SESSION_INDEX_TIMEOUT: Duration = Duration::from_secs(30);
+const SESSION_SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
+const SESSION_GLOB_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Wait for a tokio mutex guard with a bounded timeout, returning an error
+/// string on timeout instead of blocking the caller indefinitely.
+async fn try_lock_or_timeout<'a, T>(
+    lock: &'a tokio::sync::Mutex<T>,
+    what: &'a str,
+) -> Result<tokio::sync::MutexGuard<'a, T>, String> {
+    tokio::time::timeout(SESSION_LOCK_TIMEOUT, lock.lock())
+        .await
+        .map_err(|_| format!("workspace search timed out waiting for {what} lock"))
+}
 
 #[derive(Debug, Clone)]
 struct SessionEntry {
@@ -188,13 +206,45 @@ impl WorkspaceSearchService {
         repo_root: impl AsRef<Path>,
     ) -> WorkspaceSearchResult<IndexTaskHandle> {
         let session = self.get_or_open_session(repo_root.as_ref()).await?;
-        let task = FlashgrepRepoSession::build_index(session.as_ref())
-            .await
-            .map_err(map_flashgrep_error("Failed to start index build"))?;
-        let repo_status = session
-            .status()
-            .await
-            .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
+        let task = tokio::time::timeout(
+            SESSION_INDEX_TIMEOUT,
+            FlashgrepRepoSession::build_index(session.as_ref()),
+        )
+        .await
+        .map_err(|_| {
+            format!(
+                "workspace search timed out starting index build: path={}",
+                repo_root.as_ref().display()
+            )
+        })?
+        .map_err(map_flashgrep_error("Failed to start index build"))?;
+        let repo_status = match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status()).await
+        {
+            Ok(Ok(status)) => status.into(),
+            Ok(Err(error)) => {
+                log::warn!(
+                    target: FLASHGREP_LOG_TARGET,
+                    "Failed to fetch repository status after index build: path={}, error={}",
+                    repo_root.as_ref().display(),
+                    error
+                );
+                unknown_repo_status(
+                    repo_root.as_ref(),
+                    &format!("failed to fetch repository status after index build: {error}"),
+                )
+            }
+            Err(_) => {
+                log::warn!(
+                    target: FLASHGREP_LOG_TARGET,
+                    "Workspace search timed out fetching repository status after index build: path={}",
+                    repo_root.as_ref().display()
+                );
+                unknown_repo_status(
+                    repo_root.as_ref(),
+                    "timed out fetching repository status after index build",
+                )
+            }
+        };
         log::info!(
             target: FLASHGREP_LOG_TARGET,
             "Workspace search build index requested: repo_root={}, task_id={}, phase={:?}",
@@ -204,7 +254,7 @@ impl WorkspaceSearchService {
         );
         Ok(IndexTaskHandle {
             task: task.into(),
-            repo_status: repo_status.into(),
+            repo_status,
         })
     }
 
@@ -213,13 +263,45 @@ impl WorkspaceSearchService {
         repo_root: impl AsRef<Path>,
     ) -> WorkspaceSearchResult<IndexTaskHandle> {
         let session = self.get_or_open_session(repo_root.as_ref()).await?;
-        let task = FlashgrepRepoSession::rebuild_index(session.as_ref())
-            .await
-            .map_err(map_flashgrep_error("Failed to start index rebuild"))?;
-        let repo_status = session
-            .status()
-            .await
-            .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
+        let task = tokio::time::timeout(
+            SESSION_INDEX_TIMEOUT,
+            FlashgrepRepoSession::rebuild_index(session.as_ref()),
+        )
+        .await
+        .map_err(|_| {
+            format!(
+                "workspace search timed out starting index rebuild: path={}",
+                repo_root.as_ref().display()
+            )
+        })?
+        .map_err(map_flashgrep_error("Failed to start index rebuild"))?;
+        let repo_status = match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status()).await
+        {
+            Ok(Ok(status)) => status.into(),
+            Ok(Err(error)) => {
+                log::warn!(
+                    target: FLASHGREP_LOG_TARGET,
+                    "Failed to fetch repository status after index rebuild: path={}, error={}",
+                    repo_root.as_ref().display(),
+                    error
+                );
+                unknown_repo_status(
+                    repo_root.as_ref(),
+                    &format!("failed to fetch repository status after index rebuild: {error}"),
+                )
+            }
+            Err(_) => {
+                log::warn!(
+                    target: FLASHGREP_LOG_TARGET,
+                    "Workspace search timed out fetching repository status after index rebuild: path={}",
+                    repo_root.as_ref().display()
+                );
+                unknown_repo_status(
+                    repo_root.as_ref(),
+                    "timed out fetching repository status after index rebuild",
+                )
+            }
+        };
         log::info!(
             target: FLASHGREP_LOG_TARGET,
             "Workspace search rebuild index requested: repo_root={}, task_id={}, phase={:?}",
@@ -229,7 +311,7 @@ impl WorkspaceSearchService {
         );
         Ok(IndexTaskHandle {
             task: task.into(),
-            repo_status: repo_status.into(),
+            repo_status,
         })
     }
 
@@ -253,6 +335,21 @@ impl WorkspaceSearchService {
         let scope_globs_count = scope.globs.len();
         let scope_types_count = scope.types.len();
         let max_results = request.max_results.filter(|limit| *limit > 0);
+        // rg 交叉校验所需的请求快照（pattern/globs/file_types 等随后被 move 进 query/scope）。
+        let validation_request = rg_fallback::RgValidationRequest {
+            search_root: request
+                .search_path
+                .clone()
+                .unwrap_or_else(|| repo_root.clone()),
+            pattern: request.pattern.clone(),
+            case_insensitive: !request.case_sensitive,
+            multiline: request.multiline,
+            whole_word: request.whole_word,
+            fixed_strings: !request.use_regex,
+            globs: scope.globs.clone(),
+            file_types: scope.types.clone(),
+            exclude_file_types: scope.type_not.clone(),
+        };
         let preview_spec = ContentPreviewSpec {
             pattern: request.pattern.clone(),
             case_sensitive: request.case_sensitive,
@@ -325,9 +422,24 @@ impl WorkspaceSearchService {
                 (result, search_completed_at, converted_at)
             }
             ContentSearchOutputMode::Count | ContentSearchOutputMode::FilesWithMatches => {
-                let search = FlashgrepRepoSession::search(session.as_ref(), search_request)
-                    .await
-                    .map_err(map_flashgrep_error("Content search failed"))?;
+                // 本地定制：SESSION_SEARCH_TIMEOUT 防卡死 + scan_fallback 兜底。
+                // 上游重构后 search 调用分派到各分支，此处保留 timeout 包装。
+                let search = tokio::time::timeout(
+                    SESSION_SEARCH_TIMEOUT,
+                    FlashgrepRepoSession::search(
+                        session.as_ref(),
+                        search_request.with_scan_fallback(true),
+                    ),
+                )
+                .await
+                .map_err(|_| {
+                    format!(
+                        "workspace search timed out executing content search: repo_root={}, pattern={}",
+                        repo_root.display(),
+                        pattern_for_log
+                    )
+                })?
+                .map_err(map_flashgrep_error("Content search failed"))?;
                 let search_completed_at = Instant::now();
 
                 let mut results = convert_search_results(&search.results, request.output_mode);
@@ -356,6 +468,24 @@ impl WorkspaceSearchService {
                     matched_occurrences: search.results.matched_occurrences,
                 };
                 (result, search_completed_at, converted_at)
+            }
+        };
+
+        // 根因级假空交叉校验（RECON-卡搜索根因彻查-20260809）：
+        // flashgrep daemon（闭源）overlay 路径匹配 bug 可能在任意相位/scope 组合下
+        // 返回 Ok(空)，工具层的 phase/scope/candidate_docs 判据只能枚举已见形态。
+        // 这里在 service 层对空结果用 rg 库引擎做结果实证：rg 有命中而 flashgrep
+        // 为空 = 假空 = 信任 rg 结果；rg 也为空 = 真实无结果，原样返回。
+        let result = match cross_validate_empty_result(&validation_request, result) {
+            Ok(validated) => validated,
+            Err(original) => {
+                log::warn!(
+                    target: FLASHGREP_LOG_TARGET,
+                    "Workspace content search rg cross-validation unavailable, keeping daemon result: repo_root={}, pattern={}",
+                    repo_root.display(),
+                    pattern_for_log,
+                );
+                *original
             }
         };
 
@@ -403,9 +533,14 @@ impl WorkspaceSearchService {
         let (walk_root, pattern) = derive_glob_walk_root(&normalized_search_path, &request.pattern);
         if !walk_root.is_dir() {
             let session = self.get_or_open_session(&repo_root).await?;
-            let repo_status = session
-                .status()
+            let repo_status = tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status())
                 .await
+                .map_err(|_| {
+                    format!(
+                        "workspace search timed out fetching repository status: path={}",
+                        repo_root.display()
+                    )
+                })?
                 .map_err(map_flashgrep_error("Glob status failed"))?;
             return Ok(GlobSearchResult {
                 paths: Vec::new(),
@@ -417,10 +552,18 @@ impl WorkspaceSearchService {
         }
         let scope = build_scope(&repo_root, Some(&walk_root), vec![pattern], vec![], vec![])?;
         let session = self.get_or_open_session(&repo_root).await?;
-        let outcome =
-            FlashgrepRepoSession::glob(session.as_ref(), GlobRequest::new().with_scope(scope))
-                .await
-                .map_err(map_flashgrep_error("Glob search failed"))?;
+        let outcome = tokio::time::timeout(
+            SESSION_GLOB_TIMEOUT,
+            FlashgrepRepoSession::glob(session.as_ref(), GlobRequest::new().with_scope(scope)),
+        )
+        .await
+        .map_err(|_| {
+            format!(
+                "workspace search timed out executing glob search: path={}",
+                repo_root.display()
+            )
+        })?
+        .map_err(map_flashgrep_error("Glob search failed"))?;
         let mut paths = outcome
             .paths
             .into_iter()
@@ -689,22 +832,26 @@ impl WorkspaceSearchService {
     ) -> WorkspaceSearchResult<Arc<RepoSession>> {
         let repo_root = normalize_repo_root(repo_root)?;
         let repo_guard = {
-            let mut guards = self.open_guards.lock().await;
+            let mut guards = try_lock_or_timeout(&self.open_guards, "workspace search").await?;
             guards
                 .entry(repo_root.clone())
                 .or_insert_with(|| Arc::new(Mutex::new(())))
                 .clone()
         };
-        let _repo_guard = repo_guard.lock().await;
+        let _repo_guard = try_lock_or_timeout(&repo_guard, "repository").await?;
 
         if let Some(existing) = self.sessions.read().await.get(&repo_root).cloned() {
             existing.activity_epoch.fetch_add(1, Ordering::Relaxed);
-            if existing.session.status().await.is_ok() {
+            let status_ok = tokio::time::timeout(SESSION_STATUS_TIMEOUT, existing.session.status())
+                .await
+                .map(|r| r.is_ok())
+                .unwrap_or(false);
+            if status_ok {
                 return Ok(existing.session);
             }
             log::warn!(
                 target: FLASHGREP_LOG_TARGET,
-                "Workspace search session became unhealthy, reopening repository session: path={}",
+                "Workspace search session became unhealthy or timed out, reopening repository session: path={}",
                 repo_root.display()
             );
             self.sessions.write().await.remove(&repo_root);
@@ -739,13 +886,21 @@ impl WorkspaceSearchService {
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "-".to_string());
 
-        let entry =
-            SessionEntry {
-                session: Arc::new(self.client.open_repo(params).await.map_err(
-                    map_flashgrep_error("Failed to open flashgrep repository session"),
-                )?),
-                activity_epoch: Arc::new(AtomicU64::new(1)),
-            };
+        let session = tokio::time::timeout(SESSION_OPEN_TIMEOUT, self.client.open_repo(params))
+            .await
+            .map_err(|_| {
+                format!(
+                    "workspace search timed out opening flashgrep repository session: path={}",
+                    repo_root.display()
+                )
+            })?
+            .map_err(map_flashgrep_error(
+                "Failed to open flashgrep repository session",
+            ))?;
+        let entry = SessionEntry {
+            session: Arc::new(session),
+            activity_epoch: Arc::new(AtomicU64::new(1)),
+        };
         log::info!(
             target: FLASHGREP_LOG_TARGET,
             "Opened workspace search repository session: path={}, storage_root={}",
@@ -879,22 +1034,33 @@ impl WorkspaceSearchService {
     where
         S: FlashgrepRepoSession + ?Sized,
     {
-        let repo_status = session
-            .status()
+        let repo_status = tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status())
             .await
+            .map_err(|_| "workspace search timed out fetching repository status".to_string())?
             .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
         let active_task = match repo_status.active_task_id.clone() {
-            Some(task_id) => match session.task_status(task_id).await {
-                Ok(task) => Some(task),
-                Err(error) => {
-                    log::warn!(
-                        target: FLASHGREP_LOG_TARGET,
-                        "Failed to fetch active flashgrep task status: {}",
-                        error
-                    );
-                    None
+            Some(task_id) => {
+                match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.task_status(task_id))
+                    .await
+                {
+                    Ok(Ok(task)) => Some(task),
+                    Ok(Err(error)) => {
+                        log::warn!(
+                            target: FLASHGREP_LOG_TARGET,
+                            "Failed to fetch active flashgrep task status: {}",
+                            error
+                        );
+                        None
+                    }
+                    Err(_) => {
+                        log::warn!(
+                            target: FLASHGREP_LOG_TARGET,
+                            "Workspace search timed out fetching active flashgrep task status"
+                        );
+                        None
+                    }
                 }
-            },
+            }
             None => None,
         };
 
@@ -1392,6 +1558,75 @@ fn normalize_scope_path(repo_root: &Path, search_path: &Path) -> WorkspaceSearch
         ));
     }
     Ok(normalized)
+}
+
+fn unknown_repo_status(repo_root: &Path, reason: &str) -> super::types::WorkspaceSearchRepoStatus {
+    super::types::WorkspaceSearchRepoStatus {
+        repo_id: String::new(),
+        repo_path: repo_root.display().to_string(),
+        storage_root: String::new(),
+        base_snapshot_root: String::new(),
+        workspace_overlay_root: String::new(),
+        phase: super::types::WorkspaceSearchRepoPhase::Limited,
+        snapshot_key: None,
+        base_head_commit: None,
+        workspace_head_commit: None,
+        base_advance_in_progress: false,
+        base_advance_target_head: None,
+        base_delta_depth: 0,
+        base_compaction_recommended: false,
+        last_probe_unix_secs: None,
+        last_rebuild_unix_secs: None,
+        dirty_files: super::types::WorkspaceSearchDirtyFiles {
+            modified: 0,
+            deleted: 0,
+            new: 0,
+        },
+        active_task_id: None,
+        probe_healthy: false,
+        workspace_probe_pending: false,
+        last_error: Some(reason.to_string()),
+        last_maintenance_error: None,
+        overlay: None,
+    }
+}
+
+/// 对 flashgrep 返回的空结果做 rg 库引擎交叉校验（service 层根因级假空兜底）。
+///
+/// 返回 `Ok(result)`：若结果为假空（rg 有命中）则替换为 rg 结果，否则原样返回。
+/// 返回 `Err(original)`：校验自身不可用/无法判定，原样交还 daemon 结果由调用方保留。
+fn cross_validate_empty_result(
+    validation_request: &super::rg_fallback::RgValidationRequest,
+    result: ContentSearchResult,
+) -> Result<ContentSearchResult, Box<ContentSearchResult>> {
+    if !super::rg_fallback::search_result_is_empty(&result) {
+        return Ok(result);
+    }
+    let outcome = match super::rg_fallback::rg_search(
+        validation_request,
+        super::rg_fallback::RG_VALIDATION_FILE_BUDGET,
+    ) {
+        Ok(Some(outcome)) => outcome,
+        // 预算内无法判定（scope 文件数超预算且前段无命中）或校验不可用：
+        // 保守保留原结果，交给工具层既有判据兜底，不在 service 层放大不确定性。
+        Ok(None) => return Err(Box::new(result)),
+        Err(_) => return Err(Box::new(result)),
+    };
+    if outcome.total_matches() == 0 {
+        // rg 也确认无命中 = 真实空结果。
+        return Ok(result);
+    }
+    log::warn!(
+        target: FLASHGREP_LOG_TARGET,
+        "Workspace search daemon returned empty but rg cross-validation found matches (false-empty); serving rg results: search_root={}, pattern={}, rg_matched_lines={}, rg_files={}, phase={:?}, candidate_docs={}",
+        validation_request.search_root.display(),
+        abbreviate_pattern_for_log(&validation_request.pattern),
+        outcome.total_matches(),
+        outcome.files.len(),
+        result.repo_status.phase,
+        result.candidate_docs,
+    );
+    Ok(outcome.into_content_search_result(result.repo_status.clone()))
 }
 
 fn map_flashgrep_error(

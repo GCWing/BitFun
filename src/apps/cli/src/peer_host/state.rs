@@ -423,24 +423,6 @@ impl PeerTurnTracker {
         }
     }
 
-    pub(crate) fn drain_session_turns(&self, session_id: &str) -> PeerTurnDrain {
-        self.inner
-            .lock()
-            .map(|mut inner| {
-                let removed = session_tree_keys(&inner, session_id);
-                if !try_quarantine_active_turns(&mut inner, &removed) {
-                    inner.interrupted_turns.clear();
-                    inner.stream = PeerEventStreamState::Closed;
-                }
-                let mut drain = peer_turn_drain_for_keys(&inner, &removed);
-                merge_completed_background_subagents(&inner, &mut drain, Some(session_id));
-                remove_completed_background_sources_for_session(&mut inner, session_id);
-                remove_tracked_turns(&mut inner, &removed);
-                drain
-            })
-            .unwrap_or_default()
-    }
-
     pub(crate) fn interrupt_event_stream(&self, closed: bool) -> PeerTurnDrain {
         let Ok(mut inner) = self.inner.lock() else {
             return PeerTurnDrain::default();
@@ -659,38 +641,6 @@ fn peer_turn_drain_for_keys(
     }
 }
 
-fn session_tree_keys(inner: &PeerTurnTrackerInner, session_id: &str) -> HashSet<PeerTurnKey> {
-    let mut keys = inner
-        .parents
-        .iter()
-        .filter(|(key, parent)| {
-            key.session_id == session_id
-                || parent
-                    .as_ref()
-                    .is_some_and(|parent| parent.session_id == session_id)
-        })
-        .map(|(key, _)| key.clone())
-        .collect::<HashSet<_>>();
-    loop {
-        let descendants = inner
-            .parents
-            .iter()
-            .filter_map(|(key, parent)| {
-                parent
-                    .as_ref()
-                    .filter(|parent| keys.contains(*parent))
-                    .map(|_| key.clone())
-            })
-            .filter(|key| !keys.contains(key))
-            .collect::<Vec<_>>();
-        if descendants.is_empty() {
-            break;
-        }
-        keys.extend(descendants);
-    }
-    keys
-}
-
 fn root_for(inner: &PeerTurnTrackerInner, key: &PeerTurnKey) -> Option<PeerTurnKey> {
     let mut current = key.clone();
     let mut remaining = inner.parents.len().saturating_add(1);
@@ -732,18 +682,6 @@ fn take_completed_background_source(inner: &mut PeerTurnTrackerInner, source: &P
     inner
         .background_source_tasks
         .retain(|_, (_, mapped_source)| mapped_source != source);
-}
-
-fn remove_completed_background_sources_for_session(
-    inner: &mut PeerTurnTrackerInner,
-    session_id: &str,
-) {
-    inner.completed_background_sources.retain(|source, parent| {
-        source.session_id != session_id && parent.session_id != session_id
-    });
-    inner.background_source_tasks.retain(|_, (parent, source)| {
-        source.session_id != session_id && parent.session_id != session_id
-    });
 }
 
 fn release_background_sources_for_subagent(
@@ -1057,6 +995,7 @@ fn spawn_turn_cancellation(
 
 static PEER_HOST_STATE: OnceLock<PeerHostState> = OnceLock::new();
 
+#[allow(clippy::result_large_err)] // returns the rejected state itself; boxing would require callers to reconstruct it
 pub(crate) fn set_peer_host_state(state: PeerHostState) -> Result<(), PeerHostState> {
     PEER_HOST_STATE.set(state)
 }
@@ -1133,34 +1072,6 @@ mod tests {
 
         assert!(!tracker.owns("session-1", Some("turn-1")));
         assert!(tracker.owns("session-2", Some("turn-2")));
-    }
-
-    #[test]
-    fn draining_a_parent_session_after_root_completion_returns_the_active_child_only() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        let root = PeerTurnKey::new("session-1", "turn-1");
-        let child = PeerTurnKey::new("session-2", "turn-2");
-        let other = PeerTurnKey::new("session-3", "turn-3");
-        tracker.register_root(root.clone()).expect("register root");
-        tracker
-            .register_child(&root, child.clone())
-            .expect("register child");
-        tracker
-            .register_root(other.clone())
-            .expect("register other root");
-
-        tracker.finish_turn(&root);
-        let drained = tracker
-            .drain_session_turns("session-1")
-            .turns
-            .into_iter()
-            .collect::<HashSet<_>>();
-
-        assert_eq!(drained, HashSet::from([child]));
-        assert!(!tracker.owns("session-1", Some("turn-1")));
-        assert!(!tracker.owns("session-2", Some("turn-2")));
-        assert!(tracker.owns("session-3", Some("turn-3")));
     }
 
     #[test]
@@ -1481,69 +1392,6 @@ mod tests {
     }
 
     #[test]
-    fn draining_a_child_session_releases_its_early_follow_up_reservation() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        let root = PeerTurnKey::new("session-1", "turn-1");
-        let child = PeerTurnKey::new("session-2", "turn-2");
-        let follow_up = PeerTurnKey::new("session-1", "turn-3");
-        tracker.register_root(root.clone()).expect("register root");
-        register_background_child(&tracker, &root, child.clone());
-        assert!(tracker
-            .register_background_follow_up(&root, &child, follow_up.clone())
-            .expect("register exact early follow-up"));
-
-        assert_eq!(
-            tracker.drain_session_turns("session-2").turns,
-            vec![child.clone()]
-        );
-        tracker.finish_turn(&root);
-        tracker.finish_turn(&follow_up);
-
-        assert!(!tracker
-            .register_background_follow_up(
-                &root,
-                &child,
-                PeerTurnKey::new("session-1", "unrelated-follow-up")
-            )
-            .expect("completed lineage must be pruned"));
-    }
-
-    #[test]
-    fn draining_a_sibling_child_does_not_release_another_childs_reservation() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        let root = PeerTurnKey::new("session-1", "turn-1");
-        let child_a = PeerTurnKey::new("session-2", "turn-2");
-        let child_b = PeerTurnKey::new("session-3", "turn-3");
-        let follow_up = PeerTurnKey::new("session-1", "turn-4");
-        tracker.register_root(root.clone()).expect("register root");
-        register_background_child(&tracker, &root, child_a.clone());
-        tracker
-            .register_child(&root, child_b.clone())
-            .expect("register child B");
-        assert!(tracker
-            .register_background_follow_up(&root, &child_a, follow_up.clone())
-            .expect("register child A follow-up"));
-
-        assert_eq!(
-            tracker.drain_session_turns("session-3").turns,
-            vec![child_b]
-        );
-        tracker.finish_turn(&root);
-        tracker.finish_turn(&child_a);
-        tracker.finish_turn(&follow_up);
-
-        assert!(!tracker
-            .register_background_follow_up(
-                &root,
-                &child_a,
-                PeerTurnKey::new("session-1", "unrelated-follow-up")
-            )
-            .expect("completed lineage must be pruned"));
-    }
-
-    #[test]
     fn unrelated_running_turn_does_not_consume_background_follow_up_authorization() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
@@ -1762,23 +1610,5 @@ mod tests {
         assert!(tracker
             .register_background_follow_up(&parent, &source, interrupted_follow_up)
             .is_err());
-    }
-
-    #[test]
-    fn explicit_drains_quarantine_removed_turn_ids() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        let root = PeerTurnKey::new("parent-session", "root-turn");
-        let child = PeerTurnKey::new("child-session", "child-turn");
-        tracker.register_root(root.clone()).expect("register root");
-        tracker
-            .register_child(&root, child.clone())
-            .expect("register child");
-
-        tracker.drain_session_turns(&child.session_id);
-        assert!(tracker.register_child(&root, child).is_err());
-
-        tracker.drain_peer_turns();
-        assert!(tracker.register_root(root).is_err());
     }
 }

@@ -537,7 +537,34 @@ mod review_git_output_tests {
         std::fs::create_dir_all(temp.path().join(".git")).expect("fake git marker");
         std::fs::create_dir_all(&nested).expect("nested directory");
 
-        assert!(get_repository_root(&nested).is_err());
+        // The lexical probe walks every ancestor that carries a `.git`
+        // entry. On developer machines whose home directory is itself a git
+        // checkout, the walk escapes the tempdir and resolves the outer
+        // repository, so the strict `Err` expectation cannot hold there. The
+        // assertion that matters is that the *invalid* marker is never
+        // adopted as the repository root; CI environments (no repository
+        // ancestor) keep the strict expectation.
+        let host_has_repository_ancestor = std::env::temp_dir()
+            .ancestors()
+            .any(|ancestor| ancestor.join(".git").exists());
+        match get_repository_root(&nested) {
+            Ok(root) => {
+                assert_ne!(
+                    root,
+                    temp.path().to_string_lossy().to_string(),
+                    "invalid lexical .git marker must not be adopted as the repository root"
+                );
+                if !host_has_repository_ancestor {
+                    panic!("expected an error in an environment without a repository ancestor");
+                }
+            }
+            Err(_) => {
+                assert!(
+                    !host_has_repository_ancestor,
+                    "unexpected error: the host environment provides no repository ancestor either"
+                );
+            }
+        }
     }
 
     #[test]

@@ -796,6 +796,9 @@ Check the app directly, or ask the user to bring it up.",
         };
 
         unsafe {
+            // SAFETY: All four Win32 calls write into stack-allocated buffers
+            // (POINT, pid, [u16; 512]); HWND validity is checked via is_invalid()
+            // before any dereference.
             let mut pt = POINT::default();
             let pointer = if GetCursorPos(&mut pt).is_ok() {
                 Some(ComputerUsePointerGlobal {
@@ -876,6 +879,9 @@ Check the app directly, or ask the user to bring it up.",
             };
             use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
             unsafe {
+                // SAFETY: OpenProcessToken/GetTokenInformation/CloseHandle take
+                // stack-allocated handles and buffers owned by this frame; the
+                // token handle is always closed on every path.
                 let mut token = HANDLE::default();
                 if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_err() {
                     return false;
@@ -1010,6 +1016,7 @@ Check the app directly, or ask the user to bring it up.",
             use windows::Win32::Foundation::POINT;
             use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
             unsafe {
+                // SAFETY: GetCursorPos writes into a stack-allocated POINT.
                 let mut pt = POINT::default();
                 if GetCursorPos(&mut pt).is_ok() {
                     (pt.x as f64, pt.y as f64)
@@ -1127,6 +1134,8 @@ impl DesktopComputerUseHost {
 
             let hwnd_raw = {
                 let target_hwnd = if app_selector_is_unspecified(&app) {
+                    // SAFETY: GetForegroundWindow takes no arguments and returns
+                    // an owned HWND; validity is checked by the caller below.
                     unsafe { GetForegroundWindow() }
                 } else {
                     let pid = resolve_pid(self, &app).await? as u32;

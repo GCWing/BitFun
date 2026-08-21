@@ -17,11 +17,17 @@ export {
   type ReviewSubagentToolReadinessResult,
 } from '@/shared/services/reviewSubagentCapabilities';
 
+// Rules source mirror: `review` is a semantic marker and never filters the
+// tool set. Only `readonly` decides whether writable tools are stripped.
 export function filterToolsForReviewMode(
   tools: SubagentEditorToolInfo[],
-  review: boolean,
+  _review: boolean,
+  readonly: boolean,
 ): SubagentEditorToolInfo[] {
-  return review ? tools.filter((tool) => tool.isReadonly) : tools;
+  if (readonly) {
+    return tools.filter((tool) => tool.isReadonly);
+  }
+  return tools;
 }
 
 export interface NormalizeReviewModeStateInput {
@@ -37,10 +43,12 @@ export interface NormalizeReviewModeStateResult {
   removedToolNames: string[];
 }
 
+// Rules source mirror: review never touches readonly/tools. Only a readonly
+// subagent strips writable tools from the selection.
 export function normalizeReviewModeState(
   input: NormalizeReviewModeStateInput,
 ): NormalizeReviewModeStateResult {
-  if (!input.review) {
+  if (!input.readonly) {
     return {
       readonly: input.readonly,
       selectedTools: new Set(input.selectedTools),

@@ -102,6 +102,8 @@
     "installer:build:only": "pnpm --dir BitFun-Installer run installer:build:only",
     "installer:build:only:fast": "pnpm --dir BitFun-Installer run installer:build:only:fast",
     "installer:dev": "pnpm --dir BitFun-Installer run installer:dev",
+    "package:windows:assets": "node scripts/package-windows-assets.mjs",
+    "package:windows:test": "node --test scripts/package-windows-assets.test.mjs",
     "cli:dev": "pnpm run plugin-host:prepare && node scripts/cli-product.mjs dev",
     "cli:build": "pnpm run plugin-host:prepare && node scripts/cli-product.mjs build",
     "cli:install": "pnpm run plugin-host:prepare && node scripts/install-cli.mjs",

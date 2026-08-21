@@ -285,7 +285,7 @@ impl FileLockManager {
         let cutoff_time = SystemTime::now() - std::time::Duration::from_secs(max_wait_minutes * 60);
         let mut cleaned_count = 0;
 
-        for (_, queue) in waiting_queue.iter_mut() {
+        for queue in waiting_queue.values_mut() {
             let original_len = queue.len();
             queue.retain(|item| item.requested_at > cutoff_time);
             cleaned_count += original_len - queue.len();

@@ -1281,8 +1281,10 @@ mod shortcut_contract_tests {
     #[test]
     fn timestamps_render_inside_user_messages_only_when_enabled() {
         let mut view = ChatView::new(Theme::dark(), Vec::new());
-        let mut config = crate::config::UiConfig::default();
-        config.timestamps = true;
+        let mut config = crate::config::UiConfig {
+            timestamps: true,
+            ..Default::default()
+        };
         view.apply_presentation_config(&config);
         let timestamp = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(86_400);
         let message = ChatMessage {

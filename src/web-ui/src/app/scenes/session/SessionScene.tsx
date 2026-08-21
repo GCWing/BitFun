@@ -13,8 +13,10 @@ import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMe
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../../hooks/useApp';
 import ChatPane from './ChatPane';
+import GroupLogView from './GroupLogView';
 import AuxPane, { type AuxPaneRef } from './AuxPane';
 import BottomTerminalPane from './BottomTerminalPane';
+import { useActiveSession } from '../../../flow_chat/store/modernFlowChatStore';
 import {
   getCachedTerminalPanelPosition,
   onTerminalPanelPositionChange,
@@ -26,10 +28,12 @@ import {
   BOTTOM_TERMINAL_PANEL_CONFIG,
   RIGHT_PANEL_CONFIG,
   PANEL_COMMON_CONFIG,
+  CHAT_FULL_WIDTH_CONFIG,
   STORAGE_KEYS,
   PanelDisplayMode,
   getPanelDisplayMode,
   getModeWidth,
+  getRightPanelMaxWidth,
   getSnappedWidth,
   getNextMode,
   savePanelWidth,
@@ -56,6 +60,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     state,
     updateRightPanelWidth,
     toggleRightPanel,
+    toggleChatFullWidth,
     updateBottomTerminalPanelHeight,
     toggleBottomTerminalPanel,
   } = useApp();
@@ -135,6 +140,17 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     return getPanelDisplayMode(currentRightWidth, RIGHT_PANEL_CONFIG);
   }, [state.layout.rightPanelCollapsed, currentRightWidth]);
 
+  const isChatFullWidth = state.layout.chatFullWidth;
+
+  // R-GC-14 / R-WF-14: group chat detection (UI-local isGroupChat marker set by
+  // MainNav when creating/opening a group, restored from backend metadata —
+  // `customMetadata.groupChats`, FlowChatStore R-GC-35). A group session is
+  // itself an ordinary session (v3 decision); it routes to the read-only
+  // GroupLogView (R-WF-14: bubble timeline without composer/member table).
+  const activeSession = useActiveSession();
+  const activeSessionId = activeSession?.sessionId ?? '';
+  const isGroupChatActive = activeSessionId !== '' && activeSession?.isGroupChat === true;
+
   const bottomTerminalPanelMode: PanelDisplayMode = useMemo(() => {
     if (state.layout.bottomTerminalPanelCollapsed) return 'collapsed';
     return getPanelDisplayMode(currentBottomHeight, BOTTOM_TERMINAL_PANEL_CONFIG);
@@ -159,10 +175,10 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     // When the container hasn't been laid out yet (e.g. window just restored from
     // minimize), offsetWidth may be 0. Bail early to avoid clamping to a tiny value.
     if (containerWidth <= 0) return newWidth;
-    // NavPanel (240px) is outside SessionScene — only account for resizer + min chat width
-    const reserved = PANEL_COMMON_CONFIG.RESIZER_WIDTH + PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH;
-    const dynamicMax = containerWidth - reserved;
-    const maxWidth = Math.min(RIGHT_PANEL_CONFIG.MAX_WIDTH, dynamicMax);
+    // NavPanel (240px) is outside SessionScene — only account for resizer + min chat width.
+    // Pure dynamic upper bound (no MAX_WIDTH hard cap): the right panel stretches until
+    // the chat pane reaches its one-page minimum (MIN_CENTER_WIDTH).
+    const maxWidth = getRightPanelMaxWidth(containerWidth, PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH);
     return Math.min(maxWidth, Math.max(RIGHT_PANEL_CONFIG.COMPACT_WIDTH, newWidth));
   }, []);
 
@@ -188,10 +204,19 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   }, [updateBottomTerminalPanelHeight]);
 
   const handleDoubleClick = useCallback(() => {
+    // Double-click cycle: compact -> comfortable -> expanded -> full-width chat (-> comfortable)
+    if (rightPanelMode === 'expanded') {
+      toggleChatFullWidth();
+      return;
+    }
+    if (isChatFullWidth) {
+      toggleChatFullWidth();
+      return;
+    }
     const nextMode = getNextMode(rightPanelMode);
     const targetWidth = getModeWidth(nextMode, RIGHT_PANEL_CONFIG);
     saveAndUpdateRightWidth(calculateValidRightWidth(targetWidth));
-  }, [rightPanelMode, calculateValidRightWidth, saveAndUpdateRightWidth]);
+  }, [rightPanelMode, isChatFullWidth, calculateValidRightWidth, saveAndUpdateRightWidth, toggleChatFullWidth]);
 
   const handleBottomDoubleClick = useCallback(() => {
     const nextMode = getNextMode(bottomTerminalPanelMode);
@@ -204,7 +229,11 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     if (!containerRef.current) return;
 
     const startX = e.clientX;
-    const startWidth = currentRightWidth;
+    // Start from the DOM's real width, not the (possibly clamped) state value:
+    // the previous drag wrote the width directly to the DOM, so the state can
+    // lag behind a width the user pulled past 1200px. Reading the DOM keeps the
+    // second drag starting from the actual position (no "bounce back").
+    const startWidth = auxPaneElementRef.current?.offsetWidth ?? currentRightWidth;
     let lastValidWidth = startWidth;
 
     setIsDraggingRight(true);
@@ -219,7 +248,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
         if (auxPaneElementRef.current && !state.layout.chatCollapsed) {
           auxPaneElementRef.current.style.width = `${valid}px`;
         } else {
-          updateRightPanelWidth(valid);
+          updateRightPanelWidth(valid, { bypassMax: true });
         }
         animationFrameRef.current = null;
       });
@@ -236,7 +265,9 @@ const SessionScene: React.FC<SessionSceneProps> = ({
       if (snapped !== lastValidWidth) {
         saveAndUpdateRightWidth(snapped);
       } else {
-        updateRightPanelWidth(lastValidWidth);
+        // Drag path bypasses the 1200px cap so a wider manual width survives;
+        // the effective limit is the dynamic bound from calculateValidRightWidth.
+        updateRightPanelWidth(lastValidWidth, { bypassMax: true });
         setLastRightWidth(lastValidWidth);
         savePanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, lastValidWidth);
       }
@@ -299,14 +330,20 @@ const SessionScene: React.FC<SessionSceneProps> = ({
 
   useEffect(() => {
     const handler = (event: CustomEvent) => {
-      if (event.detail?.noAnimation && state.layout.rightPanelCollapsed) {
+      if (event.detail?.noAnimation && (state.layout.rightPanelCollapsed || isChatFullWidth)) {
         setIsAuxPaneExpandingImmediate(true);
         setTimeout(() => setIsAuxPaneExpandingImmediate(false), 0);
       }
     };
     window.addEventListener('expand-right-panel-immediate', handler as EventListener);
     return () => window.removeEventListener('expand-right-panel-immediate', handler as EventListener);
-  }, [state.layout.rightPanelCollapsed]);
+  }, [state.layout.rightPanelCollapsed, isChatFullWidth]);
+
+  // Full-width tiled chat and the right panel are independent: requesting the
+  // right panel to expand (open file tab, task detail, panel control, L0 drag)
+  // must NOT exit full-width. Previously this handler called toggleChatFullWidth
+  // and the user's right-panel open yanked the tiled layout away ("two-sided
+  // trap"). The right panel now simply opens beside the tiled conversation.
 
   const expandBottomTerminalPanel = useCallback(() => {
     const saved = loadPanelWidth(
@@ -343,6 +380,9 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   // localStorage that may exceed the current (non-maximized) window size.
   useEffect(() => {
     const validate = () => {
+      // Full-width tiled chat owns the right panel state; never re-clamp (or
+      // zero out) the remembered width while it is active.
+      if (isChatFullWidth) return;
       const valid = calculateValidRightWidth(currentRightWidth);
       if (valid !== currentRightWidth) updateRightPanelWidth(valid);
       if (isTerminalDockedBottom) {
@@ -359,6 +399,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   }, [
     currentRightWidth,
     currentBottomHeight,
+    isChatFullWidth,
     calculateValidRightWidth,
     calculateValidBottomHeight,
     isTerminalDockedBottom,
@@ -368,22 +409,33 @@ const SessionScene: React.FC<SessionSceneProps> = ({
 
   // Restore right panel width when window regains visibility (e.g. after minimize → restore).
   // This acts as a safety net in case any layout recalculation during the restore
-  // cycle lost the user's manual width adjustment.
+  // cycle lost the user's manual width adjustment. Only override when the saved
+  // width would no longer fit the (possibly shrunk) window — a larger manual
+  // width the user set before the minimize must NOT be pulled back to a smaller
+  // localStorage value. Note: `saved !== currentRightWidth` is NOT a valid guard
+  // here because the drag onUp writes BOTH the store and localStorage, so they
+  // always match; instead compare against the container's actual dynamic max.
   const prevVisibleRef = useRef(true);
   useEffect(() => {
     const handleVisibility = () => {
       const nowVisible = document.visibilityState === 'visible';
-      if (nowVisible && !prevVisibleRef.current) {
+      if (nowVisible && !prevVisibleRef.current && !isChatFullWidth) {
         const saved = loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, currentRightWidth);
-        if (saved !== currentRightWidth && !state.layout.rightPanelCollapsed) {
-          updateRightPanelWidth(saved);
+        const containerWidth = containerRef.current?.offsetWidth ?? 0;
+        const dynamicMax = containerWidth > 0
+          ? getRightPanelMaxWidth(containerWidth, PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH)
+          : Infinity;
+        // Only clamp when the window actually shrank: saved exceeds the current
+        // container's dynamic max. A larger manual width that still fits is kept.
+        if (!state.layout.rightPanelCollapsed && saved > dynamicMax) {
+          updateRightPanelWidth(Math.max(RIGHT_PANEL_CONFIG.COMPACT_WIDTH, dynamicMax));
         }
       }
       prevVisibleRef.current = nowVisible;
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [currentRightWidth, updateRightPanelWidth, state.layout.rightPanelCollapsed]);
+  }, [currentRightWidth, updateRightPanelWidth, state.layout.rightPanelCollapsed, isChatFullWidth]);
 
   // Cleanup animation frames
   useEffect(() => () => {
@@ -404,7 +456,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   // permanently damage scrollback before the panel reaches its final size.
   useLayoutEffect(() => {
     const transitionKey = [
-      state.layout.rightPanelCollapsed ? 'collapsed' : 'open',
+      (state.layout.rightPanelCollapsed || isChatFullWidth) ? 'collapsed' : 'open',
       currentRightWidth,
       isRightAsMain ? 'main' : 'side',
     ].join(':');
@@ -429,6 +481,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     currentRightWidth,
     isAuxPaneExpandingImmediate,
     isDraggingRight,
+    isChatFullWidth,
     isRightAsMain,
     startRightPanelTransition,
     state.layout.rightPanelCollapsed,
@@ -484,6 +537,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     compact:      t('layout.panelMode.compact'),
     comfortable:  t('layout.panelMode.comfortable'),
     expanded:     t('layout.panelMode.expanded'),
+    fullWidth:    t(CHAT_FULL_WIDTH_CONFIG.MODE_LABEL_KEY),
   }), [t]);
 
   const panelCollapseHintStyles = useMemo(() => {
@@ -514,7 +568,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
       ].filter(Boolean).join(' ') || undefined}
     >
       <div className="bitfun-session-scene__main-row" data-bf-scene="session" data-bf-part="main">
-        {/* ChatPane — FlowChat conversation */}
+        {/* ChatPane — FlowChat conversation (GroupLogView for group chats, R-WF-14) */}
         {!isChatHidden && (
           <div
             className={`bitfun-session-scene__chat-pane ${isDragging ? 'bitfun-session-scene__chat-pane--dragging' : ''}`}
@@ -522,14 +576,22 @@ const SessionScene: React.FC<SessionSceneProps> = ({
             data-bf-scene="session"
             data-bf-part="chat"
           >
-            <ChatPane
-              width={0}
-              isFullscreen={false}
-              isSceneActive={isActive}
-              isDragging={false}
-              workspacePath={workspacePath}
-              showChatInput
-            />
+            {isGroupChatActive ? (
+              <GroupLogView
+                groupId={activeSessionId}
+                workspacePath={workspacePath || activeSession?.workspacePath || ''}
+                isSceneActive={isActive}
+              />
+            ) : (
+              <ChatPane
+                width={0}
+                isFullscreen={false}
+                isSceneActive={isActive}
+                isDragging={false}
+                workspacePath={workspacePath}
+                showChatInput
+              />
+            )}
           </div>
         )}
 
@@ -554,7 +616,9 @@ const SessionScene: React.FC<SessionSceneProps> = ({
             aria-valuenow={currentRightWidth}
             aria-valuemin={RIGHT_PANEL_CONFIG.COMPACT_WIDTH}
             aria-valuemax={RIGHT_PANEL_CONFIG.MAX_WIDTH}
-            title={t('layout.resizer.title', { mode: panelModeLabels[rightPanelMode] })}
+            title={t('layout.resizer.title', {
+              mode: isChatFullWidth ? panelModeLabels.fullWidth : panelModeLabels[rightPanelMode],
+            })}
             data-testid="session-right-pane-resizer"
           >
             <div className="bitfun-pane-resizer__line" />
@@ -576,7 +640,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
           ref={auxPaneElementRef}
           className={[
             'bitfun-session-scene__aux-pane',
-            state.layout.rightPanelCollapsed         && 'bitfun-session-scene__aux-pane--collapsed',
+            state.layout.rightPanelCollapsed  && 'bitfun-session-scene__aux-pane--collapsed',
             isDraggingRight                          && 'bitfun-session-scene__aux-pane--dragging',
             isRightAsMain                            && 'bitfun-session-scene__aux-pane--editor-mode',
             isAuxPaneExpandingImmediate              && 'bitfun-session-scene__aux-pane--no-animation',

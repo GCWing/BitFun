@@ -111,7 +111,16 @@ vi.mock('@/infrastructure/api', () => ({
 vi.mock('@/infrastructure/event-bus', () => ({
   globalEventBus: {
     emit: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
   },
+}));
+
+vi.mock('@/app/hooks/useApp', () => ({
+  useApp: () => ({
+    toggleChatFullWidth: vi.fn(),
+  }),
+  useChatFullWidth: () => false,
 }));
 
 vi.mock('@/shared/notification-system', () => ({

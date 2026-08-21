@@ -49,4 +49,17 @@ describe('SessionStateMachine recoverable interruption', () => {
     expect(interruptDialogTurn).toHaveBeenCalledWith('session-1', 'turn-1');
     expect(cancelSessionTask).not.toHaveBeenCalled();
   });
+
+  it('keeps processing when a background command is running after turn completion', async () => {
+    const machine = new SessionStateMachineImpl('session-1');
+    await machine.transition(SessionExecutionEvent.START, {
+      taskId: 'session-1',
+      dialogTurnId: 'turn-1',
+    });
+
+    // R-WF-25: DialogTurnCompleted with a live background command must keep the
+    // session PROCESSING (running icon stays lit) instead of settling to IDLE.
+    await machine.transition(SessionExecutionEvent.BACKGROUND_COMMAND_RUNNING);
+    expect(machine.getCurrentState()).toBe('processing');
+  });
 });

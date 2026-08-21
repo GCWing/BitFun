@@ -85,6 +85,12 @@ fn extract_sse_api_error(event_json: &Value) -> Option<AiProviderError> {
 /// * `response` - HTTP response
 /// * `tx_event` - parsed event sender
 /// * `tx_raw_sse` - optional raw SSE sender (collect raw data for diagnostics)
+/// * `qoder_envelope` - when true, each `data:` payload is the Qoder gateway
+///   envelope `{"headers":{...},"body":"<inner>","statusCode":"OK",...}`;
+///   the inner `body` string (a standard OpenAI SSE chunk or `[DONE]`) is
+///   unwrapped before the normal OpenAI parsing. Qoder also appends a
+///   terminal `event:finish` with a duration summary that has no `body`
+///   field — that event is skipped as non-standard.
 pub async fn handle_openai_stream(
     response: Response,
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
@@ -92,6 +98,49 @@ pub async fn handle_openai_stream(
     inline_think_in_text: bool,
     ttft_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
+) {
+    handle_openai_stream_inner(
+        response,
+        tx_event,
+        tx_raw_sse,
+        inline_think_in_text,
+        ttft_timeout,
+        idle_timeout,
+        false,
+    )
+    .await
+}
+
+/// Qoder gateway variant of [`handle_openai_stream`]: unwraps the gateway
+/// envelope on every SSE event before OpenAI parsing.
+pub async fn handle_qoder_stream(
+    response: Response,
+    tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
+    tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    inline_think_in_text: bool,
+    ttft_timeout: Option<Duration>,
+    idle_timeout: Option<Duration>,
+) {
+    handle_openai_stream_inner(
+        response,
+        tx_event,
+        tx_raw_sse,
+        inline_think_in_text,
+        ttft_timeout,
+        idle_timeout,
+        true,
+    )
+    .await
+}
+
+async fn handle_openai_stream_inner(
+    response: Response,
+    tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
+    tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    inline_think_in_text: bool,
+    ttft_timeout: Option<Duration>,
+    idle_timeout: Option<Duration>,
+    qoder_envelope: bool,
 ) {
     let mut stream = response.bytes_stream().eventsource();
     let mut stats = StreamStats::new("OpenAI");
@@ -155,6 +204,17 @@ pub async fn handle_openai_stream(
         if let Some(ref tx) = tx_raw_sse {
             let _ = tx.send(raw.clone());
         }
+        // Qoder gateway wraps each chunk as `{"headers":{...},"body":"<inner>",...}`.
+        // Unwrap the inner body string before OpenAI parsing; the terminal
+        // `event:finish` duration summary has no body field and is skipped.
+        let raw = if qoder_envelope {
+            match unwrap_qoder_envelope(&raw) {
+                Some(inner) => inner,
+                None => continue,
+            }
+        } else {
+            raw
+        };
         if raw == "[DONE]" {
             for normalized_response in normalizer.flush() {
                 stats.record_unified_response(&normalized_response);
@@ -168,7 +228,7 @@ pub async fn handle_openai_stream(
         let event_json: Value = match serde_json::from_str(&raw) {
             Ok(json) => json,
             Err(e) => {
-                let error_msg = format!("SSE parsing error: {}, data: {}", e, &raw);
+                let error_msg = format!("SSE parsing error: {}, data: {}", e, raw);
                 stats.increment("error:sse_parsing");
                 stats.log_summary("sse_parsing_error");
                 error!("{}", error_msg);
@@ -203,7 +263,7 @@ pub async fn handle_openai_stream(
         let sse_data: OpenAISSEData = match serde_json::from_value(event_json) {
             Ok(event) => event,
             Err(e) => {
-                let error_msg = format!("SSE data schema error: {}, data: {}", e, &raw);
+                let error_msg = format!("SSE data schema error: {}, data: {}", e, raw);
                 stats.increment("error:schema");
                 stats.log_summary("sse_data_schema_error");
                 error!("{}", error_msg);
@@ -266,12 +326,29 @@ pub async fn handle_openai_stream(
     }
 }
 
+/// Unwraps the Qoder gateway SSE envelope `{"headers":{...},"body":"<inner>",
+/// "statusCode":"OK","statusCodeValue":200}` into the inner `body` string
+/// (a standard OpenAI SSE chunk or `[DONE]`). Returns `None` for events that
+/// carry no `body` field (e.g. the terminal `event:finish` duration summary).
+fn unwrap_qoder_envelope(raw: &str) -> Option<String> {
+    let envelope: Value = serde_json::from_str(raw).ok()?;
+    let body = envelope.get("body")?;
+    match body {
+        Value::String(inner) => Some(inner.clone()),
+        // Some gateways emit the body as a raw JSON object (non-chunk shapes);
+        // keep it as-is so the standard parser can classify it.
+        _ => Some(body.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         extract_sse_api_error, extract_sse_api_error_message, is_valid_chat_completion_chunk_weak,
+        unwrap_qoder_envelope,
     };
     use bitfun_core_types::errors::ErrorCategory;
+    use serde_json::Value;
 
     #[test]
     fn weak_filter_accepts_chat_completion_chunk() {
@@ -357,5 +434,38 @@ mod tests {
             "object": "chat.completion.chunk"
         });
         assert!(extract_sse_api_error_message(&event).is_none());
+    }
+
+    #[test]
+    fn qoder_envelope_unwraps_inner_openai_chunk() {
+        let envelope = serde_json::json!({
+            "headers": {"Content-Type": ["application/json"]},
+            "body": "{\"choices\":[{\"delta\":{\"content\":\"hi\"},\"index\":0}],\"object\":\"chat.completion.chunk\"}",
+            "statusCode": "OK",
+            "statusCodeValue": 200
+        })
+        .to_string();
+        let inner = unwrap_qoder_envelope(&envelope).expect("envelope unwraps");
+        let parsed: Value = serde_json::from_str(&inner).expect("inner is valid JSON");
+        assert_eq!(parsed["object"], "chat.completion.chunk");
+    }
+
+    #[test]
+    fn qoder_envelope_unwraps_done_marker() {
+        let envelope = serde_json::json!({
+            "headers": {"Content-Type": ["application/json"]},
+            "body": "[DONE]",
+            "statusCode": "OK",
+            "statusCodeValue": 200
+        })
+        .to_string();
+        assert_eq!(unwrap_qoder_envelope(&envelope).as_deref(), Some("[DONE]"));
+    }
+
+    #[test]
+    fn qoder_finish_event_without_body_is_skipped() {
+        // Terminal `event:finish` duration summary has no body field.
+        let finish = r#"{"firstTokenDuration":788,"totalDuration":2025,"serverDuration":40}"#;
+        assert!(unwrap_qoder_envelope(finish).is_none());
     }
 }

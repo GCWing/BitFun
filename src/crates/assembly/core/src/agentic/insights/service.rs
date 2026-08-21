@@ -3,7 +3,8 @@ use crate::agentic::insights::collector::InsightsCollector;
 use crate::agentic::insights::facet_cache;
 use crate::agentic::insights::html::generate_html;
 use crate::agentic::insights::prompt_context::{
-    aggregate_stats_json_for_prompt, friction_block, summaries_block, user_instructions_block,
+    aggregate_stats_json_for_prompt, friction_block_with_limit, summaries_block_with_limit,
+    user_instructions_block_with_limit,
 };
 use crate::agentic::insights::types::*;
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -29,8 +30,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
-
-const MAX_CONCURRENT_FACET_EXTRACTIONS: usize = 5;
 
 #[derive(Clone)]
 struct TrackedAIClient {
@@ -328,7 +327,12 @@ impl InsightsService {
         token: &CancellationToken,
     ) -> BitFunResult<Vec<SessionFacet>> {
         let total = transcripts.len();
-        let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_FACET_EXTRACTIONS));
+        // R-THR-01 批2 2-4：并发上限配置化（`ai.thresholds.insights.max_concurrent_facet_extractions`）。
+        let concurrent_limit = crate::service::config::types::configured_insights_thresholds()
+            .await
+            .max_concurrent_facet_extractions
+            .max(1);
+        let semaphore = Arc::new(Semaphore::new(concurrent_limit));
         let counter = Arc::new(AtomicUsize::new(0));
         let rate_limited = Arc::new(AtomicBool::new(false));
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -548,9 +552,13 @@ impl InsightsService {
         HorizonResult,
         Option<FunEnding>,
     ) {
+        // R-THR-01 批2 2-3：洞察 prompt 上下文上限配置化（`ai.thresholds.insights.*`）。
+        let prompt_limits = crate::service::config::types::configured_insights_thresholds().await;
         let aggregate_json = aggregate_stats_json_for_prompt(aggregate);
-        let summaries_text = summaries_block(aggregate);
-        let friction_text = friction_block(aggregate);
+        let summaries_text =
+            summaries_block_with_limit(aggregate, prompt_limits.max_prompt_session_summaries);
+        let friction_text =
+            friction_block_with_limit(aggregate, prompt_limits.max_prompt_friction_details);
 
         let semaphore = Arc::new(Semaphore::new(3));
 
@@ -661,8 +669,8 @@ impl InsightsService {
             || async {
                 Self::analyze_wins(
                     ai_client,
-                    &aggregate_stats_json_for_prompt(aggregate),
-                    &summaries_block(aggregate),
+                    &aggregate_json,
+                    &summaries_text,
                     lang_instruction,
                 )
                 .await
@@ -677,9 +685,9 @@ impl InsightsService {
             || async {
                 Self::analyze_friction(
                     ai_client,
-                    &aggregate_stats_json_for_prompt(aggregate),
-                    &summaries_block(aggregate),
-                    &friction_block(aggregate),
+                    &aggregate_json,
+                    &summaries_text,
+                    &friction_text,
                     lang_instruction,
                 )
                 .await
@@ -701,8 +709,8 @@ impl InsightsService {
             || async {
                 Self::analyze_interaction_style(
                     ai_client,
-                    &aggregate_stats_json_for_prompt(aggregate),
-                    &summaries_block(aggregate),
+                    &aggregate_json,
+                    &summaries_text,
                     lang_instruction,
                 )
                 .await
@@ -717,9 +725,9 @@ impl InsightsService {
             || async {
                 Self::generate_horizon(
                     ai_client,
-                    &aggregate_stats_json_for_prompt(aggregate),
-                    &summaries_block(aggregate),
-                    &friction_block(aggregate),
+                    &aggregate_json,
+                    &summaries_text,
+                    &friction_text,
                     lang_instruction,
                 )
                 .await
@@ -734,8 +742,8 @@ impl InsightsService {
             || async {
                 Self::generate_fun_ending(
                     ai_client,
-                    &aggregate_stats_json_for_prompt(aggregate),
-                    &summaries_block(aggregate),
+                    &aggregate_json,
+                    &summaries_text,
                     lang_instruction,
                 )
                 .await
@@ -852,9 +860,16 @@ impl InsightsService {
         lang_instruction: &str,
     ) -> BitFunResult<InsightsSuggestions> {
         let aggregate_json = aggregate_stats_json_for_prompt(aggregate);
-        let summaries = summaries_block(aggregate);
-        let friction_details = friction_block(aggregate);
-        let user_instructions = user_instructions_block(aggregate);
+        // R-THR-01 批2 2-3：prompt 上下文上限配置化。
+        let prompt_limits = crate::service::config::types::configured_insights_thresholds().await;
+        let summaries =
+            summaries_block_with_limit(aggregate, prompt_limits.max_prompt_session_summaries);
+        let friction_details =
+            friction_block_with_limit(aggregate, prompt_limits.max_prompt_friction_details);
+        let user_instructions = user_instructions_block_with_limit(
+            aggregate,
+            prompt_limits.max_prompt_user_instructions,
+        );
 
         let prompt = format!(
             "{}{}",
@@ -984,7 +999,13 @@ impl InsightsService {
         lang_instruction: &str,
     ) -> BitFunResult<Vec<ProjectArea>> {
         let aggregate_json = aggregate_stats_json_for_prompt(aggregate);
-        let summaries = summaries_block(aggregate);
+        // R-THR-01 批2 2-3：prompt 上下文上限配置化。
+        let summaries = summaries_block_with_limit(
+            aggregate,
+            crate::service::config::types::configured_insights_thresholds()
+                .await
+                .max_prompt_session_summaries,
+        );
 
         let prompt = format!(
             "{}{}",

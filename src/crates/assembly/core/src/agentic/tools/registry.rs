@@ -19,7 +19,7 @@ pub(in crate::agentic::tools) type ProductToolDecoratorRef = ToolDecoratorRef<dy
 fn route_external_tool_registration(tool: ToolRef) -> ToolRef {
     #[cfg(feature = "external-sources")]
     {
-        return crate::external_tools::intercept_external_tool_registry_registration(tool);
+        crate::external_tools::intercept_external_tool_registry_registration(tool)
     }
     #[cfg(not(feature = "external-sources"))]
     {
@@ -30,7 +30,7 @@ fn route_external_tool_registration(tool: ToolRef) -> ToolRef {
 fn detach_external_mcp_routes(server_id: &str) -> Vec<ToolRef> {
     #[cfg(feature = "external-sources")]
     {
-        return crate::external_tools::detach_external_tool_mcp_server(server_id);
+        crate::external_tools::detach_external_tool_mcp_server(server_id)
     }
     #[cfg(not(feature = "external-sources"))]
     {
@@ -42,7 +42,7 @@ fn detach_external_mcp_routes(server_id: &str) -> Vec<ToolRef> {
 fn retain_external_tool_muxes(prefix: &str) -> Vec<ToolRef> {
     #[cfg(feature = "external-sources")]
     {
-        return crate::external_tools::retain_external_tool_muxes_for_prefix(prefix);
+        crate::external_tools::retain_external_tool_muxes_for_prefix(prefix)
     }
     #[cfg(not(feature = "external-sources"))]
     {
@@ -561,6 +561,8 @@ mod tests {
             "analyze_image",
             "Glob",
             "Grep",
+            "WorkspaceScan",
+            "KnowledgeBaseSearch",
             "Write",
             "Edit",
             "Delete",
@@ -579,6 +581,9 @@ mod tests {
             "create_goal",
             "update_goal",
             "CreatePlan",
+            "PlanList",
+            "PlanRead",
+            "PlanUpdate",
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
@@ -588,9 +593,24 @@ mod tests {
             "UpdateCanvas",
             "PatchCanvas",
             "SessionControl",
+            "LegionControl",
             "SessionMessage",
             "SessionHistory",
+            "acp_control",
+            "acp_message",
+            "acp_history",
             "Cron",
+            "create_group_chat",
+            "invite_group_member",
+            "remove_group_member",
+            "send_group_message",
+            "get_group_history",
+            "list_group_chats",
+            "fork_group_chat",
+            "group_member_status",
+            "delete_group_chat",
+            "update_group_member_tools",
+            "update_group_wiring",
             "WebSearch",
             "WebFetch",
             "ListMCPResources",
@@ -769,6 +789,9 @@ mod tests {
         assert!(!registry.is_tool_deferred("InitMiniApp"));
         assert!(!registry.is_tool_deferred("FinalizeMiniApp"));
         assert!(!registry.is_tool_deferred("PublishMiniApp"));
+        // 2026-08-04 user calibration: CreatePlan is a commander staple and is
+        // directly available without a GetToolSpec unlock round-trip.
+        assert!(!registry.is_tool_deferred("CreatePlan"));
         assert!(!registry.is_tool_deferred("PublishAppearance"));
     }
 
@@ -781,11 +804,14 @@ mod tests {
             registry.get_deferred_tool_names(),
             vec![
                 "ListModels",
-                "CreatePlan",
                 "GetFileDiff",
                 "SessionControl",
+                "LegionControl",
                 "SessionMessage",
                 "SessionHistory",
+                "acp_control",
+                "acp_message",
+                "acp_history",
                 "Cron",
                 "WebSearch",
                 "WebFetch",
@@ -824,18 +850,24 @@ mod tests {
                 "analyze_image",
                 "Glob",
                 "Grep",
+                "WorkspaceScan",
+                "KnowledgeBaseSearch",
                 "GetTime",
                 "ListModels",
                 "Skill",
                 "AskUserQuestion",
-                "TodoWrite",
                 "get_goal",
-                "CreatePlan",
+                "PlanList",
+                "PlanRead",
                 "submit_code_review",
                 "GetToolSpec",
                 "GetFileDiff",
                 "ReadCanvas",
                 "SessionHistory",
+                "acp_history",
+                "get_group_history",
+                "list_group_chats",
+                "group_member_status",
                 "WebSearch",
                 "WebFetch",
                 "ListMCPResources",
@@ -847,6 +879,30 @@ mod tests {
             ],
             "readonly tool manifest must stay stable before moving registry ownership"
         );
+    }
+
+    #[cfg(feature = "product-full")]
+    #[test]
+    fn group_room_alias_readonly_matches_action_readonly_manifest() {
+        // R-GC-09 §六.5：9 个群聊别名工具按 action 区分只读（与
+        // group_room_action_is_readonly 一致）；readonly manifest 为 tool 级
+        // is_readonly() 过滤，别名工具 is_readonly 即 manifest 判定源。
+        use crate::agentic::tools::implementations::group_room_aliases::{
+            group_room_alias_tool_for_name, GROUP_ROOM_ALIAS_TOOL_NAMES,
+        };
+        for tool_name in GROUP_ROOM_ALIAS_TOOL_NAMES {
+            let alias = group_room_alias_tool_for_name(tool_name)
+                .unwrap_or_else(|| panic!("alias {tool_name} must materialize"));
+            let readonly = matches!(
+                *tool_name,
+                "get_group_history" | "list_group_chats" | "group_member_status"
+            );
+            assert_eq!(
+                alias.is_readonly(),
+                readonly,
+                "alias {tool_name} readonly must match contract §六.5"
+            );
+        }
     }
 
     #[tokio::test]

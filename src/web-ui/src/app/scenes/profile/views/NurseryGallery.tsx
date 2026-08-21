@@ -29,6 +29,7 @@ import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import AssistantCard from './AssistantCard';
+import { isWorkflowClawWorkspace } from '../../workflow-claw/workflowClawWorkspace';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
 
@@ -133,8 +134,11 @@ const NurseryGallery: React.FC = () => {
 
   const sortedAssistantWorkspacesList = useMemo(
     () => {
-      const primary = assistantWorkspacesList.filter(w => w.id === primaryAssistantWorkspaceId);
-      const secondary = assistantWorkspacesList.filter(w => w.id !== primaryAssistantWorkspaceId);
+      // R-WF-18: plain assistant gallery must not mix in workflow-member
+      // Claw workspaces (they live in the independent workflow-Claw list).
+      const plainAssistants = assistantWorkspacesList.filter(w => !isWorkflowClawWorkspace(w));
+      const primary = plainAssistants.filter(w => w.id === primaryAssistantWorkspaceId);
+      const secondary = plainAssistants.filter(w => w.id !== primaryAssistantWorkspaceId);
       return [...primary, ...secondary];
     },
     [assistantWorkspacesList, primaryAssistantWorkspaceId]

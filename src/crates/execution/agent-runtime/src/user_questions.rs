@@ -326,6 +326,16 @@ pub fn ask_user_question_available_in_context(
 }
 
 pub fn validate_ask_user_question_input(input: &AskUserQuestionInput) -> Result<(), String> {
+    validate_ask_user_question_input_with_limit(input, 20)
+}
+
+/// R-THR-01 批2 2-1：header 上限配置化变体——limit 由调用方从
+/// `ai.thresholds.user_questions.header_max_chars` 解析
+/// （默认镜像旧硬编码 20，零行为变化）。
+pub fn validate_ask_user_question_input_with_limit(
+    input: &AskUserQuestionInput,
+    header_max_chars: usize,
+) -> Result<(), String> {
     if input.questions.is_empty() {
         return Err("At least one question is required".to_string());
     }
@@ -343,9 +353,9 @@ pub fn validate_ask_user_question_input(input: &AskUserQuestionInput) -> Result<
         if question.header.trim().is_empty() {
             return Err(format!("Question {} header is required", q_num));
         }
-        if question.header.chars().count() > 20 {
+        if question.header.chars().count() > header_max_chars {
             return Err(format!(
-                "Question {} header must be less than 20 characters",
+                "Question {} header must be less than {header_max_chars} characters",
                 q_num
             ));
         }

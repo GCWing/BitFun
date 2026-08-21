@@ -63,10 +63,24 @@ struct DeepReviewTurnBudget {
     runtime_diagnostics: DeepReviewRuntimeDiagnostics,
     created_at: Instant,
     updated_at: Instant,
+    /// Per-turn max diff chars budget. `None` = use the legacy
+    /// [`REVIEW_DIFF_MAX_CHARS_PER_TURN`] constant.
+    configured_diff_max_chars: Option<usize>,
+    /// Per-turn max provider-diff acquisitions budget. `None` = use the legacy
+    /// [`REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN`] constant.
+    configured_diff_max_acquisitions: Option<usize>,
 }
 
 impl DeepReviewTurnBudget {
     fn new(now: Instant) -> Self {
+        Self::with_configured_budgets(now, None, None)
+    }
+
+    fn with_configured_budgets(
+        now: Instant,
+        configured_diff_max_chars: Option<usize>,
+        configured_diff_max_acquisitions: Option<usize>,
+    ) -> Self {
         Self {
             judge_calls: 0,
             reviewer_calls: 0,
@@ -91,6 +105,8 @@ impl DeepReviewTurnBudget {
             runtime_diagnostics: DeepReviewRuntimeDiagnostics::default(),
             created_at: now,
             updated_at: now,
+            configured_diff_max_chars,
+            configured_diff_max_acquisitions,
         }
     }
 
@@ -130,6 +146,10 @@ impl Drop for DeepReviewActiveReviewerGuard<'_> {
 pub struct DeepReviewBudgetTracker {
     turns: DashMap<String, DeepReviewTurnBudget>,
     last_pruned_at: Mutex<Instant>,
+    /// Configured per-turn diff budgets (`ai.thresholds.deep_review.*`).
+    /// `None` entries fall back to the legacy constants.
+    configured_diff_max_chars: Mutex<Option<usize>>,
+    configured_diff_max_acquisitions: Mutex<Option<usize>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,11 +164,48 @@ impl Default for DeepReviewBudgetTracker {
         Self {
             turns: DashMap::new(),
             last_pruned_at: Mutex::new(Instant::now()),
+            configured_diff_max_chars: Mutex::new(None),
+            configured_diff_max_acquisitions: Mutex::new(None),
         }
     }
 }
 
 impl DeepReviewBudgetTracker {
+    /// Override the per-turn diff budgets
+    /// (`ai.thresholds.deep_review.diff_max_chars_per_turn` /
+    /// `diff_max_acquisitions_per_turn`). `None` keeps the legacy constant.
+    /// `0` is rejected (falls back to the legacy constant) so a misconfigured
+    /// budget can never hard-disable every Review diff read.
+    pub fn set_configured_diff_budgets(
+        &self,
+        diff_max_chars_per_turn: Option<usize>,
+        diff_max_acquisitions_per_turn: Option<usize>,
+    ) {
+        *self
+            .configured_diff_max_chars
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) =
+            diff_max_chars_per_turn.filter(|value| *value > 0);
+        *self
+            .configured_diff_max_acquisitions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) =
+            diff_max_acquisitions_per_turn.filter(|value| *value > 0);
+    }
+
+    fn configured_budgets(&self) -> (Option<usize>, Option<usize>) {
+        (
+            *self
+                .configured_diff_max_chars
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+            *self
+                .configured_diff_max_acquisitions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        )
+    }
+
     fn record_reason_count(
         counts: &mut std::collections::BTreeMap<String, usize>,
         reason: DeepReviewCapacityQueueReason,
@@ -179,10 +236,18 @@ impl DeepReviewBudgetTracker {
                 self.prune_stale(now);
             }
         }
+        let (configured_diff_max_chars, configured_diff_max_acquisitions) =
+            self.configured_budgets();
         let mut turn = self
             .turns
             .entry(parent_dialog_turn_id.to_string())
-            .or_insert_with(|| DeepReviewTurnBudget::new(now));
+            .or_insert_with(|| {
+                DeepReviewTurnBudget::with_configured_budgets(
+                    now,
+                    configured_diff_max_chars,
+                    configured_diff_max_acquisitions,
+                )
+            });
         let repeated_page = turn
             .review_diff_returned_pages_by_reviewer
             .get(reviewer_id.trim())
@@ -192,11 +257,14 @@ impl DeepReviewBudgetTracker {
                 repeated_page: true,
             };
         }
+        let max_chars_per_turn = turn
+            .configured_diff_max_chars
+            .unwrap_or(REVIEW_DIFF_MAX_CHARS_PER_TURN);
         if turn.review_diff_exhausted
             || turn
                 .review_diff_returned_chars
                 .saturating_add(returned_chars)
-                > REVIEW_DIFF_MAX_CHARS_PER_TURN
+                > max_chars_per_turn
         {
             turn.review_diff_exhausted = true;
             turn.updated_at = now;
@@ -226,12 +294,22 @@ impl DeepReviewBudgetTracker {
             return false;
         }
         let now = Instant::now();
+        let (configured_diff_max_chars, configured_diff_max_acquisitions) =
+            self.configured_budgets();
         let mut turn = self
             .turns
             .entry(parent_dialog_turn_id.to_string())
-            .or_insert_with(|| DeepReviewTurnBudget::new(now));
-        if turn.review_provider_diff_acquisitions >= REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN
-        {
+            .or_insert_with(|| {
+                DeepReviewTurnBudget::with_configured_budgets(
+                    now,
+                    configured_diff_max_chars,
+                    configured_diff_max_acquisitions,
+                )
+            });
+        let max_acquisitions = turn
+            .configured_diff_max_acquisitions
+            .unwrap_or(REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN);
+        if turn.review_provider_diff_acquisitions >= max_acquisitions {
             turn.review_diff_limited = true;
             turn.updated_at = now;
             return false;
@@ -545,6 +623,7 @@ impl DeepReviewBudgetTracker {
         )
     }
 
+    #[allow(clippy::too_many_arguments)] // policy-record API; grouping would churn all callers
     pub fn record_task_for_packet_with_focus(
         &self,
         parent_dialog_turn_id: &str,

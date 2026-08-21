@@ -95,6 +95,7 @@ vi.mock('react-i18next', () => ({
         'steering.statusInjected': '已触发',
         'message.copy': '复制',
         'message.copyFailed': '复制失败',
+        'message.system': '系统',
       };
       return labels[key] ?? key;
     },
@@ -736,5 +737,163 @@ describe('UserMessageItem steering tag', () => {
       editedContent: 'edited older window prompt',
     }));
     expect(flowChatStoreMock.loadSessionHistory).not.toHaveBeenCalled();
+  });
+
+  it('renders a sender identity badge for forwarded agent messages', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-forwarded-1',
+              content: 'run the recon task',
+              timestamp: 1000,
+              metadata: {
+                senderSessionId: 'commander-session',
+                senderRole: 'Commander',
+                senderDepth: 0,
+                senderName: 'Assistant',
+              },
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const badge = container.querySelector('.user-message-item__sender-badge');
+    expect(badge?.textContent).toBe('[Commander L0] Assistant');
+
+    // Identity badge must live INSIDE the message content flow (first inline
+    // element) so the text wraps beneath it — not beside it as a flex column.
+    const content = container.querySelector('.user-message-item__content');
+    expect(content?.contains(badge)).toBe(true);
+    expect(content?.classList.contains('user-message-item__content--with-badge')).toBe(true);
+  });
+
+  it('renders a fallback role when sender metadata lacks role and depth', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-forwarded-2',
+              content: 'reply from an unregistered session',
+              timestamp: 1000,
+              metadata: {
+                senderSessionId: 'unknown-session',
+              },
+            }}
+            turnId="turn-2"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const badge = container.querySelector('.user-message-item__sender-badge');
+    expect(badge?.textContent).toBe('[Agent]');
+  });
+
+  it('does not render a sender badge for plain user messages without metadata', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-plain-1',
+              content: 'a direct user question',
+              timestamp: 1000,
+            }}
+            turnId="turn-3"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('.user-message-item__sender-badge')).toBeNull();
+  });
+
+  it('renders a system badge for the group mode system prompt (R-WF-08)', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'group-mode-system-1',
+              content: '群聊工作流 mode：本群为群聊容器会话。',
+              timestamp: 1000,
+              metadata: {
+                groupId: 'group-1',
+                senderSessionId: 'group-1',
+                turnRole: 'system',
+              },
+            }}
+            turnId="turn-g0"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    // R-WF-08: 群首 turn = system 提示词，senderBadge 渲染为 [系统]。
+    const badge = container.querySelector('.user-message-item__sender-badge');
+    expect(badge?.textContent).toBe('[系统]');
+    const content = container.querySelector('.user-message-item__content');
+    expect(content?.textContent).toContain('群聊工作流 mode');
+  });
+
+  it('applies group-chat indent classes by senderSessionId (R-GC-14)', () => {
+    const previous = activeSessionRef.current;
+    activeSessionRef.current = { sessionId: 'group-1', dialogTurns: [] };
+    try {
+      // 群主消息（senderSessionId === 群会话 id）：--group-self，无右侧错位。
+      act(() => {
+        root.render(
+          <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+            <UserMessageItem
+              message={{
+                id: 'group-owner-1',
+                content: 'owner message',
+                timestamp: 1000,
+                metadata: {
+                  groupId: 'group-1',
+                  senderSessionId: 'group-1',
+                  senderName: '群主',
+                },
+              }}
+              turnId="turn-g1"
+            />
+          </FlowChatContext.Provider>,
+        );
+      });
+      let item = container.querySelector('.user-message-item');
+      expect(item?.classList.contains('user-message-item--group-self')).toBe(true);
+      expect(item?.classList.contains('user-message-item--group-other')).toBe(false);
+
+      // 成员消息（senderSessionId !== 群会话 id）：--group-other（右侧缩进错位）。
+      act(() => {
+        root.render(
+          <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+            <UserMessageItem
+              message={{
+                id: 'group-member-1',
+                content: 'member reply',
+                timestamp: 1000,
+                metadata: {
+                  groupId: 'group-1',
+                  senderSessionId: 'member-2',
+                  senderName: '二号',
+                },
+              }}
+              turnId="turn-g2"
+            />
+          </FlowChatContext.Provider>,
+        );
+      });
+      item = container.querySelector('.user-message-item');
+      expect(item?.classList.contains('user-message-item--group-other')).toBe(true);
+      expect(item?.classList.contains('user-message-item--group-self')).toBe(false);
+    } finally {
+      activeSessionRef.current = previous;
+    }
   });
 });

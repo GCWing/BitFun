@@ -366,6 +366,7 @@ impl RemoteStdioRepoSession {
                     repo_id: self.repo_id.clone(),
                     query,
                     scope,
+                    allow_scan_fallback: false,
                 },
             })
             .await?
@@ -400,6 +401,7 @@ impl RemoteStdioRepoSession {
                     repo_id: self.repo_id.clone(),
                     query,
                     scope,
+                    allow_scan_fallback: false,
                 },
             })
             .await?

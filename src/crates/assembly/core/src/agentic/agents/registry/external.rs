@@ -14,11 +14,19 @@ use bitfun_product_domains::external_subagents::ExternalSubagentMode;
 use log::{debug, warn};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, Weak};
+use tokio::sync::RwLock;
 
+/// Stable prefix for external subagent runtime keys within the agent registry.
+/// External subagents are registered under this namespace to avoid collisions with
+/// built-in agents (`builtin:`, `custom:`, etc.). The module itself is intentionally
+/// minimal — routing and lifecycle logic lives in `external_subagents.rs`.
 #[cfg(feature = "external-sources")]
 pub(crate) const EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX: &str = "external_subagent_runtime:";
 
+/// Formats a stable runtime key for an external subagent given its content digest.
+/// Used by `install_active_candidate` to register generation-specific agent entries
+/// without re-parsing ecosystem manifests on every restart.
 #[cfg(feature = "external-sources")]
 pub(crate) fn external_subagent_runtime_key(digest: &str) -> String {
     format!("{EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX}{digest}")
@@ -106,38 +114,47 @@ impl ExternalSubagentRegistryState {
         }
     }
 
+    // Synchronous helper over a tokio RwLock (no await point); see
+    // super::spin_read for the bounded-retry contract. Guards must never be
+    // held across an await; a panic (spin cap exceeded) means a holder
+    // violated that.
     fn read_generations(
         &self,
-    ) -> std::sync::RwLockReadGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
-        self.generations
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
+        super::spin_read(
+            &self.generations,
+            "ExternalSubagentRegistryState generations",
+        )
     }
 
     fn write_generations(
         &self,
-    ) -> std::sync::RwLockWriteGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
-        self.generations
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
+        super::spin_write(
+            &self.generations,
+            "ExternalSubagentRegistryState generations",
+        )
     }
 
+    // Synchronous helper; see read_generations for the lock-contention contract.
     fn read_routes(
         &self,
-    ) -> std::sync::RwLockReadGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
+    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
     {
-        self.workspace_routes
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        super::spin_read(
+            &self.workspace_routes,
+            "ExternalSubagentRegistryState workspace_routes",
+        )
     }
 
     fn write_routes(
         &self,
-    ) -> std::sync::RwLockWriteGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
+    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
     {
-        self.workspace_routes
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        super::spin_write(
+            &self.workspace_routes,
+            "ExternalSubagentRegistryState workspace_routes",
+        )
     }
 
     pub(super) fn find_generation_entry(&self, runtime_key: &str) -> Option<AgentEntry> {
@@ -291,6 +308,48 @@ pub struct ExternalPrimaryAgentTurnBinding {
     pub lease: Option<ExternalSubagentGenerationLease>,
 }
 
+/// 主代理（会话主模型）解析失败的原因分类。
+///
+/// 之前 `resolve_primary_agent_for_turn` 对「路由不可用」与「owner 不匹配」
+/// 一律返回 `None`，调用方只能统一报 "Unknown session mode"，无法诊断。
+/// 现在返回带原因的 `Err`，区分：
+/// - `CandidateUnavailable`：外部候选已撤回 / generation 缺失 / 不支持主代理，
+///   或本地候选不存在；
+/// - `OwnerMismatch`：已解析绑定与持久化会话的期望 owner 不一致。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalPrimaryAgentResolutionError {
+    /// 候选不可用：路由处于 `Unavailable`（fail-closed 撤回），或外部
+    /// generation 缺失 / 不支持主代理，或本地路由下找不到注册候选。
+    CandidateUnavailable {
+        logical_id: String,
+        reason: &'static str,
+    },
+    /// 已解析绑定与期望的会话 route owner 不匹配。
+    OwnerMismatch {
+        logical_id: String,
+        expected: SessionAgentRouteOwner,
+        actual: SessionAgentRouteOwner,
+    },
+}
+
+impl std::fmt::Display for ExternalPrimaryAgentResolutionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CandidateUnavailable { logical_id, reason } => {
+                write!(formatter, "candidate_unavailable: {logical_id} ({reason})")
+            }
+            Self::OwnerMismatch {
+                logical_id,
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "owner_mismatch: {logical_id} expected {expected:?}, resolved {actual:?}"
+            ),
+        }
+    }
+}
+
 impl AgentRegistry {
     /// Returns whether the logical id is owned by an external route in the
     /// requested workspace. `Unavailable` remains externally owned so a
@@ -331,13 +390,19 @@ impl AgentRegistry {
                 let lease_count = generations
                     .get(&runtime_key)
                     .map_or(0, |entry| entry.lease_count);
-                let agent_entry = AgentEntry {
-                    category: AgentCategory::SubAgent,
-                    source: AgentSource::External,
-                    subagent_source: Some(SubAgentSource::External),
-                    agent: registration.agent.clone(),
-                    visibility_policy: SubagentVisibilityPolicy::public(),
-                    custom_config: None,
+                // 同 runtime_key 重新 install 时，若仍有在途 turn（lease_count>0），
+                // 保留旧 agent_entry，避免换绑导致进行中的会话底层 agent 不一致；
+                // registration 仍更新（新配置对后续 acquire 生效，已发出的 lease 持有快照）。
+                let agent_entry = match generations.get(&runtime_key) {
+                    Some(entry) if entry.lease_count > 0 => entry.agent_entry.clone(),
+                    _ => AgentEntry {
+                        category: AgentCategory::SubAgent,
+                        source: AgentSource::External,
+                        subagent_source: Some(SubAgentSource::External),
+                        agent: registration.agent.clone(),
+                        visibility_policy: SubagentVisibilityPolicy::public(),
+                        custom_config: None,
+                    },
                 };
                 generations.insert(
                     runtime_key,
@@ -423,13 +488,18 @@ impl AgentRegistry {
     /// Resolve a user-facing main-agent id to the exact generation that owns
     /// the next turn. The returned lease keeps prompt, tools, permissions, and
     /// model metadata stable until that turn settles.
+    ///
+    /// 失败时返回带原因的错误，而不是一律 `None`，便于调用方精确诊断：
+    /// - `CandidateUnavailable`：外部候选撤回（`Unavailable` 路由）或
+    ///   generation 缺失 / 不支持主代理、本地候选不存在；
+    /// - `OwnerMismatch`：已解析绑定与 `expected_owner` 不一致。
     pub fn resolve_primary_agent_for_turn(
         &self,
         logical_id: &str,
         workspace_root: Option<&Path>,
         external_sources_supported: bool,
         expected_owner: Option<SessionAgentRouteOwner>,
-    ) -> Option<ExternalPrimaryAgentTurnBinding> {
+    ) -> Result<ExternalPrimaryAgentTurnBinding, ExternalPrimaryAgentResolutionError> {
         let logical_key = normalize_external_logical_id(logical_id);
         if external_sources_supported {
             if let Some(workspace_root) = workspace_root {
@@ -442,57 +512,106 @@ impl AgentRegistry {
                     .cloned()
                 {
                     let binding = match route {
-                        ExternalSubagentRoute::Local => {
-                            match self.find_agent_entry(logical_id, Some(workspace_root)) {
-                                Some(entry) if is_local_session_primary_entry(&entry) => {
-                                    Some(local_primary_binding(entry.agent.id()))
-                                }
-                                Some(entry) => {
-                                    warn!(
-                                        "Session primary agent resolution rejected a registered non-mode agent under a Local route: logical_id={}, category={:?}, source={:?}",
-                                        logical_id,
-                                        entry.category,
-                                        entry.source
-                                    );
-                                    None
-                                }
-                                None => None,
-                            }
+                        // 与下方 fall-through（find_agent_entry 直接映射）对齐：
+                        // 移除 Mode 过滤，允许 subagent 类型代理续聊/恢复/压缩。
+                        // 上游 is_local_session_primary_entry 白名单保留（融合
+                        // 方案）——下方 fall-through 中
+                        // 命中白名单走确认路径，未命中按本地全量放开。
+                        ExternalSubagentRoute::Local => self
+                            .find_agent_entry(logical_id, Some(workspace_root))
+                            .map(|entry| local_primary_binding(entry.agent.id()))
+                            .ok_or(ExternalPrimaryAgentResolutionError::CandidateUnavailable {
+                                logical_id: logical_key.clone(),
+                                reason: "local route has no registered candidate",
+                            })?,
+                        ExternalSubagentRoute::External(runtime_key) => self
+                            .external_subagents
+                            .acquire_primary(&runtime_key)
+                            .ok_or(ExternalPrimaryAgentResolutionError::CandidateUnavailable {
+                                logical_id: logical_key.clone(),
+                                reason: "external generation missing or not primary-capable",
+                            })?,
+                        // 候选已撤回时保持 fail-closed：不回落同名本地实现，
+                        // 并携带明确原因供调用方诊断。
+                        ExternalSubagentRoute::Unavailable => {
+                            return Err(
+                                ExternalPrimaryAgentResolutionError::CandidateUnavailable {
+                                    logical_id: logical_key,
+                                    reason: "external candidate withdrawn (fail-closed route)",
+                                },
+                            );
                         }
-                        ExternalSubagentRoute::External(runtime_key) => {
-                            self.external_subagents.acquire_primary(&runtime_key)
-                        }
-                        ExternalSubagentRoute::Unavailable => None,
                     };
-                    return binding.filter(|binding| {
-                        expected_owner.is_none_or(|owner| binding.route_owner == owner)
-                    });
+                    if let Some(expected_owner) = expected_owner {
+                        if binding.route_owner != expected_owner {
+                            // 解析成功但 owner 与持久化会话不一致，单独归类，
+                            // 避免与「候选不可用」混为一谈。
+                            return Err(ExternalPrimaryAgentResolutionError::OwnerMismatch {
+                                logical_id: logical_key,
+                                expected: expected_owner,
+                                actual: binding.route_owner,
+                            });
+                        }
+                    }
+                    return Ok(binding);
                 }
             }
         }
         if expected_owner == Some(SessionAgentRouteOwner::External) {
-            return None;
+            // 会话持久化 owner 为 External，但当前没有外部路由可解析，
+            // 属于 owner 语义冲突（fail-closed），不再是「未知会话模式」。
+            return Err(ExternalPrimaryAgentResolutionError::OwnerMismatch {
+                logical_id: logical_key,
+                expected: SessionAgentRouteOwner::External,
+                actual: SessionAgentRouteOwner::Local,
+            });
         }
+        // Subagent types (custom `kind: subagent` agents such as legion
+        // permanent posts, and builtin subagents) are valid owners of sessions
+        // created through SessionControl/SessionMessage and must resolve for
+        // continued dialog turns, restore, and manual compaction. The Mode
+        // filter only guarded the route branch above; the fail-closed
+        // `expected_owner == External` guard stays.
+        // 融合（上游 review 修复 + 本地全量放开）：
+        // - 命中上游 is_local_session_primary_entry 白名单（Mode 或
+        //   CodeReview/DeepReview/ReviewFixer builtin）→ 白名单确认路径解析（上游功能保留）；
+        // - 未命中（其他 subagent 类型）→ 本地全量放开仍允许（ACP/本地定制超集），
+        //   并 warn 提示该 entry 不在上游白名单、由本地定制放开；
+        // - 例外（上游 c4a301e20 语义保留）：builtin 保留 review ID
+        //   （CodeReview/DeepReview/ReviewFixer）被非 Builtin entry 同名 shadow
+        //   时 fail-closed——不继承 builtin primary 路径，避免自定义 agent
+        //   冒用 review 会话主代理身份（安全边界）。
         match self.find_agent_entry(logical_id, workspace_root) {
-            Some(entry) if is_local_session_primary_entry(&entry) => {
-                Some(local_primary_binding(entry.agent.id()))
-            }
             Some(entry) => {
-                warn!(
-                    "Session primary agent resolution rejected a registered non-mode agent: logical_id={}, category={:?}, source={:?}, expected_owner={:?}",
-                    logical_id,
-                    entry.category,
-                    entry.source,
-                    expected_owner
-                );
-                None
+                if is_shadowed_builtin_review_primary_id(&entry) {
+                    return Err(ExternalPrimaryAgentResolutionError::CandidateUnavailable {
+                        logical_id: logical_key,
+                        reason:
+                            "non-Builtin entry shadows a builtin review primary id (fail-closed)",
+                    });
+                }
+                if is_local_session_primary_entry(&entry) {
+                    Ok(local_primary_binding(entry.agent.id()))
+                } else {
+                    warn!(
+                        "Session primary agent resolution allows a non-whitelisted subagent via local customization: logical_id={}, category={:?}, source={:?}, expected_owner={:?}",
+                        logical_id,
+                        entry.category,
+                        entry.source,
+                        expected_owner
+                    );
+                    Ok(local_primary_binding(entry.agent.id()))
+                }
             }
             None => {
                 debug!(
                     "Session primary agent resolution found no registered agent: logical_id={}, expected_owner={:?}",
                     logical_id, expected_owner
                 );
-                None
+                Err(ExternalPrimaryAgentResolutionError::CandidateUnavailable {
+                    logical_id: logical_key,
+                    reason: "no registered candidate for the requested session mode",
+                })
             }
         }
     }
@@ -600,7 +719,13 @@ impl AgentRegistry {
 }
 
 fn normalize_external_logical_id(logical_id: &str) -> String {
-    logical_id.to_ascii_lowercase()
+    // 归一化更严格：折叠空白（去首尾、合并内部连续空白）后统一 Unicode 小写，
+    // 避免仅 ASCII 小写时同一逻辑 id 因空白或非 ASCII 大小写变体被拆成不同键。
+    logical_id
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentInvocationBinding {
@@ -640,6 +765,18 @@ fn is_local_session_primary_entry(entry: &AgentEntry) -> bool {
     entry.category == AgentCategory::Mode
         || (entry.source == AgentSource::Builtin
             && is_builtin_session_primary_agent(entry.agent.id()))
+}
+
+/// Whether a non-Builtin entry shadows a builtin review primary id.
+///
+/// Custom-agent loading normally filters ids that collide with builtin entries,
+/// but the session-primary path must fail closed regardless: a User/Custom
+/// entry occupying the builtin "ReviewFixer" (or "CodeReview"/"DeepReview") id
+/// must never inherit the builtin primary path (upstream c4a301e20 semantics).
+/// Non-reserved custom subagent ids (e.g. `custom-handoff`) stay full-open via
+/// the local customization branch.
+fn is_shadowed_builtin_review_primary_id(entry: &AgentEntry) -> bool {
+    entry.source != AgentSource::Builtin && is_builtin_session_primary_agent(entry.agent.id())
 }
 
 fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {

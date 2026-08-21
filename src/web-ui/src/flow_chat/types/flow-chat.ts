@@ -12,6 +12,7 @@ import type {
 } from '@/shared/types/session-history';
 import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type { SessionDisplayState } from '../state-machine/types';
 
 export type ModelRoundAttemptDiagnostic = import('@/shared/types/session-history').ModelRoundAttemptDiagnostic;
 
@@ -20,6 +21,9 @@ export interface FlowItem {
   id: string;
   type: 'text' | 'tool' | 'image-analysis' | 'thinking' | 'user-steering';
   timestamp: number;
+  /** TODO(tech-debt): This union is too wide — every concrete FlowItem subtype only
+   *  uses a subset of these statuses. Consider narrowing per-type via discriminated
+   *  union or a base `status` plus per-subtype status enums. */
   status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'rejected' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
   attemptId?: string;
   attemptIndex?: number;
@@ -327,6 +331,7 @@ export interface TodoItem {
   id: string;
   content: string; // Imperative task description.
   status: 'pending' | 'in_progress' | 'completed';
+  dependencies?: string[];
 }
 
 export type SessionHistoryState =
@@ -402,6 +407,12 @@ export interface Session {
   // - 'error': state machine state === ERROR
   // - 'idle': otherwise
   status: 'active' | 'idle' | 'error';
+  /**
+   * Display/management state (seven-state projection) from the backend
+   * `AgentSessionSummary.displayState`, when available. Falls back to
+   * `undefined` for sessions that never reported it.
+   */
+  displayState?: SessionDisplayState;
   /** Persisted backend status retained while historical turns are metadata-only. */
   persistedStatus?: 'active' | 'archived' | 'completed';
   
@@ -489,11 +500,45 @@ export interface Session {
   /**
    * Optional parent session id for hierarchical sessions.
    * Used by /btw "side threads" and potentially other derived sessions.
+   *
+   * NOTE: This is a UI-local field derived from SessionRelationship; the backend
+   * SessionTreeNode uses `relationship.parent_session_id`. Keep in sync.
    */
   parentSessionId?: string;
 
   /** Session kind for UI grouping. */
   sessionKind: SessionKind;
+
+  /**
+   * R-GC-14 / R-GC-35: true when this session is a group chat (group chat =
+   * ordinary session, v3 decision). Rendered as GroupChatView instead of the
+   * plain agent chat surface. Set live by the group chat create flow (MainNav
+   * handleGroupChatCreated -> markSessionAsGroupChat) and restored from the
+   * backend session metadata on reload: the backend marks group sessions via
+   * `customMetadata.groupChats` (member session ids array, group_room_tools.rs
+   * add_group_member), so a session whose metadata carries a `groupChats`
+   * array restores `isGroupChat = true` after a restart.
+   */
+  isGroupChat?: boolean;
+
+  /**
+   * R-WF-12: true when this session is a workflow member Claw — a Claw owned
+   * by a group/workflow (backend marks members via
+   * `customMetadata.legionNodeId`, legion_control_tool.rs). Restored from
+   * backend metadata on reload, same as `isGroupChat`. UI uses it to hide
+   * workflow-owned Claws from the Claw assistant list (they belong to the
+   * group, not to the user's assistant list).
+   */
+  workflowMember?: boolean;
+
+  /**
+   * R-AD-08: when true this session's parent is missing from the loaded set
+   * (backend orphan classification). The nav groups such sessions under the
+   * orphan section instead of pretending they are normal top-level rows.
+   * `orphanKind` narrows the reason (DanglingChild / DetachedChild).
+   */
+  orphaned?: boolean;
+  orphanKind?: import('@/shared/types/session-history').SessionOrphanKind;
 
   /**
    * For hidden subagent sessions, records which parent Task tool launched it.
@@ -504,8 +549,22 @@ export interface Session {
   /** Logical subagent id / type used to launch this hidden subagent session. */
   subagentType?: string;
 
+  /**
+   * Depth in session tree (root = 0, child = parent_depth + 1).
+   * NOTE: This is a UI-local cache derived from the backend SessionTreeManager.
+   * The backend assigns depth on registration; the UI mirrors it for nav rendering.
+   */
+  depth?: number;
+
   /** Whether `/goal` mode is active for this session. */
   goalModeActive?: boolean;
+
+  /**
+   * Monotonic clock for thread-goal writes. Every setThreadGoal call (including
+   * explicit clears) advances it, so a late thread-goal-updated event carrying a
+   * stale updatedAt cannot resurrect an already-cleared goal.
+   */
+  threadGoalUpdatedAt?: number;
 
   /** Latest thread goal snapshot for UI (/goal menu, edit, resume). */
   threadGoal?: {
@@ -636,6 +695,9 @@ export interface SessionConfig {
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  maxContextTokens?: number;
+  autoCompact?: boolean;
+  enableTools?: boolean;
 }
 
 /**
@@ -759,3 +821,5 @@ export interface FlowChatConfig {
   maxHistoryRounds: number;
   enableVirtualScroll: boolean;
 }
+
+

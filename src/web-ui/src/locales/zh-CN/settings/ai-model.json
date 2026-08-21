@@ -46,7 +46,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "订阅账号",
-    "sectionDescription": "OpenCode 账号只需登录一次，即可分别使用 Zen 或 Go API 套餐；同时支持 Codex 与 Antigravity",
+    "sectionDescription": "OpenCode 账号只需登录一次，即可分别使用 Zen 或 Go API 套餐；同时支持 Codex、Antigravity、CodeBuddy 与 Qoder",
     "rescan": "刷新状态",
     "import": "导入使用",
     "login": "登录",
@@ -58,6 +58,11 @@
     "refreshFailed": "刷新失败：{{error}}",
     "loginSuccess": "登录成功",
     "loginFailed": "登录失败：{{error}}",
+    "patLogin": "使用令牌登录",
+    "patLoginSuccess": "已使用个人访问令牌登录",
+    "patLoginFailed": "令牌登录失败：{{error}}",
+    "patPlaceholder": "个人访问令牌（可选）",
+    "patRequired": "请输入个人访问令牌",
     "logoutSuccess": "已退出登录",
     "logoutCleanupPending": "已退出登录，系统凭据清理仍在等待中，稍后会自动重试。",
     "logoutFailed": "退出登录失败：{{error}}",
@@ -72,7 +77,9 @@
       "codex": "Codex（ChatGPT 订阅）",
       "antigravity": "Antigravity（Google 订阅）",
       "opencodeZen": "OpenCode 账号 · Zen API",
-      "opencodeGo": "OpenCode 账号 · Go API"
+      "opencodeGo": "OpenCode 账号 · Go API",
+      "codebuddy": "CodeBuddy（腾讯 AI 订阅）",
+      "qoder": "Qoder（Qoder 订阅）"
     },
     "openCodePlans": {
       "zen": {

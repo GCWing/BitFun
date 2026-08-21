@@ -11,11 +11,14 @@
     "title": "Agents",
     "subtitle": "Review and manage core modes, agents, and sub-agents, including tools and skills.",
     "searchPlaceholder": "Search agents by name or description…",
-    "newAgent": "New Agent"
+    "newAgent": "New Agent",
+    "newLegion": "New workflow"
   },
   "nav": {
     "coreAgents": "Core Agents",
-    "agents": "Agent"
+    "agents": "Agent",
+    "legions": "Workflows",
+    "teams": "Agent Team"
   },
   "filters": {
     "source": "Source",
@@ -62,6 +65,7 @@
       "userSubagent": "User Sub-Agent",
       "projectSubagent": "Project Sub-Agent",
       "externalSubagent": "External Sub-Agent",
+      "workflow": "Workflow",
       "disabled": "Disabled"
     },
     "actions": {
@@ -228,6 +232,10 @@
       "deleteMessage": "Delete \"{{name}}\"? This does not change any Agent tool selection.",
       "deleteConfirm": "Delete",
       "saveFailed": "Failed to save tool groups",
+      "suiteTitle": "Tools",
+      "suiteSubtitle": "Manage which tools each agent can use per mode — toggles apply live",
+      "saveFirst": "Save your pending changes first",
+      "refreshFailed": "Failed to refresh tool configs: {{error}}",
       "validation": {
         "nameRequired": "Enter a group name",
         "nameDuplicate": "A group with this name already exists",
@@ -326,6 +334,112 @@
         "Check only the requested changes and selected files.",
         "Return concrete findings with clear fixes or follow-up steps."
       ]
+    },
+    "default": {
+      "name": "Code Review Team",
+      "summary": "A deep-review code team with locked logic, performance, security, architecture, and quality-gate roles.",
+      "members": "{{count}} members",
+      "tags": [
+        "Quality",
+        "Performance",
+        "Architecture"
+      ]
+    },
+    "detail": {
+      "open": "Open team",
+      "back": "Back to Agents",
+      "openSettings": "Review settings",
+      "loading": "Loading code review team...",
+      "title": "Code Review Team",
+      "subtitle": "Configure the code review team used by Deep Review and /DeepReview. Every reviewer starts on the Fast model unless you change it.",
+      "summaryTitle": "Team Overview",
+      "summaryDescription": "Parallel reviewers cover the requested scope, then the quality gate consolidates the final result.",
+      "membersTitle": "Team Members",
+      "membersDescription": "Select a member to review its role, responsibilities, model, and strategy override. Locked roles always stay in the team.",
+      "membersCount": "{{count}} members",
+      "lockedCount": "{{count}} locked roles",
+      "extraCount": "{{count}} extra Sub-Agents",
+      "localOnly": "Code review",
+      "localOnlyDescription": "Runs inside BitFun as read-only Sub-Agents and reports back into this review thread.",
+      "parallelLabel": "Parallel reviewers",
+      "parallelDescription": "Logic, performance, security, architecture, and extra reviewers work side by side before the judge validates findings.",
+      "warningLabel": "Heavier review",
+      "warning": "Use for higher-risk changes; it can take longer and use more tokens than a standard review.",
+      "qualityGate": "Quality gate",
+      "executionPolicyTitle": "Execution Policy",
+      "executionPolicyDescription": "Control review depth, timeouts, and how broad scopes split across parallel read-only reviewers.",
+      "policySummaryTitle": "Current Policy",
+      "policySummaryIntro": "This live snapshot comes from Review settings and updates when the team policy changes.",
+      "policySummaryEyebrow": "Configured behavior",
+      "policySummaryDescription": "{{strategy}} review uses {{reviewerTimeout}} per reviewer, gives the judge {{judgeTimeout}}, splits each role after {{splitThreshold}}, and caps same-role parallelism at {{maxSameRoleInstances}}.",
+      "policySummaryAction": "Open Review settings to edit the current policy",
+      "policyMetricsLabel": "Current policy values",
+      "policyStrategyLabel": "Strategy",
+      "reviewerTimeout": "Reviewer timeout",
+      "reviewerTimeoutDescription": "Per-reviewer timeout in seconds. Set 0 to let reviewers run without a hard deadline.",
+      "judgeTimeout": "Judge timeout",
+      "judgeTimeoutDescription": "Quality-gate timeout in seconds. Set 0 to wait as long as needed for the judge.",
+      "fileSplitThreshold": "File split threshold",
+      "fileSplitThresholdDescription": "When target files exceed this value, each reviewer role can split into multiple instances. Set 0 to disable splitting.",
+      "maxSameRoleInstances": "Max same-role instances",
+      "maxSameRoleInstancesDescription": "Maximum parallel instances per reviewer role when file splitting is active.",
+      "seconds": "s",
+      "secondsValue": "{{seconds}}s",
+      "noTimeout": "No cap",
+      "fileCountValue": "{{count}} files",
+      "splitDisabled": "No split",
+      "instancesValue": "{{count}} max",
+      "memberDetailTitle": "Member Detail",
+      "memberDetailDescription": "Each reviewer keeps its own context while the team run is active.",
+      "responsibilities": "Responsibilities",
+      "model": "Assigned model",
+      "modelDescription": "Change the model for this reviewer only. Deep review uses Fast by default, and your update applies immediately.",
+      "remove": "Remove member",
+      "removeDescription": "Remove this extra Sub-Agent from the code review team. Core roles cannot be removed.",
+      "addTitle": "Add Extra Sub-Agent",
+      "addDescription": "Bring another read-only Sub-Agent into the deep code review team. The core roles always remain locked in place.",
+      "addLabel": "Candidate",
+      "addHint": "Only read-only Sub-Agents can join the initial review pass; the quality inspector checks every extra reviewer before final reporting.",
+      "addPlaceholder": "Select a Sub-Agent",
+      "addButton": "Add to team",
+      "emptyCandidates": "No additional read-only Sub-Agents are available to add right now.",
+      "memberTypes": {
+        "locked": "Locked",
+        "core": "Core role",
+        "extra": "Extra Sub-Agent",
+        "builtin": "Built-in",
+        "user": "User",
+        "project": "Project"
+      },
+      "messages": {
+        "modelUpdated": "Updated {{name}} model.",
+        "memberAdded": "Added the extra reviewer to the team.",
+        "memberRemoved": "Removed the extra reviewer from the team.",
+        "saveFailed": "Failed to save the code review team configuration."
+      }
+    },
+    "strategy": {
+      "teamTitle": "Review strategy",
+      "teamDescription": "Choose the default depth for the whole code review team. Individual reviewers can override it in their member details.",
+      "memberTitle": "Reviewer strategy",
+      "memberDescription": "Override this reviewer only when a role needs a different depth from the team default.",
+      "impact": "About {{token}} token usage and {{runtime}} runtime.",
+      "inheritLabel": "Inherit team ({{level}})",
+      "inheritSummary": "Use the team-wide review strategy for this reviewer.",
+      "modelFallbackShort": "fallback",
+      "modelFallbackDescription": "The configured model {{configuredModel}} is no longer available, so this reviewer will use {{model}}.",
+      "quick": {
+        "label": "Quick",
+        "summary": "Fast screening for high-confidence issues in the requested diff or scope."
+      },
+      "normal": {
+        "label": "Normal",
+        "summary": "Balanced review depth for day-to-day code review with practical evidence."
+      },
+      "deep": {
+        "label": "Deep",
+        "summary": "Thorough multi-pass review for risky, broad, or release-sensitive changes."
+      }
     }
   },
   "agentDescriptions": {
@@ -333,6 +447,7 @@
     "Cowork": "Cowork mode: work alongside you, asking for confirmation at key steps",
     "ComputerUse": "Computer use mode: capable of operating browsers, desktop apps, and file systems",
     "DeepResearch": "Deep research agent: conduct systematic investigation and analysis on complex topics",
+    "Workflow": "Multi-agent workflow commander: orchestrate agent sessions through a fractal deployment topology — decompose tasks, create sessions, dispatch via SessionMessage, enforce quality gates",
     "Explore": "Explore agent: quickly browse the codebase to understand project structure and key files",
     "FileFinder": "File finder agent: locate relevant files and code snippets based on requirements",
     "CodeReview": "Code review agent: perform quality checks and provide improvement suggestions",
@@ -345,5 +460,230 @@
     "Debug": "Debug mode: systematically diagnose and fix errors in code",
     "Claw": "Claw mode: extract and integrate information from external sources",
     "Team": "Team mode: coordinate multiple agents to collaboratively complete complex tasks"
+  },
+  "legionsZone": {
+    "title": "Workflows",
+    "subtitle": "Saved workflow presets",
+    "loadFailed": "Failed to load workflow presets: "
+  },
+  "legionPattern": {
+    "gate": "Gate",
+    "back": "Back",
+    "choosePattern": "Choose a pattern",
+    "orchestrationPatterns": "Orchestration patterns",
+    "overview": "Overview",
+    "complexity": "Complexity L{{level}}",
+    "nodesCount": "{{count}} nodes",
+    "edgesCount": "{{count}} edges",
+    "nodes": "Nodes ({{count}})",
+    "edges": "Edges ({{count}})",
+    "noEdges": "No edges",
+    "canvas": "Canvas preview",
+    "usePattern": "Use this pattern",
+    "savePreset": "Save preset",
+    "planning": "Planning",
+    "saved": "Workflow preset \"{{name}}\" saved",
+    "saveFailed": "Failed to save workflow preset",
+    "roleAnnotation": "display only",
+    "roleAnnotationTooltip": "This role label is orchestration metadata for organizing the workflow. The deployed session's actual permissions are always resolved by the standard subagent role (Executor), never by this label.",
+    "meta": {
+      "gate": "gates"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2": "L2",
+      "l3": "L3",
+      "l4": "L4",
+      "l5": "L5",
+      "l6": "L6",
+      "l7": "L7"
+    }
+  },
+  "teamsZone": {
+    "title": "Agent Teams",
+    "subtitle": "Review agent team setups, capability coverage, and member structure, then jump into the editor.",
+    "create": "Create Agent Team",
+    "newTeamName": "New Agent Team",
+    "empty": {
+      "noTeams": "No teams have been created yet",
+      "noMatch": "No matching teams"
+    }
+  },
+  "composer": {
+    "emptyTeam": "Select or create an agent team",
+    "emptyMembers": "No members yet. Add them from the gallery on the left.",
+    "memberCount": "{{count}} members",
+    "viewMode": {
+      "formation": "Formation",
+      "list": "List"
+    },
+    "role": {
+      "leader": "Leader",
+      "member": "Member",
+      "reviewer": "Reviewer"
+    },
+    "strategy": {
+      "collaborative": "Collaborative",
+      "sequential": "Sequential",
+      "free": "Free"
+    },
+    "columns": {
+      "agent": "Agent",
+      "role": "Role",
+      "tools": "Tools",
+      "model": "Model"
+    },
+    "remove": "Remove",
+    "rename": "Click to rename",
+    "saveTeam": "Save",
+    "cancelEdit": "Cancel"
+  },
+  "gallery": {
+    "title": "Agent Gallery",
+    "search": "Search agents...",
+    "filter": {
+      "joined": "Joined",
+      "all": "All"
+    },
+    "empty": "No matching agents",
+    "footer": "{{shown}} / {{total}} · {{enabled}} enabled",
+    "removeFromTeam": "Remove from team",
+    "addToTeam": "Add to team",
+    "joinedTeam": "Already in team",
+    "addCurrentTeam": "Add to current team",
+    "toolCount": "{{count}} tools",
+    "modelLabel": "Model"
+  },
+  "tabbar": {
+    "newTeam": "New Agent Team",
+    "fromTemplate": "From Template",
+    "templateTitle": "Choose Template",
+    "blankCreate": "Blank",
+    "cancel": "Cancel",
+    "create": "Create",
+    "deleteTeam": "Delete Team",
+    "deleteConfirm": "Delete team \"{{name}}\"? This cannot be undone.",
+    "form": {
+      "namePlaceholder": "Agent Team name",
+      "descriptionPlaceholder": "Description (optional)"
+    }
+  },
+  "home": {
+    "filterAll": "All",
+    "filterAgent": "Solo Agents",
+    "filterTeam": "Teams",
+    "search": "Search by name or description...",
+    "solo": "Solo",
+    "team": "Team",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "members": "{{count}} members",
+    "createTeam": "Create Agent Team",
+    "quickCreate": "Quick Create",
+    "globalCap": "Global Capabilities",
+    "backToOverview": "Back to Overview",
+    "strategyCollab": "Collaborative",
+    "strategySeq": "Sequential",
+    "strategyFree": "Free"
+  },
+  "teamCard": {
+    "badges": {
+      "example": "Example",
+      "sharedContext": "Shared context"
+    },
+    "actions": {
+      "expand": "Expand details"
+    },
+    "sections": {
+      "members": "Members",
+      "capabilities": "Capabilities"
+    }
+  },
+  "formation": {
+    "empty": "Select agents from the left panel",
+    "emptySub": "Click the + button on an agent card",
+    "hint": "Click the wire port on a node to create an edge, click an edge start dot to remove it",
+    "startWire": "Start wiring",
+    "cancelWire": "Cancel wiring",
+    "wireActive": "Wiring (from: {{from}}) - click another node to finish, click the port to cancel",
+    "removeEdge": "Remove this edge",
+    "openSession": "Open session",
+    "state": {
+      "standby": "Standby",
+      "processing": "Processing",
+      "hung": "Hung",
+      "interrupted": "Interrupted",
+      "pending_attention": "Needs attention",
+      "viewed": "Viewed"
+    }
+  },
+  "capability": {
+    "warning": "Missing capabilities: {{cats}}",
+    "coverage": "Coverage",
+    "none": "None"
+  },
+  "suite": {
+    "title": "Tools",
+    "subtitle": "Pick a mode to control each tool group's availability, or adjust tools individually and save per group.",
+    "modeLabel": "Mode",
+    "refreshTooltip": "Refresh current mode",
+    "refreshAction": "Refresh",
+    "loading": "Loading tool suite...",
+    "empty": "No tools available.",
+    "sections": {
+      "myGroups": "My groups",
+      "builtin": "Built-in groups",
+      "otherSkills": "Other tools"
+    },
+    "manageGroups": "Manage tool groups",
+    "modes": {
+      "agentic": "agentic",
+      "cowork": "Cowork",
+      "team": "Team"
+    },
+    "modeDescriptions": {
+      "agentic": "Coding-first default mode",
+      "cowork": "Office collaboration mode",
+      "claw": "Assistant mode",
+      "team": "Team mode"
+    },
+    "modeActions": {
+      "reset": "Reset {{mode}}",
+      "resetShort": "Reset"
+    },
+    "groupActions": {
+      "save": "Save",
+      "enableGroup": "Enable group",
+      "disableGroup": "Disable group"
+    },
+    "resetDialog": {
+      "title": "Reset {{mode}}?",
+      "message": "This restores the mode's tool availability to its default state.",
+      "messageWithUnsaved": "This restores the mode's tool availability to its default state and discards unsaved changes.",
+      "confirm": "Reset",
+      "cancel": "Cancel"
+    },
+    "groupState": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "partial": "Partial"
+    },
+    "skillState": {
+      "enabled": "Enabled for this mode",
+      "disabled": "Disabled for this mode",
+      "pending": "Unsaved",
+      "covered": "Covered · {{source}}",
+      "coveredDetail": "Enabled, but this mode uses a tool with the same name from {{source}}.",
+      "globalDisabled": "Globally disabled"
+    },
+    "groupCount": "{{total}} tools",
+    "messages": {
+      "saveSuccess": "Updated {{mode}} tool visibility",
+      "saveFailed": "Failed to update tools: {{error}}",
+      "resetSuccess": "Restored {{mode}} tool defaults",
+      "resetFailed": "Failed to reset tools: {{error}}",
+      "refreshFailed": "Failed to refresh tools: {{error}}",
+      "saveFirst": "Save your current tool changes first."
+    }
   }
 }

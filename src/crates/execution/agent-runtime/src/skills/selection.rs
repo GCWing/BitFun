@@ -55,6 +55,7 @@ impl SkillCandidate {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)] // found skill carries full SkillInfo; control outcomes are small
 pub enum ExplicitSkillInvocationResolution {
     Found(SkillInfo),
     NotFound,

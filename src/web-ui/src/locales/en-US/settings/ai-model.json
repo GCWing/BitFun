@@ -46,7 +46,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "Subscription accounts",
-    "sectionDescription": "Sign in once to an OpenCode account and use either its Zen or Go API plan, alongside Codex and Antigravity",
+    "sectionDescription": "Sign in once to an OpenCode account and use either its Zen or Go API plan, alongside Codex, Antigravity, CodeBuddy and Qoder",
     "rescan": "Refresh status",
     "import": "Use as model",
     "login": "Sign in",
@@ -58,6 +58,11 @@
     "refreshFailed": "Refresh failed: {{error}}",
     "loginSuccess": "Signed in",
     "loginFailed": "Sign-in failed: {{error}}",
+    "patLogin": "Sign in with token",
+    "patLoginSuccess": "Signed in with personal access token",
+    "patLoginFailed": "Sign-in with token failed: {{error}}",
+    "patPlaceholder": "Personal access token (optional)",
+    "patRequired": "Enter a personal access token",
     "logoutSuccess": "Signed out",
     "logoutCleanupPending": "Signed out. Native credential cleanup is pending and will retry automatically.",
     "logoutFailed": "Sign-out failed: {{error}}",
@@ -72,7 +77,9 @@
       "codex": "Codex (ChatGPT subscription)",
       "antigravity": "Antigravity (Google subscription)",
       "opencodeZen": "OpenCode account · Zen API",
-      "opencodeGo": "OpenCode account · Go API"
+      "opencodeGo": "OpenCode account · Go API",
+      "codebuddy": "CodeBuddy (Tencent AI subscription)",
+      "qoder": "Qoder (Qoder subscription)"
     },
     "openCodePlans": {
       "zen": {

@@ -273,6 +273,7 @@ impl RepoSession {
                     repo_id: self.repo_id.clone(),
                     query: request.query,
                     scope: request.scope,
+                    allow_scan_fallback: request.allow_scan_fallback,
                 },
             },
             |response| match response {
@@ -311,6 +312,7 @@ impl RepoSession {
                     repo_id: self.repo_id.clone(),
                     query: request.query,
                     scope: request.scope,
+                    allow_scan_fallback: request.allow_scan_fallback,
                 },
             },
             |response| match response {

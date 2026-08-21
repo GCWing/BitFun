@@ -326,4 +326,69 @@ describe('review team locale completeness', () => {
     expect(userFacingCopy).not.toMatch(/\b(worker|lens|specialist|inspector|focused)\b/i);
     expect(userFacingCopy).not.toMatch(/\bone (optional|justified|narrowly focused)\b/i);
   });
+
+  // ── R-WF-13: recovered AgentTeam (A-suite) locale blocks ─────────────────
+
+  const AGENT_TEAM_LOCALE_BLOCKS = [
+    'teamsZone',
+    'composer',
+    'gallery',
+    'tabbar',
+    'home',
+    'teamCard',
+    'formation',
+    'capability',
+  ] as const;
+
+  it.each(REVIEW_TEAM_LOCALES)(
+    'keeps recovered AgentTeam locale blocks fully translated in %s agents namespace',
+    (locale) => {
+      const scenesAgents = readLocaleJson(locale, 'scenes/agents.json');
+
+      for (const block of AGENT_TEAM_LOCALE_BLOCKS) {
+        expect(getPathValue(scenesAgents, block)).toBeDefined();
+      }
+
+      // Every zh-CN string in the A-suite blocks must have a zh-TW counterpart
+      // that is not an identical simplified copy (the review found 11 residue
+      // spots here; this locks the regression).
+      const zhCn = readLocaleJson('zh-CN', 'scenes/agents.json');
+      const zhTw = readLocaleJson('zh-TW', 'scenes/agents.json');
+
+      for (const block of AGENT_TEAM_LOCALE_BLOCKS) {
+        const cn = getPathValue(zhCn, block) as Record<string, unknown>;
+        const tw = getPathValue(zhTw, block) as Record<string, unknown>;
+        expect(tw).toBeDefined();
+
+        // Simplified-only forms derived from the actual zh-CN/zh-TW data diff
+        // (chars whose simplified form differs from the traditional form).
+        const simplifiedOnly = new Set('盖并进编辑创请选择个暂无从侧图鉴阵导执审协顺点击启独总览开详钮');
+
+        function walk(value: unknown, path: string) {
+          if (typeof value === 'string') {
+            const hits = [...new Set(value.split('').filter((c) => simplifiedOnly.has(c)))];
+            if (hits.length > 0) {
+              // "{{var}}" placeholders and pure-ASCII segments are allowed.
+              const withoutPlaceholders = value.replace(/\{\{[^}]+\}\}/g, '');
+              const asciiOnly = /^[\x00-\x7F\s]*$/.test(withoutPlaceholders);
+              if (!asciiOnly) {
+                throw new Error(
+                  `zh-TW simplified residue in ${block}.${path}: chars=${hits.join('')} value=${value}`,
+                );
+              }
+            }
+          } else if (Array.isArray(value)) {
+            value.forEach((v, i) => walk(v, `${path}[${i}]`));
+          } else if (value && typeof value === 'object') {
+            for (const k of Object.keys(value)) walk(value[k], path ? `${path}.${k}` : k);
+          }
+        }
+        walk(tw, block);
+
+        // zh-CN strings that are identical to zh-TW and contain only
+        // same-writing Han terms are fine; flag nothing here (case handled above).
+        expect(cn).toBeDefined();
+      }
+    },
+  );
 });

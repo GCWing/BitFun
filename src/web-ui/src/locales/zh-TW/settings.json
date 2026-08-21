@@ -35,6 +35,13 @@
         "長期記憶",
         "學習"
       ],
+      "aiThresholds": [
+        "閾值",
+        "參數",
+        "上限",
+        "逾時",
+        "重試"
+      ],
       "usageStatistics": [
         "調用統計",
         "用量",
@@ -54,6 +61,7 @@
       "sessionPermissions": "工具權限、執行方式，以及桌面和瀏覽器控制。",
       "review": "Review 策略、覆蓋深度、容量、成本和耗時控制。",
       "memories": "自動記憶生成、注入、整理窗口與記憶模型。",
+      "aiThresholds": "AI 行為閾值統一調節：壓縮預算、重試退避、工具輸出上限與逾時、知識庫搜尋、ACP 逾時、記憶與目標續接等。預設值與內建行為一致。",
       "mcpTools": "MCP 伺服器與工具集成。",
       "externalSources": "載入其他 AI 應用中相容的命令與擴充。",
       "hooks": "在 Agent 生命週期節點執行你自己的命令，與 Codex Hooks 相容。",
@@ -80,6 +88,7 @@
       "sessionPermissions": "權限管理",
       "review": "審核",
       "memories": "記憶",
+      "aiThresholds": "AI 閾值",
       "skills": "技能",
       "mcpTools": "MCP",
       "externalSources": "外部 AI 應用",
@@ -229,7 +238,8 @@
     "shortcuts": {
       "panel": {
         "toggleLeft": "展開/收起左側導航區域",
-        "toggleBoth": "摺疊所有面板"
+        "toggleBoth": "摺疊所有面板",
+        "toggleChatFullWidth": "切換對話全寬平鋪"
       },
       "nav": {
         "toggleSearch": "開啟導航搜尋"
@@ -249,6 +259,7 @@
         "missionControl": "Mission Control",
         "splitHorizontal": "水平分屏",
         "splitVertical": "垂直分屏",
+        "splitGrid9": "九宮格排列",
         "anchorZone": "切換錨點區",
         "maximize": "最大化編輯器",
         "closePreview": "關閉預覽"

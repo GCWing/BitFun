@@ -104,6 +104,7 @@ async fn session_list(context: &PluginHostInstance) -> RouteResult {
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct SessionCreateBody {
+    #[serde(rename = "parentID")]
     parent_id: Option<String>,
     title: Option<String>,
 }

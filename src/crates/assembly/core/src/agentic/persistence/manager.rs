@@ -55,7 +55,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 pub use bitfun_services_core::session::SessionMetadataPage;
@@ -560,7 +559,17 @@ impl PersistenceManager {
     /// `~/.bitfun/projects/`; already-resolved local/remote sessions
     /// directories are used as-is.
     fn project_sessions_dir(&self, workspace_path: &Path) -> PathBuf {
-        if self.is_resolved_sessions_dir(workspace_path) {
+        let resolved = self.is_resolved_sessions_dir(workspace_path);
+        #[cfg(test)]
+        eprintln!(
+            "[ci-probe] project_sessions_dir: resolved={}, workspace_path={}, derived={}, workspace_exists={}, parent_exists={}",
+            resolved,
+            workspace_path.display(),
+            self.path_manager.project_sessions_dir(workspace_path).display(),
+            workspace_path.exists(),
+            workspace_path.parent().map(|p| p.exists()).unwrap_or(false),
+        );
+        if resolved {
             return workspace_path.to_path_buf();
         }
         self.path_manager.project_sessions_dir(workspace_path)
@@ -820,9 +829,24 @@ impl PersistenceManager {
             .map_err(Self::json_store_error)
     }
 
-    async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
+    pub(crate) async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
         JsonFileStore
             .write_text_atomic(path, text)
+            .await
+            .map_err(Self::json_store_error)
+    }
+
+    /// Atomically replace a UTF-8 text file without ever falling back to a
+    /// direct overwrite on Windows permission transients (d4-P2-8). Used by
+    /// durability-critical registries (deletion tombstones) where a torn
+    /// write must be impossible.
+    pub(crate) async fn write_text_atomic_strict(
+        &self,
+        path: &Path,
+        text: &str,
+    ) -> BitFunResult<()> {
+        JsonFileStore
+            .write_text_atomic_strict(path, text)
             .await
             .map_err(Self::json_store_error)
     }
@@ -1047,6 +1071,7 @@ impl PersistenceManager {
             workspace_hostname: workspace_hostname.as_deref(),
             new_session_memory_mode: new_session_memory_mode_from_global_config().await,
             existing,
+            is_daemon: session.config.is_daemon,
         })
     }
 
@@ -1183,12 +1208,31 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
+        self.list_session_metadata_with_options(workspace_path, false)
+            .await
+    }
+
+    /// Lists session metadata. With `include_internal`, hidden Subagent/
+    /// Ephemeral sessions are included for full conversation management.
+    pub async fn list_session_metadata_with_options(
+        &self,
+        workspace_path: &Path,
+        include_internal: bool,
+    ) -> BitFunResult<Vec<SessionMetadata>> {
         if !workspace_path.exists() {
             return Ok(Vec::new());
         }
 
         if self.existing_project_sessions_dir(workspace_path).is_none() {
             return Ok(Vec::new());
+        }
+
+        if include_internal {
+            return self
+                .session_metadata_store(workspace_path)
+                .list_metadata_including_internal()
+                .await
+                .map_err(Self::session_metadata_store_error);
         }
 
         self.session_metadata_store(workspace_path)
@@ -1203,12 +1247,32 @@ impl PersistenceManager {
         cursor: Option<&str>,
         limit: usize,
     ) -> BitFunResult<SessionMetadataPage> {
+        self.list_session_metadata_page_with_options(workspace_path, cursor, limit, false)
+            .await
+    }
+
+    /// Paginated variant of [`list_session_metadata_with_options`].
+    pub async fn list_session_metadata_page_with_options(
+        &self,
+        workspace_path: &Path,
+        cursor: Option<&str>,
+        limit: usize,
+        include_internal: bool,
+    ) -> BitFunResult<SessionMetadataPage> {
         if !workspace_path.exists() {
             return Ok(empty_session_metadata_page());
         }
 
         if self.existing_project_sessions_dir(workspace_path).is_none() {
             return Ok(empty_session_metadata_page());
+        }
+
+        if include_internal {
+            return self
+                .session_metadata_store(workspace_path)
+                .list_metadata_page_with_options(cursor, limit, true)
+                .await
+                .map_err(Self::session_metadata_store_error);
         }
 
         self.session_metadata_store(workspace_path)
@@ -1314,6 +1378,28 @@ impl PersistenceManager {
         if updated {
             Ok(())
         } else {
+            // CI-only diagnostic (RAD08/遗留2 flake): when the metadata file is
+            // missing inside the update call, log the exact probed paths so the
+            // divergence between merge (write OK) and persist (read NotFound)
+            // becomes visible. eprintln is used instead of the log crate to
+            // guarantee the line reaches the test stdout even when tracing
+            // filters would drop it.
+            #[cfg(test)]
+            eprintln!(
+                "[session-meta-diag] update NotFound: session_id={}, workspace_path={}, sessions_root={}, metadata_path={}, root_exists={}, session_dir_exists={}",
+                session_id,
+                workspace_path.display(),
+                self.session_layout(workspace_path).sessions_root().display(),
+                self.session_layout(workspace_path)
+                    .metadata_path(session_id)
+                    .display(),
+                self.session_layout(workspace_path)
+                    .sessions_root()
+                    .exists(),
+                self.session_layout(workspace_path)
+                    .session_dir(session_id)
+                    .exists(),
+            );
             Err(BitFunError::NotFound(format!(
                 "Session metadata not found: {}",
                 session_id
@@ -1527,7 +1613,7 @@ impl PersistenceManager {
             .map_err(Self::session_metadata_store_error)
     }
 
-    async fn load_stored_session_state(
+    pub(crate) async fn load_stored_session_state(
         &self,
         workspace_path: &Path,
         session_id: &str,
@@ -2035,6 +2121,13 @@ impl PersistenceManager {
         self.ensure_runtime_for_write(workspace_path).await?;
 
         let sessions_dir = self.project_sessions_dir(workspace_path);
+        #[cfg(test)]
+        eprintln!(
+            "[ci-probe] create_session_if_absent: workspace_path={}, sessions_dir={}, lock_root_exists={}",
+            workspace_path.display(),
+            sessions_dir.display(),
+            sessions_dir.parent().map(|p| p.join(".session-write-locks")).map(|p| p.exists()).unwrap_or(false),
+        );
         fs::create_dir_all(&sessions_dir).await.map_err(|error| {
             BitFunError::io(format!(
                 "Failed to create sessions directory {}: {}",
@@ -2042,6 +2135,15 @@ impl PersistenceManager {
                 error
             ))
         })?;
+        #[cfg(test)]
+        eprintln!(
+            "[ci-probe] create_session_if_absent AFTER create_dir_all: sessions_dir={}, exists={}, projects_root_tree={:?}",
+            sessions_dir.display(),
+            sessions_dir.exists(),
+            std::fs::read_dir(self.path_manager.projects_root()).map(|entries| {
+                entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect::<Vec<_>>()
+            }).unwrap_or_default(),
+        );
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, &session.session_id)
             .await;
@@ -2121,9 +2223,13 @@ impl PersistenceManager {
         let existing_metadata = self
             .load_session_metadata(workspace_path, &session.session_id)
             .await?;
-        let metadata = self
+        let mut metadata = self
             .build_session_metadata(workspace_path, session, existing_metadata.as_ref())
             .await;
+        metadata.runtime_state = Some(
+            serde_json::to_value(sanitize_persisted_session_state(&session.state))
+                .unwrap_or(serde_json::Value::Null),
+        );
         self.save_session_metadata_locked(workspace_path, &metadata)
             .await?;
 
@@ -2135,6 +2241,13 @@ impl PersistenceManager {
             last_submitted_agent_type: session.last_submitted_agent_type.clone(),
             compression_state: session.compression_state.clone(),
             runtime_state: sanitize_persisted_session_state(&session.state),
+            // R-WF-11: persist the display lifecycle markers so a rebuilt
+            // Session after restart keeps its seven-state projection.
+            last_progress_at: session.last_progress_at,
+            interrupt_reason: session.interrupt_reason.clone(),
+            last_completed_at: session.last_completed_at,
+            needs_attention: session.needs_attention,
+            viewed: session.viewed,
         };
         self.save_stored_session_state(workspace_path, &session.session_id, &state)
             .await
@@ -2207,6 +2320,26 @@ impl PersistenceManager {
                 .or(metadata.snapshot_session_id.clone()),
             dialog_turn_ids,
             state: runtime_state,
+            // R-WF-11: restore the display lifecycle markers from the persisted
+            // sidecar so a rebuilt Session after restart keeps its seven-state
+            // projection (hung / interrupted / completed-dot / viewed).
+            last_progress_at: stored_state
+                .as_ref()
+                .and_then(|value| value.last_progress_at),
+            interrupt_reason: stored_state
+                .as_ref()
+                .and_then(|value| value.interrupt_reason.clone()),
+            last_completed_at: stored_state
+                .as_ref()
+                .and_then(|value| value.last_completed_at),
+            needs_attention: stored_state
+                .as_ref()
+                .map(|value| value.needs_attention)
+                .unwrap_or(false),
+            viewed: stored_state
+                .as_ref()
+                .map(|value| value.viewed)
+                .unwrap_or(false),
             config,
             compression_state,
             created_at,
@@ -2479,6 +2612,11 @@ impl PersistenceManager {
                 last_submitted_agent_type: None,
                 compression_state: CompressionState::default(),
                 runtime_state: SessionState::Idle,
+                last_progress_at: None,
+                interrupt_reason: None,
+                last_completed_at: None,
+                needs_attention: false,
+                viewed: false,
             });
         stored_state.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
         stored_state.runtime_state = sanitize_persisted_session_state(state);
@@ -2512,16 +2650,36 @@ impl PersistenceManager {
         let mut summaries = Vec::with_capacity(metadata_list.len());
 
         for metadata in metadata_list {
-            let (state, reasoning_preset) = self
+            let (state, reasoning_preset, display_markers) = self
                 .load_stored_session_state(workspace_path, &metadata.session_id)
                 .await?
                 .map(|value| {
-                    (
-                        sanitize_persisted_session_state(&value.runtime_state),
-                        value.config.reasoning_preset,
-                    )
+                    let state = sanitize_persisted_session_state(&value.runtime_state);
+                    let display_markers = (
+                        value.last_progress_at,
+                        value.interrupt_reason.clone(),
+                        value.last_completed_at,
+                        value.needs_attention,
+                        value.viewed,
+                    );
+                    (state, value.config.reasoning_preset, display_markers)
                 })
-                .unwrap_or((SessionState::Idle, None));
+                .unwrap_or((SessionState::Idle, None, (None, None, None, false, false)));
+
+            // R-WF-11: project the seven-state display value from the persisted
+            // lifecycle markers so a restart does not lose hung/interrupted/
+            // pending-attention/viewed.
+            let (last_progress_at, interrupt_reason, _last_completed_at, needs_attention, viewed) =
+                display_markers;
+            let display_state = crate::agentic::core::state::derive_display_state(
+                &state,
+                metadata.turn_count,
+                interrupt_reason.as_deref(),
+                needs_attention,
+                viewed,
+                last_progress_at,
+                SystemTime::now(),
+            );
 
             summaries.push(SessionSummary {
                 session_id: metadata.session_id,
@@ -2536,7 +2694,13 @@ impl PersistenceManager {
                 turn_count: metadata.turn_count,
                 created_at: Self::unix_ms_to_system_time(metadata.created_at),
                 last_activity_at: Self::unix_ms_to_system_time(metadata.last_active_at),
-                state,
+                state: state.clone(),
+                display_state,
+                parent_session_id: metadata
+                    .relationship
+                    .as_ref()
+                    .and_then(|r| r.parent_session_id.clone()),
+                is_daemon: metadata.is_daemon,
             });
         }
 
@@ -3595,61 +3759,44 @@ impl PersistenceManager {
                 ))
             })?;
             metadata_bytes.push(b'\n');
+            let metadata_text = String::from_utf8(metadata_bytes).map_err(|error| {
+                BitFunError::serialization(format!(
+                    "Failed to decode serialized compression transcript metadata: {}",
+                    error
+                ))
+            })?;
 
-            let mut transcript_file = match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&transcript_path)
+            // UX-P1-7: publish the transcript and metadata pair atomically
+            // (temp + rename / hard-link publish). The previous
+            // create_new + write_all path could expose a torn file to readers
+            // (compression transcript readers sit outside the session write
+            // lock). `write_text_atomic_create_new` publishes the fully
+            // written temp in one step and fails with AlreadyExists instead of
+            // replacing a racing file — preserving the unique-name retry
+            // semantics of the former create_new reservation.
+            match JsonFileStore
+                .write_text_atomic_create_new(&transcript_path, &transcript_content)
                 .await
             {
-                Ok(file) => file,
-                Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+                Ok(()) => {}
+                Err(error) if error.is_already_exists() => continue,
                 Err(error) => {
-                    return Err(BitFunError::io(format!(
-                        "Failed to reserve compression transcript {}: {}",
-                        transcript_path.display(),
-                        error
-                    )))
+                    return Err(Self::json_store_error(error));
                 }
-            };
-
-            let mut meta_file = match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&meta_path)
+            }
+            match JsonFileStore
+                .write_text_atomic_create_new(&meta_path, &metadata_text)
                 .await
             {
-                Ok(file) => file,
-                Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                Ok(()) => {}
+                Err(error) if error.is_already_exists() => {
                     let _ = fs::remove_file(&transcript_path).await;
                     continue;
                 }
                 Err(error) => {
                     let _ = fs::remove_file(&transcript_path).await;
-                    return Err(BitFunError::io(format!(
-                        "Failed to reserve compression transcript metadata {}: {}",
-                        meta_path.display(),
-                        error
-                    )));
+                    return Err(Self::json_store_error(error));
                 }
-            };
-
-            let write_result = async {
-                transcript_file.write_all(transcript_bytes).await?;
-                transcript_file.flush().await?;
-                meta_file.write_all(&metadata_bytes).await?;
-                meta_file.flush().await
-            }
-            .await;
-            if let Err(error) = write_result {
-                drop(transcript_file);
-                drop(meta_file);
-                let _ = fs::remove_file(&transcript_path).await;
-                let _ = fs::remove_file(&meta_path).await;
-                return Err(BitFunError::io(format!(
-                    "Failed to write compression transcript pair: {}",
-                    error
-                )));
             }
 
             let uri = bitfun_agent_tools::build_bitfun_current_session_uri(&format!(
@@ -3854,15 +4001,13 @@ impl PersistenceManager {
         let index = rendered.index;
 
         let transcript_content = lines.join("\n");
-        fs::write(&transcript_path, transcript_content)
-            .await
-            .map_err(|e| {
-                BitFunError::io(format!(
-                    "Failed to write transcript file {}: {}",
-                    transcript_path.display(),
-                    e
-                ))
-            })?;
+        // UX-P1-7: replace the bare fs::write with an atomic temp+rename write
+        // (same tombstone pattern). SessionHistory export and compression
+        // transcript readers read this file outside the session write lock, so
+        // a direct overwrite could expose a torn/partial transcript to a
+        // concurrent reader.
+        self.write_text_atomic(&transcript_path, &transcript_content)
+            .await?;
 
         let transcript = SessionTranscriptExport {
             session_id: session_id.to_string(),
@@ -3933,10 +4078,15 @@ impl PersistenceManager {
         // Pick complete turns backwards from the newest one. The first turn
         // is admitted whenever the current total is below the limit, even if
         // that individual turn crosses it; this keeps references coherent.
+        // R-THR-01 批2 2-12：上限配置化（`ai.thresholds.persistence.session_reference_transcript_char_limit`）。
+        let char_limit =
+            crate::service::config::types::configured_persistence_session_reference_transcript_char_limit()
+                .await
+                .max(1);
         let mut selected_indices_reversed = Vec::new();
         let mut selected_turn_chars = 0usize;
         for index in (0..all_turns.len()).rev() {
-            if selected_turn_chars >= SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT {
+            if selected_turn_chars >= char_limit {
                 break;
             }
             selected_turn_chars += rendered_turn_char_count(&all_turns[index], &options);
@@ -4105,7 +4255,38 @@ impl PersistenceManager {
             Ok(())
         })
         .await
-        .map(|_| ())
+        .map(|_| ())?;
+        // R-WF-11 P1-5: opening/activating a session marks it as viewed so the
+        // seven-state projection clears the green dot after the user has seen
+        // the completed result. Idempotent: the marker is only written when it
+        // changes, keeping the sidecar write traffic minimal.
+        let mut stored_state = self
+            .load_stored_session_state(workspace_path, session_id)
+            .await?
+            .unwrap_or(StoredSessionStateFile {
+                schema_version: SESSION_STORAGE_SCHEMA_VERSION,
+                config: SessionConfig {
+                    workspace_path: None,
+                    ..Default::default()
+                },
+                snapshot_session_id: None,
+                last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
+                compression_state: CompressionState::default(),
+                runtime_state: SessionState::Idle,
+                last_progress_at: None,
+                interrupt_reason: None,
+                last_completed_at: None,
+                needs_attention: false,
+                viewed: false,
+            });
+        if !stored_state.viewed {
+            stored_state.viewed = true;
+            stored_state.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
+            self.save_stored_session_state(workspace_path, session_id, &stored_state)
+                .await?;
+        }
+        Ok(())
     }
 }
 
@@ -4610,6 +4791,196 @@ mod tests {
             .expect("selected transcript should be readable");
         assert!(selected_transcript.contains("hello transcript"));
         assert!(!selected_transcript.contains("hidden transcript payload"));
+    }
+
+    #[tokio::test]
+    async fn transcript_atomic_write_leaves_no_torn_or_temp_artifacts() {
+        // UX-P1-7 regression: export_session_transcript must publish the
+        // transcript via temp+rename (write_text_atomic). A concurrent reader
+        // must never observe a partial file, and the atomic writer must not
+        // leave `.tmp` droppings behind after success.
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+
+        let metadata = SessionMetadata::new(
+            session_id.clone(),
+            "Atomic transcript".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        for turn_index in 0..3usize {
+            let mut turn = DialogTurnData::new(
+                format!("turn-{turn_index}"),
+                turn_index,
+                session_id.clone(),
+                UserMessageData {
+                    id: format!("user-{turn_index}"),
+                    content: format!("atomic transcript line {turn_index}"),
+                    timestamp: turn_index as u64,
+                    metadata: None,
+                },
+            );
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        // Re-export twice: the fingerprint cache path is skipped on the second
+        // call only if the stored meta matches; force a regenerate by using a
+        // different turns selector each time, then read the file back fully.
+        // A torn/partial write would truncate the body mid-line, so the
+        // strongest complete-read assertion is: the file contains the full
+        // index header, the selected turn body, and ends on a clean structural
+        // marker (the render's own closing line / omitted-turns note) rather
+        // than a half-written line.
+        for (index, selector) in ["0:1", "0:2"].iter().enumerate() {
+            let export = manager
+                .export_session_transcript(
+                    workspace.path(),
+                    &session_id,
+                    &SessionTranscriptExportOptions {
+                        turns: Some(vec![selector.to_string()]),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("transcript export should succeed");
+            let transcript = std::fs::read_to_string(&export.transcript_path)
+                .expect("transcript file should be readable");
+            assert!(
+                transcript.contains("## Index"),
+                "export {index} must include the index header"
+            );
+            assert!(
+                transcript.contains("atomic transcript line 0"),
+                "export {index} must contain the full rendered body"
+            );
+            assert!(
+                transcript.trim_end().ends_with(")") || transcript.trim_end().ends_with("]"),
+                "export {index} must not be truncated mid-line; tail: {:?}",
+                transcript
+                    .trim_end()
+                    .chars()
+                    .rev()
+                    .take(40)
+                    .collect::<String>()
+            );
+            // The structural closing marker of a rendered transcript is the
+            // "(omitted turn(s) N-M)" note or the last turn's closing tag —
+            // both end with a closing bracket. A torn file cannot end cleanly.
+            assert!(
+                transcript.trim_end().ends_with("[/user]")
+                    || transcript.trim_end().contains("omitted turn"),
+                "export {index} must end on a structural marker"
+            );
+        }
+
+        // No temp droppings survive next to the transcript artifacts.
+        let artifacts_dir = manager
+            .session_layout(workspace.path())
+            .artifacts_dir(&session_id);
+        let mut entries = std::fs::read_dir(&artifacts_dir).expect("artifacts dir");
+        while let Some(entry) = entries.next().transpose().expect("entry") {
+            let name = entry.file_name().to_string_lossy().to_string();
+            assert!(
+                !name.contains(".tmp"),
+                "atomic write must not leave temp files, found: {name}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn compression_transcript_pair_is_published_atomically() {
+        // UX-P1-7 regression: create_compression_transcript must publish the
+        // transcript + meta pair via atomic create-new writes (temp + rename /
+        // hard-link publish). The pair must be fully readable immediately
+        // after the call, and no `.tmp` files may remain.
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+
+        let metadata = SessionMetadata::new(
+            session_id.clone(),
+            "Compression transcript".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        for turn_index in 0..2usize {
+            let mut turn = DialogTurnData::new(
+                format!("turn-{turn_index}"),
+                turn_index,
+                session_id.clone(),
+                UserMessageData {
+                    id: format!("user-{turn_index}"),
+                    content: format!("compression line {turn_index}"),
+                    timestamp: turn_index as u64,
+                    metadata: None,
+                },
+            );
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        let artifact = manager
+            .create_compression_transcript(
+                workspace.path(),
+                &session_id,
+                1,
+                "compression-1",
+                "test",
+            )
+            .await
+            .expect("compression transcript should be created")
+            .expect("artifact should exist");
+
+        let transcript = std::fs::read_to_string(&artifact.transcript_path)
+            .expect("compression transcript should be readable");
+        assert!(
+            transcript.contains("compression line 0"),
+            "compression transcript must contain the full body"
+        );
+        assert!(
+            transcript.contains("compression line 1"),
+            "compression transcript must include the boundary turn"
+        );
+
+        let meta = std::fs::read_to_string(&artifact.meta_path)
+            .expect("compression meta should be readable");
+        assert!(
+            meta.contains("\"boundaryTurnIndex\": 1"),
+            "compression meta must be complete JSON: {meta}"
+        );
+
+        let dir = artifact
+            .transcript_path
+            .parent()
+            .expect("transcript parent dir");
+        let mut entries = std::fs::read_dir(dir).expect("transcript dir");
+        while let Some(entry) = entries.next().transpose().expect("entry") {
+            let name = entry.file_name().to_string_lossy().to_string();
+            assert!(
+                !name.contains(".tmp"),
+                "atomic pair write must not leave temp files, found: {name}"
+            );
+        }
     }
 
     #[tokio::test]

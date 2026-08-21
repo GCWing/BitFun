@@ -361,6 +361,7 @@ async fn cancel_active_turns(
         workspace_path: workspace_root.to_string_lossy().into_owned(),
         remote_connection_id: None,
         remote_ssh_host: None,
+        include_hidden: false,
     };
     let sessions = match runtime.list_sessions(request).await {
         Ok(sessions) => sessions,

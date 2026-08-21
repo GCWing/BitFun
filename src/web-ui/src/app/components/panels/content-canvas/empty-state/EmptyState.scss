@@ -60,4 +60,15 @@
       color: var(--bf-appearance-token-color-text-secondary);
     }
   }
+
+  // Grid-9 / drag guidance shown when the panel has no tabs yet.
+  &__hint {
+    p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--bf-appearance-token-color-text-muted);
+      opacity: 0.85;
+    }
+  }
 }

@@ -40,6 +40,14 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onClose }) => {
         <div className="canvas-empty-state__message">
           <p>{t('canvas.noContentOpen')}</p>
         </div>
+        {/* Grid-9 / drag hint: visible guidance instead of a silent no-op.
+            The right panel has no tabs yet, so this tells the user how to
+            reach the split / 3x3 layouts (drag a conversation in from the
+            center, or open a panel) — the same message the Ctrl+Shift+9
+            shortcut shows as a toast when the canvas is empty. */}
+        <div className="canvas-empty-state__hint">
+          <p>{t('canvas.grid9EmptyHint')}</p>
+        </div>
       </div>
     </div>
   );

@@ -73,10 +73,16 @@ pub fn aggregate_stats_json_for_prompt(aggregate: &InsightsAggregate) -> String 
 
 /// Bullet list for templates that embed `{summaries}` after a label.
 pub fn summaries_block(aggregate: &InsightsAggregate) -> String {
+    summaries_block_with_limit(aggregate, MAX_PROMPT_SESSION_SUMMARIES)
+}
+
+/// R-THR-01 批2 2-3：配置化变体——limit 由调用方从
+/// `ai.thresholds.insights.max_prompt_session_summaries` 解析。
+pub fn summaries_block_with_limit(aggregate: &InsightsAggregate, max_summaries: usize) -> String {
     let lines: Vec<&str> = aggregate
         .session_summaries
         .iter()
-        .take(MAX_PROMPT_SESSION_SUMMARIES)
+        .take(max_summaries)
         .map(|s| s.as_str())
         .collect();
     if lines.is_empty() {
@@ -86,11 +92,16 @@ pub fn summaries_block(aggregate: &InsightsAggregate) -> String {
 }
 
 pub fn friction_block(aggregate: &InsightsAggregate) -> String {
+    friction_block_with_limit(aggregate, MAX_PROMPT_FRICTION_DETAILS)
+}
+
+/// R-THR-01 批2 2-3：配置化变体。
+pub fn friction_block_with_limit(aggregate: &InsightsAggregate, max_friction: usize) -> String {
     let lines: Vec<&str> = aggregate
         .friction_details
         .iter()
         .filter(|s| !s.trim().is_empty())
-        .take(MAX_PROMPT_FRICTION_DETAILS)
+        .take(max_friction)
         .map(|s| s.as_str())
         .collect();
     if lines.is_empty() {
@@ -100,13 +111,21 @@ pub fn friction_block(aggregate: &InsightsAggregate) -> String {
 }
 
 pub fn user_instructions_block(aggregate: &InsightsAggregate) -> String {
+    user_instructions_block_with_limit(aggregate, MAX_PROMPT_USER_INSTRUCTIONS)
+}
+
+/// R-THR-01 批2 2-3：配置化变体。
+pub fn user_instructions_block_with_limit(
+    aggregate: &InsightsAggregate,
+    max_instructions: usize,
+) -> String {
     let mut seen = std::collections::HashSet::<&str>::new();
     let mut lines: Vec<&str> = Vec::new();
     for s in &aggregate.user_instructions {
         if s.trim().is_empty() {
             continue;
         }
-        if seen.insert(s.as_str()) && lines.len() < MAX_PROMPT_USER_INSTRUCTIONS {
+        if seen.insert(s.as_str()) && lines.len() < max_instructions {
             lines.push(s.as_str());
         }
     }

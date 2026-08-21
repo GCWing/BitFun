@@ -330,7 +330,7 @@ describe('AgentCompanionDesktopPet', () => {
     expect(bubbleShell!.classList).not.toContain('bitfun-agent-companion-window__bubble-shell--hovered');
   });
 
-  it('sends the composer message on Enter', () => {
+  it('sends the composer message on Enter', async () => {
     pushActivity({ mood: 'working', tasks: [task()], sequence: 1, emittedAt: 1 });
 
     act(() => {
@@ -345,6 +345,12 @@ describe('AgentCompanionDesktopPet', () => {
         bubbles: true,
         cancelable: true,
       }));
+    });
+
+    // submitBubbleComposer awaits sendPetCommand before clearing the composer;
+    // flush that promise so the resulting setState lands inside act().
+    await act(async () => {
+      await Promise.resolve();
     });
 
     expect(emitMock).toHaveBeenCalledWith(PET_COMMAND_EVENT, {

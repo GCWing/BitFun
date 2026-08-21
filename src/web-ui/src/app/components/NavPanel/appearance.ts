@@ -19,6 +19,7 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'sectionContent', visualRole: 'content' },
     { id: 'assistantSessionActions', propertyProfile: 'control', visualRole: 'control' },
     { id: 'assistantSessionMenu', propertyProfile: 'overlay', visualRole: 'popup' },
+    { id: 'groupChatsActions', propertyProfile: 'control', visualRole: 'control' },
     { id: 'bottomBar', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'miniAppFooter', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'footer', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
@@ -34,8 +35,8 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   ],
   facets: [
     { id: 'layer', attribute: 'data-bf-layer', values: ['main', 'scene'] },
-    { id: 'action', attribute: 'data-bf-action', values: ['code', 'cowork', 'assistant', 'todos', 'extensions', 'agents', 'skills'] },
-    { id: 'section', attribute: 'data-bf-section', values: ['assistant-sessions', 'workspace'] },
+    { id: 'action', attribute: 'data-bf-action', values: ['code', 'cowork', 'assistant', 'workflow-claw', 'todos', 'extensions', 'agents', 'skills', 'workflow', 'tools'] },
+    { id: 'section', attribute: 'data-bf-section', values: ['assistant-sessions', 'workspace', 'group-chats'] },
   ],
   states: [
     { id: 'scene', selector: { kind: 'self', suffix: '[data-bf-state~="scene"]' } },

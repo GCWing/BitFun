@@ -386,7 +386,8 @@ fn internal_turns_cannot_revoke_a_user_edit_constraint() {
         description: "tests may be modified now".to_string(),
     };
 
-    let (revoked, unmatched) = validated_revocation_ids(&[revocation], &[protected.clone()], false);
+    let (revoked, unmatched) =
+        validated_revocation_ids(&[revocation], std::slice::from_ref(&protected), false);
 
     assert!(revoked.is_empty());
     assert!(unmatched.is_empty());
@@ -856,4 +857,178 @@ fn local_recursive_delete_fallback_finds_protected_descendant() {
         .contains("tests"));
 
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn allow_set_phrases_do_not_trigger_prohibition_signal() {
+    for message in [
+        "Only modify src/lib.rs.",
+        "Only change the files under src/.",
+        "Please edit only the api/ directory.",
+        "只修改 src/ 下的文件。",
+        "仅允许修改 config/ 目录。",
+        "只能修改 tools/ 里的内容。",
+    ] {
+        assert!(
+            !has_prohibition_signal(message),
+            "allow-set phrasing must not be a prohibition signal: {message}"
+        );
+    }
+}
+
+#[test]
+fn allow_set_signal_recognizes_scope_defining_phrases() {
+    for message in [
+        "Only modify src/lib.rs.",
+        "只修改 src/ 下的文件。",
+        "仅允许修改 config/ 目录。",
+        "Modify only the files in src/.",
+        "Limit changes to the api/ directory.",
+        "Only modify non-test files.",
+    ] {
+        assert!(
+            has_allow_set_signal(message),
+            "expected allow-set signal for: {message}"
+        );
+    }
+    for message in [
+        "Do not modify tests.",
+        "Cargo.lock is off limits.",
+        "Continue with the implementation.",
+        "可以修改测试文件了。",
+    ] {
+        assert!(
+            !has_allow_set_signal(message),
+            "unexpected allow-set signal for: {message}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn allow_set_message_marks_scope_replacement_without_constraints() {
+    let active = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+    let extraction = extract_constraints_with_active("只修改 src/ 下的文件。", &[active]).await;
+
+    assert_eq!(extraction.status, ExtractionStatus::ScopeReplaced);
+    assert!(extraction.constraints.is_empty());
+    assert_eq!(extraction.model_attempts, 0);
+    assert!(extraction.failure.is_none());
+    assert!(extraction_requires_session_state(&extraction));
+}
+
+#[tokio::test]
+async fn non_test_allow_set_keeps_deterministic_test_prohibition() {
+    // "Only modify non-test files." is an allow-list that explicitly excludes
+    // test files: the deterministic extractor keeps that prohibition, while
+    // the message still marks a scope replacement for older constraints.
+    let extraction = extract_constraints("Only modify non-test files.").await;
+    assert_eq!(extraction.status, ExtractionStatus::ScopeReplaced);
+    assert_eq!(extraction.constraints.len(), 1);
+    assert_eq!(
+        extraction.constraints[0].matcher,
+        ConstraintMatcher::TestFiles
+    );
+}
+
+#[test]
+fn new_scope_replaces_previous_constraints_in_state() {
+    let mut state = EditConstraintState::default();
+    let old = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+    state.merge_extraction(ConstraintExtractionRecord {
+        message_sha256: "turn-1-hash".to_string(),
+        dialog_turn_id: Some("turn-1".to_string()),
+        status: ExtractionStatus::Extracted,
+        constraints: vec![old],
+        deterministic_constraint_count: 1,
+        model_attempts: 0,
+        active_constraint_ids: Vec::new(),
+        revocation_authorized: true,
+        model_status: ModelExtractionStatus::NotRun,
+        model_constraints: Vec::new(),
+        model_revocations: Vec::new(),
+        revoked_constraint_ids: Vec::new(),
+        unmatched_revocation_ids: Vec::new(),
+        input_chars: 10,
+        prompt_chars: 10,
+        input_truncated: false,
+        latency_ms: 1,
+        extracted_at_ms: 1,
+        failure: None,
+        response_excerpt: None,
+    });
+    assert!(state.has_enforceable_constraints());
+
+    state.merge_extraction(ConstraintExtractionRecord {
+        message_sha256: "turn-2-hash".to_string(),
+        dialog_turn_id: Some("turn-2".to_string()),
+        status: ExtractionStatus::ScopeReplaced,
+        constraints: Vec::new(),
+        deterministic_constraint_count: 0,
+        model_attempts: 0,
+        active_constraint_ids: Vec::new(),
+        revocation_authorized: true,
+        model_status: ModelExtractionStatus::NotRun,
+        model_constraints: Vec::new(),
+        model_revocations: Vec::new(),
+        revoked_constraint_ids: Vec::new(),
+        unmatched_revocation_ids: Vec::new(),
+        input_chars: 10,
+        prompt_chars: 10,
+        input_truncated: false,
+        latency_ms: 1,
+        extracted_at_ms: 2,
+        failure: None,
+        response_excerpt: None,
+    });
+
+    assert!(state.constraints.is_empty());
+    assert!(!state.has_enforceable_constraints());
+}
+
+#[test]
+fn scope_replacement_keeps_only_explicit_new_prohibition() {
+    let mut state = EditConstraintState::default();
+    state.constraints.push(constraint(
+        "don't touch lockfiles",
+        ConstraintMatcher::Extension {
+            exts: vec![".lock".to_string()],
+        },
+    ));
+    let new_test = constraint("don't modify tests", ConstraintMatcher::TestFiles);
+
+    state.merge_extraction(ConstraintExtractionRecord {
+        message_sha256: "turn-2-hash".to_string(),
+        dialog_turn_id: Some("turn-2".to_string()),
+        status: ExtractionStatus::ScopeReplaced,
+        constraints: vec![new_test.clone()],
+        deterministic_constraint_count: 0,
+        model_attempts: 1,
+        active_constraint_ids: Vec::new(),
+        revocation_authorized: true,
+        model_status: ModelExtractionStatus::Parsed,
+        model_constraints: vec![new_test.clone()],
+        model_revocations: Vec::new(),
+        revoked_constraint_ids: Vec::new(),
+        unmatched_revocation_ids: Vec::new(),
+        input_chars: 10,
+        prompt_chars: 10,
+        input_truncated: false,
+        latency_ms: 1,
+        extracted_at_ms: 2,
+        failure: None,
+        response_excerpt: None,
+    });
+
+    assert_eq!(state.constraints, vec![new_test]);
+    assert!(find_violation(&state.constraints, "Cargo.lock").is_none());
+    assert!(find_violation(&state.constraints, "report/util_test.go").is_some());
+}
+
+#[test]
+fn explicit_prohibition_still_generates_constraint() {
+    assert!(has_prohibition_signal("Do not modify Cargo.lock."));
+    assert!(has_prohibition_signal("禁止修改 src/config.rs。"));
+    let extracted =
+        deterministic_test_constraint("Do not modify test files.").expect("test constraint");
+    assert_eq!(extracted.matcher, ConstraintMatcher::TestFiles);
 }

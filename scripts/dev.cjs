@@ -286,25 +286,6 @@ async function waitForPort(port, hosts = DEV_SERVER_HOSTS, timeoutMs = 30000) {
   throw new Error(`Port ${port} did not become ready within ${timeoutMs}ms`);
 }
 
-async function runDesktopTargetGcBestEffort(profile = 'debug') {
-  try {
-    const { runGcBestEffort } = await import(
-      pathToFileURL(path.join(__dirname, 'cargo-target-gc.mjs')).href
-    );
-    printInfo('Pruning stale Cargo target caches (keep latest only)');
-    runGcBestEffort({
-      rootDir: ROOT_DIR,
-      profile,
-      logger: {
-        info: (message) => printInfo(message),
-        warn: (message) => printError(message),
-      },
-    });
-  } catch (error) {
-    printError(`Target GC skipped: ${error.message || String(error)}`);
-  }
-}
-
 async function runDesktopTargetGc(profile = 'debug') {
   try {
     const { runGcBestEffort } = await import(

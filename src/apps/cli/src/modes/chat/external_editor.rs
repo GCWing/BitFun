@@ -1,4 +1,6 @@
-use std::ffi::{OsStr, OsString};
+#[cfg(windows)]
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -103,7 +105,7 @@ fn has_unclosed_windows_quote(value: &str) -> bool {
             backslashes += 1;
             continue;
         }
-        if character == '"' && backslashes % 2 == 0 {
+        if character == '"' && backslashes.is_multiple_of(2) {
             quoted = !quoted;
         }
         backslashes = 0;
@@ -208,7 +210,7 @@ fn editor_process(
     command: &EditorCommand,
     path: &std::path::Path,
 ) -> Result<Command, EditorRunError> {
-    let mut process = Command::new(&command.program);
+    let mut process = bitfun_core::util::process_manager::create_command(&command.program);
     process.args(&command.args).arg(path);
     Ok(process)
 }
@@ -235,7 +237,7 @@ fn editor_process(
         }
         values.push(quote_windows_batch_value(path.as_os_str())?);
         let command_line = values.join(" ");
-        let mut process = Command::new("cmd.exe");
+        let mut process = bitfun_core::util::process_manager::create_command("cmd.exe");
         process.args(["/d", "/v:off", "/s", "/c"]);
         // cmd.exe requires an extra outer quote pair when the command itself
         // begins with a quoted executable path. raw_arg is intentional here:
@@ -243,7 +245,7 @@ fn editor_process(
         process.raw_arg(format!("\"{command_line}\""));
         Ok(process)
     } else {
-        let mut process = Command::new(&command.program);
+        let mut process = bitfun_core::util::process_manager::create_command(&command.program);
         process.args(&command.args).arg(path);
         Ok(process)
     }

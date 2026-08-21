@@ -1,0 +1,576 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+// ─── Composer shell ───────────────────────────────────────────────────────────
+.tc {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+
+  &--empty {
+    align-items: center;
+    justify-content: center;
+    color: var(--bf-appearance-token-color-text-disabled);
+    font-size: 0.8125rem;
+  }
+
+  // ── Compact bar (replaces header + toolbar) ────────────────────────────
+  &__bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-4;
+    padding: 8px $size-gap-4;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    min-height: 0;
+  }
+
+  &__bar-left {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  &__name {
+    font-size: 0.8125rem;
+    font-weight: $font-weight-semibold;
+    color: var(--bf-appearance-token-color-text-primary);
+    cursor: pointer;
+    border-bottom: 1px dashed transparent;
+    transition: border-color $motion-fast $easing-standard;
+    white-space: nowrap;
+
+    &:hover { border-bottom-color: var(--bf-appearance-token-border-medium); }
+  }
+
+  &__name-input {
+    font-size: 0.8125rem;
+    font-weight: $font-weight-semibold;
+    color: var(--bf-appearance-token-color-text-primary);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--bf-appearance-token-color-accent-500);
+    outline: none;
+    font-family: var(--bf-appearance-token-font-family-sans);
+    padding: 0;
+    width: 120px;
+  }
+
+  &__edit-action {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: $font-weight-medium;
+    padding: 2px 8px;
+    border-radius: $size-radius-base;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+
+    &--save {
+      color: var(--bf-appearance-token-color-accent-500);
+      border-color: var(--bf-appearance-token-color-accent-500);
+
+      &:hover {
+        background: var(--bf-appearance-token-color-accent-100);
+      }
+    }
+  }
+
+  &__sep {
+    color: var(--bf-appearance-token-color-text-disabled);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  &__meta {
+    font-size: 0.75rem;
+    color: var(--bf-appearance-token-color-text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  &__bar-right {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    flex-shrink: 0;
+  }
+
+  &__bar-sep {
+    width: 1px;
+    height: 14px;
+    background: var(--bf-appearance-token-border-subtle);
+    flex-shrink: 0;
+  }
+
+  // ── View toggle ────────────────────────────────────────────────────────
+  &__toggle {
+    display: flex;
+    gap: 1px;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 4px;
+    padding: 2px;
+  }
+
+  &__toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    font-family: var(--bf-appearance-token-font-family-sans);
+
+    &.is-on {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
+    &:not(.is-on):hover { color: var(--bf-appearance-token-color-text-secondary); }
+  }
+
+  // ── Role legend ────────────────────────────────────────────────────────
+  &__legend {
+    display: flex;
+    gap: $size-gap-3;
+  }
+
+  &__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__legend-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  // ── Body ────────────────────────────────────────────────────────────────
+  &__body {
+    flex: 1;
+    overflow: visible;
+    position: relative;
+  }
+}
+
+// ─── Formation ────────────────────────────────────────────────────────────────
+.tcf {
+  position: relative;
+  width: 100%;
+  height: 100%;
+
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__empty-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $size-gap-2;
+    text-align: center;
+  }
+
+  &__empty-ico {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    color: var(--bf-appearance-token-color-text-disabled);
+    margin-bottom: $size-gap-2;
+  }
+
+  &__empty-msg p {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__empty-sub {
+    font-size: 0.75rem !important;
+    color: var(--bf-appearance-token-color-text-disabled) !important;
+  }
+
+  &__svg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  &__edge {
+    cursor: pointer;
+  }
+
+  &__edge-remove {
+    fill: var(--bf-appearance-token-color-bg-elevated);
+    stroke: var(--bf-appearance-token-border-subtle);
+    stroke-width: 1;
+    pointer-events: all;
+    cursor: pointer;
+
+    &:hover { fill: var(--bf-appearance-token-color-error-bg); stroke: var(--bf-appearance-token-color-error); }
+  }
+
+  &__hint {
+    margin: 0 0 4px;
+    font-size: 0.7rem;
+    color: var(--bf-appearance-token-color-text-disabled);
+  }
+
+  &__wire {
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+    padding: 4px 10px;
+    border: 1px dashed var(--bf-appearance-token-border-strong);
+    border-radius: 999px;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 0.7rem;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  // ── Node ────────────────────────────────────────────────────────────────
+  &__node {
+    position: absolute;
+    pointer-events: all;
+
+    &:hover .tcf__node-del { opacity: 1; }
+  }
+
+  &__node-card {
+    width: 100%;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top-width: 2px;
+    border-radius: $size-radius-base;
+    padding: $size-gap-2 $size-gap-3;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    position: relative;
+    transition: border-color $motion-fast $easing-standard;
+
+    &:hover { border-color: var(--bf-appearance-token-border-medium); }
+  }
+
+  // Row 1: icon + name + delete
+  &__node-head {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+
+  &__node-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8125rem;
+    font-weight: $font-weight-semibold;
+    color: var(--bf-appearance-token-color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  &__node-del {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-disabled);
+    cursor: pointer;
+    opacity: 0;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover { background: var(--bf-appearance-token-color-error-bg); color: var(--bf-appearance-token-color-error); }
+  }
+
+  &__node-foot {
+    display: flex;
+    align-items: baseline;
+    gap: $size-gap-2;
+    flex-wrap: nowrap;
+    font-size: 0.75rem;
+    line-height: 1;
+  }
+
+  &__role-wrap { position: relative; flex-shrink: 0; }
+
+  &__role-btn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
+    padding: 1px 5px;
+    border: none;
+    border-radius: 2px;
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: $font-weight-semibold;
+    cursor: pointer;
+    font-family: var(--bf-appearance-token-font-family-sans);
+    background: transparent;
+    transition: opacity $motion-fast $easing-standard;
+
+    &:hover { opacity: 0.7; }
+  }
+
+  &__role-menu {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-appearance-token-border-base);
+    border-radius: $size-radius-sm;
+    z-index: $z-dropdown;
+    overflow: hidden;
+    min-width: 64px;
+    animation: tc-in $motion-fast $easing-decelerate;
+  }
+
+  &__role-opt {
+    display: block;
+    width: 100%;
+    padding: 5px $size-gap-3;
+    background: transparent;
+    border: none;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--bf-appearance-token-font-family-sans);
+    transition: background $motion-fast $easing-standard;
+
+    &:hover { background: var(--bf-appearance-token-element-bg-medium); }
+    &.is-active { font-weight: $font-weight-semibold; }
+  }
+
+  &__role-bd { position: fixed; inset: 0; z-index: calc(#{$z-dropdown} - 1); }
+
+  &__node-cap {
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+  }
+
+  &__node-model {
+    font-size: inherit;
+    line-height: inherit;
+    color: var(--bf-appearance-token-color-text-disabled);
+    white-space: nowrap;
+    margin-left: auto;
+  }
+
+  // ── Seven-state badge + wire port + session jump (R-WF-17) ────────
+  &__node-status {
+    align-items: center;
+    gap: $size-gap-2;
+  }
+
+  &__node-state {
+    flex-shrink: 0;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__node-port,
+  &__node-jump {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-disabled);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
+    &.is-active {
+      background: var(--bf-appearance-token-color-accent-200);
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+  }
+
+  &__node-jump { margin-left: auto; }
+}
+
+// ─── List view ────────────────────────────────────────────────────────────────
+.tcl {
+  height: 100%;
+  overflow-y: auto;
+  padding: $size-gap-4 $size-gap-6;
+
+  &::-webkit-scrollbar { width: 3px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--bf-appearance-token-border-subtle); border-radius: 2px; }
+
+  &--empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: $size-gap-3;
+    color: var(--bf-appearance-token-color-text-disabled);
+    font-size: 0.8125rem;
+    p { margin: 0; }
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  &__th {
+    padding: $size-gap-2 $size-gap-3;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: $font-weight-semibold;
+    color: var(--bf-appearance-token-color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    white-space: nowrap;
+  }
+
+  &__tr {
+    &:hover .tcl__td { background: var(--bf-appearance-token-element-bg-subtle); }
+    &:last-child .tcl__td { border-bottom: none; }
+  }
+
+  &__td {
+    padding: $size-gap-3;
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 50%, transparent);
+    vertical-align: middle;
+    font-size: 0.8125rem;
+    transition: background $motion-fast $easing-standard;
+  }
+
+  &__seq {
+    color: var(--bf-appearance-token-color-text-disabled);
+    font-size: 0.75rem;
+    width: 28px;
+  }
+
+  &__agent {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+  }
+
+  &__agent-icon {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: $size-radius-sm;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__agent-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__agent-name {
+    font-size: 0.8125rem;
+    font-weight: $font-weight-medium;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__agent-desc {
+    font-size: 0.75rem;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__role {
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 3px;
+    padding: 3px $size-gap-2;
+    font-size: 0.75rem;
+    font-weight: $font-weight-semibold;
+    cursor: pointer;
+    outline: none;
+    font-family: var(--bf-appearance-token-font-family-sans);
+    transition: border-color $motion-fast $easing-standard;
+
+    &:hover { border-color: var(--bf-appearance-token-border-medium); }
+    option { background: var(--bf-appearance-token-color-bg-elevated); color: var(--bf-appearance-token-color-text-primary); }
+  }
+
+  &__muted {
+    font-size: 0.75rem;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__del {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-disabled);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover { background: var(--bf-appearance-token-color-error-bg); color: var(--bf-appearance-token-color-error); }
+  }
+}
+
+@keyframes tc-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

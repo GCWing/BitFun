@@ -172,6 +172,61 @@ pub(crate) mod test_support {
             .expect("instruction environment lock")
     }
 
+    /// Test fixture for the two AtomicBool instruction master switches.
+    ///
+    /// These switches are process-level global caches
+    /// (`set_workspace_instruction_files_enabled` /
+    /// `set_external_instruction_sources_enabled`). Mutating them directly in
+    /// tests leaks state across tests: a test that flips a switch without
+    /// restoring it can silently change the behavior of later tests that
+    /// implicitly depend on the default. This guard records the previous value
+    /// of each switch, applies the requested values, and restores the previous
+    /// values on drop — making every test self-contained regardless of the
+    /// order it runs in.
+    pub(crate) struct InstructionSwitches {
+        previous_workspace: bool,
+        previous_external: bool,
+    }
+
+    impl InstructionSwitches {
+        /// Set both instruction master switches for the duration of the test.
+        ///
+        /// Pass `Option::None` to leave that switch untouched.
+        pub(crate) fn set(
+            workspace_instruction_files: Option<bool>,
+            external_instruction_sources: Option<bool>,
+        ) -> Self {
+            let previous_workspace = crate::service::config::workspace_instruction_files_enabled();
+            let previous_external = crate::service::config::external_instruction_sources_enabled();
+            if let Some(enabled) = workspace_instruction_files {
+                crate::service::config::set_workspace_instruction_files_enabled(enabled);
+            }
+            if let Some(enabled) = external_instruction_sources {
+                crate::service::config::set_external_instruction_sources_enabled(enabled);
+            }
+            Self {
+                previous_workspace,
+                previous_external,
+            }
+        }
+
+        /// Enable both instruction master switches (the common test baseline).
+        pub(crate) fn enable_all() -> Self {
+            Self::set(Some(true), Some(true))
+        }
+    }
+
+    impl Drop for InstructionSwitches {
+        fn drop(&mut self) {
+            crate::service::config::set_workspace_instruction_files_enabled(
+                self.previous_workspace,
+            );
+            crate::service::config::set_external_instruction_sources_enabled(
+                self.previous_external,
+            );
+        }
+    }
+
     pub(crate) struct EnvironmentGuard {
         values: Vec<(&'static str, Option<OsString>)>,
     }

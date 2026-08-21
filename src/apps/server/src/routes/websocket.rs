@@ -25,7 +25,7 @@
 use axum::{
     extract::{
         ws::{WebSocket, WebSocketUpgrade},
-        Extension, State,
+        State,
     },
     http::{header::ORIGIN, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
@@ -40,23 +40,30 @@ const MAX_WS_TEXT_BYTES: usize = 256 * 1024;
 
 /// WebSocket connection handler.
 ///
-/// Validates the browser origin, then upgrades the connection and runs one
-/// in-process `BitfunAppServer::serve` per connection over the WS-bridged
-/// `Lines` transport.
+/// Validates the browser origin, then (when the host runs in runtime mode)
+/// upgrades the connection and runs one in-process `BitfunAppServer::serve` per
+/// connection over the WS-bridged `Lines` transport. A dormant HTTP shell
+/// (started without `--with-runtime`) rejects upgrades: it must never silently
+/// boot an Agent Runtime.
 pub(crate) async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
-    Extension(bitfun_app_server): Extension<BitfunAppServer>,
     headers: HeaderMap,
 ) -> Response {
     if !browser_origin_allowed(&headers, &state) {
         tracing::warn!("Rejected WebSocket upgrade from untrusted browser origin");
         return StatusCode::FORBIDDEN.into_response();
     }
+    let Some(app_server) = state.app_server.clone() else {
+        tracing::warn!(
+            "Rejected WebSocket upgrade: Agent Runtime is dormant; start with --with-runtime"
+        );
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
     tracing::info!("New WebSocket connection");
     ws.max_message_size(MAX_WS_TEXT_BYTES)
         .max_frame_size(MAX_WS_TEXT_BYTES)
-        .on_upgrade(move |socket| handle_socket(socket, bitfun_app_server))
+        .on_upgrade(move |socket| handle_socket(socket, app_server))
 }
 
 /// Check the browser `Origin` header against the allow-list.
@@ -108,6 +115,7 @@ mod tests {
                 origins.iter().map(|origin| (*origin).to_string()).collect(),
             ),
             dispatch_host: None,
+            app_server: None,
         }
     }
 

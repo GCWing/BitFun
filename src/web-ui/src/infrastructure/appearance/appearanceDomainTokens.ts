@@ -38,6 +38,12 @@ export const APPEARANCE_DOMAIN_TOKENS = {
     worker: appearanceToken('domain-review-worker'),
     judge: appearanceToken('domain-review-judge'),
   },
+  agentTeam: {
+    accents: Array.from({ length: 6 }, (_, index) => appearanceToken(`domain-agent-team-accent-${index}`)),
+    roleLeader: appearanceToken('domain-agent-team-role-leader'),
+    roleMember: appearanceToken('domain-agent-team-role-member'),
+    roleReviewer: appearanceToken('domain-agent-team-role-reviewer'),
+  },
   tealAction: appearanceToken('domain-teal-action'),
   todo: appearanceToken('domain-todo'),
   textStroke: Array.from({ length: 5 }, (_, index) => appearanceToken(`domain-text-stroke-${index}`)),

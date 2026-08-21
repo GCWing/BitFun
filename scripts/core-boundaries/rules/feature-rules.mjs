@@ -47,7 +47,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'base64', ownerFeatures: ['filesystem'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['local-storage', 'lsp'] },
       { depName: 'bitfun-events', ownerFeatures: ['local-storage'] },
-      { depName: 'bitfun-runtime-ports', ownerFeatures: ['permission', 'workspace-runtime'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['local-storage', 'permission', 'workspace-runtime'] },
       { depName: 'chrono', ownerFeatures: ['filesystem', 'local-storage'] },
       { depName: 'chrono-tz', ownerFeatures: ['token-usage-statistics'] },
       { depName: 'dunce', ownerFeatures: ['runtime-ownership', 'workspace-identity', 'workspace-runtime'] },
@@ -110,7 +110,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'anyhow', ownerFeatures: ['workspace-ports'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['agent-api', 'ts'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['permission', 'ts'] },
-      { depName: 'tokio', ownerFeatures: ['remote-exec-port', 'terminal-port'] },
+      { depName: 'tokio', ownerFeatures: ['acp-client', 'remote-exec-port', 'terminal-port'] },
       { depName: 'tokio-util', ownerFeatures: ['workspace-ports'] },
       { depName: 'ts-rs', ownerFeatures: ['ts'] },
     ],
@@ -359,6 +359,10 @@ export const capabilityContractDependencyRules = [
     featureProfiles: {
       default: [],
       'agent-api': ['dep:bitfun-core-types'],
+      // Local fork: acp_client_port.rs (ACP client contract) is unconditionally
+      // needed by coordinator/tool implementations; it stays behind the
+      // tool-runtime-handles aggregate (owned by agent-runtime consumers).
+      'acp-client': ['dep:tokio'],
       'git-port': [],
       permission: ['dep:bitfun-product-domains'],
       'plugin-runtime': [],
@@ -367,7 +371,7 @@ export const capabilityContractDependencyRules = [
       'runtime-event-port': [],
       'script-tool-runtime': [],
       'terminal-port': ['dep:tokio'],
-      'tool-runtime-handles': ['workspace-ports', 'terminal-port', 'remote-exec-port'],
+      'tool-runtime-handles': ['acp-client', 'workspace-ports', 'terminal-port', 'remote-exec-port'],
       ts: [
         'dep:ts-rs',
         'agent-api',
@@ -458,7 +462,8 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('workspace-runtime', 'runtime-event-port'),
           capabilityForwarder('workspace-runtime', 'workspace-ports'),
         ],
-        ['permission', 'workspace-runtime'],
+        ['local-storage', 'permission', 'workspace-runtime'],
+        ['session-git', 'token-usage-statistics'],
       )],
       ['bitfun-services-integrations', capabilityConsumer(
         [capabilityEdge([], { optional: true })],
@@ -510,6 +515,7 @@ export const capabilityContractDependencyRules = [
       ['bitfun-core', capabilityConsumer(
         [capabilityEdge([], { optional: true })],
         [
+          capabilityForwarder('agent-runtime', 'acp-bridge'),
           capabilityForwarder('agent-runtime', 'computer-use-contract'),
           capabilityForwarder('mcp-runtime', 'mcp-bridge'),
         ],
@@ -812,6 +818,9 @@ export const coreClosedFeatureProfileRules = [
       'dep:bitfun-agent-stream',
       'dep:bitfun-agent-tools',
       'bitfun-agent-tools/computer-use-contract',
+      // Local fork: acp_agent.rs (definitions/subagents) needs the ACP tool
+      // bridge names, which upstream gates behind `acp-bridge`.
+      'bitfun-agent-tools/acp-bridge',
       'bitfun-runtime-ports/agent-api',
       'bitfun-runtime-ports/git-port',
       'bitfun-runtime-ports/remote-exec-port',
@@ -1374,6 +1383,7 @@ export const coreClosedFeatureProfileRules = [
     requiredFeatureRefs: [
       'dep:bitfun-core-types',
       'dep:bitfun-events',
+      'dep:bitfun-runtime-ports',
       'dep:chrono',
       'dep:fs2',
       'dep:libc',

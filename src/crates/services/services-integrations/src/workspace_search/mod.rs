@@ -10,6 +10,7 @@ mod index_budget;
 mod index_queue;
 pub(crate) mod line_hydration;
 pub(crate) mod result_mapping;
+pub(crate) mod rg_fallback;
 mod service;
 mod types;
 

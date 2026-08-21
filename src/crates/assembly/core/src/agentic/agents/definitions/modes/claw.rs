@@ -1,9 +1,18 @@
 //! Claw Mode
 
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{
+    shared_coding_mode_tool_exposure_overrides, subagent_default_tools, Agent,
+    AgentToolPolicyOverrides, UserContextPolicy,
+};
 use async_trait::async_trait;
+
+/// Claw 独有工具（不在 subagent_default_tools 共享集内）：WorkspaceScan
+/// （跨工作区扫描）、AgentWait（后台任务等待）、Cron（定时任务）。
+const CLAW_EXCLUSIVE_TOOLS: &[&str] = &["WorkspaceScan", "AgentWait", "Cron"];
+
 pub struct ClawMode {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for ClawMode {
@@ -14,44 +23,19 @@ impl Default for ClawMode {
 
 impl ClawMode {
     pub fn new() -> Self {
+        // 全套工具箱：subagent_default_tools()（agentic 全工具 + 会话核心）单源
+        // 同步，再追加 Claw 独有工具（WorkspaceScan/AgentWait/Cron 不在共享集）。
+        // Claw 助理会话默认即全量工具（含 TodoWrite/goal 族/Plan 族/
+        // GenerativeUI/AskUserQuestion/ReviewPlatform/canvas 族 + 独有集）。
+        let mut default_tools = subagent_default_tools();
+        for tool in CLAW_EXCLUSIVE_TOOLS {
+            if !default_tools.contains(&tool.to_string()) {
+                default_tools.push(tool.to_string());
+            }
+        }
         Self {
-            default_tools: vec![
-                "Task".to_string(),
-                "ListModels".to_string(),
-                "AgentWait".to_string(),
-                "Read".to_string(),
-                "view_image".to_string(),
-                "analyze_image".to_string(),
-                "Write".to_string(),
-                "Edit".to_string(),
-                "Delete".to_string(),
-                "ExecCommand".to_string(),
-                "WriteStdin".to_string(),
-                "ExecControl".to_string(),
-                "Grep".to_string(),
-                "Glob".to_string(),
-                "WebSearch".to_string(),
-                "WebFetch".to_string(),
-                "get_goal".to_string(),
-                "create_goal".to_string(),
-                "update_goal".to_string(),
-                "Skill".to_string(),
-                "Git".to_string(),
-                "SessionControl".to_string(),
-                "SessionMessage".to_string(),
-                "SessionHistory".to_string(),
-                "Cron".to_string(),
-                // Browser, terminal, and routing metadata live under ControlHub.
-                // Local desktop/system control is delegated to the ComputerUse
-                // agent/tool instead of being surfaced as a ControlHub domain.
-                "ControlHub".to_string(),
-                "InitMiniApp".to_string(),
-                "FinalizeMiniApp".to_string(),
-                "PublishMiniApp".to_string(),
-                "PublishAppearance".to_string(),
-                "PageDeploy".to_string(),
-                "PagePublish".to_string(),
-            ],
+            default_tools,
+            tool_exposure_overrides: shared_coding_mode_tool_exposure_overrides(),
         }
     }
 }
@@ -82,6 +66,12 @@ impl Agent for ClawMode {
         self.default_tools.clone()
     }
 
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        // 继承共享编码模式的曝光覆盖：WebSearch/WebFetch/CreatePlan 提 Direct，
+        // 省 GetToolSpec 解锁往返（与 agentic/Plan 等模式一致）。
+        &self.tool_exposure_overrides
+    }
+
     fn user_context_policy(&self) -> UserContextPolicy {
         UserContextPolicy::empty()
             .with_workspace_context()
@@ -106,6 +96,54 @@ mod tests {
         assert!(tools.contains(&"InitMiniApp".to_string()));
         assert!(tools.contains(&"FinalizeMiniApp".to_string()));
         assert!(tools.contains(&"ListModels".to_string()));
+    }
+
+    #[test]
+    fn claw_mode_defaults_to_full_toolkit_aligned_with_subagents() {
+        // 全套工具箱（E2）：Claw 默认工具 = subagent_default_tools() 单源
+        // + Claw 独有工具（WorkspaceScan/AgentWait/Cron）——含之前缺失的
+        // TodoWrite/goal 族/Plan 族/GenerativeUI/AskUserQuestion/
+        // ReviewPlatform/canvas 族，且保留 Claw 独有集。
+        let tools = ClawMode::new().default_tools();
+        let shared = crate::agentic::agents::subagent_default_tools();
+        for tool in &shared {
+            assert!(
+                tools.contains(tool),
+                "Claw default tools must include shared tool {}",
+                tool
+            );
+        }
+        for tool in [
+            "TodoWrite",
+            "get_goal",
+            "create_goal",
+            "update_goal",
+            "GenerativeUI",
+            "AskUserQuestion",
+            "CreatePlan",
+            "PlanList",
+            "PlanRead",
+            "PlanUpdate",
+            "ReviewPlatform",
+            "CreateCanvas",
+            "ReadCanvas",
+            "UpdateCanvas",
+            "PatchCanvas",
+        ] {
+            assert!(
+                tools.contains(&tool.to_string()),
+                "Claw default tools must include {}",
+                tool
+            );
+        }
+        // Claw 独有集保留。
+        for tool in ["WorkspaceScan", "AgentWait", "Cron"] {
+            assert!(
+                tools.contains(&tool.to_string()),
+                "Claw default tools must include exclusive {}",
+                tool
+            );
+        }
     }
 
     #[test]

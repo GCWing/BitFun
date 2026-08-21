@@ -44,6 +44,8 @@ export interface ConnectionTestResult {
 export interface RemoteModelInfo {
   id: string;
   display_name?: string;
+  /** When the discovery source reports a per-model reasoning capability. */
+  supports_reasoning?: boolean;
 }
 
 export interface AIModelCatalogEntry {
@@ -195,6 +197,7 @@ export type SubscriptionLoginStatus = 'pending' | 'authorized' | 'failed' | 'can
 export interface SubscriptionOfferingModel {
   id: string;
   display_name?: string | null;
+  supports_reasoning?: boolean | null;
 }
 
 export interface SubscriptionApiOffering {
@@ -423,6 +426,19 @@ export class AIApi {
       });
     } catch (error) {
       throw createTauriCommandError('start_subscription_login', error, { provider, sessionId });
+    }
+  }
+
+  async startSubscriptionPatLogin(
+    provider: SubscriptionProvider,
+    pat: string,
+  ): Promise<void> {
+    try {
+      await api.invoke('start_subscription_pat_login', {
+        request: { provider, pat },
+      });
+    } catch (error) {
+      throw createTauriCommandError('start_subscription_pat_login', error, { provider });
     }
   }
 

@@ -14,6 +14,9 @@
 
 #![cfg(target_os = "windows")]
 #![allow(dead_code)]
+// All unsafe blocks are single Win32 API calls through the windows crate or the
+// local extern "system" declarations; handles are null-checked before use.
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use std::collections::HashMap;
 use std::ffi::c_void;

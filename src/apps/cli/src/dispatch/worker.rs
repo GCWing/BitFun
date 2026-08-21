@@ -505,6 +505,7 @@ async fn process_mailboxes(
                 turn_id: turn_id.to_string(),
                 content: request.content.clone(),
                 display_content: request.display_content.clone(),
+                prepended_reminders: Vec::new(),
                 attachments: runtime_attachments(&request.attachments),
                 metadata: serde_json::Map::new(),
             })

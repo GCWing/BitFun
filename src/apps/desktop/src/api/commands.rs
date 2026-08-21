@@ -5095,6 +5095,13 @@ pub struct SubscriptionLoginRequest {
     pub session_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionPatLoginRequest {
+    pub provider: bitfun_core::infrastructure::subscription_auth::SubscriptionProvider,
+    pub pat: String,
+}
+
 async fn configured_ai_proxy(
     state: &State<'_, AppState>,
 ) -> Result<Option<bitfun_core::service::config::types::ProxyConfig>, String> {
@@ -5149,6 +5156,25 @@ pub async fn get_subscription_login_status(
 }
 
 #[tauri::command]
+pub async fn start_subscription_pat_login(
+    state: State<'_, AppState>,
+    request: SubscriptionPatLoginRequest,
+) -> Result<(), String> {
+    let proxy_config = configured_ai_proxy(&state).await?;
+    let options = bitfun_core::infrastructure::subscription_auth::SubscriptionHttpOptions::new(
+        proxy_config,
+        false,
+    );
+    bitfun_core::infrastructure::subscription_auth::start_pat_login_with_options(
+        request.provider,
+        request.pat,
+        options,
+    )
+    .await
+    .map_err(|e| format!("Failed to log in with personal access token: {e:#}"))
+}
+
+#[tauri::command]
 pub async fn cancel_subscription_login(request: SubscriptionLoginRequest) -> Result<(), String> {
     bitfun_core::infrastructure::subscription_auth::cancel_login(
         request.provider,
@@ -5183,4 +5209,32 @@ pub async fn refresh_subscription_account(
     )
     .await
     .map_err(|e| format!("Failed to refresh subscription account: {e:#}"))
+}
+
+/// Create (or overwrite) a saved Legion preset.
+///
+/// The front-end `CreateLegionPage` calls `create_legion_preset` through
+/// `LegionPresetAPI.createPreset` with a `{ request }` payload. This command
+/// bridges that call to the core `team_presets::create_preset` storage layer
+/// (JSON file under `<user-config>/legions/<id>.json`). The command was
+/// previously unregistered, so the UI creation flow failed with a
+/// "command not found" rejection; wiring it restores the Legion preset
+/// creation path (L1-P0-1).
+#[tauri::command]
+pub async fn create_legion_preset(
+    request: bitfun_core::agentic::agents::team_presets::LegionPreset,
+) -> Result<(), String> {
+    bitfun_core::agentic::agents::team_presets::create_preset(&request)
+        .map_err(|e| format!("Failed to create legion preset: {e}"))
+}
+
+/// List all saved Legion presets (sorted by id). Bridges the front-end
+/// LegionCard gallery to `team_presets::list_presets` (d7-P2-1 wiring:
+/// previously the component and its appearance descriptor existed but no
+/// consumer rendered them, so the registry entry was a no-op contract).
+#[tauri::command]
+pub async fn list_legion_presets(
+) -> Result<Vec<bitfun_core::agentic::agents::team_presets::LegionPreset>, String> {
+    bitfun_core::agentic::agents::team_presets::list_presets()
+        .map_err(|e| format!("Failed to list legion presets: {e}"))
 }

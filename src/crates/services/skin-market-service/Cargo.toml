@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-skin-market-service"
 version.workspace = true
 authors.workspace = true

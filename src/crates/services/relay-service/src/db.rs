@@ -387,6 +387,7 @@ impl UserRow {
     /// out-of-band (e.g. an admin import tool) so the relay never sees a
     /// password. Kept as a DB primitive for that future tooling.
     #[allow(dead_code)]
+    #[allow(clippy::too_many_arguments)] // row insert primitive; mirrors users table columns
     pub async fn create(
         pool: &DbPool,
         user_id: &str,
@@ -636,11 +637,7 @@ pub const DEVICE_KIND_DESKTOP: &str = "desktop";
 pub const DEVICE_KIND_MOBILE: &str = "mobile";
 pub const DEVICE_KIND_WATCH: &str = "watch";
 
-pub const DEVICE_KINDS: [&str; 3] = [
-    DEVICE_KIND_DESKTOP,
-    DEVICE_KIND_MOBILE,
-    DEVICE_KIND_WATCH,
-];
+pub const DEVICE_KINDS: [&str; 3] = [DEVICE_KIND_DESKTOP, DEVICE_KIND_MOBILE, DEVICE_KIND_WATCH];
 
 pub fn is_valid_device_kind(kind: &str) -> bool {
     DEVICE_KINDS.contains(&kind)
@@ -1098,6 +1095,7 @@ impl SyncSessionRow {
     /// Enforces optional per-user active session count and total encrypted-byte
     /// quotas. Product defaults are effectively unlimited (`i32::MAX`); pass
     /// lower ceilings when an operator needs to bound account storage.
+    #[allow(clippy::too_many_arguments)] // upsert primitive; mirrors sync_sessions columns
     pub async fn upsert_with_quota(
         pool: &DbPool,
         user_id: &str,
@@ -1981,6 +1979,7 @@ impl PageWithUsername {
 }
 
 impl PageVersionRow {
+    #[allow(clippy::too_many_arguments)] // row insert primitive; mirrors page_versions columns
     pub async fn insert(
         pool: &DbPool,
         user_id: &str,
@@ -2700,9 +2699,16 @@ mod tests {
             .await
             .unwrap()
             .is_none());
-        DeviceRow::upsert(&migrated, "shared-install", "u1", "Alice laptop", None, None)
-            .await
-            .unwrap();
+        DeviceRow::upsert(
+            &migrated,
+            "shared-install",
+            "u1",
+            "Alice laptop",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             DeviceRow::list_by_user(&migrated, "u1")
                 .await
@@ -2734,9 +2740,16 @@ mod tests {
         UserRow::create(&first, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&first, "phone", "u1", "Phone", Some(DEVICE_KIND_MOBILE), None)
-            .await
-            .unwrap();
+        DeviceRow::upsert(
+            &first,
+            "phone",
+            "u1",
+            "Phone",
+            Some(DEVICE_KIND_MOBILE),
+            None,
+        )
+        .await
+        .unwrap();
         first.close().await;
 
         // The ALTER runs on every startup and must tolerate the column already

@@ -40,6 +40,7 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
     listPendingPermissionRequests: agentApiMock.listPendingPermissionRequests,
     respondPermission: agentApiMock.respondPermission,
     respondPermissionBatch: agentApiMock.respondPermissionBatch,
+    getAvailableModes: async () => [],
   },
 }));
 vi.mock('@/features/dispatch/dispatchApi', () => ({

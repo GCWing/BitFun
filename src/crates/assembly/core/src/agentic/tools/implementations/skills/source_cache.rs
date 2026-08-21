@@ -141,10 +141,12 @@ pub(super) struct LocalSkillWatchMonitor {
 
 impl LocalSkillWatchMonitor {
     pub(super) fn new(invalidator: SnapshotInvalidator) -> Self {
-        let mut config = FileWatcherConfig::default();
-        config.ignore_hidden_files = false;
-        config.ignore_common_build_directories = false;
-        config.debounce_interval_ms = SKILL_WATCH_DEBOUNCE_MS;
+        let config = FileWatcherConfig {
+            ignore_hidden_files: false,
+            ignore_common_build_directories: false,
+            debounce_interval_ms: SKILL_WATCH_DEBOUNCE_MS,
+            ..Default::default()
+        };
         Self {
             watcher: Arc::new(FileWatchService::new(config)),
             invalidator,
@@ -212,14 +214,11 @@ impl LocalSkillWatchMonitor {
             }
         });
         tokio::spawn(async move {
-            loop {
-                match health_failures.recv().await {
-                    Ok(()) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                        health_rebind_required.store(true, Ordering::Release);
-                        health_invalidator.invalidate();
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
+            while let Ok(()) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) =
+                health_failures.recv().await
+            {
+                health_rebind_required.store(true, Ordering::Release);
+                health_invalidator.invalidate();
             }
         });
     }
@@ -287,11 +286,13 @@ impl LocalSkillWatchMonitor {
             if previous.is_some() {
                 let _ = self.watcher.unwatch_path(&path.to_string_lossy()).await;
             }
-            let mut config = FileWatcherConfig::default();
-            config.watch_recursively = recursive;
-            config.ignore_hidden_files = false;
-            config.ignore_common_build_directories = false;
-            config.debounce_interval_ms = SKILL_WATCH_DEBOUNCE_MS;
+            let config = FileWatcherConfig {
+                watch_recursively: recursive,
+                ignore_hidden_files: false,
+                ignore_common_build_directories: false,
+                debounce_interval_ms: SKILL_WATCH_DEBOUNCE_MS,
+                ..Default::default()
+            };
             match self
                 .watcher
                 .watch_path(&path.to_string_lossy(), Some(config))

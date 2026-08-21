@@ -10,6 +10,9 @@ fn sdk_host_process_installs_a_rustls_crypto_provider() {
 
 #[cfg(windows)]
 #[test]
+// 有意设计：owner 模式派生一个长驻后代进程（不等待），由外层测试通过
+// job object 回收语义验证「宿主退出后后代被回收」；等待会破坏测试目的。
+#[allow(clippy::zombie_processes)]
 fn sdk_host_process_job_reclaims_descendants_when_host_exits() {
     const TEST_NAME: &str = "sdk_host_process_job_reclaims_descendants_when_host_exits";
     const MODE_ENV: &str = "BITFUN_SDK_HOST_JOB_TEST_MODE";

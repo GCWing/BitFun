@@ -1024,10 +1024,24 @@ mod tests {
     #[tokio::test]
     async fn reports_a_plain_directory_as_not_a_repository() {
         let temp = tempfile::tempdir().expect("tempdir");
-
-        let report = inspect_repository_trust(&temp.path().to_string_lossy())
-            .await
-            .expect("trust report");
+        // The host environment itself may be a git repository (e.g. a user
+        // home directory that is a git checkout). Without a ceiling, git's
+        // upward discovery escapes the tempdir and classifies the plain
+        // directory as part of that outer repository. GIT_CEILING_DIRECTORIES
+        // stops discovery at the tempdir boundary, keeping the assertion about
+        // the directory itself.
+        let ceiling = temp
+            .path()
+            .parent()
+            .expect("tempdir parent")
+            .to_string_lossy()
+            .to_string();
+        let report = inspect_repository_trust_with_env(
+            &temp.path().to_string_lossy(),
+            &[("GIT_CEILING_DIRECTORIES", &ceiling)],
+        )
+        .await
+        .expect("trust report");
         assert_eq!(report.state, GitTrustState::NotARepository);
     }
 

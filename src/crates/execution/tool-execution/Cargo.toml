@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "tool-runtime"
 version.workspace = true
 edition.workspace = true

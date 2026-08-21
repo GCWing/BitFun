@@ -13,6 +13,64 @@ use std::sync::{Arc, Mutex};
 
 const MAX_PROJECT_SLUG_LEN: usize = 120;
 
+#[cfg(test)]
+static TEST_PLANS_DIR_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+#[cfg(test)]
+impl PathManager {
+    /// Set the plans directory returned by `project_plans_dir` for the
+    /// duration of a test. Callers must clear the override before the test
+    /// ends; `set_plans_dir_override_guard` is the preferred helper because
+    /// it clears automatically on drop.
+    ///
+    /// Only exercised by tests under the `agent-runtime` feature
+    /// (`agentic/coordination/scheduler.rs`), so this impl is dead code when
+    /// bitfun-core is built without that feature (e.g. `cargo test -p
+    /// bitfun-core --lib` in CI). Kept instead of deleted so the agent-runtime
+    /// plan-binding tests keep their isolated plans dir.
+    #[allow(dead_code)]
+    pub(crate) fn set_plans_dir_for_test(plans_dir: PathBuf) {
+        TEST_PLANS_DIR_OVERRIDE
+            .lock()
+            .expect("test plans dir override poisoned")
+            .replace(plans_dir);
+    }
+
+    /// Clear the plans directory override installed by `set_plans_dir_for_test`.
+    #[allow(dead_code)]
+    pub(crate) fn clear_plans_dir_override() {
+        TEST_PLANS_DIR_OVERRIDE
+            .lock()
+            .expect("test plans dir override poisoned")
+            .take();
+    }
+
+    /// RAII guard that sets the plans directory override on construction and
+    /// clears it on drop. Tests should prefer this over manual set/clear to
+    /// keep the override from leaking across tests.
+    #[allow(dead_code)]
+    pub(crate) fn set_plans_dir_override_guard(plans_dir: PathBuf) -> TestPlansDirOverrideGuard {
+        Self::set_plans_dir_for_test(plans_dir);
+        TestPlansDirOverrideGuard
+    }
+}
+
+/// RAII guard for the plans directory test override.
+///
+/// Only constructed by `agent-runtime`-feature tests; `#[allow(dead_code)]`
+/// keeps the no-feature build (CI `--lib` test step) warning-free while the
+/// agent-runtime tests keep exercising it.
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) struct TestPlansDirOverrideGuard;
+
+#[cfg(test)]
+impl Drop for TestPlansDirOverrideGuard {
+    fn drop(&mut self) {
+        PathManager::clear_plans_dir_override();
+    }
+}
+
 /// Storage level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StorageLevel {
@@ -475,6 +533,16 @@ impl PathManager {
 
     /// Get project plans directory: ~/.bitfun/projects/<workspace-slug>/plans/
     pub fn project_plans_dir(&self, workspace_path: &Path) -> PathBuf {
+        #[cfg(test)]
+        {
+            if let Some(override_dir) = TEST_PLANS_DIR_OVERRIDE
+                .lock()
+                .expect("test plans dir override poisoned")
+                .as_ref()
+            {
+                return override_dir.clone();
+            }
+        }
         self.project_runtime_root(workspace_path).join("plans")
     }
 

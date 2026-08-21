@@ -6,7 +6,7 @@
 import React, { useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabBar } from '../tab-bar';
-import { DropZone } from './DropZone';
+import { DropZone, type ExternalChatSessionPayload } from './DropZone';
 import FlexiblePanel from '../../base/FlexiblePanel';
 import { usePanelViewCanvasStore } from '../stores';
 import { useSceneStore } from '../../../../stores/sceneStore';
@@ -42,6 +42,25 @@ export interface EditorGroupProps {
   onDragEnd: () => void;
   onReorderTab: (tabId: string, newIndex: number) => void;
   onDrop: (position: DropPosition) => void;
+  onExternalChatDrop?: (payload: ExternalChatSessionPayload) => void;
+  /** Optional grid template toggle (primary group only, shown in the tab-bar
+   *  actions): four/six/nine-cell presets + merge support. */
+  grid9Slot?: {
+    active: boolean;
+    onToggle: () => void;
+    label: string;
+    /** Preset templates shown in the dropdown: [cols, rows, label]. */
+    templates?: Array<{ cols: number; rows: number; label: string }>;
+    onApplyTemplate?: (cols: number, rows: number) => void;
+  };
+  /** Merge this grid9 cell into a neighbour (free split/merge). */
+  onMergeCell?: () => void;
+  /** Whether the merge affordance is available. */
+  canMergeCell?: boolean;
+  /** Remove this blank grid9 cell (shrink + re-tile remaining cells). */
+  onRemoveCell?: () => void;
+  /** Whether the remove affordance is available (blank cell, grid large enough). */
+  canRemoveCell?: boolean;
   onGroupFocus: () => void;
   onContentChange: (tabId: string, content: PanelContent) => void;
   onDirtyStateChange: (tabId: string, isDirty: boolean) => void;
@@ -70,6 +89,12 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   onDragEnd,
   onReorderTab,
   onDrop,
+  onExternalChatDrop,
+  grid9Slot,
+  onMergeCell,
+  canMergeCell = false,
+  onRemoveCell,
+  canRemoveCell = false,
   onGroupFocus,
   onContentChange,
   onDirtyStateChange,
@@ -221,6 +246,11 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
         onOpenMissionControl={onOpenMissionControl}
         onCloseAllTabs={onCloseAllTabs}
         onTabPopOut={disablePopOut ? undefined : handleTabPopOut}
+        grid9Slot={groupId === 'primary' ? grid9Slot : undefined}
+        onMergeCell={onMergeCell}
+        canMergeCell={canMergeCell}
+        onRemoveCell={onRemoveCell}
+        canRemoveCell={canRemoveCell}
       />
 
       <DropZone
@@ -229,6 +259,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
         draggingFromGroupId={draggingFromGroupId}
         splitMode={splitMode}
         onDrop={onDrop}
+        onExternalChatDrop={onExternalChatDrop}
       >
         <div data-bf-component="canvas-editor-group" data-bf-part="content" className="canvas-editor-group__content">
           {/* Render cached tabs (active shown, others hidden) for instant switching */}

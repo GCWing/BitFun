@@ -787,6 +787,9 @@ enum ConnectionInput {
     ),
 }
 
+// Large operation result vs a unit Deadline variant; kept unboxed for simple
+// matched control flow at both use sites.
+#[allow(clippy::large_enum_variant)]
 enum InterruptibleLineageReadResult {
     Completed(Result<RuntimeIpcOperationResult, RuntimeIpcError>),
     Deadline,

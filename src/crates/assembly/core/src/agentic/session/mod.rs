@@ -2,6 +2,7 @@
 //!
 //! Provides session lifecycle management and context management.
 
+mod background_command_settler;
 pub mod compression;
 pub mod context_store;
 mod context_usage;
@@ -9,18 +10,21 @@ pub mod evidence_ledger;
 pub mod file_read_state;
 pub mod prompt_cache;
 pub(crate) mod revert;
+pub mod session_gc;
 pub mod session_manager;
 pub mod session_store_port;
 pub mod token_anchor;
 pub(crate) mod transcript_render;
 pub mod turn_skill_agent_snapshot_store;
 
+pub use background_command_settler::*;
 pub use compression::*;
 pub use context_store::*;
 pub use context_usage::*;
 pub use evidence_ledger::*;
 pub use file_read_state::*;
 pub use prompt_cache::*;
+pub use session_gc::*;
 pub use session_manager::*;
 pub use session_store_port::*;
 pub use token_anchor::*;

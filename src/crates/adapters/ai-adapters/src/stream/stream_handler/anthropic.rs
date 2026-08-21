@@ -115,7 +115,7 @@ pub async fn handle_anthropic_stream(
                     Ok(message_start) => message_start,
                     Err(e) => {
                         stats.increment("error:sse_parsing");
-                        let err_str = format!("SSE Parsing Error: {e}, data: {}", &data);
+                        let err_str = format!("SSE Parsing Error: {e}, data: {}", data);
                         error!("{}", err_str);
                         continue;
                     }
@@ -129,7 +129,7 @@ pub async fn handle_anthropic_stream(
                     Ok(content_block_start) => content_block_start,
                     Err(e) => {
                         stats.increment("error:sse_parsing");
-                        let err_str = format!("SSE Parsing Error: {e}, data: {}", &data);
+                        let err_str = format!("SSE Parsing Error: {e}, data: {}", data);
                         stats.log_summary("sse_parsing_error");
                         error!("{}", err_str);
                         let _ = tx_event.send(Err(anyhow!(err_str)));
@@ -159,7 +159,7 @@ pub async fn handle_anthropic_stream(
                     Ok(content_block_delta) => content_block_delta,
                     Err(e) => {
                         stats.increment("error:sse_parsing");
-                        let err_str = format!("SSE Parsing Error: {e}, data: {}", &data);
+                        let err_str = format!("SSE Parsing Error: {e}, data: {}", data);
                         stats.log_summary("sse_parsing_error");
                         error!("{}", err_str);
                         let _ = tx_event.send(Err(anyhow!(err_str)));
@@ -185,7 +185,7 @@ pub async fn handle_anthropic_stream(
                     Ok(message_delta) => message_delta,
                     Err(e) => {
                         stats.increment("error:sse_parsing");
-                        let err_str = format!("SSE Parsing Error: {e}, data: {}", &data);
+                        let err_str = format!("SSE Parsing Error: {e}, data: {}", data);
                         error!("{}", err_str);
                         continue;
                     }
@@ -215,7 +215,7 @@ pub async fn handle_anthropic_stream(
                     Ok(message_delta) => message_delta,
                     Err(e) => {
                         stats.increment("error:sse_parsing");
-                        let err_str = format!("SSE Parsing Error: {e}, data: {}", &data);
+                        let err_str = format!("SSE Parsing Error: {e}, data: {}", data);
                         stats.log_summary("sse_parsing_error");
                         error!("{}", err_str);
                         let _ = tx_event.send(Err(anyhow!(err_str)));

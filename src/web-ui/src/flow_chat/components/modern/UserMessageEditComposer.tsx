@@ -25,7 +25,6 @@ interface UserMessageEditComposerProps {
   onCancel: () => void;
   presentation?: ComposerPresentation | null;
   workspacePath?: string;
-  workspaceId?: string;
   remoteConnectionId?: string;
   excludeSessionId?: string;
 }
@@ -45,7 +44,6 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   onCancel,
   presentation,
   workspacePath,
-  workspaceId,
   remoteConnectionId,
   excludeSessionId,
 }) => {
@@ -135,7 +133,6 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
           isOpen={mentionState.isActive}
           searchQuery={mentionState.query}
           workspacePath={workspacePath}
-          workspaceId={workspaceId}
           remoteConnectionId={remoteConnectionId}
           excludeSessionId={excludeSessionId}
           anchorRef={mentionAnchorRef}
@@ -186,7 +183,6 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
   onCancel,
   presentation,
   workspacePath,
-  workspaceId,
   remoteConnectionId,
   excludeSessionId,
 }) => {
@@ -238,7 +234,6 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
         onCancel={onCancel}
         presentation={presentation}
         workspacePath={workspacePath}
-        workspaceId={workspaceId}
         remoteConnectionId={remoteConnectionId}
         excludeSessionId={excludeSessionId}
       />

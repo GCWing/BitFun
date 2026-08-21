@@ -14,6 +14,7 @@
       "quickActions": [],
       "review": [],
       "memories": [],
+      "aiThresholds": [],
       "usageStatistics": []
     },
     "tabDescriptions": {
@@ -28,6 +29,7 @@
       "voiceInput": "Local microphone input and speech-to-text model.",
       "review": "Review strategy, coverage depth, capacity, cost, and latency controls.",
       "memories": "Automatic memory generation, injection, retention windows, and memory models.",
+      "aiThresholds": "Tune AI behavior thresholds: compression budgets, retry backoff, tool output caps and timeouts, knowledge-base search, ACP timeouts, memory and goal continuation. Defaults match built-in behavior.",
       "mcpTools": "MCP servers and tool integrations.",
       "externalSources": "Load compatible commands and extensions from other AI applications.",
       "hooks": "Run your own commands at Agent lifecycle points. Codex-compatible.",
@@ -54,6 +56,7 @@
       "voiceInput": "Voice Input",
       "review": "Review",
       "memories": "Memory",
+      "aiThresholds": "AI Thresholds",
       "skills": "Skills",
       "mcpTools": "MCP",
       "externalSources": "External AI Apps",
@@ -201,7 +204,8 @@
     "shortcuts": {
       "panel": {
         "toggleLeft": "Expand or collapse left navigation",
-        "toggleBoth": "Collapse All Panels"
+        "toggleBoth": "Collapse All Panels",
+        "toggleChatFullWidth": "Toggle chat full-width tiling"
       },
       "nav": {
         "toggleSearch": "Open navigation search"
@@ -221,6 +225,7 @@
         "missionControl": "Mission Control",
         "splitHorizontal": "Horizontal Split",
         "splitVertical": "Vertical Split",
+        "splitGrid9": "3x3 Grid Layout",
         "anchorZone": "Toggle Anchor Zone",
         "maximize": "Maximize Editor",
         "closePreview": "Close Preview"

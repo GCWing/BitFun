@@ -2,7 +2,11 @@
 //!
 //! Used to create and store plan files during the planning phase
 
-use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
+use crate::agentic::tools::file_permissions::file_permission_intents;
+use crate::agentic::tools::framework::{
+    PermissionIntent, Tool, ToolExposure, ToolResult, ToolUseContext,
+};
+use crate::agentic::tools::implementations::plan_update_tool::atomic_write_plan_file;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_runtime::remote_file_delivery::{
@@ -10,7 +14,6 @@ use bitfun_agent_runtime::remote_file_delivery::{
 };
 use serde::Serialize;
 use serde_json::{json, Value};
-use tokio::fs;
 
 /// YAML frontmatter structure for Plan files
 #[derive(Serialize)]
@@ -90,7 +93,10 @@ Additional guidelines:
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Deferred
+        // 2026-08-04 user calibration: plan tool family is a commander
+        // staple; Direct so no GetToolSpec unlock round-trip is needed.
+        // Also mirrored in `shared_coding_mode_tool_exposure_overrides()`.
+        ToolExposure::Direct
     }
 
     fn input_schema(&self) -> Value {
@@ -141,12 +147,36 @@ Additional guidelines:
     }
 
     fn is_readonly(&self) -> bool {
-        // Only writes plan file, doesn't modify code
-        true
+        // PLAN-02: CreatePlan writes the plan file, so it must NOT be declared
+        // readonly - otherwise permission_intents would be empty and the write
+        // would have no permission gate.
+        false
     }
 
     fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
+        // Each call generates a unique plan file name, so concurrent creates
+        // never collide on the same target.
         true
+    }
+
+    fn permission_intents(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        // PLAN-02: emit an edit intent for the plan file that will be created
+        // so permission rules actually gate the write (mirrors
+        // file_write_tool.rs). The uuid nonce differs per call; the intent
+        // still describes the plans-dir target the tool writes to.
+        let name = input
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let plans_dir = context.current_workspace_runtime_root()?.join("plans");
+        let plan_file_name = generate_plan_file_name(name);
+        let plan_path = plans_dir.join(plan_file_name);
+        let plan_path_str = plan_path.to_string_lossy().to_string();
+        file_permission_intents("edit", [plan_path_str.as_str()], context)
     }
 
     async fn call_impl(
@@ -172,31 +202,16 @@ Additional guidelines:
 
         let todos = input.get("todos").and_then(|v| v.as_array());
 
-        // Generate filename: {name_lowercase_underscored}_{8-digit uuid}.plan.md
-        let name_normalized = name
-            .to_lowercase()
-            .replace(' ', "_")
-            .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '_')
-            .collect::<String>();
-
-        let uuid_short = uuid::Uuid::new_v4()
-            .to_string()
-            .split('-')
-            .next()
-            .unwrap_or("00000000")
-            .to_string();
-
-        let plan_file_name = format!("{}_{}.plan.md", name_normalized, uuid_short);
+        let plan_file_name = generate_plan_file_name(name);
 
         let file_content = generate_plan_file_content(name, overview, plan, todos);
 
         let runtime_context = context.ensure_current_workspace_runtime().await?;
         let plans_dir = runtime_context.plans_dir.clone();
         let plan_file_path = plans_dir.join(&plan_file_name);
-        fs::write(&plan_file_path, &file_content)
-            .await
-            .map_err(|e| BitFunError::tool(format!("Failed to write plan file: {}", e)))?;
+        // PLAN-11: atomic write (sibling temp file + rename) so a crash never
+        // leaves a half-written plan file.
+        atomic_write_plan_file(&plan_file_path, file_content.as_bytes()).await?;
         let plan_file_path_str = plan_file_path.to_string_lossy().to_string();
 
         // Process todos for return result
@@ -258,6 +273,26 @@ Your next reply MUST show the clickable link and then end the conversation turn.
     }
 }
 
+/// Build the plan file name: `{name_lowercase_underscored}_{8-char uuid}.plan.md`.
+/// Falls back to a "plan" stem when the name normalizes to an empty string
+/// (PLAN-11: previously produced an ugly `_<uuid>.plan.md`).
+fn generate_plan_file_name(name: &str) -> String {
+    let name_normalized = name
+        .to_lowercase()
+        .replace(' ', "_")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_')
+        .collect::<String>();
+    let name_stem = if name_normalized.is_empty() {
+        "plan".to_string()
+    } else {
+        name_normalized
+    };
+    let uuid_short = uuid::Uuid::new_v4().simple().to_string();
+    let uuid_short = &uuid_short[..8];
+    format!("{}_{}.plan.md", name_stem, uuid_short)
+}
+
 /// Generate plan file content
 fn generate_plan_file_content(
     name: &str,
@@ -307,17 +342,79 @@ fn generate_plan_file_content(
 
 #[cfg(test)]
 mod tests {
-    use super::CreatePlanTool;
-    use crate::agentic::tools::framework::{Tool, ToolExposure};
+    use super::{generate_plan_file_name, CreatePlanTool};
+    use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
+    use serde_json::json;
 
     #[test]
-    fn create_plan_is_deferred_and_plan_mode_specific() {
+    fn create_plan_is_direct_available() {
         let tool = CreatePlanTool::new();
 
-        assert_eq!(tool.default_exposure(), ToolExposure::Deferred);
+        assert_eq!(tool.default_exposure(), ToolExposure::Direct);
         assert_eq!(
             tool.short_description(),
             "Create and store a concise implementation plan; only for Plan mode."
         );
+    }
+
+    #[test]
+    fn generate_plan_file_name_uses_normalized_stem() {
+        let name = generate_plan_file_name("Deploy API 2026");
+        assert!(name.starts_with("deploy_api_2026_"), "name: {}", name);
+        assert!(name.ends_with(".plan.md"), "name: {}", name);
+    }
+
+    #[test]
+    fn generate_plan_file_name_falls_back_for_empty_normalized_stem() {
+        // PLAN-11: a name with no alphanumeric characters must not produce an
+        // ugly leading-underscore file name.
+        let name = generate_plan_file_name("!!!");
+        assert!(name.starts_with("plan_"), "name: {}", name);
+        assert!(name.ends_with(".plan.md"), "name: {}", name);
+    }
+
+    #[test]
+    fn create_plan_permission_intents_emits_edit_for_plans_dir_target() {
+        // PLAN-02: the write must surface a non-empty edit intent so the
+        // permission system can gate it.
+        let dir = std::env::temp_dir().join(format!("create-plan-intent-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("plans")).expect("plans dir should be created");
+        let mut context = ToolUseContext::for_tool_listing(
+            Some(crate::agentic::WorkspaceBinding::new(None, dir.clone())),
+            None,
+        );
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            json!(dir.to_string_lossy().to_string()),
+        );
+
+        let intents = CreatePlanTool::new()
+            .permission_intents(
+                &json!({
+                    "name": "My Plan",
+                    "overview": "Overview",
+                    "plan": "# My Plan"
+                }),
+                &context,
+            )
+            .expect("permission intents");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(!intents.is_empty(), "edit intent must be emitted");
+        assert_eq!(intents[0].action, "edit");
+        assert!(
+            intents[0]
+                .resources
+                .iter()
+                .any(|resource| { resource.replace('\\', "/").contains("/plans/") }),
+            "intent must target the plans directory: {:?}",
+            intents[0].resources
+        );
+    }
+
+    #[test]
+    fn create_plan_is_no_longer_readonly() {
+        // PLAN-02: CreatePlan writes a file, so it must report non-readonly.
+        assert!(!CreatePlanTool::new().is_readonly());
     }
 }

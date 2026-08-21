@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-ai-adapters"
 version.workspace = true
 authors.workspace = true
@@ -43,6 +44,8 @@ tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true, optional = true }
+wasmi = { workspace = true, optional = true }
+getrandom = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { workspace = true, optional = true }
@@ -67,6 +70,8 @@ subscription-auth = [
     "tokio/io-util",
     "tokio/net",
     "dep:uuid",
+    "dep:wasmi",
+    "dep:getrandom",
     "dep:windows-native-keyring-store",
     "dep:zbus-secret-service-keyring-store",
 ]

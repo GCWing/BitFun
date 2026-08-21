@@ -7,6 +7,8 @@ use super::env_snapshot::{remote_env_snapshot_for, RemoteEnvSnapshot};
 use super::local_shell::{resolve_local_exec_shell, ResolvedLocalExecShell};
 use super::progress::ExecOutputProgressBridge;
 use super::shell_kind::{exec_command_shell_kind, terminal_shell_type};
+use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::events::AgenticEvent;
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -66,6 +68,27 @@ impl Default for ExecCommandTool {
 impl ExecCommandTool {
     pub fn new() -> Self {
         Self
+    }
+
+    /// Resolve the configured ExecCommand default yield time
+    /// (`ai.thresholds.tool_timeout.exec_command_yield_ms`), falling back to
+    /// `EXEC_COMMAND_DEFAULT_YIELD_TIME_MS = 30_000` when unset or invalid.
+    async fn configured_exec_command_yield_ms() -> u64 {
+        use crate::service::config::get_global_config_service;
+        let Ok(config_service) = get_global_config_service().await else {
+            return tool_runtime::exec_command::EXEC_COMMAND_DEFAULT_YIELD_TIME_MS;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return tool_runtime::exec_command::EXEC_COMMAND_DEFAULT_YIELD_TIME_MS;
+        };
+        let ms = thresholds.tool_timeout.exec_command_yield_ms;
+        if ms == 0 {
+            return tool_runtime::exec_command::EXEC_COMMAND_DEFAULT_YIELD_TIME_MS;
+        }
+        ms
     }
 
     pub(crate) async fn local_shell_prompt_info() -> ExecCommandShellPromptInfo {
@@ -320,23 +343,41 @@ impl ExecCommandTool {
                     .await
                 {
                     let timestamp = Self::now_unix_seconds();
+                    let lifecycle_status_name =
+                        exec_command_lifecycle_status_name(status).to_string();
+                    let resolved_session_id =
+                        metadata.agent_session_id.or(agent_session_id.clone());
                     let _ = event_system
                         .emit(BackgroundCommandLifecycle(BackgroundCommandLifecycleInfo {
-                            agent_session_id: metadata
-                                .agent_session_id
-                                .or(agent_session_id.clone()),
+                            agent_session_id: resolved_session_id.clone(),
                             exec_session_id: event.session_id,
-                            command: metadata.command,
-                            workdir: metadata.workdir,
+                            command: metadata.command.clone(),
+                            workdir: metadata.workdir.clone(),
                             remote: false,
                             tty: metadata.tty,
-                            status: exec_command_lifecycle_status_name(status).to_string(),
+                            status: lifecycle_status_name.clone(),
                             exit_code: event.exit_code,
                             started_at: metadata.started_at,
                             ended_at: metadata.ended_at,
                             timestamp,
                         }))
                         .await;
+                    // Mirror the lifecycle transition into the agentic event
+                    // channel so internal subscribers (e.g. the background
+                    // command settler) can settle the owning session back to
+                    // Idle once no Running command remains. The global
+                    // coordinator owns the event queue (P 工位实证: this
+                    // static bridge has no event_queue handle).
+                    if let Some(session_id) = resolved_session_id {
+                        if let Some(coordinator) = get_global_coordinator() {
+                            coordinator
+                                .emit_event(AgenticEvent::BackgroundCommandLifecycleChanged {
+                                    session_id,
+                                    status: lifecycle_status_name,
+                                })
+                                .await;
+                        }
+                    }
                 }
             }
         });
@@ -366,23 +407,36 @@ impl ExecCommandTool {
                     .await
                 {
                     let timestamp = Self::now_unix_seconds();
+                    let lifecycle_status_name =
+                        exec_command_lifecycle_status_name(status).to_string();
+                    let resolved_session_id =
+                        metadata.agent_session_id.or(agent_session_id.clone());
                     let _ = event_system
                         .emit(BackgroundCommandLifecycle(BackgroundCommandLifecycleInfo {
-                            agent_session_id: metadata
-                                .agent_session_id
-                                .or(agent_session_id.clone()),
+                            agent_session_id: resolved_session_id.clone(),
                             exec_session_id: event.session_id,
-                            command: metadata.command,
-                            workdir: metadata.workdir,
+                            command: metadata.command.clone(),
+                            workdir: metadata.workdir.clone(),
                             remote: true,
                             tty: metadata.tty,
-                            status: exec_command_lifecycle_status_name(status).to_string(),
+                            status: lifecycle_status_name.clone(),
                             exit_code: event.exit_code,
                             started_at: metadata.started_at,
                             ended_at: metadata.ended_at,
                             timestamp,
                         }))
                         .await;
+                    // Mirror into the agentic event channel (see local bridge).
+                    if let Some(session_id) = resolved_session_id {
+                        if let Some(coordinator) = get_global_coordinator() {
+                            coordinator
+                                .emit_event(AgenticEvent::BackgroundCommandLifecycleChanged {
+                                    session_id,
+                                    status: lifecycle_status_name,
+                                })
+                                .await;
+                        }
+                    }
                 }
             }
         });
@@ -675,7 +729,13 @@ Output:
         let workdir = Self::resolve_workdir(input, context)?;
         let tty = parsed_input.tty;
         let shell = resolve_local_exec_shell().await;
-        let yield_time_ms = parsed_input.yield_time_ms;
+        // 阈值参数配置化：ai.thresholds.tool_timeout.exec_command_yield_ms。
+        // tool-runtime 的默认 30s 在此被配置值覆盖（仅在用户未显式传 yield_time_ms 时）。
+        let yield_time_ms = if input.get("yield_time_ms").is_some() {
+            parsed_input.yield_time_ms
+        } else {
+            Self::configured_exec_command_yield_ms().await
+        };
         let terminal_port = context.terminal_port().ok_or_else(|| {
             BitFunError::tool("terminal runtime service is required for ExecCommand".to_string())
         })?;

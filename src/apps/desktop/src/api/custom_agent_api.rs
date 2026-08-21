@@ -1,6 +1,6 @@
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::agents::{
-    custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
+    custom_agent_model_or_default, default_custom_agent_tools,
     default_custom_agent_user_context_policy, CustomAgentDetail, CustomAgentKind, CustomAgentLevel,
     CustomMode, CustomSubagent, UserContextPolicy, UserContextSection,
 };
@@ -68,34 +68,6 @@ fn policy_from_sections(
             policy
         })
         .unwrap_or_else(|| default_custom_agent_user_context_policy(kind))
-}
-
-fn readonly_tool_names(state: &AppState) -> Vec<String> {
-    state
-        .tool_registry
-        .iter()
-        .filter(|tool| tool.is_readonly())
-        .map(|tool| tool.name().to_string())
-        .collect()
-}
-
-fn ensure_review_tools_are_readonly(
-    state: &AppState,
-    agent_id: &str,
-    tools: &[String],
-) -> Result<(), String> {
-    let readonly_tools = readonly_tool_names(state);
-    let writable_tools = custom_agent_review_writable_tools(tools, &readonly_tools);
-
-    if writable_tools.is_empty() {
-        return Ok(());
-    }
-
-    Err(format!(
-        "Review Sub-Agent '{}' can only use read-only tools; remove writable tools: {}",
-        agent_id,
-        writable_tools.join(", ")
-    ))
 }
 
 async fn existing_agent_ids(state: &AppState, workspace: Option<&PathBuf>) -> HashSet<String> {
@@ -221,17 +193,12 @@ pub async fn create_custom_agent(
     if request.kind == CustomAgentKind::Mode && review {
         return Err("Custom modes cannot enable review".to_string());
     }
-    if review {
-        ensure_review_tools_are_readonly(&state, &id, &tools)?;
-    }
 
-    let readonly = if review {
-        true
-    } else {
-        request
-            .readonly
-            .unwrap_or(request.kind == CustomAgentKind::Subagent)
-    };
+    // readonly is decided solely by the explicit field (falling back to the
+    // per-kind default); review is a semantic marker and never forces it.
+    let readonly = request
+        .readonly
+        .unwrap_or(request.kind == CustomAgentKind::Subagent);
     let model_is_explicit = request
         .model
         .as_deref()
@@ -273,7 +240,7 @@ pub async fn create_custom_agent(
                 model_is_explicit,
                 user_context_policy,
             );
-            subagent.set_review(review);
+            subagent.set_review(review, readonly);
             subagent
                 .save_to_file(None)
                 .map_err(|error| error.to_string())?;
@@ -335,14 +302,6 @@ pub async fn update_custom_agent(
 
     if kind == CustomAgentKind::Mode && request.review.unwrap_or(false) {
         return Err("Custom modes cannot enable review".to_string());
-    }
-    if kind == CustomAgentKind::Subagent && request.review.unwrap_or(current.review) {
-        let tools = request
-            .tools
-            .clone()
-            .filter(|items| !items.is_empty())
-            .unwrap_or_else(|| current.tools.clone());
-        ensure_review_tools_are_readonly(&state, &request.agent_id, &tools)?;
     }
 
     state

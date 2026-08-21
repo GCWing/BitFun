@@ -20,7 +20,10 @@ pub fn render_tool_result_for_assistant(tool_name: &str, data: &Value) -> String
 }
 
 pub fn is_write_like_tool_name(tool_name: &str) -> bool {
-    matches!(tool_name, "Write" | "file_write" | "write_notebook")
+    matches!(
+        tool_name,
+        "Write" | "file_write" | "write_notebook" | "Edit" | "Delete" | "ExecCommand"
+    )
 }
 
 pub fn build_write_tail_closure_notice(tool_name: &str) -> String {

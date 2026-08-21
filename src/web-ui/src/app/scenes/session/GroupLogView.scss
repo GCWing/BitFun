@@ -1,0 +1,66 @@
+/**
+ * GroupLogView styles - existing appearance tokens and size tokens only
+ * (no new style system). R-WF-14: read-only timeline - body scaffold only,
+ * no header-actions inline group and no input bar (no composer surface).
+ */
+
+@use '../../../component-library/styles/tokens' as *;
+
+.group-log-view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  color: var(--bf-appearance-token-color-text-primary);
+
+  &__body {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  &__chat-container {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: $size-gap-6;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
+  }
+
+  &__state {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+    padding: $size-gap-3 $size-gap-2;
+    border: 1px dashed var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__retry {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: $color-accent-500;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    padding: 0 $size-gap-1;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

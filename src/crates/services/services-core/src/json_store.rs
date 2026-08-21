@@ -65,12 +65,6 @@ pub enum JsonFileStoreError {
         #[source]
         source: std::io::Error,
     },
-    #[error("Failed fallback JSON overwrite {path}: {source}")]
-    FallbackOverwrite {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
     #[error("Failed to replace JSON file: {source}")]
     Replace {
         #[source]
@@ -306,6 +300,45 @@ impl JsonFileStore {
             if let Err(source) = fs::write(&tmp_path, &bytes).await {
                 return Err(JsonFileStoreError::WriteTemp { source });
             }
+            // UX-P2-4: session artifacts carry full prompt/output and must not
+            // be world-readable on multi-user hosts. The temp file inherits
+            // the process umask by default; force owner-only (0o600) on Unix
+            // before the rename publishes it. Best-effort: a set_permissions
+            // failure is logged, not fatal — the file is still written.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = fs::metadata(&tmp_path)
+                    .await
+                    .map(|metadata| metadata.permissions().mode());
+                match mode {
+                    Ok(previous_mode) => {
+                        // Preserve the owner read/write bits, clear group/other
+                        // access so the published file is 0o600-equivalent
+                        // regardless of the process umask.
+                        let restricted = previous_mode & 0o700;
+                        if let Err(error) = fs::set_permissions(
+                            &tmp_path,
+                            std::fs::Permissions::from_mode(restricted),
+                        )
+                        .await
+                        {
+                            warn!(
+                                "Failed to restrict permissions on temporary file {}: {} (continuing; the file may be readable by other local users)",
+                                tmp_path.display(),
+                                error
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        warn!(
+                            "Failed to read permissions of temporary file {}: {} (continuing)",
+                            tmp_path.display(),
+                            error
+                        );
+                    }
+                }
+            }
 
             let replacement = match policy {
                 AtomicWritePolicy::BestEffortReplace => {
@@ -338,26 +371,14 @@ impl JsonFileStore {
         }
 
         if let Some(error) = last_replace_error {
-            // On Windows, external scanners/file indexers may temporarily hold a
-            // non-shareable handle, making delete/rename fail with
-            // PermissionDenied. Fallback to direct write to avoid losing session
-            // persistence while keeping best-effort atomic behavior.
-            if policy == AtomicWritePolicy::BestEffortReplace
-                && error.kind() == ErrorKind::PermissionDenied
-            {
-                warn!(
-                    "Atomic JSON replace permission denied for {}, fallback to direct overwrite",
-                    path.display()
-                );
-                fs::write(path, &bytes).await.map_err(|source| {
-                    JsonFileStoreError::FallbackOverwrite {
-                        path: path.to_path_buf(),
-                        source,
-                    }
-                })?;
-                return Ok(());
-            }
-
+            // d4-P2-8: the previous PermissionDenied fallback wrote directly
+            // over the target, silently downgrading the atomic-replace
+            // contract (a concurrent reader could observe the pre/post
+            // replacement versions, and the tombstone registry's "no torn
+            // write" guarantee no longer held). The retry loop above already
+            // absorbs transient Windows handle contention (antivirus/file
+            // indexers); after it is exhausted the error is propagated so the
+            // caller can retry or surface it instead of losing atomicity.
             return Err(JsonFileStoreError::Replace { source: error });
         }
 
@@ -493,6 +514,9 @@ impl JsonFileStore {
 
         let temp = Self::windows_extended_path(tmp_path)?;
         let target = Self::windows_extended_path(target_path)?;
+        // SAFETY: `temp` and `target` are extended-length UTF-16 paths owned by
+        // local `OsString`-backed buffers; their pointers stay valid for the
+        // duration of the call and both buffers are null-terminated.
         let result = unsafe {
             if target_path.exists() {
                 ReplaceFileW(

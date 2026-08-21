@@ -181,11 +181,12 @@ impl CustomSubagent {
         self.data.save_to_file(model, Some(model_is_explicit))
     }
 
-    pub fn set_review(&mut self, review: bool) {
+    /// Set the review semantic marker only. `readonly` is the sole field that
+    /// decides whether writable tools are stripped, so it stays under caller
+    /// control (R-WF-21 rules source: review never forces readonly).
+    pub fn set_review(&mut self, review: bool, readonly: bool) {
         self.data.review = review;
-        if review {
-            self.data.readonly = true;
-        }
+        self.data.readonly = readonly;
     }
 }
 
@@ -244,5 +245,29 @@ mod tests {
             .expect("review subagent should load");
         assert!(loaded.data.review);
         assert!(loaded.data.readonly);
+    }
+
+    #[test]
+    fn set_review_does_not_implicitly_force_readonly() {
+        // R-WF-21 rules source: review is a semantic marker; readonly stays
+        // under caller control. set_review(true, false) must not flip readonly.
+        let dir = TestTempDir::new("bitfun-subagent-set-review");
+        let path = dir.join("writable-review.md");
+        let mut subagent = CustomSubagent::new(
+            "WritableReview".to_string(),
+            "Review that may fix files".to_string(),
+            vec!["Read".to_string(), "Write".to_string()],
+            "Review and fix when needed.".to_string(),
+            false,
+            path.clone(),
+            CustomSubagentKind::User,
+        );
+        subagent.set_review(true, false);
+
+        assert!(subagent.data.review);
+        assert!(
+            !subagent.data.readonly,
+            "set_review must not force readonly"
+        );
     }
 }

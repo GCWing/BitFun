@@ -1,0 +1,2 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+export const agentTeamCardAppearanceDescriptor: AppearanceSurfaceDescriptor = { id: 'agent-team-card', parts: [{ id: 'root' }, { id: 'header' }, { id: 'iconArea' }, { id: 'icon' }, { id: 'headerInfo' }, { id: 'name' }, { id: 'actions' }, { id: 'body' }, { id: 'description' }, { id: 'meta' }, { id: 'avatars' }, { id: 'footer' }] };

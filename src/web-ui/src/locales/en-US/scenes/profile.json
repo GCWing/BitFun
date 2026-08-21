@@ -132,6 +132,18 @@
   "nursery": {
     "backToGallery": "Assistant",
 
+    "workflowClaw": {
+      "gallery": {
+        "title": "Workflow Claw",
+        "subtitle": "Independent list of workflow-member Claws, isolated from plain assistants",
+        "zoneTitle": "Workflow members",
+        "zoneSubtitle": "Claws deployed as workflow members",
+        "emptyTitle": "No workflow members yet",
+        "emptySubtitle": "Deploy a workflow and its member Claws will appear here",
+        "create": "New workflow"
+      }
+    },
+
     "gallery": {
       "title":              "Assistant",
       "subtitle":           "Create, configure, and start conversations with your assistants",

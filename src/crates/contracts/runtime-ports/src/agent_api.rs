@@ -72,6 +72,10 @@ pub struct AgentSessionListRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+    /// When true, hidden Subagent/Ephemeral sessions are included in the
+    /// listing (full conversation management).
+    #[serde(default)]
+    pub include_hidden: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +97,20 @@ pub struct AgentSessionSummary {
     pub turn_count: usize,
     pub created_at_ms: u64,
     pub last_active_at_ms: u64,
+    /// Optional parent session ID for tree-structured display.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    /// Optional session runtime status (e.g. "idle", "active", "error").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Display/management state (seven-state projection), e.g. "standby",
+    /// "processing", "completed", "hung", "interrupted", "pending_attention",
+    /// "viewed". Distinct from the runtime `status` above.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_state: Option<String>,
+    /// Daemon session marker.
+    #[serde(default)]
+    pub is_daemon: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -565,18 +583,14 @@ pub struct AgentSubmissionRequest {
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
+#[derive(Default)]
 pub enum AgentDialogTurnExecution {
+    #[default]
     Standard,
     FreshExternalSubagent {
         ecosystem_id: String,
         logical_id: String,
     },
-}
-
-impl Default for AgentDialogTurnExecution {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -648,6 +662,8 @@ pub struct AgentDialogSteerRequest {
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_content: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prepended_reminders: Vec<AgentDialogPrependedReminder>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<AgentInputAttachment>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
@@ -823,8 +839,16 @@ pub enum DialogTurnOutcomeKind {
 pub const fn should_skip_agent_session_reply(
     outcome_kind: DialogTurnOutcomeKind,
     suppressed_cancelled_reply: bool,
+    suppress_injected_turn_reply: bool,
 ) -> bool {
-    matches!(outcome_kind, DialogTurnOutcomeKind::Interrupted)
+    // R-ASYNC-01（P1-1 扩展点）：引导注入 turn 完成时抑制自动回传——无论
+    // outcome kind（含 Completed）均 NoReply/Skip。urgent 注入（UserSteering）
+    // 的消息回复由注入通道交付，注入 turn 若再自动回传即产生双回复。
+    // 现役判定只覆盖 Interrupted / (Cancelled && suppressed_cancelled_reply)，
+    // Completed+suppress=true 仍 Forward（assembly scheduler.rs:6274-6284
+    // 现役测试实证）——本分支根除该盲区。
+    suppress_injected_turn_reply
+        || matches!(outcome_kind, DialogTurnOutcomeKind::Interrupted)
         || matches!(outcome_kind, DialogTurnOutcomeKind::Cancelled) && suppressed_cancelled_reply
 }
 
@@ -943,6 +967,22 @@ pub struct RoundInjection {
     /// a turn submission's `metadata`).
     pub metadata: serde_json::Map<String, serde_json::Value>,
     pub created_at: std::time::SystemTime,
+    /// Prepended reminders carried with the injected message.
+    pub prepended_reminders: Vec<AgentDialogPrependedReminder>,
+}
+
+impl RoundInjection {
+    /// TOKEN-01 dedup marker: the caller-supplied steering id that uniquely
+    /// identifies this user-steering event end to end (the scheduler generates
+    /// it in `buffer_steering` as `Uuid::new_v4()`). `UserSteering` injections
+    /// always carry it; the other kinds return `None`.
+    pub fn dedup_key(&self) -> Option<&str> {
+        match self.kind {
+            RoundInjectionKind::UserSteering => Some(self.id.as_str()),
+            RoundInjectionKind::BackgroundResult
+            | RoundInjectionKind::ThreadGoalObjectiveUpdated => None,
+        }
+    }
 }
 
 /// Observes round-boundary injections for a given running turn.
@@ -976,7 +1016,9 @@ pub const MAX_THREAD_GOAL_OBJECTIVE_CHARS: usize = 4_000;
 pub const MAX_CONTEXT_SUMMARY_CHARS: usize = 12_000;
 
 /// Max automatic goal continuation dialog turns per objective (legacy goal_mode parity).
-pub const MAX_THREAD_GOAL_AUTO_CONTINUATIONS: u32 = 100;
+///
+/// 本地安全限定（fork）：上游为 100，本地收窄为 10。
+pub const MAX_THREAD_GOAL_AUTO_CONTINUATIONS: u32 = 10;
 
 /// Alias retained for migration from legacy `goal_mode` metadata and docs.
 pub const MAX_GOAL_CONTINUATIONS: u32 = MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
@@ -1035,6 +1077,10 @@ pub struct ThreadGoal {
     /// Auto-continuation dialog turns scheduled toward this goal (resets on new objective).
     #[serde(default)]
     pub auto_continuation_count: u32,
+    /// Files the goal references as authoritative context (workspace-relative
+    /// paths the agent should keep in sync while pursuing the goal).
+    #[serde(default)]
+    pub reference_files: Vec<String>,
 }
 
 impl ThreadGoal {
@@ -1094,6 +1140,10 @@ pub struct AgentThreadGoalCreateRequest {
     pub objective: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_budget: Option<i64>,
+    /// Workspace-relative reference files the goal tracks as authoritative
+    /// context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_files: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2688,18 +2738,36 @@ mod tests {
         assert!(should_skip_agent_session_reply(
             DialogTurnOutcomeKind::Cancelled,
             true,
+            false,
         ));
         assert!(!should_skip_agent_session_reply(
             DialogTurnOutcomeKind::Cancelled,
+            false,
             false,
         ));
         assert!(!should_skip_agent_session_reply(
             DialogTurnOutcomeKind::Completed,
             true,
+            false,
         ));
         assert!(!should_skip_agent_session_reply(
             DialogTurnOutcomeKind::Failed,
             true,
+            false,
+        ));
+
+        // R-ASYNC-01（P1-1 扩展点）：注入 turn suppress 标记命中 → 无论
+        // outcome kind（含 Completed）均 skip——修复前 Completed+suppress=true
+        // 仍 Forward（S-9 前后对比：此断言在旧签名下为 !skip，现为 skip）。
+        assert!(should_skip_agent_session_reply(
+            DialogTurnOutcomeKind::Completed,
+            true,
+            true,
+        ));
+        assert!(should_skip_agent_session_reply(
+            DialogTurnOutcomeKind::Interrupted,
+            true,
+            false,
         ));
     }
 
@@ -2810,6 +2878,7 @@ mod tests {
                 attachments: Vec::new(),
                 metadata: serde_json::Map::new(),
                 created_at: std::time::SystemTime::UNIX_EPOCH,
+                prepended_reminders: Vec::new(),
             },
         };
 
@@ -2838,6 +2907,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 0,
+            reference_files: Vec::new(),
         };
         assert!(active.is_active());
         assert_eq!(active.remaining_tokens(), Some(9_900));
@@ -3004,6 +3074,7 @@ mod tests {
             turn_id: "turn_1".to_string(),
             content: "Please also check the tests".to_string(),
             display_content: Some("Also check tests".to_string()),
+            prepended_reminders: Vec::new(),
             attachments: vec![AgentInputAttachment::remote_image(
                 "image-1",
                 "shot.png",
@@ -3094,6 +3165,7 @@ mod tests {
                 created_at: 1,
                 updated_at: 2,
                 auto_continuation_count: 0,
+                reference_files: Vec::new(),
             },
         };
 
@@ -3121,6 +3193,7 @@ mod tests {
             workspace_path: "/workspace/project".to_string(),
             objective: "Ship the refactor".to_string(),
             token_budget: Some(1000),
+            reference_files: None,
         };
         let update_request = AgentThreadGoalUpdateStatusRequest {
             session_id: "session_1".to_string(),
@@ -3305,6 +3378,7 @@ mod tests {
             workspace_path: "/workspace/project".to_string(),
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
+            include_hidden: false,
         };
         let summary = AgentSessionSummary {
             session_id: "session_1".to_string(),
@@ -3317,6 +3391,10 @@ mod tests {
             turn_count: 3,
             created_at_ms: 1000,
             last_active_at_ms: 2000,
+            parent_session_id: None,
+            status: None,
+            display_state: None,
+            is_daemon: false,
         };
         let delete_request = AgentSessionDeleteRequest {
             workspace_path: "/workspace/project".to_string(),

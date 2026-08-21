@@ -1,0 +1,82 @@
+/**
+ * GroupChatView styles - existing appearance tokens and size tokens only
+ * (no new style system). R-GC-24: the top bar and input bar are the original
+ * session layout (FlowChatHeader / ChatInput) - this file only keeps the
+ * minimal body scaffold plus the header-actions inline group.
+ */
+
+@use '../../../component-library/styles/tokens' as *;
+
+.group-chat-view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  color: var(--bf-appearance-token-color-text-primary);
+
+  &__header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    margin-left: $size-gap-1;
+  }
+
+  &__body {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  &__chat-container {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: $size-gap-6;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
+  }
+
+  &__state {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+    padding: $size-gap-3 $size-gap-2;
+    border: 1px dashed var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__retry {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: $color-accent-500;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    padding: 0 $size-gap-1;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__input {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: $size-gap-3 $size-gap-4;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-element-bg-soft);
+  }
+}

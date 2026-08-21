@@ -18,6 +18,8 @@ export interface SplitHandleProps {
   onRatioChange: (ratio: number) => void;
   /** Container ref */
   containerRef: React.RefObject<HTMLElement>;
+  /** Extra inline styles (e.g. explicit CSS Grid placement) */
+  style?: React.CSSProperties;
 }
 
 export const SplitHandle: React.FC<SplitHandleProps> = ({
@@ -25,6 +27,7 @@ export const SplitHandle: React.FC<SplitHandleProps> = ({
   ratio,
   onRatioChange,
   containerRef,
+  style,
 }) => {
   const { t } = useTranslation('components');
   const [isDragging, setIsDragging] = useState(false);
@@ -106,6 +109,7 @@ export const SplitHandle: React.FC<SplitHandleProps> = ({
         className={`canvas-split-handle canvas-split-handle--${direction} ${
           isDragging ? 'is-dragging' : ''
         }`}
+        style={style}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
         onKeyDown={handleKeyDown}

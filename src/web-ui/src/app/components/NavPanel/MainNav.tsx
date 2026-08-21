@@ -14,7 +14,7 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, CalendarClock, ChevronDown, Search } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, CalendarClock, ChevronDown, Search, GitBranch, Wrench } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
@@ -23,15 +23,18 @@ import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from '../SceneBar/types';
 import SectionHeader from './components/SectionHeader';
 import AssistantSessionCreateMenu from './components/AssistantSessionCreateMenu';
+import CreateGroupChatDialog from './components/CreateGroupChatDialog';
 import MiniAppEntry from './components/MiniAppEntry';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
 import SessionsSection from './sections/sessions/SessionsSection';
+import GroupChatsSection from './sections/group-chats/GroupChatsSection';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { resolveAgentTypeForSessionCreation } from '@/flow_chat/services/flow-chat-manager';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
@@ -107,6 +110,58 @@ const MainNav: React.FC<MainNavProps> = ({
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     () => new Set(['assistant-sessions', 'workspace'])
   );
+
+  // Group chats (R-GC-27): entry merged into the assistant session create
+  // menu; the create dialog stays the existing CreateGroupChatDialog.
+  const [isGroupChatDialogOpen, setIsGroupChatDialogOpen] = useState(false);
+
+  // R-GC-26: group chat = a new Claw default conversation. The group session
+  // (and its workspace) always belongs to the Claw default assistant workspace
+  // (primary assistant workspace, else the first assistant workspace), never
+  // the current project workspace. The backend create resolves the same
+  // workspace (path_manager default assistant workspace), so the local
+  // registration must use the same root.
+  const defaultAssistantWorkspace =
+    pickPrimaryAssistantWorkspace(assistantWorkspacesList, primaryAssistantWorkspaceId)
+    ?? assistantWorkspacesList[0]
+    ?? null;
+
+  const handleGroupChatCreated = useCallback(async (groupId: string, name: string) => {
+    // R-GC-26 + R-WF-02: group chat = a new agent_type="group" conversation
+    // living under the Claw default assistant workspace (never the current
+    // project workspace). The backend create resolves the same workspace
+    // (path_manager default assistant workspace), so register locally with
+    // the same root so the group session opens consistently.
+    const workspace = defaultAssistantWorkspace;
+    const workspacePath = workspace?.rootPath || '';
+    const workspaceId = workspace?.id || undefined;
+    if (!workspacePath) return;
+    // Group = agent_type="group" session (backend group_room_tools.rs
+    // create_group builds a group session — default_group_agent_type,
+    // group_room_tools.rs; the createSession config agentType and mode below
+    // mirror it); registering it locally into flowChatStore lets the existing
+    // SessionScene open it.
+    flowChatStore.createSession(
+      groupId,
+      {
+        workspacePath,
+        projectWorkspacePath: workspacePath,
+        agentType: 'group',
+        workspaceId,
+      },
+      undefined,
+      name,
+      1048576,
+      'group',
+      workspacePath,
+    );
+    // R-GC-14: mark the group session (UI-local, used by the group chat view).
+    flowChatStore.markSessionAsGroupChat(groupId);
+    await openMainSession(groupId, {
+      workspaceId,
+      activateWorkspace: workspaceId ? setActiveWorkspace : undefined,
+    });
+  }, [defaultAssistantWorkspace, setActiveWorkspace]);
 
   const workspaceMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -191,9 +246,6 @@ const MainNav: React.FC<MainNavProps> = ({
       : assistantWorkspacesList,
     [assistantWorkspacesList, primaryAssistantWorkspace]
   );
-
-  const defaultAssistantWorkspace =
-    primaryAssistantWorkspace ?? assistantWorkspacesList[0] ?? null;
 
   const toggleNavSearch = useCallback(() => {
     setSearchOpen((v) => !v);
@@ -399,6 +451,10 @@ const MainNav: React.FC<MainNavProps> = ({
     switchLeftPanelTab,
   ]);
 
+  const handleOpenWorkflowClaw = useCallback(() => {
+    openScene('workflow-claw');
+  }, [openScene]);
+
   const handleOpenTodos = useCallback(() => {
     openScene('todos');
   }, [openScene]);
@@ -411,14 +467,23 @@ const MainNav: React.FC<MainNavProps> = ({
     openScene('skills');
   }, [openScene]);
 
+  const handleOpenTools = useCallback(() => {
+    openScene('tools');
+  }, [openScene]);
+
+  const handleOpenWorkflow = useCallback(() => {
+    openScene('agents');
+  }, [openScene]);
+
   const isAgentsActive = activeTabId === 'agents';
   const isSkillsActive = activeTabId === 'skills';
+  const isToolsActive = activeTabId === 'tools';
 
   useEffect(() => {
-    if (isAgentsActive || isSkillsActive) {
+    if (isAgentsActive || isSkillsActive || isToolsActive) {
       setIsExtensionsOpen(true);
     }
-  }, [isAgentsActive, isSkillsActive]);
+  }, [isAgentsActive, isSkillsActive, isToolsActive]);
 
   const workspaceMenuPortal = workspaceMenuOpen ? createPortal(
     <div
@@ -514,13 +579,18 @@ const MainNav: React.FC<MainNavProps> = ({
   const createCodeTooltip = t('nav.sessions.newCodeSession');
   const createCoworkTooltip = t('nav.sessions.newCoworkSession');
   const assistantTooltip = t('nav.items.persona');
+  const workflowClawTooltip = t('nav.tooltips.workflowClaw');
   const todosTooltip = t('nav.tooltips.todos');
   const addWorkspaceTooltip = t('nav.tooltips.addWorkspace');
   const isAssistantActive = activeTabId === 'assistant';
+  const isWorkflowClawActive = activeTabId === 'workflow-claw';
   const isTodosActive = activeTabId === 'todos';
   const agentsTooltip = t('nav.tooltips.agents');
   const skillsTooltip = t('nav.tooltips.skills');
+  const toolsTooltip = t('nav.tooltips.tools');
+  const workflowTooltip = t('nav.tooltips.workflow');
   const extensionsLabel = t('nav.sections.extensions');
+
   return (
     <>
       {/* ── Workspace search ───────────────────────── */}
@@ -604,6 +674,25 @@ const MainNav: React.FC<MainNavProps> = ({
               <User size={15} />
             </span>
             <span>{t('nav.items.persona')}</span>
+          </button>
+        </Tooltip>
+
+        <Tooltip content={workflowClawTooltip} placement="right" followCursor>
+          <button
+            type="button"
+            className={`bitfun-nav-panel__top-action-btn${isWorkflowClawActive ? ' is-active' : ''}`}
+            data-bf-component="nav-panel"
+            data-bf-part="topAction"
+            data-bf-action="workflow-claw"
+            data-bf-state={isWorkflowClawActive ? 'active' : ''}
+            onClick={handleOpenWorkflowClaw}
+            aria-label={workflowClawTooltip}
+            data-testid="nav-workflow-claw-btn"
+          >
+            <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+              <GitBranch size={15} />
+            </span>
+            <span>{t('nav.items.workflowClaw')}</span>
           </button>
         </Tooltip>
 
@@ -707,6 +796,52 @@ const MainNav: React.FC<MainNavProps> = ({
                 <span>{t('nav.items.skills')}</span>
               </button>
             </Tooltip>
+
+            <Tooltip content={workflowTooltip} placement="right" followCursor>
+              <button
+                type="button"
+                className={[
+                  'bitfun-nav-panel__top-action-btn',
+                  'bitfun-nav-panel__top-action-btn--sub',
+                  isAgentsActive ? 'is-active' : '',
+                ].filter(Boolean).join(' ')}
+                data-bf-component="nav-panel"
+                data-bf-part="topAction"
+                data-bf-action="workflow"
+                data-bf-state={isAgentsActive ? 'active' : ''}
+                onClick={handleOpenWorkflow}
+                aria-label={workflowTooltip}
+                data-testid="workflow-tab"
+              >
+                <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                  <GitBranch size={15} />
+                </span>
+                <span>{t('nav.items.workflow')}</span>
+              </button>
+            </Tooltip>
+
+            <Tooltip content={toolsTooltip} placement="right" followCursor>
+              <button
+                type="button"
+                className={[
+                  'bitfun-nav-panel__top-action-btn',
+                  'bitfun-nav-panel__top-action-btn--sub',
+                  isToolsActive ? 'is-active' : '',
+                ].filter(Boolean).join(' ')}
+                data-bf-component="nav-panel"
+                data-bf-part="topAction"
+                data-bf-action="tools"
+                data-bf-state={isToolsActive ? 'active' : ''}
+                onClick={handleOpenTools}
+                aria-label={toolsTooltip}
+                data-testid="tool-tab"
+              >
+                <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                  <Wrench size={15} />
+                </span>
+                <span>{t('nav.items.tools')}</span>
+              </button>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -727,6 +862,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 primaryAssistant={primaryAssistantWorkspace}
                 onCreatePrimary={handleCreatePrimaryAssistantSession}
                 onCreateAssistant={handleCreateAssistantSession}
+                onCreateGroupChat={() => setIsGroupChatDialogOpen(true)}
               />
             }
           />
@@ -747,6 +883,8 @@ const MainNav: React.FC<MainNavProps> = ({
                       isActiveWorkspace={workspace.id === currentWorkspace?.id}
                       assistantLabel={assistantDisplayName}
                       isVisible={expandedSections.has('assistant-sessions')}
+                      hideGroupChats
+                      hideWorkflowMembers
                     />
                   );
                 })}
@@ -789,6 +927,18 @@ const MainNav: React.FC<MainNavProps> = ({
           </div>
         </div>
 
+        {/* Group chats (R-WF-12) */}
+        <GroupChatsSection
+          workspaceId={defaultAssistantWorkspace?.id}
+          workspacePath={defaultAssistantWorkspace?.rootPath}
+          remoteConnectionId={
+            defaultAssistantWorkspace && isRemoteWorkspace(defaultAssistantWorkspace)
+              ? defaultAssistantWorkspace.connectionId
+              : null
+          }
+          onCreateGroupChat={() => setIsGroupChatDialogOpen(true)}
+        />
+
       </div>
 
       {/* ── Bottom: MiniApp ───────────────────────── */}
@@ -817,6 +967,18 @@ const MainNav: React.FC<MainNavProps> = ({
 
       {workspaceMenuPortal}
 
+      {/* Group chat create dialog (R-GC-13 / R-GC-26: workspace = Claw default
+           assistant workspace, never the current project workspace; R-GC-30:
+           members = owner-picked Claw multi-select from the runtime list,
+           no member-count input) */}
+      <CreateGroupChatDialog
+        isOpen={isGroupChatDialogOpen}
+        onClose={() => setIsGroupChatDialogOpen(false)}
+        workspacePath={defaultAssistantWorkspace?.rootPath ?? ''}
+        assistantWorkspaces={assistantWorkspacesList}
+        onCreated={handleGroupChatCreated}
+      />
+
       {/* SSH Remote Dialogs */}
       <SSHConnectionDialog
         open={isSSHConnectionDialogOpen}
@@ -843,6 +1005,7 @@ const MainNav: React.FC<MainNavProps> = ({
           }}
         />
       )}
+
     </>
   );
 };

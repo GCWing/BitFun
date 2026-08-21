@@ -63,6 +63,7 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: {
     startDialogTurn: (...args: unknown[]) => mockStartDialogTurn(...args),
     updateSessionModel: (...args: unknown[]) => mockUpdateSessionModel(...args),
+    getAvailableModes: async () => [],
   },
 }));
 

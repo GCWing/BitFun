@@ -1,12 +1,39 @@
 use crate::util::errors::{BitFunError, BitFunResult};
 pub use bitfun_agent_tools::{
-    is_miniapp_headless_agent_run, is_miniapp_market_strict_agent_run,
+    classify_tool_call, is_miniapp_headless_agent_run, is_miniapp_market_strict_agent_run,
     is_remote_posix_path_within_root, miniapp_agent_run_tool_restrictions,
     miniapp_headless_agent_tool_restrictions, miniapp_market_strict_agent_tool_restrictions,
-    tool_restrictions_for_delegation_policy, ToolPathOperation, ToolPathPolicy,
-    ToolRestrictionError, ToolRuntimeRestrictions,
+    subagent_tool_restrictions, tool_restrictions_for_delegation_policy, OperationClass,
+    ToolPathOperation, ToolPathPolicy, ToolRestrictionError, ToolRuntimeRestrictions,
+    ToolRuntimeRestrictionsPatch,
 };
 use std::path::{Path, PathBuf};
+
+/// Update tool runtime restrictions for a specific session.
+///
+/// RBAC role system removed (R-WF-01): retained as a no-op stub so existing
+/// callers and re-exports keep compiling. Session-level overrides are no longer
+/// used; enforcement falls back to the context-level [`ToolRuntimeRestrictions`].
+pub fn update_restrictions(
+    _session_id: &str,
+    _patch: ToolRuntimeRestrictionsPatch,
+) -> BitFunResult<()> {
+    Ok(())
+}
+
+/// Retrieve the session-specific restrictions, if any.
+///
+/// RBAC role system removed (R-WF-01): no per-session override is ever
+/// registered, so this always returns `None` and consumers fall back to the
+/// context-level restrictions.
+pub fn get_session_restrictions(_session_id: &str) -> Option<ToolRuntimeRestrictions> {
+    None
+}
+
+/// Remove the session-specific tool restrictions (session-end cleanup).
+///
+/// RBAC role system removed (R-WF-01): retained as a no-op stub.
+pub fn clear_session_restrictions(_session_id: &str) {}
 
 impl From<ToolRestrictionError> for BitFunError {
     fn from(error: ToolRestrictionError) -> Self {
@@ -106,5 +133,19 @@ mod tests {
         assert!(!is_local_path_within_root(&sibling, &root.join("allowed")).unwrap());
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn session_restrictions_always_none_after_rbac_removal() {
+        // R-WF-01 D2: the RBAC role system is removed, so no per-session
+        // override is ever registered. get_session_restrictions must always
+        // return None so consumers fall back to the context-level restrictions.
+        let session_id = "test-session-restrictions-none-01";
+        assert_eq!(get_session_restrictions(session_id), None);
+        update_restrictions(session_id, ToolRuntimeRestrictionsPatch::default())
+            .expect("no-op update must succeed");
+        assert_eq!(get_session_restrictions(session_id), None);
+        clear_session_restrictions(session_id);
+        assert_eq!(get_session_restrictions(session_id), None);
     }
 }

@@ -3,7 +3,7 @@
  * Initializes event listeners and handles various Agentic events
  */
 
-import { FlowChatStore, mergeModelRoundAttemptDiagnostics } from '../../store/FlowChatStore';
+import { FlowChatStore, isSessionConfirmedDeleted, markSessionsConfirmedDeleted, mergeModelRoundAttemptDiagnostics } from '../../store/FlowChatStore';
 import { isSessionTurnRetired } from '../../store/sessionMutationStore';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
@@ -27,6 +27,7 @@ import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDispl
 import { cleanRemoteUserInput } from '../../utils/userInputText';
 import { effectiveToolInvocation, getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 import { absoluteSessionTurnIndexForId } from '../../utils/flowChatTurnOrdinal';
+import { isAcpFlowSession } from '../../utils/acpSession';
 import type {
   DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
@@ -38,6 +39,7 @@ import type {
   SessionModelAutoMigratedEvent,
   SessionReasoningPresetAutoClearedEvent,
   SubagentSessionLinkedEvent,
+  SubagentTurnCompletedEvent,
   RecoverInterruptedDialogTurnResponse,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -55,6 +57,9 @@ import { useBackgroundCommandActivityStore } from '../../store/backgroundCommand
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
 import { createTab } from '@/shared/utils/tabUtils';
 import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
+import { i18nService } from '@/infrastructure/i18n';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
@@ -76,12 +81,14 @@ import {
   processToolProgressInternal,
   handleToolExecutionProgress,
   handleToolTerminalReady,
+  cleanupPendingTerminalSessionIdsForTurn,
 } from './ToolEventModule';
 import { handleAcpPermissionRequestForToolCard } from './AcpPermissionToolCardModule';
 import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
+import { clearRuntimeStatusState } from '../../store/runtimeStatusStore';
 import { requestRuntimeProjectionRepair } from './PeerSessionRefreshModule';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import {
@@ -89,10 +96,13 @@ import {
   sessionPendingTurnAdoptionKey,
   stripOptimisticTurnAdoption,
 } from '../../utils/optimisticTurnAdoption';
-import { isAcpFlowSession } from '../../utils/acpSession';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
+const SUBAGENT_NOTIFY_SESSION_DEBOUNCE_MS = 3000;
+const SUBAGENT_NOTIFY_GLOBAL_THROTTLE_MS = 2000;
+const lastSubagentNotifyAt = new Map<string, number>();
+let lastSubagentGlobalNotifyAt = 0;
 
 interface MCPInteractionRequestEvent {
   interactionId: string;
@@ -104,6 +114,33 @@ interface MCPInteractionRequestEvent {
 
 function isStreamingExecutionState(state: SessionExecutionState): boolean {
   return state === SessionExecutionState.PROCESSING || state === SessionExecutionState.FINISHING;
+}
+
+/**
+ * R-WF-25: after a background command lifecycle transition, settle the state
+ * machine back to IDLE when no `running` activity remains for the session and
+ * the machine is stuck in the background-command PROCESSING projection.
+ */
+function handleBackgroundCommandLifecycleForStateMachine(
+  eventData: import('../../store/backgroundCommandActivityStore').BackgroundCommandLifecycleEvent,
+): void {
+  const agentSessionId = eventData.agentSessionId ?? eventData.agent_session_id;
+  if (!agentSessionId) {
+    return;
+  }
+  const activities = Object.values(
+    useBackgroundCommandActivityStore.getState().activities,
+  );
+  const hasRunning = activities.some(
+    activity => activity.agentSessionId === agentSessionId && activity.status === 'running',
+  );
+  if (hasRunning) {
+    return;
+  }
+  const currentState = stateMachineManager.getCurrentState(agentSessionId);
+  if (currentState === SessionExecutionState.PROCESSING) {
+    stateMachineManager.transition(agentSessionId, SessionExecutionEvent.FINISHING_SETTLED);
+  }
 }
 
 const RECOVERABLE_IDLE_TURN_STATUSES = new Set<DialogTurn['status']>([
@@ -168,11 +205,14 @@ export const __test_only__ = {
   handleDialogTurnFailed,
   handleSubagentSessionLinked,
   handleModelRoundStart,
+  handleSessionDeleted,
+  handleTextChunk,
   handleTokenUsageUpdate,
   handleCompressionCompleted,
   handleDialogTurnInterrupted,
   handleDialogTurnRecovered,
   handleDialogTurnCancelled,
+  notifySubagentTurnCompleted,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -185,9 +225,13 @@ function eventOwnsLatestSessionTurn(
   sessionId: string,
   turnId: string,
 ): boolean {
-  if (session.dialogTurns.at(-1)?.id !== turnId) return false;
   const machine = stateMachineManager.get(sessionId);
   const currentTurnId = machine?.getContext().currentDialogTurnId;
+  // Match against the state machine's currentDialogTurnId first: when an
+  // optimistically created follow-up turn makes dialogTurns.at(-1) differ from
+  // this turn, the completion event must not be dropped (busy deadlock root A).
+  if (currentTurnId && currentTurnId === turnId) return true;
+  if (session.dialogTurns.at(-1)?.id !== turnId) return false;
   return !currentTurnId || currentTurnId === turnId;
 }
 
@@ -255,6 +299,70 @@ function recoverIdleLatestTurnDataEvent(
     sessionId,
     turnId,
     eventName,
+  });
+  return true;
+}
+
+function recoverAcpIdleTurnForDataEvent(
+  sessionId: string,
+  turnId: string,
+  currentState: SessionExecutionState,
+  currentDialogTurnId: string | null,
+): boolean {
+  if (isStreamingExecutionState(currentState)) {
+    return false;
+  }
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  if (!session || !isAcpFlowSession(session)) {
+    return false;
+  }
+
+  const turnIndex = session.dialogTurns.findIndex((turn: DialogTurn) => turn.id === turnId);
+  if (turnIndex < 0) {
+    return false;
+  }
+  if (currentDialogTurnId) {
+    const currentIndex = session.dialogTurns.findIndex(
+      (turn: DialogTurn) => turn.id === currentDialogTurnId,
+    );
+    if (currentIndex < 0 || turnIndex <= currentIndex) {
+      return false;
+    }
+  }
+
+  const machine = stateMachineManager.get(sessionId);
+  const machineContext = machine?.getContext();
+  if (machineContext) {
+    machineContext.currentDialogTurnId = turnId;
+  }
+  if (machine?.getCurrentState() === SessionExecutionState.IDLE) {
+    void stateMachineManager
+      .transition(sessionId, SessionExecutionEvent.START, {
+        taskId: sessionId,
+        dialogTurnId: turnId,
+      })
+      .catch(error => {
+        log.error('State machine transition failed while recovering ACP idle data event', {
+          sessionId,
+          turnId,
+          error,
+        });
+      });
+  }
+
+  log.info('ACP idle turn recovered', {
+    sessionId,
+    turnId,
+    prevState: currentState,
+  });
+
+  log.debug('Recovered ACP data event after non-streaming state', {
+    sessionId,
+    turnId,
+    eventName: 'data',
+    currentState,
   });
   return true;
 }
@@ -473,6 +581,16 @@ function ensureSubagentSession(
     return;
   }
 
+  // A session whose deletion was confirmed on the backend must not be
+  // resurrected as a placeholder shell by stale in-flight events.
+  if (isSessionConfirmedDeleted(subagentSessionId)) {
+    log.warn('SubagentSessionLinked: ignoring event for confirmed deleted session', {
+      subagentSessionId,
+      parentSessionId: parentInfo.sessionId,
+    });
+    return;
+  }
+
   const parentSession = store.getState().sessions.get(parentInfo.sessionId);
   const parentTurnIndex = parentSession
     ? absoluteSessionTurnIndexForId(parentSession, parentInfo.dialogTurnId)
@@ -580,6 +698,149 @@ function handleSubagentSessionLinked(
   reconcileBackgroundSubagentSession(childSessionId);
 }
 
+function resolveSubagentCompletionKind(
+  status: string | undefined,
+): 'completed' | 'error' | 'interrupted' {
+  switch (status) {
+    case 'failed':
+      return 'error';
+    case 'cancelled':
+    case 'partial_timeout':
+      return 'interrupted';
+    default:
+      return 'completed';
+  }
+}
+
+function resolveSubagentNotifyTitle(sessionId: string, agentType: string | undefined): string {
+  const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+  const sessionTitle = session?.title?.trim();
+  if (sessionTitle) {
+    return sessionTitle;
+  }
+  return agentType?.trim() || sessionId;
+}
+
+async function notifySubagentTurnCompleted(
+  childSessionId: string,
+  parentSessionId: string,
+  agentType: string | undefined,
+  outputText: string | undefined,
+  status: string | undefined,
+): Promise<void> {
+  // The full reply is intentionally NOT part of the desktop notification body
+  // (Type-Contract R-TA-01: body is minimal metadata only). It is still
+  // received here so the event-card projection stays untouched.
+  void outputText;
+  const now = Date.now();
+
+  // Debounce repeated completion events for the same subagent, and throttle
+  // bursts when several subagents finish around the same time.
+  const lastForSession = lastSubagentNotifyAt.get(childSessionId) ?? 0;
+  if (now - lastForSession < SUBAGENT_NOTIFY_SESSION_DEBOUNCE_MS) {
+    return;
+  }
+  if (now - lastSubagentGlobalNotifyAt < SUBAGENT_NOTIFY_GLOBAL_THROTTLE_MS) {
+    return;
+  }
+  lastSubagentNotifyAt.set(childSessionId, now);
+  lastSubagentGlobalNotifyAt = now;
+
+  // Only notify when the parent conversation is not being watched right now.
+  const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
+  if (activeSessionId === parentSessionId && isAppWindowFocused()) {
+    return;
+  }
+
+  let notificationsEnabled = true;
+  try {
+    notificationsEnabled = await configManager.getConfig<boolean>(
+      'app.notifications.dialog_completion_notify',
+    );
+  } catch (error) {
+    log.warn('Failed to read dialog_completion_notify config', error);
+  }
+  if (notificationsEnabled === false) {
+    return;
+  }
+
+  const completionKind = resolveSubagentCompletionKind(status);
+  const statusText = i18nService.t(`flow-chat:subagent.${completionKind}Notification`);
+  const agentLabel = agentType?.trim() || childSessionId;
+  const body = [
+    statusText,
+    `Agent: ${agentLabel}`,
+    `Status: ${completionKind}`,
+    `Session: ${childSessionId}`,
+    `Full reply: SessionHistory(${childSessionId})`,
+  ].join(' · ');
+
+  await systemAPI.sendSystemNotification(
+    resolveSubagentNotifyTitle(childSessionId, agentType),
+    body,
+  );
+}
+
+function handleSubagentTurnCompleted(
+  context: FlowChatContext,
+  event: SubagentTurnCompletedEvent,
+): void {
+  const childSessionId = event?.sessionId ?? (event as any)?.childSessionId;
+  const parentSessionId = event?.parentSessionId ?? (event as any)?.parent_session_id;
+  const parentDialogTurnId =
+    event?.parentDialogTurnId ?? (event as any)?.parent_dialog_turn_id;
+  const parentToolCallId = event?.parentToolCallId ?? (event as any)?.parent_tool_call_id;
+  const subagentDialogTurnId =
+    event?.subagentDialogTurnId ?? (event as any)?.subagent_dialog_turn_id;
+  const modelId = event?.modelId ?? (event as any)?.model_id;
+  const effectiveModelName = event?.effectiveModelName ?? (event as any)?.effective_model_name;
+
+  if (childSessionId && parentSessionId && parentDialogTurnId && parentToolCallId) {
+    const parentInfo: SubagentParentInfo = {
+      sessionId: parentSessionId,
+      dialogTurnId: parentDialogTurnId,
+      toolCallId: parentToolCallId,
+    };
+    attachSubagentSessionToParentTool(parentInfo, childSessionId, subagentDialogTurnId);
+    if (typeof modelId === 'string' && modelId.trim()) {
+      FlowChatStore.getInstance().updateSessionModelName(childSessionId, modelId.trim());
+    }
+  }
+
+  if (subagentDialogTurnId && parentSessionId && parentDialogTurnId && parentToolCallId) {
+    updateSubagentParentTaskModel(
+      context,
+      {
+        sessionId: parentSessionId,
+        dialogTurnId: parentDialogTurnId,
+        toolCallId: parentToolCallId,
+      },
+      typeof modelId === 'string' && modelId.trim() ? modelId.trim() : undefined,
+      typeof effectiveModelName === 'string' && effectiveModelName.trim()
+        ? effectiveModelName.trim()
+        : '',
+    );
+  }
+
+  reconcileBackgroundSubagentSession(childSessionId);
+
+  if (childSessionId && parentSessionId) {
+    const status = event?.status;
+    const outputText = event?.outputText ?? (event as any)?.output_text;
+    FlowChatStore.getInstance().markSessionUnreadCompletion(
+      childSessionId,
+      resolveSubagentCompletionKind(status),
+    );
+    void notifySubagentTurnCompleted(
+      childSessionId,
+      parentSessionId,
+      event?.agentType ?? (event as any)?.agent_type,
+      outputText,
+      status,
+    );
+  }
+}
+
 function getLinkedSubagentParentInfo(sessionId: string): SubagentParentInfo | undefined {
   const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
   if (
@@ -657,6 +918,85 @@ function updateSubagentParentTaskModel(
 }
 
 /**
+ * UI-04: ACP flow session id shape detection (aligned with session_message_tool.rs
+ * acp_flow_client_id_from_session_id + looks_like_uuid):
+ * `acp_<client_id>_<uuid>`, where the trailing segment is an 8-4-4-4-12 UUID shape
+ * and client_id is non-empty. On match returns `acp:<client_id>`, otherwise null.
+ * Placeholder sessions thereby carry an agentType, so isAcpFlowSession /
+ * ensureDialogTurnForAcpDataEvent take effect for ACP-delegated replies.
+ */
+const ACP_FLOW_SESSION_ID_UUID_RE =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function acpAgentTypeFromFlowSessionId(sessionId: string): string | null {
+  if (!sessionId.startsWith('acp_')) {
+    return null;
+  }
+  const rest = sessionId.slice('acp_'.length);
+  const lastSeparatorIndex = rest.lastIndexOf('_');
+  if (lastSeparatorIndex <= 0) {
+    return null;
+  }
+  const clientId = rest.slice(0, lastSeparatorIndex);
+  const uuidSegment = rest.slice(lastSeparatorIndex + 1);
+  if (!clientId || !ACP_FLOW_SESSION_ID_UUID_RE.test(uuidSegment)) {
+    return null;
+  }
+  return `acp:${clientId}`;
+}
+
+/**
+ * UI-04: An ACP directly-delivered session may have no dialog-turn-started /
+ * state machine at all. Lazily create the turn and backfill the state machine
+ * when text-chunk / tool-event arrives, so data events are not dropped.
+ */
+function ensureDialogTurnForAcpDataEvent(sessionId: string, turnId: string): boolean {
+  if (!sessionId || !turnId) {
+    return false;
+  }
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  if (!session || !isAcpFlowSession(session)) {
+    return false;
+  }
+
+  const existing = session.dialogTurns.find(turn => turn.id === turnId);
+  if (!existing) {
+    const lazyTurn: DialogTurn = {
+      id: turnId,
+      sessionId,
+      kind: 'user_dialog',
+      userMessage: {
+        id: `user_acp_lazy_${Date.now()}`,
+        content: '',
+        timestamp: Date.now(),
+      },
+      modelRounds: [],
+      status: 'pending',
+      startTime: Date.now(),
+    };
+    store.addDialogTurn(sessionId, lazyTurn);
+  }
+
+  const machine = stateMachineManager.getOrCreate(sessionId);
+  const ctx = machine.getContext();
+  if (ctx.currentDialogTurnId !== turnId) {
+    ctx.currentDialogTurnId = turnId;
+  }
+  if (machine.getCurrentState() === SessionExecutionState.IDLE) {
+    void stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
+      taskId: sessionId,
+      dialogTurnId: turnId,
+    }).catch(error => {
+      log.error('State machine transition failed on lazy ACP turn start', { sessionId, error });
+    });
+  }
+
+  return true;
+}
+
+/**
  * Event filtering mechanism: determines if an event should be processed
  */
 export function shouldProcessEvent(
@@ -679,6 +1019,16 @@ export function shouldProcessEvent(
   const machine = stateMachineManager.get(sessionId);
   if (!machine) {
     if (eventType === 'data') {
+      // UI-04: When the state machine is missing, lazily create the turn
+      // (with state machine) on text-chunk / tool-event; other cases keep the
+      // original drop-and-log path.
+      if (
+        (eventName === 'TextChunk' || eventName === 'ToolEvent') &&
+        turnId &&
+        ensureDialogTurnForAcpDataEvent(sessionId, turnId)
+      ) {
+        return true;
+      }
       logDroppedDataEvent(eventName, sessionId, turnId, { reason: 'missing_state_machine' });
     }
     return false;
@@ -705,7 +1055,11 @@ export function shouldProcessEvent(
       return true;
     }
 
-    if (isRecoveringIdleTurn(sessionId, turnId, currentState, context.currentDialogTurnId)) {
+    if (
+      isRecoveringIdleTurn(sessionId, turnId, currentState, context.currentDialogTurnId) ||
+      (turnId &&
+        recoverAcpIdleTurnForDataEvent(sessionId, turnId, currentState, context.currentDialogTurnId))
+    ) {
       return true;
     }
 
@@ -790,6 +1144,7 @@ export async function initializeEventListeners(
   const unlistenBackgroundCommandLifecycle = api.listen('backend-event-backgroundcommandlifecycle', (payload: any) => {
     const eventData = (payload as any)?.value || payload;
     useBackgroundCommandActivityStore.getState().applyLifecycleEvent(eventData);
+    handleBackgroundCommandLifecycleForStateMachine(eventData);
   });
   const unlistenMcpInteractionRequest = api.listen('backend-event-mcpinteractionrequest', (payload: any) => {
     void handleMcpInteractionRequest((payload as any)?.value || payload);
@@ -882,6 +1237,9 @@ export async function initializeEventListeners(
     },
     onSessionModelAutoMigrated: (event) => {
       handleSessionModelAutoMigrated(event);
+    },
+    onSubagentTurnCompleted: (event) => {
+      handleSubagentTurnCompleted(context, event);
     },
     onSessionReasoningPresetAutoCleared: (event) => {
       handleSessionReasoningPresetAutoCleared(event);
@@ -986,6 +1344,14 @@ function handleSessionCreated(context: FlowChatContext, event: any): void {
   const remoteConnectionId = extractEventRemoteConnectionId(event);
   const remoteSshHost = extractEventRemoteSshHost(event);
 
+  // Subagent relationship fields are optional: the backend is adding them to
+  // the session-created payload; until they arrive they degrade to undefined
+  // and the session is treated as a normal external session.
+  const parentSessionId =
+    (typeof event.parentSessionId === 'string' && event.parentSessionId) || undefined;
+  const subagentType =
+    (typeof event.subagentType === 'string' && event.subagentType) || undefined;
+
   if (existing) return;
 
   store.addExternalSession(
@@ -997,6 +1363,9 @@ function handleSessionCreated(context: FlowChatContext, event: any): void {
       projectWorkspacePath,
       executionTarget,
       workspaceId,
+      sessionKind: parentSessionId ? 'subagent' : undefined,
+      parentSessionId,
+      subagentType,
     },
     remoteConnectionId,
     remoteSshHost
@@ -1160,7 +1529,16 @@ function finalizeTurnCompletionState(
   reconcileBackgroundSubagentSession(sessionId);
 
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (isStreamingExecutionState(currentState)) {
+  // R-WF-25: if a background ExecCommand child is still running for this
+  // session, do NOT settle to IDLE -- the running icon must stay lit until the
+  // command exits. The lifecycle listener settles the machine when the last
+  // command finishes.
+  const hasRunningBackgroundCommand = Object.values(
+    useBackgroundCommandActivityStore.getState().activities,
+  ).some(activity => activity.agentSessionId === sessionId && activity.status === 'running');
+  if (hasRunningBackgroundCommand) {
+    stateMachineManager.transition(sessionId, SessionExecutionEvent.BACKGROUND_COMMAND_RUNNING);
+  } else if (isStreamingExecutionState(currentState)) {
     stateMachineManager.transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED);
   } else {
     log.debug('Skipping FINISHING_SETTLED transition', { currentState, sessionId, turnId });
@@ -1428,10 +1806,10 @@ function handleUserSteeringInjected(_context: FlowChatContext, event: any): void
  */
 function handleSessionDeleted(context: FlowChatContext, event: any): void {
   const { sessionId } = event;
-  
+
   const store = FlowChatStore.getInstance();
   const removedSessionIds = store.getCascadeSessionIds(sessionId);
-  if (removedSessionIds.length === 0) return;
+  if (!sessionId) return;
 
   log.info('Remote session deleted', { sessionId });
   removedSessionIds.forEach(id => {
@@ -1442,8 +1820,30 @@ function handleSessionDeleted(context: FlowChatContext, event: any): void {
     context.processingManager.clearSessionStatus(id);
     cleanupSaveState(context, id);
     cleanupSessionBuffers(context, id);
+    // Drop transient runtime wait status so a stale event cannot re-render a
+    // deleted subagent's projection shell (same guard as the UI delete path).
+    clearRuntimeStatusState({ sessionId: id });
   });
+  // Backend-confirmed deletions must never be resurrected by stale events
+  // (same guard as the frontend UI delete path in FlowChatStore). Mark
+  // unconditionally: when the cascade is empty (the store never loaded the
+  // session, e.g. it was deleted while the tab was closed) the id must still
+  // be recorded so a later refresh cannot resurrect it from residual disk
+  // metadata or the backend deletion tombstone.
+  markSessionsConfirmedDeleted(
+    removedSessionIds.length > 0 ? removedSessionIds : [sessionId]
+  );
   store.removeSession(sessionId);
+
+  // Close any open btw-session panel tabs for the deleted sessions so the
+  // deleted thread placeholder does not linger in the canvas. Dynamic import
+  // keeps the module graph acyclic (btwSessionPane -> FlowChatManager -> index
+  // -> EventHandlerModule).
+  void import('../../services/btwSessionPane').then(({ closeBtwSessionInAuxPane }) => {
+    for (const id of removedSessionIds) {
+      closeBtwSessionInAuxPane(id);
+    }
+  });
 }
 
 /**
@@ -1730,6 +2130,15 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const session = state.sessions.get(sessionId);
 
   if (!session) {
+    // A session whose deletion was confirmed on the backend must not be
+    // resurrected as a placeholder shell by stale in-flight events.
+    if (isSessionConfirmedDeleted(sessionId)) {
+      log.warn('DialogTurnStarted: ignoring event for confirmed deleted session', {
+        sessionId,
+        sessionsCount: state.sessions.size,
+      });
+      return;
+    }
     // Hidden MiniApp agent runs (e.g. PPT Live) submit turns with
     // `surface: 'miniapp_agent'`. Register them as transient miniapp sessions
     // so they stay out of the session list and the agent companion bubbles.
@@ -1737,7 +2146,8 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     const miniAppId = typeof userMessageMetadata?.appId === 'string'
       ? userMessageMetadata.appId
       : undefined;
-    log.warn('DialogTurnStarted: session not in store, creating placeholder', { sessionId, sessionsCount: state.sessions.size, isMiniAppAgentRun });
+    const acpAgentType = acpAgentTypeFromFlowSessionId(sessionId);
+    log.warn('DialogTurnStarted: session not in store, creating placeholder', { sessionId, sessionsCount: state.sessions.size, isMiniAppAgentRun, acpAgentType });
     store.addExternalSession(
       sessionId,
       isMiniAppAgentRun ? (miniAppId ? `MiniApp: ${miniAppId}` : 'MiniApp Agent') : 'Remote Session',
@@ -1745,7 +2155,9 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       resolveExternalSessionWorkspacePath(context, event),
       isMiniAppAgentRun
         ? { sessionKind: 'miniapp', isTransient: true, agentBackedTransient: true }
-        : undefined,
+        : acpAgentType
+          ? { agentType: acpAgentType }
+          : undefined,
       extractEventRemoteConnectionId(event),
       extractEventRemoteSshHost(event)
     );
@@ -1925,13 +2337,36 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
  */
 function handleTextChunk(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, roundId, text, contentType = 'text', isThinkingEnd = false } = event;
+
+  // UI-05: ACP flow session (acp_<client>_<uuid>) text-chunk may arrive before
+  // session-created / dialog-turn-started (out-of-order events / un-hydrated
+  // session). Align with the handleDialogTurnStarted placeholder-creation pattern:
+  // when the ACP flow session id resolves, first create a placeholder session
+  // (with agentType) so shouldProcessEvent / ensureDialogTurnForAcpDataEvent can
+  // lazily create the turn; non-ACP sessions / unresolvable ids keep the original
+  // drop path (no scope expansion).
+  if (sessionId && turnId && !FlowChatStore.getInstance().getState().sessions.has(sessionId)) {
+    const acpAgentType = acpAgentTypeFromFlowSessionId(sessionId);
+    if (acpAgentType) {
+      FlowChatStore.getInstance().addExternalSession(
+        sessionId,
+        'Remote Session',
+        'agentic',
+        resolveExternalSessionWorkspacePath(context, event),
+        { agentType: acpAgentType },
+        extractEventRemoteConnectionId(event),
+        extractEventRemoteSshHost(event)
+      );
+    }
+  }
+
   if (!shouldProcessEvent(sessionId, turnId, 'data', 'TextChunk')) {
     return;
   }
-  
+
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
-  
+
   if (!session) {
     if (!context.contentBuffers.has(sessionId)) {
       log.debug('Session not found (text chunk event)', { sessionId });
@@ -1939,11 +2374,22 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
     return;
   }
 
-  const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+  let dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
-    requestRuntimeProjectionRepair(sessionId);
-    log.debug('Dialog turn not found', { turnId });
-    return;
+    // UI-04: An ACP directly-delivered session may only have text-chunk without
+    // dialog-turn-started; lazily create the turn (with state machine) and keep
+    // displaying; other sessions keep the original drop path.
+    if (turnId && ensureDialogTurnForAcpDataEvent(sessionId, turnId)) {
+      dialogTurn = FlowChatStore.getInstance()
+        .getState()
+        .sessions.get(sessionId)
+        ?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+    }
+    if (!dialogTurn) {
+      requestRuntimeProjectionRepair(sessionId);
+      log.debug('Dialog turn not found', { turnId });
+      return;
+    }
   }
 
   clearRuntimeStatus(context, sessionId, turnId, { roundId });
@@ -2510,6 +2956,23 @@ function handleCompressionFailed(context: FlowChatContext, event: any): void {
 /**
  * Handle dialog turn completed event
  */
+// UI-05: Model-native normal termination codes ('eos' / 'tool_calls') may be
+// misreported by the backend as success=false. Combined with hasFinalResponse:
+// as long as the turn actually produced a final reply, treat it as a normal
+// finish rather than a failure. Consistent with turnCompletionNotice.NORMAL_FINISH_REASONS.
+const MODEL_NATIVE_NORMAL_FINISH_REASONS = new Set(['eos', 'tool_calls']);
+
+function isModelNativeNormalTermination(
+  finishReason?: string,
+  hasFinalResponse?: boolean,
+): boolean {
+  if (typeof finishReason !== 'string') {
+    return false;
+  }
+  const reason = finishReason.trim();
+  return MODEL_NATIVE_NORMAL_FINISH_REASONS.has(reason) && hasFinalResponse === true;
+}
+
 function buildUnsuccessfulCompletionError(finishReason?: string): string {
   if (finishReason === 'empty_round') {
     return 'Model returned an empty response after retrying. finish_reason=empty_round';
@@ -2581,7 +3044,10 @@ export function handleDialogTurnComplete(
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
 
-  if (success === false) {
+  // UI-05: finishReason normalization residual — model-native normal termination
+  // codes ('eos' / 'tool_calls') must not be treated as failures when a final
+  // reply was already produced (hasFinalResponse=true).
+  if (success === false && !isModelNativeNormalTermination(finishReason, hasFinalResponse)) {
     handleDialogTurnFailed(context, {
       ...event,
       sessionId,
@@ -2600,6 +3066,18 @@ export function handleDialogTurnComplete(
     return;
   }
   context.handledTerminalTurnEvents.add(terminalKey);
+
+  // UI-11: Clean up pending terminal session cache entries stuck on this turn
+  // once the turn reaches a terminal state.
+  cleanupPendingTerminalSessionIdsForTurn(sessionId, turnId);
+
+  const machine = stateMachineManager.get(sessionId);
+  if (machine) {
+    const ctx = machine.getContext();
+    if (ctx.currentDialogTurnId !== turnId) {
+      ctx.currentDialogTurnId = turnId;
+    }
+  }
 
   if (!session) {
     log.debug('Session not found (dialog turn complete)', { sessionId });
@@ -2645,7 +3123,21 @@ export function handleDialogTurnComplete(
   reconcileBackgroundSubagentSession(sessionId);
 
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (ownsSessionSettlement && currentState === SessionExecutionState.PROCESSING) {
+  // Busy deadlock root fix (R-BUSY-V6): a DialogTurnCompleted arrival means
+  // some turn of this session finished normally, so the state machine settles
+  // unconditionally while PROCESSING (matching upstream, which has no state
+  // machine and releases on arrival). ownsSessionSettlement no longer gates
+  // settlement: the :207 fallback `dialogTurns.at(-1)?.id !== turnId` in
+  // eventOwnsLatestSessionTurn mis-blocks when the frontend-optimistic turn id
+  // differs from the backend completion turn id (currentTurnId mismatch and the
+  // latest dialogTurns entry is not this turn) -> false -> both
+  // BACKEND_STREAM_COMPLETED and beginTurnCompletion are skipped ->
+  // FINISHING_SETTLED never fires -> the machine stays in PROCESSING forever
+  // (busy deadlock). The backend emits Completed exactly once, immediately
+  // after that turn ends (before any new turn starts), so a late old-turn
+  // Completed cannot corrupt a new turn (only Cancelled can arrive late and it
+  // has its own handler). Completed means completed: settle.
+  if (currentState === SessionExecutionState.PROCESSING) {
     void stateMachineManager
       .transition(sessionId, SessionExecutionEvent.BACKEND_STREAM_COMPLETED)
       .catch(error => {
@@ -2655,9 +3147,13 @@ export function handleDialogTurnComplete(
     log.debug('Skipping BACKEND_STREAM_COMPLETED transition', { currentState, sessionId, turnId });
   }
 
-  if (ownsSessionSettlement) {
-    beginTurnCompletion(context, sessionId, turnId, partialRecoveryReason);
-  }
+  // Unconditional beginTurnCompletion (settle on completion arrival, matching
+  // upstream): in recovered/non-settlement scenarios the machine may not be
+  // PROCESSING, but the completion event must still settle (finalize performs
+  // an idempotent FINISHING_SETTLED on the machine; the UI turn update already
+  // happened above). Never gate completion settlement on machine state or
+  // ownsSessionSettlement.
+  beginTurnCompletion(context, sessionId, turnId, partialRecoveryReason);
 }
 
 function normalizeDialogErrorDetail(event: any): AiErrorDetail {
@@ -2685,6 +3181,10 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
       return;
     }
     context.handledTerminalTurnEvents.add(terminalKey);
+
+    // UI-11: Clean up pending terminal session cache entries stuck on this turn
+  // once the turn reaches a terminal state.
+    cleanupPendingTerminalSessionIdsForTurn(sessionId, turnId);
   }
 
   log.error('Dialog turn failed', { sessionId, turnId, error, errorDetail });
@@ -2746,13 +3246,14 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   
   const currentState = stateMachineManager.getCurrentState(sessionId);
   if (ownsSessionSettlement && isStreamingExecutionState(currentState)) {
-    stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
+    // Busy deadlock fix (root A related): failure paths reset via a single
+    // FINISHING_SETTLED hop instead of ERROR_OCCURRED -> RESET (RESET clears
+    // context.currentDialogTurnId, which distorts later completion-event
+    // judgement -> the machine stays in PROCESSING forever -> busy always).
+    stateMachineManager.transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED, {
       error: error || 'Execution failed'
     }).catch(err => {
-      log.error('State machine transition failed on error occurred', { sessionId, error: err });
-    });
-    stateMachineManager.transition(sessionId, SessionExecutionEvent.RESET).catch(err => {
-      log.error('State machine transition failed on reset', { sessionId, error: err });
+      log.error('State machine transition failed on error settled', { sessionId, error: err });
     });
   }
   
@@ -2790,6 +3291,10 @@ function handleDialogTurnCancelled(
       return;
     }
     context.handledTerminalTurnEvents.add(terminalKey);
+
+    // UI-11: Clean up pending terminal session cache entries stuck on this turn
+  // once the turn reaches a terminal state.
+    cleanupPendingTerminalSessionIdsForTurn(sessionId, turnId);
   }
 
   log.info('Dialog turn cancelled', { sessionId, turnId });

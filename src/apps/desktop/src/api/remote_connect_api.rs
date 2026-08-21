@@ -1283,11 +1283,10 @@ async fn register_delegated_identity_providers() {
                     let account_lease = lock_account_sync(generation)
                         .await
                         .map_err(|_| "Desktop account changed; try again".to_string())?;
-                    let context = account_context
-                        .read()
-                        .await
-                        .clone()
-                        .ok_or_else(|| "Desktop is not logged into a BitFun account".to_string())?;
+                    let context =
+                        account_context.read().await.clone().ok_or_else(|| {
+                            "Desktop is not logged into a BitFun account".to_string()
+                        })?;
                     if !account_context_matches(generation, &context.session.token).await {
                         return Err("Desktop account changed; try again".to_string());
                     }
@@ -4054,11 +4053,10 @@ async fn account_auto_sync_inner(
                 match result {
                     Ok(version) => {
                         let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                        let percent = if upload_total == 0 {
-                            95u8
-                        } else {
-                            20 + ((75 * done) / upload_total) as u8
-                        };
+                        let percent = (75 * done)
+                            .checked_div(upload_total)
+                            .map(|part| 20 + part as u8)
+                            .unwrap_or(95u8);
                         if ensure_account_auto_sync_current(sync_operation_id).is_err() {
                             return Err("account sync cancelled".to_string());
                         }
@@ -4223,7 +4221,6 @@ fn start_settings_sync_engine() {
         on_token_expired: Some(std::sync::Arc::new(|| {
             TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
         })),
-        ..Default::default()
     };
     settings_sync::start_settings_sync_engine(hooks);
 }

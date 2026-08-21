@@ -163,6 +163,27 @@ impl BashTool {
         bash_noninteractive_env()
     }
 
+    /// Resolve the configured Bash default/max timeouts
+    /// (`ai.thresholds.tool_timeout.bash_default_ms` / `bash_max_ms`), falling
+    /// back to the legacy 120s/600s constants when unset or invalid.
+    async fn configured_bash_timeout_bounds() -> (u64, u64) {
+        use crate::service::config::get_global_config_service;
+        let Ok(config_service) = get_global_config_service().await else {
+            return (120_000, 600_000);
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return (120_000, 600_000);
+        };
+        let timeouts = &thresholds.tool_timeout;
+        (
+            timeouts.bash_default_ms.max(1),
+            timeouts.bash_max_ms.max(timeouts.bash_default_ms.max(1)),
+        )
+    }
+
     /// Resolve shell configuration for bash tool.
     /// If configured shell doesn't support integration, falls back to system default.
     async fn resolve_shell() -> ResolvedShell {
@@ -788,14 +809,14 @@ Usage notes:
 
         let tool_name = self.name().to_string();
 
-        const DEFAULT_TIMEOUT_MS: u64 = 120_000;
-        const MAX_TIMEOUT_MS: u64 = 600_000;
+        // 阈值参数配置化：ai.thresholds.tool_timeout.bash_default_ms / bash_max_ms
+        let (bash_default_ms, bash_max_ms) = Self::configured_bash_timeout_bounds().await;
         let timeout_ms = Some(
             input
                 .get("timeout_ms")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(DEFAULT_TIMEOUT_MS)
-                .min(MAX_TIMEOUT_MS),
+                .unwrap_or(bash_default_ms)
+                .min(bash_max_ms),
         );
 
         debug!(

@@ -2049,6 +2049,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 0,
+            reference_files: Vec::new(),
         }
     }
 
@@ -2070,6 +2071,10 @@ mod tests {
                 turn_count: 3,
                 created_at_ms: 1000,
                 last_active_at_ms: 2000,
+                parent_session_id: None,
+                status: None,
+                display_state: None,
+                is_daemon: false,
             }])
         }
 
@@ -2247,6 +2252,10 @@ mod tests {
                     turn_count: 3,
                     created_at_ms: 1000,
                     last_active_at_ms: 2000,
+                    parent_session_id: None,
+                    status: None,
+                    display_state: None,
+                    is_daemon: false,
                 },
                 state: SessionState::Idle,
             })
@@ -2945,6 +2954,7 @@ mod tests {
                 workspace_path: "/workspace/project".to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             })
             .await
             .unwrap_err();
@@ -2966,6 +2976,7 @@ mod tests {
                 workspace_path: "/workspace/project".to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             })
             .await
             .expect("list sessions");
@@ -3190,6 +3201,7 @@ mod tests {
                 workspace_path: "/workspace/project".to_string(),
                 objective: "Ship runtime port".to_string(),
                 token_budget: Some(1000),
+                reference_files: None,
             })
             .await
             .expect("create goal");
@@ -3296,6 +3308,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // cancelled_turns guard is intentionally held between two assertions
     async fn lineage_cancellation_delegates_scope_and_execution_to_one_owner() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let runtime = AgentRuntimeBuilder::new()
@@ -3423,6 +3436,10 @@ mod tests {
                 turn_count: 3,
                 created_at_ms: 1000,
                 last_active_at_ms: 2000,
+                parent_session_id: None,
+                status: None,
+                display_state: None,
+                is_daemon: false,
             },
             state: SessionState::Error {
                 error: "recoverable failure".to_string(),
@@ -3729,6 +3746,7 @@ mod tests {
                 turn_id: "turn_1".to_string(),
                 content: "check tests".to_string(),
                 display_content: None,
+                prepended_reminders: Vec::new(),
                 attachments: Vec::new(),
                 metadata: serde_json::Map::new(),
             })
@@ -3781,6 +3799,7 @@ mod tests {
             turn_id: "turn_1".to_string(),
             content: "check tests".to_string(),
             display_content: Some("Check tests".to_string()),
+            prepended_reminders: Vec::new(),
             attachments: Vec::new(),
             metadata: serde_json::Map::new(),
         };
@@ -3842,6 +3861,7 @@ mod tests {
                 turn_id: "turn_1".to_string(),
                 content: "check tests".to_string(),
                 display_content: None,
+                prepended_reminders: Vec::new(),
                 attachments: Vec::new(),
                 metadata: serde_json::Map::new(),
             })
@@ -3951,6 +3971,7 @@ mod tests {
                     created_at: 1,
                     updated_at: 2,
                     auto_continuation_count: 0,
+                    reference_files: Vec::new(),
                 },
             })
             .await

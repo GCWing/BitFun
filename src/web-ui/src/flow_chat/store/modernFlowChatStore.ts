@@ -337,13 +337,19 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     const turnItemStart = items.length;
 
     if (turn.userMessage) {
-      items.push({
-        type: 'user-message',
-        data: turn.userMessage,
-        turnId: turn.id,
-        absoluteTurnIndex,
-        turnStatus: turn.status,
-      });
+      // R-GC-23: skip empty-content bubbles (front-end defense for empty
+      // auto turns; the backend fix lands in R-GC-25). Empty content renders
+      // a blank bubble otherwise.
+      const userMessageContent = turn.userMessage.content ?? '';
+      if (userMessageContent.trim().length > 0 || (turn.userMessage.images?.length ?? 0) > 0) {
+        items.push({
+          type: 'user-message',
+          data: turn.userMessage,
+          turnId: turn.id,
+          absoluteTurnIndex,
+          turnStatus: turn.status,
+        });
+      }
     }
 
     if (turn.status === 'image_analyzing' && turn.modelRounds.length === 0) {

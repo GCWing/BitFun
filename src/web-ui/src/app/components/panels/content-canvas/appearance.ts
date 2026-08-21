@@ -21,6 +21,7 @@ export const contentCanvasAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'empty', visualRole: 'content' },
     { id: 'emptyToolbar', visualRole: 'toolbar' },
     { id: 'emptyContent', visualRole: 'content' },
+    { id: 'emptyDropTarget', propertyProfile: 'overlay', visualRole: 'decoration' },
     { id: 'quickLook', propertyProfile: 'overlay', visualRole: 'popup' },
     { id: 'quickLookHeader', visualRole: 'toolbar', continuityGroup: 'content-canvas-quick-look' },
     { id: 'quickLookTitle', propertyProfile: 'paint', visualRole: 'content' },

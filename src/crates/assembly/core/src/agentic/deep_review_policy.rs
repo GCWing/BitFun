@@ -76,9 +76,37 @@ pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecuti
         }
     };
 
-    Ok(DeepReviewExecutionPolicy::from_config_value(
-        raw_config.as_ref(),
-    ))
+    let mut policy = DeepReviewExecutionPolicy::from_config_value(raw_config.as_ref());
+
+    // 阈值参数配置化：ai.thresholds.deep_review.max_parallel_instances /
+    // max_queue_wait_secs / auto_retry_elapsed_guard_secs —— 注入到默认
+    // 并发策略的兜底值（manifest/run 中显式声明的并发策略优先级更高，
+    // 由 `concurrency_policy_from_manifest` 覆盖）。
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return Ok(policy);
+    };
+    let deep_review = &thresholds.deep_review;
+    if deep_review.max_parallel_instances > 0 {
+        policy.configured_max_parallel_instances = Some(deep_review.max_parallel_instances);
+    }
+    policy.configured_queue_wait_seconds =
+        (deep_review.max_queue_wait_secs > 0).then_some(deep_review.max_queue_wait_secs);
+    policy.configured_auto_retry_elapsed_guard_seconds =
+        (deep_review.auto_retry_elapsed_guard_secs > 0)
+            .then_some(deep_review.auto_retry_elapsed_guard_secs);
+
+    // 阈值参数配置化：ai.thresholds.deep_review.diff_max_chars_per_turn /
+    // diff_max_acquisitions_per_turn —— 注入全局 Review diff 预算 tracker。
+    bitfun_agent_runtime::deep_review::set_deep_review_configured_diff_budgets(
+        (deep_review.diff_max_chars_per_turn > 0).then_some(deep_review.diff_max_chars_per_turn),
+        (deep_review.diff_max_acquisitions_per_turn > 0)
+            .then_some(deep_review.diff_max_acquisitions_per_turn),
+    );
+
+    Ok(policy)
 }
 
 pub fn is_missing_default_review_team_config_error(error: &BitFunError) -> bool {

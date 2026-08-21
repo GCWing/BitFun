@@ -8,7 +8,7 @@
 //! Local desktop and OS/system actions are intentionally surfaced through the
 //! dedicated ComputerUse tool/agent, not through public ControlHub domains.
 
-use crate::agentic::tools::browser_control::actions::{BrowserActions, MAX_WAIT_MS};
+use crate::agentic::tools::browser_control::actions::BrowserActions;
 use crate::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
@@ -698,7 +698,9 @@ Branch on `ok` and `error.code`, not on English messages.
         requested_ms: u64,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let waited_ms = requested_ms.min(MAX_WAIT_MS);
+        // R-THR-01 批2 2-9：浏览器超时配置化（`ai.thresholds.tool_timeout.browser_max_wait_ms`）。
+        let (max_wait_ms, _) = crate::service::config::types::configured_browser_timeouts().await;
+        let waited_ms = requested_ms.min(max_wait_ms);
         let sleep = tokio::time::sleep(std::time::Duration::from_millis(waited_ms));
 
         if let Some(token) = context.cancellation_token() {
@@ -715,7 +717,7 @@ Branch on `ok` and `error.code`, not on English messages.
             sleep.await;
         }
 
-        let (data, summary) = Self::wait_outcome(requested_ms);
+        let (data, summary) = Self::wait_outcome(requested_ms, max_wait_ms);
         Ok(vec![ToolResult::ok(data, Some(summary))])
     }
 
@@ -725,15 +727,17 @@ Branch on `ok` and `error.code`, not on English messages.
     /// instantly was indistinguishable from one that ran to completion; both
     /// printed "Wait completed". State the elapsed time, and say plainly when
     /// the request was clamped instead of quietly waiting less than asked.
-    fn wait_outcome(requested_ms: u64) -> (Value, String) {
-        let waited_ms = requested_ms.min(MAX_WAIT_MS);
+    /// R-THR-01 批2 2-9：max_wait_ms 由调用方从
+    /// `ai.thresholds.tool_timeout.browser_max_wait_ms` 解析。
+    fn wait_outcome(requested_ms: u64, max_wait_ms: u64) -> (Value, String) {
+        let waited_ms = requested_ms.min(max_wait_ms);
         let clamped = waited_ms != requested_ms;
         let summary = if clamped {
             format!(
                 "Waited {} (requested {} — clamped to the {} maximum)",
                 format_duration_ms(waited_ms),
                 format_duration_ms(requested_ms),
-                format_duration_ms(MAX_WAIT_MS)
+                format_duration_ms(max_wait_ms)
             )
         } else {
             format!("Waited {}", format_duration_ms(waited_ms))
@@ -894,12 +898,11 @@ Branch on `ok` and `error.code`, not on English messages.
                 }?;
 
                 let user_data_dir = params.get("user_data_dir").and_then(|v| v.as_str());
-                let launch_result = if mode == "headless" {
-                    LaunchResult::AlreadyConnected
-                } else if user_data_dir.is_none()
-                    && CdpClient::browser_connection_for_kind(port, &kind)
-                        .await
-                        .is_some()
+                let launch_result = if mode == "headless"
+                    || (user_data_dir.is_none()
+                        && CdpClient::browser_connection_for_kind(port, &kind)
+                            .await
+                            .is_some())
                 {
                     LaunchResult::AlreadyConnected
                 } else {
@@ -2812,6 +2815,7 @@ fn map_dispatch_error(domain: &str, _action: &str, err: BitFunError) -> ControlH
 #[cfg(test)]
 mod control_hub_tests {
     use super::*;
+    use crate::agentic::tools::browser_control::actions::MAX_WAIT_MS;
     use crate::agentic::tools::implementations::computer_use_actions::ComputerUseActions;
 
     fn empty_context() -> ToolUseContext {
@@ -2963,7 +2967,7 @@ mod control_hub_tests {
     fn browser_wait_clamps_absurd_durations_and_says_so() {
         // Asserted on the reporting helper rather than through `dispatch`, so
         // the test does not have to sit through the wait itself.
-        let (data, summary) = ControlHubTool::wait_outcome(MAX_WAIT_MS * 3);
+        let (data, summary) = ControlHubTool::wait_outcome(MAX_WAIT_MS * 3, MAX_WAIT_MS);
         assert_eq!(data.get("ms").and_then(|v| v.as_u64()), Some(MAX_WAIT_MS));
         assert_eq!(
             data.get("requested_ms").and_then(|v| v.as_u64()),
@@ -2974,7 +2978,7 @@ mod control_hub_tests {
         // asked is how the agent ends up out of step with the schedule.
         assert!(summary.contains("clamped"), "got: {summary}");
 
-        let (data, summary) = ControlHubTool::wait_outcome(1_800_000);
+        let (data, summary) = ControlHubTool::wait_outcome(1_800_000, MAX_WAIT_MS);
         assert_eq!(data.get("clamped").and_then(|v| v.as_bool()), Some(false));
         assert_eq!(summary, "Waited 30m00s");
     }

@@ -115,7 +115,6 @@ impl ModelRoundLifecycle {
 }
 
 impl RoundExecutor {
-    const MAX_STREAM_ATTEMPTS: usize = 10;
     const RETRY_BASE_DELAY_MS: u64 = 500;
     const RATE_LIMIT_RETRY_BASE_DELAY_MS: u64 = 2_000;
     const MAX_EXPONENTIAL_DELAY_MS: u64 = 30_000;
@@ -152,6 +151,7 @@ impl RoundExecutor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn record_retry_diagnostic(
         &self,
         context: &RoundContext,
@@ -285,6 +285,63 @@ impl RoundExecutor {
         }
     }
 
+    /// True when a provider error is an HTTP 401/403 classified as an
+    /// authentication or permission failure, which triggers the subscription
+    /// credential auto-refresh and one retry.
+    fn is_subscription_auth_failure(error: Option<&AiProviderError>) -> bool {
+        error.is_some_and(|error| {
+            matches!(
+                error.category,
+                ErrorCategory::Auth | ErrorCategory::Permission
+            ) && matches!(error.http_status, Some(401) | Some(403))
+        })
+    }
+
+    /// Force-refreshes the subscription credential for the round's model and
+    /// drops the cached client. Returns `Ok(true)` when a refresh happened and
+    /// the caller should retry once; `Ok(false)` when the model does not use
+    /// subscription auth or subscription support is not compiled.
+    async fn force_refresh_subscription(context: &RoundContext) -> anyhow::Result<bool> {
+        #[cfg(not(feature = "subscription-auth"))]
+        {
+            let _ = context;
+            return Ok(false);
+        }
+        #[cfg(feature = "subscription-auth")]
+        {
+            let factory = crate::infrastructure::ai::get_global_ai_client_factory().await?;
+            let global_config: crate::service::config::types::GlobalConfig =
+                match GlobalConfigManager::get_service().await {
+                    Ok(service) => service.get_config(None).await.unwrap_or_default(),
+                    Err(_) => Default::default(),
+                };
+            let proxy_config = global_config
+                .ai
+                .proxy
+                .enabled
+                .then_some(global_config.ai.proxy);
+            crate::infrastructure::ai::force_refresh_subscription_for_model(
+                &factory,
+                &context.model_config_id,
+                proxy_config,
+            )
+            .await
+        }
+    }
+
+    /// Rebuilds the AI client for the round's model from the factory. After a
+    /// subscription force-refresh the factory cache is invalidated, so this
+    /// returns a client whose auth headers carry the rotated token.
+    async fn rebuild_client(context: &RoundContext) -> anyhow::Result<Arc<AIClient>> {
+        let factory = crate::infrastructure::ai::get_global_ai_client_factory().await?;
+        factory
+            .get_client_resolved(&context.model_config_id)
+            .await
+            .map_err(|error| {
+                anyhow::anyhow!("rebuild client for {}: {error:#}", context.model_config_id)
+            })
+    }
+
     pub fn new(
         stream_processor: Arc<StreamProcessor>,
         event_queue: Arc<EventQueue>,
@@ -334,6 +391,10 @@ impl RoundExecutor {
         context_window: Option<usize>,
         lifecycle: &mut ModelRoundLifecycle,
     ) -> BitFunResult<RoundResult> {
+        // The client is rebound after a 401/403 subscription credential
+        // refresh so the retry uses the fresh token instead of the stale
+        // credential baked into the original client.
+        let mut ai_client = ai_client;
         let round_started_at = lifecycle.started_at;
         let subagent_parent_info = context.subagent_parent_info.clone();
         let is_subagent = subagent_parent_info.is_some();
@@ -374,7 +435,8 @@ impl RoundExecutor {
                 Err(_) => Default::default(),
             };
         let allow_normal_tool_json_repair = global_config.ai.allow_tool_json_repair;
-        let max_attempts = Self::MAX_STREAM_ATTEMPTS;
+        // 阈值参数配置化：ai.thresholds.model_retry.max_attempts
+        let max_attempts = global_config.ai.thresholds.model_retry.max_attempts.max(1);
         let mut local_attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
             let attempt_number = lifecycle.begin_attempt();
@@ -433,6 +495,50 @@ impl RoundExecutor {
                     error!("AI request failed: {}", e);
                     let provider_error = e.downcast_ref::<AiProviderError>().cloned();
                     let err_msg = e.to_string();
+                    // 401/403 subscription auto-refresh: force-refresh the
+                    // provider credential, drop the cached client, and retry
+                    // once with a fresh token. Mirrors the CLI contract
+                    // (`openResponse`: 401/403 -> forceRefreshToken -> retry
+                    // once); `non_retryable_keywords` below must not mark
+                    // these as permanently dead for subscription models.
+                    if Self::is_subscription_auth_failure(provider_error.as_ref())
+                        && local_attempt_index < max_attempts - 1
+                    {
+                        if let Ok(refreshed) = Self::force_refresh_subscription(&context).await {
+                            if refreshed {
+                                warn!(
+                                    "Subscription credential refreshed after 401/403; retrying once: session_id={}, round_id={}, model_config_id={}",
+                                    context.session_id,
+                                    round_id,
+                                    context.model_config_id
+                                );
+                                // Rebind the retry client from the factory: the
+                                // force-refresh rotated the credential in the
+                                // store and invalidated the cache, so a fresh
+                                // `get_client_resolved` rebuilds the client with
+                                // the new token. Retrying with the original
+                                // client would reuse the stale token and fail
+                                // with 401/403 again.
+                                match Self::rebuild_client(&context).await {
+                                    Ok(rebuilt) => {
+                                        ai_client = rebuilt;
+                                    }
+                                    Err(rebuild_error) => {
+                                        warn!(
+                                            "Rebuild client after subscription refresh failed: {}",
+                                            rebuild_error
+                                        );
+                                        // Fall through to the ordinary retry path
+                                        // below; the stale client will still be
+                                        // tried, but the credential is fresh in
+                                        // the store for the next turn.
+                                    }
+                                }
+                                local_attempt_index += 1;
+                                continue;
+                            }
+                        }
+                    }
                     if local_attempt_index < max_attempts - 1 {
                         self.record_retry_diagnostic(
                             &context,
@@ -444,9 +550,15 @@ impl RoundExecutor {
                             &[],
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms_for_provider_error(
+                        let model_retry = &global_config.ai.thresholds.model_retry;
+                        let delay_ms = Self::retry_delay_ms_for_error_with_config(
                             local_attempt_index,
                             &err_msg,
+                            model_retry.base_delay_ms.max(1),
+                            model_retry.rate_limit_base_delay_ms.max(1),
+                            model_retry.max_exponential_delay_ms.max(1),
+                            model_retry.max_rate_limit_delay_ms.max(1),
+                            model_retry.max_exponent_shift.max(1),
                             provider_error.as_ref(),
                         );
                         warn!(
@@ -572,9 +684,16 @@ impl RoundExecutor {
                                 Self::trace_response_from_stream_result("partial", &result),
                             )
                             .await;
-                            let delay_ms = Self::retry_delay_ms_for_error(
+                            let model_retry = &global_config.ai.thresholds.model_retry;
+                            let delay_ms = Self::retry_delay_ms_for_error_with_config(
                                 local_attempt_index,
                                 partial_recovery_reason,
+                                model_retry.base_delay_ms.max(1),
+                                model_retry.rate_limit_base_delay_ms.max(1),
+                                model_retry.max_exponential_delay_ms.max(1),
+                                model_retry.max_rate_limit_delay_ms.max(1),
+                                model_retry.max_exponent_shift.max(1),
+                                None,
                             );
                             warn!(
                                 "Retrying stream after partial recovery error: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, effective_output={}, tool_calls={}, reason={}",
@@ -655,6 +774,57 @@ impl RoundExecutor {
 
                     let no_effective_output = !result.has_effective_output;
                     let is_partial_recovery = result.partial_recovery_reason.is_some();
+                    let partial_recovery_reason =
+                        result.partial_recovery_reason.as_deref().unwrap_or("");
+
+                    if is_partial_recovery
+                        && !Self::has_user_visible_assistant_text(&result.full_text)
+                        && !result.tool_calls.is_empty()
+                        && Self::is_transient_network_error(partial_recovery_reason)
+                        && local_attempt_index < max_attempts - 1
+                    {
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "partial_stream_error",
+                            Some(partial_recovery_reason.to_string()),
+                            &result.tool_calls,
+                        )
+                        .await;
+                        Self::complete_model_exchange_trace(
+                            trace_config.as_ref(),
+                            trace_handle.as_ref(),
+                            Self::trace_response_from_stream_result("partial", &result),
+                        )
+                        .await;
+                        let model_retry = &global_config.ai.thresholds.model_retry;
+                        let delay_ms = Self::retry_delay_ms_for_error_with_config(
+                            local_attempt_index,
+                            partial_recovery_reason,
+                            model_retry.base_delay_ms.max(1),
+                            model_retry.rate_limit_base_delay_ms.max(1),
+                            model_retry.max_exponential_delay_ms.max(1),
+                            model_retry.max_rate_limit_delay_ms.max(1),
+                            model_retry.max_exponent_shift.max(1),
+                            None,
+                        );
+                        warn!(
+                            "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, tool_calls={}, reason={}",
+                            context.session_id,
+                            round_id,
+                            attempt_number,
+                            local_attempt_index + 1,
+                            max_attempts,
+                            delay_ms,
+                            result.tool_calls.len(),
+                            partial_recovery_reason
+                        );
+                        Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
+                        local_attempt_index += 1;
+                        continue;
+                    }
 
                     if Self::is_invalid_tool_only_without_text(&result) {
                         let err_msg = "Provider returned only invalid tool arguments".to_string();
@@ -679,7 +849,17 @@ impl RoundExecutor {
                                 ),
                             )
                             .await;
-                            let delay_ms = Self::retry_delay_ms(local_attempt_index);
+                            let model_retry = &global_config.ai.thresholds.model_retry;
+                            let delay_ms = Self::retry_delay_ms_for_error_with_config(
+                                local_attempt_index,
+                                "",
+                                model_retry.base_delay_ms.max(1),
+                                model_retry.rate_limit_base_delay_ms.max(1),
+                                model_retry.max_exponential_delay_ms.max(1),
+                                model_retry.max_rate_limit_delay_ms.max(1),
+                                model_retry.max_exponent_shift.max(1),
+                                None,
+                            );
                             warn!(
                                 "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, tool_calls={}",
                                 context.session_id,
@@ -824,9 +1004,15 @@ impl RoundExecutor {
                             &[],
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms_for_provider_error(
+                        let model_retry = &global_config.ai.thresholds.model_retry;
+                        let delay_ms = Self::retry_delay_ms_for_error_with_config(
                             local_attempt_index,
                             &err_msg,
+                            model_retry.base_delay_ms.max(1),
+                            model_retry.rate_limit_base_delay_ms.max(1),
+                            model_retry.max_exponential_delay_ms.max(1),
+                            model_retry.max_rate_limit_delay_ms.max(1),
+                            model_retry.max_exponent_shift.max(1),
                             provider_error,
                         );
                         warn!(
@@ -1059,6 +1245,7 @@ impl RoundExecutor {
                 deferred_tools: context.deferred_tools.clone(),
                 loaded_deferred_tool_specs: context.loaded_deferred_tool_specs.clone(),
                 allowed_tools,
+                user_enabled_tools: context.user_enabled_tools.clone(),
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
                 workspace_services: context.workspace_services.clone(),
@@ -1497,22 +1684,40 @@ impl RoundExecutor {
                 .all(|tool_call| !tool_call.is_valid())
     }
 
+    #[allow(dead_code)] // 保留 API：lib 调用点被上游重构为 retry_delay_ms_for_error 后仅测试引用
     fn retry_delay_ms(attempt_index: usize) -> u64 {
         Self::retry_delay_ms_for_error(attempt_index, "")
     }
 
     fn retry_delay_ms_for_error(attempt_index: usize, error_message: &str) -> u64 {
-        Self::retry_delay_ms_for_provider_error(attempt_index, error_message, None)
+        Self::retry_delay_ms_for_error_with_config(
+            attempt_index,
+            error_message,
+            Self::RETRY_BASE_DELAY_MS,
+            Self::RATE_LIMIT_RETRY_BASE_DELAY_MS,
+            Self::MAX_EXPONENTIAL_DELAY_MS,
+            Self::MAX_RATE_LIMIT_DELAY_MS,
+            Self::MAX_RETRY_EXPONENT_SHIFT,
+            None,
+        )
     }
 
-    fn retry_delay_ms_for_provider_error(
+    /// Same as [`Self::retry_delay_ms_for_error`] but with explicit backoff
+    /// parameters (阈值参数配置化：`ai.thresholds.model_retry.*`).
+    #[allow(clippy::too_many_arguments)] // explicit configurable backoff parameters
+    fn retry_delay_ms_for_error_with_config(
         attempt_index: usize,
         error_message: &str,
+        retry_base_delay_ms: u64,
+        rate_limit_base_delay_ms: u64,
+        max_exponential_delay_ms: u64,
+        max_rate_limit_delay_ms: u64,
+        max_retry_exponent_shift: u32,
         provider_error: Option<&AiProviderError>,
     ) -> u64 {
         let shift = u32::try_from(attempt_index)
             .unwrap_or(u32::MAX)
-            .min(Self::MAX_RETRY_EXPONENT_SHIFT);
+            .min(max_retry_exponent_shift);
         let msg = error_message.to_lowercase();
         let is_rate_limit = provider_error
             .is_some_and(|error| error.category == ErrorCategory::RateLimit)
@@ -1521,24 +1726,150 @@ impl RoundExecutor {
             || msg.contains("too many requests");
 
         let fallback = if is_rate_limit {
-            Self::RATE_LIMIT_RETRY_BASE_DELAY_MS
+            rate_limit_base_delay_ms
                 .saturating_mul(1u64 << shift)
-                .min(Self::MAX_RATE_LIMIT_DELAY_MS)
+                .min(max_rate_limit_delay_ms.max(1))
         } else {
-            Self::RETRY_BASE_DELAY_MS
+            retry_base_delay_ms
                 .saturating_mul(1u64 << shift)
-                .min(Self::MAX_EXPONENTIAL_DELAY_MS)
+                .min(max_exponential_delay_ms.max(1))
         };
 
         match provider_error.and_then(|error| error.retry_after_ms) {
             Some(retry_after_ms) if is_rate_limit => retry_after_ms
                 .max(fallback)
-                .min(Self::MAX_RATE_LIMIT_DELAY_MS),
+                .min(max_rate_limit_delay_ms.max(1)),
             Some(retry_after_ms) if retry_after_ms > 0 => {
-                retry_after_ms.min(Self::MAX_RATE_LIMIT_DELAY_MS)
+                retry_after_ms.min(max_rate_limit_delay_ms.max(1))
             }
             Some(_) | None => fallback,
         }
+    }
+
+    /// Same as [`Self::retry_delay_ms_for_error`] but with provider error
+    /// awareness (retry_after_ms / rate-limit category) using built-in constants.
+    #[allow(dead_code)] // 保留上游 API：lib 调用点统一走 _with_config 后仅测试引用
+    fn retry_delay_ms_for_provider_error(
+        attempt_index: usize,
+        error_message: &str,
+        provider_error: Option<&AiProviderError>,
+    ) -> u64 {
+        Self::retry_delay_ms_for_error_with_config(
+            attempt_index,
+            error_message,
+            Self::RETRY_BASE_DELAY_MS,
+            Self::RATE_LIMIT_RETRY_BASE_DELAY_MS,
+            Self::MAX_EXPONENTIAL_DELAY_MS,
+            Self::MAX_RATE_LIMIT_DELAY_MS,
+            Self::MAX_RETRY_EXPONENT_SHIFT,
+            provider_error,
+        )
+    }
+
+    /// Check whether an error message represents a transient (retryable) condition.
+    ///
+    /// Errors that already exhausted the SSE-layer retry budget (e.g. "failed
+    /// after N attempts:" or "Stream retry budget exhausted") are **not**
+    /// transient from the round-executor perspective — the SSE transport layer
+    /// already retried with exponential backoff and `Retry-After` parsing.
+    /// Re-entering the send loop would multiply attempts (10 × 10 = 100) and
+    /// hold the user in a long silent stall.
+    fn is_transient_network_error(error_message: &str) -> bool {
+        let msg = error_message.to_lowercase();
+
+        // The SSE layer already exhausted its own retry budget — do not
+        // re-enter another round of attempts from the round executor.
+        // We require BOTH "failed after " and "attempts:" to co-occur,
+        // which uniquely identifies the SSE/round-executor budget-exhausted
+        // format without catching generic errors like "failed after timeout".
+        if msg.contains("failed after ") && msg.contains("attempts:") {
+            return false;
+        }
+        if msg.contains("retry budget exhausted") {
+            return false;
+        }
+
+        let non_retryable_keywords = [
+            "invalid api key",
+            "unauthorized",
+            "forbidden",
+            "model not found",
+            "unsupported model",
+            "invalid request",
+            "bad request",
+            "prompt is too long",
+            "content policy",
+            "proxy authentication required",
+            "provider quota",
+            "provider billing",
+            "insufficient_quota",
+            "insufficient quota",
+            "insufficient balance",
+            "not_enough_balance",
+            "not enough balance",
+            "余额不足",
+            "无可用资源包",
+            "账户已欠费",
+            "code=1113",
+            "\"code\":\"1113\"",
+            "client error 400",
+            "client error 401",
+            "client error 402",
+            "client error 403",
+            "client error 404",
+            "client error 413",
+            "client error 422",
+            "sse parsing error",
+            "schema error",
+            "unknown api format",
+        ];
+
+        let transient_keywords = [
+            "transport error",
+            "error decoding response body",
+            "stream closed before response completed",
+            "stream processing error",
+            "sse stream error",
+            "sse error",
+            "sse timeout",
+            "stream data timeout",
+            "timeout",
+            "request timeout",
+            "deadline exceeded",
+            "connection reset",
+            "connection closed",
+            "broken pipe",
+            "unexpected eof",
+            "connection refused",
+            "socket closed",
+            "temporarily unavailable",
+            "service unavailable",
+            "bad gateway",
+            "gateway timeout",
+            "overloaded",
+            "proxy",
+            "tunnel",
+            "dns",
+            "network",
+            "econnreset",
+            "econnrefused",
+            "etimedout",
+            "rate limit",
+            "too many requests",
+            "408",
+            "409",
+            "425",
+            "429",
+            "502",
+            "503",
+            "504",
+        ];
+
+        if non_retryable_keywords.iter().any(|k| msg.contains(k)) {
+            return false;
+        }
+
+        transient_keywords.iter().any(|k| msg.contains(k))
     }
 }
 
@@ -1709,6 +2040,7 @@ mod tests {
             workspace: None,
             model_exchange_trace_dir: None,
             available_tools: Vec::new(),
+            user_enabled_tools: Vec::new(),
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
             model_config_id: "model-1".to_string(),
@@ -2127,6 +2459,42 @@ mod tests {
         assert_eq!(RoundExecutor::retry_delay_ms(5), 16_000);
         assert_eq!(RoundExecutor::retry_delay_ms(6), 30_000);
         assert_eq!(RoundExecutor::retry_delay_ms(9), 30_000);
+    }
+
+    #[test]
+    fn subscription_auth_401_403_triggers_auto_refresh_decision() {
+        // Contract: 401/403 on a subscription model must take the
+        // force-refresh-then-retry-once path instead of being classified as
+        // permanently non-retryable.
+        let auth_401 = bitfun_core_types::errors::AiProviderError::from_parts(
+            "client error 401 Unauthorized".to_string(),
+            Some("qoder".to_string()),
+            None,
+            Some(401),
+        );
+        assert!(RoundExecutor::is_subscription_auth_failure(Some(&auth_401)));
+
+        let permission_403 = bitfun_core_types::errors::AiProviderError::from_parts(
+            "client error 403 Forbidden".to_string(),
+            Some("qoder".to_string()),
+            None,
+            Some(403),
+        );
+        assert!(RoundExecutor::is_subscription_auth_failure(Some(
+            &permission_403
+        )));
+
+        // Non-auth failures (rate limit, quota) must NOT take the refresh path.
+        let rate_limit = bitfun_core_types::errors::AiProviderError::from_parts(
+            "too many requests".to_string(),
+            Some("qoder".to_string()),
+            None,
+            Some(429),
+        );
+        assert!(!RoundExecutor::is_subscription_auth_failure(Some(
+            &rate_limit
+        )));
+        assert!(!RoundExecutor::is_subscription_auth_failure(None));
     }
 
     #[test]

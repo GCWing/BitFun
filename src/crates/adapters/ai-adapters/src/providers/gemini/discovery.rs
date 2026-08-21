@@ -66,6 +66,7 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
                 RemoteModelInfo {
                     id,
                     display_name: model.display_name,
+                    supports_reasoning: None,
                 }
             })
             .collect(),

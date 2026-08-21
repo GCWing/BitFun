@@ -385,6 +385,9 @@ fn replace_cache_file_atomically(
 
     let temp = windows_extended_path(temp_path)?;
     let target = windows_extended_path(target_path)?;
+    // SAFETY: both paths are NUL-terminated wide strings owned by the local
+    // `temp`/`target` Vecs (extended-length paths, see windows_extended_path),
+    // so the PCWSTR pointers stay valid for the duration of the FFI call.
     let result = unsafe {
         if target_path.exists() {
             ReplaceFileW(

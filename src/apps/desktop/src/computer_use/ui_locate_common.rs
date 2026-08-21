@@ -423,6 +423,8 @@ mod tests {
     /// the platform-specific constructors. We only need the fields the
     /// mapping function reads.
     fn fake_display(x: i32, y: i32, w: u32, h: u32, scale: f32) -> DisplayInfo {
+        // SAFETY: Every field of the synthetic DisplayInfo is written right
+        // below, so the zeroed-initialized value is never read partially.
         let mut d: DisplayInfo = unsafe { std::mem::zeroed() };
         d.x = x;
         d.y = y;

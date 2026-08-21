@@ -134,6 +134,9 @@ fn show_fatal_startup_error(message: &str) {
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect::<Vec<_>>();
+    // SAFETY: `message` and `title` are NUL-terminated UTF-16 buffers owned by
+    // this function and alive for the duration of the call; a null parent
+    // handle (no owning window at startup) is valid for MessageBoxW.
     unsafe {
         let _ = MessageBoxW(
             None,
@@ -537,6 +540,39 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_global_config", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
 
+    // Inject the knowledge base root into the environment for the
+    // KnowledgeBaseSearch tool. The tool reads `BITFUN_KNOWLEDGE_BASE_ROOT`
+    // at call time (knowledge_base_search_tool.rs); without an injection
+    // source the product feature is unusable in default deployments
+    // (L6-P0-1). The value is optional: when the user configures
+    // `ai.knowledge_base_root` (a directory path) it is injected here so
+    // every model tool call sees it. The environment value wins over the
+    // config value when both exist (explicit env is the escape hatch).
+    if std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT").is_none() {
+        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await
+        {
+            match config_service
+                .get_config::<String>(Some("ai.knowledge_base_root"))
+                .await
+            {
+                Ok(root) if !root.trim().is_empty() => {
+                    std::env::set_var("BITFUN_KNOWLEDGE_BASE_ROOT", root.trim());
+                    log::info!(
+                        "Injected ai.knowledge_base_root into BITFUN_KNOWLEDGE_BASE_ROOT: {}",
+                        root
+                    );
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    log::debug!(
+                        "ai.knowledge_base_root is not configured; KnowledgeBaseSearch stays disabled: {}",
+                        error
+                    );
+                }
+            }
+        }
+    }
+
     let step_started = Instant::now();
     match bitfun_core::plugin_host::initialize_configured_plugin_host_with_log_file(
         PLUGIN_HOST_LAUNCH_POLICY,
@@ -693,6 +729,7 @@ pub async fn run() {
         app_state.workspace_service.clone(),
         app_state.ssh_manager.clone(),
         app_state.acp_client_service.clone(),
+        ai_client_factory.clone(),
         session_event_journal.clone(),
     ) {
         Ok(runtime) => runtime,
@@ -701,6 +738,24 @@ pub async fn run() {
             return;
         }
     };
+    // ACP session lifecycle bridge: keeps the external ACP client process in
+    // sync with agentic session lifecycle events (start on `acp__*` session
+    // creation, release on deletion, cancel on dialog turn cancellation).
+    // Registered after AppState is available; the event router is the same
+    // instance created by `init_agentic_system`.
+    event_router.subscribe_internal(
+        "acp_session_lifecycle".to_string(),
+        Arc::new(runtime::AcpSessionLifecycleSubscriber::new(
+            app_state.acp_client_service.clone(),
+        )),
+    );
+    // Dedicated ACP tool family (`acp_control`/`acp_message`/`acp_history`)
+    // reaches the real external ACP process through this port; core keeps no
+    // dependency on the ACP crate.
+    coordinator.set_acp_client_port(Arc::new(runtime::DesktopAcpClientPort::new(
+        app_state.acp_client_service.clone(),
+        Some(coordinator.clone()),
+    )));
     startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
     startup_trace.record_elapsed_step(
         "native_pre_tauri",
@@ -1281,6 +1336,7 @@ pub async fn run() {
             api::agentic_api::read_background_command_output,
             api::agentic_api::list_background_command_activities,
             api::agentic_api::delete_session,
+            api::agentic_api::delete_session_tree,
             api::agentic_api::restore_session,
             api::agentic_api::restore_session_view,
             api::agentic_api::load_session_event_backfill,
@@ -1357,6 +1413,7 @@ pub async fn run() {
             list_ai_models_by_config,
             list_subscription_accounts,
             start_subscription_login,
+            start_subscription_pat_login,
             get_subscription_login_status,
             cancel_subscription_login,
             logout_subscription_account,
@@ -1464,6 +1521,9 @@ pub async fn run() {
             set_mode_skill_disabled,
             replace_mode_skill_selection,
             reset_mode_skill_selection,
+            set_global_tool_disabled,
+            replace_mode_tool_selection,
+            reset_mode_tool_selection,
             validate_skill_path,
             add_skill,
             delete_skill,
@@ -1556,6 +1616,7 @@ pub async fn run() {
             list_persisted_sessions,
             search_referenceable_sessions,
             list_persisted_sessions_page,
+            list_deleted_session_ids,
             get_session_lineage,
             load_session_turns,
             get_session_usage_report,
@@ -1684,6 +1745,8 @@ pub async fn run() {
             delete_cron_job,
             notify_cron_host_ready,
             api::config_api::canonicalize_agent_profile_configs,
+            create_legion_preset,
+            list_legion_presets,
             api::terminal_api::terminal_get_shells,
             api::terminal_api::terminal_create,
             api::terminal_api::terminal_get,

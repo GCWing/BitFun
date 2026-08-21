@@ -15,8 +15,6 @@ export interface AppearancePromptSnapshotEntry {
   accent600: string;
   borderBase: string;
   elementBase: string;
-  radiusBase: string;
-  spacing4: string;
   shadowBase: string;
   styleNotes: string;
 }
@@ -43,8 +41,6 @@ export function createAppearancePromptSnapshotEntry(
     accent600: palette.colors.accent[600],
     borderBase: palette.colors.border.base,
     elementBase: palette.colors.element.base,
-    radiusBase: palette.effects.radius.base,
-    spacing4: palette.effects.spacing[4],
     shadowBase: palette.effects.shadow.base,
     styleNotes: palette.description ?? palette.name,
   };

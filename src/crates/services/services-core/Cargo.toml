@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-services-core"
 version.workspace = true
 authors.workspace = true
@@ -16,6 +17,8 @@ async-trait = { workspace = true, optional = true }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-events = { path = "../../contracts/events", optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+dashmap = { workspace = true }
+futures = { workspace = true }
 tokio = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -73,6 +76,7 @@ json-io = [
 local-storage = [
     "dep:bitfun-core-types",
     "dep:bitfun-events",
+    "dep:bitfun-runtime-ports",
     "dep:chrono",
     "dep:fs2",
     "dep:libc",

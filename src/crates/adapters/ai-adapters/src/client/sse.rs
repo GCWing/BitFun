@@ -52,20 +52,27 @@ enum StreamSendOutcome {
 async fn send_stream_request<BuildRequest>(
     build_request: BuildRequest,
     request_body: &serde_json::Value,
+    raw_body: Option<Vec<u8>>,
     ttft_timeout: Option<Duration>,
 ) -> StreamSendOutcome
 where
     BuildRequest: Fn() -> reqwest::RequestBuilder,
 {
+    let finalize = |builder: reqwest::RequestBuilder| match raw_body.clone() {
+        // A pre-encoded body (e.g. the wasm-encrypted Qoder payload) replaces
+        // the JSON serialization entirely.
+        Some(bytes) => builder.body(bytes),
+        None => builder.json(request_body),
+    };
     match ttft_timeout {
         Some(timeout) => {
-            match tokio::time::timeout(timeout, build_request().json(request_body).send()).await {
+            match tokio::time::timeout(timeout, finalize(build_request()).send()).await {
                 Ok(Ok(response)) => StreamSendOutcome::Response(response),
                 Ok(Err(error)) => StreamSendOutcome::Transport(error),
                 Err(_) => StreamSendOutcome::TtftTimeout,
             }
         }
-        None => match build_request().json(request_body).send().await {
+        None => match finalize(build_request()).send().await {
             Ok(response) => StreamSendOutcome::Response(response),
             Err(error) => StreamSendOutcome::Transport(error),
         },
@@ -224,10 +231,50 @@ impl Drop for ManagedResponseStream {
     }
 }
 
+#[allow(clippy::too_many_arguments)] // request pipeline entry; grouping would churn all callers
 pub(crate) async fn execute_sse_request<BuildRequest, BuildHandler, HandlerFuture>(
     label: &str,
     url: &str,
     request_body: &serde_json::Value,
+    max_tries: usize,
+    ttft_timeout: Option<Duration>,
+    trace: Option<ModelExchangeTraceConfig>,
+    build_request: BuildRequest,
+    build_handler: BuildHandler,
+) -> Result<StreamResponse>
+where
+    BuildRequest: Fn() -> reqwest::RequestBuilder,
+    BuildHandler: Fn(
+        reqwest::Response,
+        mpsc::UnboundedSender<Result<UnifiedResponse>>,
+        Option<mpsc::UnboundedSender<String>>,
+        Option<Duration>,
+    ) -> HandlerFuture,
+    HandlerFuture: Future<Output = ()> + Send + 'static,
+{
+    execute_sse_request_with_raw_body(
+        label,
+        url,
+        request_body,
+        None,
+        max_tries,
+        ttft_timeout,
+        trace,
+        build_request,
+        build_handler,
+    )
+    .await
+}
+
+/// Variant of [`execute_sse_request`] that replaces the JSON serialization
+/// with a pre-encoded body (used by the wasm-encrypted Qoder inference
+/// payload).
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn execute_sse_request_with_raw_body<BuildRequest, BuildHandler, HandlerFuture>(
+    label: &str,
+    url: &str,
+    request_body: &serde_json::Value,
+    raw_body: Option<Vec<u8>>,
     max_tries: usize,
     ttft_timeout: Option<Duration>,
     trace: Option<ModelExchangeTraceConfig>,
@@ -260,7 +307,8 @@ where
             None
         };
         let request_start_time = std::time::Instant::now();
-        let send_outcome = send_stream_request(&build_request, request_body, ttft_timeout).await;
+        let send_outcome =
+            send_stream_request(&build_request, request_body, raw_body.clone(), ttft_timeout).await;
 
         let response = match send_outcome {
             StreamSendOutcome::Response(resp) => {

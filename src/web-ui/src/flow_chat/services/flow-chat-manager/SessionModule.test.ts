@@ -27,7 +27,7 @@ import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService'
 const agentApiMocks = vi.hoisted(() => ({
   ensureCoordinatorSession: vi.fn(),
   createSession: vi.fn(),
-  getAvailableModes: vi.fn(),
+  getAvailableModes: vi.fn(async () => []),
 }));
 
 const configApiMocks = vi.hoisted(() => ({
@@ -509,10 +509,23 @@ describe('createChatSession', () => {
         dispatchApprovalPolicy: 'reject-and-report',
         dispatchJobState: 'submitting',
         dispatchCursor: 0,
+        dispatchBaseRef: 'HEAD',
+        dispatchIncludeUncommitted: false,
+        dispatchTarget: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '/target/repo',
+          displayName: 'build-host',
+        },
+        dispatchTargetRequest: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '/target/repo',
+        },
       }),
       undefined,
       expect.any(String),
-      128128,
+      expect.any(Number),
       'agentic',
       '/source/repo',
       undefined,

@@ -9,16 +9,19 @@
 //! There is no upgrade path for the previous Codex/Gemini CLI disk-scan import.
 
 mod antigravity;
+mod codebuddy;
 mod codex;
 mod jwt;
 mod oauth_server;
 mod opencode;
 mod pkce;
+mod qoder;
+pub(crate) mod qoder_wasm;
 pub mod store;
 
 pub use store::{set_store_path_for_test, StoredCredential};
 
-use crate::types::ProxyConfig;
+use crate::types::{ProxyConfig, RemoteModelInfo};
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -38,6 +41,9 @@ pub enum SubscriptionProvider {
     Codex,
     Antigravity,
     Opencode,
+    #[serde(rename = "codebuddy")]
+    CodeBuddy,
+    Qoder,
 }
 
 /// Transport policy shared by subscription-auth requests.
@@ -61,7 +67,13 @@ impl SubscriptionHttpOptions {
 
 impl SubscriptionProvider {
     /// All providers, in display order.
-    pub const ALL: [SubscriptionProvider; 3] = [Self::Codex, Self::Antigravity, Self::Opencode];
+    pub const ALL: [SubscriptionProvider; 5] = [
+        Self::Codex,
+        Self::Antigravity,
+        Self::Opencode,
+        Self::CodeBuddy,
+        Self::Qoder,
+    ];
 
     /// Stable store key / serde tag for this provider.
     pub fn key(self) -> &'static str {
@@ -69,6 +81,8 @@ impl SubscriptionProvider {
             Self::Codex => "codex",
             Self::Antigravity => "antigravity",
             Self::Opencode => "opencode",
+            Self::CodeBuddy => "codebuddy",
+            Self::Qoder => "qoder",
         }
     }
 
@@ -78,6 +92,8 @@ impl SubscriptionProvider {
             "codex" => Some(Self::Codex),
             "antigravity" => Some(Self::Antigravity),
             "opencode" => Some(Self::Opencode),
+            "codebuddy" => Some(Self::CodeBuddy),
+            "qoder" => Some(Self::Qoder),
             _ => None,
         }
     }
@@ -87,6 +103,8 @@ impl SubscriptionProvider {
             Self::Codex => "Codex (ChatGPT)",
             Self::Antigravity => "Antigravity (Google)",
             Self::Opencode => "OpenCode",
+            Self::CodeBuddy => "CodeBuddy",
+            Self::Qoder => "Qoder",
         }
         .to_string()
     }
@@ -96,6 +114,8 @@ impl SubscriptionProvider {
             Self::Codex => codex::suggested(),
             Self::Antigravity => antigravity::suggested(),
             Self::Opencode => opencode::suggested(),
+            Self::CodeBuddy => codebuddy::suggested(),
+            Self::Qoder => qoder::suggested(),
         }
     }
 }
@@ -117,6 +137,8 @@ pub struct SubscriptionOfferingModel {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_reasoning: Option<bool>,
 }
 
 /// A homogeneous group of models that share one OpenCode plan and wire format.
@@ -313,10 +335,14 @@ pub(crate) fn store_lock(provider: SubscriptionProvider) -> &'static tokio::sync
     static CODEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static ANTIGRAVITY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static OPENCODE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    static CODEBUDDY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    static QODER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     match provider {
         SubscriptionProvider::Codex => &CODEX,
         SubscriptionProvider::Antigravity => &ANTIGRAVITY,
         SubscriptionProvider::Opencode => &OPENCODE,
+        SubscriptionProvider::CodeBuddy => &CODEBUDDY,
+        SubscriptionProvider::Qoder => &QODER,
     }
 }
 
@@ -543,6 +569,13 @@ pub async fn start_login_with_options(
             SubscriptionProvider::Opencode => {
                 opencode::begin_login(begin_cancel.clone(), expected_revision, options).await
             }
+            SubscriptionProvider::CodeBuddy => {
+                codebuddy::begin_login(begin_cancel.clone(), expected_revision, options.clone())
+                    .await
+            }
+            SubscriptionProvider::Qoder => {
+                qoder::begin_login(begin_cancel, expected_revision, options).await
+            }
         }
     };
     let started_result = tokio::select! {
@@ -624,6 +657,35 @@ pub async fn start_login_with_options(
         user_code,
         instructions,
     })
+}
+
+/// Logs in with a Personal Access Token, supported by providers whose gateways
+/// exchange a PAT for a short-lived job token (currently Qoder). The exchange
+/// happens synchronously and the resulting credential is persisted, so the
+/// account is immediately connected on success.
+pub async fn start_pat_login(provider: SubscriptionProvider, pat: String) -> Result<()> {
+    start_pat_login_with_options(provider, pat, SubscriptionHttpOptions::default()).await
+}
+
+/// PAT login with an explicit transport policy.
+pub async fn start_pat_login_with_options(
+    provider: SubscriptionProvider,
+    pat: String,
+    options: SubscriptionHttpOptions,
+) -> Result<()> {
+    match provider {
+        SubscriptionProvider::Qoder => {
+            let guard = store_lock(provider).lock().await;
+            let expected_revision = store::credential_revision(provider.key()).await?;
+            let result = qoder::pat_login(&pat, expected_revision, &options).await;
+            drop(guard);
+            result
+        }
+        other => Err(anyhow!(
+            "{} does not support personal access token login",
+            other.display_label()
+        )),
+    }
 }
 
 async fn finalize_session(
@@ -801,6 +863,8 @@ pub async fn resolve_with_options(
         SubscriptionProvider::Codex => codex::resolve(options).await,
         SubscriptionProvider::Antigravity => antigravity::resolve(options).await,
         SubscriptionProvider::Opencode => opencode::resolve(options).await,
+        SubscriptionProvider::CodeBuddy => codebuddy::resolve(options).await,
+        SubscriptionProvider::Qoder => qoder::resolve(options).await,
     }
 }
 
@@ -825,6 +889,37 @@ pub async fn refresh_account(provider: SubscriptionProvider) -> Result<Subscript
     refresh_account_with_options(provider, &SubscriptionHttpOptions::default()).await
 }
 
+/// Fetches the live Qoder model catalog through the wasm-signed gateway
+/// request. Qoder has no no-token login entry: the catalog is always fetched
+/// dynamically from the gateway, and a failure is surfaced to the caller
+/// (the UI shows the error) instead of substituting a stale static list.
+pub async fn list_qoder_models(options: &SubscriptionHttpOptions) -> Result<Vec<RemoteModelInfo>> {
+    qoder::list_models(options).await
+}
+
+/// Fetches the live CodeBuddy model catalog through the subscription auth
+/// layer. The fallback chain is: enterprise endpoint → /v3/config → static
+/// catalog. Results are cached in memory for 6 minutes; failed fetches back
+/// off exponentially (30s–300s) before retrying.
+pub async fn list_codebuddy_models(
+    options: &SubscriptionHttpOptions,
+) -> Result<Vec<RemoteModelInfo>> {
+    codebuddy::list_models(options).await
+}
+
+/// Signs a Qoder inference request body with the embedded wasm
+/// (`prepareInferRequest`), returning the signed URL, the COSY signature
+/// headers, and the encrypted body. Called by the OpenAI chat provider for
+/// Qoder-gateway requests; the caller POSTs the returned body to the URL with
+/// the returned headers.
+pub async fn sign_qoder_infer_request(
+    options: &SubscriptionHttpOptions,
+    body_json: &serde_json::Value,
+    model_key: &str,
+) -> Result<(String, HashMap<String, String>, Vec<u8>)> {
+    qoder::sign_infer_request(options, body_json, model_key).await
+}
+
 /// Refreshes a subscription account with an explicit transport policy.
 pub async fn refresh_account_with_options(
     provider: SubscriptionProvider,
@@ -832,6 +927,7 @@ pub async fn refresh_account_with_options(
 ) -> Result<SubscriptionAccount> {
     match provider {
         SubscriptionProvider::Opencode => opencode::refresh_profile(options).await?,
+        SubscriptionProvider::Qoder => qoder::refresh_profile(options).await?,
         _ => {
             resolve_with_options(provider, options).await?;
         }
@@ -853,7 +949,7 @@ mod tests {
     /// Serializes these tests against the shared on-disk store. Async-aware so
     /// the guard may be held across the awaits each test performs, matching how
     /// `store_lock` above already guards the real store.
-    fn test_lock() -> &'static tokio::sync::Mutex<()> {
+    pub(crate) fn test_lock() -> &'static tokio::sync::Mutex<()> {
         static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
         &LOCK
     }
@@ -886,6 +982,25 @@ mod tests {
             Some(SubscriptionProvider::Codex)
         );
         assert_eq!(SubscriptionProvider::from_key("unknown"), None);
+        assert_eq!(
+            serde_json::to_value(SubscriptionProvider::CodeBuddy).unwrap(),
+            serde_json::json!("codebuddy")
+        );
+        assert_eq!(
+            serde_json::to_value(SubscriptionProvider::Qoder).unwrap(),
+            serde_json::json!("qoder")
+        );
+        assert_eq!(
+            SubscriptionProvider::from_key("codebuddy"),
+            Some(SubscriptionProvider::CodeBuddy)
+        );
+        assert_eq!(
+            SubscriptionProvider::from_key("qoder"),
+            Some(SubscriptionProvider::Qoder)
+        );
+        assert_eq!(SubscriptionProvider::ALL.len(), 5);
+        assert!(SubscriptionProvider::ALL.contains(&SubscriptionProvider::CodeBuddy));
+        assert!(SubscriptionProvider::ALL.contains(&SubscriptionProvider::Qoder));
     }
 
     #[tokio::test]

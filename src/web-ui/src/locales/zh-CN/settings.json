@@ -35,6 +35,13 @@
         "长期记忆",
         "学习"
       ],
+      "aiThresholds": [
+        "阈值",
+        "参数",
+        "上限",
+        "超时",
+        "重试"
+      ],
       "usageStatistics": [
         "调用统计",
         "用量",
@@ -56,6 +63,7 @@
       "voiceInput": "本地麦克风输入与语音转文字模型。",
       "review": "Review 策略、覆盖深度、容量、成本和耗时控制。",
       "memories": "自动记忆生成、注入、整理窗口与记忆模型。",
+      "aiThresholds": "AI 行为阈值统一调节：压缩预算、重试退避、工具输出上限与超时、知识库搜索、ACP 超时、记忆与目标续接等。默认值与内置行为一致。",
       "mcpTools": "MCP 服务器与工具集成。",
       "externalSources": "加载其他 AI 应用中兼容的命令与扩展。",
       "hooks": "在 Agent 生命周期节点运行你自己的命令，与 Codex Hooks 兼容。",
@@ -82,6 +90,7 @@
       "voiceInput": "语音输入",
       "review": "审核",
       "memories": "记忆",
+      "aiThresholds": "AI 阈值",
       "skills": "技能",
       "mcpTools": "MCP",
       "externalSources": "外部 AI 应用",
@@ -229,7 +238,8 @@
     "shortcuts": {
       "panel": {
         "toggleLeft": "展开/收起左侧导航区域",
-        "toggleBoth": "折叠所有面板"
+        "toggleBoth": "折叠所有面板",
+        "toggleChatFullWidth": "切换对话全宽平铺"
       },
       "nav": {
         "toggleSearch": "打开导航搜索"
@@ -249,6 +259,7 @@
         "missionControl": "Mission Control",
         "splitHorizontal": "水平分屏",
         "splitVertical": "垂直分屏",
+        "splitGrid9": "九宫格排列",
         "anchorZone": "切换锚点区",
         "maximize": "最大化编辑器",
         "closePreview": "关闭预览"

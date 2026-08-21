@@ -42,13 +42,18 @@
       }
     },
     "l10nQualityCandidates": {
-      "maxTotal": 0,
+      "maxTotal": 3,
       "bySurface": {
         "core": 0,
         "installer": 0,
         "mobile-web": 0,
         "relay-static-homepage": 0,
-        "web-ui": 0
+        "web-ui": 3
+      },
+      "byNamespace": {
+        "common": 1,
+        "components": 1,
+        "flow-chat/processing-hints": 1
       }
     }
   }

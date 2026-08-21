@@ -434,6 +434,7 @@ The tool cannot remove or rebind the worktree in which it is running. Use Sessio
                         workspace_path: project_workspace_path.clone(),
                         remote_connection_id: None,
                         remote_ssh_host: None,
+                        include_hidden: false,
                     })
                     .await
                 {

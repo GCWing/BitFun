@@ -44,6 +44,24 @@ pub enum WorktreeLifecycle {
     External,
 }
 
+/// User-facing worktree options accepted by SessionControl/SessionMessage
+/// `create` for automatically creating a managed worktree together with the
+/// session. Mirrors the `NewManagedWorktree` request contract
+/// (`SessionExecutionTargetRequest::NewManagedWorktree`), so the resolved
+/// execution target matches what the Worktree tool would produce.
+///
+/// `base_ref` and `copy_local_changes` share the exact WorktreeService
+/// semantics (base defaults to HEAD; local changes can only be copied when
+/// the selected base resolves to source HEAD).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(default, rename_all = "camelCase")]
+pub struct WorktreeSessionOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_ref: Option<String>,
+    pub copy_local_changes: bool,
+}
+
 /// Resolved and persisted execution location for a session.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -120,6 +138,10 @@ pub struct WorktreeSummary {
     pub head: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
+    /// 展示名（W7 rename 联动）：会话 rename 时同步，保持「会话名 =
+    /// worktree 展示名 = 分支名」三方一致。`None` = 未设置（legacy）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub lifecycle: WorktreeLifecycle,
     pub is_main: bool,
     pub dirty: bool,
@@ -203,7 +225,8 @@ impl std::error::Error for WorktreeError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        SessionExecutionTargetRequest, WorktreeError, WorktreeErrorCode, WorktreeSettings,
+        SessionExecutionTargetRequest, WorktreeError, WorktreeErrorCode, WorktreeSessionOptions,
+        WorktreeSettings,
     };
 
     #[test]
@@ -254,5 +277,25 @@ mod tests {
         };
 
         assert_eq!(error.to_string(), "dirty_worktree: local changes");
+    }
+
+    #[test]
+    fn worktree_session_options_default_to_head_without_copying_changes() {
+        let options: WorktreeSessionOptions =
+            serde_json::from_value(serde_json::json!({})).expect("empty options should parse");
+        assert_eq!(options.base_ref, None);
+        assert!(!options.copy_local_changes);
+
+        let full: WorktreeSessionOptions = serde_json::from_value(serde_json::json!({
+            "baseRef": "main",
+            "copyLocalChanges": true
+        }))
+        .expect("full options should parse");
+        assert_eq!(full.base_ref.as_deref(), Some("main"));
+        assert!(full.copy_local_changes);
+
+        let serialized = serde_json::to_value(&full).expect("options should serialize");
+        assert_eq!(serialized["baseRef"], "main");
+        assert_eq!(serialized["copyLocalChanges"], true);
     }
 }

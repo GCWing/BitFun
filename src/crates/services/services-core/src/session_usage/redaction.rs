@@ -80,6 +80,7 @@ fn sensitive_input_patterns() -> &'static [Regex] {
         [
             r#"(?i)\b(authorization\s*:\s*(?:(?:bearer|basic)\s+)?)[^\s"'`]+"#,
             r#"(?i)\b(x-api-key\s*:\s*)[^\s"'`]+"#,
+            r#"(?i)\b((?:x-user-id|x-enterprise-id|x-tenant-id|x-department-info|x-request-id|x-session-id|x-refresh-token)\s*:\s*)[^\s"'`]+"#,
             r#"(?i)\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)\s*=\s*)[^&\s"'`]+"#,
             r#"(?i)(--(?:api-key|access-token|refresh-token|id-token|client-secret|secret|password|token)\s+)[^&\s"'`]+"#,
         ]
@@ -140,5 +141,21 @@ mod tests {
 
         assert!(!label.redacted);
         assert_eq!(label.value, "src/main.rs");
+    }
+
+    #[test]
+    fn redact_usage_input_summary_masks_subscription_identity_headers() {
+        let redacted = redact_usage_input_summary(
+            "request -H 'X-User-Id: u-123' -H 'X-Enterprise-Id: ent-9' -H 'X-Tenant-Id: ent-9' -H 'X-Department-Info: R&D' -H 'X-Request-ID: req-1' -H 'X-Session-ID: sess-1' -H 'X-Refresh-Token: refresh-secret'",
+            240,
+        );
+
+        assert!(redacted.redacted);
+        for header in ["u-123", "ent-9", "R&D", "req-1", "sess-1", "refresh-secret"] {
+            assert!(
+                !redacted.value.contains(header),
+                "header value {header} must be redacted"
+            );
+        }
     }
 }

@@ -87,8 +87,8 @@ impl ContentMatchPreviewBuilder {
     ) -> FileSystemResult<Self> {
         let matcher = compile_content_search_regex(pattern, case_sensitive, use_regex, whole_word)
             .map_err(|error| {
-            FileSystemError::service(format!("Invalid regex pattern: {}", error))
-        })?;
+                FileSystemError::service(format!("Invalid regex pattern: {}", error))
+            })?;
         Ok(Self { matcher })
     }
 

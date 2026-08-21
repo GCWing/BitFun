@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-plugin-runtime-client"
 version.workspace = true
 authors.workspace = true

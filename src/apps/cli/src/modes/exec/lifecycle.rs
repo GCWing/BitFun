@@ -492,6 +492,7 @@ pub(crate) struct ExecMode {
 }
 
 impl ExecMode {
+    #[allow(clippy::too_many_arguments)] // exec mode constructor carrying config, runtime and run options
     pub(crate) fn new(
         config: CliConfig,
         message: String,

@@ -443,6 +443,8 @@ fn to_adapter_provider(provider: SubscriptionProvider) -> AdapterProvider {
         SubscriptionProvider::Codex => AdapterProvider::Codex,
         SubscriptionProvider::Antigravity => AdapterProvider::Antigravity,
         SubscriptionProvider::Opencode => AdapterProvider::Opencode,
+        SubscriptionProvider::CodeBuddy => AdapterProvider::CodeBuddy,
+        SubscriptionProvider::Qoder => AdapterProvider::Qoder,
     }
 }
 
@@ -574,6 +576,49 @@ pub async fn apply_subscription_auth_with_options(
 #[cfg(feature = "subscription-auth")]
 pub async fn list_subscription_accounts() -> Vec<subscription_auth::SubscriptionAccount> {
     subscription_auth::list_accounts().await
+}
+
+/// Force-refreshes the subscription credential backing a model and drops the
+/// cached client so the next request rebuilds against the fresh token.
+///
+/// This is the provider-aware half of the 401/403 auto-refresh contract: the
+/// transport layer cannot know which subscription provider a model uses, so
+/// runtime owners call this after an `ErrorCategory::Auth`/`Permission` failure
+/// (HTTP 401/403) and then retry the request once, mirroring the Qoder CLI's
+/// `openResponse` loop (`401/403 -> forceRefreshToken -> retry once`).
+///
+/// Returns `false` when the model does not use subscription auth (the caller
+/// should not retry with a rebuilt client).
+#[cfg(feature = "subscription-auth")]
+pub async fn force_refresh_subscription_for_model(
+    factory: &AIClientFactory,
+    model_id: &str,
+    proxy_config: Option<crate::service::config::types::ProxyConfig>,
+) -> Result<bool> {
+    let global_config: crate::service::config::types::GlobalConfig = factory
+        .config_service
+        .get_config(None)
+        .await
+        .map_err(|e| anyhow!("Failed to get configuration: {}", e))?;
+    let model = global_config
+        .ai
+        .models
+        .iter()
+        .find(|model| model.id == model_id)
+        .ok_or_else(|| anyhow!("Model configuration not found: {}", model_id))?;
+    let AuthConfig::Subscription { provider, plan } = &model.auth else {
+        return Ok(false);
+    };
+    let _ = plan;
+    let options = SubscriptionHttpOptions::new(proxy_config, false);
+    subscription_auth::refresh_account_with_options(to_adapter_provider(*provider), &options)
+        .await?;
+    factory.invalidate_model(model_id);
+    info!(
+        "Subscription credential force-refreshed after 401/403 for model: model_id={}, provider={:?}",
+        model_id, provider
+    );
+    Ok(true)
 }
 
 #[cfg(test)]

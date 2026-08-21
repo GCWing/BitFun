@@ -5,15 +5,20 @@
 
 use super::state_manager::{tool_task_state_kind, ToolStateManager};
 use super::types::*;
-use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
+use crate::agentic::core::{Message, ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
 use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::ToolResult as FrameworkToolResult;
-use crate::agentic::tools::registry::ToolRegistry;
+use crate::agentic::tools::product_runtime::{
+    collect_product_loaded_deferred_tool_specs, resolve_product_get_tool_spec_results,
+};
+use crate::agentic::tools::registry::{ToolRef, ToolRegistry};
+use crate::agentic::tools::restrictions::get_session_restrictions;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
 use crate::native_hooks::{self, NativeHookSessionFacts};
+use crate::service::config::types::ExecutionThresholds;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::permission::{
@@ -28,9 +33,10 @@ use bitfun_agent_tools::{
     build_tool_execution_timeout_presentation,
     build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, build_write_tail_closure_notice,
-    render_tool_result_for_assistant, validate_tool_execution_admission, PermissionIntent,
-    ResolvedToolInvocation, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
-    ToolExecutionErrorPresentation, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    is_write_like_tool_name, render_tool_result_for_assistant, validate_tool_execution_admission,
+    LoadedDeferredToolSpec, PermissionIntent, ResolvedToolInvocation,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExecutionErrorPresentation,
+    ToolRuntimeRestrictions, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::{
     PermissionReply, PermissionRequest, PermissionRequestSource, PermissionRequestSourceKind,
@@ -38,7 +44,7 @@ use bitfun_runtime_ports::{
 };
 use futures::future::join_all;
 use log::{debug, error, info, warn};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
@@ -58,10 +64,10 @@ fn resolve_contextual_tool(
 ) -> Option<Arc<dyn crate::agentic::tools::framework::Tool>> {
     #[cfg(feature = "external-sources")]
     {
-        return crate::external_tools::resolve_external_tool_for_workspace(
+        crate::external_tools::resolve_external_tool_for_workspace(
             tool,
             crate::external_tools::external_tool_route_root(workspace_root, remote),
-        );
+        )
     }
     #[cfg(not(feature = "external-sources"))]
     {
@@ -75,6 +81,206 @@ fn persisted_effective_tool_name(
     effective_tool_name: &str,
 ) -> Option<String> {
     (wire_tool_name != effective_tool_name).then(|| effective_tool_name.to_string())
+}
+
+/// R-MR-11 读取/搜索类工具集合（工具注册名）。
+const REPEATED_READ_TOOL_NAMES: &[&str] = &["Read", "Grep", "Glob", "LS", "WebSearch", "WebFetch"];
+
+/// R-MR-11 目标指纹归一化。
+///
+/// - Read：文件路径（忽略 offset/limit/tail/render 等分段参数 → 十行读同文件 = 同目标）
+/// - Grep：关键词 pattern + path（未提供 path 归一为 "."，同关键词同路径 = 同目标）
+/// - Glob：pattern（忽略 path 变化，pattern 即目标）
+/// - WebSearch：query
+/// - WebFetch：url
+/// - LS：path（未提供归一为 "."）
+///
+/// 非读取/搜索类工具返回 None。
+fn repeated_read_target_fingerprint(
+    tool_name: &str,
+    arguments: &serde_json::Value,
+) -> Option<String> {
+    if !REPEATED_READ_TOOL_NAMES.contains(&tool_name) {
+        return None;
+    }
+    let target = match tool_name {
+        "Read" => arguments
+            .get("file_path")
+            .and_then(serde_json::Value::as_str)?
+            .trim()
+            .to_string(),
+        "Grep" => {
+            let pattern = arguments
+                .get("pattern")
+                .and_then(serde_json::Value::as_str)?
+                .trim();
+            let path = arguments
+                .get("path")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(".");
+            format!("{pattern}@{}", path.trim())
+        }
+        "Glob" => arguments
+            .get("pattern")
+            .and_then(serde_json::Value::as_str)?
+            .trim()
+            .to_string(),
+        "WebSearch" => arguments
+            .get("query")
+            .and_then(serde_json::Value::as_str)?
+            .trim()
+            .to_string(),
+        "WebFetch" => arguments
+            .get("url")
+            .and_then(serde_json::Value::as_str)?
+            .trim()
+            .to_string(),
+        "LS" => {
+            let path = arguments
+                .get("path")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(".");
+            path.trim().to_string()
+        }
+        _ => return None,
+    };
+    if target.is_empty() {
+        return None;
+    }
+    Some(target)
+}
+
+/// 小文件特判的裸函数版（供单元测试直接验证）。
+fn repeated_read_small_file_hint_impl(
+    tool_name: &str,
+    arguments: &serde_json::Value,
+    small_file_line_threshold: usize,
+) -> Option<String> {
+    if tool_name != "Read" {
+        return None;
+    }
+    let file_path = arguments
+        .get("file_path")
+        .and_then(serde_json::Value::as_str)?;
+    if file_path.is_empty() || arguments.get("offset").is_none() {
+        return None;
+    }
+    let small = std::fs::read_to_string(file_path)
+        .map(|content| content.lines().count() < small_file_line_threshold)
+        .unwrap_or(false);
+    small.then(|| {
+        format!(
+            "文件较小（<{} 行），建议一次读全文",
+            small_file_line_threshold
+        )
+    })
+}
+
+/// R-MR-11 纯判定：给定会话级连续状态，返回是否拦截（及提示）。
+///
+/// - 目标与当前连续目标一致 → 计数 +1；达到 limit 时拦截（第 N 次）。
+/// - 目标变化 → 重置为 1（交叉引用 A→B→A 不误伤）。
+/// - 拦截后计数保持，同目标后续调用继续拦截。
+fn repeated_read_decide(
+    thresholds: &ExecutionThresholds,
+    tool_name: &str,
+    target: &str,
+    arguments: &serde_json::Value,
+    state: &mut RepeatedReadSessionState,
+) -> Option<String> {
+    if !thresholds.repeated_read_enabled {
+        return None;
+    }
+    let limit = thresholds.repeated_read_limit.max(2);
+
+    if state.current_target.as_deref() != Some(target) {
+        state.current_target = Some(target.to_string());
+        state.consecutive_count = 1;
+        return None;
+    }
+
+    state.consecutive_count += 1;
+    if state.consecutive_count < limit {
+        return None;
+    }
+
+    // 第 N 次：拦截。构造引导正确做法的提示。
+    let message = if tool_name == "Read" && arguments.get("offset").is_some() {
+        let small_hint = repeated_read_small_file_hint_impl(
+            tool_name,
+            arguments,
+            thresholds.small_file_line_threshold,
+        );
+        match small_hint {
+            Some(hint) => format!(
+                "重复读取拦截（R-MR-11）：{tool_name} 目标 `{target}` 已连续调用 {} 次，本次未执行（零请求）。检测到碎片化读取（连续分段读同一目标 {} 次）。{}。正确做法：读全文（小文件）或搜索关键词定位（大文件），不要再逐行/逐段反复读取。",
+                state.consecutive_count, state.consecutive_count, hint
+            ),
+            None => format!(
+                "重复读取拦截（R-MR-11）：{tool_name} 目标 `{target}` 已连续调用 {} 次，本次未执行（零请求）。检测到碎片化读取（连续分段读同一目标 {} 次）。正确做法：读全文（小文件）或搜索关键词定位（大文件），不要再逐行/逐段反复读取。",
+                state.consecutive_count, state.consecutive_count
+            ),
+        }
+    } else {
+        format!(
+            "重复读取拦截（R-MR-11）：{tool_name} 目标 `{target}` 已连续调用 {} 次，本次未执行（零请求）。该目标已连续读取 {} 次，请基于已有内容继续，或明确新目标。正确做法：读全文（小文件）或搜索关键词定位（大文件），不要再重复读取同一目标。",
+            state.consecutive_count, state.consecutive_count
+        )
+    };
+    state.last_intercepted_message = Some(message.clone());
+    Some(message)
+}
+
+/// Resolve the effective tool runtime restrictions for a session.
+///
+/// Per-session restrictions fully replace the context-level restrictions,
+/// matching the precedence of
+/// [`ToolUseContext::enforce_tool_runtime_restrictions`]: a session override
+/// wins, otherwise the context-level template applies.
+fn effective_runtime_tool_restrictions(
+    session_id: &str,
+    context_level: &ToolRuntimeRestrictions,
+) -> ToolRuntimeRestrictions {
+    get_session_restrictions(session_id).unwrap_or_else(|| context_level.clone())
+}
+
+/// Merge freshly collected deferred-tool specs into the existing set. A fresh
+/// entry replaces the entry with the same tool name, mirroring the upsert
+/// semantics of the loaded-spec collection channel.
+fn merge_loaded_deferred_tool_specs(
+    existing: &[LoadedDeferredToolSpec],
+    fresh: &[LoadedDeferredToolSpec],
+) -> Vec<LoadedDeferredToolSpec> {
+    let mut merged: BTreeMap<String, LoadedDeferredToolSpec> = existing
+        .iter()
+        .map(|spec| (spec.tool_name.clone(), spec.clone()))
+        .collect();
+    for spec in fresh {
+        merged.insert(spec.tool_name.clone(), spec.clone());
+    }
+    merged.into_values().collect()
+}
+
+/// Maximum auto-reload attempts for one stale deferred-tool spec invocation.
+/// Each attempt re-runs GetToolSpec and re-checks admission; the loop ends
+/// early as soon as admission passes or the tool is not reloadable.
+const MAX_STALE_SPEC_RELOAD_ATTEMPTS: usize = 3;
+
+/// Defensive upper bound for the session-scoped auto-reload cache. Entries are
+/// small and only referenced while their session stays active, so this guard
+/// simply prevents unbounded growth after very long-lived hosts.
+const MAX_CACHED_SESSIONS_WITH_RELOADED_SPECS: usize = 1024;
+
+/// Outcome of a stale deferred-tool spec reload attempt.
+enum StaleSpecReloadOutcome {
+    /// The reload observed a fresh spec and produced the merged loaded-
+    /// spec set (existing entries plus the refreshed one).
+    Reloaded(Vec<LoadedDeferredToolSpec>),
+    /// The tool cannot be reloaded through the GetToolSpec runtime path —
+    /// the execution call failed, returned no usable result, or the tool
+    /// is no longer part of the contextual deferred catalog. The caller
+    /// keeps the original admission rejection.
+    NotReloadable(&'static str),
 }
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -316,7 +522,14 @@ fn build_user_steering_interrupted_result(
             effective_tool_name: persisted_effective_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
-            is_error: true,
+            // Skipped-by-steering is not a failure: the tool never executed, so
+            // marking it `is_error: true` would push a fake failure to the model
+            // (provider converters translate it into `tool_result.is_error` /
+            // `[TOOL ERROR]`), causing retry / detour waste on an action that
+            // merely yielded to a user steering message. The `status: "skipped"`
+            // + `category: "user_steering_interrupted"` payload already tells the
+            // model the tool did not run.
+            is_error: false,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
         },
@@ -600,6 +813,43 @@ pub struct ToolPipeline {
     /// Tool task ids a PreToolUse hook approved. The approval waives the
     /// interactive permission prompt only; policy denials still apply.
     hook_preapprovals: Arc<TokioMutex<HashSet<String>>>,
+    /// Tool task ids whose admission was rejected before execution (stale
+    /// tool catalog, deferred-tool gateway, runtime restrictions). Such
+    /// rejections are protocol-layer outcomes, not execution violations.
+    admission_rejected_tasks: Arc<TokioMutex<HashSet<String>>>,
+    /// Session-scoped auto-reloaded deferred-tool specs (F2). A stale spec
+    /// reloaded by [`Self::reload_stale_deferred_tool_spec`] is recorded here
+    /// so later rounds that reconstruct loaded specs from the message history
+    /// (the synthesized GetToolSpec result never becomes part of the
+    /// conversation) can merge the refreshed generation back instead of
+    /// re-triggering the reload every round.
+    session_loaded_deferred_specs: Arc<TokioMutex<HashMap<String, Vec<LoadedDeferredToolSpec>>>>,
+    /// R-MR-11 读取/搜索重复拦截：会话级「连续同目标指纹」追踪。
+    ///
+    /// 读取/搜索类工具（Read/Grep/Glob/LS/WebSearch/WebFetch）连续操作同一
+    /// 目标（同文件路径 / 同关键词+路径 / 同 pattern / 同 query / 同 URL /
+    /// 同路径）达 `repeated_read_limit` 次时，第 N 次调用被本地拦截——不执行
+    /// 工具、不发起 LLM 请求（零请求），并把引导正确做法的提示作为 tool
+    /// result 返回。中间插入其他工具调用 / 其他目标 / 文本产出 → 计数重置
+    /// （交叉引用 A→B→A 不误伤）。配置：`ai.thresholds.execution.*`。
+    repeated_read_states: Arc<TokioMutex<HashMap<String, RepeatedReadSessionState>>>,
+    /// R-WF-22: write-like tool (Write/Edit/Delete/ExecCommand) in-flight
+    /// protection. Tracks the task ids currently executing inside an atomic
+    /// unit. When a round injection CancelRunning path sees a write-like tool
+    /// still running, cancellation is deferred until the atomic unit completes
+    /// to avoid half-written files. Zero type changes: consumer-side logic only.
+    active_write_like_tools: Arc<TokioMutex<HashSet<String>>>,
+}
+
+/// R-MR-11 会话级重复读取拦截的连续计数状态。
+#[derive(Debug, Clone, Default)]
+struct RepeatedReadSessionState {
+    /// 当前连续同目标指纹（None = 无连续目标，下个读取类调用直接建立）。
+    current_target: Option<String>,
+    /// 当前目标已连续出现的次数（含本次）。
+    consecutive_count: usize,
+    /// 最近一次被拦截提示的摘要（用于避免连续重复刷屏）。
+    last_intercepted_message: Option<String>,
 }
 
 impl ToolPipeline {
@@ -616,6 +866,10 @@ impl ToolPipeline {
             permission_request_manager: None,
             permission_plans: Arc::new(TokioMutex::new(HashMap::new())),
             hook_preapprovals: Arc::new(TokioMutex::new(HashSet::new())),
+            admission_rejected_tasks: Arc::new(TokioMutex::new(HashSet::new())),
+            session_loaded_deferred_specs: Arc::new(TokioMutex::new(HashMap::new())),
+            repeated_read_states: Arc::new(TokioMutex::new(HashMap::new())),
+            active_write_like_tools: Arc::new(TokioMutex::new(HashSet::new())),
         }
     }
 
@@ -888,6 +1142,7 @@ impl ToolPipeline {
         for context in decision.additional_context {
             hook_sections.push(format!("PostToolUse hook context: {context}"));
         }
+
         if hook_sections.is_empty() {
             return;
         }
@@ -928,10 +1183,16 @@ impl ToolPipeline {
             }
             let tool = {
                 let registry = self.tool_registry.read().await;
+                let effective_restrictions = effective_runtime_tool_restrictions(
+                    &task.context.session_id,
+                    &task.context.runtime_tool_restrictions,
+                );
                 if validate_tool_execution_admission(ToolExecutionAdmissionRequest {
                     tool_name: &tool_name,
                     allowed_tools: &task.context.allowed_tools,
-                    runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+                    runtime_tool_restrictions: &effective_restrictions,
+                    user_enabled_tools: &task.context.user_enabled_tools,
+                    tool_arguments: &task.invocation.effective_arguments,
                     deferred_tools: &task.context.deferred_tools,
                     loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
                     current_catalog_generation: registry.current_snapshot_generation(),
@@ -1210,9 +1471,58 @@ impl ToolPipeline {
             .unwrap_or(RoundInjectionToolPreemption::None)
     }
 
-    fn should_interrupt_for_round_injection(&self, context: &ToolExecutionContext) -> bool {
-        self.pending_round_injection_tool_preemption(context)
-            .should_interrupt_after_current_atomic_unit()
+    /// R-WF-22: whether a write-like tool (matched by is_write_like_tool_name)
+    /// is still executing inside an atomic unit. When true, round injection
+    /// interruption/cancellation must be deferred until the tool fully
+    /// completes to avoid half-written files.
+    async fn has_active_write_like_tools(&self) -> bool {
+        !self.active_write_like_tools.lock().await.is_empty()
+    }
+
+    async fn mark_write_like_tool_started(&self, tool_id: &str, tool_name: &str) {
+        if is_write_like_tool_name(tool_name) {
+            self.active_write_like_tools
+                .lock()
+                .await
+                .insert(tool_id.to_string());
+        }
+    }
+
+    async fn mark_write_like_tool_finished(&self, tool_id: &str) {
+        self.active_write_like_tools.lock().await.remove(tool_id);
+    }
+
+    /// R-WF-22 injection decision consumer: while a write-like tool is
+    /// running, both interrupt/cancel signals resolve to "wait for the
+    /// current atomic unit" — the remaining tool plan is still skipped as
+    /// before, but the in-flight write operation itself is not interrupted.
+    /// Read-like tools keep the original immediate-interrupt semantics.
+    async fn should_interrupt_for_round_injection(
+        &self,
+        context: &ToolExecutionContext,
+        tool_name: &str,
+    ) -> bool {
+        let pending = self.pending_round_injection_tool_preemption(context);
+        if !pending.should_interrupt_after_current_atomic_unit() {
+            return false;
+        }
+        if is_write_like_tool_name(tool_name) && self.has_active_write_like_tools().await {
+            // A write-like tool is inside its atomic unit: defer the
+            // injection until it completes. Semantically equivalent to
+            // InterruptAfterCurrentAtomicUnit — wait for the write.
+            return false;
+        }
+        true
+    }
+
+    /// R-WF-22 write-tool protection consumer for the round injection
+    /// interruption path (CancelRunningCooperatively/Forcefully → cancel_tool):
+    /// returns true while a write-like tool is running, deferring the cancel
+    /// until the atomic unit completes (the execution side cancels after the
+    /// tool finishes); with no write-like tool running, cancel proceeds
+    /// immediately as before.
+    async fn should_defer_cancel_for_active_write_like_tools(&self) -> bool {
+        self.has_active_write_like_tools().await
     }
 
     async fn build_steering_interrupted_results(
@@ -1240,16 +1550,23 @@ impl ToolPipeline {
         results
     }
 
-    fn append_execution_result(
+    async fn append_execution_result(
         &self,
         task_id: &str,
         result: BitFunResult<ToolExecutionResult>,
         all_results: &mut Vec<ToolExecutionResult>,
     ) {
         match result {
-            Ok(execution_result) => all_results.push(execution_result),
+            Ok(execution_result) => {
+                all_results.push(execution_result);
+            }
             Err(error) => {
                 error!("Tool execution failed: error={}", error);
+                // F3: an admission rejection (stale catalog, deferred gate,
+                // runtime restriction) is a protocol-layer outcome, not an
+                // execution violation.
+                let mut rejected = self.admission_rejected_tasks.lock().await;
+                rejected.remove(task_id);
                 let error_result = build_error_execution_result(
                     task_id,
                     self.state_manager.get_task(task_id),
@@ -1289,6 +1606,17 @@ impl ToolPipeline {
 
             loop {
                 if interrupt.should_cancel_running_tools() {
+                    // R-WF-22: while a write-like tool is running, defer the
+                    // cancel until the atomic unit completes (avoid
+                    // half-written files). With no write-like tool running,
+                    // cancel proceeds immediately as before.
+                    if pipeline
+                        .should_defer_cancel_for_active_write_like_tools()
+                        .await
+                    {
+                        tokio::time::sleep(Duration::from_millis(25)).await;
+                        continue;
+                    }
                     let _ = pipeline.cancel_tools_for_round_injection(task_ids).await;
                     break;
                 }
@@ -1311,6 +1639,23 @@ impl ToolPipeline {
     ) -> BitFunResult<Vec<ToolExecutionResult>> {
         if tool_calls.is_empty() {
             return Ok(vec![]);
+        }
+
+        // F2: merge the session-scoped auto-reload cache into the caller-
+        // provided loaded-spec set. Each round reconstructs loaded specs from
+        // the conversation history, which never contains the synthesized
+        // GetToolSpec result produced by an auto-reload, so without this merge
+        // a spec refreshed in an earlier round would be stale again on the
+        // next round and re-trigger the reload.
+        let mut context = context;
+        let cached_specs = self
+            .cached_session_loaded_deferred_specs(&context.session_id)
+            .await;
+        if !cached_specs.is_empty() {
+            context.loaded_deferred_tool_specs = merge_loaded_deferred_tool_specs(
+                &context.loaded_deferred_tool_specs,
+                &cached_specs,
+            );
         }
 
         info!("Executing tools: count={}", tool_calls.len());
@@ -1438,10 +1783,20 @@ impl ToolPipeline {
                 .first()
                 .and_then(|task_id| self.state_manager.get_task(task_id))
                 .map(|task| task.context);
-            if batch_context
-                .as_ref()
-                .is_some_and(|context| self.should_interrupt_for_round_injection(context))
+            let batch_tool_name = batch
+                .task_ids
+                .first()
+                .and_then(|task_id| self.state_manager.get_task(task_id))
+                .map(|task| task.effective_tool_name().to_string());
+            let batch_should_interrupt = match (batch_context.as_ref(), batch_tool_name.as_deref())
             {
+                (Some(context), Some(tool_name)) => {
+                    self.should_interrupt_for_round_injection(context, tool_name)
+                        .await
+                }
+                _ => false,
+            };
+            if batch_should_interrupt {
                 let remaining_task_ids = batch
                     .task_ids
                     .into_iter()
@@ -1499,7 +1854,8 @@ impl ToolPipeline {
         let mut all_results = Vec::new();
         for (idx, result) in results.into_iter().enumerate() {
             let task_id = &task_ids[idx];
-            self.append_execution_result(task_id, result, &mut all_results);
+            self.append_execution_result(task_id, result, &mut all_results)
+                .await;
         }
 
         Ok(all_results)
@@ -1515,10 +1871,17 @@ impl ToolPipeline {
         let mut task_iter = task_ids.into_iter().peekable();
         while let Some(task_id) = task_iter.next() {
             let task = self.state_manager.get_task(&task_id);
-            if task
-                .as_ref()
-                .is_some_and(|task| self.should_interrupt_for_round_injection(&task.context))
-            {
+            let should_interrupt = match task.as_ref() {
+                Some(task) => {
+                    self.should_interrupt_for_round_injection(
+                        &task.context,
+                        task.effective_tool_name(),
+                    )
+                    .await
+                }
+                None => false,
+            };
+            if should_interrupt {
                 let remaining_task_ids = std::iter::once(task_id).chain(task_iter);
                 results.extend(
                     self.build_steering_interrupted_results(remaining_task_ids)
@@ -1535,20 +1898,239 @@ impl ToolPipeline {
                 handle.abort();
                 let _ = handle.await;
             }
-            self.append_execution_result(&task_id, result, &mut results);
+            self.append_execution_result(&task_id, result, &mut results)
+                .await;
         }
 
         Ok(results)
     }
 
+    /// Resolve the admission gate and registered tool for one invocation.
+    async fn resolve_tool_admission(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        tool_args: &serde_json::Value,
+    ) -> (Result<(), ToolExecutionAdmissionRejection>, Option<ToolRef>) {
+        let registry = self.tool_registry.read().await;
+        let effective_restrictions = effective_runtime_tool_restrictions(
+            &task.context.session_id,
+            &task.context.runtime_tool_restrictions,
+        );
+        let admission = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+            tool_name,
+            allowed_tools: &task.context.allowed_tools,
+            runtime_tool_restrictions: &effective_restrictions,
+            user_enabled_tools: &task.context.user_enabled_tools,
+            tool_arguments: tool_args,
+            deferred_tools: &task.context.deferred_tools,
+            loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
+            current_catalog_generation: registry.current_snapshot_generation(),
+            get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+        });
+        (admission, registry.get_tool(tool_name))
+    }
+
+    /// Reload a stale deferred-tool spec through the GetToolSpec runtime path.
+    ///
+    /// Returns [`StaleSpecReloadOutcome::Reloaded`] with the refreshed
+    /// loaded-spec set (existing entries merged with the reloaded one) when a
+    /// fresh spec was observed, or [`StaleSpecReloadOutcome::NotReloadable`]
+    /// with a classified reason when the reload cannot succeed — the caller
+    /// then keeps the original admission rejection.
+    async fn reload_stale_deferred_tool_spec(
+        &self,
+        task: &ToolTask,
+        stale_tool_name: &str,
+    ) -> StaleSpecReloadOutcome {
+        let cancellation_token = task
+            .options
+            .parent_cancellation_token
+            .as_ref()
+            .map(CancellationToken::child_token)
+            .unwrap_or_default();
+        let tool_context = self.build_tool_use_context(task, cancellation_token);
+        let input = serde_json::json!({ "tool_name": stale_tool_name });
+        let results = match resolve_product_get_tool_spec_results(
+            &input,
+            &tool_context,
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .await
+        {
+            Ok(results) => results,
+            Err(error) => {
+                warn!(
+                    "Stale deferred-tool spec reload failed during GetToolSpec execution: tool_name={}, session_id={}, error={}",
+                    stale_tool_name, task.context.session_id, error
+                );
+                return StaleSpecReloadOutcome::NotReloadable("GetToolSpec execution failed");
+            }
+        };
+        let Some(result) = results.into_iter().next() else {
+            warn!(
+                "Stale deferred-tool spec reload returned no GetToolSpec result: tool_name={}, session_id={}",
+                stale_tool_name, task.context.session_id
+            );
+            return StaleSpecReloadOutcome::NotReloadable("GetToolSpec returned no result");
+        };
+        let FrameworkToolResult::Result {
+            data,
+            result_for_assistant,
+            image_attachments,
+        } = result
+        else {
+            warn!(
+                "Stale deferred-tool spec reload received a non-result GetToolSpec outcome: tool_name={}, session_id={}",
+                stale_tool_name, task.context.session_id
+            );
+            return StaleSpecReloadOutcome::NotReloadable("GetToolSpec returned an error result");
+        };
+        // Synthesize a GetToolSpec ToolResult message and feed it through the
+        // loaded-spec state collection channel so the refreshed generation is
+        // observed by the same path that tracks model-initiated loads.
+        let message = Message::tool_result(ModelToolResult {
+            tool_id: task.tool_call.tool_id.clone(),
+            tool_name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            effective_tool_name: None,
+            result: data,
+            result_for_assistant,
+            is_error: false,
+            duration_ms: Some(0),
+            image_attachments,
+        });
+        let refreshed =
+            collect_product_loaded_deferred_tool_specs(&[message], &task.context.deferred_tools);
+        if refreshed.is_empty() {
+            warn!(
+                "Stale deferred-tool spec is not reloadable: tool_name={}, session_id={} — the tool is no longer part of the contextual deferred catalog or the GetToolSpec result lacks a catalog generation",
+                stale_tool_name, task.context.session_id
+            );
+            return StaleSpecReloadOutcome::NotReloadable(
+                "tool is not reloadable: not in the deferred catalog or result lacks catalog_generation",
+            );
+        }
+        StaleSpecReloadOutcome::Reloaded(merge_loaded_deferred_tool_specs(
+            &task.context.loaded_deferred_tool_specs,
+            &refreshed,
+        ))
+    }
+
+    /// Record freshly reloaded deferred-tool specs for a session so later
+    /// rounds merge them back into the message-history-derived loaded-spec
+    /// set instead of re-triggering the reload. Entries upsert by tool name.
+    async fn record_session_loaded_deferred_specs(
+        &self,
+        session_id: &str,
+        specs: &[LoadedDeferredToolSpec],
+    ) {
+        let mut cache = self.session_loaded_deferred_specs.lock().await;
+        if cache.len() >= MAX_CACHED_SESSIONS_WITH_RELOADED_SPECS {
+            // Defensive upper bound: drop the whole cache rather than letting
+            // stale sessions accumulate unboundedly. Losing a session entry
+            // only forces one extra auto-reload for that session.
+            cache.clear();
+        }
+        let merged = merge_loaded_deferred_tool_specs(
+            cache.get(session_id).map(Vec::as_slice).unwrap_or_default(),
+            specs,
+        );
+        cache.insert(session_id.to_string(), merged);
+    }
+
+    /// Read the recorded auto-reloaded deferred-tool specs of a session.
+    async fn cached_session_loaded_deferred_specs(
+        &self,
+        session_id: &str,
+    ) -> Vec<LoadedDeferredToolSpec> {
+        self.session_loaded_deferred_specs
+            .lock()
+            .await
+            .get(session_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// R-MR-11 读取/搜索重复拦截判定。
+    ///
+    /// 命中「连续同目标 N 次」时返回拦截提示，否则返回 None（正常执行）。
+    /// 副作用：更新会话级连续计数状态；中间有产出（写入类工具 / 其他工具 /
+    /// 不同目标）时自动重置计数。
+    async fn repeated_read_interception(
+        &self,
+        session_id: &str,
+        tool_name: &str,
+        arguments: &serde_json::Value,
+    ) -> Option<String> {
+        let thresholds = Self::execution_thresholds().await;
+        if !thresholds.repeated_read_enabled {
+            return None;
+        }
+
+        let Some(target) = repeated_read_target_fingerprint(tool_name, arguments) else {
+            // 非读取/搜索类工具：重置连续计数（中间有产出/其他工具 → 重置）。
+            self.reset_repeated_read_state(session_id).await;
+            return None;
+        };
+
+        let mut states = self.repeated_read_states.lock().await;
+        let state = states
+            .entry(session_id.to_string())
+            .or_insert_with(RepeatedReadSessionState::default);
+
+        repeated_read_decide(&thresholds, tool_name, &target, arguments, state)
+    }
+
+    async fn reset_repeated_read_state(&self, session_id: &str) {
+        if let Some(state) = self.repeated_read_states.lock().await.get_mut(session_id) {
+            state.current_target = None;
+            state.consecutive_count = 0;
+            state.last_intercepted_message = None;
+        }
+    }
+
+    /// 读取 `ai.thresholds.execution.*` 配置（R-MR-07 配置域扩展）。
+    ///
+    /// R-MR-07 未完成时按契约回退到常量默认值（enabled=true, limit=3,
+    /// small_file_line_threshold=200），配置服务不可用/加载失败不影响拦截
+    /// 可用性。
+    async fn execution_thresholds() -> ExecutionThresholds {
+        match crate::service::config::get_global_config_service().await {
+            Ok(service) => service
+                .get_config::<ExecutionThresholds>(Some("ai.thresholds.execution"))
+                .await
+                .unwrap_or_default(),
+            Err(_) => ExecutionThresholds::default(),
+        }
+    }
+
     /// Execute single tool
     async fn execute_single_tool(&self, tool_id: String) -> BitFunResult<ToolExecutionResult> {
+        // R-WF-22: write-like atomic-unit protection — register on entry;
+        // every return path (success/failure/cancel/reject/timeout) must
+        // pair with mark_write_like_tool_finished.
+        let tool_name = self
+            .state_manager
+            .get_task(&tool_id)
+            .map(|task| task.effective_tool_name().to_string())
+            .unwrap_or_default();
+        self.mark_write_like_tool_started(&tool_id, &tool_name)
+            .await;
+        let write_guard_result = self.execute_single_tool_inner(tool_id.clone()).await;
+        self.mark_write_like_tool_finished(&tool_id).await;
+        write_guard_result
+    }
+
+    async fn execute_single_tool_inner(
+        &self,
+        tool_id: String,
+    ) -> BitFunResult<ToolExecutionResult> {
         let start_time = Instant::now();
 
         debug!("Starting tool execution: tool_id={}", tool_id);
 
         // Get task
-        let task = self
+        let mut task = self
             .state_manager
             .get_task(&tool_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Tool task not found: {}", tool_id)))?;
@@ -1626,21 +2208,128 @@ impl ToolPipeline {
             ToolArgumentRepairKind::None => {}
         }
 
+        // R-MR-11 读取/搜索重复拦截：连续同目标 N 次 → 拦截不执行。
+        // 拦截 = 不调工具 + 不调 LLM（零请求）：本地构造提示并作为
+        // tool result 返回，随消息历史回到模型侧。
+        if let Some(block_message) = self
+            .repeated_read_interception(&task.context.session_id, &tool_name, &tool_args)
+            .await
+        {
+            warn!(
+                "Repeated read intercepted (R-MR-11): session_id={}, tool_name={}, tool_id={}, message={}",
+                task.context.session_id, tool_name, tool_id, block_message
+            );
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: block_message.clone(),
+                        is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: Some(queue_wait_ms),
+                        preflight_ms: None,
+                        confirmation_wait_ms: Some(confirmation_wait_ms),
+                        execution_ms: None,
+                    },
+                )
+                .await;
+            return Ok(ToolExecutionResult {
+                tool_id: tool_id.clone(),
+                tool_name: wire_tool_name.clone(),
+                effective_tool_name: tool_name.clone(),
+                result: ModelToolResult {
+                    tool_id,
+                    tool_name: wire_tool_name.clone(),
+                    effective_tool_name: persisted_effective_tool_name(&wire_tool_name, &tool_name),
+                    result: serde_json::json!({
+                        "category": "repeated_read_blocked",
+                        "status": "skipped",
+                        "message": block_message,
+                    }),
+                    result_for_assistant: Some(block_message),
+                    is_error: false,
+                    duration_ms: Some(elapsed_ms_u64(start_time)),
+                    image_attachments: None,
+                },
+                execution_time_ms: elapsed_ms_u64(start_time),
+            });
+        }
+
         // Repetition alone is not execution failure: polling and status checks
         // may legitimately reuse identical arguments. The execution engine
         // evaluates repeated patterns only after observing actual tool results.
-        let (admission, tool) = {
-            let registry = self.tool_registry.read().await;
-            let admission = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
-                tool_name: &tool_name,
-                allowed_tools: &task.context.allowed_tools,
-                runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-                deferred_tools: &task.context.deferred_tools,
-                loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
-                current_catalog_generation: registry.current_snapshot_generation(),
-                get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
-            });
-            (admission, registry.get_tool(&tool_name))
+        let (admission, tool) = self
+            .resolve_tool_admission(&task, &tool_name, &tool_args)
+            .await;
+
+        // F2: stale deferred-tool specs are refreshed automatically instead of
+        // surfacing a protocol-layer admission failure. The GetToolSpec reload
+        // goes through the same runtime path a model-initiated load uses, and
+        // the refreshed spec is fed back through the loaded-spec state
+        // collection channel before admission is re-run. Reloads are retried
+        // in a loop (bounded by `MAX_STALE_SPEC_RELOAD_ATTEMPTS`) so a catalog
+        // refresh racing the reload cannot leave the invocation stale, and
+        // each successful reload is recorded in the session-scoped cache so
+        // later rounds do not re-trigger the recovery. `RequiresGetToolSpec`
+        // is intentionally not auto-recovered: the model must still unlock the
+        // tool explicitly.
+        let (admission, tool) = if let Err(err) = &admission {
+            match err {
+                ToolExecutionAdmissionRejection::Deferred(stale) if stale.is_stale_spec() => {
+                    let mut admission = admission;
+                    let mut tool = tool;
+                    let mut reload_attempts = 0usize;
+                    while matches!(
+                        &admission,
+                        Err(ToolExecutionAdmissionRejection::Deferred(stale))
+                            if stale.is_stale_spec()
+                    ) {
+                        if reload_attempts >= MAX_STALE_SPEC_RELOAD_ATTEMPTS {
+                            let last_rejection = match &admission {
+                                Err(rejection) => rejection.to_string(),
+                                Ok(()) => String::new(),
+                            };
+                            warn!(
+                                "Stale deferred-tool spec reload attempts exhausted: tool_name={}, tool_id={}, session_id={}, attempts={}, last_rejection={}",
+                                tool_name, tool_id, task.context.session_id, reload_attempts, last_rejection
+                            );
+                            break;
+                        }
+                        reload_attempts += 1;
+                        match self
+                            .reload_stale_deferred_tool_spec(&task, &tool_name)
+                            .await
+                        {
+                            StaleSpecReloadOutcome::Reloaded(updated_specs) => {
+                                task.context.loaded_deferred_tool_specs = updated_specs.clone();
+                                self.record_session_loaded_deferred_specs(
+                                    &task.context.session_id,
+                                    &updated_specs,
+                                )
+                                .await;
+                                info!(
+                                    "Automatically reloaded stale deferred-tool spec: tool_name={}, tool_id={}, session_id={}, attempt={}",
+                                    tool_name, tool_id, task.context.session_id, reload_attempts
+                                );
+                                (admission, tool) = self
+                                    .resolve_tool_admission(&task, &tool_name, &tool_args)
+                                    .await;
+                            }
+                            StaleSpecReloadOutcome::NotReloadable(reason) => {
+                                warn!(
+                                    "Stale deferred-tool spec reload skipped, keeping admission rejection: tool_name={}, tool_id={}, session_id={}, reason={}",
+                                    tool_name, tool_id, task.context.session_id, reason
+                                );
+                                break;
+                            }
+                        }
+                    }
+                    (admission, tool)
+                }
+                _ => (admission, tool),
+            }
+        } else {
+            (admission, tool)
         };
 
         if let Err(err) = admission {
@@ -1650,6 +2339,14 @@ impl ToolPipeline {
             } else {
                 warn!("Tool execution admission rejected: {}", error_msg);
             }
+
+            // F3: mark the task so the result sink reports `AdmissionRejected`
+            // — admission rejections (stale catalog, deferred gateway,
+            // runtime restrictions) are protocol-layer outcomes.
+            self.admission_rejected_tasks
+                .lock()
+                .await
+                .insert(tool_id.clone());
 
             self.state_manager
                 .update_state(
@@ -1737,7 +2434,7 @@ impl ToolPipeline {
 
         // Register cancellation only after deterministic validation and registry lookup succeed.
         self.cancellation_tokens
-            .insert(tool_id.clone(), cancellation_token.clone());
+            .insert(tool_id.to_string(), cancellation_token.clone());
 
         if cancellation_token.is_cancelled() {
             self.state_manager
@@ -2351,6 +3048,14 @@ impl ToolPipeline {
     }
 
     #[cfg(test)]
+    pub(crate) async fn session_loaded_specs_for_test(
+        &self,
+        session_id: &str,
+    ) -> Vec<LoadedDeferredToolSpec> {
+        self.cached_session_loaded_deferred_specs(session_id).await
+    }
+
+    #[cfg(test)]
     pub(crate) fn tool_task_is_cancelled_for_test(&self, tool_id: &str) -> bool {
         self.state_manager
             .get_task(tool_id)
@@ -2360,6 +3065,7 @@ impl ToolPipeline {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::field_reassign_with_default)] // test fixtures build options via field assignment
     use super::*;
     use crate::agentic::core::ToolExecutionState;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
@@ -2795,6 +3501,7 @@ mod tests {
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
             allowed_tools: Vec::new(),
+            user_enabled_tools: Vec::new(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             steering_interrupt: None,
             workspace_services: None,
@@ -2927,6 +3634,7 @@ mod tests {
             session_id: "parent-session".to_string(),
             dialog_turn_id: "parent-turn".to_string(),
             tool_call_id: parent_tool_call_id.to_string(),
+            depth: None,
         });
         context
     }
@@ -2976,6 +3684,44 @@ mod tests {
             .result_for_assistant
             .as_deref()
             .is_some_and(|message| message.contains("current permission policy")));
+    }
+
+    #[tokio::test]
+    async fn runtime_operation_class_restriction_rejects_tool_in_pipeline() {
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Bash", json!({ "ok": true }), 0).await;
+
+        // Read-only operation class is allowed; Bash resolves to ExecuteCode by
+        // default, so the operation-level gate must reject it inside the
+        // pipeline before any tool side effect can run.
+        let mut context = test_tool_execution_context();
+        let mut restrictions = ToolRuntimeRestrictions::default();
+        restrictions
+            .allowed_operation_classes
+            .insert(bitfun_agent_tools::OperationClass::ReadOnly);
+        context.runtime_tool_restrictions = restrictions;
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("op-gate", "Bash")],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("operation-class denial surfaces as a tool result");
+
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("op-gate")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Failed { .. })
+        ));
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .is_some_and(|message| message.contains("not allowed by runtime restrictions")));
     }
 
     fn permission_test_manager(store: Arc<MemoryPermissionStore>) -> Arc<PermissionRequestManager> {
@@ -4039,6 +4785,7 @@ mod tests {
             attachments: Vec::new(),
             metadata: serde_json::Map::new(),
             created_at: SystemTime::now(),
+            prepended_reminders: Vec::new(),
         }
     }
 
@@ -4063,10 +4810,17 @@ mod tests {
 
         assert_eq!(result.tool_id, "tool_1");
         assert_eq!(result.tool_name, "Read");
-        assert!(result.result.is_error);
+        // Skipped-by-steering must not surface as a tool failure: the tool
+        // never ran, and `is_error: true` would make the model retry / detour
+        // around a fake error (see build_user_steering_interrupted_result).
+        assert!(!result.result.is_error);
         assert_eq!(
             result.result.result["category"],
             serde_json::Value::String("user_steering_interrupted".to_string())
+        );
+        assert_eq!(
+            result.result.result["status"],
+            serde_json::Value::String("skipped".to_string())
         );
         assert_eq!(
             result.result.result_for_assistant.as_deref(),
@@ -4322,6 +5076,9 @@ mod tests {
             results[1].result.result["category"],
             json!("user_steering_interrupted")
         );
+        // Skipped tools must not surface as failures (no retry / detour bait).
+        assert!(!results[0].result.is_error);
+        assert!(!results[1].result.is_error);
     }
 
     #[tokio::test]
@@ -4361,6 +5118,136 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results[0].result.is_error);
         assert_eq!(results[0].result.result["category"], json!("cancelled"));
+    }
+
+    #[tokio::test]
+    async fn write_like_tool_in_flight_defers_round_injection_cancel_until_complete() {
+        let pipeline = test_tool_pipeline();
+        // Use a long-running write tool to simulate an in-flight atomic unit.
+        register_static_test_tool(&pipeline, "Write", json!({ "ok": true }), 500).await;
+
+        let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+        let buffer_for_injection = buffer.clone();
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(50)).await;
+            buffer_for_injection.push(
+                "session_1",
+                test_round_injection(
+                    RoundInjectionKind::UserSteering,
+                    RoundInjectionToolPreemption::CancelRunningCooperatively,
+                ),
+            );
+        });
+
+        let mut context = test_tool_execution_context();
+        context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+            "session_1".to_string(),
+            "turn_1".to_string(),
+            buffer,
+        ));
+        let options = ToolExecutionOptions {
+            allow_parallel: false,
+            ..Default::default()
+        };
+
+        let results = pipeline
+            .execute_tools(vec![test_tool_call("tool_1", "Write")], context, options)
+            .await
+            .expect("write tool should complete despite cooperative cancel");
+
+        // The write-like atomic unit must complete fully (no forced cancel /
+        // no half-written file).
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].result.is_error);
+        assert_eq!(results[0].result.result["ok"], json!(true));
+        assert_ne!(results[0].result.result["category"], json!("cancelled"));
+    }
+
+    #[tokio::test]
+    async fn read_like_tool_in_flight_is_cancelled_immediately_by_round_injection() {
+        let pipeline = test_tool_pipeline();
+        // Long-running read tool: injection should cancel it immediately
+        // (it is not protected by the write guard).
+        register_static_test_tool(&pipeline, "Read", json!({ "ok": true }), 30_000).await;
+
+        let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+        let buffer_for_injection = buffer.clone();
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(50)).await;
+            buffer_for_injection.push(
+                "session_1",
+                test_round_injection(
+                    RoundInjectionKind::UserSteering,
+                    RoundInjectionToolPreemption::CancelRunningCooperatively,
+                ),
+            );
+        });
+
+        let mut context = test_tool_execution_context();
+        context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+            "session_1".to_string(),
+            "turn_1".to_string(),
+            buffer,
+        ));
+        let options = ToolExecutionOptions {
+            allow_parallel: false,
+            ..Default::default()
+        };
+
+        let results = pipeline
+            .execute_tools(vec![test_tool_call("tool_1", "Read")], context, options)
+            .await
+            .expect("read tool cancellation should surface as a tool result");
+
+        // Read-like tools are not protected by the write guard: the
+        // injection takes effect immediately (cancelled).
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_error);
+        assert_eq!(results[0].result.result["category"], json!("cancelled"));
+    }
+
+    #[tokio::test]
+    async fn write_like_tool_in_flight_defers_forceful_cancel_until_complete() {
+        // P2: CancelRunningForcefully variant — the write guard defers the
+        // forceful cancel until the atomic unit completes too.
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Write", json!({ "ok": true }), 500).await;
+
+        let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+        let buffer_for_injection = buffer.clone();
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(50)).await;
+            buffer_for_injection.push(
+                "session_1",
+                test_round_injection(
+                    RoundInjectionKind::UserSteering,
+                    RoundInjectionToolPreemption::CancelRunningForcefully,
+                ),
+            );
+        });
+
+        let mut context = test_tool_execution_context();
+        context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+            "session_1".to_string(),
+            "turn_1".to_string(),
+            buffer,
+        ));
+        let options = ToolExecutionOptions {
+            allow_parallel: false,
+            ..Default::default()
+        };
+
+        let results = pipeline
+            .execute_tools(vec![test_tool_call("tool_1", "Write")], context, options)
+            .await
+            .expect("write tool should complete despite forceful cancel");
+
+        // The write-like atomic unit must still complete fully (no forced
+        // cancel / no half-written file) under the forceful preemption.
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].result.is_error);
+        assert_eq!(results[0].result.result["ok"], json!(true));
+        assert_ne!(results[0].result.result["category"], json!("cancelled"));
     }
 
     #[test]
@@ -4425,6 +5312,8 @@ mod tests {
             denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: Default::default(),
+            allowed_operation_classes: Default::default(),
+            denied_operation_classes: Default::default(),
         };
 
         let context = pipeline.build_tool_use_context(&task, CancellationToken::new());
@@ -4468,6 +5357,8 @@ mod tests {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+            user_enabled_tools: &task.context.user_enabled_tools,
+            tool_arguments: &task.tool_call.arguments,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
             current_catalog_generation: 0,
@@ -4490,6 +5381,8 @@ mod tests {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+            user_enabled_tools: &task.context.user_enabled_tools,
+            tool_arguments: &task.tool_call.arguments,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
             current_catalog_generation: 0,
@@ -4506,5 +5399,908 @@ mod tests {
     fn task_tool_manages_its_own_execution_timeout() {
         let task_tool = TaskTool::new();
         assert!(task_tool.manages_own_execution_timeout());
+    }
+
+    fn test_pipeline_with_global_registry() -> ToolPipeline {
+        let registry = crate::agentic::tools::registry::get_global_tool_registry();
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let state_manager = Arc::new(ToolStateManager::new(event_queue));
+        ToolPipeline::new(registry, state_manager, None)
+    }
+
+    fn test_deferred_list_models_invocation() -> ResolvedToolInvocation {
+        ResolvedToolInvocation::from_wire_call(
+            CALL_DEFERRED_TOOL_NAME,
+            json!({
+                "tool_name": "ListModels",
+                "args": {},
+            }),
+        )
+        .expect("valid deferred ListModels invocation")
+    }
+
+    fn test_deferred_list_models_task(tool_id: &str, stale_generation: u64) -> ToolTask {
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["ListModels".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec("ListModels", stale_generation)];
+        ToolTask::new_resolved(
+            ToolCall {
+                tool_id: tool_id.to_string(),
+                tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: json!({
+                    "tool_name": "ListModels",
+                    "args": {},
+                }),
+                raw_arguments: None,
+                is_error: false,
+                parse_error: None,
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            },
+            test_deferred_list_models_invocation(),
+            None,
+            context,
+            ToolExecutionOptions::default(),
+        )
+    }
+
+    #[test]
+    fn merge_loaded_deferred_tool_specs_upserts_by_tool_name() {
+        let existing = vec![loaded_spec("WebFetch", 41), loaded_spec("Git", 42)];
+        let fresh = vec![loaded_spec("WebFetch", 42)];
+
+        let merged = merge_loaded_deferred_tool_specs(&existing, &fresh);
+
+        assert_eq!(
+            merged,
+            vec![loaded_spec("Git", 42), loaded_spec("WebFetch", 42)]
+        );
+    }
+
+    #[tokio::test]
+    async fn stale_deferred_spec_auto_reloads_and_continues_execution() {
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let tool_id = "f2-stale-reload";
+        let task = test_deferred_list_models_task(tool_id, current_generation.saturating_sub(1));
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(20),
+            pipeline.execute_single_tool(tool_id.to_string()),
+        )
+        .await
+        .expect("stale auto-reload path must not hang");
+
+        // The admission gate must auto-reload the stale spec and let the call
+        // through; whatever happens afterwards is execution-layer behavior.
+        // In this test environment ListModels fails to load model config, so
+        // the observable contract is: no stale-spec / GetToolSpec admission
+        // error may surface.
+        match result {
+            Ok(execution_result) => {
+                assert_eq!(execution_result.effective_tool_name, "ListModels");
+            }
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    !message.contains("stale"),
+                    "stale spec must be auto-reloaded before admission, got: {message}"
+                );
+                assert!(
+                    !message.contains("Call GetToolSpec first"),
+                    "auto-reloaded admission must not fall back to RequiresGetToolSpec, got: {message}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn reload_stale_deferred_tool_spec_observes_fresh_generation() {
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let task =
+            test_deferred_list_models_task("f2-reload-unit", current_generation.saturating_sub(1));
+        let outcome = pipeline
+            .reload_stale_deferred_tool_spec(&task, "ListModels")
+            .await;
+        let StaleSpecReloadOutcome::Reloaded(updated) = outcome else {
+            panic!("reload must observe a fresh spec");
+        };
+        let refreshed = updated
+            .iter()
+            .find(|spec| spec.tool_name == "ListModels")
+            .expect("refreshed spec must contain ListModels");
+        assert_eq!(
+            refreshed.catalog_generation,
+            crate::agentic::tools::registry::get_global_tool_registry()
+                .read()
+                .await
+                .current_snapshot_generation(),
+            "reloaded spec generation must match the current catalog generation"
+        );
+    }
+
+    #[tokio::test]
+    async fn stale_reload_records_session_cache_for_later_rounds() {
+        // F2 round 1: the stale task triggers the auto-reload and the
+        // refreshed spec must land in the session-scoped cache so a later
+        // round does not re-trigger the recovery.
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+        let stale_generation = current_generation.saturating_sub(1);
+
+        let tool_id = "f2-cache-round-1";
+        let task = test_deferred_list_models_task(tool_id, stale_generation);
+        pipeline.insert_tool_task_for_test(task).await;
+        let result = tokio::time::timeout(
+            Duration::from_secs(20),
+            pipeline.execute_single_tool(tool_id.to_string()),
+        )
+        .await
+        .expect("round-1 stale auto-reload path must not hang");
+        match &result {
+            Ok(execution_result) => assert_eq!(execution_result.effective_tool_name, "ListModels"),
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    !message.contains("stale"),
+                    "round-1 must auto-reload before admission, got: {message}"
+                );
+                assert!(
+                    !message.contains("Call GetToolSpec first"),
+                    "round-1 must not fall back to RequiresGetToolSpec, got: {message}"
+                );
+            }
+        }
+
+        let cached = pipeline.session_loaded_specs_for_test("session_1").await;
+        let cached_list_models = cached
+            .iter()
+            .find(|spec| spec.tool_name == "ListModels")
+            .expect("the auto-reloaded spec must be cached for the session");
+        assert_eq!(
+            cached_list_models.catalog_generation, current_generation,
+            "the cached spec must carry the refreshed catalog generation"
+        );
+    }
+
+    #[tokio::test]
+    async fn second_round_rebuilds_loaded_specs_from_cache_without_recovery() {
+        // F2 round 2: the next round rebuilds loaded specs from the message
+        // history, which still carries only the stale generation (the
+        // synthesized GetToolSpec result never becomes part of the
+        // conversation). execute_tools must merge the session cache at its
+        // entry so the invocation passes admission directly — no recovery
+        // action and no reload.
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+        let stale_generation = current_generation.saturating_sub(1);
+
+        // Seed the session cache exactly like round 1's auto-reload would.
+        pipeline
+            .record_session_loaded_deferred_specs(
+                "session_1",
+                &[loaded_spec("ListModels", current_generation)],
+            )
+            .await;
+
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["ListModels".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec("ListModels", stale_generation)];
+        let results = tokio::time::timeout(
+            Duration::from_secs(20),
+            pipeline.execute_tools(
+                vec![ToolCall {
+                    tool_id: "f2-cache-round-2".to_string(),
+                    tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+                    arguments: json!({
+                        "tool_name": "ListModels",
+                        "args": {},
+                    }),
+                    raw_arguments: None,
+                    is_error: false,
+                    parse_error: None,
+                    recovered_from_truncation: false,
+                    repair_kind: Default::default(),
+                }],
+                context,
+                ToolExecutionOptions::default(),
+            ),
+        )
+        .await
+        .expect("round-2 execute_tools must not hang")
+        .expect("round-2 execute_tools must not fail at the pipeline level");
+
+        // The created task must observe the merged fresh generation from the
+        // start — an auto-reload only mutates the local clone inside
+        // execute_single_tool, so a cache miss here would leave the stored
+        // task stale and prove the round still needed recovery.
+        let task = pipeline
+            .state_manager
+            .get_task("f2-cache-round-2")
+            .expect("round-2 task must exist");
+        let task_loaded = task
+            .context
+            .loaded_deferred_tool_specs
+            .iter()
+            .find(|spec| spec.tool_name == "ListModels")
+            .expect("round-2 task must carry the ListModels loaded spec");
+        assert_eq!(
+            task_loaded.catalog_generation, current_generation,
+            "round-2 task must see the cached generation merged over the rebuilt stale one"
+        );
+
+        // No stale-spec admission error may surface to the model.
+        let execution = results
+            .first()
+            .expect("round-2 must produce one execution result");
+        let visible = execution
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default();
+        assert!(
+            !visible.contains("stale"),
+            "round-2 must pass admission without a stale-spec error, got: {visible}"
+        );
+    }
+
+    struct RefreshProbeTool(String);
+
+    #[async_trait]
+    impl Tool for RefreshProbeTool {
+        fn name(&self) -> &str {
+            &self.0
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok(format!("Refresh probe {}", self.0))
+        }
+
+        fn short_description(&self) -> String {
+            format!("Refresh probe {}", self.0)
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            json!({ "type": "object" })
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            Ok(vec![ToolResult::Result {
+                data: json!({ "ok": true }),
+                result_for_assistant: Some("refresh probe executed".to_string()),
+                image_attachments: None,
+            }])
+        }
+    }
+
+    #[tokio::test]
+    async fn stale_reload_retries_when_registry_generation_advances_during_reload() {
+        // F2 loop retry: a registry refresh racing the reload bumps the
+        // catalog generation again after the first reload observed it; the
+        // loop must reload again instead of surfacing the stale-spec
+        // rejection.
+        let pipeline = test_pipeline_with_global_registry();
+        let registry = crate::agentic::tools::registry::get_global_tool_registry();
+        let stale_generation = {
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let tool_id = "f2-retry-loop";
+        let task = test_deferred_list_models_task(tool_id, stale_generation.saturating_sub(1));
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let pipeline_runner = pipeline.clone();
+        let handle = tokio::spawn(async move {
+            pipeline_runner
+                .execute_single_tool(tool_id.to_string())
+                .await
+        });
+
+        // Wait until the first reload has landed in the session cache, then
+        // advance the catalog generation twice (registering probe tools) to
+        // simulate a refresh racing the reload. The first reload observes the
+        // generation the test read above, so the poll is satisfied by any
+        // entry at or above that baseline.
+        let first_reloaded = async {
+            loop {
+                let cached = pipeline.session_loaded_specs_for_test("session_1").await;
+                if cached.iter().any(|spec| {
+                    spec.tool_name == "ListModels" && spec.catalog_generation >= stale_generation
+                }) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(10), first_reloaded)
+            .await
+            .expect("the first reload must land in the session cache");
+        for probe_index in 0..2 {
+            registry
+                .write()
+                .await
+                .register_tool(Arc::new(RefreshProbeTool(format!(
+                    "F2RefreshProbe{probe_index}"
+                ))));
+        }
+
+        let result = tokio::time::timeout(Duration::from_secs(20), handle)
+            .await
+            .expect("stale reload retry loop must not hang")
+            .expect("tool execution join must not fail");
+
+        // Cleanup: remove the probe tools so other tests keep a stable catalog.
+        for probe_index in 0..2 {
+            registry
+                .write()
+                .await
+                .unregister_tool(&format!("F2RefreshProbe{probe_index}"));
+        }
+
+        match result {
+            Ok(execution_result) => {
+                assert_eq!(execution_result.effective_tool_name, "ListModels");
+            }
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    !message.contains("stale"),
+                    "registry refresh racing the reload must be absorbed by the retry loop, got: {message}"
+                );
+                assert!(
+                    !message.contains("Call GetToolSpec first"),
+                    "the retry loop must not fall back to RequiresGetToolSpec, got: {message}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stale_spec_reload_reports_not_reloadable_when_tool_leaves_deferred_catalog() {
+        // F2 failure classification: the tool is tracked as loaded by the task
+        // but no longer part of the deferred catalog. The reload cannot
+        // observe a fresh spec and must be classified as not reloadable with a
+        // semantic reason; the original stale-spec rejection stays visible.
+        let pipeline = test_pipeline_with_global_registry();
+        let current_generation = {
+            let registry = crate::agentic::tools::registry::get_global_tool_registry();
+            let guard = registry.read().await;
+            assert!(
+                guard.get_tool("ListModels").is_some(),
+                "F2 test requires the product-full global registry with ListModels"
+            );
+            guard.current_snapshot_generation()
+        };
+
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["MissingDeferredTool".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec(
+            "MissingDeferredTool",
+            current_generation.saturating_sub(1),
+        )];
+        let invocation = ResolvedToolInvocation::from_wire_call(
+            CALL_DEFERRED_TOOL_NAME,
+            json!({
+                "tool_name": "MissingDeferredTool",
+                "args": {},
+            }),
+        )
+        .expect("valid deferred MissingDeferredTool invocation");
+        let task = ToolTask::new_resolved(
+            ToolCall {
+                tool_id: "f2-not-reloadable".to_string(),
+                tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: json!({
+                    "tool_name": "MissingDeferredTool",
+                    "args": {},
+                }),
+                raw_arguments: None,
+                is_error: false,
+                parse_error: None,
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            },
+            invocation,
+            None,
+            context,
+            ToolExecutionOptions::default(),
+        );
+
+        let outcome = pipeline
+            .reload_stale_deferred_tool_spec(&task, "MissingDeferredTool")
+            .await;
+        let StaleSpecReloadOutcome::NotReloadable(reason) = outcome else {
+            panic!("a tool outside the deferred catalog must be classified as not reloadable");
+        };
+        assert!(
+            reason.contains("not in the deferred catalog"),
+            "unexpected not-reloadable reason: {reason}"
+        );
+
+        // End-to-end: the admission rejection keeps its original stale-spec
+        // semantics instead of being silently swallowed.
+        pipeline.insert_tool_task_for_test(task).await;
+        let err = pipeline
+            .execute_single_tool("f2-not-reloadable".to_string())
+            .await
+            .expect_err("the stale-spec rejection must be preserved");
+        let message = err.to_string();
+        assert!(
+            message.contains("stale"),
+            "original stale-spec rejection must surface, got: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_deferred_spec_still_requires_explicit_get_tool_spec() {
+        let pipeline = test_pipeline_with_global_registry();
+        let mut task = test_deferred_list_models_task("f2-require-spec", 0);
+        task.context.loaded_deferred_tool_specs = Vec::new();
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let result = pipeline
+            .execute_single_tool("f2-require-spec".to_string())
+            .await;
+        let err = result.expect_err("unloaded deferred tools must still require GetToolSpec");
+        let message = err.to_string();
+        assert!(
+            message.contains("Call GetToolSpec first"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn direct_deferred_invocation_still_requires_gateway() {
+        let pipeline = test_pipeline_with_global_registry();
+        let mut context = test_tool_execution_context();
+        context.agent_type = "agentic".to_string();
+        context.deferred_tools = vec!["ListModels".to_string()];
+        let task = ToolTask::new(
+            ToolCall {
+                tool_id: "f2-direct-gateway".to_string(),
+                tool_name: "ListModels".to_string(),
+                arguments: json!({}),
+                raw_arguments: None,
+                is_error: false,
+                parse_error: None,
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            },
+            context,
+            ToolExecutionOptions::default(),
+        );
+        pipeline.insert_tool_task_for_test(task).await;
+
+        let result = pipeline
+            .execute_single_tool("f2-direct-gateway".to_string())
+            .await;
+        let err = result.expect_err("direct deferred invocation must be rejected");
+        let message = err.to_string();
+        assert!(
+            message.contains("Call GetToolSpec first"),
+            "unexpected error: {message}"
+        );
+    }
+
+    // ---- R-MR-11 读取/搜索重复拦截测试 ----
+
+    /// 构造一个 Read 工具调用（同文件不同 offset = 同目标指纹）。
+    fn repeated_read_call(tool_id: &str, file_path: &str, offset: u64) -> ToolCall {
+        ToolCall {
+            tool_id: tool_id.to_string(),
+            tool_name: "Read".to_string(),
+            arguments: json!({ "file_path": file_path, "offset": offset, "limit": 10 }),
+            raw_arguments: None,
+            is_error: false,
+            parse_error: None,
+            recovered_from_truncation: false,
+            repair_kind: Default::default(),
+        }
+    }
+
+    fn repeated_read_task(tool_id: &str, file_path: &str, offset: u64) -> ToolTask {
+        ToolTask::new(
+            repeated_read_call(tool_id, file_path, offset),
+            test_tool_execution_context(),
+            ToolExecutionOptions::default(),
+        )
+    }
+
+    #[tokio::test]
+    async fn repeated_read_same_file_three_offsets_blocks_third() {
+        // type-contract §四.1：连续 3 次读同文件（不同 offset 分段）→ 第 3 次拦截。
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Read", json!({ "ok": true }), 0).await;
+        let file_path = std::env::temp_dir()
+            .join("r-mr-11-same-file.txt")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(&file_path, "line1\nline2\nline3\n").expect("write test file");
+
+        for (index, offset) in [0u64, 10u64, 20u64].into_iter().enumerate() {
+            let tool_id = format!("same-file-{index}");
+            let task = repeated_read_task(&tool_id, &file_path, offset);
+            pipeline.insert_tool_task_for_test(task).await;
+            let result = pipeline
+                .execute_single_tool(tool_id.clone())
+                .await
+                .expect("execute single tool must not fail at pipeline level");
+
+            if index < 2 {
+                // 前 2 次：正常执行（工具返回 ok）。
+                assert_eq!(
+                    result.result.result["ok"],
+                    json!(true),
+                    "call {index} must execute normally"
+                );
+            } else {
+                // 第 3 次：拦截，返回提示，零请求
+                assert_eq!(
+                    result.result.result["category"],
+                    json!("repeated_read_blocked"),
+                    "third consecutive same-file read must be blocked"
+                );
+                assert_eq!(result.result.result["status"], json!("skipped"));
+                let message = result
+                    .result
+                    .result_for_assistant
+                    .as_deref()
+                    .expect("block message must be present");
+                assert!(message.contains("已连续调用 3 次"));
+                assert!(message.contains("检测到碎片化读取"));
+                assert!(!result.result.is_error, "block is not an execution failure");
+            }
+        }
+        std::fs::remove_file(&file_path).ok();
+    }
+
+    #[tokio::test]
+    async fn repeated_grep_same_keyword_blocks_third() {
+        // type-contract §四.2：连续 3 次 grep 同关键词 → 第 3 次拦截。
+        let mut state = RepeatedReadSessionState::default();
+        let thresholds = ExecutionThresholds::default();
+
+        // 连续 3 次同一关键词：前 2 次放行，第 3 次拦截。
+        let grep_args = json!({ "pattern": "log.*Error", "path": "src" });
+        for index in 0..3 {
+            let block = repeated_read_decide(
+                &thresholds,
+                "Grep",
+                "log.*Error@src",
+                &grep_args,
+                &mut state,
+            );
+            if index < 2 {
+                assert!(block.is_none(), "grep call {index} must pass");
+            } else {
+                let message = block.expect("third grep must be blocked");
+                assert!(message.contains("已连续调用 3 次"));
+                assert!(message.contains("请基于已有内容继续"));
+            }
+        }
+
+        // 目标变化 → 重置：A→B→A 不误伤。
+        let mut state = RepeatedReadSessionState::default();
+        assert!(repeated_read_decide(
+            &thresholds,
+            "Grep",
+            "log.*Error@src",
+            &json!({ "pattern": "log.*Error", "path": "src" }),
+            &mut state,
+        )
+        .is_none());
+        assert!(repeated_read_decide(
+            &thresholds,
+            "Grep",
+            "other@src",
+            &json!({ "pattern": "other", "path": "src" }),
+            &mut state,
+        )
+        .is_none());
+        // A→B→A：目标回到 A，重新计数为 1，不拦。
+        assert!(repeated_read_decide(
+            &thresholds,
+            "Grep",
+            "log.*Error@src",
+            &json!({ "pattern": "log.*Error", "path": "src" }),
+            &mut state,
+        )
+        .is_none());
+    }
+
+    #[tokio::test]
+    async fn repeated_read_cross_reference_a_b_a_not_blocked() {
+        // type-contract §四.3：读 A → 读 B → 读 A（交叉引用）→ 不拦。
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Read", json!({ "ok": true }), 0).await;
+        let file_a = std::env::temp_dir()
+            .join("r-mr-11-cross-a.txt")
+            .to_string_lossy()
+            .to_string();
+        let file_b = std::env::temp_dir()
+            .join("r-mr-11-cross-b.txt")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(&file_a, "a\n").ok();
+        std::fs::write(&file_b, "b\n").ok();
+
+        for (tool_id, path) in [
+            ("cross-a1", file_a.as_str()),
+            ("cross-b", file_b.as_str()),
+            ("cross-a2", file_a.as_str()),
+        ] {
+            let task = repeated_read_task(tool_id, path, 0);
+            pipeline.insert_tool_task_for_test(task).await;
+            let result = pipeline
+                .execute_single_tool(tool_id.to_string())
+                .await
+                .expect("execute single tool");
+            assert_ne!(
+                result.result.result["category"],
+                json!("repeated_read_blocked"),
+                "cross-reference {tool_id} must not be blocked"
+            );
+        }
+        std::fs::remove_file(&file_a).ok();
+        std::fs::remove_file(&file_b).ok();
+    }
+
+    #[tokio::test]
+    async fn repeated_read_interleaved_production_resets() {
+        // type-contract §四.4：读 A → 读 A(offset 10) → 写文件 → 读 A → 不拦
+        // （中间有产出重置）。
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Read", json!({ "ok": true }), 0).await;
+        register_static_test_tool(&pipeline, "Write", json!({ "written": true }), 0).await;
+        let file_path = std::env::temp_dir()
+            .join("r-mr-11-reset.txt")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(&file_path, "x\n").ok();
+
+        // 前 2 次连续读 A（不同 offset）。
+        for (index, offset) in [0u64, 10u64].into_iter().enumerate() {
+            let tool_id = format!("reset-read-{index}");
+            let task = repeated_read_task(&tool_id, &file_path, offset);
+            pipeline.insert_tool_task_for_test(task).await;
+            let result = pipeline
+                .execute_single_tool(tool_id)
+                .await
+                .expect("execute single tool");
+            assert_ne!(
+                result.result.result["category"],
+                json!("repeated_read_blocked"),
+                "pre-write read {index} must not be blocked"
+            );
+        }
+
+        // 中间写文件（非读取类工具 → 重置计数）。
+        let mut write_call = test_tool_call("reset-write", "Write");
+        write_call.arguments = json!({ "payload": "+++ /tmp/reset.txt\nnew" });
+        let write_task = ToolTask::new(
+            write_call,
+            test_tool_execution_context(),
+            ToolExecutionOptions::default(),
+        );
+        pipeline.insert_tool_task_for_test(write_task).await;
+        let result = pipeline
+            .execute_single_tool("reset-write".to_string())
+            .await
+            .expect("write tool executes");
+        assert_ne!(
+            result.result.result["category"],
+            json!("repeated_read_blocked"),
+            "write must not be blocked"
+        );
+
+        // 再读 A：重置后重新计数为 1，不拦。
+        let task = repeated_read_task("reset-read-after", &file_path, 20);
+        pipeline.insert_tool_task_for_test(task).await;
+        let result = pipeline
+            .execute_single_tool("reset-read-after".to_string())
+            .await
+            .expect("execute single tool");
+        assert_ne!(
+            result.result.result["category"],
+            json!("repeated_read_blocked"),
+            "post-write read must not be blocked"
+        );
+        std::fs::remove_file(&file_path).ok();
+    }
+
+    #[tokio::test]
+    async fn repeated_read_disabled_via_thresholds_config() {
+        // type-contract §四.5：配置开关 enabled=false 不拦。
+        let file_path = std::env::temp_dir()
+            .join("r-mr-11-disabled.txt")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(&file_path, "d\n").ok();
+
+        // 直接构造纯函数判定验证开关：enabled=false → 永不拦截。
+        let disabled = ExecutionThresholds {
+            repeated_read_enabled: false,
+            ..ExecutionThresholds::default()
+        };
+        let mut state = RepeatedReadSessionState::default();
+        for _ in 0..5 {
+            assert!(
+                repeated_read_decide(
+                    &disabled,
+                    "Read",
+                    &file_path,
+                    &json!({ "file_path": file_path, "offset": 0 }),
+                    &mut state,
+                )
+                .is_none(),
+                "disabled threshold must never block"
+            );
+        }
+
+        // 端到端：通过 pipeline 连读 3 次同一文件（enabled 默认 true 会拦第 3 次，
+        // 但这里验证的是阈值配置关闭时的纯函数语义，故仅验证 pipeline 端到端拦截
+        // 在开启时生效已在 repeated_read_same_file_three_offsets_blocks_third 覆盖）。
+        // 本测试仅覆盖开关语义（纯函数层面，避免依赖全局配置注入）。
+        std::fs::remove_file(&file_path).ok();
+    }
+
+    #[tokio::test]
+    async fn repeated_read_offset_increment_fragment_blocks_with_guidance() {
+        // 强化：连续分段读同文件（offset 递增十行读）→ 按同目标计数，3 次即拦；
+        // 拦截提示含「碎片化读取」引导；小文件（<200 行）→ 提示一次读全文。
+        // 小文件：<200 行。
+        let small_path = std::env::temp_dir()
+            .join("r-mr-11-small.txt")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(&small_path, "small\n").ok();
+
+        let mut state = RepeatedReadSessionState::default();
+        let thresholds = ExecutionThresholds::default();
+
+        // offset 递增的十行读同一小文件：第 3 次拦截 + 碎片化 + 小文件提示。
+        let mut block_message = None;
+        for (index, offset) in [0u64, 10u64, 20u64].into_iter().enumerate() {
+            let arguments = json!({ "file_path": small_path, "offset": offset, "limit": 10 });
+            let block =
+                repeated_read_decide(&thresholds, "Read", &small_path, &arguments, &mut state);
+            if index == 2 {
+                block_message = block;
+            }
+        }
+        let message = block_message.expect("third fragmented read must be blocked");
+        assert!(
+            message.contains("碎片化读取"),
+            "fragment guidance must mention 碎片化读取, got: {message}"
+        );
+        assert!(
+            message.contains("文件较小（<200 行），建议一次读全文"),
+            "small-file hint must be present, got: {message}"
+        );
+        assert!(
+            message.contains("正确做法：读全文（小文件）或搜索关键词定位（大文件）"),
+            "correct-practice guidance must be present, got: {message}"
+        );
+
+        // 大文件（>=200 行）：有碎片化引导但无小文件提示。
+        let big_path = std::env::temp_dir()
+            .join("r-mr-11-big.txt")
+            .to_string_lossy()
+            .to_string();
+        std::fs::write(&big_path, "line\n".repeat(300)).ok();
+        let mut state = RepeatedReadSessionState::default();
+        let mut big_block_message = None;
+        for (index, offset) in [0u64, 10u64, 20u64].into_iter().enumerate() {
+            let arguments = json!({ "file_path": big_path, "offset": offset, "limit": 10 });
+            let block =
+                repeated_read_decide(&thresholds, "Read", &big_path, &arguments, &mut state);
+            if index == 2 {
+                big_block_message = block;
+            }
+        }
+        let message = big_block_message.expect("third fragmented big-file read must be blocked");
+        assert!(message.contains("碎片化读取"));
+        assert!(
+            !message.contains("建议一次读全文"),
+            "big file must not get the small-file hint, got: {message}"
+        );
+
+        std::fs::remove_file(&small_path).ok();
+        std::fs::remove_file(&big_path).ok();
+    }
+
+    #[test]
+    fn repeated_read_target_fingerprint_normalization() {
+        // 目标指纹归一化：Read 忽略 offset/limit 分段；Grep 关键词+路径；Glob pattern；
+        // WebSearch query；WebFetch url；LS path；非读取类工具 None。
+        assert_eq!(
+            repeated_read_target_fingerprint(
+                "Read",
+                &json!({ "file_path": "src/main.rs", "offset": 10, "limit": 10 }),
+            )
+            .as_deref(),
+            Some("src/main.rs")
+        );
+        assert_eq!(
+            repeated_read_target_fingerprint("Grep", &json!({ "pattern": "foo", "path": "src" }))
+                .as_deref(),
+            Some("foo@src")
+        );
+        assert_eq!(
+            repeated_read_target_fingerprint("Grep", &json!({ "pattern": "foo" })).as_deref(),
+            Some("foo@.")
+        );
+        assert_eq!(
+            repeated_read_target_fingerprint("Glob", &json!({ "pattern": "**/*.ts" })).as_deref(),
+            Some("**/*.ts")
+        );
+        assert_eq!(
+            repeated_read_target_fingerprint("WebSearch", &json!({ "query": "rust async" }))
+                .as_deref(),
+            Some("rust async")
+        );
+        assert_eq!(
+            repeated_read_target_fingerprint("WebFetch", &json!({ "url": "https://example.com" }),)
+                .as_deref(),
+            Some("https://example.com")
+        );
+        assert_eq!(
+            repeated_read_target_fingerprint("LS", &json!({ "path": "src" })).as_deref(),
+            Some("src")
+        );
+        assert_eq!(
+            repeated_read_target_fingerprint("LS", &json!({})).as_deref(),
+            Some(".")
+        );
+        assert!(repeated_read_target_fingerprint("Write", &json!({})).is_none());
+        assert!(repeated_read_target_fingerprint("Read", &json!({})).is_none());
     }
 }

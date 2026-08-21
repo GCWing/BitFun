@@ -20,13 +20,6 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const MAX_TRANSCRIPT_CHARS: usize = 16000;
-const MAX_TEXT_PER_MESSAGE: usize = 800;
-const TAIL_RESERVE_CHARS: usize = 4000;
-/// Gaps longer than this between messages are treated as "user away" and excluded
-/// from both active duration and response time calculations.
-const ACTIVITY_GAP_THRESHOLD_SECS: u64 = 30 * 60;
-
 fn effective_tool_call_name(tool_call: &ToolCall) -> String {
     ResolvedToolInvocation::from_wire_call(tool_call.tool_name.clone(), tool_call.arguments.clone())
         .map(|invocation| invocation.effective_tool_name)
@@ -53,6 +46,10 @@ impl InsightsCollector {
         let now = SystemTime::now();
         let now_ms = system_time_to_unix_ms(now);
         let cutoff_ms = now_ms.saturating_sub(days as u64 * 86_400_000);
+
+        // R-THR-01 批2 2-2：洞察域常量配置化（`ai.thresholds.insights.*`），
+        // 默认值镜像旧硬编码（零行为变化）。
+        let insights = crate::service::config::types::configured_insights_thresholds().await;
 
         let workspace_targets = collect_effective_session_storage_targets().await;
 
@@ -199,7 +196,7 @@ impl InsightsCollector {
                     .max()
                     .unwrap_or(first_activity_ms);
 
-                let mut transcript = Self::build_transcript(
+                let mut transcript = Self::build_transcript_with_limits(
                     &summary.session_id,
                     &session,
                     &messages,
@@ -207,6 +204,9 @@ impl InsightsCollector {
                     message_count,
                     duration_minutes,
                     unix_ms_to_iso(first_activity_ms),
+                    insights.max_transcript_chars,
+                    insights.max_text_per_message,
+                    insights.tail_reserve_chars,
                 );
                 transcript.workspace_path = Some(workspace_path.to_string_lossy().to_string());
                 transcript.last_activity_unix_secs = last_activity_ms / 1000;
@@ -219,6 +219,7 @@ impl InsightsCollector {
                     &selected_turns,
                     message_count,
                     duration_millis,
+                    insights.activity_gap_threshold_secs,
                 );
                 for path in
                     accumulate_code_stats(&mut base_stats, workspace_path, &selected_turns).await
@@ -259,7 +260,10 @@ impl InsightsCollector {
         Ok((base_stats, transcripts))
     }
 
-    fn build_transcript(
+    /// R-THR-01 批2 2-2：洞察域常量配置化变体——limit 由调用方从
+    /// `ai.thresholds.insights.*` 解析（默认镜像旧常量，零行为变化）。
+    #[allow(clippy::too_many_arguments)] // transcript construction context; kept flat
+    fn build_transcript_with_limits(
         session_id: &str,
         session: &crate::agentic::core::Session,
         messages: &[Message],
@@ -267,6 +271,9 @@ impl InsightsCollector {
         message_count: usize,
         duration_minutes: u64,
         created_at: String,
+        max_transcript_chars: usize,
+        max_text_per_message: usize,
+        tail_reserve_chars: usize,
     ) -> SessionTranscript {
         let mut all_parts: Vec<String> = Vec::new();
         let mut tool_names: Vec<String> = Vec::new();
@@ -281,14 +288,14 @@ impl InsightsCollector {
                         MessageRole::System => continue,
                         MessageRole::Tool => continue,
                     };
-                    let truncated = truncate_text(text, MAX_TEXT_PER_MESSAGE);
+                    let truncated = truncate_text(text, max_text_per_message);
                     all_parts.push(format!("{}: {}", role_tag, truncated));
                 }
                 MessageContent::Mixed {
                     text, tool_calls, ..
                 } => {
                     if !text.is_empty() {
-                        let truncated = truncate_text(text, MAX_TEXT_PER_MESSAGE);
+                        let truncated = truncate_text(text, max_text_per_message);
                         all_parts.push(format!("[Assistant]: {}", truncated));
                     }
                     for tc in tool_calls {
@@ -315,14 +322,14 @@ impl InsightsCollector {
                 }
                 MessageContent::Multimodal { text, .. } => {
                     if !text.is_empty() {
-                        let truncated = truncate_text(text, MAX_TEXT_PER_MESSAGE);
+                        let truncated = truncate_text(text, max_text_per_message);
                         all_parts.push(format!("[User]: {} [+images]", truncated));
                     }
                 }
             }
         }
 
-        let transcript = smart_truncate_parts(&all_parts, MAX_TRANSCRIPT_CHARS, TAIL_RESERVE_CHARS);
+        let transcript = smart_truncate_parts(&all_parts, max_transcript_chars, tail_reserve_chars);
 
         SessionTranscript {
             session_id: session_id.to_string(),
@@ -347,6 +354,7 @@ impl InsightsCollector {
         all_turns: &[DialogTurnData],
         message_count: usize,
         duration_millis: u64,
+        activity_gap_threshold_secs: u64,
     ) {
         base_stats.total_messages += message_count as u32;
         base_stats.total_turns += all_turns.len() as u32;
@@ -388,7 +396,7 @@ impl InsightsCollector {
             if let Some(previous_end_ms) = previous_end_ms {
                 let response_ms = turn.start_time.saturating_sub(previous_end_ms);
                 let response_secs = response_ms / 1000;
-                if (2..=ACTIVITY_GAP_THRESHOLD_SECS).contains(&response_secs) {
+                if (2..=activity_gap_threshold_secs).contains(&response_secs) {
                     base_stats.response_times_raw.push(response_secs as f64);
                 }
             }

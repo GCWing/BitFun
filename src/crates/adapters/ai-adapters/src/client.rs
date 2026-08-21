@@ -439,7 +439,16 @@ impl AIClient {
     ) -> Result<StreamResponse> {
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
-                openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
+                openai::chat::send_stream(
+                    self,
+                    messages,
+                    tools,
+                    extra_body,
+                    max_tries,
+                    trace,
+                    request_context,
+                )
+                .await
             }
             ApiFormat::OpenAIResponses => {
                 openai::responses::send_stream(
@@ -1491,6 +1500,83 @@ mod tests {
 
         assert_eq!(request_body["enable_thinking"], true);
         assert!(request_body.get("thinking").is_none());
+    }
+
+    #[test]
+    fn build_openai_request_body_injects_enable_thinking_for_codebuddy() {
+        let client = AIClient::new(AIConfig {
+            name: "codebuddy".to_string(),
+            base_url: "https://copilot.tencent.com/v1".to_string(),
+            request_url: "https://copilot.tencent.com/v2/chat/completions".to_string(),
+            api_key: "test-key".to_string(),
+            model: "glm-5.2".to_string(),
+            format: "openai".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            inline_think_in_text: true,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        })
+        .with_reasoning_preset(&reasoning_preset(
+            "on",
+            vec![ReasoningPresetAction::Toggle { enabled: true }],
+        ));
+
+        let request_body = openai::chat::build_request_body(
+            &client,
+            &client.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["enable_thinking"], true);
+    }
+
+    #[test]
+    fn build_openai_request_body_injects_codebuddy_reasoning_effort_tier() {
+        // CodeBuddy thinking is tier-adjustable: an effort preset must set both
+        // `enable_thinking: true` and the `reasoning_effort` tier string.
+        let client = AIClient::new(AIConfig {
+            name: "codebuddy".to_string(),
+            base_url: "https://copilot.tencent.com/v1".to_string(),
+            request_url: "https://copilot.tencent.com/v2/chat/completions".to_string(),
+            api_key: "test-key".to_string(),
+            model: "glm-5.2".to_string(),
+            format: "openai".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            inline_think_in_text: true,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        })
+        .with_reasoning_preset(&reasoning_preset(
+            "high",
+            vec![ReasoningPresetAction::Effort {
+                value: "high".to_string(),
+            }],
+        ));
+
+        let request_body = openai::chat::build_request_body(
+            &client,
+            &client.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["enable_thinking"], true);
+        assert_eq!(request_body["reasoning_effort"], "high");
     }
 
     #[test]

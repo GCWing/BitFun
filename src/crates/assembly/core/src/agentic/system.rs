@@ -103,6 +103,12 @@ pub async fn init_agentic_system_for_profile_with_runtime_ownership(
         "thread_goal_tokens".to_string(),
         Arc::new(ThreadGoalTokenSubscriber),
     );
+    event_router.subscribe_internal(
+        "background_command_settler".to_string(),
+        Arc::new(session::BackgroundCommandSettlerSubscriber::new(
+            session_manager.clone(),
+        )),
+    );
 
     let tool_registry = tools::registry::get_global_tool_registry();
     let tool_state_manager = Arc::new(tools::pipeline::ToolStateManager::new(event_queue.clone()));

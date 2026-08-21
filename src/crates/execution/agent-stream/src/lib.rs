@@ -1189,13 +1189,20 @@ impl StreamProcessor {
                     }
 
                     if let Some(reason) = finish_reason {
-                        let completion = tool_call_completion.unwrap_or(ToolCallCompletion::Unknown);
-                        let _ = ctx.finalize_all_pending_tool_calls(
-                            ToolCallBoundary::FinishReason,
-                            completion,
-                        );
-                        if is_token_limit_finish_reason(&reason) {
-                            ctx.token_limit_finish_reason = Some(reason);
+                        // Some providers (e.g. CodeBuddy cloud) send an empty
+                        // finish_reason placeholder on every delta chunk. It is
+                        // not a real completion signal, so it must not
+                        // finalize pending tool calls mid-stream.
+                        if !reason.is_empty() {
+                            let completion =
+                                tool_call_completion.unwrap_or(ToolCallCompletion::Unknown);
+                            let _ = ctx.finalize_all_pending_tool_calls(
+                                ToolCallBoundary::FinishReason,
+                                completion,
+                            );
+                            if is_token_limit_finish_reason(&reason) {
+                                ctx.token_limit_finish_reason = Some(reason);
+                            }
                         }
                     }
                 }
