@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "scope": "example-style-selection",
   "styleId": "cinematic-animated-wallpaper",
-  "validatedAgainstRegistryRevision": "71fbdbb26757c930eedfef5cfda55ca12e008ae1",
+  "validatedAgainstRegistryRevision": "b5869b8d2ff5ffd03a558e0839e8a96837873c11",
   "scenes": {
     "workbench": {
       "parts": {
