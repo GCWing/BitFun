@@ -1,13 +1,57 @@
 # BitFun iOS
 
-iOS application entrypoint.
+Native SwiftUI client for the mobile conversation surface. The initial iOS
+entrypoint is intentionally small, but it is a real Xcode application and uses
+the same geometry as the HarmonyOS reference: 76pt conversation header, 44pt
+circle controls, 16pt content margins, the 48pt connection strip, and the
+floating composer with 52pt collapsed height.
 
-Provisional source layout:
+## Project layout
 
-- `BitFun/App/`: application lifecycle and composition root.
-- `BitFun/Features/`: iOS product features and native UI.
-- `BitFun/Infrastructure/`: iOS adapters and platform services.
-- `BitFun/Resources/`: assets and localized resources.
+- `BitFun/App/`: lifecycle and composition root.
+- `BitFun/Features/Chat/`: header, timeline bubbles, and composer.
+- `BitFun/Features/Shell/`: theme tokens, drawer, settings, and shell layout.
+- `BitFun/Infrastructure/`: observable state and the platform seam.
+- `BitFun/Resources.xcassets/`: app icon and future native assets.
 
-Add the Xcode project after the UI stack, bundle identifier, deployment target,
-and shared-core integration strategy are selected.
+## Build and run
+
+The repository does not change the machine-wide developer directory. Use the
+Xcode copy in `~/Downloads` when it is the compatible version:
+
+```bash
+export DEVELOPER_DIR="$HOME/Downloads/Xcode.app/Contents/Developer"
+"$DEVELOPER_DIR/usr/bin/xcodebuild" \
+  -project BitFun.xcodeproj -scheme BitFun \
+  -destination 'platform=iOS Simulator,id=1D7E5AA6-1AE9-4CAB-966B-A83B5F113B4A' \
+  -derivedDataPath /tmp/BitFun-iOS-Derived \
+  CODE_SIGNING_ALLOWED=YES CODE_SIGNING_IDENTITY=- build
+```
+
+`MobileAppModel` is kept in `Infrastructure` so the SwiftUI views do not know
+about transport or persistence. Local chat, pairing, and remote session state
+are supplied by the generated `BitFunMobileCore` framework from
+`src/apps/mobile/shared/core-feature`; SwiftUI only maps the typed state to its
+presentation model. Pairing accepts the desktop connection URL through the
+connection sheet (the camera scanner remains a native adapter concern).
+
+When the framework has not been built yet, generate it with the same compatible
+toolchain before opening the Xcode project:
+
+```bash
+export JAVA_HOME="/Applications/DevEco-Studio.app/Contents/jbr/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+export DEVELOPER_DIR="$HOME/Downloads/Xcode.app/Contents/Developer"
+../../../../gradlew :core-feature:assembleBitFunMobileCoreDebugXCFramework
+```
+
+The shell includes both product surfaces already: Local opens the HarmonyOS
+welcome prompts, Remote has the disconnected desktop state and connection
+action, and the unified drawer mirrors the HarmonyOS recent-chat, device,
+workspace, chat, and settings sections. A connected preview exposes the
+remote empty home through the same conversation chrome.
+
+For repeatable simulator captures, pass `--remote`, `--connected`, and/or
+`--drawer` after the bundle identifier in `simctl launch`. These launch flags
+select deterministic inspection states; normal launches use the live KMP
+pairing/session stores.

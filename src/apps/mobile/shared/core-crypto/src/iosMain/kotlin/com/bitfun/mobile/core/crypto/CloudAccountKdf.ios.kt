@@ -9,6 +9,7 @@ import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 public actual object PlatformArgon2id {
     public actual suspend fun derive(
         password: String,
