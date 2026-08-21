@@ -101,6 +101,12 @@ pub enum PluginHostError {
     PrepareLog(#[source] std::io::Error),
     #[error("plugin host did not connect within the startup timeout")]
     StartupTimeout,
+    #[error("plugin host startup failed ({startup}) and process-tree cleanup failed: {cleanup}")]
+    StartupCleanup {
+        startup: String,
+        #[source]
+        cleanup: std::io::Error,
+    },
     #[error("plugin host IPC failed: {0}")]
     Io(#[source] std::io::Error),
     #[error("plugin host handshake frame is invalid: {0}")]
@@ -163,6 +169,7 @@ pub enum PluginHostShutdownDisposition {
 pub struct PluginHostShutdownReport {
     pub generation: u64,
     pub disposition: PluginHostShutdownDisposition,
+    pub reaped: bool,
     pub rpc_completed: bool,
     pub exit_code: Option<i32>,
     pub duration_ms: u64,
@@ -170,6 +177,13 @@ pub struct PluginHostShutdownReport {
 
 impl PluginHost {
     pub async fn start(config: PluginHostConfig) -> Result<Self, PluginHostError> {
+        Self::start_with_timeout(config, STARTUP_TIMEOUT).await
+    }
+
+    async fn start_with_timeout(
+        config: PluginHostConfig,
+        startup_timeout: Duration,
+    ) -> Result<Self, PluginHostError> {
         validate_config(&config)?;
         tokio::fs::create_dir_all(&config.cache_directory)
             .await
@@ -203,17 +217,31 @@ impl PluginHost {
                     PluginHostError::Spawn(error)
                 }
             })?;
-        let host_log = host_log::attach_host_log(&mut child, &config.log_file)
-            .await
-            .map_err(PluginHostError::PrepareLog)?;
+        let host_log = match host_log::attach_host_log(&mut child, &config.log_file).await {
+            Ok(host_log) => host_log,
+            Err(error) => {
+                return Err(cleanup_failed_start(
+                    &mut child,
+                    None,
+                    PluginHostError::PrepareLog(error),
+                )
+                .await);
+            }
+        };
 
-        let (stream, max_frame_bytes) = accept_authenticated_connection(
+        let (stream, max_frame_bytes) = match accept_authenticated_connection(
             &listener,
             &token,
             &config.cache_directory,
-            STARTUP_TIMEOUT,
+            startup_timeout,
         )
-        .await?;
+        .await
+        {
+            Ok(connection) => connection,
+            Err(error) => {
+                return Err(cleanup_failed_start(&mut child, Some(host_log), error).await);
+            }
+        };
         let generation = NEXT_CONNECTION_GENERATION.fetch_add(1, Ordering::Relaxed);
         let peer = JsonRpcPeer::start(stream, generation, max_frame_bytes);
         Ok(Self {
@@ -282,8 +310,10 @@ impl PluginHost {
                 } else {
                     PluginHostShutdownDisposition::ExitedAfterShutdown
                 };
-                let report =
+                let mut report =
                     shutdown_report(generation, disposition, true, status.code(), started_at);
+                report.reaped =
+                    reap_process_tree(&mut self.child, policy.terminate_grace, generation).await;
                 if report.disposition == PluginHostShutdownDisposition::Graceful {
                     log::info!(
                         "Plugin host exited gracefully: generation={}, exit_code={:?}, duration_ms={}",
@@ -317,13 +347,15 @@ impl PluginHost {
             .close("plugin host graceful shutdown fallback")
             .await;
         if let Ok(Ok(status)) = tokio::time::timeout(policy.eof_timeout, self.child.wait()).await {
-            let report = shutdown_report(
+            let mut report = shutdown_report(
                 generation,
                 PluginHostShutdownDisposition::ExitedAfterConnectionClose,
                 rpc_completed,
                 status.code(),
                 started_at,
             );
+            report.reaped =
+                reap_process_tree(&mut self.child, policy.terminate_grace, generation).await;
             log::info!(
                 "Plugin host exited after RPC connection close: generation={}, exit_code={:?}, duration_ms={}",
                 generation,
@@ -334,37 +366,21 @@ impl PluginHost {
             return report;
         }
 
-        let cleanup = self.child.terminate(policy.terminate_grace).await;
+        let reaped = reap_process_tree(&mut self.child, policy.terminate_grace, generation).await;
         let exit_code = self
             .child
             .try_wait()
             .ok()
             .flatten()
             .and_then(|status| status.code());
-        let report = shutdown_report(
+        let mut report = shutdown_report(
             generation,
             PluginHostShutdownDisposition::Forced,
             rpc_completed,
             exit_code,
             started_at,
         );
-        match cleanup {
-            Ok(CleanupOutcome::AlreadyExited) => log::warn!(
-                "Plugin host exited during forced cleanup: generation={}, duration_ms={}",
-                generation,
-                report.duration_ms
-            ),
-            Ok(_) => log::warn!(
-                "Plugin host process tree terminated: generation={}, duration_ms={}",
-                generation,
-                report.duration_ms
-            ),
-            Err(error) => log::error!(
-                "Plugin host process tree termination failed: generation={}, error={}",
-                generation,
-                error
-            ),
-        }
+        report.reaped = reaped;
         self.flush_host_log(policy.eof_timeout).await;
         report
     }
@@ -379,6 +395,46 @@ impl PluginHost {
                 self.client.generation()
             );
         }
+    }
+}
+
+async fn reap_process_tree(child: &mut ProcessTreeChild, grace: Duration, generation: u64) -> bool {
+    match child.terminate(grace).await {
+        Ok(CleanupOutcome::AlreadyExited) => {
+            log::info!("Plugin host process tree already exited: generation={generation}");
+            true
+        }
+        Ok(_) => {
+            log::info!("Plugin host process tree reaped: generation={generation}");
+            true
+        }
+        Err(error) => {
+            log::error!(
+                "Plugin host process tree termination failed: generation={}, error={}",
+                generation,
+                error
+            );
+            false
+        }
+    }
+}
+
+async fn cleanup_failed_start(
+    child: &mut ProcessTreeChild,
+    host_log: Option<host_log::HostLogDrain>,
+    startup: PluginHostError,
+) -> PluginHostError {
+    let policy = PluginHostShutdownPolicy::default();
+    let cleanup = child.terminate(policy.terminate_grace).await;
+    if let Some(host_log) = host_log {
+        let _ = host_log.flush(policy.eof_timeout).await;
+    }
+    match cleanup {
+        Ok(_) => startup,
+        Err(cleanup) => PluginHostError::StartupCleanup {
+            startup: startup.to_string(),
+            cleanup,
+        },
     }
 }
 
@@ -408,6 +464,7 @@ fn shutdown_report(
     PluginHostShutdownReport {
         generation,
         disposition,
+        reaped: false,
         rpc_completed,
         exit_code,
         duration_ms: elapsed_ms(started_at),

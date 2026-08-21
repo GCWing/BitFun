@@ -967,7 +967,12 @@ impl CliAgentRuntimeClient {
         if matches!(&self.backend, CliAgentRuntimeBackend::Shared(_)) {
             return Ok(());
         }
-        let binding = self.session_workspace_binding(session_id).await?;
+        // Session creation holds session_id until activation has completed.
+        // Resolve directly instead of re-locking that non-reentrant mutex.
+        let project_workspace = self.project_workspace_path_buf();
+        let binding = self
+            .resolve_session_workspace_binding(session_id, &project_workspace)
+            .await?;
         self.ensure_embedded_plugin_workspace_ready(&binding).await
     }
 
