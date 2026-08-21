@@ -25,4 +25,9 @@ describe('ModernFlowChatContainer natural navigation contract', () => {
     expect(componentSource).toContain('onViewportRestoreSettled={handleViewportRestoreSettled}');
     expect(componentSource).toContain('viewportRestorePendingSessionId === sessionId');
   });
+
+  it('dismisses a pending open shield when its global transition is cancelled', () => {
+    expect(componentSource).toContain('subscribeHistorySessionOpenTransition');
+    expect(componentSource).toContain("transition?.sessionId !== current.sessionId ? null : current");
+  });
 });

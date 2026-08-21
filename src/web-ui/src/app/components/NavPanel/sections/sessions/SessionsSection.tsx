@@ -45,6 +45,7 @@ import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
 import { isSessionNavRowActive } from './sessionNavSelection';
+import { isSessionRowPointerTarget } from './sessionOpenPointer';
 import {
   deriveSessionReviewActivity,
   isReviewActivityBlocking,
@@ -1165,6 +1166,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         return;
       }
       if (event.button !== 0) {
+        return;
+      }
+
+      // React portal events still bubble through the component tree. Only a
+      // pointer physically inside the row is an intent to open that session;
+      // menu actions rendered in the overlay host must not start hydration.
+      if (!isSessionRowPointerTarget(event.currentTarget, event.target)) {
         return;
       }
 

@@ -57,6 +57,10 @@ import { reconcileSubagentIdentitiesFromFlowState } from '../../subagent-identit
 import { createTab } from '@/shared/utils/tabUtils';
 import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
+import {
+  clearHistorySessionOpenTransition,
+  clearRecentHistorySessionOpenIntent,
+} from '../sessionOpenIntent';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -1437,6 +1441,11 @@ function handleSessionDeleted(context: FlowChatContext, event: any): void {
   const store = FlowChatStore.getInstance();
   const removedSessionIds = store.getCascadeSessionIds(sessionId);
   if (removedSessionIds.length === 0) return;
+
+  removedSessionIds.forEach(removedSessionId => {
+    clearRecentHistorySessionOpenIntent(removedSessionId);
+    clearHistorySessionOpenTransition(removedSessionId);
+  });
 
   log.info('Remote session deleted', { sessionId });
   removedSessionIds.forEach(id => {

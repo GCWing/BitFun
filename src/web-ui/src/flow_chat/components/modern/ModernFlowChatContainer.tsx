@@ -92,6 +92,7 @@ import {
   getHistorySessionOpenTransitionSnapshot,
   hasRenderableSessionContent,
   HISTORY_SESSION_OPEN_INTENT_EVENT,
+  subscribeHistorySessionOpenTransition,
   type HistorySessionOpenIntentDetail,
 } from '../../services/sessionOpenIntent';
 import {
@@ -833,6 +834,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       window.removeEventListener(HISTORY_SESSION_OPEN_INTENT_EVENT, handleHistorySessionOpenIntent);
     };
   }, []);
+
+  useEffect(() => subscribeHistorySessionOpenTransition(() => {
+    const transition = getHistorySessionOpenTransitionSnapshot();
+    setPendingHistoryOpenSession(current => (
+      current && transition?.sessionId !== current.sessionId ? null : current
+    ));
+  }), []);
 
   useEffect(() => {
     if (!pendingHistoryOpenSession) {

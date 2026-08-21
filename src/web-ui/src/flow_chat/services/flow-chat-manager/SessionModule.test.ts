@@ -18,8 +18,10 @@ import {
   LOCAL_SURFACE_ID,
 } from '@/infrastructure/peer-device/deviceSurface';
 import {
+  clearHistorySessionOpenTransition,
   clearRecentHistorySessionOpenIntent,
   dispatchHistorySessionOpenIntent,
+  getHistorySessionOpenTransitionSnapshot,
 } from '../sessionOpenIntent';
 import type { Session } from '../../types/flow-chat';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
@@ -578,6 +580,7 @@ describe('SessionModule historical session coordination', () => {
   afterEach(async () => {
     await vi.runOnlyPendingTimersAsync();
     clearRecentHistorySessionOpenIntent();
+    clearHistorySessionOpenTransition();
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -1154,6 +1157,27 @@ describe('SessionModule historical session coordination', () => {
     expect(flowChatStore.getState().activeSessionId).toBeNull();
     expect(processingManager.clearSessionStatus).toHaveBeenCalledWith('active-1');
     expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
+  });
+
+  it('cancels a speculative history-open transition when deleting its target', async () => {
+    const historicalSession = createSession({
+      sessionId: 'history-delete',
+      isHistorical: true,
+      historyState: 'metadata-only',
+      dialogTurns: [],
+    });
+    const { context } = createContext(historicalSession, {
+      activeSessionId: null,
+    });
+
+    dispatchHistorySessionOpenIntent(historicalSession.sessionId, 'Saved session');
+    expect(getHistorySessionOpenTransitionSnapshot()).toMatchObject({
+      sessionId: historicalSession.sessionId,
+    });
+
+    await deleteChatSession(context, historicalSession.sessionId);
+
+    expect(getHistorySessionOpenTransitionSnapshot()).toBeNull();
   });
 
   it('tombstones a deleted dispatch projection instead of deleting a local session', async () => {
