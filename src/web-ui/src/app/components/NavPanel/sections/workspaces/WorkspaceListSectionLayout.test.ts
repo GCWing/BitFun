@@ -125,13 +125,12 @@ describe('WorkspaceListSection layout styles', () => {
       /\.bitfun-nav-panel__inline-list \{\n\s+\/\/[^\n]+\n\s+margin-left: 0;/g,
     );
     const sessionRails = stylesheet.match(/--bf-nav-session-rail: 30px;/g);
-    const indentedChildRows = stylesheet.match(
-      /\.bitfun-nav-panel__inline-item \{\n\s+height: 28px;\n\n\s+&\.is-child \{\n\s+padding-left: 44px;/g,
-    );
 
     expect(fullWidthSessionLists).toHaveLength(2);
     expect(sessionRails).toHaveLength(2);
-    expect(indentedChildRows).toHaveLength(2);
+    // SessionsSection derives both the child connector and title offsets from
+    // this rail. Context-specific child padding would split those axes again.
+    expect(stylesheet).not.toMatch(/&\.is-child\s*\{\s*padding-left:/);
     expect(stylesheet).not.toContain('margin-left: 22px;');
     expect(stylesheet).toContain(
       '&__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active)',

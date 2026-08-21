@@ -173,13 +173,13 @@
       margin-top: -2px;
       min-height: 24px;
       font-size: var(--bf-appearance-token-font-size-xs);
-      padding-left: calc(#{$size-gap-1} + 14px);
+      padding-left: calc(var(--bf-nav-session-rail) + 14px);
       position: relative;
 
       &::before {
         content: '';
         position: absolute;
-        left: 8px;
+        left: calc(var(--bf-nav-session-rail) + 2px);
         top: 0;
         width: 1px;
         height: 50%;
@@ -190,7 +190,7 @@
       &::after {
         content: '';
         position: absolute;
-        left: 8px;
+        left: calc(var(--bf-nav-session-rail) + 2px);
         top: 50%;
         width: 10px;
         height: 1px;
