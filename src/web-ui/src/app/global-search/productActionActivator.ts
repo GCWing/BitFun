@@ -1,4 +1,3 @@
-import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
@@ -48,16 +47,7 @@ export async function activateProductAction(
       }
       return;
     case 'surface.terminal.open': {
-      const navStore = useNavSceneStore.getState();
-      if (
-        options.behavior === 'toggle'
-        && navStore.showSceneNav
-        && navStore.navSceneId === 'shell'
-      ) {
-        navStore.closeNavScene();
-      } else {
-        navStore.openNavScene('shell');
-      }
+      window.dispatchEvent(new CustomEvent('terminal-create-requested'));
       return;
     }
     case 'surface.files.open':

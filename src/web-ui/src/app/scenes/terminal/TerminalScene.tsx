@@ -1,9 +1,9 @@
 /**
  * TerminalScene — renders a ConnectedTerminal for the session selected
- * via terminalSceneStore (set from the Shell navigation).
+ * via terminalSceneStore.
  *
  * When no session is active, shows a minimal empty state prompting the
- * user to open a terminal from the navigation panel.
+ * user that no terminal is currently open.
  */
 
 import React, { useCallback } from 'react';

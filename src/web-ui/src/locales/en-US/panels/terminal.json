@@ -1,6 +1,6 @@
 {
   "title": "Terminal",
-  "emptyState": "Open a terminal from the Shell navigation",
+  "emptyState": "No terminal is open",
   "dialog": {
     "editTerminal": {
       "title": "Edit Terminal",

@@ -67,10 +67,6 @@ function buildSceneTab(id: SceneTabId, now: number): SceneTab {
 }
 
 function resolveNavSceneId(sceneId: SceneTabId): SceneTabId | null {
-  if (sceneId === 'terminal') {
-    return 'shell';
-  }
-
   return getSceneNav(sceneId) ? sceneId : null;
 }
 

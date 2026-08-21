@@ -30,6 +30,15 @@ describe('global search ownership', () => {
     expect(footer).not.toContain('data-testid="shell-panel-entry"');
     expect(activator).toContain("case 'surface.browser.open':");
     expect(activator).toContain("case 'surface.terminal.open':");
+    expect(activator).toContain("new CustomEvent('terminal-create-requested')");
+    expect(activator).not.toContain("openNavScene('shell')");
+  });
+
+  it('does not register a Shell navigation surface in the left panel', () => {
+    const navRegistry = source('src/app/scenes/nav-registry.ts');
+
+    expect(navRegistry).not.toContain("import('./shell/ShellNav')");
+    expect(navRegistry).not.toContain('shell: lazy(');
   });
 
   it('removes the superseded navigation-owned dialog', () => {

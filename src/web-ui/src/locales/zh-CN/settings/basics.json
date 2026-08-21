@@ -200,7 +200,7 @@
     },
     "panelPosition": {
       "label": "终端打开位置",
-      "description": "在会话中从 Shell 导航打开终端时显示的位置",
+      "description": "在会话中新建的终端标签页显示的位置",
       "placeholder": "选择终端显示位置",
       "options": {
         "right": "右侧面板",

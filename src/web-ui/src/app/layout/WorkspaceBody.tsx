@@ -16,6 +16,7 @@ import { NavBar } from '../components/NavBar';
 import NavPanel from '../components/NavPanel/NavPanel';
 import { SceneBar } from '../components/SceneBar';
 import { SceneViewport } from '../scenes';
+import TerminalActionBridge from '../scenes/terminal/TerminalActionBridge';
 import { useApp } from '../hooks/useApp';
 import './WorkspaceBody.scss';
 
@@ -155,6 +156,8 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         <NavBar onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
         <NavPanel className="bitfun-workspace-body__nav-panel" />
       </div>
+
+      <TerminalActionBridge />
 
       {/* Resize divider — placed at workspace-body level to avoid overflow:hidden clipping */}
       {!isNavCollapsed && (

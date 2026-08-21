@@ -186,7 +186,7 @@
     },
     "panelPosition": {
       "label": "終端開啟位置",
-      "description": "在會話中從 Shell 導航開啟終端時顯示的位置",
+      "description": "在會話中新建的終端分頁顯示的位置",
       "placeholder": "選擇終端顯示位置",
       "options": {
         "right": "右側面板",

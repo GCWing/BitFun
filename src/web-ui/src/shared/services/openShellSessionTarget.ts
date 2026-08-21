@@ -13,7 +13,7 @@ function openStandaloneShellSession(sessionId: string): void {
   const { openScene } = useSceneStore.getState();
   const terminalState = useTerminalSceneStore.getState();
 
-  openScene('shell' as SceneTabId);
+  openScene('terminal' as SceneTabId);
 
   // Force a remount when reopening the same session so the terminal view
   // can recover from stale/error state and always reflect the latest selection.

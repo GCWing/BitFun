@@ -48,13 +48,13 @@ interface CanvasStoreActions {
   /** Add tab */
   addTab: (content: PanelContent, state?: TabState, groupId?: EditorGroupId) => void;
   
-  /** Close tab; forceRemove removes terminal tab instead of hiding */
+  /** Close tab; terminal tabs are always removed and cannot be restored. */
   closeTab: (tabId: string, groupId: EditorGroupId, options?: { forceRemove?: boolean }) => void;
 
-  /** Close and remove tab by terminal sessionId (sync when left panel closes terminal) */
+  /** Close and remove a tab after its terminal session is destroyed. */
   closeTerminalTabBySessionId: (sessionId: string) => void;
 
-  /** Rename terminal tab by sessionId (sync when left panel renames terminal) */
+  /** Rename a terminal tab by sessionId. */
   renameTerminalTabBySessionId: (sessionId: string, newName: string) => void;
   
   /** Close all tabs */
@@ -252,21 +252,11 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
           if (tabIndex === -1) return;
           
           const tab = group.tabs[tabIndex];
-          const forceRemove = options?.forceRemove === true;
-
-          // For terminal tabs without force remove, hide instead of delete for reactivation
-          if (tab.content.type === 'terminal' && !forceRemove) {
-            tab.isHidden = true;
-            
-            // If closing active tab, switch to next visible tab
-            if (group.activeTabId === tabId) {
-              const visibleTabs = group.tabs.filter(t => !t.isHidden);
-              group.activeTabId = visibleTabs[0]?.id || null;
-            }
-            return;
-          }
+          // Closing a terminal tab must destroy its PTY. Keep the explicit option
+          // for callers that already use it, but never hide terminals for reuse.
+          const forceRemove = options?.forceRemove === true || tab.content.type === 'terminal';
           
-          // Skip history when terminal is force-removed
+          // Skip history for terminal tabs: a closed PTY cannot be restored.
           if (!(tab.content.type === 'terminal' && forceRemove)) {
             // Record in close history
             draft.closedTabs.unshift({

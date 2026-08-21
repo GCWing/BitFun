@@ -114,8 +114,8 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     void openMainSession(activeBtwSessionData.parentSessionId);
   }, [activeBtwSessionData?.parentSessionId, activeBtwSessionData?.workspacePath, activeBtwSessionTab?.id, mode, workspacePath]);
 
-  // Keep the editor area mounted for hidden terminal tabs. Closing a terminal
-  // tab backgrounds it without destroying the xterm instance.
+  // Keep the editor area mounted for legacy hidden terminal tabs restored from
+  // an older canvas snapshot. New terminal closes destroy and remove the tab.
   const hasRenderableTabs = useMemo(() => {
     const groups = [primaryGroup, secondaryGroup, tertiaryGroup];
     return groups.some(group =>

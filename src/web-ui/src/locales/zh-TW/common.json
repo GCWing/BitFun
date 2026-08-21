@@ -163,7 +163,7 @@
       "actionDescriptions": {
         "newSession": "透過統一會話流程開始新對話",
         "openBrowser": "在目前工作上下文中開啟瀏覽器",
-        "openTerminal": "開啟項目的持久化 Shell",
+        "openTerminal": "在目前項目中新增終端機",
         "openProject": "選擇並開啟本機或對端裝置上的項目",
         "newProject": "從範本或空白工作區建立項目",
         "openFiles": "瀏覽和編輯目前項目檔案",

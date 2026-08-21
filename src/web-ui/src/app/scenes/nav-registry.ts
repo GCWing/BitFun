@@ -27,19 +27,16 @@ const loadSettingsNav = async () => {
   return navModule;
 };
 const loadFileViewerNav = () => import('./file-viewer/FileViewerNav');
-const loadShellNav = () => import('./shell/ShellNav');
 
 const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, LazyNavComponent>> = {
   settings: lazy(loadSettingsNav),
   'file-viewer': lazy(loadFileViewerNav),
-  shell: lazy(loadShellNav),
   // terminal: lazy(() => import('./terminal/TerminalNav')),
 };
 
 const SCENE_NAV_LOADERS: Partial<Record<SceneTabId, () => Promise<unknown>>> = {
   settings: loadSettingsNav,
   'file-viewer': loadFileViewerNav,
-  shell: loadShellNav,
 };
 
 /**
