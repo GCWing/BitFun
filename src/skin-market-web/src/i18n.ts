@@ -27,7 +27,6 @@ const messages = {
     githubUnavailable: 'GitHub sign-in is being configured. Please try again shortly.',
     headline: 'A different atmosphere for BitFun.',
     intro: 'Browse reviewed appearance packages, then install the one that fits your workspace.',
-    desktopInstallTitle: 'Install with BitFun Desktop',
     desktopInstallNote: 'Download the package, then open Settings > Appearance in BitFun Desktop to import it.',
     catalogTitle: 'Reviewed appearances',
     catalogIntro: 'Each release is immutable, compatibility-labeled, and ready for local import.',
@@ -84,6 +83,12 @@ const messages = {
     backToCatalog: 'Browse appearances',
     footerNote: 'Reviewed packages. Local installation. Your appearance stays on your device.',
     bitfunHome: 'BitFun website',
+    getBitfunTitle: 'New to BitFun?',
+    getBitfunCatalogNote:
+      'Appearances apply inside the BitFun desktop client. Download it once, then install any appearance from this market.',
+    getBitfunListingNote:
+      'This appearance applies inside the BitFun desktop client. Download it first, then import the package.',
+    getBitfunAction: 'Download BitFun',
     refresh: 'Refresh',
     submissionsTitle: 'My submissions',
     submissionsIntro: 'Track appearance packages submitted from BitFun Agent and respond to review feedback.',
@@ -160,7 +165,6 @@ const messages = {
     githubUnavailable: 'GitHub 登录正在配置，请稍后再试。',
     headline: '换一种 BitFun 的气质。',
     intro: '浏览经过审核的外观包，为你的工作空间选择更合适的视觉表达。',
-    desktopInstallTitle: '使用 BitFun Desktop 安装',
     desktopInstallNote: '下载外观包后，在 BitFun Desktop 中打开「设置 > 外观」并导入。',
     catalogTitle: '已审核外观',
     catalogIntro: '每个版本都锁定内容哈希，并明确标注兼容要求，可安全导入本机。',
@@ -217,6 +221,12 @@ const messages = {
     backToCatalog: '浏览外观',
     footerNote: '人工审核安装包，本机安装，外观资源只保存在你的设备中。',
     bitfunHome: 'BitFun 官网',
+    getBitfunTitle: '没有 BitFun？',
+    getBitfunCatalogNote:
+      '外观需要在 BitFun 客户端里生效。下载客户端后，就能安装市场里的任意外观。',
+    getBitfunListingNote:
+      '这个外观需要在 BitFun 客户端里生效。先下载客户端，再导入外观包即可。',
+    getBitfunAction: '下载 BitFun 客户端',
     refresh: '刷新',
     submissionsTitle: '我的投稿',
     submissionsIntro: '查看通过 BitFun Agent 投稿的外观包，并跟进审核意见。',
