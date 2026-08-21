@@ -1,5 +1,6 @@
 //! Connection initialization, capability, and health wire schemas.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
@@ -42,15 +43,17 @@ pub struct CapabilityDescriptor {
     pub methods: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "app/initialize", response = InitializeResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "app/initialize", response = InitializeResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeRequest {
     pub protocol_version: u32,
     pub client: ClientInfo,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeResponse {
     pub protocol_version: u32,
@@ -76,11 +79,13 @@ impl InitializeResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "app/health", response = HealthResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "app/health", response = HealthResponse))]
 pub struct HealthRequest {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct HealthResponse {
     pub status: HealthStatus,

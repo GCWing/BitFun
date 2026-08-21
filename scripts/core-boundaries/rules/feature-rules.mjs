@@ -30,6 +30,14 @@ export const guardedEmptyInternalDefaultManifestPaths = [
 
 export const optionalDependencyFeatureOwnerRules = [
   {
+    crateName: 'app-server-protocol',
+    reason:
+      'App Server Protocol must keep the ACP runtime dependency behind its RPC integration',
+    dependencies: [
+      { depName: 'agent-client-protocol', ownerFeatures: ['rpc'] },
+    ],
+  },
+  {
     crateName: 'services-core',
     reason:
       'services-core optional implementation dependencies must stay behind their exact owner capability',
@@ -757,6 +765,20 @@ export const coreClosedFeatureProfileRules = [
     requiredFeatureRefs: ['bitfun-app-server-protocol/ts'],
     exact: true,
     reason: 'App Server must delegate TypeScript wire export to the protocol owner',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+    featureName: 'default',
+    requiredFeatureRefs: ['rpc'],
+    exact: true,
+    reason: 'App Server Protocol must preserve RPC compatibility for default consumers',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+    featureName: 'rpc',
+    requiredFeatureRefs: ['dep:agent-client-protocol'],
+    exact: true,
+    reason: 'App Server Protocol RPC bindings must own the ACP runtime dependency',
   },
   {
     manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
