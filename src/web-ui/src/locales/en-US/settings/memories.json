@@ -6,6 +6,14 @@
       "title": "Basics",
       "description": "Control whether new memories are generated and whether consolidated memories are used in sessions."
     },
+    "models": {
+      "title": "Models",
+      "description": "Choose the models used to extract and consolidate memories."
+    },
+    "advanced": {
+      "title": "Advanced settings",
+      "description": "Tune memory extraction and consolidation limits. These settings are optional."
+    },
     "extraction": {
       "title": "Extraction",
       "description": "Control which completed sessions are eligible for memory extraction."
@@ -16,6 +24,10 @@
     }
   },
   "fields": {
+    "memoryEnabled": {
+      "label": "Memory",
+      "description": "When enabled, memories are generated automatically and used in sessions."
+    },
     "generateMemories": {
       "label": "Generate memories automatically",
       "description": "Extract and consolidate reusable memory from completed local sessions in the background."
@@ -26,7 +38,7 @@
     },
     "generateForBtwSessions": {
       "label": "Generate memories from BTW sessions",
-      "description": "Allow newly created persistent BTW sessions to contribute to global memory. This requires automatic memory generation to be enabled."
+      "description": "Allow BTW sessions to contribute to global memory."
     },
     "externalContextPolicy": {
       "label": "External context handling",

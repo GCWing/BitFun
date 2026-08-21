@@ -24,6 +24,7 @@ import {
   ConfigPageRow,
   ConfigPageSection,
 } from './common';
+import './MemoriesConfig.scss';
 
 const log = createLogger('MemoriesConfig');
 
@@ -160,6 +161,27 @@ const MemoriesConfig: React.FC = () => {
     }
   }, [config, notifyError, notifySuccess, t]);
 
+  const updateMemoryEnabled = useCallback(async (enabled: boolean) => {
+    const previous = config;
+    const next = {
+      ...config,
+      generate_memories: enabled,
+      use_memories: enabled,
+    };
+    setSavingKey('generate_memories');
+    setConfig(next);
+    try {
+      await configManager.setConfig('memories', next);
+      notifySuccess(t('messages.saved'));
+    } catch (error) {
+      log.error('Failed to save memory enabled state', error);
+      setConfig(previous);
+      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
+    } finally {
+      setSavingKey(null);
+    }
+  }, [config, notifyError, notifySuccess, t]);
+
   const updateModelSelector = useCallback((
     key: 'extract_model' | 'consolidation_model',
     value: string | number | (string | number)[],
@@ -211,7 +233,11 @@ const MemoriesConfig: React.FC = () => {
 
   if (loading) {
     return (
-      <ConfigPageLayout>
+      <ConfigPageLayout
+        className="bitfun-memories-config"
+        data-bf-component="config"
+        data-bf-part="root"
+      >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigPageLoading text={t('messages.loading')} />
@@ -220,10 +246,15 @@ const MemoriesConfig: React.FC = () => {
     );
   }
 
-  const memoryWorkDisabled = !config.generate_memories;
+  const memoryEnabled = config.generate_memories && config.use_memories;
+  const memoryWorkDisabled = !memoryEnabled;
 
   return (
-    <ConfigPageLayout>
+    <ConfigPageLayout
+      className="bitfun-memories-config"
+      data-bf-component="config"
+      data-bf-part="root"
+    >
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
@@ -274,27 +305,14 @@ const MemoriesConfig: React.FC = () => {
       <ConfigPageContent>
         <ConfigPageSection title={t('sections.basic.title')} description={t('sections.basic.description')}>
           <ConfigPageRow
-            label={t('fields.generateMemories.label')}
-            description={t('fields.generateMemories.description')}
+            label={t('fields.memoryEnabled.label')}
+            description={t('fields.memoryEnabled.description')}
             align="center"
           >
             <Switch
-              checked={config.generate_memories}
-              onChange={(event) => void updateConfig('generate_memories', event.target.checked)}
-              disabled={savingKey === 'generate_memories'}
-              size="small"
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow
-            label={t('fields.useMemories.label')}
-            description={t('fields.useMemories.description')}
-            align="center"
-          >
-            <Switch
-              checked={config.use_memories}
-              onChange={(event) => void updateConfig('use_memories', event.target.checked)}
-              disabled={savingKey === 'use_memories'}
+              checked={memoryEnabled}
+              onChange={(event) => void updateMemoryEnabled(event.target.checked)}
+              disabled={savingKey === 'generate_memories' || savingKey === 'use_memories'}
               size="small"
             />
           </ConfigPageRow>
@@ -307,7 +325,7 @@ const MemoriesConfig: React.FC = () => {
             <Switch
               checked={config.generate_for_btw_sessions}
               onChange={(event) => void updateConfig('generate_for_btw_sessions', event.target.checked)}
-              disabled={savingKey === 'generate_for_btw_sessions'}
+              disabled={savingKey === 'generate_for_btw_sessions' || memoryWorkDisabled}
               size="small"
             />
           </ConfigPageRow>
@@ -332,89 +350,7 @@ const MemoriesConfig: React.FC = () => {
           </ConfigPageRow>
         </ConfigPageSection>
 
-        <ConfigPageSection title={t('sections.extraction.title')} description={t('sections.extraction.description')}>
-          <ConfigPageRow
-            label={t('fields.minRolloutIdleHours.label')}
-            description={t('fields.minRolloutIdleHours.description')}
-            align="center"
-          >
-            <NumberInput
-              value={config.min_rollout_idle_hours}
-              onChange={(value) => void updateConfig('min_rollout_idle_hours', value)}
-              min={1}
-              max={48}
-              step={1}
-              unit={t('units.hours')}
-              size="small"
-              disabled={savingKey === 'min_rollout_idle_hours' || memoryWorkDisabled}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow
-            label={t('fields.maxRolloutAgeDays.label')}
-            description={t('fields.maxRolloutAgeDays.description')}
-            align="center"
-          >
-            <NumberInput
-              value={config.max_rollout_age_days}
-              onChange={(value) => void updateConfig('max_rollout_age_days', value)}
-              min={0}
-              max={config.max_unused_days}
-              step={1}
-              unit={t('units.days')}
-              size="small"
-              disabled={savingKey === 'max_rollout_age_days' || memoryWorkDisabled}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow
-            label={t('fields.maxRolloutsPerStartup.label')}
-            description={t('fields.maxRolloutsPerStartup.description')}
-            align="center"
-          >
-            <NumberInput
-              value={config.max_rollouts_per_startup}
-              onChange={(value) => void updateConfig('max_rollouts_per_startup', value)}
-              min={1}
-              max={128}
-              step={1}
-              size="small"
-              disabled={savingKey === 'max_rollouts_per_startup' || memoryWorkDisabled}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow
-            label={t('fields.maxRolloutsScanLimit.label')}
-            description={t('fields.maxRolloutsScanLimit.description')}
-            align="center"
-          >
-            <NumberInput
-              value={config.max_rollouts_scan_limit}
-              onChange={(value) => void updateConfig('max_rollouts_scan_limit', value)}
-              min={1}
-              max={50000}
-              step={100}
-              size="small"
-              disabled={savingKey === 'max_rollouts_scan_limit' || memoryWorkDisabled}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow
-            label={t('fields.phase1MaxConcurrency.label')}
-            description={t('fields.phase1MaxConcurrency.description')}
-            align="center"
-          >
-            <NumberInput
-              value={config.phase1_max_concurrency}
-              onChange={(value) => void updateConfig('phase1_max_concurrency', value)}
-              min={1}
-              max={16}
-              step={1}
-              size="small"
-              disabled={savingKey === 'phase1_max_concurrency' || memoryWorkDisabled}
-            />
-          </ConfigPageRow>
-
+        <ConfigPageSection title={t('sections.models.title')} description={t('sections.models.description')}>
           <ConfigPageRow
             label={t('fields.extractModel.label')}
             description={t('fields.extractModel.description')}
@@ -428,42 +364,6 @@ const MemoriesConfig: React.FC = () => {
               disabled={savingKey === 'extract_model' || memoryWorkDisabled}
             />
           </ConfigPageRow>
-        </ConfigPageSection>
-
-        <ConfigPageSection title={t('sections.consolidation.title')} description={t('sections.consolidation.description')}>
-          <ConfigPageRow
-            label={t('fields.maxRawMemories.label')}
-            description={t('fields.maxRawMemories.description')}
-            align="center"
-          >
-            <NumberInput
-              value={config.max_raw_memories_for_consolidation}
-              onChange={(value) => void updateConfig('max_raw_memories_for_consolidation', value)}
-              min={1}
-              max={4096}
-              step={1}
-              size="small"
-              disabled={savingKey === 'max_raw_memories_for_consolidation' || memoryWorkDisabled}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow
-            label={t('fields.maxUnusedDays.label')}
-            description={t('fields.maxUnusedDays.description')}
-            align="center"
-          >
-            <NumberInput
-              value={config.max_unused_days}
-              onChange={(value) => void updateConfig('max_unused_days', value)}
-              min={config.max_rollout_age_days}
-              max={365}
-              step={1}
-              unit={t('units.days')}
-              size="small"
-              disabled={savingKey === 'max_unused_days' || memoryWorkDisabled}
-            />
-          </ConfigPageRow>
-
           <ConfigPageRow
             label={t('fields.consolidationModel.label')}
             description={t('fields.consolidationModel.description')}
@@ -478,6 +378,127 @@ const MemoriesConfig: React.FC = () => {
             />
           </ConfigPageRow>
         </ConfigPageSection>
+
+        <details className="bitfun-memories-config__advanced">
+          <summary>{t('sections.advanced.title')}</summary>
+          <div className="bitfun-memories-config__advanced-content">
+            <ConfigPageSection title={t('sections.advanced.title')} description={t('sections.advanced.description')}>
+              <ConfigPageRow
+                label={t('fields.minRolloutIdleHours.label')}
+                description={t('fields.minRolloutIdleHours.description')}
+                align="center"
+              >
+                <NumberInput
+                  value={config.min_rollout_idle_hours}
+                  onChange={(value) => void updateConfig('min_rollout_idle_hours', value)}
+                  min={1}
+                  max={48}
+                  step={1}
+                  unit={t('units.hours')}
+                  size="small"
+                  disabled={savingKey === 'min_rollout_idle_hours' || memoryWorkDisabled}
+                />
+              </ConfigPageRow>
+
+              <ConfigPageRow
+                label={t('fields.maxRolloutAgeDays.label')}
+                description={t('fields.maxRolloutAgeDays.description')}
+                align="center"
+              >
+                <NumberInput
+                  value={config.max_rollout_age_days}
+                  onChange={(value) => void updateConfig('max_rollout_age_days', value)}
+                  min={0}
+                  max={config.max_unused_days}
+                  step={1}
+                  unit={t('units.days')}
+                  size="small"
+                  disabled={savingKey === 'max_rollout_age_days' || memoryWorkDisabled}
+                />
+              </ConfigPageRow>
+
+              <ConfigPageRow
+                label={t('fields.maxRolloutsPerStartup.label')}
+                description={t('fields.maxRolloutsPerStartup.description')}
+                align="center"
+              >
+                <NumberInput
+                  value={config.max_rollouts_per_startup}
+                  onChange={(value) => void updateConfig('max_rollouts_per_startup', value)}
+                  min={1}
+                  max={128}
+                  step={1}
+                  size="small"
+                  disabled={savingKey === 'max_rollouts_per_startup' || memoryWorkDisabled}
+                />
+              </ConfigPageRow>
+
+              <ConfigPageRow
+                label={t('fields.maxRolloutsScanLimit.label')}
+                description={t('fields.maxRolloutsScanLimit.description')}
+                align="center"
+              >
+                <NumberInput
+                  value={config.max_rollouts_scan_limit}
+                  onChange={(value) => void updateConfig('max_rollouts_scan_limit', value)}
+                  min={1}
+                  max={50000}
+                  step={100}
+                  size="small"
+                  disabled={savingKey === 'max_rollouts_scan_limit' || memoryWorkDisabled}
+                />
+              </ConfigPageRow>
+
+              <ConfigPageRow
+                label={t('fields.phase1MaxConcurrency.label')}
+                description={t('fields.phase1MaxConcurrency.description')}
+                align="center"
+              >
+                <NumberInput
+                  value={config.phase1_max_concurrency}
+                  onChange={(value) => void updateConfig('phase1_max_concurrency', value)}
+                  min={1}
+                  max={16}
+                  step={1}
+                  size="small"
+                  disabled={savingKey === 'phase1_max_concurrency' || memoryWorkDisabled}
+                />
+              </ConfigPageRow>
+              <ConfigPageRow
+                label={t('fields.maxRawMemories.label')}
+                description={t('fields.maxRawMemories.description')}
+                align="center"
+              >
+                <NumberInput
+                  value={config.max_raw_memories_for_consolidation}
+                  onChange={(value) => void updateConfig('max_raw_memories_for_consolidation', value)}
+                  min={1}
+                  max={4096}
+                  step={1}
+                  size="small"
+                  disabled={savingKey === 'max_raw_memories_for_consolidation' || memoryWorkDisabled}
+                />
+              </ConfigPageRow>
+
+              <ConfigPageRow
+                label={t('fields.maxUnusedDays.label')}
+                description={t('fields.maxUnusedDays.description')}
+                align="center"
+              >
+                <NumberInput
+                  value={config.max_unused_days}
+                  onChange={(value) => void updateConfig('max_unused_days', value)}
+                  min={config.max_rollout_age_days}
+                  max={365}
+                  step={1}
+                  unit={t('units.days')}
+                  size="small"
+                  disabled={savingKey === 'max_unused_days' || memoryWorkDisabled}
+                />
+              </ConfigPageRow>
+            </ConfigPageSection>
+          </div>
+        </details>
       </ConfigPageContent>
       <ConfirmDialog
         isOpen={resetMemoryConfirmOpen}
