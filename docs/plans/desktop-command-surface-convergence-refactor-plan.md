@@ -63,197 +63,40 @@ Desktop 当前通过 Tauri command 暴露绝大多数产品能力。静态盘点
 - 不仅为减少文件数量而合并 Terminal、LSP、MiniApp 等具有独立流式和生命周期合同的能力。
 - 不在新路径失败后静默调用旧 command；迁移和回滚必须由明确的 Host route 或版本协商决定。
 
-## 3. 核心决策
+## 3. 已批准合同与计划边界
 
-### 3.1 区分逻辑接口与物理入口
+本计划不重新定义稳定架构事实。产品请求表面、三类前端 client、operation owner、
+Host route/catalog 和 I18n 的归属以
+[`product-architecture.md#46-产品请求表面与操作归属`](../architecture/product-architecture.md#46-产品请求表面与操作归属)
+为准；App Server 的 wire/owner 边界与两阶段授权以
+[`app-server-architecture.md#81-product-operationhost-route-与两阶段授权`](../architecture/app-server-architecture.md#81-product-operationhost-route-与两阶段授权)
+为准；Peer envelope、mixed-version alias 和 target ingress 以
+[`peer-device-mode.md#stable-operation-envelope-and-ingress-authority`](../architecture/peer-device-mode.md#stable-operation-envelope-and-ingress-authority)
+为准；Remote workspace 的请求级 execution scope 以
+[`remote-workspace-transport.md#request-level-execution-scope`](../architecture/remote-workspace-transport.md#request-level-execution-scope)
+为准。
 
-接口收敛分为两个层次：
+本计划只记录盘点、迁移顺序、兼容边界、验证证据和删除门槛，并遵守以下实施约束：
 
-- **逻辑接口按领域保持类型化。** Agent、Session、Permission、Workspace、Git、Config、MCP 等仍有字段明确的独立方法、请求和响应。
-- **物理 Tauri 入口按宿主边界收敛。** 同一领域的 Desktop delivery 可以经过一个封闭的 tagged request gateway，但 gateway 内只能穷举已声明操作，不能接受自由方法名并动态调用任意实现。
+1. 逻辑接口按领域保持 typed request/response/error；物理 Tauri gateway 只能使用
+   封闭 tagged request 和穷举 dispatch，不能接受自由 method string、任意 JSON 或
+   反射式 handler lookup。
+2. Embedded Desktop 的 direct adapter 调用既有 Runtime/owner API，不创建同进程 App
+   Server wire、第二份业务状态或静默旧路径 fallback。
+3. gateway/Peer/App Server 的 ingress 先完成 bounded envelope、operation id、认证
+   caller/Host role 和静态 capability/allowlist 准入；typed decode 后、任何副作用前，
+   必须调用现有 Host/owner policy 做 request-derived workspace、resource、execution
+   target、permission 或 Config sensitivity 授权。catalog 命中不是授权结果。
+4. Terminal、LSP、MiniApp、PTY、大 payload 和独立事件生命周期在确有合同差异时保留
+   专用 gateway/stream，不为减少注册项强行合并。
+5. 每个可删除垂直切片必须同时完成新路径、调用方切换、行为/mixed-version 验证和旧
+   command/DTO/policy 删除；alias 必须有最后发送方范围和删除条件。
 
-目标示意：
-
-```text
-React feature / store
-  -> ProductBackendClient
-     -> agent / session / permission / workspace / config / ...
-  -> DesktopHostClient
-     -> window / tray / picker / clipboard / notification / updater
-  -> ControlPlaneClient
-     -> account / peer / remote-connect / dispatch / relay-deploy
-
-Desktop deployment
-  -> Desktop transport adapter
-  -> typed domain Tauri gateway
-  -> Desktop direct Runtime adapter / owner service
-
-Web deployment
-  -> App Server typed client
-  -> WebSocket transport
-  -> App Server owner adapter
-
-Peer deployment
-  -> negotiated ProductOperation envelope or legacy alias adapter
-  -> target Host typed dispatcher
-```
-
-### 3.2 三类前端客户端
-
-#### ProductBackendClient
-
-面向跨 Desktop/Web 或多 Host 复用的产品用例，按领域暴露类型化方法：
-
-- Agent / Session / Turn / Permission
-- Workspace / File / Search / Git / Snapshot / Worktree
-- Config / Model / Skill / Subagent / MCP / Hook / External Source
-- 适合跨 Host 的 MiniApp、Page 或其他产品领域能力
-
-客户端隐藏 transport 和部署差异。UI component 不直接调用 `invoke`，也不判断当前是 Tauri、WebSocket 或 Peer。
-
-#### DesktopHostClient
-
-只承载 controller-local Desktop effect：
-
-- 窗口、菜单、托盘和应用进程生命周期
-- 原生文件/目录选择器、剪贴板和系统通知
-- 更新器、系统设置、Desktop Computer Use 权限
-- 本机语言偏好应用、原生菜单/托盘刷新和其他 surface-local 呈现 effect
-- 本机嵌入式浏览器窗口和其他明确的本机呈现能力
-
-这些 DTO 可以继续留在 `src/apps/desktop` 或 Web UI infrastructure；只有出现真实第二宿主且语义相同时才抽取共享契约。
-
-#### ControlPlaneClient
-
-承载 authority 不随当前 workspace surface 变化的控制面：
-
-- Account identity 与 settings sync
-- Peer attach/detach、device RPC 和 capability handshake
-- Remote Connect 配置与 bot lifecycle
-- Detached Dispatch controller observer/credential 操作
-- Relay Deploy
-
-每个操作必须明确由 controller、peer、target Host 还是 split endpoint 执行。
-
-#### I18n 的拆分边界
-
-I18n 不作为随当前 workspace 或 Peer rendered surface 切换的普通
-`ProductBackendClient` 领域。它拆为三个已有 owner 的协作：
-
-- locale id、alias、fallback 和支持列表继续由共享 i18n contract 持有，Web UI
-  直接消费本 surface 的生成资源，不通过远端 Runtime 读取资源目录。
-- 当前窗口的语言选择属于 controller/surface-local preference。Desktop 通过
-  `DesktopHostClient` 持久化并应用到本机 backend locale、菜单和托盘；Web Host
-  通过自己的 surface adapter 持久化，不把操作转发到当前 Peer target。
-- Account settings sync 可以同步该偏好值，但同步 transport 不接管当前窗口的
-  呈现 authority；收到同步值后仍由每个 surface 的本地 adapter 决定何时应用。
-
-因此，旧 `i18n_*` command 可以收敛为窄的 Host preference/effect 入口，但不能被
-包装成 target-host product operation。Peer 模式下改变 A 窗口语言不得重建 B 的
-菜单或托盘。
-
-### 3.3 两级操作描述
-
-不能把所有策略塞进一个全局注册表。操作事实按 owner 分为两级：
-
-#### Product operation contract
-
-由 Runtime API、能力 contract 或已有稳定 owner 持有：
-
-- 稳定 operation id；已有 App Server method 与语义完全一致时优先复用其 id。
-- request / response / typed error。
-- required capability。
-- query、mutation 或 streaming 分类。
-- mutation 的幂等键、可重试条件和 `outcome_unknown` 语义。
-- execution/workspace scope 和阻塞交互合同。
-- 事件、取消和恢复身份。
-
-这些事实不要求塞进一个新的全仓 struct。每个 operation 的稳定 id 和可跨 Host
-复用的行为事实必须与其 typed owner facade 相邻；只有两个以上 Host 确实需要消费
-同一机器可读事实时，才在该 owner 已有的 stable contract crate 中增加窄 descriptor。
-Runtime operation 优先留在 `runtime-ports`/Agent Runtime SDK，Product Domain 和
-Service operation 留在各自现有 contract/owner，不新建 `desktop-api-contracts` 总包。
-
-#### Host route descriptor
-
-由 Desktop、Web、CLI Peer 等真实 Host 根据装配事实持有：
-
-- 当前 Host 是否提供该 capability。
-- Remote workspace 下 `RemoteRouted`、`RemoteUnsupported`、`LocalOnly` 或 `WorkspaceAgnostic`。
-- Peer 中由 controller 还是 target Host 执行。
-- transport timeout、priority、concurrency 和 retry budget。
-- 日志脱敏和 payload size policy。
-- 旧 operation/command alias 及其删除版本。
-
-Host route 可以从 product contract 投影共同事实，再增加 Host-specific override。禁止前端、Desktop 和 CLI 各自重新猜测 read/mutation、authority 或幂等性；也禁止仅根据 `get_`、`list_`、`read_` 前缀决定自动重试。
-
-迁移期间仍遵守仓库现有规则：每个物理 Tauri command 都必须在
-`remote_workspace_policy.rs` 中显式声明 policy。新的领域 gateway 应使用一个明确的
-variant-routed policy，表示物理入口只完成第一层准入，真正的 Remote workspace
-决策必须逐 operation 执行；Desktop-native command 则继续声明 `LocalOnly`、
-`WorkspaceAgnostic` 等物理策略。最终删除的是旧的一用例一 command policy entry，
-不是取消物理 Tauri 入口的 fail-closed policy 合同。
-
-#### Host catalog 与 TypeScript 投影
-
-`Operation catalog` 是 Host 在组装时将“已选 product descriptor”和“本 Host route”
-连接后的只读结果，不是第三个事实 owner，也不是运行时 Service Locator：
-
-1. Desktop、Web 和 CLI 各自在 app/Host 边界声明自己提供的 route，并在构建或启动
-   组装时与 owner descriptor 做完整性校验。
-2. Catalog 只能查询 capability、authority、scope、transport policy 和兼容 alias，
-   不能保存 handler closure、任意函数指针或业务状态。
-3. Gateway/Peer ingress 必须先以 operation id 查得 Host route 并完成 fail-closed
-   校验，再反序列化到封闭的领域 request 并调用 owner；“catalog 中有 id”本身不
-   表示 capability available。
-4. App Server method 是 wire id。只有 method 语义、request/response、错误和版本
-   合同与 product operation 完全等价时才复用为稳定 operation id；否则保留显式
-   映射，不能让 wire DTO 反向成为 Runtime owner。
-5. 跨 Desktop/Web 的前端请求和响应类型继续通过现有
-   `app-server-protocol` TypeScript schema exporter 产生 wire-facing 类型；Desktop
-   gateway adapter 在边界将该形状映射到 owner DTO。不得为了导出 TypeScript 给
-   Runtime/Service owner 引入 `ts-rs`，也不得再维护第二套手写 Desktop DTO。
-6. 仅 Desktop-native 的 Host effect 类型留在 Web UI infrastructure 与 Desktop app
-   边界，不进入 App Server protocol。阶段 0 的试点必须证明 Rust owner、App Server
-   wire、Desktop gateway 和生成的 TypeScript client 之间只有明确 adapter，没有
-   循环依赖或重复行为 owner。
-
-### 3.4 Tauri gateway 形态
-
-示意类型如下，最终名称以 owner 现有命名为准：
-
-```rust
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "operation", content = "request", rename_all = "camelCase")]
-enum DesktopSessionRequest {
-    Create(AgentSessionCreateRequest),
-    Restore(SessionRestoreRequest),
-    Rename(AgentSessionRenameRequest),
-    Archive(AgentSessionArchiveStateRequest),
-}
-
-#[tauri::command]
-async fn session_request(
-    state: State<'_, DesktopRuntimeContext>,
-    request: DesktopSessionRequest,
-) -> Result<DesktopSessionResponse, DesktopHostError> {
-    // Resolve and enforce the per-operation Host route before typed dispatch.
-    // Exhaustive typed dispatch only.
-}
-```
-
-约束：
-
-1. Gateway command 继续遵循 `snake_case` 和结构化 `request` 参数。
-2. Request enum 必须封闭、可穷举，并直接委托 Runtime/owner typed API。
-3. Gateway 不拥有业务状态、权限策略或持久化规则。
-4. Gateway 不接受自由字符串、任意 JSON method 或反射式 handler lookup。
-5. 大 payload、PTY、事件流或独立生命周期能力可以保留专用 gateway，不为追求入口数量强行合并。
-6. Tauri event 只投递 typed Runtime/App Server notification 或 Desktop 专属事件，不创建第二套 Runtime 事件语义。
-7. Gateway 的 Tauri 名不能代替内部 operation 的 Remote/Peer 审计；每个 enum variant
-   必须在进入 owner 前通过对应 Host route。
-8. 同一 gateway 中只有 route authority、调用来源、payload/stream 限制和生命周期
-   兼容的 operation 才能合并；否则即使属于同一领域也保留独立 gateway。
+首个 Config 试点只允许使用无敏感字段、owner 清晰的 typed Agent profile projection。
+通用 `get_config` / `get_configs` 当前接受任意或空 path 并返回 `serde_json::Value`，
+在完成 path allowlist、脱敏 projection、typed error 和请求级授权前，不得将其列入首批
+稳定 operation 或删除切片。现有 App Server `AgentProfileView` 可作为 characterization
+基线，但 Desktop 端必须先证明同一 typed、无敏感字段的投影。
 
 ## 4. Command 分类与目标归宿
 
@@ -292,16 +135,18 @@ descriptor 归属和 Host route 执法基础。阶段 0 只冻结边界、建立
    并要求每个 variant 都有 operation-level route。
 4. 增加前端约束测试或 lint：新的 UI component 不得直接导入 Tauri `invoke`；裸字符串调用仅允许存在于 infrastructure adapter 和迁移 allowlist。
 5. 记录无调用者、重复命令、同义命令和参数未结构化命令，优先形成删除候选。
-6. 选择一个低风险、已有 App Server 合同的 Config query 作为 catalog 试点，明确
-   product descriptor、Desktop/Web/CLI route、实际 capability、Remote policy、Peer
-   authority、retry/idempotency 和 alias 的物理 owner。
+6. 选择 `get_agent_profile_config` 的无敏感字段 typed projection 作为 catalog 试点，
+   明确 product descriptor、Desktop/Web/CLI route、实际 capability、Remote policy、
+   Peer authority、retry/idempotency 和 alias 的物理 owner；不得以现有 Desktop
+   `Value` 返回形状作为稳定合同。
 7. 为该试点建立最小的 Rust owner -> App Server wire -> Desktop route -> Web UI
    类型投影 characterization fixture，先刻画现有结果、错误和 capability；
    TypeScript 类型只能由现有 protocol schema exporter 或明确的 surface-local
    contract 生成，不复制第二套 DTO owner。
-8. 定义 operation-level route 的 fail-closed 合同测试，覆盖未声明 route、未装配
-   capability、错误 execution scope 和 local-only 访问；阶段 1 的生产 gateway
-   必须通过该测试后才能接入调用方。
+8. 定义两阶段 fail-closed 合同测试：静态准入覆盖未声明 route、未装配 capability、
+   未认证 caller/错误 Host role；请求级授权覆盖错误 execution scope、越权 resource、
+   local-only 访问和敏感 Config path。阶段 1 的生产 gateway 必须在任何 owner 副作用
+   前通过两层测试后才能接入调用方。
 9. 定义 Peer 稳定 envelope、capability handshake、legacy alias 元数据和双向
    mixed-version fixture；生产 ingress/egress 在阶段 1 接入，旧 alias 不得继续
    依赖 WebView 任意执行 `invoke(command)`。
@@ -314,8 +159,8 @@ descriptor 归属和 Host route 执法基础。阶段 0 只冻结边界、建立
 - 至少一条真实 operation 的 descriptor、Host route、现有 Desktop/Web 行为和
   TypeScript 投影被同一 characterization fixture 覆盖；catalog 不持有业务状态或
   handler closure。
-- 新领域 gateway 的物理 policy 与逐 operation route 合同已经由测试固定，未声明
-  任一层都无法暴露 operation。
+- 新领域 gateway 的物理 policy、逐 operation 静态 route 和请求级 Host/owner policy
+  已由测试固定；任一层拒绝都无法到达 owner 副作用。
 - Peer envelope、legacy alias 和 capability handshake 的合同 fixture 已能在旧/新
   controller 与 Host 组合中区分 unsupported、transport failure 和 product failure；
   此时尚不宣称生产 Peer ingress 已切换。
@@ -333,26 +178,31 @@ descriptor 归属和 Host route 执法基础。阶段 0 只冻结边界、建立
    component/store。
 2. 复用 owner DTO；已有 App Server protocol 类型只有在语义完全等价且已有多个
    生产 Host 消费时才复用，不把 wire 类型反向变成 owner。
-3. 为试点 operation 接入 Desktop typed gateway，并在 gateway 内先查询 Host route
-   再调用现有 Config owner；不创建第二份 Config、Session 或 capability 状态。
+3. 为 Agent profile projection 接入 Desktop typed gateway：Tauri 完成 tagged request
+   decode 后先校验 variant route、caller/Host role 和静态 capability，再由现有
+   Host/Config owner policy 结合 `agent_id` 与 AuthContext 做请求级授权，最后调用
+   Config owner；不创建第二份 Config、Session、授权或 capability 状态。
 4. 为同一 operation 接入 WebSocket typed client。旧 Tauri-name 映射暂时保留在
    迁移层，直到新 client 与旧路径 fixture 等价；不得在新 client 返回错误后
    动态 fallback。
 5. 为 Desktop/CLI Peer Host 接入稳定 operation envelope、typed dispatcher 和
    legacy alias adapter。Desktop legacy alias 必须绕过 WebView `invoke(command)`，
-   CLI alias 也必须进入同一 operation-level authority/route 校验。
+   CLI alias 也必须依次进入静态 route 准入和请求级 authority/scope 授权。
 6. 将 capability handshake 扩展为真实 operation/capability 支持集及兼容 alias
    范围；不以 package version 相等推断 typed envelope 能力。
 7. 记录请求 identity、幂等键、retry budget、`outcome_unknown`、execution scope、
    permission/mailbox 和事件恢复事实；没有这些事实的 operation 默认不可自动 retry。
 
-阶段 1 的基础设施试点只覆盖一个 Config query 和一个等价的 unsupported/local-only
-fixture，不宣称 Session 或 I18n 已迁移。必须验证：
+阶段 1 的基础设施试点只覆盖一个 Agent profile typed projection 和等价的
+unsupported/local-only/request-denied fixture，不宣称通用 Config path read、Session
+或 I18n 已迁移。必须验证：
 
 - Desktop direct path 与 Web/App Server path 的 request/response/error 等价。
 - 新/旧 Peer controller 与新/旧 Host 的双向兼容、alias 删除条件和 unsupported 语义。
-- operation-level Remote route 校验不被单一 Tauri gateway 名绕过。
-- Host local-only 拒绝、Remote unsupported 和 transport failure 保持可区分。
+- operation-level Remote route 校验不被单一 Tauri gateway 名绕过，请求级拒绝也不被
+  catalog 命中或 frontend route 绕过。
+- Host local-only、request authorization、Remote unsupported 和 transport failure
+  保持可区分。
 
 完成条件：
 
@@ -365,35 +215,42 @@ fixture，不宣称 Session 或 I18n 已迁移。必须验证：
 - 试点 operation 的 route、capability、retry、authority 和 alias 都有唯一 owner
   与删除条件。
 
-### 阶段 2：首批可删除切片：Config 查询
+### 阶段 2：首批可删除切片：Agent profile projection
 
-目标：在阶段 0/1 的基础设施完成后，选择可独立回滚的低副作用查询，
-先迁移 Config 查询并删除对应本机旧 command、WebSocket Tauri-name 映射和旧
-policy 项。不把 Session、mutation、Permission mailbox 和 I18n 混入。
+目标：在阶段 0/1 的基础设施完成后，只迁移无敏感字段、owner 清晰的 Agent profile
+typed projection，并删除该 operation 对应的本机旧 command、WebSocket Tauri-name
+映射和旧 policy 项。不把通用 Config path read、Session、mutation、Permission
+mailbox 和 I18n 混入。
 
 工作项：
 
-1. 先迁移 Config query：`get_config`、`get_configs`、`get_agent_profile_config`
-   等明确 read contract；每个 operation 通过 catalog/route 校验后调用现有
-   Config owner。
+1. 迁移 `get_agent_profile_config` 的 typed Agent profile projection；静态
+   catalog/route 准入后，结合 AuthContext 与 `agent_id` 完成请求级授权，再调用现有
+   Config owner。响应不得退化为任意 `Value` 或包含模型凭据、surface preference。
 2. WebSocket adapter 直接使用稳定 client 方法；对应旧映射仅在 alias boundary
    保留，且不能被 UI feature 直接调用。
 3. 新 controller -> 旧 Host 继续使用 legacy command alias；旧 controller -> 新
    Host 由 Host ingress 转成 typed operation；新/新双方走稳定 envelope。
-4. 对每个迁移 operation 先完成 Remote workspace policy，再切换调用方；gateway
-   名称不作为 policy 依据。
+4. 切换调用方前同时完成物理 Remote workspace policy、operation route 和请求级
+   Host/owner policy；gateway 名称和 catalog 命中都不作为完整授权依据。
 5. 通过同一行为 fixture 验证 Desktop direct、Web/App Server、Peer typed 和
    legacy alias 的结果、错误、scope、事件顺序、恢复和 `unsupported` 等价。
-6. 只有在 mixed-version fixture、旧 payload 读取和新路径观测数据通过后，才删除
+6. 只有在 mixed-version fixture、旧 payload 读取、静态/请求级拒绝和新路径观测
+   数据通过后，才删除
    该 operation 的旧 Tauri handler、旧 WebSocket normalizer 和旧 Remote policy
    entry。删除必须是按 operation/variant 的明确变更，而不是删除整个领域的兼容层。
+7. `get_config` / `get_configs` 保留在旧路径和迁移 allowlist，不在本阶段删除。后续
+   只有按 owner/sensitivity 拆出 path allowlist、脱敏 typed projection、typed error
+   和请求级授权，并为每个 projection 定义独立删除条件后，才能迁移对应 path。
 
 完成条件：
 
-- Config query 的旧本机 product command、重复 DTO、WebSocket Tauri-name 映射和旧
-  policy entry 已按各自删除条件移除。
+- Agent profile projection 的旧本机 product command、重复 DTO、WebSocket
+  Tauri-name 映射和旧 policy entry 已按删除条件移除；通用 `get_config` /
+  `get_configs` 未被误报为已迁移或已类型化。
 - 已迁移操作的 Remote、Peer、retry 和 idempotency 只有 owner fact + Host route
-  两级来源；不存在 product request 在 Peer/Remote 失败后回落 controller 本机。
+  两级来源；请求级授权继续由现有 Host/owner policy 持有，不复制进 catalog。不存在
+  product request 在 Peer/Remote 失败后回落 controller 本机。
 - Peer target Host 对 controller-owned operation 继续强制拒绝，且不依赖前端 deny
   表才能成立。
 - 旧 alias 仍只服务于支持范围内的 mixed-version peer；没有删除条件的兼容代码
@@ -401,7 +258,7 @@ policy 项。不把 Session、mutation、Permission mailbox 和 I18n 混入。
 
 ### 阶段 3：Session 读路径与运行中投影
 
-该批次迁移 Session list/restore/read projection，必须在 Config 查询稳定后执行。
+该批次迁移 Session list/restore/read projection，必须在首个 typed projection 稳定后执行。
 它不包含 Session mutation、Permission mailbox 和 I18n。
 
 工作项：
@@ -674,13 +531,19 @@ Peer operation/authority 变化时，运行 CLI 最近指南指定的 focused te
 
 ### 必需合同测试
 
-1. Operation catalog、Desktop route、Host capability 和实际注册 handler 一致。
-2. 未声明 Remote policy 的 operation 无法暴露。
-3. Mutation 未声明幂等合同就不能自动 retry。
-4. Host local-only 拒绝不能被前端 route 绕过。
-5. Desktop direct adapter 与 App Server adapter 对同一 use case 的结果、错误和事件 fixture 等价。
-6. Typed `unsupported`、cancelled、lagged、invalidated 和 `outcome_unknown` 保持可区分。
-7. 旧 payload 缺省字段和新 payload 未知字段可兼容读取。
+1. Operation catalog、Desktop route、Host capability 和实际注册 handler 一致；未声明
+   route/capability/caller role 的 operation 在静态准入阶段无法暴露。
+2. App Server、Peer 和 Remote ingress 对越界 workspace、错误 execution target、
+   越权 resource/Session 和敏感 Config path 在 owner 副作用前做请求级拒绝；catalog
+   命中、Tauri gateway 名或前端 route 不能绕过该拒绝。
+3. 未声明物理 Remote policy 的 Tauri command 无法暴露，operation-level route 也不能
+   取消该 fail-closed 合同。
+4. Mutation 未声明幂等合同就不能自动 retry。
+5. Host local-only 拒绝不能被前端 route 绕过。
+6. Desktop direct adapter 与 App Server adapter 对同一 use case 的结果、错误和事件 fixture 等价。
+7. Typed `unsupported`、authorization denied、cancelled、lagged、invalidated 和
+   `outcome_unknown` 保持可区分。
+8. 旧 payload 缺省字段和新 payload 未知字段可兼容读取。
 
 ## 9. 风险与控制
 
@@ -691,7 +554,7 @@ Peer operation/authority 变化时，运行 CLI 最近指南指定的 focused te
 | App Server wire 反向成为内部模型 | owner DTO 和行为合同优先；App Server 继续只做 wire adapter |
 | Peer mixed-version 中断 | capability negotiation + 双向 legacy alias fixture；不按版本号猜测 |
 | Mutation timeout 后重复副作用 | 显式 operation identity、幂等键和 `outcome_unknown`；默认禁止自动 retry |
-| Remote workspace 本机数据泄漏 | operation-level execution scope 校验；unsupported fail closed；无 fallback |
+| Remote workspace 本机数据泄漏 | 静态 route 准入 + 请求级 workspace/target/resource 授权；unsupported fail closed；无 fallback |
 | 高频 Terminal/LSP/MiniApp 退化 | 保留专用 gateway/stream，测量 payload、背压、延迟和内存 |
 | 策略“单一真源”变成无 owner 总表 | Product fact 与 Host route 两级归属，Host-specific 策略不下沉 contracts |
 | 大规模一次性切换难回滚 | 按领域垂直切片；route 在构建/握手时确定，不在错误后动态切换 |
@@ -720,7 +583,8 @@ Peer operation/authority 变化时，运行 CLI 最近指南指定的 focused te
 2. Embedded Desktop 产品请求通过 Host-owned direct adapter 调用 Runtime typed API 或真实 owner/service，不创建同进程 App Server wire。
 3. 产品用例不再按“一用例一个 Tauri command”注册；Tauri 注册面只包含领域 gateway、Desktop-native capability 和必要 callback。
 4. Gateway 使用封闭 typed request/response，不存在任意字符串到 Rust handler 的通用调用器。
-5. Remote workspace、Peer authority、capability、idempotency 和 retry 不再由多份 command-name 表手工同步。
+5. Remote workspace、Peer authority、capability、idempotency 和 retry 不再由多份
+   command-name 表手工同步；静态 catalog/route 不能替代现有 Host/owner 请求级授权。
 6. `LegacyUnaudited` 为零，旧的一用例一 product-command policy entry、Peer deny 表
    和 WebSocket command normalizer 已按删除条件移除；剩余物理 Tauri command 仍有
    显式 Remote policy，Peer guardrail 已与新的 authority 合同同步更新。

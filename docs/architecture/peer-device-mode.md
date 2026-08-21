@@ -212,8 +212,15 @@ FS) and must not be mixed with Peer Device Mode.
   - canvas snapshot poll slows to 15s (from 2s)
   - workspace search-index poll slows to 30s idle / 5s active
 - Peer: decrypt → allow/deny → execute on the peer host:
-  - Desktop: webview bridge `peer-host-invoke://request` → same Tauri handlers
-    as local UI → `peer_host_invoke_complete`
+  - The current compatibility path carries command-shaped HostInvoke. Migrated
+    operations instead use the negotiated stable envelope described below; an
+    unmigrated command is a bounded legacy alias, not a second operation owner.
+  - Desktop currently reaches the webview bridge
+    `peer-host-invoke://request` and the same Tauri handlers as local UI, then
+    returns completion through `peer_host_invoke_complete`. This is the legacy
+    boundary to replace per vertical slice. A migrated operation must enter the
+    target typed dispatcher and both authorization stages without regaining
+    arbitrary WebView `invoke(command)` execution.
   - CLI: the invocation-scoped CLI product runtime handles dialog submit/cancel
     through the Agent Runtime SDK and session/snapshot gaps through one Core
     compatibility facade — no webview and no second scheduler, persistence
@@ -263,6 +270,44 @@ FS) and must not be mixed with Peer Device Mode.
   callers. Peer controllers normally cancel earlier through their per-command
   10s/30s deadlines; reverse proxies must still accommodate any other caller
   that relies on the Relay maximum.
+
+## Stable operation envelope and ingress authority
+
+The stable envelope below is the migration target, not a claim that every current
+HostInvoke caller already uses it. The current compatibility baseline still carries
+command-shaped `HostInvoke { command, args }` through the Desktop WebView bridge and
+CLI Peer Host. Until each vertical slice switches its callers and mixed-version
+fixtures pass, that baseline remains an explicitly bounded legacy alias path.
+
+Peer product operations use a bounded, version-negotiated envelope with a stable
+operation id, typed request payload, caller identity, target Host role and
+request identity where the operation can have side effects. `peer_mode_ping`
+advertises the operation/capability set and the exact legacy aliases accepted by
+that Host; package version equality is not evidence of support.
+
+Ingress has two distinct checks:
+
+1. **Static admission:** after transport authentication, the target checks the
+   envelope size, protocol/operation id, caller role, static capability and
+   operation allowlist. Unknown or unadvertised operations fail closed.
+2. **Request authorization:** after typed decode and before invoking Runtime,
+   service or product owner, the target checks AuthContext plus request-derived
+   Session, workspace, execution-target, resource and controller/lease facts.
+   This includes split-endpoint and controller-local boundaries. The target Host
+   remains authoritative even when the controller has a local deny table.
+
+Desktop, CLI and Web UI command-name tables remain migration compatibility guards
+until the target ingress independently enforces both stages and mixed-version
+fixtures pass. They are not a second product operation owner and cannot be used
+to infer read/write, retry or authority from command names. Legacy aliases are
+accepted only inside their negotiated range, translated at the ingress boundary,
+and carry an explicit last-sender scope and deletion condition.
+
+The stable envelope and request-level rejection contract covers Desktop and CLI
+Peer Hosts, including unsupported capability, wrong rendered/controller
+authority, remote workspace mismatch, invalid resource scope and unknown
+outcomes. It must not fall back to controller-local content after a target
+rejection or transport failure.
 
 ## Workspace directory picking
 

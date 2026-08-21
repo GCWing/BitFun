@@ -158,6 +158,30 @@ current surface. Peer Device controllers without a negotiated search-event
 contract use the response-based command on the peer host; they never fall back
 to searching the controller filesystem.
 
+## Request-level execution scope
+
+Remote routing has two separate decisions. A Host route may statically state that
+an operation is remote-routed, unsupported, local-only or workspace-agnostic, but
+that fact does not authorize a particular request. After the bounded operation
+envelope and authenticated Host/caller role pass static admission, the typed
+request must carry or resolve an explicit workspace identity, remote connection
+binding and execution target. The existing workspace/service owner then checks the
+request-derived POSIX path, target binding and resource scope before opening a
+file, terminal, search helper, Git process, Agent subprocess or other side effect.
+
+The request-level check is authoritative for SSH, Docker and Peer-backed remote
+workspace paths. A static catalog entry, Tauri gateway variant, frontend route or
+command-name policy cannot replace it. An unknown connection, mismatched path,
+controller-local resource, unavailable target or unsupported execution mode fails
+before owner side effects and remains distinguishable from transport failure.
+Neither stage may fall back to the controller filesystem or process environment.
+
+The Host route/catalog is therefore only a read-only projection of product
+operation facts and current Host assembly. Request-level policy remains with the
+existing Host/workspace/service owner; adapters must pass AuthContext and typed
+scope facts to that owner rather than recreate path, target or authorization rules
+independently.
+
 ## Authentication and secrets
 
 Supported target methods are password, private key, private key plus OpenSSH

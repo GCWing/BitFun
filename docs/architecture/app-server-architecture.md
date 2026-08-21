@@ -285,6 +285,56 @@ Tauri 继续拥有窗口、菜单、系统托盘、文件选择器、剪贴板�
 - Desktop Host 可在 direct Embedded 与 Shared/App Server 之间切换，但 UI 不包含部署分支；
   route 选择留在 Host/infrastructure。
 
+### 8.1 Product operation、Host route 与两阶段授权
+
+App Server 复用既有 owner 的产品 operation，不把 wire method、Tauri command 或
+Peer alias 变成业务 owner。跨 Desktop/Web/Peer 的前端基础设施按产品架构中的
+`ProductBackendClient` 暴露领域方法；Desktop-native effect 和 controller control
+plane 分别留在 `DesktopHostClient` 与 `ControlPlaneClient`。
+
+每个可跨 Host 复用的 operation descriptor 由 Runtime API、能力 contract 或既有
+domain/service owner 持有，至少包括稳定 operation id、typed request/response/error、
+所需 capability、execution/workspace scope、事件/取消/恢复身份，以及 mutation 的
+幂等和 `outcome_unknown` 语义。Host 根据装配结果持有 route 投影；catalog 只能连接
+descriptor 与 route，查询 capability、authority、limits 和兼容 alias，不能存 handler
+closure、业务状态或授权规则。
+
+所有连接型 App Server ingress 都必须分两阶段执行：
+
+1. **静态准入。** 在进入 domain handler 前，校验有界 envelope、稳定 method/operation
+   id、已认证 connection/client identity、Host role 和静态 capability/allowlist。
+   未知或未装配的 operation fail closed，并返回 typed `unsupported`/method denial。
+2. **请求级授权。** 静态准入后、任何 owner 副作用前，先由现有
+   `AppServerHostPolicy` 基于 raw params 做通用 Host scope guard；typed request 解码后，
+   再由对应 owner policy 使用 AuthContext 与 request-derived facts 完成 workspace path、
+   remote connection、execution target、resource/session scope、Config path/sensitivity
+   和 permission/authority 授权。该阶段的拒绝不能由 catalog 命中绕过，也不能由各
+   gateway 复制成第二套安全权威。
+
+不同 transport 的解码顺序可以不同，但安全语义相同：JSON-RPC 的 raw params 可先经
+`AppServerHostPolicy` 做静态 method 与通用 scope guard，再由 typed handler 做请求级
+检查；Tauri 的 tagged request 由框架完成边界反序列化后，gateway 必须先做 variant
+route/静态 capability 检查，再在 owner 调用前执行请求级授权。反序列化本身不代表
+operation 已获准，也不得产生副作用。
+
+`AppServerHostPolicy` 是 App Server 当前 method allowlist 和通用 Host scope guard 的
+owner，不是全局授权 owner。它应继续在 domain handler 前拒绝越界 path、非本地
+execution target 和不支持的 remote scope；operation-specific owner policy 负责无法从
+通用 JSON 递归规则推断的 resource、Config sensitivity、Session/permission authority
+等约束。两层都必须 fail closed，并分别覆盖 App Server、Peer/Remote ingress 的拒绝
+合同。
+
+通用 `config/getConfig` 与 `config/getConfigs` 当前允许任意/空 path 并返回
+`serde_json::Value`，因此不构成首个稳定 operation。只有在 Config owner 提供窄 path
+allowlist、脱敏 typed projection、明确 capability/authority 和 typed error 后，才可
+为某个具体 Config projection 建立 operation；已有无敏感字段的 Agent profile view
+可以作为低风险 characterization 试点。不得把模型 `api_key`、surface-local language/
+appearance 或整个 `GlobalConfig` 通过通用 path 读取纳入跨 Host 合同。
+
+测试必须分别证明：静态未知/未装配 operation 被拒绝；typed request 中越界 workspace、
+错误 execution target、越权 resource 或敏感 Config path 在副作用前被拒绝；App Server、
+Peer 和 Remote ingress 不因前端 route 或 catalog 命中而绕过请求级授权。
+
 ## 9. Web、stdio 与远程 Host
 
 CLI 的 `bitfun server` 是同一 App Server 合同的独立 stdio Server Host：stdout 只承载 JSON-RPC line 流量；canonical cwd 是唯一 workspace scope；Host 注入显式 method allowlist；`app/initialize` 返回该 Host 的实际能力与 transport limits；stdin 读取端按 advertised frame limit fail closed；stdin EOF 触发断连生命周期（取消在途 Turn 并确定性退出）。该 Host 是独立 Host surface，不是 TUI/Headless CLI 的默认路径。

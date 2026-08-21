@@ -677,7 +677,50 @@ flowchart LR
   可以选择下层提供方，但不能依赖 app crate；需要同时被独立应用和嵌入式模式复用的实现必须下沉到可复用 owner，
   再由各 app 和 assembly 组合。
 
-### 4.6 名词与定义归属
+### 4.6 产品请求表面与操作归属
+
+Desktop、Web、Peer 和其他 Rich Surface 的产品请求遵循以下稳定边界。它们是
+前端基础设施和 Host adapter 的合同，不是新的业务 owner：
+
+| Client | 负责 | 不负责 |
+|---|---|---|
+| `ProductBackendClient` | 以领域方法提供跨 Desktop/Web/Peer 复用的 Agent、Session、Workspace、Config 和其他产品用例 | Tauri command 名称、transport 选择、UI 状态或权限上限 |
+| `DesktopHostClient` | controller-local 的窗口、托盘、选择器、剪贴板、通知、更新器和其他 Desktop-native effect | Peer target 的 workspace、Runtime 或产品状态 |
+| `ControlPlaneClient` | Account、Peer attach、Remote Connect、Detached Dispatch 和 Relay 等 controller-owned 控制面 | 把 target Host 当作 controller 的 Runtime 或文件系统代理 |
+
+`ProductBackendClient`、`DesktopHostClient` 和 `ControlPlaneClient` 的实现留在各
+surface 的 infrastructure/adapter；UI component 和 feature 不直接调用 Tauri、
+WebSocket 或 Peer transport。一个操作的稳定身份、request/response、typed error、
+capability、execution scope、事件/取消/恢复和 mutation 的幂等合同由对应的
+Runtime API、能力 contract 或既有 domain/service owner 持有。它们不得被汇总到新的
+`desktop-api-contracts`、Service Locator 或动态通用 RPC crate。
+
+Host route 是 Host 根据装配事实提供的只读路由投影，包含当前 capability、controller
+或 target authority、Remote workspace 模式、transport limits、retry budget 和兼容
+alias。它可以增加 Host-specific 限制，但不复制 owner 的业务规则、权限状态或持久化。
+`Operation catalog` 只是把 owner operation descriptor 与 Host route 在组装期连接
+后的只读结果；它不保存 handler、业务状态，也不成为全局授权 owner。
+
+所有连接型或跨设备 ingress 都遵循两阶段顺序：先校验有界 envelope、operation id、
+已认证 caller/Host role 和静态 capability/allowlist；typed request 解码后、任何
+副作用前，再由现有 Host/owner policy 结合 AuthContext 和 request-derived
+workspace、resource、execution-target 或 config scope 做请求级授权。静态 catalog
+命中不能替代第二阶段授权，失败必须区分 unsupported、transport failure 和 product
+authorization failure。Embedded direct adapter 省略 wire，但仍传递同一 Host/request
+context 并执行同一请求级检查。
+
+Config 是该规则的反例边界：通用 `get_config` / `get_configs` 接受任意 path 并返回
+`serde_json::Value`，空 path 还可能覆盖包含 surface preference 和模型凭据的
+`GlobalConfig`。在现有 Config owner 提供窄的 path allowlist、无敏感字段的 typed
+projection、脱敏规则和 typed error 之前，它们不是稳定跨 Host operation。首个试点应
+使用已有 owner 清晰、无敏感字段的 Agent profile projection，并从该规则验证后再
+扩展到其他 Config read。
+
+I18n 的 locale contract、资源和各 surface 的加载边界由
+[`i18n.md`](i18n.md) 持有；当前窗口语言和菜单/托盘刷新仍是
+`DesktopHostClient` 的 surface-local effect，不能路由到 Peer target。
+
+### 4.7 名词与定义归属
 
 全仓人工维护文档、AGENTS、README 和代码注释遵守以下规则：
 
