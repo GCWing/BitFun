@@ -1,5 +1,6 @@
 //! Product-search App Server wire schema.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 pub use bitfun_product_domains::product_search::{
     SessionContentSearchRequest, SessionContentSearchResponse, SessionSearchDiagnostic,
@@ -8,9 +9,10 @@ pub use bitfun_product_domains::product_search::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "search/sessionContent", response = SearchSessionContentResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[request(method = "search/sessionContent", response = SearchSessionContentResponse)]
 #[serde(transparent)]
 pub struct SearchSessionContentMessage(pub SessionContentSearchRequest);
 
@@ -25,7 +27,8 @@ impl std::fmt::Debug for SearchSessionContentMessage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(transparent)]
 pub struct SearchSessionContentResponse(pub SessionContentSearchResponse);

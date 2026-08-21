@@ -4,6 +4,7 @@
 //! inspection uses a protocol-owned projection so executable commands and host
 //! filesystem paths do not cross the wire.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use bitfun_product_domains::external_hook_import::{
     ExternalHookImportApplyRequestV1, ExternalHookImportApplyResultV1,
@@ -16,8 +17,9 @@ pub use bitfun_product_domains::native_hooks::{
     NativeHookFileSummary, NativeHookHandlerSummary, NativeHookOverview, NativeHookRuleSummary,
 };
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "nativeHook/overview", response = NativeHookOverviewResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "nativeHook/overview", response = NativeHookOverviewResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeHookOverviewRequest {
     pub workspace_path: String,
@@ -32,7 +34,8 @@ impl std::fmt::Debug for NativeHookOverviewRequest {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct NativeHookOverviewResponse(pub NativeHookOverview);
 
 impl std::fmt::Debug for NativeHookOverviewResponse {
@@ -49,8 +52,9 @@ impl std::fmt::Debug for NativeHookOverviewResponse {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalHook/snapshot", response = ExternalHookSnapshotResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalHook/snapshot", response = ExternalHookSnapshotResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalHookSnapshotRequest {
     pub workspace_path: String,
@@ -67,11 +71,13 @@ impl std::fmt::Debug for ExternalHookSnapshotRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ExternalHookSnapshotResponse(pub ExternalHookImportSnapshotV1);
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalHook/plan", response = ExternalHookPlanResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalHook/plan", response = ExternalHookPlanResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalHookPlanRequest {
     pub workspace_path: String,
@@ -88,11 +94,13 @@ impl std::fmt::Debug for ExternalHookPlanRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ExternalHookPlanResponse(pub ExternalHookImportPlanV1);
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalHook/apply", response = ExternalHookApplyResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalHook/apply", response = ExternalHookApplyResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalHookApplyRequest {
     pub workspace_path: String,
@@ -112,11 +120,13 @@ impl std::fmt::Debug for ExternalHookApplyRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ExternalHookApplyResponse(pub ExternalHookImportApplyResultV1);
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalHook/mutate", response = ExternalHookMutationResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalHook/mutate", response = ExternalHookMutationResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalHookMutationRequest {
     pub workspace_path: String,
@@ -136,7 +146,8 @@ impl std::fmt::Debug for ExternalHookMutationRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ExternalHookMutationResponse(pub ExternalHookImportSnapshotV1);
 
 #[cfg(test)]

@@ -3,6 +3,7 @@
 //! These DTOs reuse the stable product-domain projections. Executable source
 //! definitions and provider-private configuration never cross this boundary.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use bitfun_product_domains::external_source_control::{
     ExternalSourceControlRequestV1, ExternalSourceControlSnapshotV1,
@@ -18,15 +19,17 @@ use serde::{Deserialize, Serialize};
 
 pub use bitfun_product_domains::external_sources::ExternalSourceConflictPreferences;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalSource/snapshot", response = ExternalSourceSnapshotResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalSource/snapshot", response = ExternalSourceSnapshotResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceSnapshotRequest {
     pub workspace_path: String,
     pub force_refresh: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceSnapshotResponse {
     pub control: ExternalSourceControlSnapshotV1,
@@ -34,8 +37,9 @@ pub struct ExternalSourceSnapshotResponse {
     pub preferences: ExternalSourceConflictPreferences,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
-#[notification(method = "externalSource/event")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcNotification))]
+#[cfg_attr(feature = "rpc", notification(method = "externalSource/event"))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceEventNotification {
     pub cursor: crate::event::EventCursor,
@@ -43,23 +47,26 @@ pub struct ExternalSourceEventNotification {
     pub snapshot: ExternalSourcePublicSnapshot,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalSource/control", response = ExternalSourceControlResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalSource/control", response = ExternalSourceControlResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceControlRequest {
     pub workspace_path: String,
     pub request: ExternalSourceControlRequestV1,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceControlResponse {
     pub surface: ExternalSourceSurfaceSnapshotV1,
     pub snapshot: ExternalSourceSnapshotResponse,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalSource/review", response = ExternalSourceReviewResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalSource/review", response = ExternalSourceReviewResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceReviewRequest {
     pub workspace_path: String,
@@ -114,13 +121,18 @@ pub enum ExternalSourceReviewAction {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ExternalSourceReviewResponse(pub ExternalSourceSnapshotResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(
-    method = "externalSource/setNativeCommandChoice",
-    response = SetNativeCommandChoiceResponse
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(
+    feature = "rpc",
+    request(
+        method = "externalSource/setNativeCommandChoice",
+        response = SetNativeCommandChoiceResponse
+    )
 )]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetNativeCommandChoiceRequest {
@@ -131,15 +143,17 @@ pub struct SetNativeCommandChoiceRequest {
     pub expected_preference_revision: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetNativeCommandChoiceResponse {
     pub conflicts: NativePromptCommandConflictSnapshot,
     pub preferences: ExternalSourceConflictPreferences,
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "externalSource/expandCommand", response = ExpandExternalCommandResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "externalSource/expandCommand", response = ExpandExternalCommandResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExpandExternalCommandRequest {
     pub workspace_path: String,
@@ -178,7 +192,8 @@ impl std::fmt::Debug for ExpandExternalCommandRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ExpandExternalCommandResponse(pub PromptCommandInvocationOutcome);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

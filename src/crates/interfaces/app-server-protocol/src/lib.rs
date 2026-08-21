@@ -6,12 +6,18 @@
 //! Wire schemas live under [`schemas`] and are grouped into modules named after
 //! their JSON-RPC method domain; shared event envelopes remain in
 //! [`schemas::event`].
+//! The default `rpc` feature attaches ACP JSON-RPC traits and exposes the role
+//! and transport helpers. The independent `ts` feature exports wire DTOs
+//! without compiling that runtime integration.
 
 pub mod config;
+#[cfg(feature = "rpc")]
 pub mod role;
 pub mod schemas;
+#[cfg(feature = "rpc")]
 pub mod transport;
 
+#[cfg(feature = "rpc")]
 pub use role::{AppClient, AppServer};
 // Keep the established public domain paths while the schema sources live in a
 // single physical directory.

@@ -23,6 +23,10 @@ and client crates.
 The `bitfun-app-server/ts` feature is a compatibility forwarder only. The
 protocol crate is the sole TypeScript schema exporter; do not add `ts-rs`,
 runtime implementation types, or a second export command back to this crate.
+Protocol wire DTOs and serde contracts remain available with no feature. The
+protocol crate's default `rpc` feature attaches ACP JSON-RPC traits and exposes
+its roles and transport helpers for compatibility; `ts` must remain orthogonal
+and must not enable `rpc` or `agent-client-protocol`.
 
 ## Guardrails
 

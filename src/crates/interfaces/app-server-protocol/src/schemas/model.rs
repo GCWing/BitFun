@@ -4,6 +4,7 @@
 //! payloads. Secret-bearing values are accepted only by mutation requests and
 //! are never returned by the server.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use bitfun_core_types::{
     ProviderCatalog, ReasoningCatalogProjection, ReasoningCatalogProjectionRequest,
@@ -16,16 +17,19 @@ pub use bitfun_core_types::model::{
 
 macro_rules! unit_response {
     ($name:ident) => {
-        #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
         pub struct $name {}
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "model/list", response = ListModelsResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "model/list", response = ListModelsResponse))]
 pub struct ListModelsRequest {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ListModelsResponse {
     pub models: Vec<ModelSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -36,42 +40,49 @@ pub struct ListModelsResponse {
     pub mode_default_model_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "model/get", response = GetModelResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "model/get", response = GetModelResponse))]
 pub struct GetModelRequest {
     pub model_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GetModelResponse {
     pub model: ModelEditProjection,
 }
 
 /// Provider and reasoning facts needed by model configuration surfaces.
 /// API keys and provider-specific execution metadata remain host-owned.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "config/getTuiModelCatalog", response = TuiModelCatalogResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "config/getTuiModelCatalog", response = TuiModelCatalogResponse))]
 pub struct TuiModelCatalogRequest {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct TuiModelCatalogResponse {
     pub provider_catalog: ProviderCatalog,
     pub reasoning_presets_by_model: std::collections::BTreeMap<String, Vec<String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "model/projectReasoningCatalog", response = ProjectReasoningCatalogResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "model/projectReasoningCatalog", response = ProjectReasoningCatalogResponse))]
 #[serde(transparent)]
 pub struct ProjectReasoningCatalogRequest(pub ReasoningCatalogProjectionRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ProjectReasoningCatalogResponse {
     pub projection: ReasoningCatalogProjection,
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "model/add", response = AddModelResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "model/add", response = AddModelResponse))]
 pub struct AddModelRequest {
     pub model: ModelMutation,
     #[serde(default)]
@@ -90,8 +101,9 @@ impl std::fmt::Debug for AddModelRequest {
 
 unit_response!(AddModelResponse);
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "model/update", response = UpdateModelResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "model/update", response = UpdateModelResponse))]
 pub struct UpdateModelRequest {
     pub model_id: String,
     pub model: ModelMutation,
@@ -109,16 +121,18 @@ impl std::fmt::Debug for UpdateModelRequest {
 
 unit_response!(UpdateModelResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "model/delete", response = DeleteModelResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "model/delete", response = DeleteModelResponse))]
 pub struct DeleteModelRequest {
     pub model_id: String,
 }
 
 unit_response!(DeleteModelResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "model/setDefault", response = SetModelDefaultResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "model/setDefault", response = SetModelDefaultResponse))]
 pub struct SetModelDefaultRequest {
     pub slot: ModelDefaultSlot,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -9,7 +9,7 @@ description = "Behavior-light wire contracts and roles for the BitFun App Server
 name = "bitfun_app_server_protocol"
 
 [dependencies]
-agent-client-protocol = { workspace = true }
+agent-client-protocol = { workspace = true, optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
@@ -19,7 +19,8 @@ serde_json = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 
 [features]
-default = []
+default = ["rpc"]
+rpc = ["dep:agent-client-protocol"]
 ts = [
     "dep:ts-rs",
     "bitfun-core-types/ts",

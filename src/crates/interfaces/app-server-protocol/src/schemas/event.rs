@@ -1,14 +1,16 @@
 //! Authoritative, sequenced App Server event schemas.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use bitfun_events::AgenticEventEnvelope;
 use bitfun_product_domains::tool_permissions::{PermissionRequest, PermissionRequestEvent};
 use serde::{Deserialize, Serialize};
 
 /// Browser-facing projected runtime or permission event.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcNotification))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[notification(method = "agent/frontendEvent")]
+#[cfg_attr(feature = "rpc", notification(method = "agent/frontendEvent"))]
 pub struct FrontendEventNotification {
     pub event: String,
     pub payload: serde_json::Value,
@@ -31,32 +33,36 @@ pub struct EventCursor {
     pub sequence: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
-#[notification(method = "agent/event")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcNotification))]
+#[cfg_attr(feature = "rpc", notification(method = "agent/event"))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventNotification {
     pub cursor: EventCursor,
     pub event: AgenticEventEnvelope,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
-#[notification(method = "agent/permissionEvent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcNotification))]
+#[cfg_attr(feature = "rpc", notification(method = "agent/permissionEvent"))]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionEventNotification {
     pub cursor: EventCursor,
     pub event: PermissionRequestEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
-#[notification(method = "config/event")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcNotification))]
+#[cfg_attr(feature = "rpc", notification(method = "config/event"))]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigEventNotification {
     pub cursor: EventCursor,
     pub event: ConfigUpdate,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
-#[notification(method = "app/eventStreamState")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcNotification))]
+#[cfg_attr(feature = "rpc", notification(method = "app/eventStreamState"))]
 #[serde(rename_all = "camelCase")]
 pub struct EventStreamStateNotification {
     pub cursor: EventCursor,
@@ -84,14 +90,16 @@ pub struct ResyncDirective {
     pub reason: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "app/syncEvents", response = SyncEventsResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "app/syncEvents", response = SyncEventsResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEventsRequest {
     pub streams: Vec<EventStream>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEventsResponse {
     pub cursors: Vec<EventCursor>,
