@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import enUS from '@/locales/en-US/settings/ai-model.json';
-import zhCN from '@/locales/zh-CN/settings/ai-model.json';
-import zhTW from '@/locales/zh-TW/settings/ai-model.json';
+import enUS from '@/locales/en-US/settings/models.json';
+import zhCN from '@/locales/zh-CN/settings/models.json';
+import zhTW from '@/locales/zh-TW/settings/models.json';
 
 vi.mock('@/infrastructure/i18n', () => ({
   i18nService: {

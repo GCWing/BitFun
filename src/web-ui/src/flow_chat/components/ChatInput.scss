@@ -61,6 +61,10 @@
   &--recording {
     min-width: 270px;
   }
+
+  &--setup {
+    min-width: min(340px, 100%);
+  }
 }
 
 .bitfun-chat-input__voice-control.icon-btn {
@@ -97,6 +101,80 @@
     0 1px 4px var(--bf-appearance-token-color-overlay-black-12),
     inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
   animation: bitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
+}
+
+.bitfun-chat-input__voice-setup-pill {
+  display: inline-flex;
+  align-items: center;
+  width: clamp(320px, 34vw, 390px);
+  max-width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 2px 3px 2px 10px;
+  gap: 7px;
+  border: 1px solid var(--bf-appearance-token-border-base);
+  border-radius: $size-radius-full;
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, var(--bf-appearance-token-element-bg-base));
+  box-shadow:
+    0 1px 4px var(--bf-appearance-token-color-overlay-black-12),
+    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
+  animation: bitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
+}
+
+.bitfun-chat-input__voice-setup-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--bf-appearance-token-color-text-secondary);
+}
+
+.bitfun-chat-input__voice-setup-copy {
+  position: relative;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: flow-type.$support-size;
+  line-height: $line-height-base;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-chat-input__voice-setup-progress {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: $size-radius-full;
+  background: var(--bf-appearance-token-border-subtle);
+
+  > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--bf-appearance-token-color-accent-500);
+    transition: width 180ms ease;
+  }
+}
+
+.bitfun-chat-input__voice-setup-action {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.bitfun-chat-input__voice-setup-dismiss.icon-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .bitfun-chat-input__voice-pill-status {
@@ -287,6 +365,7 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-chat-input__voice-spinner,
   .bitfun-chat-input__voice-pill,
+  .bitfun-chat-input__voice-setup-pill,
   .bitfun-chat-input__voice-pill-recording-dot,
   .bitfun-chat-input__voice-low-volume {
     animation: none;
@@ -298,9 +377,17 @@
     min-width: 220px;
   }
 
+  .bitfun-chat-input__voice-cluster--setup {
+    min-width: min(280px, 100%);
+  }
+
   .bitfun-chat-input__voice-pill {
     width: min(100%, 240px);
     min-width: 220px;
+  }
+
+  .bitfun-chat-input__voice-setup-pill {
+    width: min(100%, 300px);
   }
 
   .bitfun-chat-input__voice-pill-timeline {

@@ -110,7 +110,7 @@ class ConfigManagerImpl implements IConfigManager {
         const baseUrl = typeof model.base_url === 'string' ? model.base_url : '';
         const matchedProvider = matchProviderCatalogItemByBaseUrl(baseUrl);
         const inferredProviderName = matchedProvider
-          ? i18nService.t(`settings/ai-model:providers.${matchedProvider.id}.name`)
+          ? i18nService.t(`settings/models:providers.${matchedProvider.id}.name`)
           : extractProviderSegmentFromBaseUrl(baseUrl);
 
         if (inferredProviderName) {

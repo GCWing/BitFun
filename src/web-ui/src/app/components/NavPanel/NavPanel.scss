@@ -2789,7 +2789,7 @@ $_section-header-height: 24px;
               color $motion-fast $easing-standard;
 
   // Only the label span should grow; icon / chevron wrappers must NOT get flex: 1
-  > span:not(.bitfun-nav-panel__top-action-icon-circle):not(.bitfun-nav-panel__top-action-icon-slot):not(.bitfun-nav-panel__top-action-expand-icons):not(.bitfun-nav-panel__count-badge) {
+  > span:not(.bitfun-nav-panel__top-action-icon-circle):not(.bitfun-nav-panel__top-action-icon-slot):not(.bitfun-nav-panel__top-action-expand-icons):not(.bitfun-nav-panel__count-badge):not(.bitfun-nav-panel__top-action-unseen) {
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -2836,6 +2836,14 @@ $_section-header-height: 24px;
       justify-content: flex-start;
     }
   }
+}
+
+.bitfun-nav-panel__top-action-unseen {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: $size-radius-full;
+  background: var(--bf-appearance-token-color-accent-500);
 }
 
 // 扩展：默认 Blocks，悬停时图标位切换为 Chevron；展开时箭头朝上

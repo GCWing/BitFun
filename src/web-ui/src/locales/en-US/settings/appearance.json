@@ -1,6 +1,6 @@
 {
   "title": "Appearance",
-  "subtitle": "Interface language, appearance packages, and global font size",
+  "subtitle": "Interface language, visual appearance, effects, appearance packages, and global font size",
   "effects": {
     "title": "Visual effects",
     "hint": "Control visual feedback across the interface.",
@@ -11,7 +11,7 @@
   },
   "package": {
     "title": "Appearance packages",
-    "description": "Import declarative BitFun appearance packages stored on this device.",
+    "description": "Choose an appearance package from the list; hover the thumbnail for a larger preview. Packages stay on this device.",
     "import": "Import package",
     "importSuccess": "Imported {{name}}",
     "importFailed": "Could not import the appearance package. Review the issue details.",

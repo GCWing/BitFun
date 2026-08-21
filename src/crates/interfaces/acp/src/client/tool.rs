@@ -52,6 +52,8 @@ fn acp_external_agent_definition_for_config(
     build_acp_external_agent_tool_definition(AcpExternalAgentToolDefinitionInput {
         client_id,
         display_name: config.name.as_deref(),
+        subagent_description: config.subagent.description.as_deref(),
+        best_for: config.subagent.best_for.as_deref(),
         read_only: config.readonly,
     })
 }
@@ -182,6 +184,11 @@ mod tests {
             env: HashMap::new(),
             enabled: true,
             readonly: true,
+            subagent: crate::client::config::AcpClientSubagentConfig {
+                enabled: true,
+                description: Some("Implements complex code changes".to_string()),
+                best_for: Some("Cross-file refactors".to_string()),
+            },
             permission_mode: AcpClientPermissionMode::Ask,
         };
 
@@ -190,6 +197,9 @@ mod tests {
         assert_eq!(definition.tool_name, "acp__codex__prompt");
         assert_eq!(definition.display_name, "Codex");
         assert_eq!(definition.user_facing_name, "Codex (ACP)");
+        assert!(definition
+            .description
+            .contains("Role: Implements complex code changes."));
         assert!(definition.read_only);
     }
 }

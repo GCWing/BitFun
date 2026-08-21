@@ -42,7 +42,6 @@
     "openMenu": "開啟菜單",
     "closeMenu": "關閉菜單",
     "selectProjectDirectory": "選擇要開啟的項目目錄",
-    "configCenter": "設定中心",
     "expandLeftPanel": "展開左側面板",
     "collapseLeftPanel": "收起左側面板",
     "expandRightPanel": "展開右側面板",
@@ -96,6 +95,7 @@
       "agents": "它能調用哪些 Agent",
       "skills": "它懂什麼專項知識 — 技能知識檔案",
       "ecosystemCompatibility": "生態兼容 — 管理其他 AI 應用的兼容能力與擴展",
+      "ecosystemCompatibilityUnseen": "生態兼容 — 發現了新的兼容應用",
       "tools": "它能用什麼工具 — 內置工具與 MCP 服務",
       "addWorkspace": "新增工作區",
       "addSessionGroup": "新增項目或個人助理"
@@ -158,7 +158,7 @@
         "openInsights": "開啟洞察",
         "openSettings": "開啟設定",
         "openKeyboardShortcuts": "開啟鍵盤快速鍵",
-        "openExternalSources": "開啟擴展與兼容"
+        "openIntegrations": "開啟生態兼容"
       },
       "actionDescriptions": {
         "newSession": "透過統一會話流程開始新對話",
@@ -174,7 +174,7 @@
         "openInsights": "查看活動與使用洞察",
         "openSettings": "設定 BitFun",
         "openKeyboardShortcuts": "查看和自訂鍵盤快速鍵",
-        "openExternalSources": "管理外部 AI 應用與兼容能力"
+        "openIntegrations": "管理外部 AI 應用中的兼容能力與執行方式"
       },
       "badges": {
         "userMessage": "你",
@@ -1364,7 +1364,6 @@
     "unknownTime": "未知時間"
   },
   "tabs": {
-    "configCenter": "設定中心",
     "diff": "Diff",
     "fixPreview": "修復預覽",
     "gitDiff": "Git Diff",

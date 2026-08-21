@@ -48,7 +48,7 @@ const bootstrapLocaleModules = import.meta.glob([
   '../../../locales/*/flow-chat.json',
   '../../../locales/*/panels/files.json',
   '../../../locales/*/panels/git.json',
-  '../../../locales/*/settings/ai-model.json',
+  '../../../locales/*/settings/models.json',
   '../../../locales/*/settings/lsp.json',
   '../../../locales/*/tools.json',
 ], {

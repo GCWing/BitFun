@@ -38,17 +38,18 @@
       "id": "web-settings-navigation-metadata",
       "surface": "web-ui",
       "namespace": "settings",
-      "owner": "src/web-ui/src/app/scenes/settings/settingsConfig.ts",
-      "description": "Settings categories and tabs store nameKey, labelKey, and descriptionKey metadata resolved with the settings namespace.",
+      "owner": "src/web-ui/src/app/scenes/settings/settingsRegistry.ts",
+      "description": "The canonical Settings registry stores category, page, and in-page view metadata resolved with the settings namespace.",
       "sourceReferences": [
-        "nameKey: 'configCenter.categories.general'",
-        "labelKey: 'configCenter.tabs.basics'",
-        "descriptionKey: 'configCenter.tabDescriptions.basics'"
+        "labelKey: `navigation.categories.${categoryId}`",
+        "labelKey: 'navigation.pages.general.label'",
+        "descriptionKey: 'navigation.pages.general.description'",
+        "labelKey: 'navigation.views.voice'"
       ],
       "keyPrefixes": [
-        "configCenter.categories.",
-        "configCenter.tabs.",
-        "configCenter.tabDescriptions."
+        "navigation.categories.",
+        "navigation.pages.",
+        "navigation.views."
       ]
     },
     {

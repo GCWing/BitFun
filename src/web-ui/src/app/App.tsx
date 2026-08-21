@@ -81,7 +81,7 @@ const MIN_SPLASH_MS = 650;
 const DEFERRED_TRAY_INIT_DELAY_MS = 1500;
 
 function App() {
-  const { t } = useI18n('settings/basics');
+  const { t } = useI18n('settings/application');
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();
@@ -812,7 +812,7 @@ function App() {
               label: t('logging.actions.openLoggingSettings'),
               onClick: () => {
                 void import('@/shared/services/ide-control').then(({ quickActions }) => {
-                  quickActions.openSettings('basics');
+                  quickActions.openSettings({ pageId: 'data.diagnostics' });
                 });
               },
             },

@@ -40,19 +40,21 @@ vi.mock('@/infrastructure/appearance', async importOriginal => ({
 }));
 
 describe('AppearancePackageConfigSection', () => {
-  it('renders built-in mode and imported appearance management actions', () => {
+  it('renders a compact package selector with thumbnail and management actions', () => {
     const html = renderToStaticMarkup(<AppearancePackageConfigSection />);
-    expect(html).toContain('package.nativeName');
     expect(html).toContain('Sample Appearance');
-    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('data-testid="appearance-package-select"');
+    expect(html).toContain('data-testid="appearance-package-preview-thumbnail"');
+    expect(html).toContain('aria-label="package.market.open"');
+    expect(html).toContain('aria-label="package.import"');
     expect(html).toContain('aria-label="package.export"');
     expect(html).toContain('aria-label="package.delete"');
-    expect(html).toContain('package.market.open');
     expect(html).toContain('accept=".bitfun-appearance,.zip,application/zip"');
-    expect(html).toContain('data-bf-part="packageGrid"');
-    expect(html).toContain('data-bf-package-type="native"');
-    expect(html).toContain('data-bf-package-type="imported"');
-    expect(html).toContain('data-bf-state="selected"');
+    expect(html).toContain('data-bf-part="packageSection"');
+    expect(html).toContain('data-bf-part="packageSelect"');
+    expect(html).not.toContain('data-bf-part="packageGrid"');
+    expect(html).not.toContain('data-bf-part="packageCard"');
+    expect(html).not.toContain('bitfun-config-page-section');
     expect(html).not.toContain('.bitfun-skin');
   });
 
@@ -77,8 +79,19 @@ describe('AppearancePackageConfigSection', () => {
 
     const preview = container.querySelector<HTMLImageElement>('.appearance-package-config__preview img');
     expect(preview?.src).toBe('blob:appearance-preview');
-    expect(preview?.alt).toBe('Sample Appearance');
+    expect(preview?.alt).toBe('');
+    expect(preview?.closest('[role="img"]')?.getAttribute('aria-label')).toBe('Sample Appearance');
     expect(createObjectURL).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      preview?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 220));
+    });
+
+    const largerPreview = document.querySelector<HTMLImageElement>(
+      '[data-testid="appearance-package-preview-popover"] img',
+    );
+    expect(largerPreview?.src).toBe('blob:appearance-preview');
 
     act(() => root.unmount());
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:appearance-preview');

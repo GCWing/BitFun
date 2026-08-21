@@ -240,15 +240,15 @@ export interface ModelMetadata {
 }
 
 export const CATEGORY_LABELS: Record<ModelCategory, string> = {
-  general_chat: t('settings/ai-model:category.general_chat'),
-  multimodal: t('settings/ai-model:category.multimodal'),
-  speech_recognition: t('settings/ai-model:category.speech_recognition')
+  general_chat: t('settings/models:category.general_chat'),
+  multimodal: t('settings/models:category.multimodal'),
+  speech_recognition: t('settings/models:category.speech_recognition')
 };
 
 export const CATEGORY_ICONS: Record<ModelCategory, string> = {
-  general_chat: t('settings/ai-model:categoryIcons.general_chat'),
-  multimodal: t('settings/ai-model:categoryIcons.multimodal'),
-  speech_recognition: t('settings/ai-model:categoryIcons.speech_recognition')
+  general_chat: t('settings/models:categoryIcons.general_chat'),
+  multimodal: t('settings/models:categoryIcons.multimodal'),
+  speech_recognition: t('settings/models:categoryIcons.speech_recognition')
 };
 
 export type CustomHeadersMode = 'replace' | 'merge';

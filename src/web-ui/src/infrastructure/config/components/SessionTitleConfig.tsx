@@ -8,7 +8,7 @@ import { configManager } from '../services/ConfigManager';
 import type { AIModelConfig, TaskModelSelection, TaskModelsConfig } from '../types';
 import { ConfigPageRow, ConfigPageSection } from './common';
 import { type ModelSelectOption, useModelSelectPresentation } from './ModelSelectPresentation';
-import './AIFeaturesConfig.scss';
+import './RuntimeSettingsPages.scss';
 
 const log = createLogger('SessionTitleConfig');
 
@@ -29,7 +29,7 @@ function normalizeSelectValue(value: string | number | (string | number)[]): str
 }
 
 export const SessionTitleConfig: React.FC = () => {
-  const { t } = useTranslation('settings/ai-model');
+  const { t } = useTranslation('settings/models');
   const { success: notifySuccess, error: notifyError } = useNotification();
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
@@ -143,14 +143,14 @@ export const SessionTitleConfig: React.FC = () => {
   return (
     <>
       <ConfigPageSection
-        className="bitfun-func-agent-config"
+        className="bitfun-runtime-settings"
         data-bf-component="session-title-config"
         data-bf-part="root"
         title={t('sessionTitle.title')}
         description={t('sessionTitle.subtitle')}
         extra={(
           <div
-            className="bitfun-func-agent-config__appearance-host"
+            className="bitfun-runtime-settings__appearance-host"
             data-bf-component="session-title-config"
             data-bf-part="enableControl"
           >
@@ -170,7 +170,7 @@ export const SessionTitleConfig: React.FC = () => {
           align="center"
         >
           <div
-            className="bitfun-func-agent-config__appearance-host"
+            className="bitfun-runtime-settings__appearance-host"
             data-bf-component="session-title-config"
             data-bf-part="modelControl"
           >

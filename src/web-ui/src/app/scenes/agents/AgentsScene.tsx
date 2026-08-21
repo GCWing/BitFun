@@ -4,6 +4,8 @@ import {
   Bot,
   Circle,
   Cpu,
+  FileText,
+  MessageSquareText,
   RotateCcw,
   Pencil,
   Plus,
@@ -68,8 +70,7 @@ import {
   type ModelSelectOption,
   useModelSelectPresentation,
 } from '@/infrastructure/config/components/ModelSelectPresentation';
-import { useSceneManager } from '@/app/hooks/useSceneManager';
-import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
 
 const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
 
@@ -82,6 +83,7 @@ const HARNESS_GEAR_PROFILES = [
 const HARNESS_DEFAULT_PROFILE_ID = 'balanced';
 
 type CapabilityTab = 'model' | 'tools' | 'skills' | 'subagents';
+type AgentDetailSection = 'basic' | 'behavior' | CapabilityTab;
 
 function normalizeSelectValue(value: string | number | (string | number)[]): string {
   return String(Array.isArray(value) ? (value[0] ?? '') : value);
@@ -183,8 +185,6 @@ function subagentTooltipFields(
 const AgentsHomeView: React.FC = () => {
   const { t } = useTranslation('scenes/agents');
   const notification = useNotification();
-  const { openScene } = useSceneManager();
-  const setSettingsTab = useSettingsStore((state) => state.setActiveTab);
   const [deletingAgent, setDeletingAgent] = useState(false);
   const {
     searchQuery,
@@ -197,7 +197,7 @@ const AgentsHomeView: React.FC = () => {
     openEditAgent,
   } = useAgentsStore();
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
-  const [activeCapabilityTab, setActiveCapabilityTab] = React.useState<CapabilityTab | null>(null);
+  const [activeDetailSection, setActiveDetailSection] = React.useState<AgentDetailSection>('basic');
   const [toolsEditing, setToolsEditing] = React.useState(false);
   const [skillsEditing, setSkillsEditing] = React.useState(false);
   const [subagentsEditing, setSubagentsEditing] = React.useState(false);
@@ -419,7 +419,16 @@ const AgentsHomeView: React.FC = () => {
     const configuredTools = getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [];
     return hasTaskTool(configuredTools) ? (agent.visibleSubagentCount ?? 0) : 0;
   }, [getModeConfig]);
-  const selectedAgentToolCount = selectedAgent ? getDisplayedToolCount(selectedAgent) : 0;
+  const selectedAgentSourceLabel = selectedAgent
+    ? subagentSourceLabel(selectedAgent.source ?? selectedAgent.subagentSource, t)
+    : '';
+  const selectedAgentBadge = selectedAgent
+    ? getAgentBadge(
+      t,
+      selectedAgent.agentKind,
+      selectedAgent.source ?? selectedAgent.subagentSource,
+    )
+    : null;
   const selectedSubagentModelValue = selectedAgent?.agentKind === 'subagent'
     ? subagentModelOverrideValue(selectedAgent.subagentModelOverride)
     : DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE;
@@ -547,11 +556,14 @@ const AgentsHomeView: React.FC = () => {
     toolsEditing,
   ]);
   const currentCapabilityTab = useMemo(() => {
-    if (selectedAgentCapabilityTabs.some((tab) => tab.key === activeCapabilityTab)) {
-      return activeCapabilityTab;
+    if (selectedAgentCapabilityTabs.some((tab) => tab.key === activeDetailSection)) {
+      return activeDetailSection as CapabilityTab;
     }
     return selectedAgentCapabilityTabs[0]?.key ?? 'tools';
-  }, [activeCapabilityTab, selectedAgentCapabilityTabs]);
+  }, [activeDetailSection, selectedAgentCapabilityTabs]);
+  const currentCapabilityMeta = selectedAgentCapabilityTabs.find(
+    (tab) => tab.key === currentCapabilityTab,
+  );
   const canManageCurrentCapability = selectedAgent?.agentKind === 'mode'
     || (
       currentCapabilityTab === 'skills'
@@ -579,21 +591,25 @@ const AgentsHomeView: React.FC = () => {
 
   const openAgentDetails = useCallback((agent: AgentWithCapabilities) => {
     setSelectedAgentId(agent.id);
-    setActiveCapabilityTab(null);
+    setActiveDetailSection('basic');
     resetEditState();
   }, [resetEditState]);
 
   const closeAgentDetails = useCallback(() => {
     setSelectedAgentId(null);
-    setActiveCapabilityTab(null);
+    setActiveDetailSection('basic');
     resetEditState();
   }, [resetEditState]);
 
   useEffect(() => {
-    if (!selectedAgentCapabilityTabs.some((tab) => tab.key === activeCapabilityTab)) {
-      setActiveCapabilityTab(selectedAgentCapabilityTabs[0]?.key ?? null);
+    if (
+      activeDetailSection !== 'basic'
+      && activeDetailSection !== 'behavior'
+      && !selectedAgentCapabilityTabs.some((tab) => tab.key === activeDetailSection)
+    ) {
+      setActiveDetailSection('basic');
     }
-  }, [activeCapabilityTab, selectedAgentCapabilityTabs]);
+  }, [activeDetailSection, selectedAgentCapabilityTabs]);
 
   const handleDeleteCustomAgent = useCallback(async () => {
     if (!selectedAgent) return;
@@ -852,25 +868,16 @@ const AgentsHomeView: React.FC = () => {
         ) : <Bot size={24} />}
         iconGradient={selectedAgent ? getCardGradient(selectedAgent.id || selectedAgent.name) : undefined}
         title={selectedAgent?.name ?? ''}
+        titlePlacement="hero"
+        size="xxlarge"
+        stableHeight
         badges={selectedAgent ? (
           <>
             <Badge
-              variant={
-                getAgentBadge(
-                  t,
-                  selectedAgent.agentKind,
-                  selectedAgent.source ?? selectedAgent.subagentSource,
-                ).variant
-              }
+              variant={selectedAgentBadge?.variant}
             >
               {selectedAgent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
-              {
-                getAgentBadge(
-                  t,
-                  selectedAgent.agentKind,
-                  selectedAgent.source ?? selectedAgent.subagentSource,
-                ).label
-              }
+              {selectedAgentBadge?.label}
             </Badge>
           </>
         ) : null}
@@ -883,49 +890,176 @@ const AgentsHomeView: React.FC = () => {
         closeButtonTestId="agent-detail-close"
         meta={selectedAgent ? (
           <>
-            <span>{t('agentCard.meta.tools', { count: selectedAgentToolCount })}</span>
+            <span>{selectedAgentSourceLabel}</span>
             {selectedAgent.externalProviderLabel ? (
               <span>{t('agentCard.meta.externalProvider', { provider: selectedAgent.externalProviderLabel })}</span>
             ) : null}
             {selectedAgent.supportsFollowUp === false ? (
               <span>{t('agentCard.meta.singleRun')}</span>
             ) : null}
-            {selectedAgentHasSkillTool ? (
-              <span>{t('agentCard.meta.skills', {
-                count: selectedAgent.agentKind === 'mode'
-                  ? selectedAgentRuntimeSkillCount
-                  : selectedAgentSkills.length,
-              })}</span>
-            ) : null}
-            {selectedAgent.agentKind === 'mode' && selectedAgentHasTaskTool ? (
-              <span>{t('agentCard.meta.subagents', { count: selectedAgentManageableSubagents.filter((subagent) => subagent.effectiveEnabled).length })}</span>
-            ) : null}
           </>
+        ) : null}
+        heroActions={selectedAgent && canManageCustomAgent ? (
+          <>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => {
+                const id = selectedAgent.id;
+                closeAgentDetails();
+                openEditAgent(id);
+              }}
+            >
+              <Pencil size={12} style={{ marginRight: 6 }} />
+              {t('agentsOverview.editAgent')}
+            </Button>
+            <IconButton
+              size="small"
+              variant="ghost"
+              tooltip={t('agentsOverview.deleteAgent')}
+              isLoading={deletingAgent}
+              onClick={() => void handleDeleteCustomAgent()}
+            >
+              <Trash2 size={14} />
+            </IconButton>
+          </>
+        ) : selectedAgent && selectedAgentIsExternal ? (
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => {
+              closeAgentDetails();
+              openEcosystemCompatibility({ ownerSurface: 'external-sources' });
+            }}
+          >
+            <Puzzle size={12} style={{ marginRight: 6 }} />
+            {t('agentsOverview.manageExternalAgent')}
+          </Button>
         ) : null}
       >
         {selectedAgent ? (
-          <>
-            <div className="agent-card__cap-grid">
-              {selectedAgent.capabilities.map((cap) => (
-                <div key={cap.category} className="agent-card__cap-row">
-                  <span
-                    className="agent-card__cap-label"
-                    style={{ color: CAPABILITY_ACCENT[cap.category] }}
+          <div className="agent-card__configuration" data-testid="agent-detail-configuration">
+                <nav className="agent-card__config-nav" aria-label={t('agentsOverview.detail.configuration')}>
+                  <button
+                    type="button"
+                    className={`agent-card__config-nav-item${activeDetailSection === 'basic' ? ' is-active' : ''}`}
+                    aria-current={activeDetailSection === 'basic' ? 'page' : undefined}
+                    onClick={() => setActiveDetailSection('basic')}
                   >
-                    {getCapabilityLabel(t, cap.category)}
+                    <FileText size={14} />
+                    <span>{t('agentsOverview.detail.basicInfo')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`agent-card__config-nav-item${activeDetailSection === 'behavior' ? ' is-active' : ''}`}
+                    aria-current={activeDetailSection === 'behavior' ? 'page' : undefined}
+                    onClick={() => setActiveDetailSection('behavior')}
+                  >
+                    <MessageSquareText size={14} />
+                    <span>{t('agentsOverview.detail.behaviorContext')}</span>
+                    <span className="agent-card__config-nav-count">{selectedAgent.capabilities.length}</span>
+                  </button>
+                  <div className="agent-card__config-nav-divider" />
+                  {selectedAgentCapabilityTabs.map((tab) => {
+                    const TabIcon = tab.icon;
+                    const isActive = activeDetailSection === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`agent-card__config-nav-item${isActive ? ' is-active' : ''}`}
+                        aria-current={isActive ? 'page' : undefined}
+                        data-detail-section={tab.key}
+                        onClick={() => setActiveDetailSection(tab.key)}
+                      >
+                        <TabIcon size={14} />
+                        <span>{tab.label}</span>
+                        {tab.count ? <span className="agent-card__config-nav-count">{tab.count}</span> : null}
+                      </button>
+                    );
+                  })}
+                </nav>
+
+                <div className="agent-card__config-main">
+                  {activeDetailSection === 'basic' ? (
+                    <section className="agent-card__config-panel" data-testid="agent-detail-basic-section">
+                      <div className="agent-card__config-panel-head">
+                        <div>
+                          <h3>{t('agentsOverview.detail.basicInfo')}</h3>
+                          <p>{t('agentsOverview.detail.basicInfoHint')}</p>
+                        </div>
+                      </div>
+                      <div className="agent-card__field-grid">
+                        <div className="agent-card__field">
+                          <span>{t('agentsOverview.detail.name')}</span>
+                          <strong>{selectedAgent.name}</strong>
+                        </div>
+                        <div className="agent-card__field">
+                          <span>{t('agentsOverview.detail.source')}</span>
+                          <strong>{selectedAgentSourceLabel}</strong>
+                        </div>
+                        <div className="agent-card__field">
+                          <span>{t('agentsOverview.detail.type')}</span>
+                          <strong>{selectedAgentBadge?.label}</strong>
+                        </div>
+                        <div className="agent-card__field">
+                          <span>{t('agentsOverview.detail.followUp')}</span>
+                          <strong>
+                            {selectedAgent.supportsFollowUp === false
+                              ? t('agentsOverview.detail.unsupported')
+                              : t('agentsOverview.detail.supported')}
+                          </strong>
+                        </div>
+                        <div className="agent-card__field agent-card__field--wide">
+                          <span>{t('agentsOverview.detail.description')}</span>
+                          <p>{getAgentDescription(t, selectedAgent)}</p>
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {activeDetailSection === 'behavior' ? (
+                    <div className="agent-card__config-panel" data-testid="agent-detail-behavior-section">
+                      <div className="agent-card__config-panel-head">
+                        <div>
+                          <h3>{t('agentsOverview.detail.behaviorContext')}</h3>
+                          <p>{t('agentsOverview.detail.behaviorContextHint')}</p>
+                        </div>
+                      </div>
+                      <div
+              className="agent-card__section agent-card__section--capabilities"
+              data-testid="agent-detail-capabilities-section"
+            >
+              <div className="agent-card__section-head">
+                <div className="agent-card__section-title">
+                  <span>{t('agentsOverview.capabilities')}</span>
+                  <span className="agent-card__section-count">
+                    {selectedAgent.capabilities.length}
                   </span>
-                  <div className="agent-card__cap-bar">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <span
-                        key={i}
-                        className="agent-card__cap-pip"
-                        style={i < cap.level ? { backgroundColor: CAPABILITY_ACCENT[cap.category] } : undefined}
-                      />
-                    ))}
-                  </div>
-                  <span className="agent-card__cap-level">{cap.level}/5</span>
                 </div>
-              ))}
+              </div>
+              <div className="agent-card__cap-grid">
+                {selectedAgent.capabilities.map((cap) => (
+                  <div key={cap.category} className="agent-card__cap-row">
+                    <span
+                      className="agent-card__cap-label"
+                      style={{ color: CAPABILITY_ACCENT[cap.category] }}
+                    >
+                      {getCapabilityLabel(t, cap.category)}
+                    </span>
+                    <div className="agent-card__cap-bar">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <span
+                          key={i}
+                          className="agent-card__cap-pip"
+                          style={i < cap.level ? { backgroundColor: CAPABILITY_ACCENT[cap.category] } : undefined}
+                        />
+                      ))}
+                    </div>
+                    <span className="agent-card__cap-level">{cap.level}/5</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {selectedAgent.agentKind === 'mode' && selectedAgentUsesSharedProfile ? (
@@ -947,31 +1081,18 @@ const AgentsHomeView: React.FC = () => {
                 </p>
               </div>
             ) : null}
+                    </div>
+                  ) : null}
 
-            {selectedAgentCapabilityTabs.length > 0 ? (
+                  {selectedAgentCapabilityTabs.some((tab) => tab.key === activeDetailSection) ? (
               <div className="agent-card__section" data-testid="agent-detail-tools-section">
-                <div className="agent-card__section-head">
-                  <div className="agent-card__tab-list" role="tablist" aria-label={t('agentsOverview.capabilities')}>
-                    {selectedAgentCapabilityTabs.map((tab) => {
-                      const TabIcon = tab.icon;
-                      const isActive = tab.key === currentCapabilityTab;
-                      return (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          role="tab"
-                          aria-selected={isActive}
-                          className={`agent-card__tab${isActive ? ' is-active' : ''}`}
-                          onClick={() => setActiveCapabilityTab(tab.key)}
-                        >
-                          <TabIcon size={12} />
-                          <span>{tab.label}</span>
-                          {isActive && tab.count ? (
-                            <span className="agent-card__tab-count">{tab.count}</span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
+                <div className="agent-card__section-head agent-card__section-head--tabs">
+                  <div className="agent-card__section-title">
+                    {currentCapabilityMeta ? React.createElement(currentCapabilityMeta.icon, { size: 14 }) : null}
+                    <span>{currentCapabilityMeta?.label}</span>
+                    {currentCapabilityMeta?.count ? (
+                      <span className="agent-card__section-count">{currentCapabilityMeta.count}</span>
+                    ) : null}
                   </div>
                   {canManageCurrentCapability ? (
                     <div className="agent-card__section-actions">
@@ -1287,62 +1408,8 @@ const AgentsHomeView: React.FC = () => {
                 ) : null}
               </div>
             ) : null}
-            {canManageCustomAgent ? (
-              <div className="agent-card__section">
-                <div className="agent-card__section-head">
-                  <div className="agent-card__section-title">
-                    <span>{t('agentsOverview.customActions')}</span>
-                  </div>
-                </div>
-                <div className="agent-card__section-actions" style={{ gap: 8 }}>
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    onClick={() => {
-                      const id = selectedAgent?.id;
-                      closeAgentDetails();
-                      if (id) openEditAgent(id);
-                    }}
-                  >
-                    <Pencil size={12} style={{ marginRight: 6 }} />
-                    {t('agentsOverview.editAgent')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    isLoading={deletingAgent}
-                    onClick={() => void handleDeleteCustomAgent()}
-                  >
-                    <Trash2 size={12} style={{ marginRight: 6 }} />
-                    {t('agentsOverview.deleteAgent')}
-                  </Button>
-                </div>
               </div>
-            ) : null}
-            {(selectedAgent.source ?? selectedAgent.subagentSource) === 'external' ? (
-              <div className="agent-card__section">
-                <div className="agent-card__section-head">
-                  <div className="agent-card__section-title">
-                    <span>{t('agentsOverview.externalActions')}</span>
-                  </div>
-                </div>
-                <div className="agent-card__section-actions">
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    onClick={() => {
-                      setSettingsTab('external-sources');
-                      closeAgentDetails();
-                      openScene('settings');
-                    }}
-                  >
-                    <Puzzle size={12} style={{ marginRight: 6 }} />
-                    {t('agentsOverview.manageExternalAgent')}
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </>
+            </div>
         ) : null}
       </GalleryDetailModal>
     </GalleryLayout>

@@ -396,6 +396,8 @@ fn acp_external_agent_bridge_preserves_tool_contract() {
         build_acp_external_agent_tool_definition(AcpExternalAgentToolDefinitionInput {
             client_id: "codex",
             display_name: Some("Codex"),
+            subagent_description: None,
+            best_for: None,
             read_only: false,
         });
 
@@ -411,6 +413,21 @@ fn acp_external_agent_bridge_preserves_tool_contract() {
         "Delegate a task to the external ACP agent 'Codex'."
     );
     assert!(!definition.read_only);
+
+    let profiled_definition =
+        build_acp_external_agent_tool_definition(AcpExternalAgentToolDefinitionInput {
+            client_id: "codex",
+            display_name: Some("Codex"),
+            subagent_description: Some("Implements complex code changes"),
+            best_for: Some("Cross-file refactors and difficult debugging"),
+            read_only: false,
+        });
+    assert!(profiled_definition
+        .description
+        .contains("Role: Implements complex code changes."));
+    assert!(profiled_definition
+        .description
+        .contains("Best suited for: Cross-file refactors and difficult debugging."));
 
     assert_eq!(
         acp_external_agent_tool_input_schema(),

@@ -567,7 +567,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const { useSettingsStore } = await import('@/app/scenes/settings/settingsStore');
-    expect(useSettingsStore.getState().activeTab).toBe('review');
+    expect(useSettingsStore.getState().activePageId).toBe('tools.execution');
   });
 
   it('sends backend queue control actions for event-driven capacity waits', async () => {

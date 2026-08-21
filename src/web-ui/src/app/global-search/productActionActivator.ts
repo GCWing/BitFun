@@ -1,5 +1,6 @@
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import type { ProductActionId } from './productActionCatalog';
 
@@ -59,6 +60,9 @@ export async function activateProductAction(
     case 'surface.skills.open':
       sceneStore.openScene('skills');
       return;
+    case 'surface.ecosystemCompatibility.open':
+      openEcosystemCompatibility();
+      return;
     case 'surface.miniapps.open':
       sceneStore.openScene('miniapps');
       return;
@@ -71,12 +75,11 @@ export async function activateProductAction(
     case 'settings.open':
       sceneStore.openScene('settings');
       return;
-    case 'settings.keyboard.open':
-      useSettingsStore.getState().openTab('keyboard');
-      sceneStore.openScene('settings');
-      return;
-    case 'settings.external-sources.open':
-      useSettingsStore.getState().openTab('external-sources');
+    case 'settings.shortcuts.open':
+      useSettingsStore.getState().openDestination({
+        pageId: 'application.input',
+        viewId: 'shortcuts',
+      });
       sceneStore.openScene('settings');
       return;
   }

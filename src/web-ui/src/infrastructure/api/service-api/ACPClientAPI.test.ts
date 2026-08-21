@@ -89,4 +89,45 @@ describe('ACPClientAPI client list startup cache', () => {
     expect(invokeMock).toHaveBeenNthCalledWith(2, 'initialize_acp_clients');
     expect(invokeMock).toHaveBeenNthCalledWith(3, 'get_acp_clients');
   });
+
+  it('patches one client subagent profile without discarding the ACP registry', async () => {
+    const ACPClientAPI = await importApi();
+    invokeMock
+      .mockResolvedValueOnce(JSON.stringify({
+        acpClients: {
+          codex: {
+            name: 'Codex',
+            command: 'codex',
+            enabled: true,
+          },
+          opencode: {
+            name: 'OpenCode',
+            command: 'opencode',
+            enabled: true,
+          },
+        },
+      }))
+      .mockResolvedValueOnce(undefined);
+
+    await ACPClientAPI.updateClientSubagentConfig({
+      clientId: 'codex',
+      enabled: true,
+      description: '  Implements complex code changes  ',
+      bestFor: ' Cross-file refactors ',
+    });
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'load_acp_json_config');
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'save_acp_json_config',
+      expect.objectContaining({ jsonConfig: expect.any(String) })
+    );
+    const saved = JSON.parse(invokeMock.mock.calls[1][1].jsonConfig);
+    expect(saved.acpClients.codex.subagent).toEqual({
+      enabled: true,
+      description: 'Implements complex code changes',
+      bestFor: 'Cross-file refactors',
+    });
+    expect(saved.acpClients.opencode.command).toBe('opencode');
+  });
 });

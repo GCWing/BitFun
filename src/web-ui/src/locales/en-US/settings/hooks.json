@@ -1,43 +1,42 @@
 {
   "title": "Agent Hooks",
-  "subtitle": "Run your own commands at fixed points in the Agent's lifecycle — before and after tool calls, around permission prompts, and at session and turn boundaries.",
+  "subtitle": "Run custom commands on Agent lifecycle events.",
   "loading": "Loading hook settings...",
   "activation": {
     "title": "Activation",
-    "description": "A hook runs with your user account's full privileges every time its event fires. Review any hook you did not write before enabling it."
+    "description": "Hooks run with your user privileges. Enable only commands you trust."
   },
   "fields": {
     "enabled": {
-      "label": "Enable hooks",
-      "description": "Master switch. When off, no hook runs for any event."
+      "label": "Enable hooks"
     },
     "projectHooks": {
       "label": "Enable project hook file",
-      "description": "Honor the hook file inside the workspace. It executes commands from the checked-out repository, so enable this only for repositories you trust."
+      "description": "Reads and runs .bitfun/config/hooks.json from the workspace. Enable only for trusted repositories."
     }
   },
   "locations": {
     "title": "Where hooks are declared",
-    "description": "Hooks live in hooks.json files, not in this settings document. Both layers are additive, with user hooks running first. Changes are picked up without restarting BitFun.",
+    "description": "Changes to hooks.json take effect without restarting BitFun.",
     "userFile": {
       "label": "User hook file",
-      "description": "config/hooks.json in your BitFun user config directory (~/.config/bitfun on Linux, ~/Library/Application Support/bitfun on macOS, %APPDATA%\\bitfun on Windows)."
+      "description": "config/hooks.json in the BitFun user config directory."
     },
     "projectFile": {
       "label": "Project hook file",
-      "description": ".bitfun/config/hooks.json inside the workspace. Only read when \"Enable project hook file\" is on."
+      "description": ".bitfun/config/hooks.json in the current workspace. Requires Enable project hook file."
     }
   },
   "imports": {
     "title": "Imported hooks",
-    "description": "Review compatible Claude Code and Codex command hooks once, then manage BitFun's local snapshot here.",
+    "description": "Review and manage hooks imported from Claude Code or Codex.",
     "masterDisabled": "Imported hooks are preserved, but the master switch prevents them from running.",
     "refresh": "Refresh",
     "remoteUnsupported": "Imported hooks are unavailable for remote workspaces.",
     "loading": "Loading imported hooks...",
     "loadFailed": "Imported hooks could not be loaded.",
     "refreshFailed": "Imported hooks could not be refreshed.",
-    "empty": "No imported Hooks yet. Add one in hooks.json, or refresh to check Claude Code and Codex.",
+    "empty": "No imported hooks. Refresh to check Claude Code and Codex.",
     "review": "Review",
     "update": "Review update",
     "remove": "Remove",
@@ -80,10 +79,9 @@
   },
   "compatibility": {
     "title": "Codex compatibility",
-    "description": "The hooks.json document, the event names, the JSON payload on stdin, the exit-code meanings, and the JSON decision schema on stdout match Codex hooks, so a Codex hook script runs here unchanged.",
+    "description": "BitFun uses the Codex Hooks contract and can run compatible hook scripts directly.",
     "reference": {
       "label": "Event and payload reference",
-      "description": "Codex's hooks documentation is the reference for event names, payload fields, and the decision schema.",
       "open": "Open docs"
     }
   },

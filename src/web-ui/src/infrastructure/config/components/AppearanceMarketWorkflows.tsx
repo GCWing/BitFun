@@ -209,7 +209,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
   const renderManualSubmit = () => manualSubmitOpen && (
     <form
       className="appearance-market__manual-submit"
-      data-bf-component="appearance-config"
+      data-bf-component="appearance-settings"
       data-bf-part="marketManualSubmit"
       onSubmit={event => void submitPackage(event)}
     >
@@ -362,7 +362,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
     return (
       <section
         className="appearance-market__workflow"
-        data-bf-component="appearance-config"
+        data-bf-component="appearance-settings"
         data-bf-part="marketWorkflow"
         aria-labelledby="appearance-market-submissions-title"
       >
@@ -401,14 +401,14 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
             ) : (
               <div
                 className="appearance-market__submission-list"
-                data-bf-component="appearance-config"
+                data-bf-component="appearance-settings"
                 data-bf-part="marketSubmissionList"
               >
                 {submissions.map(submission => (
                   <article
                     key={submission.submissionId}
                     className="appearance-market__submission"
-                    data-bf-component="appearance-config"
+                    data-bf-component="appearance-settings"
                     data-bf-part="marketSubmission"
                   >
                     <div className="appearance-market__submission-preview">
@@ -464,7 +464,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
   return (
     <section
       className="appearance-market__workflow"
-      data-bf-component="appearance-config"
+      data-bf-component="appearance-settings"
       data-bf-part="marketWorkflow"
       aria-labelledby="appearance-market-review-title"
     >
@@ -489,12 +489,12 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
       ) : (
         <div
           className="appearance-market__review-layout"
-          data-bf-component="appearance-config"
+          data-bf-component="appearance-settings"
           data-bf-part="marketReviewLayout"
         >
           <div
             className="appearance-market__review-queue"
-            data-bf-component="appearance-config"
+            data-bf-component="appearance-settings"
             data-bf-part="marketReviewQueue"
           >
             {reviewQueue.map(submission => (
@@ -513,7 +513,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           </div>
           <div
             className="appearance-market__review-detail"
-            data-bf-component="appearance-config"
+            data-bf-component="appearance-settings"
             data-bf-part="marketReviewDetail"
           >
             {detailLoading || !reviewDetail ? (
@@ -564,7 +564,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 )}
                 <div
                   className="appearance-market__review-actions"
-                  data-bf-component="appearance-config"
+                  data-bf-component="appearance-settings"
                   data-bf-part="marketReviewActions"
                 >
                   <Textarea

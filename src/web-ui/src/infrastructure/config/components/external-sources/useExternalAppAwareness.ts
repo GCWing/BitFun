@@ -1,34 +1,42 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { externalSourcesAPI } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { useOptionalCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isRemoteWorkspace } from '@/shared/types';
-import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { createLogger } from '@/shared/utils/logger';
 
 const logger = createLogger('ExternalAppAwareness');
 
-/** Marks the external sources tab when the host found an application the user
- * has never been told about, and clears it once they open the tab.
+/** Reports whether the host found an ecosystem the user has not seen yet, and
+ * acknowledges it once the ecosystem compatibility scene becomes active.
  *
- * The lookup is lazy on purpose: it only runs while the settings scene is
- * mounted, so a user who never opens settings pays nothing. Failures stay
- * silent because a missing hint is far less harmful than an error toast for
- * something the user did not ask for.
+ * Failures stay silent because a missing navigation hint is less harmful than
+ * an error toast for a background awareness check.
  */
-export function useExternalAppAwareness(): void {
+export function useExternalAppAwareness(active: boolean): boolean {
   const { workspace, workspacePath } = useOptionalCurrentWorkspace();
-  const activeTab = useSettingsStore((state) => state.activeTab);
-  const markTabUnseen = useSettingsStore((state) => state.markTabUnseen);
+  const remoteWorkspace = isRemoteWorkspace(workspace);
+  const [hasUnseen, setHasUnseen] = useState(false);
   const acknowledgedScopeRef = useRef<string | null>(null);
+  const currentScopeRef = useRef(workspacePath);
+  const activeRef = useRef(active);
+  currentScopeRef.current = workspacePath;
+  activeRef.current = active;
 
   useEffect(() => {
-    if (isRemoteWorkspace(workspace)) return;
+    setHasUnseen(false);
+    if (remoteWorkspace) return undefined;
+    const scope = workspacePath;
     let cancelled = false;
     void externalSourcesAPI
-      .getEcosystemAwareness(workspacePath)
+      .getEcosystemAwareness(scope)
       .then((unacknowledged) => {
-        if (cancelled || acknowledgedScopeRef.current === workspacePath) return;
-        markTabUnseen('external-sources', unacknowledged.length > 0);
+        if (
+          cancelled
+          || currentScopeRef.current !== scope
+          || activeRef.current
+          || acknowledgedScopeRef.current === scope
+        ) return;
+        setHasUnseen(unacknowledged.length > 0);
       })
       .catch((error) => {
         logger.debug('Could not read external application awareness', { error });
@@ -36,25 +44,30 @@ export function useExternalAppAwareness(): void {
     return () => {
       cancelled = true;
     };
-  }, [markTabUnseen, workspace, workspacePath]);
+  }, [remoteWorkspace, workspacePath]);
 
   useEffect(() => {
-    if (isRemoteWorkspace(workspace)
-      || activeTab !== 'external-sources'
+    if (remoteWorkspace
+      || !active
       || acknowledgedScopeRef.current === workspacePath) return;
+    const scope = workspacePath;
     // Clear the dot immediately while allowing a failed host write to retry.
-    markTabUnseen('external-sources', false);
+    setHasUnseen(false);
     void externalSourcesAPI
-      .getEcosystemAwareness(workspacePath)
+      .getEcosystemAwareness(scope)
       .then((unacknowledged) => (unacknowledged.length > 0
-        ? externalSourcesAPI.acknowledgeEcosystems(workspacePath, unacknowledged)
+        ? externalSourcesAPI.acknowledgeEcosystems(scope, unacknowledged)
         : undefined))
       .then(() => {
-        acknowledgedScopeRef.current = workspacePath;
+        if (currentScopeRef.current !== scope) return;
+        acknowledgedScopeRef.current = scope;
+        setHasUnseen(false);
       })
       .catch((error) => {
-        markTabUnseen('external-sources', true);
+        if (currentScopeRef.current === scope) setHasUnseen(true);
         logger.debug('Could not record external application awareness', { error });
       });
-  }, [activeTab, markTabUnseen, workspace, workspacePath]);
+  }, [active, remoteWorkspace, workspacePath]);
+
+  return hasUnseen;
 }

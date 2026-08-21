@@ -9,6 +9,27 @@ pub struct AcpClientConfigFile {
     pub acp_clients: HashMap<String, AcpClientConfig>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpClientSubagentConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub best_for: Option<String>,
+}
+
+impl Default for AcpClientSubagentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            description: None,
+            best_for: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpClientConfig {
@@ -23,6 +44,8 @@ pub struct AcpClientConfig {
     pub enabled: bool,
     #[serde(default)]
     pub readonly: bool,
+    #[serde(default)]
+    pub subagent: AcpClientSubagentConfig,
     #[serde(default)]
     pub permission_mode: AcpClientPermissionMode,
 }
@@ -45,6 +68,7 @@ pub struct AcpClientInfo {
     pub args: Vec<String>,
     pub enabled: bool,
     pub readonly: bool,
+    pub subagent: AcpClientSubagentConfig,
     pub permission_mode: AcpClientPermissionMode,
     pub status: AcpClientStatus,
     pub tool_name: String,
@@ -101,7 +125,7 @@ fn default_true() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::AcpClientPermissionMode;
+    use super::{AcpClientConfigFile, AcpClientPermissionMode};
 
     #[test]
     fn permission_mode_default_remains_ask_on_the_wire() {
@@ -109,5 +133,46 @@ mod tests {
 
         assert_eq!(mode, AcpClientPermissionMode::Ask);
         assert_eq!(serde_json::to_string(&mode).unwrap(), "\"ask\"");
+    }
+
+    #[test]
+    fn legacy_client_config_keeps_external_agent_tool_enabled() {
+        let config: AcpClientConfigFile = serde_json::from_value(serde_json::json!({
+            "acpClients": {
+                "codex": {
+                    "command": "codex",
+                    "enabled": true
+                }
+            }
+        }))
+        .unwrap();
+
+        let codex = config.acp_clients.get("codex").unwrap();
+        assert!(codex.subagent.enabled);
+        assert!(codex.subagent.description.is_none());
+        assert!(codex.subagent.best_for.is_none());
+    }
+
+    #[test]
+    fn subagent_profile_round_trips_with_camel_case_fields() {
+        let config: AcpClientConfigFile = serde_json::from_value(serde_json::json!({
+            "acpClients": {
+                "codex": {
+                    "command": "codex",
+                    "subagent": {
+                        "enabled": true,
+                        "description": "Implements complex code changes",
+                        "bestFor": "Cross-file refactors and difficult debugging"
+                    }
+                }
+            }
+        }))
+        .unwrap();
+
+        let serialized = serde_json::to_value(config).unwrap();
+        assert_eq!(
+            serialized["acpClients"]["codex"]["subagent"]["bestFor"],
+            "Cross-file refactors and difficult debugging"
+        );
     }
 }

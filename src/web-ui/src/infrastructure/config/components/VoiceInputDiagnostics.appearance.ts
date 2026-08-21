@@ -11,12 +11,11 @@ export const voiceInputDiagnosticsAppearanceDescriptor: AppearanceSurfaceDescrip
     {
       id: 'phase',
       attribute: 'data-bf-phase',
-      values: ['idle', 'preparing-microphone', 'checking-microphone', 'preparing-recognition', 'recording', 'transcribing'],
+      values: ['idle', 'preparing', 'recording', 'transcribing'],
     },
     { id: 'volume', attribute: 'data-bf-volume', values: ['silent', 'low', 'normal'] },
   ],
   states: [
-    { id: 'testingMicrophone', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="testing-microphone"]' } },
     { id: 'testingRecognition', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="testing-recognition"]' } },
     { id: 'error', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="error"]' } },
   ],

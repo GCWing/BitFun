@@ -107,7 +107,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
   disabled = false,
   onValidationChange,
 }) => {
-  const { t } = useTranslation('settings/ai-model');
+  const { t } = useTranslation('settings/models');
   const modelsDevSearchListboxId = React.useId();
   const [jsonDrafts, setJsonDrafts] = useState<Record<string, string>>({});
   const [expandedPresetIndex, setExpandedPresetIndex] = useState<number | null>(null);

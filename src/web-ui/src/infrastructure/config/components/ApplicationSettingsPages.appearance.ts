@@ -1,0 +1,10 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
+export const applicationSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'application-settings',
+  parts: [
+    { id: 'root' }, { id: 'content' }, { id: 'launchAtLogin' }, { id: 'autoUpdate' },
+    { id: 'logging' }, { id: 'logPath' }, { id: 'terminal' }, { id: 'shellOption' },
+    { id: 'windowBehavior' }, { id: 'notifications' },
+  ],
+};

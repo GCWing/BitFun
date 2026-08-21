@@ -1,0 +1,28 @@
+{
+  "loading": "正在載入 Review 容量...",
+  "desktopOnly": {
+    "title": "僅桌面端可用",
+    "description": "Review 容量設定僅在 BitFun 桌面應用中可用；目前介面不支援啟動 Review。"
+  },
+  "error": {
+    "title": "Review 容量暫不可用",
+    "retry": "重試"
+  },
+  "capacity": {
+    "title": "容量",
+    "description": "選擇補充審核工作逐項或兩路執行，並設定等待供應商容量的時長。",
+    "maxParallelReviewers": {
+      "label": "審核並行數",
+      "description": "控制補充審核工作逐項或兩路執行；只改變並行方式，不改變審核範圍。"
+    },
+    "maxQueueWaitSeconds": {
+      "label": "容量等待視窗",
+      "description": "可選審核工作等待供應商容量的時長；已經執行的檢查可能讓審核總耗時更長。"
+    }
+  },
+  "messages": {
+    "loadFailed": "載入 Review 容量失敗。",
+    "saveFailed": "儲存 Review 容量失敗。",
+    "saved": "Review 容量已儲存。"
+  }
+}

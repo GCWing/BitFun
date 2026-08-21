@@ -65,7 +65,8 @@ describe('unified project session creation', () => {
     expect(mainNav).not.toContain('data-testid="nav-bottom-bar"');
     expect(mainNav).toContain('className="bitfun-nav-panel__top-action-expand"');
     expect(mainNav).toContain('data-testid="ecosystem-compatibility-tab"');
-    expect(mainNav).toContain("activateProductAction('settings.external-sources.open')");
+    expect(mainNav).toContain("activateProductAction('surface.ecosystemCompatibility.open')");
+    expect(mainNav).not.toContain("activateProductAction('settings.external-sources.open')");
   });
 
   it('opens the footer utility list from Settings without More or Insights', () => {
@@ -83,7 +84,7 @@ describe('unified project session creation', () => {
     expect(themeIndex).toBeGreaterThan(notificationIndex);
     expect(openSettingsIndex).toBeGreaterThan(themeIndex);
     expect(aboutIndex).toBeGreaterThan(openSettingsIndex);
-    expect(footerActions).toContain("useSettingsStore.getState().openTab('appearance')");
+    expect(footerActions).toContain("useSettingsStore.getState().openPage('application.appearance')");
     expect(footerActions).not.toContain('data-testid="nav-footer-more-btn"');
     expect(footerActions).not.toContain("activateProductAction('surface.insights.open')");
   });

@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { getAppearanceProfileProperties } from '../appearancePropertyProfiles';
 import { AppearancePackageValidationError } from './AppearancePackageValidationError';
+import { migrateAppearancePackage } from './migrateAppearancePackage';
 
 type ValidationErrorReporter = (
   path: string,
@@ -152,6 +153,8 @@ export class AppearancePackageValidator {
       error('$', 'INVALID_PACKAGE', 'Appearance package must be an object');
       return { valid: false, errors, warnings };
     }
+    const migratedInput = migrateAppearancePackage(input);
+    if (migratedInput !== input) return this.validate(migratedInput, registry);
     this.validateKnownKeys(input, [
       'schema', 'schemaVersion', 'id', 'name', 'author', 'description', 'version', 'mode',
       'preview', 'backgroundMedia', 'requiredCapabilities', 'globals', 'materials', 'components', 'scenes', 'renderers',

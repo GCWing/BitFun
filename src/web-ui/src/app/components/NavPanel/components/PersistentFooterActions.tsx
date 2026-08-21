@@ -117,7 +117,7 @@ const PersistentFooterActions: React.FC = () => {
 
   const handleOpenThemeConfiguration = useCallback(() => {
     closeMenu();
-    useSettingsStore.getState().openTab('appearance');
+    useSettingsStore.getState().openPage('application.appearance');
     void activateProductAction('settings.open');
   }, [closeMenu]);
 

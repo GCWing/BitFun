@@ -88,10 +88,15 @@ vi.mock('@/component-library', () => ({
 
 vi.mock('./common', () => ({
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ConfigPageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => (
+  ConfigPageHeader: ({ title, subtitle, extra }: {
+    title: string;
+    subtitle: string;
+    extra?: React.ReactNode;
+  }) => (
     <header>
       <h1>{title}</h1>
       <p>{subtitle}</p>
+      {extra}
     </header>
   ),
   ConfigPageLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
@@ -224,6 +229,25 @@ describe('AcpAgentsConfig', () => {
     expect(getClientsMock).toHaveBeenCalledTimes(1);
     expect(probeClientRequirementsMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).not.toContain('registry.configInvalid');
+  });
+
+  it('keeps page help and agent detection with their owning surfaces', async () => {
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('header')?.textContent).toContain('actions.learnMore');
+    const registryHeading = Array.from(container.querySelectorAll('h2'))
+      .find(heading => heading.textContent === 'registry.title');
+    const registrySection = registryHeading?.closest('section');
+    expect(registrySection?.textContent).toContain('actions.refresh');
+    expect(registrySection?.textContent).toContain('presets.opencode.description');
+    expect(registrySection?.textContent).not.toContain('registry.description');
+    expect(registrySection?.textContent).not.toContain('Native ACP coding agent');
   });
 
   it('renders saved remote servers as global agent rows without override controls', async () => {

@@ -102,7 +102,7 @@ const REVIEW_COPY_EXPECTATIONS: Record<
 
 function readLocaleJson(
   locale: Locale,
-  namespace: 'flow-chat.json' | 'scenes/agents.json' | 'settings/review.json',
+  namespace: 'flow-chat.json' | 'scenes/agents.json' | 'settings/review-capacity.json',
 ) {
   const filePath = fileURLToPath(new URL(`../../locales/${locale}/${namespace}`, import.meta.url));
   return JSON.parse(readFileSync(filePath, 'utf8')) as JsonObject;
@@ -228,7 +228,7 @@ describe('review team locale completeness', () => {
     (locale) => {
       const flowChat = readLocaleJson(locale, 'flow-chat.json');
       const scenesAgents = readLocaleJson(locale, 'scenes/agents.json');
-      const settings = readLocaleJson(locale, 'settings/review.json');
+      const settings = readLocaleJson(locale, 'settings/review-capacity.json');
       const visibleCopy = [
         'deepReviewConsent.body',
         'deepReviewConsent.cost',

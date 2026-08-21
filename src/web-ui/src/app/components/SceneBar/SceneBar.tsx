@@ -10,7 +10,7 @@ import SceneTab from './SceneTab';
 import { WindowControls } from '@/component-library';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
-import { useCurrentSettingsTabTitle } from '../../hooks/useCurrentSettingsTabTitle';
+import { useCurrentSettingsPageTitle } from '../../hooks/useCurrentSettingsPageTitle';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { createLogger } from '@/shared/utils/logger';
 import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
@@ -38,7 +38,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
 }) => {
   const { openTabs, activeTabId, tabDefs, activateScene, closeScene } = useSceneManager();
   const sessionTitle = useCurrentSessionTitle();
-  const settingsTabTitle = useCurrentSettingsTabTitle();
+  const settingsPageTitle = useCurrentSettingsPageTitle();
   const { t } = useI18n('common');
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
   const sceneBarClassName = `bitfun-scene-bar ${!hasWindowControls ? 'bitfun-scene-bar--no-controls' : ''} ${className}`.trim();
@@ -97,7 +97,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
           const translatedLabel = def.labelKey ? t(def.labelKey) : def.label;
           const subtitle =
             (tab.id === 'session' && sessionTitle ? sessionTitle : undefined)
-            ?? (tab.id === 'settings' && settingsTabTitle ? settingsTabTitle : undefined);
+            ?? (tab.id === 'settings' && settingsPageTitle ? settingsPageTitle : undefined);
           return (
             <SceneTab
               key={tab.id}

@@ -65,7 +65,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
   isOpen,
   onClose,
 }) => {
-  const { t, formatDate } = useI18n('settings/session-config');
+  const { t, formatDate } = useI18n('settings/runtime');
   const [permissionGrants, setPermissionGrants] = useState<PermissionGrant[]>([]);
   const [grantsLoading, setGrantsLoading] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);

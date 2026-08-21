@@ -119,6 +119,7 @@ pub(crate) fn default_config_for_builtin_client(client_id: &str) -> Option<AcpCl
         env: HashMap::new(),
         enabled: true,
         readonly: false,
+        subagent: Default::default(),
         permission_mode: AcpClientPermissionMode::Ask,
     })
 }
@@ -219,6 +220,7 @@ mod tests {
                         env: HashMap::new(),
                         enabled: true,
                         readonly: false,
+                        subagent: Default::default(),
                         permission_mode: AcpClientPermissionMode::Ask,
                     },
                 ),
@@ -234,6 +236,7 @@ mod tests {
                         env: HashMap::new(),
                         enabled: true,
                         readonly: false,
+                        subagent: Default::default(),
                         permission_mode: AcpClientPermissionMode::Ask,
                     },
                 ),
@@ -249,6 +252,7 @@ mod tests {
                         env: HashMap::new(),
                         enabled: true,
                         readonly: false,
+                        subagent: Default::default(),
                         permission_mode: AcpClientPermissionMode::Ask,
                     },
                 ),

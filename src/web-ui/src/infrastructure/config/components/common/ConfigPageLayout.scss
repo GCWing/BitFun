@@ -167,6 +167,18 @@
   }
 }
 
+.bitfun-config-page-row--no-control {
+  --row-grid-cols: minmax(0, 1fr);
+
+  .bitfun-config-page-row__meta {
+    grid-column: 1 / -1;
+  }
+
+  .bitfun-config-page-row__description {
+    max-inline-size: none;
+  }
+}
+
 
 .bitfun-config-page-row__meta {
   min-width: 0;

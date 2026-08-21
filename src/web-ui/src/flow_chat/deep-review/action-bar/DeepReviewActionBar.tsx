@@ -45,7 +45,7 @@ import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSceneStore } from '@/app/stores/sceneStore';
-import type { ConfigTab } from '@/app/scenes/settings/settingsConfig';
+import type { SettingsPageId } from '@/app/scenes/settings/settingsTypes';
 import { formatElapsedTime } from './actionBarFormatting';
 import { CapacityQueueNotice } from './CapacityQueueNotice';
 import { DecisionExecutionGate } from './DecisionExecutionGate';
@@ -70,8 +70,8 @@ import '../../components/btw/DeepReviewActionBar.scss';
 
 const log = createLogger('DeepReviewActionBar');
 
-function openSettingsTab(tab: ConfigTab) {
-  useSettingsStore.getState().setActiveTab(tab);
+function openSettingsPage(pageId: SettingsPageId) {
+  useSettingsStore.getState().openPage(pageId);
   useSceneStore.getState().openScene('settings');
 }
 
@@ -280,7 +280,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
   }, [capacityQueueState, childSessionId, t]);
 
   const handleOpenReviewSettings = useCallback(() => {
-    openSettingsTab('review');
+    openSettingsPage('tools.execution');
   }, []);
 
   // ---- progress tracking ----
@@ -795,7 +795,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
 
   const handleOpenModelSettings = useCallback(async () => {
     if (!interruption) return;
-    openSettingsTab('models');
+    openSettingsPage('ai.models');
   }, [interruption]);
 
   const handleViewPartialResults = useCallback(() => {

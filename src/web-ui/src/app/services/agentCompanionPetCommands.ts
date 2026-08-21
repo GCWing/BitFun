@@ -50,7 +50,7 @@ async function openAgentCompanionPetSettings(): Promise<void> {
     import('@/shared/services/ide-control'),
     import('@tauri-apps/api/core'),
   ]);
-  quickActions.openSettings('session-personalization');
+  quickActions.openSettings({ pageId: 'application.pet' });
   await invoke('show_main_window');
   log.info('Agent companion settings opened from pet context menu');
 }

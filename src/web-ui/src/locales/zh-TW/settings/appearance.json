@@ -1,6 +1,6 @@
 {
   "title": "外觀",
-  "subtitle": "介面語言、外觀包與全域字體大小",
+  "subtitle": "介面語言、視覺外觀、動態效果、外觀包與全域字體大小",
   "effects": {
     "title": "動態效果",
     "hint": "控制介面中的視覺回饋。",
@@ -11,7 +11,7 @@
   },
   "package": {
     "title": "外觀包",
-    "description": "匯入宣告式 BitFun 外觀包，資源僅儲存在目前裝置。",
+    "description": "從清單選擇外觀包；懸停微縮圖可查看大圖，資源僅儲存在目前裝置。",
     "import": "匯入外觀包",
     "importSuccess": "已匯入 {{name}}",
     "importFailed": "無法匯入外觀包，請查看問題詳情。",

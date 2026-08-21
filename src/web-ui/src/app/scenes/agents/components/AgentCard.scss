@@ -278,6 +278,176 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 .agent-card {
+  // ── Detail information architecture ─────────────────────────────────────
+  &__config-panel {
+    padding: 14px 16px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-lg;
+    background: var(--bf-appearance-token-color-bg-elevated);
+  }
+
+  &__configuration {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 14px;
+  }
+
+  &__config-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: sticky;
+    inset-block-start: 0;
+  }
+
+  &__config-nav-item {
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: 11px;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
+
+    > span:not(.agent-card__config-nav-count) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
+    &.is-active {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  &__config-nav-count {
+    min-width: 20px;
+    padding: 1px 5px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-full;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  &__config-nav-divider {
+    height: 1px;
+    margin: 4px 8px;
+    background: var(--bf-appearance-token-border-subtle);
+  }
+
+  &__config-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    padding-inline-end: 2px;
+
+    > .agent-card__config-panel,
+    > .agent-card__section {
+      flex: 1 0 auto;
+      min-height: 100%;
+    }
+  }
+
+  &__config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+
+  &__config-panel-head {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h3 {
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: $font-weight-semibold;
+    }
+
+    p {
+      margin-top: 3px;
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: 10px;
+      line-height: $line-height-relaxed;
+    }
+  }
+
+  &__field-grid {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(52px, auto)) minmax(76px, 1fr);
+    gap: 10px;
+  }
+
+  &__field {
+    min-width: 0;
+    min-height: 52px;
+    padding: 8px 10px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-element-bg-subtle);
+
+    > span,
+    > strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > span {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: 9px;
+    }
+
+    > strong,
+    > p {
+      margin: 5px 0 0;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: 11px;
+      font-weight: $font-weight-medium;
+      line-height: $line-height-relaxed;
+    }
+
+    &--wide {
+      grid-column: 1 / -1;
+      min-height: 76px;
+    }
+  }
+
   // ── Capability grid ──────────────────────────────────────────────────────
   &__cap-grid {
     display: flex;
@@ -288,12 +458,12 @@
   &__cap-row {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: $size-gap-2;
   }
 
   &__cap-label {
     flex-shrink: 0;
-    width: 80px;
+    width: 72px;
     font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
     white-space: nowrap;
@@ -330,6 +500,14 @@
     display: flex;
     flex-direction: column;
     gap: $size-gap-2;
+    padding: 10px 12px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-lg;
+    background: var(--bf-appearance-token-color-bg-elevated);
+
+    &--capabilities {
+      background: var(--bf-appearance-token-element-bg-subtle);
+    }
   }
 
   &__section-head {
@@ -337,18 +515,22 @@
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-2;
-    min-height: 28px;
+    min-height: 24px;
+
+    &--tabs {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
   }
 
   &__section-title {
     display: inline-flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
-    color: var(--bf-appearance-token-color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__section-count {
@@ -357,7 +539,8 @@
     justify-content: center;
     padding: 1px 6px;
     border-radius: $size-radius-full;
-    background: var(--bf-appearance-token-element-bg-medium);
+    min-width: 20px;
+    background: var(--bf-appearance-token-color-bg-elevated);
     font-size: 10px;
     font-weight: $font-weight-medium;
     color: var(--bf-appearance-token-color-text-muted);
@@ -387,20 +570,23 @@
     gap: 4px;
     flex-wrap: wrap;
     min-width: 0;
-    padding-bottom: 4px;
-    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 78%, transparent);
+    padding: 3px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-element-bg-subtle);
   }
 
   &__tab {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 5px;
-    min-height: 26px;
-    padding: 0 8px;
-    margin-bottom: -5px;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 30px;
+    padding: 0 7px;
     border: 1px solid transparent;
-    border-bottom-color: transparent;
-    border-radius: $size-radius-base $size-radius-base 0 0;
+    border-radius: 6px;
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
     font-size: 11px;
@@ -412,23 +598,24 @@
       border-color $motion-fast $easing-standard,
       background $motion-fast $easing-standard,
       color $motion-fast $easing-standard,
-      box-shadow $motion-fast $easing-standard,
-      transform $motion-fast $easing-standard;
+      box-shadow $motion-fast $easing-standard;
+
+    > span:not(.agent-card__tab-count) {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 92%, transparent);
+      background: var(--bf-appearance-token-element-bg-medium);
       color: var(--bf-appearance-token-color-text-secondary);
-      transform: translateY(-1px);
     }
 
     &.is-active {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-border-subtle) 88%, transparent);
-      border-bottom-color: transparent;
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 96%, transparent);
-      color: var(--bf-appearance-token-color-accent-500);
-      box-shadow:
-        inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04),
-        0 -1px 0 color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
+      border-color: var(--bf-appearance-token-border-subtle);
+      background: var(--bf-appearance-token-color-bg-elevated);
+      color: var(--bf-appearance-token-color-text-primary);
+      box-shadow: $shadow-xs;
     }
   }
 
@@ -439,13 +626,13 @@
     min-width: 20px;
     padding: 0 5px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-medium) 92%, transparent);
+    background: var(--bf-appearance-token-element-bg-medium);
     color: inherit;
     font-size: 9px;
     line-height: 1.4;
     font-weight: $font-weight-semibold;
     font-variant-numeric: tabular-nums;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 72%, transparent);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__skill-groups {
@@ -629,6 +816,73 @@
     font-size: var(--bf-appearance-token-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
+  }
+}
+
+@container gallery-detail-modal (max-width: 620px) {
+  .agent-card {
+    &__configuration {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    &__config-nav {
+      position: static;
+      flex-direction: row;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    &__config-nav-item {
+      width: auto;
+      min-width: max-content;
+    }
+
+    &__config-nav-divider {
+      width: 1px;
+      height: 22px;
+      margin: 6px 3px;
+      flex: none;
+    }
+  }
+}
+
+@container gallery-detail-modal (max-width: 460px) {
+  .agent-card {
+    &__field-grid {
+      flex: 0 0 auto;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
+    }
+
+    &__field--wide {
+      grid-column: auto;
+    }
+
+    &__section-head--tabs {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &__section-head--tabs &__section-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    &__tab {
+      flex-basis: calc(50% - 2px);
+    }
+  }
+}
+
+@container gallery-detail-modal (max-width: 360px) {
+  .agent-card {
+    &__cap-label {
+      width: 60px;
+    }
+
+    &__section {
+      padding-inline: 10px;
+    }
   }
 }
 

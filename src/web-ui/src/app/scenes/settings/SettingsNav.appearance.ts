@@ -14,7 +14,6 @@ export const settingsNavAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'categoryHeader', visualRole: 'toolbar' },
     { id: 'items', visualRole: 'content' },
     { id: 'item', propertyProfile: 'control', visualRole: 'control' },
-    { id: 'itemUnseen', propertyProfile: 'paint', visualRole: 'decoration' },
     { id: 'highlight', propertyProfile: 'paint', visualRole: 'decoration' },
   ],
   states: [

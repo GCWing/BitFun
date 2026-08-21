@@ -35,6 +35,9 @@ const FileViewerScene = lazy(() => import('./file-viewer/FileViewerScene'));
 const ProfileScene    = lazy(() => import('./profile/ProfileScene'));
 const AgentsScene       = lazy(() => import('./agents/AgentsScene'));
 const SkillsScene     = lazy(() => import('./skills/SkillsScene'));
+const EcosystemCompatibilityScene = lazy(
+  () => import('./ecosystem-compatibility/EcosystemCompatibilityScene'),
+);
 const MiniAppGalleryScene = lazy(() => import('./miniapps/MiniAppGalleryScene'));
 const PagesScene      = lazy(() => import('./pages/PagesScene'));
 const BrowserScene    = lazy(() => import('./browser/BrowserScene'));
@@ -317,6 +320,8 @@ function renderScene(
       return <AgentsScene />;
     case 'skills':
       return <SkillsScene />;
+    case 'ecosystem-compatibility':
+      return <EcosystemCompatibilityScene />;
     case 'miniapps':
       return <MiniAppGalleryScene />;
     case 'pages':

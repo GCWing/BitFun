@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, Loader2, Mic, VolumeX, X } from 'lucide-react';
-import { IconButton } from '@/component-library';
+import { ArrowUp, Check, Download, Loader2, Mic, VolumeX, X } from 'lucide-react';
+import { Button, IconButton } from '@/component-library';
 import type { ComposerVoiceInputController } from './useComposerVoiceInput';
 
 const VOICE_TIMELINE_SAMPLE_COUNT = 32;
@@ -31,7 +31,12 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
   }, [controller.audioLevel]);
 
   useEffect(() => {
-    if (controller.phase === 'idle' || controller.phase === 'preparing') {
+    if (
+      controller.phase === 'idle'
+      || controller.phase === 'setup'
+      || controller.phase === 'downloading'
+      || controller.phase === 'preparing'
+    ) {
       setTimelineSamples(createFlatTimelineSamples());
       return undefined;
     }
@@ -51,7 +56,12 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
   }, [controller.phase]);
 
   useEffect(() => {
-    if (controller.phase === 'idle' || controller.phase === 'preparing') {
+    if (
+      controller.phase === 'idle'
+      || controller.phase === 'setup'
+      || controller.phase === 'downloading'
+      || controller.phase === 'preparing'
+    ) {
       setElapsedSeconds(0);
       return undefined;
     }
@@ -67,6 +77,84 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
 
   if (!controller.enabled) {
     return null;
+  }
+
+  const setupRequired = controller.phase === 'setup';
+  const downloading = controller.phase === 'downloading';
+
+  if (setupRequired || downloading) {
+    const progress = Math.min(100, Math.max(0, controller.downloadProgress ?? 0));
+    return (
+      <span
+        className="bitfun-chat-input__voice-cluster bitfun-chat-input__voice-cluster--setup"
+        data-bf-component="composer-voice-input"
+        data-bf-part="root"
+        data-bf-phase={controller.phase}
+        data-bf-state="active"
+      >
+        <span
+          className="bitfun-chat-input__voice-setup-pill"
+          data-bf-component="composer-voice-input"
+          data-bf-part="setupPill"
+          role="group"
+          aria-label={controller.setupMessage}
+          aria-busy={downloading}
+        >
+          <span
+            className="bitfun-chat-input__voice-setup-icon"
+            data-bf-component="composer-voice-input"
+            data-bf-part="status"
+            aria-hidden="true"
+          >
+            {downloading
+              ? <Loader2 size={14} className="bitfun-chat-input__voice-spinner" />
+              : <Download size={14} />}
+          </span>
+          <span
+            className="bitfun-chat-input__voice-setup-copy"
+            data-bf-component="composer-voice-input"
+            data-bf-part="setupMessage"
+          >
+            {controller.setupMessage}
+            {downloading ? (
+              <span className="bitfun-chat-input__voice-setup-progress" aria-hidden="true">
+                <span style={{ width: `${progress}%` }} />
+              </span>
+            ) : null}
+          </span>
+          {setupRequired ? (
+            <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="install">
+              <Button
+                className="bitfun-chat-input__voice-setup-action"
+                variant="primary"
+                size="small"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  controller.installAndStart();
+                }}
+              >
+                {controller.setupActionLabel}
+              </Button>
+            </span>
+          ) : null}
+          <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="dismiss">
+            <IconButton
+              aria-label={controller.setupCancelTooltip}
+              className="bitfun-chat-input__voice-setup-dismiss"
+              variant="ghost"
+              size="xs"
+              tooltip={controller.setupCancelTooltip}
+              onClick={(event) => {
+                event.stopPropagation();
+                controller.dismissSetup();
+              }}
+            >
+              <X size={14} />
+            </IconButton>
+          </span>
+        </span>
+      </span>
+    );
   }
 
   const preparing = controller.phase === 'preparing';

@@ -2,10 +2,10 @@
   "title": "Default Model Configuration",
   "subtitle": "Configure AI models for different scenarios",
   "loading": "Loading...",
-  "tabs": {
-    "default": "Default Config",
-    "models": "Model List",
-    "proxy": "Proxy"
+  "sections": {
+    "defaults": "Default Models",
+    "providers": "Model Services",
+    "proxy": "Network Proxy"
   },
   "core": {
     "title": "Core Configuration",
@@ -44,31 +44,6 @@
     "notSet": "Not set",
     "selectModel": "Select model",
     "autoSelect": "Auto select"
-  },
-  "advanced": {
-    "title": "Advanced Configuration",
-    "modeOverrides": {
-      "title": "Mode Model Overrides",
-      "description": "Specify different models for specific modes (default: primary model)"
-    },
-    "subAgentOverrides": {
-      "title": "SubAgent Model Overrides",
-      "description": "Specify different models for specific assistants (default: primary model)"
-    },
-    "subAgents": {
-      "git-func-agent": {
-        "displayName": "Git Functions",
-        "description": "Commit messages, code review"
-      },
-      "arc-func-agent": {
-        "displayName": "Architecture Analysis",
-        "description": "Dependency graph, Mermaid diagrams"
-      },
-      "compression": {
-        "displayName": "Context Compression",
-        "description": "Intelligently compress long conversation context"
-      }
-    }
   },
   "selection": {
     "primary": "Primary",

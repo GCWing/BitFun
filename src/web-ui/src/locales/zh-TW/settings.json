@@ -1,97 +1,44 @@
 {
-  "configCenter": {
-    "selectConfig": "選擇設定項",
-    "searchPlaceholder": "搜尋設定…",
-    "searchNoResults": "沒有匹配的設定",
-    "searchClear": "清除搜尋",
-    "beta": "Beta",
-    "unseenItems": "尚未檢視",
-    "searchAliases": {
-      "archivedSessions": [
-        "歸檔",
-        "會話"
-      ],
-      "keyboard": [
-        "快捷鍵",
-        "鍵位"
-      ],
-      "sessionPersonalization": [
-        "夥伴",
-        "個性化"
-      ],
-      "sessionPermissions": [
-        "權限"
-      ],
-      "quickActions": [
-        "快捷動作",
-        "提交"
-      ],
-      "review": [
-        "審核",
-        "程式碼審核"
-      ],
-      "memories": [
-        "記憶",
-        "長期記憶",
-        "學習"
-      ],
-      "usageStatistics": [
-        "調用統計",
-        "用量",
-        "Token",
-        "費用",
-        "成本",
-        "統計"
-      ]
-    },
-    "tabDescriptions": {
-      "basics": "日誌、終端 Shell、通知與開機啟動。",
-      "appearance": "語言、視覺外觀與介面字體大小。",
-      "models": "AI 模型、API 密鑰、供應商、代理與會話標題。",
-      "usageStatistics": "歷史模型調用情況統計：按模型、供應商與端點統計請求數、Token 用量與快取命中率。",
-      "worktrees": "隔離 Git Worktree 與平行工作階段的預設設定。",
-      "sessionPersonalization": "Agent 夥伴。",
-      "sessionPermissions": "工具權限、執行方式，以及桌面和瀏覽器控制。",
-      "review": "Review 策略、覆蓋深度、容量、成本和耗時控制。",
-      "memories": "自動記憶生成、注入、整理窗口與記憶模型。",
-      "mcpTools": "MCP 伺服器與工具集成。",
-      "externalSources": "載入其他 AI 應用中相容的命令與擴充。",
-      "hooks": "在 Agent 生命週期節點執行你自己的命令，與 Codex Hooks 相容。",
-      "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
-      "editor": "編輯器字體、顯示與格式化。",
-      "lsp": "語言服務與代碼智能。",
-      "keyboard": "快捷鍵與鍵位。",
-      "archivedSessions": "檢視、恢復或永久刪除已歸檔的會話。",
-      "quickActions": "程式碼完成後的一鍵 AI 動作，支援內建和自訂指令。",
-      "voiceInput": "本地麥克風輸入與語音轉文字模型。"
+  "navigation": {
+    "search": {
+      "placeholder": "搜尋設定…",
+      "empty": "沒有匹配的設定"
     },
     "categories": {
-      "general": "通用",
-      "smartCapabilities": "智慧化設定",
-      "devkit": "開發套件"
+      "application": "應用與介面",
+      "ai": "AI 與模型",
+      "workspace": "會話與工作區",
+      "tools": "工具與整合",
+      "data": "資料與維護"
     },
-    "tabs": {
-      "basics": "基礎",
-      "appearance": "外觀",
-      "models": "模型",
-      "usageStatistics": "調用統計",
-      "worktrees": "Worktrees",
-      "sessionPersonalization": "個性化",
-      "sessionPermissions": "權限管理",
-      "review": "審核",
-      "memories": "記憶",
-      "skills": "技能",
-      "mcpTools": "MCP",
-      "externalSources": "外部 AI 應用",
-      "hooks": "Agent Hooks",
-      "acpAgents": "ACP Agent",
-      "agents": "智能體",
+    "pages": {
+      "general": { "label": "通用", "description": "啟動、更新、視窗、休眠與通知。" },
+      "appearance": { "label": "外觀", "description": "語言、主題、動效、外觀包與介面字體。" },
+      "pet": { "label": "寵物", "description": "顯示位置、角色包、匯入與預覽。" },
+      "input": { "label": "輸入與快捷鍵", "description": "語音輸入與鍵盤快捷鍵。" },
+      "terminal": { "label": "終端", "description": "預設 Shell 與終端面板顯示位置。" },
+      "development": { "label": "終端與編輯器", "description": "終端 Shell 與程式碼編輯體驗。" },
+      "models": { "label": "模型", "description": "預設模型、模型服務、訂閱帳戶、模型目錄與網路代理。" },
+      "memory": { "label": "記憶", "description": "記憶生成、使用、提取與整理。" },
+      "sessionWorkspace": { "label": "會話與工作區", "description": "會話標題與目前工作區搜尋。" },
+      "worktrees": { "label": "Worktrees", "description": "Git Worktree 隔離與平行會話預設值。" },
+      "executionControl": { "label": "執行、權限與控制", "description": "工具執行與權限、Review 容量、桌面控制及瀏覽器連線。" },
+      "execution": { "label": "執行與權限", "description": "工具權限、執行策略、Review 容量與容錯。" },
+      "deviceControl": { "label": "桌面與瀏覽器", "description": "Computer Use、系統授權與瀏覽器連線。" },
+      "automation": { "label": "自動化", "description": "快捷動作與 Agent 生命週期 Hooks。" },
+      "mcp": { "label": "MCP", "description": "管理 MCP 伺服器、連線與對外提供的工具。" },
+      "acp": { "label": "ACP Agent", "description": "設定透過 Agent Client Protocol 接入的外部 Agent。" },
+      "usage": { "label": "使用統計", "description": "模型請求數、Token 用量與快取命中率。" },
+      "archivedSessions": { "label": "已歸檔會話", "description": "檢視、恢復或永久刪除已歸檔的會話。" },
+      "diagnostics": { "label": "日誌與診斷", "description": "日誌層級、執行資訊與故障排查。" }
+    },
+    "views": {
+      "voice": "語音輸入",
+      "shortcuts": "快捷鍵",
       "editor": "編輯器",
-      "lsp": "語言服務",
-      "keyboard": "快捷鍵",
-      "archivedSessions": "已歸檔會話",
-      "quickActions": "快捷動作",
-      "voiceInput": "語音輸入"
+      "terminal": "終端",
+      "quick-actions": "快捷動作",
+      "hooks": "Hooks"
     }
   },
   "general": {

@@ -15,7 +15,7 @@ export * from './services/modelConfigs';
 export * from './services/PermissionConfigService';
 
 // Components
-export { default as AIModelConfig } from './components/AIModelConfig';
+export { default as ModelSettingsPage } from './components/ModelSettingsPage';
 
 // Default instance
 export { configManager } from './services/ConfigManager';

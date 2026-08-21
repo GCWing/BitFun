@@ -78,7 +78,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
   onSave,
   onClose,
 }) => {
-  const { t } = useTranslation('settings/session-config');
+  const { t } = useTranslation('settings/runtime');
   const [savedRules, setSavedRules] = useState<PermissionRule[]>([]);
   const [draftRules, setDraftRules] = useState<DraftRule[]>([]);
   const [exitingRuleIds, setExitingRuleIds] = useState<Set<string>>(() => new Set());

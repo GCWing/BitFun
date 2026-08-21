@@ -1,0 +1,169 @@
+{
+  "title": "生態兼容",
+  "loading": "正在檢查兼容狀態…",
+  "partialLoad": "部分狀態未能讀取：{{sources}} {{acp}}。已保留其餘可用內容。",
+  "retry": "重試",
+  "loadAreas": {
+    "externalSources": "外部來源",
+    "acpClients": "ACP Agent"
+  },
+  "search": {
+    "label": "搜尋兼容產品、協議或能力",
+    "placeholder": "搜尋產品、協議或能力",
+    "empty": "沒有符合的兼容產品。"
+  },
+  "host": {
+    "label": "執行主機",
+    "local": "本機",
+    "remote": "遠端 · {{name}}",
+    "switchLabel": "切換執行主機",
+    "switchAction": "執行主機切換"
+  },
+  "groups": {
+    "connected": "已連接或發現",
+    "available": "可新增",
+    "other": "其他"
+  },
+  "status": {
+    "connected": "已連接",
+    "detected": "已發現",
+    "configured": "已設定",
+    "available": "可新增",
+    "development": "開發中"
+  },
+  "productSummary": {
+    "assets": "發現 {{count}} 項兼容內容",
+    "acpClients": "{{count}} 個 ACP 設定",
+    "available": "可設定",
+    "development": "兼容能力正在開發中"
+  },
+  "sidebar": {
+    "label": "兼容產品",
+    "hint": "選擇產品，查看可用方式和可匯入內容。"
+  },
+  "header": {
+    "sourceLocation": "設定來源",
+    "executionHost": "執行主機",
+    "currentState": "目前狀態",
+    "adapterRevision": "適配 v{{revision}}",
+    "acpRuntime": "ACP",
+    "notDetected": "目前未發現設定",
+    "notAvailable": "暫不可用",
+    "checksLabel": "更新與檢測",
+    "checksSummary": "{{sourceCount}} 個來源 · {{assetCount}} 項內容 · {{runtimeCount}} 個 ACP"
+  },
+  "governance": {
+    "openAction": "來源與安全",
+    "closeAction": "返回兼容概覽",
+    "managerLabel": "外部來源治理",
+    "managerScope": "這些控制項作用於目前執行主機上的兼容來源；產品兼容概覽保持唯讀。",
+    "loadingManager": "正在載入來源治理…"
+  },
+  "comingSoon": {
+    "title": "開發中",
+    "notice": "「{{name}}」正在開發中。"
+  },
+  "capabilities": {
+    "account": "帳號",
+    "settings": "設定與偏好",
+    "command": "命令",
+    "tool": "工具",
+    "subagent": "子 Agent",
+    "skill": "Skill",
+    "mcp": "MCP",
+    "hook": "Hooks",
+    "memory": "記憶",
+    "plugin": "外掛",
+    "pet": "寵物"
+  },
+  "import": {
+    "title": "匯入與複用",
+    "description": "查看 {{name}} 可與 BitFun 搭配使用的內容。可匯入的內容可以直接加入，其餘內容會顯示目前支援狀態。",
+    "columns": {
+      "item": "內容",
+      "type": "類型",
+      "source": "來源",
+      "state": "支援狀態",
+      "action": "操作"
+    },
+    "states": {
+      "ready": "可匯入",
+      "readyRename": "可匯入 · 自動改名",
+      "checking": "正在檢查",
+      "imported": "已匯入",
+      "reusable": "可直接使用",
+      "adapted": "已支援",
+      "notDetected": "未發現",
+      "notAdapted": "未適配",
+      "unsupportedContext": "目前環境無法匯入",
+      "unavailable": "暫時無法匯入"
+    },
+    "importAction": "匯入",
+    "importingAction": "匯入中",
+    "undetectedItem": "未發現{{type}}",
+    "undetectedDescription": "目前沒有發現可用內容",
+    "notAdaptedDescription": "BitFun 暫不支援使用 {{name}} 的{{type}}",
+    "ownerAdaptedDescription": "{{type}}已可在 BitFun 中直接使用，無需匯入",
+    "notifications": {
+      "success": "{{name}} 已匯入 BitFun",
+      "stale": "來源內容已更新，請確認最新狀態後重試",
+      "failed": "匯入 {{name}} 失敗"
+    }
+  },
+  "run": {
+    "title": "在 BitFun 中使用",
+    "description": "可用 {{name}} 新增獨立工作階段，也可將它設為子 Agent，由主 Agent 在合適的任務中呼叫。",
+    "session": {
+      "title": "建立獨立工作階段",
+      "description": "由 {{name}} 獨立處理任務並持續對話。"
+    },
+    "subagent": {
+      "title": "設定為子 Agent",
+      "responsibilityFallback": "尚未填寫職責說明。",
+      "bestForSummary": "適合：{{value}}",
+      "bestForFallback": "尚未填寫適用任務",
+      "configureAction": "配置",
+      "editAction": "$t(shared:tools.edit)",
+      "editorTitle": "{{name}} 的子 Agent 設定",
+      "editorDescription": "這些說明會成為主 Agent 判斷是否以及何時呼叫它的依據。",
+      "enabledLabel": "允許主 Agent 呼叫",
+      "responsibilityLabel": "它負責什麼",
+      "responsibilityPlaceholder": "例如：負責複雜程式碼實作、跨檔案修改和結果驗證",
+      "bestForLabel": "它適合什麼任務",
+      "bestForPlaceholder": "例如：大型重構、疑難問題定位、需要獨立上下文的實作任務",
+      "profileNote": "說明越具體，主 Agent 越容易在合適的任務中呼叫它。",
+      "saveAction": "儲存設定",
+      "savingAction": "儲存中",
+      "cancelAction": "取消",
+      "states": {
+        "configured": "已設定",
+        "defaultProfile": "使用預設說明",
+        "disabled": "未啟用",
+        "clientDisabled": "ACP 未啟用",
+        "unsupportedHost": "目前主機版本不支援"
+      },
+      "notifications": {
+        "saved": "已更新 {{name}} 的子 Agent 設定",
+        "failed": "儲存 {{name}} 的子 Agent 設定失敗"
+      }
+    },
+    "openManager": "管理 ACP Agent",
+    "hideManager": "收起 ACP 管理",
+    "managerLabel": "ACP Agent 管理",
+    "managerScope": "在下方安裝、啟用或調整 ACP Agent。",
+    "loadingManager": "正在載入 ACP Agent 管理…",
+    "startSession": "新增工作階段",
+    "starting": "正在建立 {{name}} 工作階段…",
+    "workspaceRequired": "請先開啟一個工作區，再建立 ACP 工作階段。",
+    "configurationRequired": "{{name}} 尚未就緒，請先檢查 ACP 設定。",
+    "notConfiguredTitle": "{{name}} 尚未就緒",
+    "notConfiguredDescription": "安裝並啟用 {{name}} 後，即可在這裡新增工作階段或將它設定為子 Agent。",
+    "clientStatus": {
+      "configured": "已設定",
+      "starting": "正在啟動",
+      "running": "$t(shared:statuses.running)",
+      "stopped": "已停止",
+      "failed": "啟動失敗"
+    }
+  }
+}

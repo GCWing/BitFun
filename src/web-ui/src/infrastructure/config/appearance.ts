@@ -28,7 +28,6 @@ export const configAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'collectionEditor' },
     { id: 'collectionFilters' },
     { id: 'collectionList' },
-    { id: 'subagentModel' },
     { id: 'modelOption' },
     { id: 'modelSelection' },
     { id: 'modelSelectionOption' },

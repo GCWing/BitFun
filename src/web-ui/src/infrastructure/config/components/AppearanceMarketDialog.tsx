@@ -290,7 +290,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
     return (
       <div
         className="appearance-market__detail"
-        data-bf-component="appearance-config"
+        data-bf-component="appearance-settings"
         data-bf-part="marketDetail"
       >
         <Button variant="ghost" size="small" onClick={() => setDetail(null)}>
@@ -299,7 +299,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
         </Button>
         <div
           className="appearance-market__detail-hero"
-          data-bf-component="appearance-config"
+          data-bf-component="appearance-settings"
           data-bf-part="marketDetailPreview"
         >
           {detail.previewUrl
@@ -317,7 +317,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
         </div>
         <div
           className="appearance-market__detail-body"
-          data-bf-component="appearance-config"
+          data-bf-component="appearance-settings"
           data-bf-part="marketDetailBody"
         >
           <div className="appearance-market__detail-heading">
@@ -353,7 +353,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
             || local?.localOverride) && (
             <div
               className="appearance-market__warning"
-              data-bf-component="appearance-config"
+              data-bf-component="appearance-settings"
               data-bf-part="marketWarning"
             >
               <AlertTriangle size={16} aria-hidden="true" />
@@ -377,7 +377,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
 
           <section
             className="appearance-market__releases"
-            data-bf-component="appearance-config"
+            data-bf-component="appearance-settings"
             data-bf-part="marketReleaseList"
           >
             <h4>{t('package.market.releases')}</h4>
@@ -385,7 +385,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               <div
                 key={item.releaseId}
                 className="appearance-market__release"
-                data-bf-component="appearance-config"
+                data-bf-component="appearance-settings"
                 data-bf-part="marketRelease"
               >
                 <span>v{item.packageVersion}</span>
@@ -397,7 +397,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
 
           <div
             className="appearance-market__actions"
-            data-bf-component="appearance-config"
+            data-bf-component="appearance-settings"
             data-bf-part="marketActions"
           >
             {local?.marketOrigin?.listingId === detail.listingId
@@ -457,12 +457,12 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
     >
       <div
         className="appearance-market"
-        data-bf-component="appearance-config"
+        data-bf-component="appearance-settings"
         data-bf-part="marketDialog"
       >
         <nav
           className="appearance-market__nav"
-          data-bf-component="appearance-config"
+          data-bf-component="appearance-settings"
           data-bf-part="marketNav"
           aria-label={t('package.market.views.label')}
         >
@@ -498,12 +498,12 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
         {view !== 'browse' ? <AppearanceMarketWorkflows workflow={view} /> : detail ? renderDetail() : (
           <div
             className="appearance-market__browse"
-            data-bf-component="appearance-config"
+            data-bf-component="appearance-settings"
             data-bf-part="marketBrowse"
           >
             <div
               className="appearance-market__toolbar"
-              data-bf-component="appearance-config"
+              data-bf-component="appearance-settings"
               data-bf-part="marketToolbar"
             >
               <Search
@@ -541,7 +541,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               <div
                 className="appearance-market__error"
                 role="alert"
-                data-bf-component="appearance-config"
+                data-bf-component="appearance-settings"
                 data-bf-part="marketError"
               >
                 <AlertTriangle size={16} />
@@ -554,7 +554,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
 
             <div
               className={`appearance-market__results${refreshing ? ' appearance-market__results--dimmed' : ''}`}
-              data-bf-component="appearance-config"
+              data-bf-component="appearance-settings"
               data-bf-part="marketResults"
               data-bf-state={loading ? 'loading' : undefined}
               aria-busy={loading || undefined}
@@ -579,7 +579,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               ) : (
                 <div
                   className="appearance-market__grid"
-                  data-bf-component="appearance-config"
+                  data-bf-component="appearance-settings"
                   data-bf-part="marketGrid"
                 >
                   {items.map(item => {
@@ -595,13 +595,13 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                         className="appearance-market__card"
                         onClick={() => void openDetail(item)}
                         disabled={detailLoading}
-                        data-bf-component="appearance-config"
+                        data-bf-component="appearance-settings"
                         data-bf-part="marketCard"
                         data-bf-state={detailLoading ? 'disabled' : undefined}
                       >
                         <div
                           className="appearance-market__preview"
-                          data-bf-component="appearance-config"
+                          data-bf-component="appearance-settings"
                           data-bf-part="marketPreview"
                         >
                           {item.previewUrl
@@ -619,7 +619,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                         </div>
                         <div
                           className="appearance-market__card-body"
-                          data-bf-component="appearance-config"
+                          data-bf-component="appearance-settings"
                           data-bf-part="marketCardBody"
                         >
                           <strong>{item.name}</strong>
@@ -629,7 +629,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                         {local && (
                           <span
                             className="appearance-market__status"
-                            data-bf-component="appearance-config"
+                            data-bf-component="appearance-settings"
                             data-bf-part="marketStatus"
                           >
                             {updateAvailable
@@ -648,7 +648,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               {showEmpty && (
                 <div
                   className="appearance-market__empty"
-                  data-bf-component="appearance-config"
+                  data-bf-component="appearance-settings"
                   data-bf-part="marketEmpty"
                 >
                   <Store size={28} aria-hidden="true" />

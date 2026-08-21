@@ -154,7 +154,7 @@ const DonutChart: React.FC<{
   kind: DistributionKind;
   entries: UsageStatisticsEntry[];
 }> = ({ kind, entries }) => {
-  const { t } = useI18n('settings/usage-statistics');
+  const { t } = useI18n('settings/usage');
   const totalTokens = entries.reduce((sum, entry) => sum + entry.tokens, 0);
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
@@ -242,7 +242,7 @@ const DistributionPanel: React.FC<{
   kind: DistributionKind;
   entries: UsageStatisticsEntry[];
 }> = ({ kind, entries }) => {
-  const { t } = useI18n('settings/usage-statistics');
+  const { t } = useI18n('settings/usage');
   const titleKey = {
     model: 'distributions.byModel',
     group: 'distributions.byGroup',
@@ -302,7 +302,7 @@ const DistributionPanel: React.FC<{
 // ---------------------------------------------------------------------------
 
 const ModelCacheHitRatePanel: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) => {
-  const { t } = useI18n('settings/usage-statistics');
+  const { t } = useI18n('settings/usage');
 
   return (
     <div
@@ -392,7 +392,7 @@ function niceMax(value: number): number {
 }
 
 const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }) => {
-  const { t, formatDate } = useI18n('settings/usage-statistics');
+  const { t, formatDate } = useI18n('settings/usage');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const plotWidth = CHART_WIDTH - PAD_LEFT - PAD_RIGHT;
@@ -624,7 +624,7 @@ const FILTER_KIND_OPTIONS: { value: UsageStatisticsFilterKind; key: string }[] =
 const FILTER_DEBOUNCE_MS = 300;
 
 const UsageStatisticsConfig: React.FC = () => {
-  const { t, resolvedTimeZone: timeZone } = useI18n('settings/usage-statistics');
+  const { t, resolvedTimeZone: timeZone } = useI18n('settings/usage');
   const [timeRange, setTimeRange] = useState<UsageTimeRange>('last24Hours');
   const [granularity, setGranularity] = useState<UsageGranularity>('hour');
   const [filterKind, setFilterKind] = useState<UsageStatisticsFilterKind>('all');

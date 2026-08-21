@@ -23,12 +23,12 @@ export type ProductActionId =
   | 'surface.files.open'
   | 'surface.agents.open'
   | 'surface.skills.open'
+  | 'surface.ecosystemCompatibility.open'
   | 'surface.miniapps.open'
   | 'surface.todos.open'
   | 'surface.insights.open'
   | 'settings.open'
-  | 'settings.keyboard.open'
-  | 'settings.external-sources.open';
+  | 'settings.shortcuts.open';
 
 export interface ProductActionDefinition {
   id: ProductActionId;
@@ -139,7 +139,7 @@ export const PRODUCT_ACTION_CATALOG: readonly ProductActionDefinition[] = [
     defaultPriority: 70,
   },
   {
-    id: 'settings.keyboard.open',
+    id: 'settings.shortcuts.open',
     labelKey: 'nav.search.actions.openKeyboardShortcuts',
     descriptionKey: 'nav.search.actionDescriptions.openKeyboardShortcuts',
     aliases: ['keyboard', 'shortcuts', 'hotkeys', 'keybindings'],
@@ -147,10 +147,10 @@ export const PRODUCT_ACTION_CATALOG: readonly ProductActionDefinition[] = [
     defaultPriority: 60,
   },
   {
-    id: 'settings.external-sources.open',
-    labelKey: 'nav.search.actions.openExternalSources',
-    descriptionKey: 'nav.search.actionDescriptions.openExternalSources',
-    aliases: ['external sources', 'compatibility', 'opencode', 'claude code', 'codex'],
+    id: 'surface.ecosystemCompatibility.open',
+    labelKey: 'nav.search.actions.openIntegrations',
+    descriptionKey: 'nav.search.actionDescriptions.openIntegrations',
+    aliases: ['ecosystem compatibility', 'external connections', 'integrations', 'external ai apps', 'opencode', 'claude code', 'codex'],
     icon: 'network',
     defaultPriority: 58,
   },

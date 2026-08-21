@@ -2,14 +2,17 @@
   container-name: external-sources;
   container-type: inline-size;
 
-  &__advanced,
-  &__hooks {
+  &__advanced {
     margin-top: var(--bf-appearance-token-size-gap-5);
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
+
+    &.is-governance {
+      margin-top: 0;
+      border-top: 0;
+    }
   }
 
-  &__advanced-summary,
-  &__hooks-summary {
+  &__advanced-summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -38,25 +41,14 @@
       color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
-  &__advanced[open] > &__advanced-summary &__disclosure-icon,
-  &__hooks[open] > &__hooks-summary &__disclosure-icon {
+  &__advanced[open] > &__advanced-summary &__disclosure-icon {
     color: var(--bf-appearance-token-color-text-secondary);
     transform: rotate(90deg);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    &__advanced-summary:hover,
-    &__hooks-summary:hover {
+    &__advanced-summary:hover {
       background: var(--bf-appearance-token-element-bg-subtle);
-    }
-  }
-
-  &__hooks .bitfun-hooks-config--embedded {
-    padding-top: var(--bf-appearance-token-size-gap-4);
-
-    .bitfun-config-page-content__inner {
-      width: 100%;
-      margin-inline: 0;
     }
   }
 

@@ -290,10 +290,7 @@ const QuickActionsConfig: React.FC = () => {
       <ConfigPageContent data-bf-component="quick-actions-config" data-bf-part="content" className="quick-actions-config__content">
 
         {/* ── Built-in actions ──────────────────────────────────────────── */}
-        <ConfigPageSection
-          title={t('sections.builtin.title')}
-          description={t('sections.builtin.description')}
-        >
+        <ConfigPageSection title={t('sections.builtin.title')}>
           <div data-bf-component="quick-actions-config" data-bf-part="list" className="quick-actions-config__list">
             {builtinActions.map(action => (
               <ActionRow
@@ -312,7 +309,6 @@ const QuickActionsConfig: React.FC = () => {
         {/* ── Custom actions ────────────────────────────────────────────── */}
         <ConfigPageSection
           title={t('sections.custom.title')}
-          description={t('sections.custom.description')}
           extra={
             <Button
               size="small"
