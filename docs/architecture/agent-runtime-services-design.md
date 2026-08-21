@@ -509,7 +509,7 @@ pub struct AgentRuntime {
     services: RuntimeServices,
     tools: Arc<ToolRuntime>,
     agents: Arc<dyn RuntimeAgentRegistry>,
-    hooks: Arc<RuntimeHookRegistry>,
+    hooks: RuntimeHookRegistry, // 自身已是内部共享的可克隆句柄，不再外套 Arc
     config: RuntimeConfig,
 }
 
