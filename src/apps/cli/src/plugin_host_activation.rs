@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use bitfun_core::BitFunResult;
 use bitfun_runtime_ports::AgentSessionWorkspaceBinding;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,35 +25,42 @@ fn activation_target(
     })
 }
 
-pub(crate) async fn ensure_plugin_workspace_ready(
-    binding: &AgentSessionWorkspaceBinding,
-) -> bitfun_core::BitFunResult<()> {
+pub(crate) async fn ensure_configured_plugin_execution_supported() -> BitFunResult<bool> {
     // Plugin activation is optional. Isolated Runtime clients (including unit
     // tests) may create sessions before the process-level config service is
     // initialized; that must not make ordinary session creation fail.
     if !bitfun_core::service::config::GlobalConfigManager::is_initialized() {
-        tracing::debug!(
-            workspace_path = %binding.workspace_path,
-            "Configured plugin host activation skipped before global config initialization"
-        );
+        return Ok(false);
+    }
+
+    let config_service = bitfun_core::service::config::get_global_config_service().await?;
+    let config: bitfun_core::service::config::GlobalConfig =
+        config_service.get_config(None).await?;
+    let has_configured_plugins = config.has_configured_plugins();
+    if has_configured_plugins
+        && crate::PLUGIN_HOST_LAUNCH_POLICY
+            == bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled
+    {
+        return Err(bitfun_core::BitFunError::NotImplemented(
+            "Configured Plugin Host execution is not enabled; plugin definitions were not imported or executed"
+            .to_string(),
+        ));
+    }
+    Ok(has_configured_plugins)
+}
+
+pub(crate) async fn ensure_plugin_workspace_ready(
+    binding: &AgentSessionWorkspaceBinding,
+) -> BitFunResult<()> {
+    if !ensure_configured_plugin_execution_supported().await? {
         return Ok(());
     }
 
     let Some(target) = activation_target(binding) else {
-        let config_service = bitfun_core::service::config::get_global_config_service().await?;
-        let config: bitfun_core::service::config::GlobalConfig =
-            config_service.get_config(None).await?;
-        if config.has_configured_plugins() {
-            return Err(bitfun_core::BitFunError::NotImplemented(
-                "Configured Plugin Host is unsupported for Remote CLI workspaces; no controller-local fallback was attempted"
-                    .to_string(),
-            ));
-        }
-        tracing::debug!(
-            workspace_path = %binding.workspace_path,
-            "Configured plugin host activation skipped for remote CLI workspace"
-        );
-        return Ok(());
+        return Err(bitfun_core::BitFunError::NotImplemented(
+            "Configured Plugin Host is unsupported for Remote CLI workspaces; no controller-local fallback was attempted"
+                .to_string(),
+        ));
     };
 
     bitfun_core::plugin_host::ensure_configured_plugin_instance(
@@ -101,5 +109,13 @@ mod tests {
         binding.remote_connection_id = Some("remote-1".to_string());
 
         assert_eq!(activation_target(&binding), None);
+    }
+
+    #[test]
+    fn cli_does_not_enable_unowned_plugin_execution() {
+        assert_eq!(
+            crate::PLUGIN_HOST_LAUNCH_POLICY,
+            bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled
+        );
     }
 }

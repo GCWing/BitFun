@@ -100,6 +100,74 @@ async fn startup_timeout_covers_a_connected_client_that_never_handshakes() {
 }
 
 #[tokio::test]
+async fn startup_failure_waits_until_the_spawned_process_is_reaped() {
+    let runtime_available = Command::new("node")
+        .arg("--version")
+        .output()
+        .await
+        .is_ok_and(|output| output.status.success());
+    if !runtime_available {
+        return;
+    }
+    let directory = tempfile::tempdir().expect("temporary directory should be created");
+    let script = directory.path().join("never-connects.mjs");
+    tokio::fs::write(
+        &script,
+        r#"import fs from "node:fs";
+fs.writeFileSync("child.pid", String(process.pid));
+setInterval(() => {}, 1000);
+"#,
+    )
+    .await
+    .expect("startup failure fixture should be written");
+    let result = PluginHost::start_with_timeout(
+        PluginHostConfig {
+            runtime_command: PathBuf::from("node"),
+            entry: script,
+            working_directory: directory.path().to_path_buf(),
+            cache_directory: directory.path().join("cache"),
+            log_file: directory.path().join("plugin-host.log"),
+            log_level: "debug".to_string(),
+        },
+        Duration::from_secs(1),
+    )
+    .await;
+
+    assert!(matches!(result, Err(PluginHostError::StartupTimeout)));
+    let process_id = tokio::fs::read_to_string(directory.path().join("child.pid"))
+        .await
+        .expect("fixture should publish its process id")
+        .parse::<u32>()
+        .expect("fixture process id should be numeric");
+    assert!(
+        !process_is_running(process_id).await,
+        "PluginHost::start must not return while its failed child is still alive"
+    );
+}
+
+#[cfg(windows)]
+async fn process_is_running(process_id: u32) -> bool {
+    let filter = format!("PID eq {process_id}");
+    Command::new("tasklist")
+        .args(["/FI", &filter, "/FO", "CSV", "/NH"])
+        .output()
+        .await
+        .is_ok_and(|output| {
+            output.status.success()
+                && String::from_utf8_lossy(&output.stdout).contains(&format!("\"{process_id}\""))
+        })
+}
+
+#[cfg(unix)]
+async fn process_is_running(process_id: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &process_id.to_string()])
+        .status()
+        .await
+        .is_ok_and(|status| status.success())
+}
+
+#[tokio::test]
 async fn handshake_clamps_requested_frame_limit_to_the_safe_range() {
     async fn negotiate(requested: usize) -> usize {
         let listener = TcpListener::bind(("127.0.0.1", 0))
@@ -275,12 +343,22 @@ async fn plugin_host_shutdown_waits_for_rpc_response_and_process_exit() {
     })
     .await
     .expect("runtime child should complete handshake");
+    let descendant_id = tokio::fs::read_to_string(directory.path().join("descendant.pid"))
+        .await
+        .expect("graceful fixture should publish its descendant id")
+        .parse::<u32>()
+        .expect("descendant id should be numeric");
 
     let report = host.shutdown(PluginHostShutdownPolicy::default()).await;
 
     assert_eq!(report.disposition, PluginHostShutdownDisposition::Graceful);
+    assert!(report.reaped);
     assert!(report.rpc_completed);
     assert_eq!(report.exit_code, Some(0));
+    assert!(
+        !process_is_running(descendant_id).await,
+        "graceful shutdown must reap the whole process tree before returning"
+    );
     let log = tokio::fs::read_to_string(log_file)
         .await
         .expect("plugin host shutdown log should be readable");
@@ -359,6 +437,7 @@ async fn plugin_host_shutdown_forces_a_host_that_ignores_shutdown_and_eof() {
     let report = host.shutdown(policy).await;
 
     assert_eq!(report.disposition, PluginHostShutdownDisposition::Forced);
+    assert!(report.reaped);
     assert!(!report.rpc_completed);
     assert!(report.duration_ms < 2_000);
 }
@@ -413,7 +492,12 @@ socket.write(Buffer.concat([header, request]));
 }
 
 fn graceful_shutdown_fixture() -> &'static str {
-    r#"import net from "node:net";
+    r#"import fs from "node:fs";
+import net from "node:net";
+import { spawn } from "node:child_process";
+const descendant = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+descendant.unref();
+fs.writeFileSync("descendant.pid", String(descendant.pid));
 const [host, port] = process.env.OPENCODE_EXTENSION_HOST_RPC_ADDRESS.split(":");
 const socket = net.createConnection({ host, port: Number(port) });
 let buffer = Buffer.alloc(0);
