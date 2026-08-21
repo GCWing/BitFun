@@ -11,7 +11,8 @@ use crate::api::app_state::SSHServiceError;
 use crate::startup_trace::DesktopStartupTrace;
 use crate::AppState;
 use bitfun_core::service::remote_ssh::{
-    ConnectionTestReport, DockerContainerInfo, RemoteTreeNode, SSHAuthMethod, SSHConfigEntry,
+    list_remote_listening_ports, ConnectionTestReport, DockerContainerInfo, PortForward,
+    PortForwardRequest, RemoteListeningPort, RemoteTreeNode, SSHAuthMethod, SSHConfigEntry,
     SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionManager, SSHConnectionResult,
     SavedConnection, ServerInfo,
 };
@@ -188,6 +189,13 @@ pub async fn ssh_disconnect(
     connection_id: String,
 ) -> Result<(), String> {
     let manager = state.get_ssh_manager_async().await?;
+    // Tear the forwards down first. They are listeners whose only meaning is
+    // this session, and leaving one running would let a later connection on it
+    // reconnect the host the user just closed.
+    state
+        .port_forward_manager
+        .stop_for_connection(&connection_id)
+        .await;
     manager
         .disconnect(&connection_id)
         .await
@@ -197,6 +205,7 @@ pub async fn ssh_disconnect(
 #[tauri::command]
 pub async fn ssh_disconnect_all(state: State<'_, AppState>) -> Result<(), String> {
     let manager = state.get_ssh_manager_async().await?;
+    state.port_forward_manager.stop_all().await;
     manager.disconnect_all().await;
     Ok(())
 }
@@ -1118,6 +1127,76 @@ pub async fn remote_get_workspace_info(
     log::info!("remote_get_workspace_info: returning {:?}", workspace);
     startup_trace.record_tauri_command_elapsed("remote_get_workspace_info", None, trace_started);
     Ok(workspace)
+}
+
+// === Port Forwarding ===
+
+/// Start a local (`-L`) forward and return the mapping that was established.
+///
+/// The returned `localPort` is not always the requested one: an unavailable
+/// port is replaced rather than refused, and `requestedLocalPort` carries what
+/// was asked for so the UI can say so.
+#[tauri::command]
+pub async fn ssh_start_port_forward(
+    state: State<'_, AppState>,
+    request: PortForwardRequest,
+) -> Result<PortForward, String> {
+    log::info!(
+        "ssh_start_port_forward: connection={}, remote={}:{}, requested local port={:?}",
+        request.connection_id,
+        request.effective_remote_host(),
+        request.remote_port,
+        request.preferred_local_port()
+    );
+    state
+        .port_forward_manager
+        .start_local_forward(&request)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+#[tauri::command]
+pub async fn ssh_stop_port_forward(
+    state: State<'_, AppState>,
+    forward_id: String,
+) -> Result<(), String> {
+    state
+        .port_forward_manager
+        .stop_forward(&forward_id)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// List forwards, optionally narrowed to one connection.
+#[tauri::command]
+pub async fn ssh_list_port_forwards(
+    state: State<'_, AppState>,
+    connection_id: Option<String>,
+) -> Result<Vec<PortForward>, String> {
+    Ok(match connection_id {
+        Some(connection_id) => {
+            state
+                .port_forward_manager
+                .list_forwards_for_connection(&connection_id)
+                .await
+        }
+        None => state.port_forward_manager.list_forwards().await,
+    })
+}
+
+/// List the TCP ports currently accepting connections on the remote host.
+///
+/// Discovery only. Nothing is forwarded as a result of calling this; it exists
+/// so users can pick a real port instead of guessing one.
+#[tauri::command]
+pub async fn ssh_list_remote_listening_ports(
+    state: State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<RemoteListeningPort>, String> {
+    let manager = state.get_ssh_manager_async().await?;
+    list_remote_listening_ports(&manager, &connection_id)
+        .await
+        .map_err(|error| format!("{error:#}"))
 }
 
 #[cfg(test)]

@@ -20,9 +20,10 @@ pub use bitfun_services_integrations::remote_ssh::{
 pub use bitfun_services_integrations::remote_ssh::{dispatch_ssh, relay_deploy};
 #[cfg(not(feature = "ssh-remote"))]
 pub use bitfun_services_integrations::remote_ssh::{
-    get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
-    PortForwardDirection, PortForwardManager, RemoteExecCommandRequest, RemoteExecCommandResponse,
-    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
+    get_global_remote_exec_process_manager, global_port_forward_manager,
+    list_remote_listening_ports, KnownHostEntry, PTYSession, PortForwardManager,
+    RemoteExecCommandRequest, RemoteExecCommandResponse, RemoteExecControlAction,
+    RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
     RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
     RemoteExecResult, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
     RemoteExecSessionCompletionStatus, RemoteFileService, RemoteSendStdinRequest,
@@ -39,8 +40,8 @@ pub use bitfun_services_integrations::remote_ssh::{
 };
 #[cfg(feature = "ssh-remote")]
 pub use bitfun_services_integrations::remote_ssh::{
-    KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
-    SSHConnectionManager,
+    global_port_forward_manager, list_remote_listening_ports, KnownHostEntry, PTYSession,
+    PortForwardManager, SSHConnectionManager,
 };
 #[cfg(feature = "ssh-remote")]
 pub use remote_fs::RemoteFileService;

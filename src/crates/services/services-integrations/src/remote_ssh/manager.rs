@@ -4035,6 +4035,61 @@ impl SSHConnectionManager {
         Ok(channel)
     }
 
+    /// Connect a saved connection if it is not already live, and return once
+    /// the session is usable.
+    ///
+    /// This is the entry point for callers that hold a connection id but do not
+    /// know whether the user ever opened it in this run. It reuses the same
+    /// saved-profile load, reconnect serialization, and config-drift handling
+    /// as every other operation.
+    pub async fn ensure_connected(&self, connection_id: &str) -> anyhow::Result<()> {
+        self.ensure_alive_or_reconnect(connection_id).await
+    }
+
+    /// Open a `direct-tcpip` channel to `host:port` as reached from the remote
+    /// end, which is the transport local port forwarding runs on.
+    ///
+    /// The handle is re-read from the connection map on every call rather than
+    /// cached by the caller: reconnect installs a *new* handle, and a forward
+    /// holding the old one would keep splicing traffic into a dead session.
+    pub async fn open_direct_tcpip(
+        &self,
+        connection_id: &str,
+        host: &str,
+        port: u16,
+        originator_host: &str,
+        originator_port: u16,
+    ) -> anyhow::Result<russh::Channel<Msg>> {
+        self.ensure_alive_or_reconnect(connection_id).await?;
+        let (handle, config) = {
+            let guard = self.connections.read().await;
+            let connection = guard
+                .get(connection_id)
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            (
+                connection.handle.clone(),
+                connection.effective_config.clone(),
+            )
+        };
+        if config.uses_local_docker() {
+            anyhow::bail!("A local Docker workspace has no SSH transport to forward over");
+        }
+        let handle =
+            handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+
+        handle
+            .channel_open_direct_tcpip(host, port as u32, originator_host, originator_port as u32)
+            .await
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to reach {}:{} from the remote host: {}",
+                    host,
+                    port,
+                    e
+                )
+            })
+    }
+
     /// Open a transport-neutral, long-lived stdio process in the effective
     /// workspace target.
     ///
@@ -5540,183 +5595,6 @@ impl PTYSession {
     /// Get connection ID
     pub fn connection_id(&self) -> &str {
         &self.connection_id
-    }
-}
-
-// ============================================================================
-// Port Forwarding
-// ============================================================================
-
-/// Port forwarding entry
-#[derive(Debug, Clone)]
-pub struct PortForward {
-    pub id: String,
-    pub local_port: u16,
-    pub remote_host: String,
-    pub remote_port: u16,
-    pub direction: PortForwardDirection,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PortForwardDirection {
-    Local,   // -L: forward local port to remote
-    Remote,  // -R: forward remote port to local
-    Dynamic, // -D: dynamic SOCKS proxy
-}
-
-/// Port forwarding manager
-pub struct PortForwardManager {
-    forwards: Arc<tokio::sync::RwLock<HashMap<String, PortForward>>>,
-    ssh_manager: Arc<tokio::sync::RwLock<Option<SSHConnectionManager>>>,
-}
-
-impl PortForwardManager {
-    pub fn new() -> Self {
-        Self {
-            forwards: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            ssh_manager: Arc::new(tokio::sync::RwLock::new(None)),
-        }
-    }
-
-    pub fn with_ssh_manager(ssh_manager: SSHConnectionManager) -> Self {
-        Self {
-            forwards: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            ssh_manager: Arc::new(tokio::sync::RwLock::new(Some(ssh_manager))),
-        }
-    }
-
-    pub async fn set_ssh_manager(&self, manager: SSHConnectionManager) {
-        let mut guard = self.ssh_manager.write().await;
-        *guard = Some(manager);
-    }
-
-    /// Start local port forwarding (-L)
-    ///
-    /// TODO: Full implementation requires:
-    /// - TCP listener to accept local connections
-    /// - SSH channel for each forwarded connection
-    /// - Proper cleanup when stopping the forward
-    ///
-    /// Currently this is a placeholder that only tracks the forward configuration.
-    pub async fn start_local_forward(
-        &self,
-        _connection_id: &str,
-        local_port: u16,
-        remote_host: String,
-        remote_port: u16,
-    ) -> anyhow::Result<String> {
-        let id = uuid::Uuid::new_v4().to_string();
-
-        let forward = PortForward {
-            id: id.clone(),
-            local_port,
-            remote_host: remote_host.clone(),
-            remote_port,
-            direction: PortForwardDirection::Local,
-        };
-
-        // Store forward entry
-        let mut guard = self.forwards.write().await;
-        guard.insert(id.clone(), forward);
-
-        log::info!(
-            "[TODO] Local port forward registered: localhost:{} -> {}:{}",
-            local_port,
-            remote_host,
-            remote_port
-        );
-        log::warn!("Port forwarding is not fully implemented - connections will not be forwarded");
-
-        Ok(id)
-    }
-
-    /// Start remote port forwarding (-R)
-    ///
-    /// TODO: Full implementation requires SSH reverse port forwarding channel.
-    /// This is more complex as it needs to bind to a remote port.
-    pub async fn start_remote_forward(
-        &self,
-        _connection_id: &str,
-        remote_port: u16,
-        local_host: String,
-        local_port: u16,
-    ) -> anyhow::Result<String> {
-        let id = uuid::Uuid::new_v4().to_string();
-
-        let forward = PortForward {
-            id: id.clone(),
-            local_port: remote_port,
-            remote_host: local_host.clone(),
-            remote_port: local_port,
-            direction: PortForwardDirection::Remote,
-        };
-
-        // Remote port forwarding requires SSH channel forwarding
-        // This is a placeholder - full implementation would need:
-        // 1. Open a "reverse" channel on SSH connection
-        // 2. Bind to remote port
-        // 3. Forward connections back through the channel
-
-        let mut guard = self.forwards.write().await;
-        guard.insert(id.clone(), forward);
-
-        log::info!(
-            "Started remote port forward (placeholder): *:{} -> {}:{}",
-            remote_port,
-            local_host,
-            local_port
-        );
-
-        // TODO: Implement actual SSH reverse port forwarding
-        log::warn!("Remote port forwarding is not fully implemented - data will not be forwarded");
-
-        Ok(id)
-    }
-
-    /// Stop a port forward
-    pub async fn stop_forward(&self, forward_id: &str) -> anyhow::Result<()> {
-        let mut guard = self.forwards.write().await;
-        if let Some(forward) = guard.remove(forward_id) {
-            log::info!(
-                "Stopped port forward: {} ({}:{} -> {}:{})",
-                forward.id,
-                match forward.direction {
-                    PortForwardDirection::Local => "local",
-                    PortForwardDirection::Remote => "remote",
-                    PortForwardDirection::Dynamic => "dynamic",
-                },
-                forward.local_port,
-                forward.remote_host,
-                forward.remote_port
-            );
-        }
-        Ok(())
-    }
-
-    /// Stop all port forwards
-    pub async fn stop_all(&self) {
-        let mut guard = self.forwards.write().await;
-        let count = guard.len();
-        guard.drain();
-        log::info!("All {} port forwards stopped", count);
-    }
-
-    /// List all active forwards
-    pub async fn list_forwards(&self) -> Vec<PortForward> {
-        let guard = self.forwards.read().await;
-        guard.values().cloned().collect()
-    }
-
-    /// Check if a port is already forwarded
-    pub async fn is_port_forwarded(&self, port: u16) -> bool {
-        let guard = self.forwards.read().await;
-        guard.values().any(|f| f.local_port == port)
-    }
-}
-
-impl Default for PortForwardManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

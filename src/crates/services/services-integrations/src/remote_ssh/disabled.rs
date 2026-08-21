@@ -5,9 +5,9 @@
 //! stay behind `ssh-remote` and return explicit unsupported errors here.
 
 use crate::remote_ssh::types::{
-    RemoteDirEntry, RemoteFileEntry, RemoteTreeNode, SSHCommandOptions, SSHCommandResult,
-    SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionResult,
-    SavedConnection, ServerInfo,
+    PortForward, PortForwardRequest, RemoteDirEntry, RemoteFileEntry, RemoteListeningPort,
+    RemoteTreeNode, SSHCommandOptions, SSHCommandResult, SSHConfigEntry, SSHConfigLookupResult,
+    SSHConnectionConfig, SSHConnectionResult, SavedConnection, ServerInfo,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -461,6 +461,10 @@ impl SSHConnectionManager {
         false
     }
 
+    pub async fn ensure_connected(&self, _connection_id: &str) -> anyhow::Result<()> {
+        Err(unsupported())
+    }
+
     pub async fn execute_command(
         &self,
         _connection_id: &str,
@@ -595,22 +599,6 @@ impl PTYSession {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct PortForward {
-    pub id: String,
-    pub local_port: u16,
-    pub remote_host: String,
-    pub remote_port: u16,
-    pub direction: PortForwardDirection,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PortForwardDirection {
-    Local,
-    Remote,
-    Dynamic,
-}
-
 #[derive(Clone, Default)]
 pub struct PortForwardManager;
 
@@ -627,11 +615,8 @@ impl PortForwardManager {
 
     pub async fn start_local_forward(
         &self,
-        _connection_id: &str,
-        _local_port: u16,
-        _remote_host: &str,
-        _remote_port: u16,
-    ) -> anyhow::Result<String> {
+        _request: &PortForwardRequest,
+    ) -> anyhow::Result<PortForward> {
         Err(unsupported())
     }
 
@@ -649,15 +634,43 @@ impl PortForwardManager {
         Err(unsupported())
     }
 
+    pub async fn stop_for_connection(&self, _connection_id: &str) -> usize {
+        0
+    }
+
     pub async fn stop_all(&self) {}
 
     pub async fn list_forwards(&self) -> Vec<PortForward> {
         Vec::new()
     }
 
+    pub async fn list_forwards_for_connection(&self, _connection_id: &str) -> Vec<PortForward> {
+        Vec::new()
+    }
+
+    pub async fn find_forward(
+        &self,
+        _connection_id: &str,
+        _remote_host: &str,
+        _remote_port: u16,
+    ) -> Option<PortForward> {
+        None
+    }
+
     pub async fn is_port_forwarded(&self, _port: u16) -> bool {
         false
     }
+}
+
+pub fn global_port_forward_manager() -> PortForwardManager {
+    PortForwardManager
+}
+
+pub async fn list_remote_listening_ports(
+    _manager: &SSHConnectionManager,
+    _connection_id: &str,
+) -> anyhow::Result<Vec<RemoteListeningPort>> {
+    Err(unsupported())
 }
 
 #[derive(Debug, Clone)]

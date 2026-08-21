@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -57,6 +57,11 @@ import {
 
 const WorkspaceRelatedPathsDialog = lazy(() => import('./WorkspaceRelatedPathsDialog'));
 const WorkspaceProjectPermissionsDialog = lazy(() => import('./WorkspaceProjectPermissionsDialog'));
+const PortForwardDialog = lazy(() =>
+  import('@/features/ssh-remote/PortForwardDialog').then((module) => ({
+    default: module.PortForwardDialog,
+  }))
+);
 const WorkspaceSessionBatchModal = lazy(() => import('./WorkspaceSessionBatchModal'));
 const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 
@@ -122,6 +127,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
   const [projectPermissionsDialogOpen, setProjectPermissionsDialogOpen] = useState(false);
+  const [portForwardDialogOpen, setPortForwardDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
@@ -525,6 +531,16 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setProjectPermissionsDialogOpen(true);
   }, []);
 
+  const handleOpenPortForward = useCallback(() => {
+    setMenuOpen(false);
+    setPortForwardDialogOpen(true);
+  }, []);
+
+  // A forward is carried by this workspace's SSH session, so the entry belongs
+  // to the workspace that owns the connection rather than to a global menu.
+  const portForwardConnectionId =
+    isRemoteWorkspace(workspace) && workspace.connectionId ? workspace.connectionId : null;
+
   const handleRequestRename = useCallback(() => {
     setMenuOpen(false);
     setRenameDialogOpen(true);
@@ -917,7 +933,22 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       {t('nav.workspaces.actions.manageProjectPermissions')}
                     </span>
                   </button>
-                  <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
+                  {portForwardConnectionId ? (
+                  <button
+                    type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
+                    className="bitfun-nav-panel__workspace-item-menu-item"
+                    onClick={handleOpenPortForward}
+                    data-testid="nav-workspace-menu-port-forward"
+                  >
+                    <Network size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">
+                      {t('ssh.portForward.menuEntry')}
+                    </span>
+                  </button>
+                ) : null}
+                <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
                   <button
                     type="button"
                     data-bf-component="workspace-item"
@@ -1046,6 +1077,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             />
           </Suspense>
         </PresenceBoundary>
+        <PresenceBoundary active={portForwardDialogOpen}>
+          <Suspense fallback={null}>
+            {portForwardConnectionId ? (
+              <PortForwardDialog
+                open={portForwardDialogOpen}
+                connectionId={portForwardConnectionId}
+                connectionName={workspaceDisplayName}
+                onClose={() => setPortForwardDialogOpen(false)}
+              />
+            ) : null}
+          </Suspense>
+        </PresenceBoundary>
+        
       </div>
     );
   }
@@ -1424,6 +1468,21 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <Clock3 size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
                 </button>
+                {portForwardConnectionId ? (
+                  <button
+                    type="button"
+                    data-bf-component="workspace-item"
+                    data-bf-part="menuItem"
+                    className="bitfun-nav-panel__workspace-item-menu-item"
+                    onClick={handleOpenPortForward}
+                    data-testid="nav-workspace-menu-port-forward"
+                  >
+                    <Network size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">
+                      {t('ssh.portForward.menuEntry')}
+                    </span>
+                  </button>
+                ) : null}
                 <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
                 <button
                   type="button"
@@ -1540,6 +1599,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           />
         </Suspense>
       </PresenceBoundary>
+      <PresenceBoundary active={portForwardDialogOpen}>
+        <Suspense fallback={null}>
+          {portForwardConnectionId ? (
+            <PortForwardDialog
+              open={portForwardDialogOpen}
+              connectionId={portForwardConnectionId}
+              connectionName={workspaceDisplayName}
+              onClose={() => setPortForwardDialogOpen(false)}
+            />
+          ) : null}
+        </Suspense>
+      </PresenceBoundary>
+      
       <PresenceBoundary active={sessionBatchModalOpen}>
         <Suspense fallback={null}>
           <WorkspaceSessionBatchModal

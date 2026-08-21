@@ -27,5 +27,10 @@ export const sshRemoteAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'confirmWarning' },
     { id: 'confirmMessage' },
     { id: 'confirmActions' },
+    { id: 'portForward' },
+    { id: 'portForwardIntro' },
+    { id: 'portForwardForm' },
+    { id: 'portForwardError' },
+    { id: 'portForwardTable' },
   ],
 };

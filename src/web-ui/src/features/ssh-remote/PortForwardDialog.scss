@@ -1,0 +1,283 @@
+/**
+ * Remote port forwarding dialog
+ *
+ * Follows the workspace dialog conventions: `contentInset` on the modal,
+ * bordered section cards with a tinted header, and rows separated by a rule
+ * rather than a table.
+ */
+
+.port-forward-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding-block: 4px 16px;
+  color: var(--bf-appearance-token-color-text-primary);
+
+  &__modal {
+    overflow-x: hidden;
+  }
+
+  &__target {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__intro {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 6px;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.5;
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+
+    p {
+      margin: 0;
+    }
+  }
+
+  &__error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--bf-appearance-token-color-error-border);
+    border-radius: 6px;
+    background: var(--bf-appearance-token-color-error-bg);
+    color: var(--bf-appearance-token-color-error);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.5;
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    padding: 8px 12px;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: 600;
+  }
+
+  &__section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    min-width: 0;
+  }
+
+  &__empty {
+    margin: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.5;
+  }
+
+  &__spin {
+    animation: port-forward-dialog-spin 1s linear infinite;
+  }
+
+  &__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 7px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 6px;
+    background: var(--bf-appearance-token-element-bg-base);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+
+    &:hover:not(:disabled) {
+      border-color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-appearance-token-color-accent-100);
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+
+    &[data-state='forwarded'] {
+      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+
+    svg {
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+  }
+
+  &__chip-port {
+    font-family: var(--bf-appearance-token-font-family-mono);
+    font-weight: 500;
+  }
+
+  &__chip-process {
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 10px 12px;
+
+    + .port-forward-dialog__row {
+      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    }
+  }
+
+  &__row-copy {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__remote,
+  &__local {
+    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__remote {
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__local {
+    color: var(--bf-appearance-token-color-text-primary);
+    font-weight: 500;
+  }
+
+  &__arrow {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  &__label {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    white-space: nowrap;
+
+    &--warn {
+      color: var(--bf-appearance-token-color-error);
+      cursor: help;
+    }
+  }
+
+  &__note {
+    flex-basis: 100%;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    line-height: 1.4;
+
+    &--warn {
+      color: var(--bf-appearance-token-color-warning);
+    }
+  }
+
+  &__row-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  &__form {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100px;
+
+    > span {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
+    }
+
+    &--grow {
+      flex: 1 1 140px;
+      width: auto;
+      min-width: 120px;
+    }
+  }
+}
+
+@keyframes port-forward-dialog-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

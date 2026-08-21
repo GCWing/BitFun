@@ -105,7 +105,9 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
         | "AgentDelete" | "AgentWait" | "LaunchReviewAgent" | "Skill" | "AskUserQuestion"
         | "TodoWrite" | "get_goal" | "create_goal" | "update_goal" | "CreatePlan"
         | "submit_code_review" | "GetToolSpec" | "CallDeferredTool" | "SessionControl"
-        | "SessionMessage" | "SessionHistory" | "Cron" => Some(ToolPackFeatureGroup::AgentControl),
+        | "SessionMessage" | "SessionHistory" | "Cron" | "PortForward" => {
+            Some(ToolPackFeatureGroup::AgentControl)
+        }
         _ => None,
     }
 }
@@ -214,7 +216,13 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.session",
         feature_groups: CORE_SESSION_FEATURE_GROUPS,
-        tool_names: &["SessionControl", "SessionMessage", "SessionHistory", "Cron"],
+        tool_names: &[
+            "SessionControl",
+            "SessionMessage",
+            "SessionHistory",
+            "Cron",
+            "PortForward",
+        ],
     },
     ToolProviderGroupPlan {
         provider_id: "core.integration",
@@ -506,6 +514,7 @@ mod tests {
                 "SessionMessage",
                 "SessionHistory",
                 "Cron",
+                "PortForward",
                 "WebSearch",
                 "WebFetch",
                 "ListMCPResources",
