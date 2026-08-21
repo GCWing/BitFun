@@ -52,7 +52,7 @@ use modes::chat::ChatMode;
 use modes::exec::{ExecApprovalMode, ExecOutputFormat};
 
 pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
-    bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled;
+    bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
 
 // ======================== Global MCP Service ========================
 
@@ -608,7 +608,10 @@ impl BootstrapProfile {
     }
 
     const fn starts_plugin_host(self) -> bool {
-        matches!(self, Self::Interactive | Self::Execution)
+        matches!(
+            PLUGIN_HOST_LAUNCH_POLICY,
+            bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled
+        ) && matches!(self, Self::Interactive | Self::Execution)
     }
 }
 
@@ -863,6 +866,12 @@ async fn initialize_core_services_for_deployment(
         .await
         .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
     tracing::info!("Global config service initialized");
+    if matches!(
+        bootstrap_profile,
+        BootstrapProfile::Interactive | BootstrapProfile::Execution
+    ) {
+        plugin_host_activation::ensure_configured_plugin_execution_supported().await?;
+    }
     if bootstrap_profile.starts_plugin_host() {
         match bitfun_core::plugin_host::initialize_configured_plugin_host_with_log_file(
             PLUGIN_HOST_LAUNCH_POLICY,
@@ -1904,8 +1913,8 @@ mod bootstrap_profile_tests {
     #[test]
     fn profiles_start_only_their_requested_background_services() {
         let cases = [
-            (BootstrapProfile::Interactive, true, true, true),
-            (BootstrapProfile::Execution, false, true, true),
+            (BootstrapProfile::Interactive, true, true, false),
+            (BootstrapProfile::Execution, false, true, false),
             (BootstrapProfile::Management, false, false, false),
         ];
 
