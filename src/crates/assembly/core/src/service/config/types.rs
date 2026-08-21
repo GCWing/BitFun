@@ -707,6 +707,18 @@ pub struct ReviewTeamConfig {
     pub reviewer_file_split_threshold: usize,
     /// Maximum number of same-role reviewer instances per role when file splitting is active.
     pub max_same_role_instances: usize,
+    /// Maximum retries for a failed same-role reviewer instance.
+    pub max_retries_per_role: usize,
+    /// Maximum number of review instances that may run at the same time.
+    pub max_parallel_reviewers: usize,
+    /// Seconds to wait for provider capacity before skipping unstarted work. 0 skips immediately.
+    pub max_queue_wait_seconds: u64,
+    /// Whether unstarted review work may wait for provider capacity.
+    pub allow_provider_capacity_queue: bool,
+    /// Whether bounded automatic retry is allowed after a reviewer failure.
+    pub allow_bounded_auto_retry: bool,
+    /// Elapsed-seconds guard that blocks bounded automatic retry after this delay.
+    pub auto_retry_elapsed_guard_seconds: u64,
 }
 
 impl Default for ReviewTeamConfig {
@@ -720,6 +732,12 @@ impl Default for ReviewTeamConfig {
             auto_fix_enabled: false,
             reviewer_file_split_threshold: 20,
             max_same_role_instances: 3,
+            max_retries_per_role: 1,
+            max_parallel_reviewers: 2,
+            max_queue_wait_seconds: 1200,
+            allow_provider_capacity_queue: true,
+            allow_bounded_auto_retry: false,
+            auto_retry_elapsed_guard_seconds: 180,
         }
     }
 }
@@ -3048,6 +3066,80 @@ mod tests {
         assert_eq!(
             serialized["review_teams"]["default"]["member_strategy_overrides"]["ReviewSecurity"],
             "quick"
+        );
+    }
+
+    #[test]
+    fn preserves_review_team_concurrency_fields_through_config_round_trip() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "default_models": {},
+            "agent_profiles": {},
+            "review_teams": {
+                "default": {
+                    "extra_subagent_ids": [],
+                    "strategy_level": "normal",
+                    "member_strategy_overrides": {},
+                    "reviewer_timeout_seconds": 3600,
+                    "judge_timeout_seconds": 2400,
+                    "reviewer_file_split_threshold": 20,
+                    "max_same_role_instances": 3,
+                    "max_retries_per_role": 1,
+                    "max_parallel_reviewers": 1,
+                    "max_queue_wait_seconds": 0,
+                    "allow_provider_capacity_queue": true,
+                    "allow_bounded_auto_retry": false,
+                    "auto_retry_elapsed_guard_seconds": 180
+                }
+            },
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("review team concurrency config should deserialize");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        let stored = &serialized["review_teams"]["default"];
+        assert_eq!(stored["max_retries_per_role"], serde_json::json!(1));
+        assert_eq!(stored["max_parallel_reviewers"], serde_json::json!(1));
+        assert_eq!(stored["max_queue_wait_seconds"], serde_json::json!(0));
+        assert_eq!(
+            stored["allow_provider_capacity_queue"],
+            serde_json::json!(true)
+        );
+        assert_eq!(stored["allow_bounded_auto_retry"], serde_json::json!(false));
+        assert_eq!(
+            stored["auto_retry_elapsed_guard_seconds"],
+            serde_json::json!(180)
+        );
+    }
+
+    #[test]
+    fn missing_review_team_concurrency_fields_use_product_defaults() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "review_teams": {
+                "default": {
+                    "strategy_level": "normal"
+                }
+            }
+        }))
+        .expect("legacy review team config should deserialize");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        let stored = &serialized["review_teams"]["default"];
+        assert_eq!(stored["max_retries_per_role"], serde_json::json!(1));
+        assert_eq!(stored["max_parallel_reviewers"], serde_json::json!(2));
+        assert_eq!(stored["max_queue_wait_seconds"], serde_json::json!(1200));
+        assert_eq!(
+            stored["allow_provider_capacity_queue"],
+            serde_json::json!(true)
+        );
+        assert_eq!(stored["allow_bounded_auto_retry"], serde_json::json!(false));
+        assert_eq!(
+            stored["auto_retry_elapsed_guard_seconds"],
+            serde_json::json!(180)
         );
     }
 
