@@ -24,6 +24,8 @@ pub mod manager;
 #[cfg(feature = "remote-ssh-concrete")]
 mod password_vault;
 #[cfg(feature = "remote-ssh-concrete")]
+mod port_forward;
+#[cfg(feature = "remote-ssh-concrete")]
 pub mod relay_deploy;
 #[cfg(feature = "remote-ssh-concrete")]
 mod release_verify;
@@ -50,9 +52,10 @@ pub use workspace_services::{remote_workspace_services, RemoteWorkspaceFs, Remot
 
 #[cfg(not(feature = "remote-ssh-concrete"))]
 pub use disabled::{
-    dispatch_ssh, get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
-    PortForwardDirection, PortForwardManager, RemoteExecCommandRequest, RemoteExecCommandResponse,
-    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
+    dispatch_ssh, get_global_remote_exec_process_manager, global_port_forward_manager,
+    list_remote_listening_ports, KnownHostEntry, PTYSession, PortForwardManager,
+    RemoteExecCommandRequest, RemoteExecCommandResponse, RemoteExecControlAction,
+    RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
     RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
     RemoteExecResult, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
     RemoteExecSessionCompletionStatus, RemoteFileService, RemoteSendStdinRequest,
@@ -60,9 +63,10 @@ pub use disabled::{
     SessionStatus,
 };
 #[cfg(feature = "remote-ssh-concrete")]
-pub use manager::{
-    KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
-    SSHConnectionManager,
+pub use manager::{KnownHostEntry, PTYSession, SSHConnectionManager};
+#[cfg(feature = "remote-ssh-concrete")]
+pub use port_forward::{
+    global_port_forward_manager, list_remote_listening_ports, PortForwardManager,
 };
 #[cfg(feature = "remote-ssh-concrete")]
 pub use remote_exec::{

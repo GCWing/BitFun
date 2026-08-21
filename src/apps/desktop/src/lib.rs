@@ -1886,6 +1886,11 @@ pub async fn run() {
             api::ssh_api::remote_close_workspace,
             api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
+            // Remote port forwarding (local `-L` mappings, user-driven)
+            api::ssh_api::ssh_start_port_forward,
+            api::ssh_api::ssh_stop_port_forward,
+            api::ssh_api::ssh_list_port_forwards,
+            api::ssh_api::ssh_list_remote_listening_ports,
             // Detached task dispatch (controller-side SSH transport)
             api::dispatch_api::dispatch_list_targets,
             api::dispatch_api::dispatch_probe_target,

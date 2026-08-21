@@ -82,6 +82,8 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "SessionHistory" => Some(Arc::new(SessionHistoryTool::new())),
             #[cfg(feature = "tools-agent-control")]
             "Cron" => Some(Arc::new(CronTool::new())),
+            #[cfg(feature = "tools-agent-control")]
+            "PortForward" => Some(Arc::new(PortForwardTool::new())),
             #[cfg(feature = "tools-browser-web")]
             "WebSearch" => Some(Arc::new(WebSearchTool::new())),
             #[cfg(feature = "tools-browser-web")]

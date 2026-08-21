@@ -8,7 +8,8 @@ use bitfun_core::miniapp::{
     initialize_global_miniapp_manager, seed_builtin_miniapps, JsWorkerPool, MiniAppManager,
 };
 use bitfun_core::service::remote_ssh::{
-    init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
+    global_port_forward_manager, init_remote_workspace_manager, PortForwardManager,
+    RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
 use bitfun_core::service::{announcement, config, filesystem, mcp, search, token_usage, workspace};
 use bitfun_core::util::errors::*;
@@ -84,6 +85,10 @@ pub struct AppState {
     pub ssh_manager: Arc<RwLock<Option<SSHConnectionManager>>>,
     pub remote_file_service: Arc<RwLock<Option<RemoteFileService>>>,
     pub remote_terminal_manager: Arc<RwLock<Option<RemoteTerminalManager>>>,
+    /// Local (`-L`) port forwards. Unlike the services above this needs no
+    /// `Option`: it is useful before any connection exists, and its own entry
+    /// points report a missing SSH manager.
+    pub port_forward_manager: PortForwardManager,
     pub remote_workspace: Arc<RwLock<Option<RemoteWorkspace>>>,
     pub active_searches: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     /// Cancellation flags for active file transfers (download/upload), keyed by transfer_id.
@@ -274,6 +279,13 @@ impl AppState {
         let manager_for_fs = Arc::new(tokio::sync::RwLock::new(Some(manager_arc.as_ref().clone())));
         let fs = RemoteFileService::new(manager_for_fs.clone());
         let tm = RemoteTerminalManager::new(manager_arc.as_ref().clone());
+        // Share the process-wide registry rather than owning a private one: the
+        // Agent tool reaches forwards through the same global, and a mapping
+        // made in the UI has to be visible to the Agent and vice versa.
+        let port_forward_manager = global_port_forward_manager();
+        port_forward_manager
+            .set_ssh_manager(manager_arc.as_ref().clone())
+            .await;
 
         // Clone for storing in AppState
         let fs_for_state = fs.clone();
@@ -316,6 +328,7 @@ impl AppState {
             ssh_manager,
             remote_file_service,
             remote_terminal_manager,
+            port_forward_manager,
             remote_workspace,
             active_searches: Arc::new(Mutex::new(HashMap::new())),
             active_transfers: Arc::new(Mutex::new(HashMap::new())),

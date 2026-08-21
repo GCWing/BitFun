@@ -14,6 +14,9 @@ import type {
   ServerInfo,
   DockerContainerInfo,
   ConnectionTestReport,
+  PortForward,
+  PortForwardRequest,
+  RemoteListeningPort,
 } from './types';
 
 // API adapter for Tauri/Server Mode compatibility
@@ -324,5 +327,39 @@ export const sshApi = {
    */
   async getWorkspaceInfo(): Promise<RemoteWorkspace | null> {
     return api.invoke<RemoteWorkspace | null>('remote_get_workspace_info', {});
+  },
+
+  // === Port Forwarding ===
+
+  /**
+   * Start a local (`-L`) forward.
+   *
+   * The resolved mapping comes back rather than the request: an unavailable
+   * local port is replaced instead of refused, so `localPort` is authoritative
+   * and `requestedLocalPort` records the move.
+   */
+  async startPortForward(request: PortForwardRequest): Promise<PortForward> {
+    return api.invoke<PortForward>('ssh_start_port_forward', { request });
+  },
+
+  /** Stop one forward. Stopping an already-gone forward is not an error. */
+  async stopPortForward(forwardId: string): Promise<void> {
+    return api.invoke('ssh_stop_port_forward', { forwardId });
+  },
+
+  /** List forwards, optionally narrowed to one connection. */
+  async listPortForwards(connectionId?: string): Promise<PortForward[]> {
+    return api.invoke<PortForward[]>('ssh_list_port_forwards', {
+      connectionId: connectionId ?? null,
+    });
+  },
+
+  /**
+   * List TCP ports currently listening on the remote host.
+   *
+   * Discovery only — nothing is forwarded as a result.
+   */
+  async listRemoteListeningPorts(connectionId: string): Promise<RemoteListeningPort[]> {
+    return api.invoke<RemoteListeningPort[]>('ssh_list_remote_listening_ports', { connectionId });
   },
 };

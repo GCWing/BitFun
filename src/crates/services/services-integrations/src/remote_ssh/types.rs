@@ -588,3 +588,136 @@ pub struct SSHConfigLookupResult {
     /// Config entry if found
     pub config: Option<SSHConfigEntry>,
 }
+
+/// Direction of an SSH port forward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PortForwardDirection {
+    /// `ssh -L`: a listener on this machine whose connections are carried to
+    /// the remote end.
+    Local,
+    /// `ssh -R`: a listener on the remote whose connections are carried back
+    /// to this machine.
+    Remote,
+    /// `ssh -D`: a local SOCKS proxy.
+    Dynamic,
+}
+
+/// A user-requested local port forward.
+///
+/// Only the remote port is required. Everything else has a default that suits
+/// the common case: a dev server bound to the remote's loopback interface,
+/// reachable from this machine on the same port number when it happens to be
+/// free.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortForwardRequest {
+    /// SSH connection that carries the forward.
+    pub connection_id: String,
+    /// Port the service listens on, as seen from the remote host.
+    pub remote_port: u16,
+    /// Address used by the remote sshd to reach the service. Defaults to
+    /// loopback, which is what a server bound to `localhost` needs.
+    #[serde(default)]
+    pub remote_host: Option<String>,
+    /// Port to bind on this machine. `None` or `0` allocates a free one.
+    #[serde(default)]
+    pub local_port: Option<u16>,
+    /// Bind every interface instead of loopback only.
+    ///
+    /// This republishes the remote service to the local network, so it stays
+    /// opt-in and is never implied by any other field.
+    #[serde(default)]
+    pub expose_on_lan: bool,
+    /// Optional user-facing name for the mapping.
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+impl PortForwardRequest {
+    /// Address the remote sshd should dial, defaulting to loopback.
+    pub fn effective_remote_host(&self) -> &str {
+        match self.remote_host.as_deref().map(str::trim) {
+            Some(host) if !host.is_empty() => host,
+            _ => "127.0.0.1",
+        }
+    }
+
+    /// Interface to bind on this machine.
+    pub fn effective_local_host(&self) -> &'static str {
+        if self.expose_on_lan {
+            "0.0.0.0"
+        } else {
+            "127.0.0.1"
+        }
+    }
+
+    /// Requested local port, with `0` normalized to "allocate one for me".
+    pub fn preferred_local_port(&self) -> Option<u16> {
+        self.local_port.filter(|port| *port != 0)
+    }
+
+    /// Trimmed label, dropping a blank one.
+    pub fn normalized_label(&self) -> Option<String> {
+        self.label
+            .as_deref()
+            .map(str::trim)
+            .filter(|label| !label.is_empty())
+            .map(str::to_string)
+    }
+}
+
+/// A live port forward as reported to the UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortForward {
+    pub id: String,
+    pub connection_id: String,
+    pub direction: PortForwardDirection,
+    pub label: Option<String>,
+    /// Interface the listener is bound to on this machine.
+    pub local_host: String,
+    /// Port actually bound, which is not always the port that was asked for.
+    pub local_port: u16,
+    /// Set only when the requested port was unavailable and a different one was
+    /// bound instead. The UI needs this to explain the mismatch rather than
+    /// silently handing back an address the user did not ask for.
+    pub requested_local_port: Option<u16>,
+    pub remote_host: String,
+    pub remote_port: u16,
+    /// Connections currently being carried.
+    pub active_connections: u32,
+    /// Connections accepted since the forward started.
+    pub total_connections: u64,
+    /// Most recent per-connection failure. Kept as the forward's health signal:
+    /// a forward stays listening even when the remote service is not up yet.
+    pub last_error: Option<String>,
+}
+
+impl PortForward {
+    /// Address to hand a browser, in `host:port` form.
+    ///
+    /// A wildcard bind is displayed as loopback because that is the address
+    /// that actually works on this machine.
+    pub fn local_address(&self) -> String {
+        let host = match self.local_host.as_str() {
+            "0.0.0.0" => "127.0.0.1",
+            "::" => "[::1]",
+            other => other,
+        };
+        format!("{}:{}", host, self.local_port)
+    }
+}
+
+/// A listening TCP port discovered on the remote host.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteListeningPort {
+    pub port: u16,
+    /// Address the remote service is bound to, as reported by the remote.
+    pub bind_address: String,
+    /// Owning process name when the remote tool exposed it.
+    pub process: Option<String>,
+    /// Owning process id when the remote tool exposed it.
+    pub pid: Option<u32>,
+}

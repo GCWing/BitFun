@@ -56,6 +56,8 @@ pub mod page_publish_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod playbook_tool;
 #[cfg(feature = "tools-git")]
+pub mod port_forward_tool;
+#[cfg(feature = "tools-git")]
 pub mod review_platform_tool;
 pub mod session_control_tool;
 pub mod session_history_tool;
@@ -71,7 +73,6 @@ pub mod util;
 pub mod view_image_tool;
 #[cfg(feature = "tools-browser-web")]
 pub mod web;
-#[cfg(feature = "tools-git")]
 pub mod worktree_tool;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
@@ -128,6 +129,8 @@ pub use page_publish_tool::PagePublishTool;
 #[cfg(feature = "tools-miniapp")]
 pub use playbook_tool::PlaybookTool;
 #[cfg(feature = "tools-git")]
+pub use port_forward_tool::PortForwardTool;
+#[cfg(feature = "tools-git")]
 pub use review_platform_tool::ReviewPlatformTool;
 pub use session_control_tool::SessionControlTool;
 pub use session_history_tool::SessionHistoryTool;
@@ -143,5 +146,4 @@ pub use todo_write_tool::TodoWriteTool;
 pub use view_image_tool::ViewImageTool;
 #[cfg(feature = "tools-browser-web")]
 pub use web::{WebFetchTool, WebSearchTool};
-#[cfg(feature = "tools-git")]
 pub use worktree_tool::WorktreeTool;
