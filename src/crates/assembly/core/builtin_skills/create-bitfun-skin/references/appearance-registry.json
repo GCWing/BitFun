@@ -1,9 +1,9 @@
 {
   "schema": "bitfun.appearance.registry",
   "schemaVersion": 1,
-  "generatedFrom": "869bde45876aaf486a2e339bc37afa6343e30e3f",
-  "generatedAt": "2026-08-20T07:09:03.732279+00:00",
-  "sourceRevision": "869bde45876aaf486a2e339bc37afa6343e30e3f",
+  "generatedFrom": "b5869b8d2ff5ffd03a558e0839e8a96837873c11",
+  "generatedAt": "2026-08-21T10:23:12.731577+00:00",
+  "sourceRevision": "b5869b8d2ff5ffd03a558e0839e8a96837873c11",
   "sourceDirty": false,
   "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "components": [
@@ -5455,6 +5455,20 @@
       ],
       "facets": [],
       "states": [
+        {
+          "id": "active",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"active\"]"
+          }
+        },
+        {
+          "id": "completed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"completed\"]"
+          }
+        },
         {
           "id": "cancelled",
           "selector": {
