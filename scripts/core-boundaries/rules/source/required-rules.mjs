@@ -4,6 +4,18 @@ import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
 
 export const requiredContentRules = [
   {
+    path: 'src/web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts',
+    reason:
+      'the Web API must continue invoking the stable Desktop command without making Web source a Rust compilation input',
+    patterns: [
+      {
+        regex:
+          /\binvokeSurfaceSnapshot\(\s*['"]get_external_source_control_snapshot['"]/,
+        message: 'missing stable external-source control snapshot invocation',
+      },
+    ],
+  },
+  {
     path: 'src/crates/adapters/agent-runtime-ipc/Cargo.toml',
     reason:
       'agent-runtime-ipc must keep the exact feature-free bitfun-transport dependency',
