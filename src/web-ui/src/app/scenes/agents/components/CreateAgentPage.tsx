@@ -102,7 +102,6 @@ const CreateAgentPage: React.FC = () => {
   const [agentId, setAgentId] = useState('');
   const [agentIdError, setAgentIdError] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [nameError, setNameError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [prompt, setPrompt] = useState('');
   const [readonly, setReadonly] = useState(defaultReadonlyForKind('mode'));
@@ -211,7 +210,6 @@ const CreateAgentPage: React.FC = () => {
         setPendingTools(null);
         setUserContextPolicy(new Set(detail.userContextPolicy));
         setAgentIdError(null);
-        setNameError(null);
       } catch (error) {
         if (cancelled) {
           return;
@@ -236,16 +234,6 @@ const CreateAgentPage: React.FC = () => {
       }
       if (!ID_REGEX.test(value.trim())) {
         return t('agentsOverview.form.idFormat');
-      }
-      return null;
-    },
-    [t],
-  );
-
-  const validateName = useCallback(
-    (value: string) => {
-      if (!value.trim()) {
-        return t('agentsOverview.form.nameRequired');
       }
       return null;
     },
@@ -372,10 +360,8 @@ const CreateAgentPage: React.FC = () => {
 
   const handleSubmit = useCallback(async () => {
     const nextAgentIdError = validateAgentId(agentId);
-    const nextNameError = validateName(name);
     setAgentIdError(nextAgentIdError);
-    setNameError(nextNameError);
-    if (nextAgentIdError || nextNameError) {
+    if (nextAgentIdError) {
       return;
     }
     if (!description.trim()) {
@@ -400,11 +386,13 @@ const CreateAgentPage: React.FC = () => {
 
     setSubmitting(true);
     try {
+      const normalizedId = agentId.trim();
+      const effectiveName = name.trim() || normalizedId;
       const payload = {
         kind,
         level: kind === 'subagent' ? level : 'user',
-        id: agentId.trim(),
-        name: name.trim(),
+        id: normalizedId,
+        name: effectiveName,
         description: description.trim(),
         prompt: prompt.trim(),
         readonly,
@@ -460,7 +448,6 @@ const CreateAgentPage: React.FC = () => {
     t,
     userContextPolicy,
     validateAgentId,
-    validateName,
     workspacePath,
   ]);
 
@@ -612,16 +599,10 @@ const CreateAgentPage: React.FC = () => {
                       value={name}
                       onChange={(event) => {
                         setName(event.target.value);
-                        setNameError(validateName(event.target.value));
                       }}
-                      onBlur={() => setNameError(validateName(name))}
                       placeholder={t('agentsOverview.form.namePlaceholder')}
                       inputSize="small"
-                      error={!!nameError}
                     />
-                    {nameError ? (
-                      <span className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error">{nameError}</span>
-                    ) : null}
                   </div>
                 </div>
 
