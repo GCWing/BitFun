@@ -50,12 +50,15 @@ export function setBuildVersion(root, version) {
 // invocation. Cargo has to do the rewrite: a text substitution would also catch
 // third-party crates that happen to publish the same version string, and would
 // miss members that pin a version of their own.
+//
+// This cannot run with --offline: resolving the workspace walks every source,
+// and the git dependencies (tauri) are not in a cold CI cargo home yet.
 function syncCargoLock(root) {
   if (!existsSync(path.join(root, 'Cargo.lock'))) {
     return;
   }
 
-  const result = spawnSync('cargo', ['update', '--workspace', '--offline'], {
+  const result = spawnSync('cargo', ['update', '--workspace'], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -64,7 +67,7 @@ function syncCargoLock(root) {
   }
   if (result.status !== 0) {
     throw new Error(
-      `cargo update --workspace --offline failed with exit code ${result.status}\n${result.stderr || ''}`,
+      `cargo update --workspace failed with exit code ${result.status}\n${result.stderr || ''}`,
     );
   }
 }
