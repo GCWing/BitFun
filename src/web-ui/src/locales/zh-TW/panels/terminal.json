@@ -1,6 +1,6 @@
 {
   "title": "終端",
-  "emptyState": "從 Shell 導航中開啟終端",
+  "emptyState": "目前沒有開啟的終端",
   "dialog": {
     "editTerminal": {
       "title": "編輯終端",

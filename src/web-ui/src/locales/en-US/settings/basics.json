@@ -200,7 +200,7 @@
     },
     "panelPosition": {
       "label": "Open terminal in",
-      "description": "Where terminal tabs open when launched from the Shell navigation in a session",
+      "description": "Where new terminal tabs open in a session",
       "placeholder": "Select terminal location",
       "options": {
         "right": "Right panel",

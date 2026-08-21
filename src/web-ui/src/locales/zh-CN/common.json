@@ -163,7 +163,7 @@
       "actionDescriptions": {
         "newSession": "通过统一会话流程开始新对话",
         "openBrowser": "在当前工作上下文中打开浏览器",
-        "openTerminal": "打开项目的持久化 Shell",
+        "openTerminal": "在当前项目中新建终端",
         "openProject": "选择并打开本地或对端设备上的项目",
         "newProject": "从模板或空工作区创建项目",
         "openFiles": "浏览和编辑当前项目文件",

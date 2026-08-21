@@ -163,7 +163,7 @@
       "actionDescriptions": {
         "newSession": "Start a conversation using the canonical session flow",
         "openBrowser": "Open the browser in the current working context",
-        "openTerminal": "Open the persistent project shell",
+        "openTerminal": "Create a terminal in the active project",
         "openProject": "Choose and open a local or peer-hosted project",
         "newProject": "Create a project from a template or empty workspace",
         "openFiles": "Browse and edit files in the active project",

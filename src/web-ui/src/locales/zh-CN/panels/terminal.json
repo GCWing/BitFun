@@ -1,6 +1,6 @@
 {
   "title": "终端",
-  "emptyState": "从 Shell 导航中打开终端",
+  "emptyState": "当前没有打开的终端",
   "dialog": {
     "editTerminal": {
       "title": "编辑终端",

@@ -42,7 +42,7 @@ export function resolveOpenTarget(intent: OpenIntent, context: OpenTargetContext
 
   // Non-agent scenes route to their dedicated host scenes.
   if (intent === 'terminal') {
-    return { mode: 'project', targetSceneId: 'shell', sceneJustOpened: false };
+    return { mode: 'project', targetSceneId: 'terminal', sceneJustOpened: false };
   }
 
   return { mode: 'project', targetSceneId: 'file-viewer', sceneJustOpened: false };
