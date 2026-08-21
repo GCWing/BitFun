@@ -3,6 +3,7 @@
 //! These payloads intentionally contain only wire-owned data. Server adapters
 //! translate them to the configuration service's domain request/result types.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -21,37 +22,44 @@ pub struct AgentProfileView {
     pub enabled_user_skills: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "config/getAgentProfileConfigs", response = GetAgentProfileConfigsResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "config/getAgentProfileConfigs", response = GetAgentProfileConfigsResponse))]
 pub struct GetAgentProfileConfigsMessage {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GetAgentProfileConfigsResponse {
     pub profiles: HashMap<String, AgentProfileView>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[request(method = "config/getAgentProfileConfig", response = GetAgentProfileConfigResponse)]
+#[cfg_attr(feature = "rpc", request(method = "config/getAgentProfileConfig", response = GetAgentProfileConfigResponse))]
 pub struct GetAgentProfileConfigMessage {
     pub agent_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GetAgentProfileConfigResponse(pub AgentProfileView);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "config/getModelConfigs", response = GetModelConfigsResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "config/getModelConfigs", response = GetModelConfigsResponse))]
 pub struct GetModelConfigsMessage {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GetModelConfigsResponse {
     pub models: Vec<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[serde(rename_all = "camelCase")]
-#[request(method = "config/getConfig", response = GetConfigResponse)]
+#[cfg_attr(feature = "rpc", request(method = "config/getConfig", response = GetConfigResponse))]
 pub struct GetConfigMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
@@ -59,56 +67,65 @@ pub struct GetConfigMessage {
     pub skip_retry_on_not_found: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GetConfigResponse(pub serde_json::Value);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[serde(rename_all = "camelCase")]
-#[request(method = "config/getConfigs", response = GetConfigsResponse)]
+#[cfg_attr(feature = "rpc", request(method = "config/getConfigs", response = GetConfigsResponse))]
 pub struct GetConfigsMessage {
     pub paths: Vec<String>,
     #[serde(default, skip_serializing_if = "skip_if_false")]
     pub skip_retry_on_not_found: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GetConfigsResponse {
     pub configs: BTreeMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[serde(rename_all = "camelCase")]
-#[request(method = "config/setConfig", response = SetConfigResponse)]
+#[cfg_attr(feature = "rpc", request(method = "config/setConfig", response = SetConfigResponse))]
 pub struct SetConfigMessage {
     pub path: String,
     pub value: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct SetConfigResponse {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
-#[request(method = "config/setAgentProfileConfig", response = SetAgentProfileConfigResponse)]
+#[cfg_attr(feature = "rpc", request(method = "config/setAgentProfileConfig", response = SetAgentProfileConfigResponse))]
 pub struct SetAgentProfileConfigMessage {
     pub agent_id: String,
     pub config: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct SetAgentProfileConfigResponse(pub AgentProfileView);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
-#[request(method = "config/resetAgentProfileConfig", response = ResetAgentProfileConfigResponse)]
+#[cfg_attr(feature = "rpc", request(method = "config/resetAgentProfileConfig", response = ResetAgentProfileConfigResponse))]
 pub struct ResetAgentProfileConfigMessage {
     pub agent_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct ResetAgentProfileConfigResponse(pub AgentProfileView);
 
@@ -131,9 +148,10 @@ pub struct SaveCloudSpeechConfigRequest {
     pub api_key: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[request(method = "config/saveCloudSpeechConfig", response = SaveCloudSpeechConfigResponse)]
+#[cfg_attr(feature = "rpc", request(method = "config/saveCloudSpeechConfig", response = SaveCloudSpeechConfigResponse))]
 pub struct SaveCloudSpeechConfigMessage {
     pub request: SaveCloudSpeechConfigRequest,
 }
@@ -146,15 +164,18 @@ pub struct SaveCloudSpeechConfigResult {
     pub created: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct SaveCloudSpeechConfigResponse(pub SaveCloudSpeechConfigResult);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "config/validateConfig", response = ValidateConfigResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "config/validateConfig", response = ValidateConfigResponse))]
 pub struct ValidateConfigMessage {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ValidateConfigResponse(pub serde_json::Value);
 
 #[cfg(test)]

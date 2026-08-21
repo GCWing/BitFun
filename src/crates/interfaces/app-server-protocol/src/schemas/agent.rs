@@ -1,5 +1,6 @@
 //! Agent-domain App Server wire schemas.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
@@ -14,13 +15,15 @@ use serde::{Deserialize, Serialize};
 
 macro_rules! unit_response {
     ($name:ident) => {
-        #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
         pub struct $name {}
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/listModes", response = ListAgentModesResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/listModes", response = ListAgentModesResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct ListAgentModesRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -29,7 +32,8 @@ pub struct ListAgentModesRequest {
     pub include_external: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ListAgentModesResponse {
     pub modes: Vec<AgentModeSummary>,
 }
@@ -45,35 +49,42 @@ pub struct AgentModeSummary {
     pub is_external: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/listSessions", response = ListSessionsResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/listSessions", response = ListSessionsResponse))]
 pub struct ListSessionsRequest(pub AgentSessionListRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 /// `agent/listSessions` response body.
 pub struct ListSessionsResponse {
     pub sessions: Vec<AgentSessionSummary>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/steerTurn", response = SteerTurnResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/steerTurn", response = SteerTurnResponse))]
 pub struct SteerTurnRequest(pub AgentDialogSteerRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct SteerTurnResponse {
     pub steering_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/runUserShellCommand", response = RunUserShellCommandResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/runUserShellCommand", response = RunUserShellCommandResponse))]
 pub struct RunUserShellCommandRequest(pub AgentUserShellCommandRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct RunUserShellCommandResponse(pub AgentUserShellCommandResult);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/submitUserAnswers", response = SubmitUserAnswersResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/submitUserAnswers", response = SubmitUserAnswersResponse))]
 pub struct SubmitUserAnswersRequest {
     pub tool_id: String,
     pub answers: serde_json::Value,
@@ -81,21 +92,25 @@ pub struct SubmitUserAnswersRequest {
 
 unit_response!(SubmitUserAnswersResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/createSession", response = CreateSessionResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/createSession", response = CreateSessionResponse))]
 pub struct CreateSessionRequest(pub AgentSessionCreateRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct CreateSessionResponse(pub AgentSessionCreateResult);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/deleteSession", response = DeleteSessionResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/deleteSession", response = DeleteSessionResponse))]
 pub struct DeleteSessionRequest(pub AgentSessionDeleteRequest);
 
 unit_response!(DeleteSessionResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/submitDialogTurn", response = SubmitDialogTurnResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/submitDialogTurn", response = SubmitDialogTurnResponse))]
 pub struct SubmitDialogTurnRequest(pub SubmitDialogTurnBody);
 
 pub use SubmitDialogTurnRequest as SubmitDialogTurnMessage;
@@ -173,7 +188,8 @@ impl From<AgentDialogTurnRequest> for SubmitDialogTurnRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase", tag = "status")]
 /// `agent/submitDialogTurn` response body.
@@ -182,9 +198,10 @@ pub enum SubmitDialogTurnResponse {
     Queued { session_id: String, turn_id: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[request(method = "agent/respondPermission", response = RespondPermissionResponse)]
+#[cfg_attr(feature = "rpc", request(method = "agent/respondPermission", response = RespondPermissionResponse))]
 pub struct RespondPermissionRequest {
     pub request_id: String,
     pub reply: PermissionReply,
@@ -192,20 +209,24 @@ pub struct RespondPermissionRequest {
 
 unit_response!(RespondPermissionResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/listPendingPermissionRequests", response = PendingPermissionsResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/listPendingPermissionRequests", response = PendingPermissionsResponse))]
 pub struct PendingPermissionsRequest {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct PendingPermissionsResponse {
     pub requests: Vec<PermissionRequest>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/cancelTurn", response = CancelTurnResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/cancelTurn", response = CancelTurnResponse))]
 pub struct CancelTurnRequest(pub AgentTurnCancellationRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct CancelTurnResponse(pub AgentTurnCancellationResult);
 
 pub use CancelTurnRequest as CancelTurnMessage;
@@ -213,15 +234,18 @@ pub use CreateSessionRequest as CreateSessionMessage;
 pub use DeleteSessionRequest as DeleteSessionMessage;
 pub use ListSessionsRequest as ListSessionsMessage;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/submitTurn", response = SubmitTurnResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/submitTurn", response = SubmitTurnResponse))]
 pub struct SubmitTurnMessage(pub AgentSubmissionRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct SubmitTurnResponse(pub AgentSubmissionResult);
 
 /// `agent/run` response body.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct RunResponse {
@@ -249,8 +273,9 @@ pub enum RunSessionSpec {
 }
 
 /// Compatibility request for `agent/run`.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "agent/run", response = RunResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "agent/run", response = RunResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct RunMessage {
     pub session: RunSessionSpec,

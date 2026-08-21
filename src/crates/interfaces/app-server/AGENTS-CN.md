@@ -20,6 +20,9 @@ protocol/client crate。
 
 `bitfun-app-server/ts` 只保留为兼容转发 feature。protocol crate 是唯一的 TypeScript
 schema 导出 owner；不要把 `ts-rs`、Runtime 实现类型或第二条导出命令重新加入本 crate。
+protocol wire DTO 与 serde 合同不启用 feature 也必须可用。protocol crate 默认的 `rpc`
+feature 负责绑定 ACP JSON-RPC trait 并暴露 role/transport helper，以保持兼容；`ts` 必须与
+它正交，不得启用 `rpc` 或 `agent-client-protocol`。
 
 ## 护栏
 

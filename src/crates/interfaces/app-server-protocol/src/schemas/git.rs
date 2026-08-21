@@ -1,20 +1,25 @@
 //! Git-domain App Server wire schemas.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "git/isRepository", response = GitIsRepositoryResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "git/isRepository", response = GitIsRepositoryResponse))]
 pub struct GitIsRepositoryMessage(pub GitRepositoryPathRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GitIsRepositoryResponse(pub bool);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "git/getStatus", response = GitGetStatusResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "git/getStatus", response = GitGetStatusResponse))]
 pub struct GitGetStatusMessage(pub GitRepositoryPathRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GitGetStatusResponse(pub GitStatus);
 
 /// Read-only ownership-trust probe.
@@ -23,18 +28,22 @@ pub struct GitGetStatusResponse(pub GitStatus);
 /// server user's global Git configuration, and a browser client is not the
 /// machine that owns the repository. The probe is what lets such a client name
 /// the folder and hand over the exact command instead of a dead end.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "git/getRepositoryTrust", response = GitGetRepositoryTrustResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "git/getRepositoryTrust", response = GitGetRepositoryTrustResponse))]
 pub struct GitGetRepositoryTrustMessage(pub GitRepositoryPathRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GitGetRepositoryTrustResponse(pub GitTrustReport);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "git/getBranches", response = GitGetBranchesResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "git/getBranches", response = GitGetBranchesResponse))]
 pub struct GitGetBranchesMessage(pub GitBranchesRequest);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct GitGetBranchesResponse {
     pub branches: Vec<GitBranch>,
 }

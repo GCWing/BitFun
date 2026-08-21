@@ -1,5 +1,6 @@
 //! Worktree-domain App Server wire schemas.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 pub use bitfun_core_types::WorktreeErrorCode;
 use bitfun_runtime_ports::AgentSessionWorkspaceBinding;
@@ -7,8 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AppServerErrorData;
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "worktree/repositoryStatus", response = WorktreeRepositoryStatusResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "worktree/repositoryStatus", response = WorktreeRepositoryStatusResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeRepositoryStatusRequest {
     pub workspace_path: String,
@@ -34,7 +36,8 @@ impl WorktreeRepositoryStatusRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeRepositoryStatusResponse {
     pub is_repository: bool,
@@ -42,8 +45,9 @@ pub struct WorktreeRepositoryStatusResponse {
     pub current_branch: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "worktree/bindSession", response = WorktreeBindingResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "worktree/bindSession", response = WorktreeBindingResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeBindSessionRequest {
     pub operation_id: String,
@@ -74,8 +78,9 @@ impl WorktreeBindSessionRequest {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "worktree/releaseSession", response = WorktreeBindingResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "worktree/releaseSession", response = WorktreeBindingResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeReleaseSessionRequest {
     pub operation_id: String,
@@ -106,7 +111,8 @@ impl WorktreeReleaseSessionRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeBindingResponse {
     pub workspace_binding: AgentSessionWorkspaceBinding,
