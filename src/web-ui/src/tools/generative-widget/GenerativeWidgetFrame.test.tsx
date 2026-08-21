@@ -41,7 +41,11 @@ describe('GenerativeWidgetFrame shell', () => {
     expect(values).toEqual(['13px']);
   });
 
-  it('writes the widget shell into about:blank instead of relying on srcdoc', async () => {
+  // document.write leaves the frame without a normal document load, and WebKit can
+  // drop such a frame's scroll node when the host window is hidden and shown again.
+  // srcdoc keeps the same-origin semantics the widget message boundary relies on
+  // while still going through the document loading path.
+  it('renders the widget shell through srcdoc rather than writing into about:blank', async () => {
     await act(async () => {
       root.render(
         <GenerativeWidgetFrame
@@ -58,9 +62,8 @@ describe('GenerativeWidgetFrame shell', () => {
 
     const iframe = container.querySelector('iframe') as HTMLIFrameElement;
     expect(iframe).toBeTruthy();
-    expect(iframe.getAttribute('src')).toBe('about:blank');
-    expect(iframe.getAttribute('srcdoc')).toBeNull();
+    expect(iframe.getAttribute('src')).toBeNull();
+    expect(iframe.getAttribute('srcdoc')).toContain('bitfun-widget');
     expect(iframe.getAttribute('sandbox')).toContain('allow-same-origin');
-    expect(iframe.contentDocument?.documentElement.outerHTML).toContain('bitfun-widget');
   });
 });

@@ -8,7 +8,7 @@ import { CodePreview } from '../components/CodePreview';
 import { useTypewriter } from '../hooks/useTypewriter';
 import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { i18nService } from '@/infrastructure/i18n';
-import { createTab } from '@/shared/utils/tabUtils';
+import { openCanvasArtifactTab } from '@/shared/utils/canvasArtifactTab';
 import { createLogger } from '@/shared/utils/logger';
 import './CanvasToolCard.scss';
 
@@ -110,9 +110,8 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
       : 'Waiting for artifact reference');
 
   const handleOpenPanel = useCallback(() => {
-    if (!isOpenable) return;
+    if (!isOpenable || !artifactReference) return;
 
-    const duplicateCheckKey = `bitfun-canvas-${artifactReference}`;
     log.info('Opening Canvas panel', {
       artifactReference,
       title,
@@ -129,35 +128,28 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
       remoteSshHost: session?.remoteSshHost,
     });
 
-    createTab({
-      type: 'bitfun-canvas',
+    void openCanvasArtifactTab(artifactReference, {
       title,
-      data: {
-        artifactReference,
-        source,
-        status: canvasStatus,
-        diagnostics,
+      source,
+      status: canvasStatus,
+      diagnostics,
+      // The card already knows its own session; skip the store lookup.
+      sessionContext: {
         workspacePath: session?.workspacePath,
         remoteConnectionId: session?.remoteConnectionId,
         remoteSshHost: session?.remoteSshHost,
-        _source: {
-          type: 'tool-call',
-          toolName: toolItem.toolName,
-          sessionId,
-          toolCallId: toolCall?.id,
-          toolItemId: toolItem.id,
-        },
+      },
+      tabSource: {
+        type: 'tool-call',
+        toolName: toolItem.toolName,
+        sessionId,
+        toolCallId: toolCall?.id,
+        toolItemId: toolItem.id,
       },
       metadata: {
-        duplicateCheckKey,
         fromTool: true,
         toolName: toolItem.toolName,
-        artifactReference,
       },
-      checkDuplicate: true,
-      duplicateCheckKey,
-      replaceExisting: true,
-      mode: 'agent',
     });
   }, [
     artifactReference,

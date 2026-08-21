@@ -42,7 +42,9 @@ impl ToolCallCompletion {
 pub enum ToolArgumentRepairKind {
     #[default]
     None,
-    /// The Write-specific close-only repair preserved a completed payload prefix.
+    /// The close-only repair preserved a completed payload prefix. Applies to
+    /// Write-like and Canvas source tools; the variant name is kept as-is
+    /// because it is serialized into persisted session history.
     WriteTailClosure,
     /// The user explicitly enabled best-effort repair after a normal tool-use
     /// completion. This must never be presented as a max-token truncation.
@@ -142,14 +144,31 @@ pub struct PendingToolCalls {
     pending: BTreeMap<ToolCallStreamKey, PendingToolCall>,
 }
 
-/// Tools where a repaired truncation can be passed to schema validation.
 /// Write requires its path/content separator before execution, so a truncation
 /// inside the path is rejected while a truncation in the content can still
-/// write the safe prefix. For everything else (Bash, Edit, Task, ...) we surface
-/// the truncation as an error: a partial shell command or a partial
-/// `old_string`/`new_string` for Edit can change semantics destructively.
+/// write the safe prefix.
 pub fn is_write_like_tool_name(tool_name: &str) -> bool {
     matches!(tool_name, "Write" | "file_write" | "write_notebook")
+}
+
+/// Canvas creation and full-source replacement carry one large `source` string
+/// and behave like Write: the schema rejects the call unless the fields before
+/// `source` arrived intact, and a truncation inside `source` still saves a
+/// prefix the model can finish with a follow-up `UpdateCanvas`. `PatchCanvas`
+/// is excluded because its `old`/`new` pairs are Edit-shaped.
+pub fn is_canvas_source_tool_name(tool_name: &str) -> bool {
+    matches!(tool_name, "CreateCanvas" | "UpdateCanvas")
+}
+
+/// Tools where a repaired truncation can be passed to schema validation.
+/// For everything else (Bash, Edit, Task, ...) we surface the truncation as an
+/// error: a partial shell command or a partial `old_string`/`new_string` for
+/// Edit can change semantics destructively.
+///
+/// Mirrors `bitfun_agent_tools::permits_tail_closure_repair`; a test below
+/// keeps the two in sync.
+pub fn permits_tail_closure_repair(tool_name: &str) -> bool {
+    is_write_like_tool_name(tool_name) || is_canvas_source_tool_name(tool_name)
 }
 
 #[derive(Debug)]
@@ -409,13 +428,13 @@ impl PendingToolCall {
             Ok(value) => (value, false, ToolArgumentRepairKind::None, None),
             Err(parse_err) => {
                 let original_parse_error = parse_err.message.clone();
-                let write_tail_repair = is_write_like_tool_name(&tool_name)
+                let tail_closure_repair = permits_tail_closure_repair(&tool_name)
                     .then(|| repair_truncated_json(&raw_arguments))
                     .flatten()
                     .and_then(|candidate| Self::parse_arguments(&tool_name, &candidate).ok());
-                if let Some(value) = write_tail_repair {
+                if let Some(value) = tail_closure_repair {
                     warn!(
-                        "Write tool call arguments recovered with close-only repair at boundary={}: tool_id={}, tool_name={}, raw_len={}, parse_error_category={}, parse_error_is_eof={}, completion={:?}",
+                        "Tool call arguments recovered with close-only tail repair at boundary={}: tool_id={}, tool_name={}, raw_len={}, parse_error_category={}, parse_error_is_eof={}, completion={:?}",
                         boundary.as_str(),
                         tool_id,
                         tool_name,
@@ -1118,11 +1137,15 @@ mod tests {
     }
 
     #[test]
-    fn write_like_recovery_classification_matches_tool_presentation_contract() {
+    fn tail_closure_classification_matches_tool_presentation_contract() {
         for tool_name in [
             "Write",
             "file_write",
             "write_notebook",
+            "CreateCanvas",
+            "UpdateCanvas",
+            "PatchCanvas",
+            "ReadCanvas",
             "Read",
             "Edit",
             "AskUserQuestion",
@@ -1131,6 +1154,16 @@ mod tests {
             assert_eq!(
                 super::is_write_like_tool_name(tool_name),
                 bitfun_agent_tools::is_write_like_tool_name(tool_name),
+                "tool_name={tool_name}"
+            );
+            assert_eq!(
+                super::is_canvas_source_tool_name(tool_name),
+                bitfun_agent_tools::is_canvas_source_tool_name(tool_name),
+                "tool_name={tool_name}"
+            );
+            assert_eq!(
+                super::permits_tail_closure_repair(tool_name),
+                bitfun_agent_tools::permits_tail_closure_repair(tool_name),
                 "tool_name={tool_name}"
             );
         }
@@ -1288,6 +1321,92 @@ mod tests {
                 ToolArgumentRepairKind::WriteTailClosure
             );
         }
+    }
+
+    #[test]
+    fn create_canvas_truncated_source_recovers_the_written_prefix() {
+        let raw = r#"{"title":"Q3 revenue","source":"import { Card } from 'bitfun/canvas';\n\nexport default function Q3() {"#;
+
+        for allow_normal_tool_json_repair in [false, true] {
+            let mut pending = PendingToolCall::default();
+            pending.start_new("call_1".to_string(), Some("CreateCanvas".to_string()));
+            pending.append_arguments(raw);
+
+            let finalized = pending
+                .finalize_with_options(
+                    ToolCallBoundary::FinishReason,
+                    ToolCallFinalizeOptions {
+                        completion: ToolCallCompletion::OutputLimit,
+                        allow_normal_tool_json_repair,
+                    },
+                )
+                .expect("finalized tool");
+
+            assert!(!finalized.is_error);
+            assert!(finalized.recovered_from_truncation);
+            assert_eq!(
+                finalized.repair_kind,
+                ToolArgumentRepairKind::WriteTailClosure
+            );
+            assert_eq!(finalized.arguments["title"], json!("Q3 revenue"));
+            assert_eq!(
+                finalized.arguments["source"],
+                json!("import { Card } from 'bitfun/canvas';\n\nexport default function Q3() {")
+            );
+        }
+    }
+
+    #[test]
+    fn update_canvas_truncated_source_keeps_the_artifact_reference() {
+        let raw = r#"{"artifact_reference":"bitfun-canvas://session/session_1/canvas/canvas_1","source":"export default function Chart("#;
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("UpdateCanvas".to_string()));
+        pending.append_arguments(raw);
+
+        let finalized = pending
+            .finalize_with_options(
+                ToolCallBoundary::FinishReason,
+                ToolCallFinalizeOptions {
+                    completion: ToolCallCompletion::OutputLimit,
+                    allow_normal_tool_json_repair: false,
+                },
+            )
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error);
+        assert_eq!(
+            finalized.repair_kind,
+            ToolArgumentRepairKind::WriteTailClosure
+        );
+        // Without the reference the model cannot finish the Canvas it started.
+        assert_eq!(
+            finalized.arguments["artifact_reference"],
+            json!("bitfun-canvas://session/session_1/canvas/canvas_1")
+        );
+    }
+
+    #[test]
+    fn patch_canvas_truncated_replacement_is_not_recovered() {
+        let raw = r#"{"canvas_id":"canvas_1","replacements":[{"old":"const total = 0","new":"const total = rows.reduce("#;
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("PatchCanvas".to_string()));
+        pending.append_arguments(raw);
+
+        let finalized = pending
+            .finalize_with_options(
+                ToolCallBoundary::FinishReason,
+                ToolCallFinalizeOptions {
+                    completion: ToolCallCompletion::OutputLimit,
+                    allow_normal_tool_json_repair: false,
+                },
+            )
+            .expect("finalized tool");
+
+        // A half-written replacement would rewrite the source with something the
+        // model never asked for; surface the truncation instead.
+        assert!(finalized.is_error);
+        assert!(!finalized.recovered_from_truncation);
+        assert_eq!(finalized.repair_kind, ToolArgumentRepairKind::None);
     }
 
     #[test]

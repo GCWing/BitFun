@@ -46,8 +46,13 @@
     "openInExplorer": "在资源管理器中打开",
     "openInBrowser": "通过浏览器打开",
     "openInBuiltInBrowser": "通过内置浏览器打开",
+    "openCanvas": "打开 Canvas",
     "copyLink": "复制链接",
+    "linkNotOpenable": "此链接无法在这里打开",
     "copyFilePath": "复制文件路径"
+  },
+  "canvasLink": {
+    "invalidReference": "该 Canvas 链接无效或已不可用"
   },
   "mermaidBlock": {
     "renderFailed": "图表渲染失败",

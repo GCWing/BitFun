@@ -46,8 +46,13 @@
     "openInExplorer": "在檔案總管中開啟",
     "openInBrowser": "透過瀏覽器開啟",
     "openInBuiltInBrowser": "透過內建瀏覽器開啟",
+    "openCanvas": "開啟 Canvas",
     "copyLink": "複製連結",
+    "linkNotOpenable": "此連結無法在這裡開啟",
     "copyFilePath": "複製檔案路徑"
+  },
+  "canvasLink": {
+    "invalidReference": "該 Canvas 連結無效或已無法使用"
   },
   "mermaidBlock": {
     "renderFailed": "圖表渲染失敗",

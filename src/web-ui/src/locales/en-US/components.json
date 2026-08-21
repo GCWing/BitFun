@@ -46,8 +46,13 @@
     "openInExplorer": "Open in Explorer",
     "openInBrowser": "Open in browser",
     "openInBuiltInBrowser": "Open in built-in browser",
+    "openCanvas": "Open Canvas",
     "copyLink": "Copy link",
+    "linkNotOpenable": "This link cannot be opened here",
     "copyFilePath": "Copy file path"
+  },
+  "canvasLink": {
+    "invalidReference": "This Canvas link is invalid or no longer available"
   },
   "mermaidBlock": {
     "renderFailed": "Diagram render failed",

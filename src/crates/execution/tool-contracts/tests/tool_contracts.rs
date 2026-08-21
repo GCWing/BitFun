@@ -42,10 +42,10 @@ use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
     build_permission_denied_tool_presentation, build_tool_execution_error_presentation,
     build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
-    build_user_steering_interrupted_presentation, is_write_like_tool_name,
-    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview_to,
-    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
-    USER_STEERING_INTERRUPTED_MESSAGE,
+    build_user_steering_interrupted_presentation, is_canvas_source_tool_name,
+    is_write_like_tool_name, permits_tail_closure_repair, render_tool_result_for_assistant,
+    truncate_raw_tool_arguments_preview_to, TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES,
+    USER_REJECTED_TOOL_MESSAGE, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 #[cfg(feature = "mcp-bridge")]
 use bitfun_agent_tools::{
@@ -699,6 +699,39 @@ fn write_tail_closure_notice_preserves_write_like_guidance() {
     assert!(notice.contains("stop tool-calling and tell the user"));
     assert!(!notice.contains("max_tokens"));
     assert!(!notice.contains("`mode`"));
+    assert!(notice.ends_with("Original tool result follows.\n\n"));
+}
+
+#[test]
+fn canvas_source_tools_get_tail_closure_repair_with_canvas_specific_guidance() {
+    assert!(is_canvas_source_tool_name("CreateCanvas"));
+    assert!(is_canvas_source_tool_name("UpdateCanvas"));
+    // Edit-shaped replacements must keep failing loudly.
+    assert!(!is_canvas_source_tool_name("PatchCanvas"));
+    assert!(!is_canvas_source_tool_name("ReadCanvas"));
+    assert!(!is_write_like_tool_name("CreateCanvas"));
+
+    for tool_name in [
+        "Write",
+        "file_write",
+        "write_notebook",
+        "CreateCanvas",
+        "UpdateCanvas",
+    ] {
+        assert!(permits_tail_closure_repair(tool_name), "{tool_name}");
+    }
+    for tool_name in ["PatchCanvas", "ReadCanvas", "Read", "Edit", "Bash"] {
+        assert!(!permits_tail_closure_repair(tool_name), "{tool_name}");
+    }
+
+    let notice = bitfun_agent_tools::build_write_tail_closure_notice("CreateCanvas");
+
+    assert!(notice.contains("completed source prefix"));
+    assert!(notice.contains("UpdateCanvas"));
+    // The file-oriented recovery steps do not apply to a Canvas artifact.
+    assert!(!notice.contains("latest Read result"));
+    assert!(!notice.contains("use Edit to add only the missing continuation"));
+    assert!(!notice.contains("max_tokens"));
     assert!(notice.ends_with("Original tool result follows.\n\n"));
 }
 

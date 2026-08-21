@@ -952,44 +952,6 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   }, [onHeightChange, onWidgetEvent, widgetId]);
 
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return undefined;
-
-    let cancelled = false;
-    setIsLoaded(false);
-
-    const writeShellHtml = () => {
-      const doc = iframe.contentDocument;
-      if (!doc) return false;
-      doc.open();
-      doc.write(GENERATIVE_WIDGET_SHELL_HTML);
-      doc.close();
-      if (!cancelled) {
-        setIsLoaded(true);
-      }
-      return true;
-    };
-
-    if (writeShellHtml()) {
-      return undefined;
-    }
-
-    const handleLoad = () => {
-      writeShellHtml();
-    };
-
-    iframe.addEventListener('load', handleLoad);
-    if (iframe.src !== 'about:blank') {
-      iframe.src = 'about:blank';
-    }
-
-    return () => {
-      cancelled = true;
-      iframe.removeEventListener('load', handleLoad);
-    };
-  }, []);
-
-  useEffect(() => {
     const updateAppearance = () => {
       setAppearancePayload(readWidgetAppearancePayload());
     };
@@ -1053,7 +1015,15 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
         data-bf-part="iframe"
         style={{ width: '100%', minWidth: '100%' }}
         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
-        src="about:blank"
+        srcDoc={GENERATIVE_WIDGET_SHELL_HTML}
+        onLoad={() => {
+          // The shell is a constant, so this frame is never re-created and the
+          // only load that matters is the one that parsed it. A srcdoc frame can
+          // still emit one load for the initial empty document; treating that as
+          // loaded would post widget code into a window with no shell listener.
+          if (!iframeRef.current?.contentDocument?.getElementById('root')) return;
+          setIsLoaded(true);
+        }}
       />
     </div>
   );

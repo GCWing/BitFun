@@ -100,8 +100,15 @@
   }
 
   span {
+    // Reference / status / error detail each stack on their own line.
+    display: block;
     font-family: var(--bf-appearance-token-font-family-mono);
     font-size: var(--bf-appearance-token-font-size-sm);
+    word-break: break-all;
+  }
+
+  .bitfun-canvas-panel__error-detail {
+    color: var(--bf-appearance-token-color-warning);
   }
 }
 

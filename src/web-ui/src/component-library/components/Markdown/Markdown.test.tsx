@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   readFileContent: vi.fn(),
   openExternal: vi.fn(),
   renderMath: vi.fn(),
+  notifyWarning: vi.fn(),
 }));
 
 vi.mock('../../../infrastructure/api', () => ({
@@ -73,6 +74,18 @@ vi.mock('@/shared/utils/logger', () => ({
     info: vi.fn(),
     debug: vi.fn(),
   }),
+}));
+
+vi.mock('@/flow_chat/store/FlowChatStore', () => ({
+  flowChatStore: {
+    getState: () => ({ sessions: new Map([['session_1', { workspacePath: '/srv/project' }]]) }),
+  },
+}));
+
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: {
+    warning: (...args: unknown[]) => mocks.notifyWarning(...args),
+  },
 }));
 
 vi.mock('@/shared/utils/startupTrace', () => ({
@@ -376,5 +389,131 @@ describe('Markdown file links', () => {
       'base64',
       'remote-connection-1',
     );
+  });
+});
+
+const CANVAS_REF = 'bitfun-canvas://session/session_1/canvas/canvas_1';
+
+describe('Markdown canvas links', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let onCreateTab: ReturnType<typeof vi.fn>;
+
+  const renderMarkdown = async (content: string) => {
+    await act(async () => {
+      root.render(<Markdown content={content} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    onCreateTab = vi.fn();
+    window.addEventListener('agent-create-tab', onCreateTab);
+    mocks.getCurrentWorkspacePath.mockReset();
+    mocks.revealInExplorer.mockReset();
+    mocks.notifyWarning.mockReset();
+    mocks.getCurrentWorkspacePath.mockResolvedValue(EXAMPLE_WORKSPACE);
+  });
+
+  afterEach(() => {
+    window.removeEventListener('agent-create-tab', onCreateTab);
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    vi.clearAllMocks();
+  });
+
+  it('opens a canvas tab from a markdown link', async () => {
+    await renderMarkdown(`[Q3 revenue](${CANVAS_REF})`);
+
+    const link = container.querySelector<HTMLButtonElement>('[data-bf-part="canvasLink"]');
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toBe('Q3 revenue');
+
+    await act(async () => {
+      link?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onCreateTab).toHaveBeenCalledTimes(1);
+    const event = onCreateTab.mock.calls[0][0] as CustomEvent;
+    expect(event.detail).toMatchObject({
+      type: 'bitfun-canvas',
+      title: 'Q3 revenue',
+      data: { artifactReference: CANVAS_REF, workspacePath: '/srv/project' },
+      duplicateCheckKey: `bitfun-canvas-${CANVAS_REF}`,
+    });
+  });
+
+  it('autolinks a bare canvas reference the model emitted as plain text', async () => {
+    await renderMarkdown(`Open ${CANVAS_REF} to review it.`);
+
+    const link = container.querySelector<HTMLButtonElement>('[data-bf-part="canvasLink"]');
+    expect(link).not.toBeNull();
+
+    await act(async () => {
+      link?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onCreateTab).toHaveBeenCalledTimes(1);
+    const event = onCreateTab.mock.calls[0][0] as CustomEvent;
+    // The bare reference is not a usable tab title.
+    expect(event.detail).toMatchObject({ type: 'bitfun-canvas', title: 'BitFun Canvas' });
+  });
+
+  it('opens a canvas tab from an angle autolink', async () => {
+    await renderMarkdown(`See <${CANVAS_REF}> for details.`);
+
+    const link = container.querySelector<HTMLButtonElement>('[data-bf-part="canvasLink"]');
+    expect(link).not.toBeNull();
+
+    await act(async () => {
+      link?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onCreateTab).toHaveBeenCalledTimes(1);
+  });
+
+  it('never routes a canvas link through the local file path handler', async () => {
+    await renderMarkdown(`[Q3 revenue](${CANVAS_REF})`);
+
+    expect(container.querySelector('.file-link')).toBeNull();
+    expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
+
+    const link = container.querySelector<HTMLButtonElement>('[data-bf-part="canvasLink"]');
+    await act(async () => {
+      link?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.revealInExplorer).not.toHaveBeenCalled();
+  });
+
+  it('warns instead of opening a tab for a malformed canvas reference', async () => {
+    await renderMarkdown('[Broken](bitfun-canvas://session/../canvas/canvas_1)');
+
+    const link = container.querySelector<HTMLButtonElement>('[data-bf-part="canvasLink"]');
+    expect(link).not.toBeNull();
+
+    await act(async () => {
+      link?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onCreateTab).not.toHaveBeenCalled();
+    expect(mocks.notifyWarning).toHaveBeenCalledTimes(1);
   });
 });

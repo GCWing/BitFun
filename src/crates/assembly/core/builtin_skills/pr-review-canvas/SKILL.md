@@ -103,4 +103,4 @@ Before calling `CreateCanvas`, verify:
 
 ## Output
 
-Call `CreateCanvas` with a concise title and the complete TSX source. In the final response, give the returned `bitfun-canvas://...` artifact reference and mention the diff source used.
+Call `CreateCanvas` with a concise title and the complete TSX source. In the final response, give the returned `bitfun-canvas://...` artifact reference as a markdown link — `[<title>](bitfun-canvas://...)`, never a bare reference, which the user cannot click — and mention the diff source used.

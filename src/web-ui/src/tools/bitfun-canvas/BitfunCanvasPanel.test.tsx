@@ -32,6 +32,17 @@ const flowChatStoreMock = vi.hoisted(() => ({
 
 const sendMessageMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
+const logMock = vi.hoisted(() => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('@/shared/utils/logger', () => ({
+  createLogger: () => logMock,
+}));
+
 vi.mock('@/infrastructure/api/service-api/CanvasAPI', () => ({
   canvasAPI: canvasApiMock,
 }));
@@ -107,7 +118,83 @@ describe('BitfunCanvasPanel message boundary', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Canvas HTML through document write instead of a blob URL', async () => {
+  // document.write leaves the frame without a normal document load, and WebKit
+  // can drop such a frame's scroll node when the host window is hidden and shown
+  // again. srcdoc keeps the same-origin semantics the message boundary relies on
+  // while still going through the document loading path. A blob URL would too,
+  // but it needs its own origin and lifetime handling, so it stays rejected.
+  it('renders Canvas HTML through srcdoc rather than document write or a blob URL', async () => {
+    const html = '<!doctype html><html><body>Canvas</body></html>';
+
+    await act(async () => {
+      root.render(
+        <BitfunCanvasPanel
+          artifactReference="bitfun-canvas://session/session_1/canvas/canvas_1"
+          html={html}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await new Promise(resolve => window.setTimeout(resolve, 0));
+    });
+
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    expect(iframe).toBeTruthy();
+    expect(iframe.getAttribute('srcdoc')).toContain('Canvas');
+    expect(iframe.getAttribute('src')).toBeNull();
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
+  });
+
+  it('does not re-arm the startup watchdog when the frame document is unchanged', async () => {
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        root.render(
+          <BitfunCanvasPanel
+            artifactReference="bitfun-canvas://session/session_1/canvas/canvas_1"
+            html={`<!doctype html><html><body><script data-revision="rev_1">window.BitfunCanvasRuntime.mount(Canvas);</script></body></html>`}
+            workspacePath="/repo"
+          />,
+        );
+      });
+
+      const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+      expect(iframe).toBeTruthy();
+
+      await act(async () => {
+        window.dispatchEvent(new MessageEvent('message', {
+          data: { type: 'bitfun-canvas-ready' },
+          source: iframe.contentWindow,
+        }));
+      });
+
+      // A window focus refresh rebuilds the panel's loader callbacks, which
+      // re-runs the handshake effect against the same, already-running document.
+      await act(async () => {
+        root.render(
+          <BitfunCanvasPanel
+            artifactReference="bitfun-canvas://session/session_1/canvas/canvas_1"
+            html={`<!doctype html><html><body><script data-revision="rev_1">window.BitfunCanvasRuntime.mount(Canvas);</script></body></html>`}
+            workspacePath="/repo/nested"
+          />,
+        );
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(logMock.warn).not.toHaveBeenCalledWith(
+        'Canvas iframe did not report runtime startup',
+        expect.anything(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restores frame scrolling on window focus without stranding overflow', async () => {
     await act(async () => {
       root.render(
         <BitfunCanvasPanel
@@ -122,10 +209,16 @@ describe('BitfunCanvasPanel message boundary', () => {
     });
 
     const iframe = container.querySelector('iframe') as HTMLIFrameElement;
-    expect(iframe).toBeTruthy();
-    expect(iframe.getAttribute('src')).toBe('about:blank');
-    expect(iframe.getAttribute('srcdoc')).toBeNull();
-    expect(iframe.contentDocument?.documentElement.outerHTML).toContain('Canvas');
+    const scroller = (iframe.contentDocument?.scrollingElement
+      ?? iframe.contentDocument?.documentElement) as HTMLElement;
+    expect(scroller).toBeTruthy();
+    scroller.style.overflowY = 'auto';
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    expect(scroller.style.overflowY).toBe('auto');
   });
 
   it('ignores Canvas host actions from non-iframe message sources', async () => {
