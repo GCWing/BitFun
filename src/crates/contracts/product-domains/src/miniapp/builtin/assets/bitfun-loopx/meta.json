@@ -1,0 +1,46 @@
+{
+  "id": "builtin-bitfun-loopx",
+  "name": "bitfun-loopx",
+  "description": "bitfun-loopx：粘贴 GitHub Issue 链接，由 BitFun 宿主 Agent 驱动本机 LoopX 引擎持续修复，心跳调度、人工审批、中途插话。",
+  "icon": "rocket",
+  "category": "developer",
+  "tags": ["loopx", "agent", "scheduler", "monitor"],
+  "version": 1,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "fs": {
+      "read": ["{appdata}", "{user-selected}", "{home}"],
+      "write": ["{appdata}"]
+    },
+    "shell": { "allow": ["loopx", "python", "py", "git"] },
+    "net": { "allow": ["api.github.com", "github.com"] },
+    "notifications": { "system": true },
+    "agent": { "enabled": true },
+    "ai": { "enabled": true },
+    "host": {
+      "reveal_in_folder": true,
+      "open_external": true
+    },
+    "node": {
+      "enabled": true,
+      "max_memory_mb": 256,
+      "timeout_ms": 1200000
+    }
+  },
+  "ai_context": null,
+  "i18n": {
+    "locales": {
+      "zh-CN": {
+        "name": "bitfun-loopx",
+        "description": "bitfun-loopx：粘贴 GitHub Issue 链接，由 BitFun 宿主 Agent 驱动本机 LoopX 引擎持续修复，心跳调度、人工审批、中途插话。",
+        "tags": ["loopx", "智能体", "调度", "监控"]
+      },
+      "en-US": {
+        "name": "bitfun-loopx",
+        "description": "bitfun-loopx: paste a GitHub issue link and the BitFun host agent drives the local LoopX engine to fix it, with heartbeat scheduling, human approval gates and mid-task guidance.",
+        "tags": ["loopx", "agent", "scheduler", "monitor"]
+      }
+    }
+  }
+}

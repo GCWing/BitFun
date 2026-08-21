@@ -6,6 +6,7 @@ import React, { Suspense, lazy, useState } from 'react';
 import { Download, Store, UploadCloud } from 'lucide-react';
 import { Tabs, TabPane } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import './MiniAppGalleryScene.scss';
 
 const MiniAppGalleryView = lazy(() => import('./views/MiniAppGalleryView'));
@@ -17,6 +18,22 @@ type MiniAppGalleryTab = 'installed' | 'market' | 'submissions';
 const MiniAppGalleryScene: React.FC = () => {
   const { t } = useI18n('scenes/miniapp');
   const [activeTab, setActiveTab] = useState<MiniAppGalleryTab>('installed');
+
+  // MiniApps run inside the desktop host (worker pool + built-in seeding live
+  // there). On server/web surfaces the scene degrades loudly instead of
+  // rendering an empty gallery.
+  if (!isTauriRuntime()) {
+    return (
+      <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">
+        <div className="miniapp-gallery-scene__unsupported">
+          <div className="miniapp-gallery-scene__unsupported-card">
+            <h2 className="miniapp-gallery-scene__unsupported-title">{t('unsupported.title')}</h2>
+            <p className="miniapp-gallery-scene__unsupported-body">{t('unsupported.body')}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">

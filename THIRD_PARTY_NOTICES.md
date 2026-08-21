@@ -52,3 +52,41 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## loopx
+
+- Project: loopx
+- Source: https://github.com/huangruiteng/loopx
+- License: MIT
+- Copyright: Copyright (c) 2026 LoopX contributors
+
+BitFun bundles a compiled, self-contained build of the loopx CLI as a desktop
+sidecar resource (`resources/loopx/`). It powers the built-in bitfun-loopx
+MiniApp's issue-fixing loop and is built at packaging time by
+`scripts/build-loopx.mjs` from the pinned upstream release recorded in
+`resources/loopx/manifest.json` (version, commit, content hash, and build
+toolchain). The upstream license text and trademark policy ship alongside the
+binary as `resources/loopx/LICENSE` and `resources/loopx/TRADEMARKS.md` in
+binary release packages. The `loopx` name is used descriptively to refer to
+the upstream project; bitfun-loopx is a third-party integration and is not a
+LoopX project release.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

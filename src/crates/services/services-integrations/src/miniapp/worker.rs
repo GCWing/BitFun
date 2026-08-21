@@ -18,6 +18,10 @@ type PendingResponseSender = oneshot::Sender<JsWorkerResponse>;
 type PendingResponseMap = HashMap<String, PendingResponseSender>;
 pub type MiniAppWorkerEventFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
+/// How long to wait for the worker host's `__ready` handshake before treating
+/// the spawn as failed.
+const BOOT_READY_TIMEOUT: Duration = Duration::from_secs(10);
+
 #[derive(Debug, Clone)]
 pub struct MiniAppWorkerEvent {
     pub app_id: String,
@@ -40,11 +44,19 @@ pub struct JsWorker {
 }
 
 impl JsWorker {
-    /// Spawn Worker process: `runtime_path worker_host_path '<policy_json>'` with cwd = app_dir.
+    /// Spawn Worker process: `runtime_path worker_host_path` with cwd = app_dir.
     /// The `app_id` is used as the source identifier when emitting worker events.
+    /// `resource_dir`, when present, is exported as `BITFUN_RESOURCE_DIR` so
+    /// workers can find host-bundled sidecar binaries (e.g. the bitfun-loopx
+    /// compiled loopx CLI).
+    /// The permission policy JSON travels via the `BITFUN_WORKER_POLICY`
+    /// environment variable, not an argv argument: Windows argv parsing (and
+    /// Bun's in particular) does not round-trip multi-line JSON reliably, and
+    /// the worker fails to boot with a truncated policy.
     pub async fn spawn(
         runtime: &DetectedRuntime,
         worker_host_path: &Path,
+        resource_dir: Option<&Path>,
         app_dir: &Path,
         policy_json: &str,
         app_id: String,
@@ -52,14 +64,19 @@ impl JsWorker {
     ) -> Result<Self, String> {
         let exe = runtime.path.to_string_lossy();
         let host = worker_host_path.to_string_lossy();
-        let mut child = bitfun_services_core::process_manager::create_tokio_command(&*exe)
+        let mut command = bitfun_services_core::process_manager::create_tokio_command(&*exe);
+        command
             .arg(&*host)
-            .arg(policy_json)
             .current_dir(app_dir)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
+            .env("BITFUN_WORKER_POLICY", policy_json);
+        if let Some(dir) = resource_dir {
+            command.env("BITFUN_RESOURCE_DIR", dir);
+        }
+        let mut child = command
             .spawn()
             .map_err(|e| format!("Failed to spawn JS Worker: {}", e))?;
 
@@ -75,10 +92,74 @@ impl JsWorker {
                 .as_millis() as i64,
         ));
 
+        // Boot handshake: the worker host emits {"id":"__ready",...} on stderr
+        // once the app worker has loaded. Wait for it with a short deadline so
+        // a worker that crashes at startup (runtime misdetection, syntax error,
+        // missing dependency) fails fast instead of hanging every RPC until the
+        // caller's — possibly very large — timeout.
+        let deadline = std::time::Instant::now() + BOOT_READY_TIMEOUT;
+        let mut reader = BufReader::new(stderr);
+        let mut boot_log = String::new();
+        let mut ready = false;
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            let mut line = String::new();
+            let read = tokio::time::timeout(remaining, reader.read_line(&mut line)).await;
+            match read {
+                Ok(Ok(0)) => break, // EOF: the worker process is gone
+                Ok(Ok(_)) => {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if trimmed.contains("\"id\":\"__ready\"")
+                        || trimmed.contains("\"id\": \"__ready\"")
+                    {
+                        ready = true;
+                        break;
+                    }
+                    if boot_log.len() < 2048 {
+                        boot_log.push_str(trimmed);
+                        boot_log.push('\n');
+                    }
+                }
+                Ok(Err(err)) => {
+                    boot_log.push_str(&format!("stderr read error: {err}\n"));
+                    break;
+                }
+                Err(_) => break, // timed out waiting for the ready handshake
+            }
+        }
+        if !ready {
+            let _ = child.start_kill();
+            let exit = tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if let Some(status) = child.try_wait().ok().flatten() {
+                        return status.code();
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            })
+            .await
+            .ok()
+            .flatten();
+            let detail = if boot_log.trim().is_empty() {
+                "worker exited without output".to_string()
+            } else {
+                boot_log.trim().to_string()
+            };
+            return Err(format!(
+                "JS Worker failed to become ready (exit={:?}): {}",
+                exit, detail
+            ));
+        }
+
         let pending_clone = pending.clone();
         let last_activity_clone = last_activity.clone();
         tokio::spawn(async move {
-            let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 if line.is_empty() {
