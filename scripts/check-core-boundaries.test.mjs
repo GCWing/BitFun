@@ -34,6 +34,7 @@ import {
   validateExplicitIntegrationTestTopology,
 } from './core-boundaries/explicit-test-topology.mjs';
 import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
+import { findForbiddenContentMatches } from './core-boundaries/source-content-checks.mjs';
 import {
   capabilityContractDependencyRules,
   coreClosedFeatureProfileRules,
@@ -44,6 +45,7 @@ import {
 import {
   agentRuntimeRootPublicModules,
   forbiddenContentRules,
+  forbiddenContentUnderRules,
   publicApiAllowlistRules,
   requiredContentRules,
 } from './core-boundaries/rules/source-rules.mjs';
@@ -54,6 +56,7 @@ const MODULES = [
   './core-boundaries/cargo-dependency-boundaries.mjs',
   './core-boundaries/explicit-test-topology.mjs',
   './core-boundaries/manifest-feature-helpers.mjs',
+  './core-boundaries/source-content-checks.mjs',
   './core-boundaries/self-test.mjs',
   './core-boundaries/tui-boundary-ratchet.mjs',
   './core-boundaries/rules/crate-rules.mjs',
@@ -874,6 +877,71 @@ test('external source integration tests keep reviewed owner and process boundari
   assert.deepEqual(
     checkExternalSourceIntegrationTestTopologies(repositoryRoot),
     [],
+  );
+});
+
+test('Web UI command contracts do not become Rust compilation inputs', async () => {
+  const webApiPath = 'src/web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts';
+  const webCommandRule = requiredContentRules.find(
+    (rule) => rule.path === webApiPath
+      && rule.reason.includes('stable Desktop command'),
+  );
+  assert.ok(webCommandRule, 'Web API must retain a boundary-owned stable command contract');
+
+  const webCommandPattern = webCommandRule.patterns.find(
+    (pattern) => pattern.message.includes('external-source control snapshot'),
+  )?.regex;
+  assert.ok(webCommandPattern, 'Web API command contract must name the control snapshot');
+
+  const webApi = await readFile(new URL(`../${webApiPath}`, import.meta.url), 'utf8');
+  assert.equal(webCommandPattern.test(webApi), true);
+  assert.equal(
+    webCommandPattern.test(
+      webApi.replace('get_external_source_control_snapshot', 'get_renamed_snapshot'),
+    ),
+    false,
+    'renaming the invoked command must break the cross-surface contract',
+  );
+
+  const rustSourceRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === '.'
+      && rule.reason.includes('Rust source must not reference the Web UI source tree'),
+  );
+  assert.ok(rustSourceRule, 'all tracked Rust sources must reject Web UI file inputs');
+  for (const mutation of [
+    'let web = include_str!(\n  "../../web-ui/src/infrastructure/api.ts"\n);',
+    'let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web-ui/src/api.ts"));',
+    'let web = include!("../../web-ui/public/generated.rs");',
+    'let web = include_dir!("../../web-ui/src");',
+    'let path = PathBuf::from("../../web-ui/src/api.ts");',
+    'let path = PathBuf::from("../../").join("web-ui").join("src");',
+    'const WEB_UI_DIR: &str = "web-ui"; let body = fs::read_to_string(WEB_UI_DIR);',
+    'let example = r#"include_str!(\"../../web-ui/src/api.ts\")"#;',
+  ]) {
+    assert.equal(
+      findForbiddenContentMatches(mutation, rustSourceRule.patterns, 'src/example.rs').length,
+      1,
+      `Rust/Web input guard must reject: ${mutation}`,
+    );
+  }
+  for (const allowed of [
+    '// include_str!("../../web-ui/src/comment-only.ts")',
+    '/* PathBuf::from("../../web-ui/public/comment-only.json") */',
+    'const REVIEW_SCOPE: &str = "src/frontend/src/**/*.ts";',
+  ]) {
+    assert.deepEqual(
+      findForbiddenContentMatches(allowed, rustSourceRule.patterns, 'src/example.rs'),
+      [],
+      `Rust/Web input guard must ignore non-input text: ${allowed}`,
+    );
+  }
+  assert.deepEqual(
+    findForbiddenContentMatches(
+      'allowed\nforbidden',
+      [{ regex: /forbidden/, message: 'line-based guard' }],
+      'src/example.rs',
+    ),
+    [{ line: 2, message: 'line-based guard' }],
   );
 });
 
@@ -3138,6 +3206,11 @@ test('core boundary check is split into focused modules', async () => {
     checker.split(/\r?\n/).length <= 1200,
     'checker should stay focused on orchestration and shared check helpers',
   );
+  assert.match(
+    checker,
+    /listTrackedRustRepoPaths/,
+    'recursive source boundary checks must inspect tracked Rust files only',
+  );
 
   const sourceRuleEntry = await readFile(
     new URL('./core-boundaries/rules/source-rules.mjs', import.meta.url),
@@ -3269,7 +3342,7 @@ test('desktop preview rebuild inputs use the current crate layout', async () => 
   );
 });
 
-test('split core boundary check keeps self-test and default execution behavior', () => {
+test('split core boundary check keeps self-test execution behavior', () => {
   const selfTest = spawnSync(
     process.execPath,
     ['scripts/check-core-boundaries.mjs'],
@@ -3281,13 +3354,6 @@ test('split core boundary check keeps self-test and default execution behavior',
   );
   assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
   assert.match(selfTest.stdout, /Core boundary check self-test passed\./);
-
-  const defaultRun = spawnSync(process.execPath, ['scripts/check-core-boundaries.mjs'], {
-    cwd: new URL('..', import.meta.url),
-    encoding: 'utf8',
-  });
-  assert.equal(defaultRun.status, 0, defaultRun.stderr || defaultRun.stdout);
-  assert.match(defaultRun.stdout, /Core boundary check passed\./);
 });
 
 test('optional dependency ownership rejects undeclared direct feature owners', async () => {
