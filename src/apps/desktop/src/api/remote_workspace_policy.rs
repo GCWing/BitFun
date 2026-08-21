@@ -1885,11 +1885,27 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "ssh_list_port_forwards",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "ssh_list_remote_listening_ports",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "ssh_list_saved_connections",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "ssh_save_connection",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "ssh_start_port_forward",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "ssh_stop_port_forward",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
