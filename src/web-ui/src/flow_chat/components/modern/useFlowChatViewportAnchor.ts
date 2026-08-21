@@ -158,6 +158,14 @@ export interface FlowChatViewportAnchorApi {
    */
   restoreAnchor: () => boolean;
   /**
+   * Restore the reading position after the native host temporarily withdrew the
+   * viewport from layout.
+   *
+   * Host recovery is not reader input. Keep its transient `scrollTop` delta
+   * out of the anchor until the pre-suspension relationship is restored.
+   */
+  restoreAnchorAfterViewportResume: () => boolean;
+  /**
    * Correct now, and hold the anchor across the settle that follows.
    *
    * One callback per change is not enough, and no callback covers all of it, so
@@ -232,6 +240,12 @@ export function useFlowChatViewportAnchor({
    * DOM in that same task anchors to whatever the reader was moved off.
    */
   const recaptureOnNextSettleRef = useRef(false);
+  /**
+   * A zero-sized native-host viewport is not a reader scroll. This remains set
+   * while its anchor waits for a virtual row to return, so the settle frame
+   * that finally sees the row does not accept host recovery as reader travel.
+   */
+  const isRestoringViewportResumeRef = useRef(false);
   const settleFrameRef = useRef<number | null>(null);
   /*
    * The settle loop is installed once and outlives every render, so it cannot
@@ -474,7 +488,10 @@ export function useFlowChatViewportAnchor({
   const attemptRestore = useCallback((): AnchorRestoreOutcome => {
     const scroller = scrollerRef.current;
     const anchor = anchorRef.current;
-    if (!scroller || !anchor) return 'no-anchor';
+    if (!scroller || !anchor) {
+      isRestoringViewportResumeRef.current = false;
+      return 'no-anchor';
+    }
     /*
      * Every way this declines is silent and looks like the transcript simply
      * not moving, which is why each of them is traced. Standing down for
@@ -482,6 +499,7 @@ export function useFlowChatViewportAnchor({
      * position gets lost, and they have both happened.
      */
     if (isViewportOwnedElsewhereRef.current()) {
+      isRestoringViewportResumeRef.current = false;
       traceViewportRepeating('anchor|owned-elsewhere', {
         location: 'anchor.stoodDown',
         message: 'anchor stood down for another owner',
@@ -521,6 +539,7 @@ export function useFlowChatViewportAnchor({
       if (givingUp) {
         reportMissingTurnWait(scroller, anchor.turnId, 'given-up');
         anchorRef.current = null;
+        isRestoringViewportResumeRef.current = false;
         return 'no-anchor';
       }
       return 'awaiting-turn';
@@ -546,7 +565,10 @@ export function useFlowChatViewportAnchor({
      * exactly itself with `scrolledSincePx: 0`.
      */
     const scrolledSincePx = scroller.scrollTop - anchorScrollTopRef.current;
-    carryAnchorThroughScroll(scroller, 'viewport-moved');
+    const isRestoringViewportResume = isRestoringViewportResumeRef.current;
+    if (!isRestoringViewportResume) {
+      carryAnchorThroughScroll(scroller, 'viewport-moved');
+    }
     const rebased = anchorRef.current ?? anchor;
     const correction = viewportAnchorCorrectionPx(
       rebased,
@@ -560,6 +582,10 @@ export function useFlowChatViewportAnchor({
      * quietly stopped meaning anything would sit unnoticed.
      */
     if (Math.abs(correction) < ANCHOR_CORRECTION_EPSILON_PX) {
+      if (isRestoringViewportResume) {
+        anchorScrollTopRef.current = scroller.scrollTop;
+        isRestoringViewportResumeRef.current = false;
+      }
       traceViewportRepeating(`anchor|in-place|${rebased.turnId}`, {
         location: 'anchor.inPlace',
         message: 'the reading position is where it belongs',
@@ -625,6 +651,7 @@ export function useFlowChatViewportAnchor({
      * `scrollTop` that must not be taken into the offset — it is the repair.
      */
     anchorScrollTopRef.current = scroller.scrollTop;
+    isRestoringViewportResumeRef.current = false;
     return 'corrected';
   }, [carryAnchorThroughScroll, reportMissingTurnWait, scrollerRef]);
 
@@ -637,6 +664,12 @@ export function useFlowChatViewportAnchor({
    * loop only ever needed the two.
    */
   const restoreAnchor = useCallback((): boolean => {
+    const outcome = attemptRestoreRef.current();
+    return outcome === 'corrected' || outcome === 'in-place';
+  }, []);
+
+  const restoreAnchorAfterViewportResume = useCallback((): boolean => {
+    isRestoringViewportResumeRef.current = true;
     const outcome = attemptRestoreRef.current();
     return outcome === 'corrected' || outcome === 'in-place';
   }, []);
@@ -722,6 +755,7 @@ export function useFlowChatViewportAnchor({
     captureAnchorForScroll,
     markUserScrollIntent,
     restoreAnchor,
+    restoreAnchorAfterViewportResume,
     openSettleWindow,
   }), [
     absorbViewportShift,
@@ -731,5 +765,6 @@ export function useFlowChatViewportAnchor({
     openSettleWindow,
     reanchorAfterNavigation,
     restoreAnchor,
+    restoreAnchorAfterViewportResume,
   ]);
 }

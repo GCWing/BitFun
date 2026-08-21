@@ -130,7 +130,7 @@ export function describeVirtualItemEstimate(item: VirtualItem): Record<string, u
     return {
       estimateKind: 'explore-group',
       itemCount: item.data.allItems.length,
-      defaultExpanded: !item.data.wasCutByCritical,
+      defaultExpanded: false,
       estimatedHeightPx: estimateVirtualItemHeightByOwner(item).heightPx,
       itemEstimates,
     };

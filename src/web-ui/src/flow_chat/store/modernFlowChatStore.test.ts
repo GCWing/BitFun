@@ -24,6 +24,7 @@ vi.mock('../tool-cards/toolCardMetadata', () => ({
     'TerminalControl',
     'SessionControl',
     'ExecControl',
+    'AgentWait',
     'view_image',
     'ReadCanvas',
     'ControlHub',
@@ -187,6 +188,32 @@ describe('sessionToVirtualItems explore grouping', () => {
       'explore-group',
     ]);
   });
+
+  it.each(['completed', 'cancelled', 'rejected', 'error'] as const)(
+    'allows a settled %s round to enter an explore group',
+    (status) => {
+      const session = makeSession({
+        sessionId: `terminal-explore-${status}`,
+        dialogTurns: [{
+          id: 'turn-1',
+          sessionId: `terminal-explore-${status}`,
+          userMessage: {
+            id: 'user-1',
+            content: 'Help',
+            timestamp: 900,
+          },
+          modelRounds: [makeRound({ status, isStreaming: false, isComplete: true })],
+          status: 'processing',
+          startTime: 900,
+        }],
+      });
+
+      expect(sessionToVirtualItems(session).map(item => item.type)).toEqual([
+        'user-message',
+        'explore-group',
+      ]);
+    },
+  );
 
   it.each(['Bash', 'Git', 'ExecCommand', 'TodoWrite', 'ContextCompression', 'Skill', 'SessionMessage'])(
     'keeps conditionally important %s rounds visible',
@@ -590,7 +617,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('keeps trailing explore groups expanded while the turn is still processing', () => {
+  it('projects a settled explore group at the tail without treating it as critical', () => {
     const session = makeSession({
       dialogTurns: [{
         id: 'turn-1',
@@ -617,7 +644,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('keeps an active collapsible tool in the same trailing explore group', () => {
+  it('keeps an active collapsible tool out of explore groups until its round settles', () => {
     const session = makeSession({
       sessionId: 'active-tool-session',
       dialogTurns: [{
@@ -647,24 +674,145 @@ describe('sessionToVirtualItems explore grouping', () => {
 
     const items = sessionToVirtualItems(session);
 
-    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
     expect(items[1]).toMatchObject({
       type: 'explore-group',
+      data: { groupId: 'round-1', allItems: [
+        expect.objectContaining({ id: 'text-1' }),
+        expect.objectContaining({ id: 'tool-1' }),
+      ] },
+    });
+    expect(items[2]).toMatchObject({
+      type: 'model-round',
       data: {
-        groupId: 'round-1',
-        isGroupStreaming: true,
-        isLastGroupInTurn: true,
-        wasCutByCritical: false,
-        allItems: [
-          expect.objectContaining({ id: 'text-1' }),
-          expect.objectContaining({ id: 'tool-1' }),
-          expect.objectContaining({ id: 'tool-2', status: 'running' }),
-        ],
+        id: 'round-2',
+        items: [expect.objectContaining({ id: 'tool-2', status: 'running' })],
       },
     });
   });
 
-  it('merges a just-completed collapsible tool immediately, with no wall-clock window', () => {
+  it('defers explore grouping until a round reaches a terminal state', () => {
+    const firstRound = makeRound({ id: 'round-1' });
+    const provisionalRound = (items: ModelRound['items']): ModelRound => makeRound({
+      id: 'round-2',
+      items,
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+    });
+
+    const makeSessionWithRounds = (round: ModelRound) => makeSession({
+      sessionId: `provisional-tail-${round.items.length}`,
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [firstRound, round],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const thinkingOnly = sessionToVirtualItems(makeSessionWithRounds(
+      provisionalRound([{
+        id: 'thinking-2',
+        type: 'thinking',
+        content: 'Waiting for the next action',
+        isStreaming: true,
+        isCollapsed: false,
+        timestamp: 1002,
+        status: 'streaming',
+      }]),
+    ));
+    expect(thinkingOnly.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(thinkingOnly[2]).toMatchObject({ type: 'model-round', data: { id: 'round-2' } });
+
+    const thinkingAndText = sessionToVirtualItems(makeSessionWithRounds(
+      provisionalRound([
+        {
+          id: 'thinking-2',
+          type: 'thinking',
+          content: 'Waiting for the next action',
+          isStreaming: true,
+          isCollapsed: false,
+          timestamp: 1002,
+          status: 'streaming',
+        },
+        {
+          id: 'text-2',
+          type: 'text',
+          content: 'I am checking the background agent.',
+          isStreaming: true,
+          timestamp: 1003,
+          status: 'streaming',
+        },
+      ]),
+    ));
+    expect(thinkingAndText.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(thinkingAndText[2]).toMatchObject({ type: 'model-round', data: { id: 'round-2' } });
+
+    const withTool = sessionToVirtualItems(makeSessionWithRounds(
+      provisionalRound([
+        {
+          id: 'thinking-2',
+          type: 'thinking',
+          content: 'Waiting for the next action',
+          isStreaming: true,
+          isCollapsed: false,
+          timestamp: 1002,
+          status: 'streaming',
+        },
+        {
+          id: 'text-2',
+          type: 'text',
+          content: 'I am checking the background agent.',
+          isStreaming: false,
+          timestamp: 1003,
+          status: 'completed',
+        },
+        makeTool('tool-2', 'AgentWait', 'running'),
+      ]),
+    ));
+    expect(withTool.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(withTool[2]).toMatchObject({
+      type: 'model-round',
+      data: {
+        id: 'round-2',
+        items: expect.arrayContaining([expect.objectContaining({ id: 'tool-2', status: 'running' })]),
+      },
+    });
+
+    const settled = sessionToVirtualItems(makeSessionWithRounds(makeRound({
+      id: 'round-2',
+      items: [
+        {
+          id: 'thinking-2',
+          type: 'thinking',
+          content: 'Waiting for the next action',
+          isStreaming: false,
+          isCollapsed: false,
+          timestamp: 1002,
+          status: 'completed',
+        },
+        makeTextItem('text-2', 'I am checking the background agent.'),
+        makeTool('tool-2', 'AgentWait', 'completed'),
+      ],
+    })));
+    expect(settled.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(settled[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        groupId: 'round-1',
+        allItems: expect.arrayContaining([expect.objectContaining({ id: 'tool-2' })]),
+      },
+    });
+  });
+
+  it('groups a settled collapsible tool immediately, with no wall-clock window', () => {
     // The projection must not depend on Date.now(): a time-dependent
     // classification needs a timer to re-run it, and that timer restructures
     // and remounts the round long after the data settled.
@@ -697,10 +845,25 @@ describe('sessionToVirtualItems explore grouping', () => {
 
     // 200ms after the tool finished — inside the old 1s transient window.
     vi.setSystemTime(10_200);
-    const justFinished = sessionToVirtualItems(makeJustCompletedSession(true));
+    const stillStreaming = sessionToVirtualItems(makeJustCompletedSession(true));
 
-    expect(justFinished.map(item => item.type)).toEqual(['user-message', 'explore-group']);
-    expect(justFinished[1]).toMatchObject({
+    expect(stillStreaming.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(stillStreaming[2]).toMatchObject({
+      type: 'model-round',
+      data: { id: 'round-2' },
+    });
+
+    // Well past the old window: time alone cannot group an active round.
+    vi.setSystemTime(999_999);
+    const longStreaming = sessionToVirtualItems(makeJustCompletedSession(true));
+    expect(longStreaming.map(item => item.type)).toEqual(stillStreaming.map(item => item.type));
+
+    // The terminal transition, rather than elapsed time, makes the round
+    // eligible to merge into the existing explore group.
+    vi.setSystemTime(10_200);
+    const settled = sessionToVirtualItems(makeJustCompletedSession(false));
+    expect(settled.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(settled[1]).toMatchObject({
       type: 'explore-group',
       data: {
         groupId: 'round-1',
@@ -711,19 +874,9 @@ describe('sessionToVirtualItems explore grouping', () => {
         ],
       },
     });
-
-    // Well past the old window: same projection, so no timer can change it.
-    vi.setSystemTime(999_999);
-    const longSettled = sessionToVirtualItems(makeJustCompletedSession(true));
-    expect(longSettled.map(item => item.type)).toEqual(justFinished.map(item => item.type));
-
-    // Streaming vs settled must not change the projection either.
-    vi.setSystemTime(10_200);
-    const notStreaming = sessionToVirtualItems(makeJustCompletedSession(false));
-    expect(notStreaming.map(item => item.type)).toEqual(justFinished.map(item => item.type));
   });
 
-  it('keeps explore-group identity while thinking narrative is still streaming', () => {
+  it('moves a collapsible round into an explore group only after streaming settles', () => {
     const streamingThinking = {
       id: 'thinking-1',
       type: 'thinking' as const,
@@ -757,10 +910,10 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
 
     const streamingItems = sessionToVirtualItems(session);
-    expect(streamingItems.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(streamingItems.map(item => item.type)).toEqual(['user-message', 'model-round']);
     expect(streamingItems[1]).toMatchObject({
-      type: 'explore-group',
-      data: { groupId: 'round-1' },
+      type: 'model-round',
+      data: { id: 'round-1' },
     });
 
     const settledSession = makeSession({
@@ -783,14 +936,14 @@ describe('sessionToVirtualItems explore grouping', () => {
       }],
     });
     const settledItems = sessionToVirtualItems(settledSession);
-    expect(settledItems.map(item => item.type)).toEqual(streamingItems.map(item => item.type));
+    expect(settledItems.map(item => item.type)).toEqual(['user-message', 'explore-group']);
     expect(settledItems[1]).toMatchObject({
       type: 'explore-group',
       data: { groupId: 'round-1' },
     });
   });
 
-  it('keeps the same explore group id when a completed trailing tool is merged in', () => {
+  it('keeps the existing group id when a trailing round settles and joins it', () => {
     const baseTurn = {
       id: 'turn-1',
       sessionId: 'stable-group-session',
@@ -837,8 +990,8 @@ describe('sessionToVirtualItems explore grouping', () => {
     const activeItems = sessionToVirtualItems(activeSession);
     const completedItems = sessionToVirtualItems(completedSession);
 
-    expect(activeItems.map(item => item.type)).toEqual(['user-message', 'explore-group']);
-    expect(completedItems.map(item => item.type)).toEqual(activeItems.map(item => item.type));
+    expect(activeItems.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(completedItems.map(item => item.type)).toEqual(['user-message', 'explore-group']);
     expect(activeItems[1]).toMatchObject({
       type: 'explore-group',
       data: {
@@ -846,9 +999,12 @@ describe('sessionToVirtualItems explore grouping', () => {
         allItems: [
           expect.objectContaining({ id: 'text-1' }),
           expect.objectContaining({ id: 'tool-1' }),
-          expect.objectContaining({ id: 'tool-2', status: 'running' }),
         ],
       },
+    });
+    expect(activeItems[2]).toMatchObject({
+      type: 'model-round',
+      data: { id: 'round-2', items: [expect.objectContaining({ id: 'tool-2', status: 'running' })] },
     });
     expect(completedItems[1]).toMatchObject({
       type: 'explore-group',
@@ -863,7 +1019,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('keeps the latest completed trailing explore group expanded', () => {
+  it('keeps the latest completed explore group marked as the trailing group', () => {
     const session = makeSession();
 
     const items = sessionToVirtualItems(session);
@@ -944,7 +1100,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('auto-collapses non-trailing explore groups during an active turn', () => {
+  it('keeps an active trailing round outside earlier settled explore groups', () => {
     const session = makeSession({
       dialogTurns: [{
         id: 'turn-1',
@@ -975,18 +1131,22 @@ describe('sessionToVirtualItems explore grouping', () => {
     const items = sessionToVirtualItems(session);
     const exploreGroups = items.filter(item => item.type === 'explore-group');
 
-    expect(exploreGroups).toHaveLength(2);
+    expect(items.map(item => item.type)).toEqual([
+      'user-message',
+      'explore-group',
+      'model-round',
+      'model-round',
+    ]);
+    expect(exploreGroups).toHaveLength(1);
     expect(exploreGroups[0]).toMatchObject({
       data: {
         isLastGroupInTurn: false,
         wasCutByCritical: true,
       },
     });
-    expect(exploreGroups[1]).toMatchObject({
-      data: {
-        isLastGroupInTurn: true,
-        wasCutByCritical: false,
-      },
+    expect(items[3]).toMatchObject({
+      type: 'model-round',
+      data: { id: 'round-3' },
     });
   });
 

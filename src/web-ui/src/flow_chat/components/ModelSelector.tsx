@@ -446,19 +446,35 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     };
   }, [dropdownOpen]);
 
-  // Calculate portal dropdown position relative to the trigger container.
+  // Calculate the portalled dropdown position relative to the trigger button.
   useEffect(() => {
     if (!dropdownOpen || !dropdownRef.current) return;
 
     const updatePosition = () => {
-      if (!dropdownRef.current || !portalDropdownRef.current) return;
-      const anchorRect = dropdownRef.current.getBoundingClientRect();
-      const dropdownRect = portalDropdownRef.current.getBoundingClientRect();
+      // Anchor on the trigger button, not the container: when a reasoning
+      // preset selector sits beside it the container's right edge is not the
+      // button's, and the menu is asked to right-align with the button.
+      const anchor = triggerRef.current ?? dropdownRef.current;
+      if (!anchor || !portalDropdownRef.current) return;
+      const anchorRect = anchor.getBoundingClientRect();
+      const dropdown = portalDropdownRef.current;
+      const dropdownRect = dropdown.getBoundingClientRect();
+      // max-height can make the rendered box shorter than its contents. Keep
+      // measuring the intrinsic height so a later resize can still choose the
+      // correct side and then size the scrollable surface to that side.
+      const intrinsicDropdownWidth = Math.max(dropdownRect.width, dropdown.offsetWidth);
+      const intrinsicDropdownHeight = Math.max(
+        dropdownRect.height,
+        dropdown.scrollHeight + Math.max(0, dropdown.offsetHeight - dropdown.clientHeight),
+      );
       const layout = getModelSelectorDropdownLayout(
         anchorRect,
-        dropdownRect,
+        { width: intrinsicDropdownWidth, height: intrinsicDropdownHeight },
         dropdownPlacement,
         { width: window.innerWidth, height: window.innerHeight },
+        // The trigger lives near the composer's right side, so a start-aligned
+        // wide menu overflows the window; right edges align instead.
+        'end',
       );
       setDropdownStyle(layout.style);
       setResolvedDropdownPlacement(layout.placement);

@@ -29,7 +29,7 @@ import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSectio
 import DefaultModelConfig from './DefaultModelConfig';
 import SubagentModelConfig from './SubagentModelConfig';
 import SessionTitleConfig from './SessionTitleConfig';
-import ReasoningConfigPanel from './ReasoningConfigPanel';
+import ReasoningConfigPanel, { type ReasoningConfigApplyResult } from './ReasoningConfigPanel';
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import { i18nService } from '@/infrastructure/i18n';
@@ -60,6 +60,10 @@ interface SelectedModelDraft {
   maxTokens?: number;
   reasoning: ReasoningConfig;
   reasoningProjectionCatalog?: ReasoningCatalogBinding;
+  reasoningProjectionSnapshot?: {
+    catalog: ReasoningCatalogBinding;
+    projection?: ReasoningCatalogProjection | null;
+  };
 }
 
 interface ProviderGroup {
@@ -795,6 +799,17 @@ const AIModelConfig: React.FC = () => {
     ))
   );
 
+  const resolveDraftReasoningProjection = (draft: SelectedModelDraft) => {
+    const snapshot = draft.reasoningProjectionSnapshot;
+    if (snapshot && reasoningCatalogBindingsEqual(draft.reasoning.catalog, snapshot.catalog)) {
+      return snapshot.projection ?? undefined;
+    }
+    if (reasoningCatalogBindingsEqual(draft.reasoning.catalog, draft.reasoningProjectionCatalog)) {
+      return resolveDraftCatalogEntry(draft)?.reasoning;
+    }
+    return undefined;
+  };
+
   const toggleSelectedModelCardExpanded = useCallback((draftKey: string) => {
     setExpandedModelCards(prev => {
       const next = new Set(prev);
@@ -1522,19 +1537,19 @@ const AIModelConfig: React.FC = () => {
         notification.warning(t('messages.contextWindowTooSmall'));
         return;
       }
-      if (draftsToSave.some(draft => (
-        validateReasoningConfig(
-          draft.reasoning,
-          reasoningCatalogBindingsEqual(
-            draft.reasoning.catalog,
-            draft.reasoningProjectionCatalog,
-          )
-            ? resolveDraftCatalogEntry(draft)?.reasoning?.presets
-                ?.filter(preset => preset.source !== 'model_config')
-                .map(preset => preset.id)
-            : [],
-        ) !== null
-      ))) {
+      const reasoningValidationResults = draftsToSave.map(draft => ({
+        modelName: draft.modelName,
+        reasoning: draft.reasoning,
+        projectionCatalog: draft.reasoningProjectionCatalog,
+        snapshotCatalog: draft.reasoningProjectionSnapshot?.catalog,
+        generatedPresetIds: resolveDraftReasoningProjection(draft)?.presets
+          ?.filter(preset => preset.source !== 'model_config')
+          .map(preset => preset.id) ?? [],
+      })).map(entry => ({
+        ...entry,
+        validationError: validateReasoningConfig(entry.reasoning, entry.generatedPresetIds),
+      }));
+      if (reasoningValidationResults.some(entry => entry.validationError !== null)) {
         notification.warning(t('messages.invalidReasoningPresets'));
         return;
       }
@@ -2219,11 +2234,7 @@ const AIModelConfig: React.FC = () => {
             const categoryLabel = categoryCompactLabels[draft.category] ?? draft.category;
             const canToggleExpand = selectedModelDrafts.length > 1;
             const modelDisplayName = draft.modelName;
-            const catalogEntry = resolveDraftCatalogEntry(draft);
-            const reasoningProjection = reasoningCatalogBindingsEqual(
-              draft.reasoning.catalog,
-              draft.reasoningProjectionCatalog,
-            ) ? catalogEntry?.reasoning : undefined;
+            const reasoningProjection = resolveDraftReasoningProjection(draft);
 
             return (
               <div
@@ -3092,11 +3103,7 @@ const AIModelConfig: React.FC = () => {
     ? selectedModelDrafts.find(draft => draft.key === reasoningPanelDraftKey)
     : undefined;
   const reasoningPanelProjection = reasoningPanelDraft
-    && reasoningCatalogBindingsEqual(
-      reasoningPanelDraft.reasoning.catalog,
-      reasoningPanelDraft.reasoningProjectionCatalog,
-    )
-    ? resolveDraftCatalogEntry(reasoningPanelDraft)?.reasoning
+    ? resolveDraftReasoningProjection(reasoningPanelDraft)
     : undefined;
   const reasoningPanelProjectionRequest = reasoningPanelDraft && editingConfig
     ? {
@@ -3752,9 +3759,14 @@ const AIModelConfig: React.FC = () => {
                 || reasoningPanelProjectionRequest.provider
               : undefined}
             onCancel={() => setReasoningPanelDraftKey(null)}
-            onApply={(reasoning) => {
+            onApply={(result: ReasoningConfigApplyResult) => {
               updateModelDraft(reasoningPanelDraft.modelName, {
-                reasoning,
+                reasoning: result.reasoning,
+                reasoningProjectionCatalog: result.projectionCatalog,
+                reasoningProjectionSnapshot: {
+                  catalog: result.projectionCatalog,
+                  projection: result.projection,
+                },
               });
               setReasoningPanelDraftKey(null);
             }}

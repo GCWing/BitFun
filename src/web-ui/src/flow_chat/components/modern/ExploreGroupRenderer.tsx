@@ -4,14 +4,11 @@
  * Renders merged explore-only rounds as a collapsible region.
  */
 
-import React, { useRef, useMemo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem, ToolRejectOptions } from '../../types/flow-chat';
 import type { ExploreGroupData } from '../../store/modernFlowChatStore';
-import { createLogger } from '@/shared/utils/logger';
-
-const log = createLogger('ExploreGroupRenderer');
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
@@ -69,7 +66,6 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     isLastGroupInTurn,
     wasCutByCritical,
   } = data;
-  const prevWasCutRef = useRef(wasCutByCritical);
   const {
     cardRootRef,
     applyExpandedState,
@@ -80,8 +76,9 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   
   const hasExplicitState = exploreGroupStates?.has(groupId) ?? false;
   const explicitExpanded = exploreGroupStates?.get(groupId) ?? false;
-  // Default: expanded while the group is still the tail; collapsed once cut.
-  const defaultExpanded = !wasCutByCritical;
+  // Exploration is low-density history. Keep every group collapsed unless the
+  // user explicitly expands it.
+  const defaultExpanded = false;
   const isExpanded = hasExplicitState ? explicitExpanded : defaultExpanded;
   const isCollapsed = !isExpanded;
   const groupKind = getExploreGroupKind(stats, allItems.length);
@@ -126,33 +123,8 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     }
   }, []);
 
-  // One-shot auto-collapse: fires exactly once when the group transitions from
-  // tail (wasCutByCritical=false) to cut (wasCutByCritical=true).
-  //
-  // Do not use `isExpanded` to guard this effect. The render that flips
-  // `wasCutByCritical` also recomputes the default expanded state. No explicit
-  // state means the live-tail default may collapse naturally; an explicit
-  // state is user intent and must not be overwritten.
-  useLayoutEffect(() => {
-    const justGotCut = wasCutByCritical && !prevWasCutRef.current;
-    prevWasCutRef.current = wasCutByCritical;
-
-    if (!justGotCut || hasExplicitState) return;
-
-    log.debug('explore group cut by critical', { groupId });
-
-    applyExpandedState(true, false, () => {
-      onCollapseGroup?.(groupId);
-    });
-  }, [
-    applyExpandedState,
-    groupId,
-    hasExplicitState,
-    wasCutByCritical,
-    onCollapseGroup,
-  ]);
-  
-  // Auto-scroll to bottom while the group is still the tail and new items arrive.
+  // Auto-scroll to bottom when an explicitly expanded tail gains a newly
+  // settled round.
   // Use double requestAnimationFrame to ensure the browser has completed
   // layout of newly added content before we measure scrollHeight.
   useEffect(() => {
