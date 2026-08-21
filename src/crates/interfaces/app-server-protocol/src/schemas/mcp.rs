@@ -3,6 +3,7 @@
 //! Mutation payloads can contain credentials and other sensitive values. Their
 //! custom `Debug` implementations expose only configuration metadata.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
@@ -12,35 +13,40 @@ pub use bitfun_product_domains::mcp::{
 
 macro_rules! unit_response {
     ($name:ident) => {
-        #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
         pub struct $name {}
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "mcp/list", response = ListMcpServersResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "mcp/list", response = ListMcpServersResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct ListMcpServersRequest {
     pub workspace_path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 pub struct ListMcpServersResponse {
     pub servers: Vec<McpServerSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "mcp/toggle", response = ToggleMcpServerResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "mcp/toggle", response = ToggleMcpServerResponse))]
 pub struct ToggleMcpServerRequest {
     pub server_id: String,
 }
 
 unit_response!(ToggleMcpServerResponse);
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "mcp/add", response = AddMcpServerResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "mcp/add", response = AddMcpServerResponse))]
 pub struct AddMcpServerRequest {
     pub name: String,
     pub config: McpServerMutation,
@@ -58,16 +64,18 @@ impl std::fmt::Debug for AddMcpServerRequest {
 
 unit_response!(AddMcpServerResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "mcp/delete", response = DeleteMcpServerResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "mcp/delete", response = DeleteMcpServerResponse))]
 pub struct DeleteMcpServerRequest {
     pub server_id: String,
 }
 
 unit_response!(DeleteMcpServerResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "mcp/externalDecision", response = ExternalMcpDecisionResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "mcp/externalDecision", response = ExternalMcpDecisionResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalMcpDecisionRequest {
     pub workspace_path: String,
@@ -80,8 +88,9 @@ pub struct ExternalMcpDecisionRequest {
 
 unit_response!(ExternalMcpDecisionResponse);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "mcp/conflictChoice", response = McpConflictChoiceResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "mcp/conflictChoice", response = McpConflictChoiceResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct McpConflictChoiceRequest {
     pub workspace_path: String,

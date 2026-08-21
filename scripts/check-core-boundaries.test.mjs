@@ -70,7 +70,7 @@ const MODULES = [
 
 const TEST_ROOT = join('C:', 'repo');
 
-test('App Server TypeScript capability is owned by the protocol crate', () => {
+test('App Server TypeScript capability is owned by the protocol crate and independent from RPC', () => {
   const appServerTs = coreClosedFeatureProfileRules.find(
     (rule) => rule.manifestPath === 'src/crates/interfaces/app-server/Cargo.toml'
       && rule.featureName === 'ts',
@@ -80,10 +80,31 @@ test('App Server TypeScript capability is owned by the protocol crate', () => {
   ]);
   assert.equal(appServerTs?.exact, true);
 
-  const protocolTs = coreClosedFeatureProfileRules.find(
-    (rule) => rule.manifestPath === 'src/crates/interfaces/app-server-protocol/Cargo.toml'
-      && rule.featureName === 'ts',
+  const protocolProfiles = new Map(
+    coreClosedFeatureProfileRules
+      .filter(
+        (rule) => rule.manifestPath
+          === 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+      )
+      .map((rule) => [rule.featureName, rule]),
   );
+
+  const protocolDefault = protocolProfiles.get('default');
+  assert.deepEqual(protocolDefault?.requiredFeatureRefs, ['rpc']);
+  assert.equal(protocolDefault?.exact, true);
+
+  const protocolRpc = protocolProfiles.get('rpc');
+  assert.deepEqual(protocolRpc?.requiredFeatureRefs, ['dep:agent-client-protocol']);
+  assert.equal(protocolRpc?.exact, true);
+
+  const protocolOptionalOwners = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'app-server-protocol',
+  );
+  assert.deepEqual(protocolOptionalOwners?.dependencies, [
+    { depName: 'agent-client-protocol', ownerFeatures: ['rpc'] },
+  ]);
+
+  const protocolTs = protocolProfiles.get('ts');
   assert.deepEqual(protocolTs?.requiredFeatureRefs, [
     'bitfun-core-types/ts',
     'bitfun-product-domains/ts',

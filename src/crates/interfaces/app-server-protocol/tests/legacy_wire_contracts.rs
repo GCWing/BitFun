@@ -1,3 +1,4 @@
+#[cfg(feature = "rpc")]
 use agent_client_protocol::JsonRpcMessage;
 use bitfun_app_server_protocol::{
     agent::{RunResponse, SubmitDialogTurnMessage, SubmitDialogTurnRequest},
@@ -8,7 +9,7 @@ use bitfun_app_server_protocol::{
 use serde_json::json;
 
 #[test]
-fn legacy_submit_dialog_contract_keeps_optional_policy_and_method() {
+fn legacy_submit_dialog_contract_keeps_optional_policy() {
     let request: SubmitDialogTurnRequest = serde_json::from_value(json!({
         "sessionId": "session-1",
         "message": "hello",
@@ -20,13 +21,18 @@ fn legacy_submit_dialog_contract_keeps_optional_policy_and_method() {
     assert!(body.policy.is_none());
     assert!(body.attachments.is_empty());
     assert!(body.metadata.is_empty());
-    assert!(SubmitDialogTurnMessage::matches_method(
-        "agent/submitDialogTurn"
-    ));
     assert_eq!(
         std::any::TypeId::of::<SubmitDialogTurnMessage>(),
         std::any::TypeId::of::<SubmitDialogTurnRequest>()
     );
+}
+
+#[cfg(feature = "rpc")]
+#[test]
+fn legacy_submit_dialog_method_stays_compatible() {
+    assert!(SubmitDialogTurnMessage::matches_method(
+        "agent/submitDialogTurn"
+    ));
 }
 
 #[test]
