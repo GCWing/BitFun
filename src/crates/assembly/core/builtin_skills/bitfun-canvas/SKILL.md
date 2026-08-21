@@ -94,14 +94,20 @@ Before returning canvas code, verify:
 
 ## Introducing the canvas
 
-Whenever you mention a canvas to the user — one you created, updated, or want them to open — **always** include the `bitfun-canvas://...` artifact reference returned by the Canvas tool. Use the artifact title or a short descriptive label near the reference; do not refer to a canvas by name alone without the reference.
+Whenever you mention a canvas to the user — one you created, updated, or want them to open — **always** include the `bitfun-canvas://...` artifact reference returned by the Canvas tool, written as a **markdown link**:
 
-When you create a canvas, add a short note in your chat response telling the user they can open it beside the chat, with that `bitfun-canvas://...` reference:
+```markdown
+[Q3 revenue breakdown](bitfun-canvas://session/<sessionId>/canvas/<canvasId>)
+```
+
+Use the artifact title or a short descriptive label as the link text; do not refer to a canvas by name alone without the reference. A bare reference pasted outside link syntax renders as plain text the user cannot click, so never write the reference on its own.
+
+When you create a canvas, add a short note in your chat response telling the user they can open it beside the chat, with that markdown link:
 
 - **First canvas** — include one sentence explaining what a canvas is.
 - **Unsolicited canvas** — if the user didn't ask for a canvas, include one sentence explaining why you chose it over plain text.
 
-Both can apply at once; one or two sentences total is enough. Skip the intro for subsequent canvases unless you are mentioning that canvas again (still include the artifact reference).
+Both can apply at once; one or two sentences total is enough. Skip the intro for subsequent canvases unless you are mentioning that canvas again (still include the artifact reference as a markdown link).
 
 ## Troubleshooting
 

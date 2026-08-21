@@ -21,7 +21,14 @@ import { useAppearance } from '@/infrastructure/appearance';
 import { contextMenuController } from '@/shared/context-menu-system/core/ContextMenuController';
 import { ContextType, type CustomContext, type MenuItem } from '@/shared/context-menu-system/types';
 import { createTab } from '@/shared/utils/tabUtils';
+import {
+  CANVAS_ARTIFACT_REF_PREFIX,
+  CANVAS_ARTIFACT_REF_SCHEME,
+  isCanvasArtifactRef,
+} from '@/shared/utils/canvasArtifactRef';
+import { openCanvasArtifactTab } from '@/shared/utils/canvasArtifactTab';
 import { createLogger } from '@/shared/utils/logger';
+import { markdownUrlTransform } from './markdownUrlTransform';
 import {
   isStartupRenderTraceEnabled,
   recordReactRenderProfile,
@@ -125,13 +132,13 @@ function mayNeedWorkspacePathForMarkdownLinks(content: string): boolean {
   // while false negatives could make relative local links display poorly.
   if (
     hasMarkdownLinkSyntax &&
-    /!?\[[^\]]+\]\(\s*(?!https?:|mailto:|data:|asset:|tauri:|visualization:|tab:|#)[^)]+\)/i.test(content)
+    /!?\[[^\]]+\]\(\s*(?!https?:|mailto:|data:|asset:|tauri:|visualization:|tab:|bitfun-canvas:|#)[^)]+\)/i.test(content)
   ) {
     return true;
   }
 
   return hasRawAnchorSyntax &&
-    /<a\s+[^>]*href=["']\s*(?!https?:|mailto:|visualization:|tab:|#)[^"']+["']/i.test(content);
+    /<a\s+[^>]*href=["']\s*(?!https?:|mailto:|visualization:|tab:|bitfun-canvas:|#)[^"']+["']/i.test(content);
 }
 
 function mayContainMarkdownMath(content: string): boolean {
@@ -250,12 +257,19 @@ const sanitizeSchema = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href || []), 'computer', 'file', 'tab', 'visualization'],
+    href: [
+      ...(defaultSchema.protocols?.href || []),
+      'computer',
+      'file',
+      'tab',
+      'visualization',
+      CANVAS_ARTIFACT_REF_SCHEME,
+    ],
     src: [...(defaultSchema.protocols?.src || []), 'asset', 'data', 'http', 'https', 'tauri'],
   },
 };
 
-function remarkAutolinkComputerFileLinks() {
+function remarkAutolinkAppSchemeLinks() {
   return (tree: any) => {
     visit(tree, 'text', (node: any, index: number | undefined, parent: any) => {
       if (index === undefined || !parent || !Array.isArray(parent.children)) {
@@ -267,11 +281,18 @@ function remarkAutolinkComputerFileLinks() {
       }
 
       const value = node.value;
-      if (typeof value !== 'string' || (!value.includes(COMPUTER_LINK_PREFIX) && !value.includes(FILE_LINK_PREFIX))) {
+      if (
+        typeof value !== 'string' ||
+        (!value.includes(COMPUTER_LINK_PREFIX) &&
+          !value.includes(FILE_LINK_PREFIX) &&
+          !value.includes(CANVAS_ARTIFACT_REF_PREFIX))
+      ) {
         return;
       }
 
-      const re = /(computer:\/\/|file:\/\/)[^\s<>()]+/g;
+      // GFM autolinks only http(s)/www/mailto, so app schemes the model emits as
+      // bare URIs would otherwise render as dead plain text.
+      const re = /(computer:\/\/|file:\/\/|bitfun-canvas:\/\/)[^\s<>()]+/g;
       let match: RegExpExecArray | null;
       let lastIndex = 0;
       const nextChildren: any[] = [];
@@ -313,6 +334,31 @@ function remarkAutolinkComputerFileLinks() {
       return index + nextChildren.length;
     });
   };
+}
+
+function markdownChildrenText(children: ReactNode): string {
+  if (typeof children === 'string' || typeof children === 'number') {
+    return String(children);
+  }
+  if (Array.isArray(children)) {
+    return children.map(markdownChildrenText).join('');
+  }
+  if (React.isValidElement(children)) {
+    return markdownChildrenText((children.props as { children?: ReactNode })?.children);
+  }
+  return '';
+}
+
+/**
+ * Tab title for a Canvas link. A bare autolinked reference is not a usable
+ * title, so fall back to the panel's own title in that case.
+ */
+function canvasLinkLabel(children: ReactNode): string | undefined {
+  const label = markdownChildrenText(children).trim();
+  if (!label || label.startsWith(CANVAS_ARTIFACT_REF_PREFIX)) {
+    return undefined;
+  }
+  return label;
 }
 
 function normalizeFileLikeHref(rawHref: string): string {
@@ -1062,7 +1108,48 @@ export const Markdown = React.memo<MarkdownProps>(({
     handleOpenExternalLink,
     showLinkContextMenu,
   ]);
-  
+
+  /**
+   * A link whose scheme no branch below handles. It cannot be opened, so at
+   * least let the user copy it instead of clicking into silence.
+   */
+  const handleUnhandledLinkContextMenu = useCallback((
+    event: React.MouseEvent<HTMLElement>,
+    url: string,
+  ) => {
+    showLinkContextMenu(event, [
+      {
+        id: 'markdown-copy-link',
+        label: translateMarkdownLabel('markdown.copyLink'),
+        icon: 'Copy',
+        onClick: () => void handleCopyLink(url),
+      },
+    ], 'markdown-unhandled-link', { url });
+  }, [handleCopyLink, showLinkContextMenu]);
+
+  const handleCanvasLinkContextMenu = useCallback((
+    event: React.MouseEvent<HTMLElement>,
+    artifactReference: string,
+    label?: string,
+  ) => {
+    const items: MenuItem[] = [
+      {
+        id: 'markdown-open-canvas',
+        label: translateMarkdownLabel('markdown.openCanvas'),
+        icon: 'PanelRightOpen',
+        onClick: () => void openCanvasArtifactTab(artifactReference, { title: label }),
+      },
+      {
+        id: 'markdown-copy-link',
+        label: translateMarkdownLabel('markdown.copyLink'),
+        icon: 'Copy',
+        onClick: () => void handleCopyLink(artifactReference),
+      },
+    ];
+
+    showLinkContextMenu(event, items, 'markdown-canvas-link', { artifactReference });
+  }, [handleCopyLink, showLinkContextMenu]);
+
   const components = useMemo(() => ({
     code({ node: _node, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
@@ -1160,6 +1247,27 @@ export const Markdown = React.memo<MarkdownProps>(({
       const isHttpLink = typeof hrefValue === 'string' &&
         (hrefValue.startsWith('http://') || hrefValue.startsWith('https://'));
       const isMailtoLink = typeof hrefValue === 'string' && hrefValue.startsWith('mailto:');
+      const isCanvasLink = isCanvasArtifactRef(hrefValue);
+
+      if (isCanvasLink) {
+        const canvasLabel = canvasLinkLabel(children);
+        return (
+          <button
+            className="canvas-link"
+            data-bf-component="markdown"
+            data-bf-part="canvasLink"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void openCanvasArtifactTab(hrefValue, { title: canvasLabel });
+            }}
+            onContextMenu={(e) => handleCanvasLinkContextMenu(e, hrefValue, canvasLabel)}
+            type="button"
+          >
+            {children}
+          </button>
+        );
+      }
 
       if (typeof hrefValue === 'string' && !isVisualizationLink && !isTabLink && !isHttpLink && !isMailtoLink && !isHashLink) {
         let filePath = normalizeFileLikeHref(hrefValue);
@@ -1332,13 +1440,27 @@ export const Markdown = React.memo<MarkdownProps>(({
         );
       }
       
+      // Nothing above claimed this link. Hash links are inert by design;
+      // anything else reaching here is a scheme we cannot open, so say so
+      // rather than swallowing the click.
+      const unhandledHref = typeof hrefValue === 'string' && hrefValue.trim() && !isHashLink
+        ? hrefValue
+        : null;
+
       return (
         <a 
           href={typeof hrefValue === 'string' ? hrefValue : undefined} 
           {...props}
           onClick={(e) => {
             e.preventDefault();
+            if (unhandledHref) {
+              log.warn('Markdown link has no handler for its scheme', { href: unhandledHref });
+            }
           }}
+          onContextMenu={unhandledHref
+            ? (e) => handleUnhandledLinkContextMenu(e, unhandledHref)
+            : undefined}
+          title={unhandledHref ? translateMarkdownLabel('markdown.linkNotOpenable') : undefined}
           style={{ cursor: 'pointer' }}
         >
           {children}
@@ -1406,7 +1528,9 @@ export const Markdown = React.memo<MarkdownProps>(({
     handleFileViewRequest,
     handleRevealInExplorer,
     handleLocalFileContextMenu,
+    handleUnhandledLinkContextMenu,
     handleWebLinkContextMenu,
+    handleCanvasLinkContextMenu,
     canOpenInBuiltInBrowser,
     handleOpenBuiltInBrowserLink,
     handleOpenVisualization,
@@ -1422,7 +1546,8 @@ export const Markdown = React.memo<MarkdownProps>(({
   const wrapperClassName = `markdown-renderer ${className}`.trim();
   const basicMarkdownRenderer = (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkAutolinkComputerFileLinks]}
+      remarkPlugins={[remarkGfm, remarkAutolinkAppSchemeLinks]}
+      urlTransform={markdownUrlTransform}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
       components={components}
     >
@@ -1449,7 +1574,7 @@ export const Markdown = React.memo<MarkdownProps>(({
               markdownContent={markdownContent}
               components={components}
               sanitizeSchema={sanitizeSchema}
-              remarkAutolinkComputerFileLinks={remarkAutolinkComputerFileLinks}
+              remarkAutolinkAppSchemeLinks={remarkAutolinkAppSchemeLinks}
             />
           </React.Suspense>
         ) : basicMarkdownRenderer}

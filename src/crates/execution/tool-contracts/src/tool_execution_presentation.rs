@@ -23,7 +23,28 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
     matches!(tool_name, "Write" | "file_write" | "write_notebook")
 }
 
+/// Canvas tools whose payload is one complete `source` string. Like `Write`,
+/// a truncation inside that field still leaves a usable prefix, and the tool
+/// cannot run at all unless the fields that precede it arrived intact.
+/// `PatchCanvas` is deliberately excluded: its `old`/`new` replacement pairs
+/// behave like `Edit`, where a truncation silently changes what gets replaced.
+pub fn is_canvas_source_tool_name(tool_name: &str) -> bool {
+    matches!(tool_name, "CreateCanvas" | "UpdateCanvas")
+}
+
+/// Tools whose truncated arguments may be closed and handed to schema
+/// validation instead of being rejected outright.
+pub fn permits_tail_closure_repair(tool_name: &str) -> bool {
+    is_write_like_tool_name(tool_name) || is_canvas_source_tool_name(tool_name)
+}
+
 pub fn build_write_tail_closure_notice(tool_name: &str) -> String {
+    if is_canvas_source_tool_name(tool_name) {
+        return format!(
+            "[Your previous {tool_name} call had incomplete JSON arguments and its completed source prefix was closed before execution; the Canvas was saved from partial source, so any compile diagnostics in the result most likely describe the truncation rather than a flaw in your design. Send one UpdateCanvas call for the returned artifact reference with the complete source. If the source does not fit in a single call, stop tool-calling and tell the user the Canvas is incomplete instead of retrying blindly.]\n\nOriginal tool result follows.\n\n"
+        );
+    }
+
     if is_write_like_tool_name(tool_name) {
         return format!(
             "[Your previous {tool_name} call had incomplete JSON arguments and its completed payload prefix was closed before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, use Edit to add only the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the write may be incomplete.]\n\nOriginal tool result follows.\n\n"

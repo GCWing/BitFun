@@ -542,6 +542,7 @@
 .markdown-renderer a,
 .markdown-renderer .file-link,
 .markdown-renderer .visualization-link,
+.markdown-renderer .canvas-link,
 .markdown-renderer .tab-link {
   margin: 0;
   padding: 0;
@@ -558,6 +559,7 @@
 .markdown-renderer a:hover,
 .markdown-renderer .file-link:hover,
 .markdown-renderer .visualization-link:hover,
+.markdown-renderer .canvas-link:hover,
 .markdown-renderer .tab-link:hover {
   color: var(--bf-appearance-token-flowchat-link-hover-color);
   text-decoration-thickness: 1.5px;
@@ -566,6 +568,7 @@
 .markdown-renderer a .inline-code,
 .markdown-renderer .file-link .inline-code,
 .markdown-renderer .visualization-link .inline-code,
+.markdown-renderer .canvas-link .inline-code,
 .markdown-renderer .tab-link .inline-code {
   color: inherit;
 }

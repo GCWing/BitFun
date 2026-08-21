@@ -8,24 +8,26 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import type { Options as RehypeSanitizeOptions } from 'rehype-sanitize';
 import type { Pluggable } from 'unified';
+import { markdownUrlTransform } from './markdownUrlTransform';
 import 'katex/dist/katex.min.css';
 
 interface MarkdownMathRendererProps {
   markdownContent: string;
   components: Components;
   sanitizeSchema: RehypeSanitizeOptions;
-  remarkAutolinkComputerFileLinks: Pluggable;
+  remarkAutolinkAppSchemeLinks: Pluggable;
 }
 
 export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
   markdownContent,
   components,
   sanitizeSchema,
-  remarkAutolinkComputerFileLinks,
+  remarkAutolinkAppSchemeLinks,
 }) => (
   <div data-bf-component="markdown" data-bf-part="math">
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
+      remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkAppSchemeLinks]}
+      urlTransform={markdownUrlTransform}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
       components={components}
     >

@@ -553,7 +553,24 @@ fn canvas_result_for_assistant(
         }
     }
 
+    // The UI only turns a Canvas reference into a clickable link when the model
+    // writes it as markdown link syntax; a bare URI renders as plain text.
+    message.push_str(&format!(
+        "\nWhen you mention this Canvas to the user, write it as a markdown link so it is clickable: [{}]({})",
+        canvas_link_label(&snapshot.artifact.title),
+        reference
+    ));
+
     message
+}
+
+/// Keeps a Canvas title usable inside markdown link text.
+fn canvas_link_label(title: &str) -> String {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        return "Canvas".to_string();
+    }
+    trimmed.replace('[', "(").replace(']', ")")
 }
 
 fn canvas_read_result_for_assistant(snapshot: &CanvasSnapshot, include_source: bool) -> String {
@@ -836,6 +853,45 @@ mod tests {
 
     fn valid_source() -> &'static str {
         "import { Stack } from 'bitfun/canvas'; export default function Canvas() { return <Stack />; }"
+    }
+
+    #[tokio::test]
+    async fn create_result_tells_the_model_to_emit_a_markdown_link() {
+        let context = test_context(&format!("session_{}", uuid_short()));
+        let created = CreateCanvasTool::new()
+            .call_impl(
+                &json!({
+                    "title": "Build Health",
+                    "source": valid_source(),
+                }),
+                &context,
+            )
+            .await
+            .expect("canvas should create");
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &created[0]
+        else {
+            panic!("expected result");
+        };
+        let reference = data["artifactReference"].as_str().expect("reference");
+        let assistant_text = result_for_assistant.as_deref().expect("assistant text");
+
+        // A bare reference renders as unclickable plain text in chat, so the
+        // tool result has to hand the model ready-to-paste link syntax.
+        assert!(
+            assistant_text.contains(&format!("[Build Health]({reference})")),
+            "assistant text should carry a markdown link: {assistant_text}"
+        );
+    }
+
+    #[test]
+    fn canvas_link_label_stays_markdown_safe() {
+        assert_eq!(canvas_link_label("  Build Health  "), "Build Health");
+        assert_eq!(canvas_link_label(""), "Canvas");
+        assert_eq!(canvas_link_label("[Draft] Plan"), "(Draft) Plan");
     }
 
     #[tokio::test]

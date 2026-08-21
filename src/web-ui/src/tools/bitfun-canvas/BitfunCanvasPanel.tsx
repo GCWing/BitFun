@@ -7,6 +7,7 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { fileTabManager } from '@/shared/services/FileTabManager';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
+import { canvasArtifactRefSessionId } from '@/shared/utils/canvasArtifactRef';
 import { createLogger } from '@/shared/utils/logger';
 import type { WebElementContext } from '@/shared/types/context';
 import { readWidgetAppearancePayload } from '@/tools/generative-widget/appearancePayload';
@@ -112,12 +113,6 @@ function positiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
     ? value
     : undefined;
-}
-
-function sessionIdFromCanvasArtifactReference(artifactReference?: string): string | null {
-  if (!artifactReference) return null;
-  const match = /^bitfun-canvas:\/\/session\/([^/]+)\/canvas\/[^/]+$/.exec(artifactReference);
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 function canvasAutoRepairPrompt(params: {
@@ -248,12 +243,15 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   const reportedRuntimeErrorsRef = useRef(new Set<string>());
   const autoRepairRuntimeErrorsRef = useRef(new Set<string>());
   const loadedCanvasSignatureRef = useRef<string | null>(null);
-  const injectedFrameKeyRef = useRef<string | null>(null);
+  const armedFrameKeyRef = useRef<string | null>(null);
   const [sourceVisible, setSourceVisible] = useState(false);
   const [designMode, setDesignMode] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
   const [loadedCanvas, setLoadedCanvas] = useState<CanvasSnapshotValue | null>(null);
   const [frameReadyKey, setFrameReadyKey] = useState<string | null>(null);
+  // Surfaced in the empty state: a silent load failure is indistinguishable
+  // from "this canvas has no preview yet" and reads as a broken link.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const resolvedHtml = loadedCanvas?.compiledPayload?.html || html;
   const resolvedSource = loadedCanvas?.source?.source || source;
   const resolvedStatus = loadedCanvas?.artifact?.status || status;
@@ -351,6 +349,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     });
     const canvas = response.canvas ?? null;
     applyLoadedCanvas(canvas, reason);
+    setLoadError(null);
     return canvas;
   }, [
     applyLoadedCanvas,
@@ -378,7 +377,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     sourceRevisionSeen?: string;
   }) => {
     if (!artifactReference) return;
-    const targetSessionId = sessionIdFromCanvasArtifactReference(artifactReference);
+    const targetSessionId = canvasArtifactRefSessionId(artifactReference);
     if (!targetSessionId) {
       log.warn('Cannot auto-repair Canvas runtime error without artifact session id', {
         artifactReference,
@@ -535,6 +534,8 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
       if (cancelled) return;
     }).catch((error) => {
       log.warn('Failed to load Canvas artifact snapshot', { artifactReference, error });
+      if (cancelled) return;
+      setLoadError(error instanceof Error ? error.message : String(error));
     });
 
     return () => {
@@ -679,15 +680,23 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   useLayoutEffect(() => {
     if (!hasHtml || !artifactReference) {
       setFrameReadyKey(null);
-      injectedFrameKeyRef.current = null;
+      armedFrameKeyRef.current = null;
       return;
     }
-    iframeStatusRef.current = {
-      bootStarted: false,
-      moduleStarted: false,
-      ready: false,
-      runtimeError: false,
-    };
+    // Only a new document restarts the runtime handshake. This effect also re-runs
+    // whenever one of its many callback dependencies is rebuilt - a window focus
+    // refresh is enough - and clearing the flags of a frame that is already up
+    // would fire the startup watchdog below against a healthy canvas.
+    const isNewDocument = armedFrameKeyRef.current !== frameDocumentKey;
+    if (isNewDocument) {
+      armedFrameKeyRef.current = frameDocumentKey;
+      iframeStatusRef.current = {
+        bootStarted: false,
+        moduleStarted: false,
+        ready: false,
+        runtimeError: false,
+      };
+    }
 
     const handleMessage = async (event: MessageEvent) => {
       const iframeWindow = iframeRef.current?.contentWindow;
@@ -858,22 +867,24 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
 
     window.addEventListener('message', handleMessage);
     setFrameReadyKey(frameDocumentKey);
-    const timer = window.setTimeout(() => {
-      const status = iframeStatusRef.current;
-      if (renderedCanvas.runtime === 'react' && !status.moduleStarted && !status.ready && !status.runtimeError) {
-        log.warn('Canvas iframe did not report runtime startup', {
-          artifactReference,
-          runtime: renderedCanvas.runtime,
-          revision: renderedCanvas.revision,
-          renderedHtmlLength: renderedHtml?.length ?? 0,
-          frameTransport: 'document-write',
-          bootStarted: status.bootStarted,
-        });
-      }
-    }, 1200);
+    const timer = isNewDocument
+      ? window.setTimeout(() => {
+        const status = iframeStatusRef.current;
+        if (renderedCanvas.runtime === 'react' && !status.moduleStarted && !status.ready && !status.runtimeError) {
+          log.warn('Canvas iframe did not report runtime startup', {
+            artifactReference,
+            runtime: renderedCanvas.runtime,
+            revision: renderedCanvas.revision,
+            renderedHtmlLength: renderedHtml?.length ?? 0,
+            frameTransport: 'srcdoc',
+            bootStarted: status.bootStarted,
+          });
+        }
+      }, 1200)
+      : undefined;
     return () => {
       window.removeEventListener('message', handleMessage);
-      window.clearTimeout(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [
     artifactReference,
@@ -897,52 +908,41 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     workspacePath,
   ]);
 
-  useLayoutEffect(() => {
-    if (!isFrameReady || !renderedHtml) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
+  // The canvas scrolls inside its own document. WebKit rebuilds the compositor
+  // when the host window is hidden and shown again, and a frame whose document
+  // never went through a normal load can come back without its scroll node: the
+  // canvas stays painted but stops responding to the wheel, and only replacing
+  // the iframe element recovers it. Toggling `overflow` on the scrolling element
+  // forces the node to be rebuilt without discarding the document or the
+  // scroll offset.
+  useEffect(() => {
+    if (!isFrameReady) return undefined;
 
-    const doc = iframe.contentDocument;
-    if (!doc) {
-      log.warn('Canvas iframe document is unavailable for HTML injection', {
-        artifactReference,
-        runtime: renderedCanvas.runtime,
-        revision: renderedCanvas.revision,
-        frameTransport: 'document-write',
-      });
-      return;
-    }
+    const reviveFrameScrolling = () => {
+      // Not `instanceof HTMLElement`: the frame is a separate realm with its own
+      // constructors, so the host's would never match.
+      const frameDocument = iframeRef.current?.contentDocument;
+      const scroller = (frameDocument?.scrollingElement
+        ?? frameDocument?.documentElement) as HTMLElement | null | undefined;
+      if (!scroller?.style) return;
+      const { scrollTop } = scroller;
+      const restoreOverflowY = scroller.style.overflowY;
+      scroller.style.overflowY = 'hidden';
+      void scroller.offsetHeight;
+      scroller.style.overflowY = restoreOverflowY;
+      scroller.scrollTop = scrollTop;
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') reviveFrameScrolling();
+    };
 
-    try {
-      injectedFrameKeyRef.current = frameDocumentKey;
-      doc.open();
-      doc.write(renderedHtml);
-      doc.close();
-      log.info('Canvas iframe HTML written', {
-        artifactReference,
-        runtime: renderedCanvas.runtime,
-        revision: renderedCanvas.revision,
-        renderedHtmlLength: renderedHtml.length,
-        frameTransport: 'document-write',
-      });
-    } catch (error) {
-      injectedFrameKeyRef.current = null;
-      log.error('Failed to write Canvas iframe HTML', {
-        artifactReference,
-        runtime: renderedCanvas.runtime,
-        revision: renderedCanvas.revision,
-        frameTransport: 'document-write',
-        error,
-      });
-    }
-  }, [
-    artifactReference,
-    frameDocumentKey,
-    isFrameReady,
-    renderedCanvas.revision,
-    renderedCanvas.runtime,
-    renderedHtml,
-  ]);
+    window.addEventListener('focus', reviveFrameScrolling);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', reviveFrameScrolling);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isFrameReady]);
 
   useEffect(() => {
     if (!hasHtml) return;
@@ -968,7 +968,13 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           <AlertTriangle size={18} />
           <div>
             <h3>{resolvedTitle}</h3>
-            <p>Canvas preview is unavailable for this revision.</p>
+            <p>
+              {loadError
+                ? 'This Canvas could not be loaded. It may have been deleted, or it belongs to a session that is not available here.'
+                : 'Canvas preview is unavailable for this revision.'}
+            </p>
+            {loadError && <span className="bitfun-canvas-panel__error-detail">{loadError}</span>}
+            {artifactReference && <span>Reference: {artifactReference}</span>}
             {resolvedStatus && <span>Status: {resolvedStatus}</span>}
           </div>
         </div>
@@ -1028,16 +1034,21 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           data-bf-component="canvas-tool"
           data-bf-part="frame"
           title={resolvedTitle}
-          src="about:blank"
+          srcDoc={renderedHtml}
           sandbox="allow-scripts allow-same-origin"
           data-artifact-reference={artifactReference}
           onLoad={() => {
-            if (injectedFrameKeyRef.current !== frameDocumentKey) return;
+            // A srcdoc frame can still emit one load for the initial empty
+            // document; initializing against it would post the appearance and
+            // state to a window the runtime never sees.
+            const doc = iframeRef.current?.contentDocument;
+            if (!doc?.body?.firstChild) return;
             log.info('Canvas iframe loaded', {
               artifactReference,
               runtime: renderedCanvas.runtime,
               revision: renderedCanvas.revision,
-              frameTransport: 'document-write',
+              renderedHtmlLength: renderedHtml?.length ?? 0,
+              frameTransport: 'srcdoc',
             });
             void initializeIframe('load');
           }}
