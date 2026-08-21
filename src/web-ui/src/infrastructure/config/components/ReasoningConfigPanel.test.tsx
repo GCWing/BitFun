@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReasoningConfig } from '../types';
+import type { ReasoningCatalogProjection, ReasoningConfig } from '../types';
 import ReasoningConfigPanel from './ReasoningConfigPanel';
 
 const { projectReasoningCatalog } = vi.hoisted(() => ({
@@ -107,8 +107,12 @@ describe('ReasoningConfigPanel', () => {
     act(() => apply?.click());
 
     expect(onApply).toHaveBeenCalledWith({
-      catalog: { source: 'auto' },
-      presets: [{ id: 'custom', actions: [{ type: 'effort', value: 'high' }] }],
+      reasoning: {
+        catalog: { source: 'auto' },
+        presets: [{ id: 'custom', actions: [{ type: 'effort', value: 'high' }] }],
+      },
+      projectionCatalog: { source: 'auto' },
+      projection: undefined,
     });
   });
 
@@ -135,15 +139,17 @@ describe('ReasoningConfigPanel', () => {
   });
 
   it('refreshes generated presets after an explicit models.dev binding change', async () => {
+    const onApply = vi.fn();
+    const modelsDevProjection: ReasoningCatalogProjection = {
+      status: 'known',
+      presets: [
+        { id: 'low', label: 'Low', order: 0, source: 'models_dev', actions: [] },
+        { id: 'high', label: 'High', order: 1, source: 'models_dev', actions: [] },
+      ],
+    };
     projectReasoningCatalog
       .mockResolvedValueOnce({ status: 'unknown', presets: [] })
-      .mockResolvedValueOnce({
-        status: 'known',
-        presets: [
-          { id: 'low', label: 'Low', order: 0, source: 'models_dev', actions: [] },
-          { id: 'high', label: 'High', order: 1, source: 'models_dev', actions: [] },
-        ],
-      });
+      .mockResolvedValueOnce(modelsDevProjection);
 
     await act(async () => root.render(
       <ReasoningConfigPanel
@@ -154,7 +160,7 @@ describe('ReasoningConfigPanel', () => {
           baseUrl: 'https://gateway.example.com/v1',
         }}
         onCancel={vi.fn()}
-        onApply={vi.fn()}
+        onApply={onApply}
       />,
     ));
 
@@ -174,5 +180,18 @@ describe('ReasoningConfigPanel', () => {
     });
     expect(container.querySelector('[data-testid="generated-presets"]')?.textContent)
       .toBe('low,high');
+
+    const apply = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'reasoningPresets.apply');
+    act(() => apply?.click());
+
+    expect(onApply).toHaveBeenCalledWith({
+      reasoning: {
+        catalog: { source: 'models_dev', provider: 'openai', model: 'gpt-test' },
+        presets: [],
+      },
+      projectionCatalog: { source: 'models_dev', provider: 'openai', model: 'gpt-test' },
+      projection: modelsDevProjection,
+    });
   });
 });

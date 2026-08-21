@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/component-library';
-import type { ReasoningCatalogProjection, ReasoningConfig } from '../types';
+import type { ReasoningCatalogBinding, ReasoningCatalogProjection, ReasoningConfig } from '../types';
 import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api/AIApi';
 import { aiApi } from '@/infrastructure/api';
 import type { ReasoningCatalogProjectionRequest } from '@/infrastructure/api/service-api/AIApi';
@@ -20,7 +20,13 @@ interface ReasoningConfigPanelProps {
   projectionRequest?: Omit<ReasoningCatalogProjectionRequest, 'reasoning'>;
   requestFormatLabel?: string;
   onCancel: () => void;
-  onApply: (value: ReasoningConfig) => void;
+  onApply: (value: ReasoningConfigApplyResult) => void;
+}
+
+export interface ReasoningConfigApplyResult {
+  reasoning: ReasoningConfig;
+  projectionCatalog: ReasoningCatalogBinding;
+  projection?: ReasoningCatalogProjection | null;
 }
 
 export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
@@ -134,7 +140,15 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
           <Button variant="secondary" onClick={onCancel}>
             {t('actions.cancel')}
           </Button>
-          <Button variant="primary" disabled={invalid} onClick={() => onApply(draft)}>
+          <Button
+            variant="primary"
+            disabled={invalid}
+            onClick={() => onApply({
+              reasoning: draft,
+              projectionCatalog: draft.catalog ?? { source: 'auto' },
+              projection: activeGeneratedProjection,
+            })}
+          >
             {t('reasoningPresets.apply')}
           </Button>
         </div>
