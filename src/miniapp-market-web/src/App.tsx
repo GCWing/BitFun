@@ -32,7 +32,9 @@ import {
 } from '@phosphor-icons/react';
 import { downloadUrl, loginUrl, marketApi, MarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate, formatMarketDateTime } from './format';
+import { GetBitfunCta } from './GetBitfunCta';
 import { useLocale, type Locale, type MessageKey } from './i18n';
+import { BITFUN_HOME_URL } from './links';
 import { MiniAppIcon } from './MiniAppIcon';
 import { marketImageSrcSet, marketImageUrl, retryOriginalMarketImage } from './marketImages';
 import { useTheme, type Theme } from './theme';
@@ -191,7 +193,7 @@ function App() {
             <span>BitFun MiniApp Market</span>
           </div>
           <span className="footer-note">{t('footerNote')}</span>
-          <a href="https://openbitfun.com/" target="_blank" rel="noreferrer">
+          <a href={BITFUN_HOME_URL} target="_blank" rel="noreferrer">
             {t('bitfunHome')}
             <ArrowSquareOut aria-hidden="true" />
           </a>
@@ -453,6 +455,7 @@ function CatalogPage({
           </div>
           <h1>{t('headline')}</h1>
           <p>{t('intro')}</p>
+          <GetBitfunCta placement="catalog" t={t} />
         </div>
         <div className="hero-visual">
           <img src="/miniapp/og.png" alt={t('heroImageAlt')} />
@@ -775,6 +778,7 @@ function DetailPage({
               </button>
             )}
           </div>
+          <GetBitfunCta placement="listing" t={t} />
           <div className="rating-control" aria-label={t('ratingLabel')}>
             {[1, 2, 3, 4, 5].map((value) => (
               <button

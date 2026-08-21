@@ -63,6 +63,12 @@ const messages = {
     authCompleteBody: 'You can return to BitFun. This browser tab may be closed.',
     footerNote: 'Reviewed releases / Hash-locked packages / Manual updates',
     bitfunHome: 'BitFun home',
+    getBitfunTitle: 'New to BitFun?',
+    getBitfunCatalogNote:
+      'MiniApps run inside the BitFun desktop client. Download it once, then install anything from this market.',
+    getBitfunListingNote:
+      'This MiniApp runs inside the BitFun desktop client. Download it, then open the .bfminiapp package.',
+    getBitfunAction: 'Download BitFun',
     navigationLabel: 'Marketplace navigation',
     language: 'Language',
     changeLanguage: 'Change language',
@@ -207,6 +213,12 @@ const messages = {
     authCompleteBody: '现在可以返回 BitFun，并关闭这个浏览器标签页。',
     footerNote: '人工审核版本 / 哈希锁定安装包 / 手动更新',
     bitfunHome: 'BitFun 官网',
+    getBitfunTitle: '没有 BitFun？',
+    getBitfunCatalogNote:
+      'MiniApp 需要在 BitFun 客户端里运行。下载客户端后，就能安装市场里的任意 MiniApp。',
+    getBitfunListingNote:
+      '这个 MiniApp 需要在 BitFun 客户端里运行。下载客户端后，打开 .bfminiapp 安装包即可。',
+    getBitfunAction: '下载 BitFun 客户端',
     navigationLabel: '市场导航',
     language: '语言',
     changeLanguage: '切换语言',
@@ -350,6 +362,12 @@ const messages = {
     authCompleteBody: '現在可以返回 BitFun，並關閉這個瀏覽器分頁。',
     footerNote: '人工審核版本 / 雜湊鎖定安裝包 / 手動更新',
     bitfunHome: 'BitFun 官網',
+    getBitfunTitle: '還沒有 BitFun？',
+    getBitfunCatalogNote:
+      'MiniApp 需要在 BitFun 客戶端裡執行。下載客戶端後，就能安裝市場裡的任意 MiniApp。',
+    getBitfunListingNote:
+      '這個 MiniApp 需要在 BitFun 客戶端裡執行。下載客戶端後，開啟 .bfminiapp 安裝包即可。',
+    getBitfunAction: '下載 BitFun 客戶端',
     navigationLabel: '市場導覽',
     language: '語言',
     changeLanguage: '切換語言',
