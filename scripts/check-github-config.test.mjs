@@ -214,7 +214,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
 
   assert.equal(
     rustJob.needs,
-    undefined,
+    'rust-impact',
     'Rust validation must not wait for the frontend build',
   );
   assert.equal(
@@ -324,6 +324,144 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     commandByStep.get('Run search tool tests'),
     'cargo test --locked -p tool-runtime --lib search::',
   );
+});
+
+test('gates Rust and CLI validation behind one fail-closed impact decision', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8'),
+  );
+  for (const eventName of ['pull_request', 'push']) {
+    assert.deepEqual(
+      workflow.on[eventName]?.['paths-ignore'],
+      ['png/**'],
+      'nested Markdown may be a Rust compile-time input and must trigger classification',
+    );
+  }
+  const impactJob = workflow.jobs['rust-impact'];
+  const cliJob = workflow.jobs['cli-test'];
+  const rustJob = workflow.jobs['rust-build-check'];
+  const resultJob = workflow.jobs['rust-validation-result'];
+  const frontendJob = workflow.jobs['frontend-build'];
+
+  assert.equal(
+    frontendJob.steps.find((step) => step.name === 'Test core boundary contracts')?.run,
+    'pnpm run check:core-boundaries:test',
+  );
+  assert.equal(
+    frontendJob.steps.find((step) => step.name === 'Check core boundaries')?.run,
+    'pnpm run check:core-boundaries',
+  );
+
+  assert.equal(impactJob.name, 'Rust / CLI Impact');
+  assert.equal(impactJob['timeout-minutes'], 5);
+  assert.equal(
+    impactJob.outputs.rust_required,
+    '${{ steps.classify.outputs.rust_required }}',
+  );
+  const checkout = impactJob.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkout?.with?.['fetch-depth'], 0);
+  const classify = impactJob.steps.find((step) => step.id === 'classify');
+  assert.match(classify?.run ?? '', /scripts\/ci\/classify-rust-impact\.mjs/);
+  assert.equal(
+    classify?.env?.BASE_SHA,
+    '${{ github.event.pull_request.base.sha || github.event.before }}',
+  );
+  assert.equal(
+    classify?.env?.HEAD_SHA,
+    '${{ github.event.pull_request.head.sha || github.sha }}',
+  );
+  assert.equal(
+    classify?.env?.RANGE_MODE,
+    "${{ github.event_name == 'pull_request' && 'merge-base' || 'direct' }}",
+  );
+  assert.match(classify?.run ?? '', /--range-mode "\$RANGE_MODE"/);
+
+  for (const job of [cliJob, rustJob]) {
+    assert.equal(job.needs, 'rust-impact');
+    assert.match(job.if, /!cancelled\(\)/);
+    assert.doesNotMatch(job.if, /always\(\)/);
+    assert.match(job.if, /rust_required != 'false'/);
+  }
+
+  assert.equal(resultJob.name, 'Rust / CLI Validation');
+  assert.equal(resultJob.if, '${{ always() }}');
+  assert.deepEqual(
+    [...resultJob.needs].sort(),
+    ['cli-test', 'rust-build-check', 'rust-impact'],
+  );
+  const verify = resultJob.steps.find((step) => step.name === 'Verify Rust and CLI result');
+  assert.equal(verify?.env?.RUST_REQUIRED, '${{ needs.rust-impact.outputs.rust_required }}');
+  assert.equal(verify?.env?.IMPACT_RESULT, '${{ needs.rust-impact.result }}');
+  assert.equal(verify?.env?.CLI_RESULT, '${{ needs.cli-test.result }}');
+  assert.equal(verify?.env?.RUST_RESULT, '${{ needs.rust-build-check.result }}');
+  assert.equal(verify?.shell, 'pwsh');
+  assert.match(verify?.run ?? '', /expected skipped Rust and CLI jobs/i);
+  assert.match(verify?.run ?? '', /expected successful Rust and CLI jobs/i);
+
+  const statuses = ['success', 'skipped', 'failure', 'cancelled'];
+  const cases = [];
+  for (const impactResult of statuses.filter((status) => status !== 'success')) {
+    cases.push({
+      rustRequired: 'true',
+      impactResult,
+      cliResult: 'success',
+      rustResult: 'success',
+      expectedSuccess: false,
+    });
+  }
+  for (const rustRequired of ['false', 'true']) {
+    for (const cliResult of statuses) {
+      for (const rustResult of statuses) {
+        cases.push({
+          rustRequired,
+          impactResult: 'success',
+          cliResult,
+          rustResult,
+          expectedSuccess: rustRequired === 'false'
+            ? cliResult === 'skipped' && rustResult === 'skipped'
+            : cliResult === 'success' && rustResult === 'success',
+        });
+      }
+    }
+  }
+  cases.push({
+    rustRequired: '',
+    impactResult: 'success',
+    cliResult: 'skipped',
+    rustResult: 'skipped',
+    expectedSuccess: false,
+  });
+  const truthTable = spawnSync(
+    'pwsh',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `$cases = ConvertFrom-Json @'
+${JSON.stringify(cases)}
+'@
+$verify = {
+${verify.run}
+}
+foreach ($case in $cases) {
+  $env:RUST_REQUIRED = [string]$case.rustRequired
+  $env:IMPACT_RESULT = [string]$case.impactResult
+  $env:CLI_RESULT = [string]$case.cliResult
+  $env:RUST_RESULT = [string]$case.rustResult
+  $succeeded = $true
+  try { & $verify } catch { $succeeded = $false }
+  if ($succeeded -ne [bool]$case.expectedSuccess) {
+    throw "Unexpected result: $($case | ConvertTo-Json -Compress) succeeded=$succeeded"
+  }
+}`,
+    ],
+    {
+      cwd: repoRoot,
+      env: process.env,
+      encoding: 'utf8',
+    },
+  );
+  assert.equal(truthTable.status, 0, `${truthTable.stdout}${truthTable.stderr}`);
 });
 
 test('generates web API bindings before nightly web type-check', () => {

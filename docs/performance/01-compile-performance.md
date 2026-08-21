@@ -381,7 +381,19 @@ Web 实际引用的 19 个直接类型及其递归导入闭包保持生成内容
 
 ### 3.4 CI 与本地验证
 
-- 现有 CI 已覆盖 workspace check、Core/Desktop lib、平台敏感 owner 测试和独立 runtime/CLI 验证；本轮不新增 job、矩阵或 changed-path 分类器。
+- 现有 CI 覆盖 workspace check、Core/Desktop lib、平台敏感 owner 测试和独立 runtime/CLI 验证。四次成功的纯 Web `main` 样本中，两个 CLI job 与三个 Rust Build Check job 没有消费变更，却合计占用 `58.9–68.2` runner-minutes；最长单 job 为 `17.3–22.7` 分钟。runner-minutes 为五个 job 的 `completed_at - started_at` 之和，不等于可直接相加的用户等待时间。
+
+| main 样本 | CI run | Rust + CLI runner-minutes | 最长 Rust/CLI job |
+|---|---:|---:|---:|
+| `b3eb18b5`（2026-08-20） | 32350538939 | 62.6 | 21.8 min |
+| `f43611e7`（2026-08-20） | 32348769484 | 58.9 | 17.3 min |
+| `b1d7c6b9`（2026-08-17） | 32018012719 | 67.1 | 22.7 min |
+| `b5ed01e3`（2026-08-17） | 31989419631 | 68.2 | 21.0 min |
+
+- 当前 CI 增加一个无依赖安装的影响分类 job 和一个稳定结果汇总 job，不增加平台矩阵。只有活动路径全部属于 `src/web-ui/**` 才跳过上述五个 Rust/CLI job；仓库根目录/`docs/**` Markdown 与 `png/**` 作为已知中性路径。其他嵌套 Markdown 可能被 Rust 编译期嵌入，因此 workflow 不再宽泛忽略全部 Markdown，它们与 `.github/**`、`scripts/**`、其他 Web 产品、Rust/build 输入和未知路径一样运行完整矩阵；diff 不可验证时也 fail-closed。PR 按 merge-base range 分类，`main` push 按 before/head direct range 分类。
+- Desktop 的 Rust 测试不再编译期读取 Web API 源码；Desktop 注册与 Web 调用分别在各自 owner 验证。影响分类在 diff 前扫描 Git 跟踪的全仓 Rust 源码；除精确登记的既有测试 fixture 外，任何非注释 `web-ui` 路径 token 都直接使分类失败，因此目录嵌入、分段路径和间接读取也不能绕过。Frontend job 另行执行 boundary contract tests 与真实 repository check。
+- 昂贵的 Rust/CLI 子 job 在 concurrency cancellation 时不再启动；轻量汇总始终读取上游 result，把分类失败、取消、异常 skipped 和 matrix 失败统一报告为失败。该汇总目前只是在已触发 CI run 内提供稳定结果；workflow 仍忽略 `png/**`，接入全局 required check 前必须先补齐所有受保护提交的 trigger 覆盖。
+- 本 PR 自身修改 CI、脚本和 Rust 边界，因此按设计必须运行完整 Rust/CLI matrix。跳过后的实际 runner-minutes 与等待时间要等合入后的首个纯 Web PR/main run 再记录；当前只能报告历史可避免成本和目标调度行为，不能把目标值表述为已实测收益。
 - CI 不负责穷举所有测试；新增验证只有具备独立 owner、平台矩阵或失败归因价值时才进入既有流水线，否则由最近模块的 focused command 维护。
 - 本地从 owner 文档的最小 package/target/feature 入口开始；仅名称过滤不能阻止无关 target 编译。
 - CI 收敛必须先有多次 job/step 耗时、缓存状态和失败历史；`SKIPPED`、未触发或只编译未运行都不算通过证据。
@@ -394,7 +406,7 @@ Web 实际引用的 19 个直接类型及其递归导入闭包保持生成内容
 | 开发循环 | mobile-web 支持输入 mtime 短路；Vite 默认使用原生文件事件；前端准备步骤已并行 |
 | Rust profile | release 使用 thin LTO；dev 使用 `line-tables-only` 和高 codegen-units，并保留调试逃生口 |
 | 可复现解析 | 根 lockfile 已提交，普通 CI 使用 `--locked`；build.rs 输出已排序 |
-| CI 拓扑 | Rust job 不再等待完整前端构建，自建 Tauri 检查所需资源目录 |
+| CI 拓扑 | Rust job 不再等待完整前端构建，自建 Tauri 检查所需资源目录；经 fail-closed 证明的纯 Web 变更跳过 Rust/CLI matrix，并由稳定结果 job 汇总 |
 | 依赖收敛 | Desktop 直接 image 版本和 Reqwest TLS 双栈已治理 |
 | Agent Runtime 闭包 | Core 基线不再暗带具体 capability；完整产品和 CLI 显式保持原能力，ACP 退出未选择闭包 |
 | Core/ACP 默认与角色 | Core 默认 feature 为空；ACP 默认精确保持 client + server，Desktop client-only、CLI 双角色均由现有边界检查锁定 |
@@ -417,7 +429,7 @@ Web 实际引用的 19 个直接类型及其递归导入闭包保持生成内容
 
 | 范围 | 启动条件 |
 |---|---|
-| CI 收敛 | 先积累多次相同 owner 的 step wall-clock、cache hit/miss 和失败历史；只有能证明收益且不会静默缩小覆盖时再独立设计 |
+| CI 收敛 | 观察首个合入后的纯 Web PR/main 样本，核对五个 Rust/CLI job 均为 skipped、稳定汇总通过且 Frontend Build 正常；只有出现新的同类浪费和充分证据时才扩大范围 |
 | Desktop 截图后端 | 新候选同时满足三平台行为等价、区域捕获无性能回退、系统依赖可 feature-gate，且根 lock package 不增加 |
 | App Server / Server | 观察 protocol 单一 schema owner 合入后的 Frontend Build 样本；没有新的生产 owner 或稳定行为收益前，不继续拆 handler 路径 |
 | 其他产品入口重型 capability | 证明入口不消费该能力，具备 typed unsupported/fallback 行为，并能让一个真实重依赖子图退出 |
