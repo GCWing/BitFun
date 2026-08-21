@@ -596,12 +596,10 @@ mod tests {
 
     #[test]
     fn screenshot_rejects_formats_outside_png_jpeg_and_webp() {
-        let mut output = Cursor::new(Vec::new());
-        image::DynamicImage::new_rgb8(2, 2)
-            .write_to(&mut output, image::ImageFormat::Bmp)
-            .unwrap();
         assert_eq!(
-            validate_screenshot(&output.into_inner()).unwrap_err().code,
+            validate_screenshot(b"BM\0\0\0\0\0\0\0\0\0\0")
+                .unwrap_err()
+                .code,
             "unsupported_screenshot_format"
         );
     }

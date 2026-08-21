@@ -102,7 +102,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             pkg-config \
             build-essential \
-            libssl-dev \
             libxcb1-dev \
             libxcb-render0-dev \
             libxcb-shape0-dev \

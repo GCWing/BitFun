@@ -77,12 +77,12 @@ thiserror = { workspace = true }
 futures = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
-tower-http = { workspace = true }
+tower-http = { workspace = true, features = ["fs"] }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
 screenshots = { workspace = true }
 enigo = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, features = ["jpeg", "png"] }
 resvg = { workspace = true }
 tempfile = { workspace = true }
 

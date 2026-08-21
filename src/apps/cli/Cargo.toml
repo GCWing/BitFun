@@ -120,7 +120,7 @@ flate2 = { workspace = true }
 futures-util = { workspace = true }
 fs2 = { workspace = true }
 base64 = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 minisign-verify = "0.2"
 reqwest = { workspace = true, features = ["http2", "rustls", "stream"] }
 sha2 = { workspace = true }

@@ -42,10 +42,6 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 win32job = { workspace = true, optional = true }
 windows = { workspace = true, optional = true }
 
-# Keep libgit2 self-contained on Unix, matching the product assembly dependency.
-[target.'cfg(not(windows))'.dependencies]
-git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
-
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, optional = true }
 

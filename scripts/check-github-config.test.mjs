@@ -543,3 +543,18 @@ test('nightly and beta use the shared build-version projection', () => {
   );
   assert.match(signingStep.run, /write-minisign-public-key\.mjs/);
 });
+
+test('Linux Rust workflows do not install an unused native OpenSSL toolchain', () => {
+  for (const workflowPath of [
+    '.github/workflows/ci.yml',
+    '.github/workflows/cli-package-manual.yml',
+    '.github/workflows/linux-binaries.yml',
+  ]) {
+    const workflow = readFileSync(path.join(repoRoot, workflowPath), 'utf8');
+    assert.doesNotMatch(
+      workflow,
+      /\blibssl-dev\b/,
+      `${workflowPath} must rely on the reviewed Cargo-owned Git2 build profile`,
+    );
+  }
+});
