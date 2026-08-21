@@ -122,6 +122,18 @@ describe('SessionsSection layout styles', () => {
     }
   });
 
+  it('indents child connectors from the parent session text rail', () => {
+    const stylesheet = readSessionsSectionStylesheet();
+
+    expect(stylesheet).toContain(
+      'padding-left: calc(var(--bf-nav-session-rail) + 14px);',
+    );
+    expect(
+      stylesheet.match(/left: calc\(var\(--bf-nav-session-rail\) \+ 2px\);/g),
+    ).toHaveLength(2);
+    expect(stylesheet).not.toContain('left: 8px;');
+  });
+
   it('keeps the remaining session count in a compact trailing chip', () => {
     const stylesheet = readSessionsSectionStylesheet();
     const countBlock = extractBlock(stylesheet, '&__inline-toggle-count');
