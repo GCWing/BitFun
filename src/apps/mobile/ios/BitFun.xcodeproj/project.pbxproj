@@ -1,0 +1,84 @@
+// !$*UTF8*$!
+{
+  archiveVersion = 1;
+  classes = {
+  };
+  objectVersion = 56;
+  objects = {
+
+/* Begin PBXBuildFile section */
+    A10000000000000000000001 /* BitFunApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* BitFunApp.swift */; };
+    A10000000000000000000002 /* MobileAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* MobileAppModel.swift */; };
+    A10000000000000000000003 /* BitFunTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* BitFunTheme.swift */; };
+    A10000000000000000000004 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* SidebarView.swift */; };
+    A10000000000000000000005 /* ConversationHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* ConversationHeader.swift */; };
+    A10000000000000000000006 /* ChatTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* ChatTimelineView.swift */; };
+    A10000000000000000000007 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* ComposerBar.swift */; };
+    A10000000000000000000008 /* MobileShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* MobileShellView.swift */; };
+    A10000000000000000000010 /* MobileCoreAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* MobileCoreAdapter.swift */; };
+    A10000000000000000000011 /* BitFunMobileCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* BitFunMobileCore.xcframework */; };
+    A10000000000000000000012 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* libsqlite3.tbd */; };
+    A10000000000000000000009 /* Resources.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* Resources.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+    B10000000000000000000000 /* BitFun.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BitFun.app; sourceTree = BUILT_PRODUCTS_DIR; };
+    B10000000000000000000001 /* BitFunApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitFunApp.swift; sourceTree = "<group>"; };
+    B10000000000000000000002 /* MobileAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAppModel.swift; sourceTree = "<group>"; };
+    B10000000000000000000003 /* BitFunTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitFunTheme.swift; sourceTree = "<group>"; };
+    B10000000000000000000004 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+    B10000000000000000000005 /* ConversationHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHeader.swift; sourceTree = "<group>"; };
+    B10000000000000000000006 /* ChatTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTimelineView.swift; sourceTree = "<group>"; };
+    B10000000000000000000007 /* ComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerBar.swift; sourceTree = "<group>"; };
+    B10000000000000000000008 /* MobileShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileShellView.swift; sourceTree = "<group>"; };
+    B10000000000000000000010 /* MobileCoreAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCoreAdapter.swift; sourceTree = "<group>"; };
+    B10000000000000000000011 /* BitFunMobileCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "../../shared/core-feature/build/XCFrameworks/debug/BitFunMobileCore.xcframework"; sourceTree = "<group>"; };
+    B10000000000000000000012 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.text-based-dylib-definition; name = libsqlite3.tbd; path = "$(SDKROOT)/usr/lib/libsqlite3.tbd"; sourceTree = SDKROOT; };
+    B10000000000000000000009 /* Resources.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+    C10000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( A10000000000000000000011 /* BitFunMobileCore.xcframework in Frameworks */, A10000000000000000000012 /* libsqlite3.tbd in Frameworks */ ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+    D10000000000000000000000 = {isa = PBXGroup; children = (D10000000000000000000001 /* BitFun */, D10000000000000000000009 /* Products */); sourceTree = "<group>"; };
+    D10000000000000000000001 /* BitFun */ = {isa = PBXGroup; children = (D10000000000000000000002 /* App */, D10000000000000000000003 /* Features */, D10000000000000000000008 /* Infrastructure */, B10000000000000000000009 /* Resources.xcassets */, B10000000000000000000011 /* BitFunMobileCore.xcframework */, B10000000000000000000012 /* libsqlite3.tbd */); path = BitFun; sourceTree = "<group>"; };
+    D10000000000000000000002 /* App */ = {isa = PBXGroup; children = (B10000000000000000000001 /* BitFunApp.swift */); path = App; sourceTree = "<group>"; };
+    D10000000000000000000003 /* Features */ = {isa = PBXGroup; children = (D10000000000000000000004 /* Chat */, D10000000000000000000005 /* Shell */); path = Features; sourceTree = "<group>"; };
+    D10000000000000000000004 /* Chat */ = {isa = PBXGroup; children = (B10000000000000000000005 /* ConversationHeader.swift */, B10000000000000000000006 /* ChatTimelineView.swift */, B10000000000000000000007 /* ComposerBar.swift */); path = Chat; sourceTree = "<group>"; };
+    D10000000000000000000005 /* Shell */ = {isa = PBXGroup; children = (B10000000000000000000003 /* BitFunTheme.swift */, B10000000000000000000004 /* SidebarView.swift */, B10000000000000000000008 /* MobileShellView.swift */); path = Shell; sourceTree = "<group>"; };
+    D10000000000000000000008 /* Infrastructure */ = {isa = PBXGroup; children = (B10000000000000000000002 /* MobileAppModel.swift */, B10000000000000000000010 /* MobileCoreAdapter.swift */); path = Infrastructure; sourceTree = "<group>"; };
+    D10000000000000000000009 /* Products */ = {isa = PBXGroup; children = (B10000000000000000000000 /* BitFun.app */); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+    E10000000000000000000001 /* BitFun */ = {isa = PBXNativeTarget; buildConfigurationList = F10000000000000000000002 /* Build configuration list for PBXNativeTarget "BitFun" */; buildPhases = (C10000000000000000000002 /* Sources */, C10000000000000000000001 /* Frameworks */, C10000000000000000000003 /* Resources */); buildRules = ( ); dependencies = ( ); name = BitFun; productName = BitFun; productReference = B10000000000000000000000 /* BitFun.app */; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+    E10000000000000000000000 /* Project object */ = {isa = PBXProject; attributes = {LastUpgradeCheck = 1640; TargetAttributes = {E10000000000000000000001 = {CreatedOnToolsVersion = 16.4; }; }; }; buildConfigurationList = F10000000000000000000001 /* Build configuration list for PBXProject "BitFun" */; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = D10000000000000000000000; productRefGroup = D10000000000000000000009 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (E10000000000000000000001 /* BitFun */); };
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+    C10000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000010); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+    C10000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000009); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+    F10000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; DEVELOPMENT_TEAM = ""; FRAMEWORK_SEARCH_PATHS = ( "$(SRCROOT)/../shared/core-feature/build/XCFrameworks/debug" ); INFOPLIST_FILE = BitFun/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.bitfun.mobile.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+    F10000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; DEVELOPMENT_TEAM = ""; FRAMEWORK_SEARCH_PATHS = ( "$(SRCROOT)/../shared/core-feature/build/XCFrameworks/debug" ); INFOPLIST_FILE = BitFun/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.bitfun.mobile.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+    F10000000000000000000005 /* Target Debug */ = {isa = XCBuildConfiguration; buildSettings = {SDKROOT = iphoneos; }; name = Debug; };
+    F10000000000000000000006 /* Target Release */ = {isa = XCBuildConfiguration; buildSettings = {SDKROOT = iphoneos; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+    F10000000000000000000001 /* Build configuration list for PBXProject "BitFun" */ = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000003 /* Debug */, F10000000000000000000004 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+    F10000000000000000000002 /* Build configuration list for PBXNativeTarget "BitFun" */ = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000005 /* Target Debug */, F10000000000000000000006 /* Target Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+  };
+  rootObject = E10000000000000000000000 /* Project object */;
+}

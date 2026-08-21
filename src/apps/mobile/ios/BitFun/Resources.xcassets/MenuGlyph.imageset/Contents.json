@@ -1,0 +1,10 @@
+{
+  "images" : [
+    {
+      "filename" : "gpt_home_menu_glyph.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

@@ -1,0 +1,10 @@
+{
+  "images" : [
+    {
+      "filename" : "remote_ref_more.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}
