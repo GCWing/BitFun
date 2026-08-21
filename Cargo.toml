@@ -121,7 +121,7 @@ regex = "1"
 base64 = "0.22"
 # Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.
 bitflags = "=2.11.1"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+image = { version = "0.25", default-features = false }
 md5 = "0.7"
 dashmap = "6"
 indexmap = "2"
@@ -138,8 +138,8 @@ reqwest = { version = "0.13.4", default-features = false }
 semver = "1.0"
 
 # Debug Log HTTP Server
-axum = { version = "0.8", features = ["json", "ws"] }
-tower-http = { version = "0.6.11", features = ["cors", "fs"] }
+axum = { version = "0.8", features = ["json"] }
+tower-http = "0.6.11"
 
 # File system
 glob = "0.3"
@@ -163,7 +163,7 @@ zstd = "0.13"
 toml = "0.9"
 
 # Git
-git2 = { version = "0.21", default-features = false, features = ["https", "vendored-libgit2"] }
+git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }
 
 # Terminal
 portable-pty = "0.8"
@@ -259,7 +259,7 @@ hostname = "0.4"
 qrcode = { version = "0.14", default-features = false }
 
 # WebSocket client
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+tokio-tungstenite = "0.29"
 
 # Local speech recognition
 sherpa-onnx = "1.13.4"
