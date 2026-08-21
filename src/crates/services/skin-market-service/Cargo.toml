@@ -15,7 +15,7 @@ base64 = { workspace = true }
 bitfun-product-domains = { path = "../../contracts/product-domains", features = ["appearance-market"] }
 chrono = { workspace = true }
 hex = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 hmac = { workspace = true }
 reqwest = { workspace = true, features = ["http2", "json", "rustls"] }
 semver = { workspace = true }

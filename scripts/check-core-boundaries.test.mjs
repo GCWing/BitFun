@@ -14,10 +14,13 @@ import {
   findFeatureGatedTestTargetViolations,
   findProductEntrypointCoreFeatureViolations,
   findReqwestDependencyFeatureViolations,
+  findResolvedThirdPartyCapabilityFeatureViolations,
   findRuntimeServicesTestSupportFeatureViolations,
   findResolvedReqwestNativeTlsViolations,
+  findServicesIntegrationsPlatformDependencyFeatureViolations,
   findServicesIntegrationsReqwestFeatureViolations,
   findServicesIntegrationsTokioFeatureViolations,
+  findThirdPartyCapabilityFeatureViolations,
   findTokioDependencyFeatureViolations,
 } from './core-boundaries/cargo-dependency-boundaries.mjs';
 import {
@@ -2681,6 +2684,182 @@ test('Reqwest consumers inherit the workspace version without duplicating featur
   }
 });
 
+test('third-party capability profiles reject ambient feature unions and unreviewed owners', () => {
+  const validPackages = [
+    packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [{
+      name: 'image',
+      kind: null,
+      optional: false,
+      uses_default_features: false,
+      features: ['gif', 'jpeg', 'png', 'webp'],
+    }]),
+    packageAt('bitfun-server', 'src/apps/server/Cargo.toml', [{
+      name: 'axum',
+      kind: null,
+      optional: false,
+      uses_default_features: true,
+      features: ['json', 'ws'],
+    }]),
+    packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml', [{
+      name: 'tokio-tungstenite',
+      kind: null,
+      optional: true,
+      uses_default_features: true,
+      features: [],
+    }]),
+    packageAt('bitfun-services-core', 'src/crates/services/services-core/Cargo.toml', [{
+      name: 'git2',
+      kind: null,
+      optional: true,
+      uses_default_features: false,
+      features: ['vendored-libgit2'],
+    }]),
+  ];
+
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations(validPackages), []);
+
+  const mutatedPackages = structuredClone(validPackages);
+  mutatedPackages[0].dependencies[0].features.push('bmp');
+  mutatedPackages[1].dependencies[0].features = ['json'];
+  mutatedPackages[2].dependencies[0].features.push('rustls-tls-native-roots');
+  mutatedPackages[3].dependencies[0].features.push('https');
+  mutatedPackages[3].dependencies[0].rename = 'private-git2';
+  mutatedPackages.push(packageAt('future-image-owner', 'src/apps/future/Cargo.toml', [{
+    name: 'image',
+    kind: null,
+    optional: false,
+    uses_default_features: false,
+    features: ['png'],
+  }]));
+
+  const messages = findThirdPartyCapabilityFeatureViolations(mutatedPackages)
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /bitfun-cli Image dependency has unexpected features: bmp/);
+  assert.match(messages, /bitfun-server Axum dependency missing features: ws/);
+  assert.match(messages, /bitfun-core Tokio Tungstenite dependency has unexpected features: rustls-tls-native-roots/);
+  assert.match(messages, /bitfun-services-core Git2 dependency has unexpected features: https/);
+  assert.match(messages, /bitfun-services-core Git2 dependency does not match its reviewed owner shape/);
+  assert.match(messages, /future-image-owner Image dependency is missing a reviewed owner profile/);
+});
+
+test('services integrations image codecs stay attached to exact product owners', () => {
+  const pkg = {
+    ...packageAt('bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', [{
+      name: 'image',
+      kind: null,
+      optional: true,
+      uses_default_features: false,
+      features: [],
+    }]),
+    features: {
+      image: ['dep:image'],
+      'miniapp-market': ['image', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'],
+      'remote-connect': [
+        'image',
+        'image/bmp',
+        'image/gif',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      ],
+    },
+  };
+
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations([pkg]), []);
+
+  const mutated = structuredClone(pkg);
+  mutated.features.image.push('image/png');
+  mutated.features['miniapp-market'].push('image/bmp');
+  mutated.features['remote-connect'] = mutated.features['remote-connect']
+    .filter((reference) => reference !== 'image/gif');
+  mutated.features.default = ['image/png'];
+  const messages = findThirdPartyCapabilityFeatureViolations([mutated])
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /miniapp-market.*unexpected Image capabilities: bmp/);
+  assert.match(messages, /remote-connect.*missing Image capabilities: gif/);
+  assert.match(messages, /default enables Image outside its reviewed owner features/);
+  assert.match(messages, /image shared Image activation alias must not select capabilities: png/);
+});
+
+test('services integrations WebSocket TLS stays attached to remote-connect', () => {
+  const pkg = {
+    ...packageAt('bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', [{
+      name: 'tokio-tungstenite',
+      kind: null,
+      optional: true,
+      uses_default_features: true,
+      features: [],
+    }]),
+    features: {
+      'remote-connect': [
+        'dep:tokio-tungstenite',
+        'tokio-tungstenite?/rustls-tls-native-roots',
+      ],
+    },
+  };
+
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations([pkg]), []);
+
+  const mutated = structuredClone(pkg);
+  mutated.features['tokio-tungstenite'] = ['dep:tokio-tungstenite'];
+  mutated.features['future-non-remote-owner'] = ['dep:tokio-tungstenite'];
+  const messages = findThirdPartyCapabilityFeatureViolations([mutated])
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /future-non-remote-owner enables Tokio Tungstenite outside its reviewed owner features/);
+  assert.match(messages, /tokio-tungstenite enables Tokio Tungstenite outside its reviewed owner features/);
+});
+
+test('resolved third-party feature unions reject global capability regressions', () => {
+  const validRecords = [
+    {
+      name: 'git2',
+      version: '0.21.0',
+      features: ['vendored-libgit2'],
+    },
+    {
+      name: 'image',
+      version: '0.24.9',
+      features: ['default', 'exr', 'tiff'],
+    },
+    {
+      name: 'image',
+      version: '0.25.10',
+      features: ['bmp', 'gif', 'jpeg', 'png', 'tiff', 'webp'],
+    },
+    {
+      name: 'libgit2-sys',
+      version: '0.18.7+1.9.6',
+      features: ['vendored'],
+    },
+  ];
+
+  assert.deepEqual(
+    findResolvedThirdPartyCapabilityFeatureViolations(validRecords, { root: TEST_ROOT }),
+    [],
+  );
+
+  const mutated = structuredClone(validRecords);
+  mutated[0].features.push('https', 'vendored-openssl');
+  mutated[2].features.push('exr');
+  mutated[3].features.push('https', 'openssl-sys', 'vendored-openssl');
+  mutated.push({
+    name: 'image',
+    version: '0.26.0',
+    features: ['avif', 'default', 'exr'],
+  });
+  const messages = findResolvedThirdPartyCapabilityFeatureViolations(
+    mutated,
+    { root: TEST_ROOT },
+  ).map((violation) => violation.message).join('\n');
+  assert.match(messages, /resolved git2.*https, vendored-openssl/);
+  assert.match(messages, /resolved image 0\.25\.10.*exr/);
+  assert.match(messages, /resolved libgit2-sys.*https, openssl-sys, vendored-openssl/);
+  assert.match(messages, /resolved image 0\.26\.0 uses an unreviewed version family/);
+});
+
 test('resolved Reqwest feature union rejects every native TLS backend alias', () => {
   const violations = findResolvedReqwestNativeTlsViolations(
     [
@@ -3612,6 +3791,53 @@ test('services-core Windows API capabilities stay feature-owned', async () => {
     ]),
     [],
   );
+});
+
+test('services-integrations Windows dependency keeps only APIs used by its owners', () => {
+  const pkg = packageAt(
+    'bitfun-services-integrations',
+    'src/crates/services/services-integrations/Cargo.toml',
+    [{
+      name: 'windows',
+      kind: null,
+      optional: true,
+      target: 'cfg(windows)',
+      features: [
+        'Win32_Foundation',
+        'Win32_Storage_FileSystem',
+        'Win32_System_Diagnostics_ToolHelp',
+      ],
+    }],
+  );
+
+  const violations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /unexpected Windows API capabilities: Win32_System_Diagnostics_ToolHelp/);
+
+  pkg.dependencies[0].features = ['Win32_Foundation', 'Win32_Storage_FileSystem'];
+  assert.deepEqual(findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]), []);
+
+  pkg.dependencies[0].target = 'cfg(all(windows, target_arch = "x86_64"))';
+  const targetViolations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(targetViolations.length, 1);
+  assert.match(targetViolations[0].message, /must declare exactly one reviewed Windows dependency/);
+
+  pkg.dependencies[0].target = 'cfg(windows)';
+  pkg.dependencies.push({
+    name: 'windows',
+    kind: null,
+    optional: false,
+    target: null,
+    features: ['Win32_System_Threading'],
+  });
+  const duplicateViolations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(duplicateViolations.length, 1);
+  assert.match(duplicateViolations[0].message, /must declare exactly one reviewed Windows dependency/);
+
+  pkg.dependencies = [];
+  const missingViolations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(missingViolations.length, 1);
+  assert.match(missingViolations[0].message, /must declare exactly one reviewed Windows dependency/);
 });
 
 test('closed feature profiles reject product-full hidden behind a child feature', async () => {

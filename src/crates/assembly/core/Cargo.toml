@@ -32,7 +32,7 @@ chrono-tz = { workspace = true, optional = true }
 cron = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
-image = { workspace = true, optional = true }
+image = { workspace = true, features = ["bmp", "gif", "jpeg", "png", "webp"], optional = true }
 md5 = { workspace = true, optional = true }
 hex = { workspace = true }
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
