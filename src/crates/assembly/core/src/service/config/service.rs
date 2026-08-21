@@ -637,6 +637,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn review_team_policy_config_survives_service_restart() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            dir.path().join("review-team-concurrency"),
+        ));
+        let settings = || ConfigManagerSettings {
+            path_manager: Some(path_manager.clone()),
+            auto_save: true,
+            backup_count: 0,
+        };
+
+        let service = ConfigService::with_settings(settings())
+            .await
+            .expect("config service should start");
+        service
+            .set_config(
+                "ai.review_teams.default",
+                serde_json::json!({
+                    "max_retries_per_role": 2,
+                    "max_parallel_reviewers": 1,
+                    "max_queue_wait_seconds": 45,
+                    "allow_provider_capacity_queue": false,
+                    "allow_bounded_auto_retry": true,
+                    "auto_retry_elapsed_guard_seconds": 240,
+                }),
+            )
+            .await
+            .expect("review team concurrency config should save");
+
+        let persisted: serde_json::Value = serde_json::from_str(
+            &tokio::fs::read_to_string(path_manager.app_config_file())
+                .await
+                .expect("review team config should be persisted"),
+        )
+        .expect("persisted config should be valid JSON");
+        let persisted_team = &persisted["ai"]["review_teams"]["default"];
+        assert_eq!(persisted_team["max_retries_per_role"], serde_json::json!(2));
+        assert_eq!(
+            persisted_team["max_parallel_reviewers"],
+            serde_json::json!(1)
+        );
+        assert_eq!(
+            persisted_team["max_queue_wait_seconds"],
+            serde_json::json!(45)
+        );
+        assert_eq!(
+            persisted_team["allow_provider_capacity_queue"],
+            serde_json::json!(false)
+        );
+        assert_eq!(
+            persisted_team["allow_bounded_auto_retry"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            persisted_team["auto_retry_elapsed_guard_seconds"],
+            serde_json::json!(240)
+        );
+
+        drop(service);
+        let reloaded_service = ConfigService::with_settings(settings())
+            .await
+            .expect("config service should reload");
+        let reloaded: serde_json::Value = reloaded_service
+            .get_config(Some("ai.review_teams.default"))
+            .await
+            .expect("review team config should be readable after reload");
+        assert_eq!(reloaded["max_retries_per_role"], serde_json::json!(2));
+        assert_eq!(reloaded["max_parallel_reviewers"], serde_json::json!(1));
+        assert_eq!(reloaded["max_queue_wait_seconds"], serde_json::json!(45));
+        assert_eq!(
+            reloaded["allow_provider_capacity_queue"],
+            serde_json::json!(false)
+        );
+        assert_eq!(
+            reloaded["allow_bounded_auto_retry"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            reloaded["auto_retry_elapsed_guard_seconds"],
+            serde_json::json!(240)
+        );
+    }
+
+    #[tokio::test]
     async fn compare_and_set_json_config_rejects_a_stale_snapshot() {
         let (service, _dir) = test_service("config-cas").await;
         assert!(service
