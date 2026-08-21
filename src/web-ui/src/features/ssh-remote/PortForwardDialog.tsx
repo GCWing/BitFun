@@ -238,7 +238,11 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
         data-bf-component="ssh-remote"
         data-bf-part="portForward"
       >
-        <div className="port-forward-dialog__intro" data-bf-part="portForwardIntro">
+        <div
+          className="port-forward-dialog__intro"
+          data-bf-component="ssh-remote"
+          data-bf-part="portForwardIntro"
+        >
           <Network size={18} aria-hidden="true" />
           <p>{t('ssh.portForward.intro')}</p>
         </div>
@@ -319,7 +323,11 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
           </div>
         </section>
 
-        <section className="port-forward-dialog__section" data-bf-part="portForwardTable">
+        <section
+          className="port-forward-dialog__section"
+          data-bf-component="ssh-remote"
+          data-bf-part="portForwardTable"
+        >
           <div className="port-forward-dialog__section-header">
             <span>{t('ssh.portForward.activeTitle')}</span>
           </div>
