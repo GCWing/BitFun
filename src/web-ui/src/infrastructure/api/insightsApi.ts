@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { api } from './service-api/ApiClient';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { openPath } from '@tauri-apps/plugin-opener';
 
@@ -176,29 +176,29 @@ export interface InsightsProgressEvent {
 
 export const insightsApi = {
   async generateInsights(days?: number, modelId?: string): Promise<InsightsReport> {
-    return invoke('generate_insights', {
+    return api.invoke('generate_insights', {
       request: { days: days ?? 30, modelId: modelId || 'auto' },
     });
   },
 
   async getLatestInsights(): Promise<InsightsReportMeta[]> {
-    return invoke('get_latest_insights');
+    return api.invoke('get_latest_insights');
   },
 
   async loadReport(path: string): Promise<InsightsReport> {
-    return invoke('load_insights_report', {
+    return api.invoke('load_insights_report', {
       request: { path },
     });
   },
 
   async hasInsightsData(days?: number): Promise<boolean> {
-    return invoke('has_insights_data', {
+    return api.invoke('has_insights_data', {
       request: { days: days ?? 30 },
     });
   },
 
   async cancelGeneration(): Promise<void> {
-    return invoke('cancel_insights_generation');
+    return api.invoke('cancel_insights_generation');
   },
 
   async listenProgress(
