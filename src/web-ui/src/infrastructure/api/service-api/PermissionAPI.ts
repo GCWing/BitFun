@@ -26,6 +26,41 @@ export interface ProjectPermissionRulesResponse {
   revision: string;
 }
 
+const EMPTY_PROJECT_SENSITIVE_RESOURCES: ProjectSensitiveResources = {
+  read: [],
+  write: [],
+};
+
+/**
+ * Normalizes the backend's sensitive-resources payload.
+ *
+ * An empty configuration serializes as an object without `read`/`write`
+ * arrays, and older backends may omit the field entirely. Both shapes must
+ * degrade to empty lists instead of leaking `undefined` into UI state.
+ */
+function normalizeProjectSensitiveResources(value: unknown): ProjectSensitiveResources {
+  if (!value || typeof value !== 'object') {
+    return { ...EMPTY_PROJECT_SENSITIVE_RESOURCES };
+  }
+  const record = value as { read?: unknown; write?: unknown };
+  const toStringArray = (input: unknown): string[] =>
+    Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string') : [];
+  return {
+    read: toStringArray(record.read),
+    write: toStringArray(record.write),
+  };
+}
+
+function normalizeProjectRulesResponse(
+  response: ProjectPermissionRulesResponse,
+): ProjectPermissionRulesResponse {
+  return {
+    ...response,
+    rules: Array.isArray(response?.rules) ? response.rules : [],
+    sensitiveResources: normalizeProjectSensitiveResources(response?.sensitiveResources),
+  };
+}
+
 export interface PermissionGrant {
   projectId: string;
   action: string;
@@ -66,7 +101,8 @@ class PermissionAPI {
   async getProjectRules(workspaceId: string): Promise<ProjectPermissionRulesResponse> {
     const request = { workspaceId };
     try {
-      return await api.invoke<ProjectPermissionRulesResponse>('get_project_permission_rules', { request });
+      const response = await api.invoke<ProjectPermissionRulesResponse>('get_project_permission_rules', { request });
+      return normalizeProjectRulesResponse(response);
     } catch (error) {
       throw createTauriCommandError('get_project_permission_rules', error, request);
     }
@@ -80,7 +116,8 @@ class PermissionAPI {
   ): Promise<ProjectPermissionRulesResponse> {
     const request = { workspaceId, rules, sensitiveResources, revision };
     try {
-      return await api.invoke<ProjectPermissionRulesResponse>('save_project_permission_rules', { request });
+      const response = await api.invoke<ProjectPermissionRulesResponse>('save_project_permission_rules', { request });
+      return normalizeProjectRulesResponse(response);
     } catch (error) {
       throw createTauriCommandError('save_project_permission_rules', error, request);
     }

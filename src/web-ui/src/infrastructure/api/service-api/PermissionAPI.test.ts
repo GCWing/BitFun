@@ -53,11 +53,46 @@ describe('PermissionAPI', () => {
     invokeMock.mockResolvedValueOnce({ rules: [], revision: 'revision-1' });
     const { permissionAPI } = await import('./PermissionAPI');
 
-    await permissionAPI.getProjectRules('workspace-1');
+    const response = await permissionAPI.getProjectRules('workspace-1');
 
     expect(invokeMock).toHaveBeenCalledWith('get_project_permission_rules', {
       request: { workspaceId: 'workspace-1' },
     });
+    expect(response.sensitiveResources).toEqual({ read: [], write: [] });
+  });
+
+  it('normalizes an empty sensitive-resources object into typed empty lists', async () => {
+    // An empty backend configuration serializes without read/write arrays.
+    invokeMock.mockResolvedValueOnce({ rules: [], sensitiveResources: {}, revision: 'r1' });
+    const { permissionAPI } = await import('./PermissionAPI');
+
+    const response = await permissionAPI.getProjectRules('workspace-1');
+
+    expect(response.sensitiveResources).toEqual({ read: [], write: [] });
+  });
+
+  it('normalizes a missing sensitive-resources payload into typed empty lists', async () => {
+    // Older backends may omit the field entirely; the dialog must never see
+    // `undefined.read`.
+    invokeMock.mockResolvedValueOnce({ rules: [], revision: 'r2' });
+    const { permissionAPI } = await import('./PermissionAPI');
+
+    const response = await permissionAPI.getProjectRules('workspace-1');
+
+    expect(response.sensitiveResources).toEqual({ read: [], write: [] });
+  });
+
+  it('drops non-string entries from sensitive-resource lists instead of crashing', async () => {
+    invokeMock.mockResolvedValueOnce({
+      rules: [],
+      sensitiveResources: { read: ['secrets/', 42, null], write: 'not-an-array' },
+      revision: 'r3',
+    });
+    const { permissionAPI } = await import('./PermissionAPI');
+
+    const response = await permissionAPI.getProjectRules('workspace-1');
+
+    expect(response.sensitiveResources).toEqual({ read: ['secrets/'], write: [] });
   });
 
   it('saves static rules with the revision returned by the backend', async () => {
