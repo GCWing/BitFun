@@ -529,7 +529,7 @@ impl Tool for FileWriteTool {
                 &resolved.logical_path,
                 vec![resolved.logical_path.clone()],
             )
-            .await;
+            .await?;
 
         let file_already_exists = Self::file_exists(context, &resolved).await;
         if file_already_exists

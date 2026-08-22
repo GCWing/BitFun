@@ -396,21 +396,23 @@ impl ToolUseContext {
         tool_name: &str,
         target: &str,
         touched_files: Vec<String>,
-    ) {
+    ) -> BitFunResult<()> {
         let Some(session_id) = self.session_id.as_deref() else {
-            return;
+            return Ok(());
         };
         let Some(turn_id) = self.dialog_turn_id.as_deref() else {
-            return;
+            return Ok(());
         };
         let Some(coordinator) = get_global_coordinator() else {
-            return;
+            return Ok(());
         };
 
         let checkpoint = self.build_light_checkpoint(touched_files).await;
         coordinator
             .get_session_manager()
-            .record_checkpoint_created(session_id, turn_id, tool_name, target, checkpoint);
+            .record_checkpoint_created(session_id, turn_id, tool_name, target, checkpoint)
+            .await?;
+        Ok(())
     }
 
     async fn build_light_checkpoint(&self, touched_files: Vec<String>) -> EvidenceLedgerCheckpoint {

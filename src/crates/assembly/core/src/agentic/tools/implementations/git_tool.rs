@@ -1408,7 +1408,7 @@ When creating commits, use this format for the commit message:
                     &format!("git {} {}", operation, args.unwrap_or("").trim()),
                     Vec::new(),
                 )
-                .await;
+                .await?;
         }
 
         let start_time = std::time::Instant::now();

@@ -2,10 +2,12 @@ use crate::checkpoint::LightCheckpoint;
 use bitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_PARTIAL_OUTPUT_BYTES: usize = 8_000;
+pub const EVIDENCE_LEDGER_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EvidenceLedgerTargetKind {
@@ -19,7 +21,7 @@ pub enum EvidenceLedgerTargetKind {
     Artifact,
     #[serde(rename = "checkpoint")]
     Checkpoint,
-    #[serde(rename = "unknown")]
+    #[serde(other, rename = "unknown")]
     Unknown,
 }
 
@@ -35,7 +37,7 @@ pub enum EvidenceLedgerEventStatus {
     PartialTimeout,
     #[serde(rename = "cancelled")]
     Cancelled,
-    #[serde(rename = "unknown")]
+    #[serde(other, rename = "unknown")]
     Unknown,
 }
 
@@ -59,14 +61,52 @@ pub struct EvidenceLedgerEvent {
     pub target_kind: EvidenceLedgerTargetKind,
     pub target: String,
     pub status: EvidenceLedgerEventStatus,
+    #[serde(default)]
     pub exit_code_or_error_kind: Option<String>,
+    #[serde(default)]
     pub touched_files: Vec<String>,
+    #[serde(default)]
     pub artifact_path: Option<String>,
     pub summary: String,
+    #[serde(default)]
     pub partial_output: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<EvidenceLedgerCheckpoint>,
+    #[serde(default)]
     pub created_at_ms: u64,
+}
+
+/// Versioned sidecar owned by the runtime and written by product persistence.
+///
+/// Keeping evidence separate from mutable Session state lets older builds
+/// rewrite `state.json` without erasing evidence produced by a newer build.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersistedEvidenceLedgerFile {
+    #[serde(default = "default_evidence_ledger_schema_version")]
+    pub schema_version: u32,
+    pub session_id: String,
+    #[serde(default)]
+    pub events: Vec<EvidenceLedgerEvent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum EvidenceLedgerPersistenceError {
+    #[error(
+        "unsupported evidence ledger schema version {actual}; maximum supported is {supported}"
+    )]
+    UnsupportedSchema { actual: u32, supported: u32 },
+    #[error("evidence ledger session mismatch: expected {expected}, found {actual}")]
+    SessionMismatch { expected: String, actual: String },
+    #[error("evidence ledger event has an empty event_id")]
+    EmptyEventId,
+    #[error("evidence ledger event {event_id} belongs to session {actual}, expected {expected}")]
+    EventSessionMismatch {
+        event_id: String,
+        expected: String,
+        actual: String,
+    },
+    #[error("evidence ledger contains conflicting payloads for event {event_id}")]
+    ConflictingEvent { event_id: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -188,6 +228,110 @@ impl From<LightCheckpoint> for EvidenceLedgerCheckpoint {
     }
 }
 
+impl PersistedEvidenceLedgerFile {
+    pub fn new(session_id: impl Into<String>) -> Self {
+        Self {
+            schema_version: EVIDENCE_LEDGER_SCHEMA_VERSION,
+            session_id: session_id.into(),
+            events: Vec::new(),
+        }
+    }
+
+    pub fn append(
+        &mut self,
+        event: EvidenceLedgerEvent,
+    ) -> Result<bool, EvidenceLedgerPersistenceError> {
+        self.validate_header(&event.session_id)?;
+        self.validate_events()?;
+        validate_event(&event, &self.session_id)?;
+
+        if let Some(existing) = self
+            .events
+            .iter()
+            .find(|existing| existing.event_id == event.event_id)
+        {
+            if existing == &event {
+                return Ok(false);
+            }
+            return Err(EvidenceLedgerPersistenceError::ConflictingEvent {
+                event_id: event.event_id,
+            });
+        }
+
+        self.events.push(event);
+        Ok(true)
+    }
+
+    pub fn validated_events(
+        self,
+        expected_session_id: &str,
+    ) -> Result<Vec<EvidenceLedgerEvent>, EvidenceLedgerPersistenceError> {
+        self.validate_header(expected_session_id)?;
+        self.validate_events()
+    }
+
+    fn validate_events(&self) -> Result<Vec<EvidenceLedgerEvent>, EvidenceLedgerPersistenceError> {
+        let mut unique_events = Vec::with_capacity(self.events.len());
+        let mut event_indices = HashMap::<String, usize>::new();
+
+        for event in &self.events {
+            validate_event(event, &self.session_id)?;
+            if let Some(index) = event_indices.get(&event.event_id).copied() {
+                if unique_events[index] != *event {
+                    return Err(EvidenceLedgerPersistenceError::ConflictingEvent {
+                        event_id: event.event_id.clone(),
+                    });
+                }
+                continue;
+            }
+            event_indices.insert(event.event_id.clone(), unique_events.len());
+            unique_events.push(event.clone());
+        }
+
+        Ok(unique_events)
+    }
+
+    fn validate_header(
+        &self,
+        expected_session_id: &str,
+    ) -> Result<(), EvidenceLedgerPersistenceError> {
+        if self.schema_version > EVIDENCE_LEDGER_SCHEMA_VERSION {
+            return Err(EvidenceLedgerPersistenceError::UnsupportedSchema {
+                actual: self.schema_version,
+                supported: EVIDENCE_LEDGER_SCHEMA_VERSION,
+            });
+        }
+        if self.session_id != expected_session_id {
+            return Err(EvidenceLedgerPersistenceError::SessionMismatch {
+                expected: expected_session_id.to_string(),
+                actual: self.session_id.clone(),
+            });
+        }
+        Ok(())
+    }
+}
+
+fn default_evidence_ledger_schema_version() -> u32 {
+    EVIDENCE_LEDGER_SCHEMA_VERSION
+}
+
+fn validate_event(
+    event: &EvidenceLedgerEvent,
+    expected_session_id: &str,
+) -> Result<(), EvidenceLedgerPersistenceError> {
+    if event.event_id.is_empty() {
+        return Err(EvidenceLedgerPersistenceError::EmptyEventId);
+    }
+    if event.session_id != expected_session_id {
+        return Err(EvidenceLedgerPersistenceError::EventSessionMismatch {
+            event_id: event.event_id.clone(),
+            expected: expected_session_id.to_string(),
+            actual: event.session_id.clone(),
+        });
+    }
+    Ok(())
+}
+
 impl SessionEvidenceLedger {
     pub fn new() -> Self {
         Self::default()
@@ -198,11 +342,46 @@ impl SessionEvidenceLedger {
     }
 
     pub fn append(&self, event: EvidenceLedgerEvent) -> EvidenceLedgerEvent {
-        self.events_by_session
+        let mut events = self
+            .events_by_session
             .entry(event.session_id.clone())
-            .or_default()
-            .push(event.clone());
+            .or_default();
+        if let Some(existing) = events
+            .iter()
+            .find(|existing| existing.event_id == event.event_id)
+        {
+            return existing.clone();
+        }
+        events.push(event.clone());
         event
+    }
+
+    pub fn replace_session(
+        &self,
+        session_id: &str,
+        events: Vec<EvidenceLedgerEvent>,
+    ) -> Result<(), EvidenceLedgerPersistenceError> {
+        let events = PersistedEvidenceLedgerFile {
+            schema_version: EVIDENCE_LEDGER_SCHEMA_VERSION,
+            session_id: session_id.to_string(),
+            events,
+        }
+        .validated_events(session_id)?;
+
+        if events.is_empty() {
+            self.events_by_session.remove(session_id);
+        } else {
+            self.events_by_session
+                .insert(session_id.to_string(), events);
+        }
+        Ok(())
+    }
+
+    pub fn events_for_session(&self, session_id: &str) -> Vec<EvidenceLedgerEvent> {
+        self.events_by_session
+            .get(session_id)
+            .map(|events| events.clone())
+            .unwrap_or_default()
     }
 
     pub fn events_for_turn(&self, session_id: &str, turn_id: &str) -> Vec<EvidenceLedgerEvent> {
@@ -375,7 +554,8 @@ fn truncate_string_at_char_boundary(value: &str, max_bytes: usize) -> String {
 mod tests {
     use super::{
         CompressionContract, EvidenceLedgerCheckpoint, EvidenceLedgerEvent,
-        EvidenceLedgerEventStatus, EvidenceLedgerTargetKind, SessionEvidenceLedger,
+        EvidenceLedgerEventStatus, EvidenceLedgerPersistenceError, EvidenceLedgerTargetKind,
+        PersistedEvidenceLedgerFile, SessionEvidenceLedger, EVIDENCE_LEDGER_SCHEMA_VERSION,
     };
     use crate::checkpoint::LightCheckpoint;
 
@@ -403,6 +583,103 @@ mod tests {
         );
         assert!(ledger.events_for_turn("session-a", "other-turn").is_empty());
         assert!(ledger.events_for_turn("other-session", "turn-a").is_empty());
+    }
+
+    #[test]
+    fn persisted_ledger_append_is_idempotent_and_rejects_conflicting_replays() {
+        let event = EvidenceLedgerEvent::new(
+            "session-a",
+            "turn-a",
+            "Bash",
+            EvidenceLedgerTargetKind::Command,
+            "cargo test",
+            EvidenceLedgerEventStatus::Succeeded,
+            "Tests passed.",
+        );
+        let mut file = PersistedEvidenceLedgerFile::new("session-a");
+
+        assert!(file.append(event.clone()).expect("first append"));
+        assert!(!file.append(event.clone()).expect("idempotent replay"));
+
+        let mut conflicting = event.clone();
+        conflicting.summary = "Different payload.".to_string();
+        assert!(matches!(
+            file.append(conflicting),
+            Err(EvidenceLedgerPersistenceError::ConflictingEvent { .. })
+        ));
+        assert_eq!(file.events, vec![event]);
+    }
+
+    #[test]
+    fn persisted_ledger_rejects_newer_schema_and_cross_session_events() {
+        let newer = PersistedEvidenceLedgerFile {
+            schema_version: EVIDENCE_LEDGER_SCHEMA_VERSION + 1,
+            session_id: "session-a".to_string(),
+            events: Vec::new(),
+        };
+        assert!(matches!(
+            newer.validated_events("session-a"),
+            Err(EvidenceLedgerPersistenceError::UnsupportedSchema { .. })
+        ));
+
+        let mut mismatched = PersistedEvidenceLedgerFile::new("session-a");
+        mismatched.events.push(EvidenceLedgerEvent::new(
+            "session-b",
+            "turn-a",
+            "Bash",
+            EvidenceLedgerTargetKind::Command,
+            "cargo test",
+            EvidenceLedgerEventStatus::Succeeded,
+            "Tests passed.",
+        ));
+        assert!(matches!(
+            mismatched.validated_events("session-a"),
+            Err(EvidenceLedgerPersistenceError::EventSessionMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn legacy_evidence_event_payload_loads_with_additive_defaults() {
+        let file: PersistedEvidenceLedgerFile = serde_json::from_value(serde_json::json!({
+            "session_id": "session-a",
+            "events": [{
+                "event_id": "event-a",
+                "session_id": "session-a",
+                "turn_id": "turn-a",
+                "tool_name": "Bash",
+                "target_kind": "command",
+                "target": "cargo test",
+                "status": "succeeded",
+                "summary": "Tests passed."
+            }]
+        }))
+        .expect("legacy payload should deserialize");
+
+        assert_eq!(file.schema_version, EVIDENCE_LEDGER_SCHEMA_VERSION);
+        let events = file
+            .validated_events("session-a")
+            .expect("legacy payload should validate");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].created_at_ms, 0);
+        assert!(events[0].touched_files.is_empty());
+        assert!(events[0].partial_output.is_none());
+
+        let round_trip: PersistedEvidenceLedgerFile = serde_json::from_value(
+            serde_json::to_value(PersistedEvidenceLedgerFile {
+                schema_version: EVIDENCE_LEDGER_SCHEMA_VERSION,
+                session_id: "session-a".to_string(),
+                events,
+            })
+            .expect("upgraded payload should serialize"),
+        )
+        .expect("upgraded payload should deserialize");
+        assert_eq!(
+            round_trip
+                .validated_events("session-a")
+                .expect("round trip should validate")[0]
+                .event_id,
+            "event-a"
+        );
     }
 
     #[test]

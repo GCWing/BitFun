@@ -605,7 +605,7 @@ Usage notes:
         if command_needs_light_checkpoint(command_str) {
             context
                 .record_light_checkpoint("Bash", command_str, Vec::new())
-                .await;
+                .await?;
         }
 
         // Remote workspace: execute via injected workspace shell
