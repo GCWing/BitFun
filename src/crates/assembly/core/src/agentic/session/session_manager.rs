@@ -348,6 +348,7 @@ pub struct SessionManager {
         Arc<DashMap<String, crate::agentic::execution::edit_constraint_guard::EditConstraintState>>,
     file_read_state_store: Arc<FileReadStateStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
+    evidence_ledger_operation_locks: Arc<KeyedAsyncLock>,
     persistence_manager: Arc<PersistenceManager>,
     memory_database: Arc<MemoryDatabase>,
 
@@ -2027,6 +2028,7 @@ impl SessionManager {
             edit_constraints_store: Arc::new(DashMap::new()),
             file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
+            evidence_ledger_operation_locks: Arc::new(KeyedAsyncLock::default()),
             persistence_manager,
             memory_database,
             config,
@@ -2046,21 +2048,60 @@ impl SessionManager {
         self.persistence_manager.clone()
     }
 
-    pub fn append_evidence_event(&self, event: EvidenceLedgerEvent) -> EvidenceLedgerEvent {
-        self.evidence_ledger.append(event)
+    pub async fn append_evidence_event(
+        &self,
+        event: EvidenceLedgerEvent,
+    ) -> BitFunResult<EvidenceLedgerEvent> {
+        let _mutation_guard = self.lock_session_mutation(&event.session_id).await;
+        let _operation_guard = self
+            .evidence_ledger_operation_locks
+            .lock(&event.session_id)
+            .await;
+        let should_persist = self.config.enable_persistence
+            && self
+                .sessions
+                .get(&event.session_id)
+                .is_some_and(|session| self.should_persist_session(&session));
+        if !should_persist {
+            return Ok(self.evidence_ledger.append(event));
+        }
+
+        let storage_path = self
+            .effective_session_storage_path(&event.session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(&event.session_id)
+                    .map(|entry| entry.value().path.clone())
+            })
+            .ok_or_else(|| {
+                BitFunError::session(format!(
+                    "Session storage path unavailable while persisting evidence: {}",
+                    event.session_id
+                ))
+            })?;
+        let persisted_events = self
+            .persistence_manager
+            .append_evidence_ledger_event(&storage_path, &event)
+            .await?;
+        self.evidence_ledger
+            .replace_session(&event.session_id, persisted_events)
+            .map_err(|error| BitFunError::parse(error.to_string()))?;
+        Ok(event)
     }
 
-    pub fn record_checkpoint_created(
+    pub async fn record_checkpoint_created(
         &self,
         session_id: &str,
         turn_id: &str,
         tool_name: &str,
         target: &str,
         checkpoint: EvidenceLedgerCheckpoint,
-    ) -> EvidenceLedgerEvent {
+    ) -> BitFunResult<EvidenceLedgerEvent> {
         self.append_evidence_event(EvidenceLedgerEvent::checkpoint_created(
             session_id, turn_id, tool_name, target, checkpoint,
         ))
+        .await
     }
 
     pub fn evidence_events_for_turn(
@@ -2089,14 +2130,14 @@ impl SessionManager {
         (!contract.is_empty()).then_some(contract)
     }
 
-    pub fn record_subagent_partial_timeout(
+    pub async fn record_subagent_partial_timeout(
         &self,
         session_id: &str,
         turn_id: &str,
         subagent_type: &str,
         partial_output: &str,
         error_kind: Option<&str>,
-    ) -> EvidenceLedgerEvent {
+    ) -> BitFunResult<EvidenceLedgerEvent> {
         let summary = format!(
             "Subagent {} timed out after producing partial output.",
             subagent_type
@@ -2113,7 +2154,7 @@ impl SessionManager {
         .with_error_kind(error_kind.unwrap_or("timeout"))
         .with_partial_output(partial_output);
 
-        self.append_evidence_event(event)
+        self.append_evidence_event(event).await
     }
 
     /// Decide whether the given session model id is still usable.
@@ -2360,6 +2401,7 @@ impl SessionManager {
         let edit_constraints_store = self.edit_constraints_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
+        let evidence_ledger_operation_locks = self.evidence_ledger_operation_locks.clone();
         let persistence_manager = self.persistence_manager.clone();
         let memory_database = self.memory_database.clone();
         let manager_config = self.config.clone();
@@ -2393,6 +2435,7 @@ impl SessionManager {
                 edit_constraints_store,
                 file_read_state_store,
                 evidence_ledger,
+                evidence_ledger_operation_locks,
                 persistence_manager,
                 memory_database,
                 config: manager_config,
@@ -5519,6 +5562,7 @@ impl SessionManager {
         include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let _mutation_guard = self.lock_session_mutation(session_id).await;
+        let _evidence_ledger_guard = self.evidence_ledger_operation_locks.lock(session_id).await;
 
         if self.is_session_loaded_from_storage_path(session_storage_path, session_id)? {
             let session = self.get_session(session_id).ok_or_else(|| {
@@ -5621,6 +5665,10 @@ impl SessionManager {
         if let Some(revert) = staged_revert.as_ref() {
             persisted_turns.retain(|turn| turn.turn_index < revert.boundary_turn);
         }
+        let restored_evidence_events = self
+            .persistence_manager
+            .load_evidence_ledger_events(session_storage_path, session_id)
+            .await?;
         debug!(
             "Session restore phase completed: session_id={}, phase=load_session_with_turns, turn_count={}, duration_ms={}",
             session_id,
@@ -5992,6 +6040,9 @@ impl SessionManager {
                 self.evidence_ledger.as_ref(),
             );
         }
+        self.evidence_ledger
+            .replace_session(session_id, restored_evidence_events)
+            .map_err(|error| BitFunError::parse(error.to_string()))?;
 
         let context_replace_started_at = Instant::now();
         self.context_store
@@ -9379,9 +9430,11 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
         revert::{SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION},
-        PromptCachePolicy, PromptCacheScope, SessionContextStore, SystemPromptCacheIdentity,
-        UserContextCacheIdentity,
+        EvidenceLedgerCheckpoint, PersistedEvidenceLedgerFile, PromptCachePolicy, PromptCacheScope,
+        SessionContextStore, SystemPromptCacheIdentity, UserContextCacheIdentity,
     };
+    #[cfg(feature = "remote-workspace")]
+    use crate::agentic::session::{EvidenceLedgerEventStatus, EvidenceLedgerTargetKind};
     use crate::agentic::skill_agent_snapshot::{SkillSnapshotEntry, TurnSkillAgentSnapshot};
     use crate::infrastructure::ai::reasoning_catalog::{
         project_model_reasoning_catalog as project_test_model_reasoning_catalog,
@@ -15631,13 +15684,16 @@ mod tests {
             Arc::new(PersistenceManager::new(test_path_manager()).expect("persistence manager"));
         let manager = test_manager(persistence_manager);
 
-        let event = manager.record_subagent_partial_timeout(
-            "session-a",
-            "turn-a",
-            "ReviewSecurity",
-            "Found token logging before timeout.",
-            Some("timeout"),
-        );
+        let event = manager
+            .record_subagent_partial_timeout(
+                "session-a",
+                "turn-a",
+                "ReviewSecurity",
+                "Found token logging before timeout.",
+                Some("timeout"),
+            )
+            .await
+            .expect("in-memory evidence should record");
 
         assert!(!event.event_id.is_empty());
         let events = manager.evidence_events_for_turn("session-a", "turn-a");
@@ -15645,6 +15701,292 @@ mod tests {
         let summary = manager.evidence_summary_for_session("session-a", 10);
         assert_eq!(summary.partial_subagent_results.len(), 1);
         assert_eq!(summary.partial_subagent_results[0].event_id, event.event_id);
+    }
+
+    #[tokio::test]
+    async fn evidence_ledger_persists_across_session_unload_and_restore() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Durable evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let storage_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+        let event = manager
+            .record_checkpoint_created(
+                &session.session_id,
+                "turn-a",
+                "Edit",
+                "src/lib.rs",
+                EvidenceLedgerCheckpoint {
+                    current_branch: Some("feature/evidence".to_string()),
+                    dirty_state_summary: "staged=0, unstaged=1, untracked=0".to_string(),
+                    touched_files: vec!["src/lib.rs".to_string()],
+                    diff_hash: Some("abc123".to_string()),
+                },
+            )
+            .await
+            .expect("checkpoint should persist before mutation");
+        let ledger_path = storage_path
+            .join(&session.session_id)
+            .join("evidence-ledger.json");
+        let stored: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(&ledger_path).expect("ledger sidecar should exist"),
+        )
+        .expect("ledger sidecar should deserialize");
+        assert_eq!(stored.session_id, session.session_id);
+        assert_eq!(stored.events, vec![event.clone()]);
+
+        assert!(manager
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect("session should unload"));
+        assert!(manager
+            .evidence_events_for_turn(&session.session_id, "turn-a")
+            .is_empty());
+
+        manager
+            .restore_session_from_storage_path(&storage_path, &session.session_id)
+            .await
+            .expect("session should restore with evidence");
+        assert_eq!(
+            manager.evidence_events_for_turn(&session.session_id, "turn-a"),
+            vec![event]
+        );
+        let summary = manager.evidence_summary_for_session(&session.session_id, 10);
+        assert_eq!(summary.latest_checkpoints.len(), 1);
+        assert_eq!(summary.latest_checkpoints[0].target, "src/lib.rs");
+    }
+
+    #[tokio::test]
+    async fn evidence_ledger_write_failure_does_not_publish_memory_only_evidence() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Evidence write failure".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        persistence_manager.fail_next_evidence_ledger_write_for_test(&session.session_id);
+
+        manager
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-a",
+                "ReviewSecurity",
+                "Partial result",
+                Some("timeout"),
+            )
+            .await
+            .expect_err("durable append failure must be visible");
+
+        assert!(manager
+            .evidence_events_for_turn(&session.session_id, "turn-a")
+            .is_empty());
+        assert!(manager
+            .evidence_summary_for_session(&session.session_id, 10)
+            .partial_subagent_results
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn concurrent_evidence_appends_keep_disk_and_memory_complete() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = Arc::new(test_manager(persistence_manager));
+        let session = manager
+            .create_session(
+                "Concurrent evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let storage_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+
+        let first_manager = manager.clone();
+        let first_session_id = session.session_id.clone();
+        let first = tokio::spawn(async move {
+            first_manager
+                .record_subagent_partial_timeout(
+                    &first_session_id,
+                    "turn-a",
+                    "ReviewSecurity",
+                    "First partial result",
+                    Some("timeout"),
+                )
+                .await
+                .expect("first evidence append")
+        });
+        let second_manager = manager.clone();
+        let second_session_id = session.session_id.clone();
+        let second = tokio::spawn(async move {
+            second_manager
+                .record_subagent_partial_timeout(
+                    &second_session_id,
+                    "turn-b",
+                    "ReviewTests",
+                    "Second partial result",
+                    Some("timeout"),
+                )
+                .await
+                .expect("second evidence append")
+        });
+        let first = first.await.expect("first append task");
+        let second = second.await.expect("second append task");
+
+        let ledger_path = storage_path
+            .join(&session.session_id)
+            .join("evidence-ledger.json");
+        let stored: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(ledger_path).expect("ledger sidecar should exist"),
+        )
+        .expect("ledger sidecar should deserialize");
+        let mut stored_ids = stored
+            .events
+            .into_iter()
+            .map(|event| event.event_id)
+            .collect::<Vec<_>>();
+        let mut memory_ids = manager
+            .evidence_ledger
+            .events_for_session(&session.session_id)
+            .into_iter()
+            .map(|event| event.event_id)
+            .collect::<Vec<_>>();
+        let mut expected_ids = vec![first.event_id, second.event_id];
+        stored_ids.sort();
+        memory_ids.sort();
+        expected_ids.sort();
+
+        assert_eq!(stored_ids, expected_ids);
+        assert_eq!(memory_ids, expected_ids);
+    }
+
+    #[tokio::test]
+    async fn corrupt_evidence_ledger_blocks_restore_without_overwriting_original_bytes() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Corrupt evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let storage_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+        let ledger_path = storage_path
+            .join(&session.session_id)
+            .join("evidence-ledger.json");
+        let corrupt_bytes = b"{not valid evidence";
+        std::fs::write(&ledger_path, corrupt_bytes).expect("corrupt fixture should write");
+        assert!(manager
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect("session should unload"));
+
+        manager
+            .restore_session_from_storage_path(&storage_path, &session.session_id)
+            .await
+            .expect_err("corrupt evidence must not degrade to an empty ledger");
+
+        assert!(manager.get_session(&session.session_id).is_none());
+        assert_eq!(
+            std::fs::read(&ledger_path).expect("corrupt sidecar should remain"),
+            corrupt_bytes
+        );
+    }
+
+    #[cfg(feature = "remote-workspace")]
+    #[tokio::test]
+    async fn remote_workspace_evidence_uses_the_resolved_session_mirror() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Remote evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some("/home/wsp/project".to_string()),
+                    remote_connection_id: Some("ssh-1".to_string()),
+                    remote_ssh_host: Some("dev-host".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("remote session should create");
+        let event = manager
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-a",
+                "ReviewSecurity",
+                "Remote partial result",
+                Some("timeout"),
+            )
+            .await
+            .expect("remote evidence should persist");
+        let sessions_dir = crate::service::WorkspaceRuntimeService::new(path_manager)
+            .context_for_remote_workspace("dev-host", "/home/wsp/project")
+            .sessions_dir;
+        let ledger_path = sessions_dir
+            .join(&session.session_id)
+            .join("evidence-ledger.json");
+        let stored: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(ledger_path).expect("remote ledger sidecar should exist"),
+        )
+        .expect("remote ledger sidecar should deserialize");
+
+        assert_eq!(stored.events, vec![event]);
+        assert_eq!(
+            stored.events[0].target_kind,
+            EvidenceLedgerTargetKind::Subagent
+        );
+        assert_eq!(
+            stored.events[0].status,
+            EvidenceLedgerEventStatus::PartialTimeout
+        );
     }
 
     #[tokio::test]
