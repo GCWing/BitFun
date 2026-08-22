@@ -4,6 +4,7 @@
  * Listens to backend IDE control events and dispatches them to registered controllers.
  */
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { IdeControlEvent, IdeController, IdeControlOperation } from './types';
 import { PanelController } from './PanelController';
 import { createLogger } from '@/shared/utils/logger';
@@ -108,8 +109,7 @@ export class IdeControlEventBus {
    
   private async sendErrorResult(requestId: string, error: any): Promise<void> {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('report_ide_control_result', {
+      await api.invoke('report_ide_control_result', {
         request_id: requestId,
         success: false,
         message: undefined,

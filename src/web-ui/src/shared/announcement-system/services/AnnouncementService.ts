@@ -4,7 +4,7 @@
  * Wraps all Tauri `invoke` calls for the announcement system so that the
  * rest of the frontend never touches `invoke` directly.
  */
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { AnnouncementCard } from '../types';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -18,7 +18,7 @@ export const announcementService = {
    */
   async getPendingAnnouncements(): Promise<AnnouncementCard[]> {
     try {
-      return await invoke<AnnouncementCard[]>('get_pending_announcements');
+      return await api.invoke<AnnouncementCard[]>('get_pending_announcements');
     } catch (e) {
       log.error('Failed to get pending announcements', e);
       return [];
@@ -28,7 +28,7 @@ export const announcementService = {
   /** Mark a card as seen (modal was opened or action button was clicked). */
   async markSeen(id: string): Promise<void> {
     try {
-      await invoke('mark_announcement_seen', { request: { id } });
+      await api.invoke('mark_announcement_seen', { request: { id } });
     } catch (e) {
       log.error('Failed to mark announcement seen', { id, error: e });
     }
@@ -37,7 +37,7 @@ export const announcementService = {
   /** Dismiss a card for the current version cycle. */
   async dismiss(id: string): Promise<void> {
     try {
-      await invoke('dismiss_announcement', { request: { id } });
+      await api.invoke('dismiss_announcement', { request: { id } });
     } catch (e) {
       log.error('Failed to dismiss announcement', { id, error: e });
     }
@@ -46,7 +46,7 @@ export const announcementService = {
   /** Permanently suppress a card. */
   async neverShow(id: string): Promise<void> {
     try {
-      await invoke('never_show_announcement', { request: { id } });
+      await api.invoke('never_show_announcement', { request: { id } });
     } catch (e) {
       log.error('Failed to suppress announcement', { id, error: e });
     }
@@ -58,7 +58,7 @@ export const announcementService = {
    */
   async triggerCard(id: string): Promise<AnnouncementCard | null> {
     try {
-      return await invoke<AnnouncementCard | null>('trigger_announcement', { request: { id } });
+      return await api.invoke<AnnouncementCard | null>('trigger_announcement', { request: { id } });
     } catch (e) {
       log.error('Failed to trigger announcement', { id, error: e });
       return null;
@@ -68,7 +68,7 @@ export const announcementService = {
   /** Fetch all currently eligible tip cards (for a tips browser). */
   async getTips(): Promise<AnnouncementCard[]> {
     try {
-      return await invoke<AnnouncementCard[]>('get_announcement_tips');
+      return await api.invoke<AnnouncementCard[]>('get_announcement_tips');
     } catch (e) {
       log.error('Failed to get announcement tips', e);
       return [];

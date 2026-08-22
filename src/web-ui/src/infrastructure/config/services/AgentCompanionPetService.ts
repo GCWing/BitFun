@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { readFile } from '@tauri-apps/plugin-fs';
 import type { AgentCompanionPetSelection } from './AIExperienceConfigService';
 import { isTauriRuntime } from '@/infrastructure/runtime';
@@ -172,7 +172,7 @@ export async function listAgentCompanionPets(): Promise<AgentCompanionPetPackage
   const builtinPets = await Promise.all(BUILTIN_PETS.map(withPreviewSrc));
   if (!isTauriRuntime()) return builtinPets;
   try {
-    const response = await invoke<ListAgentCompanionPetsResponse>('list_agent_companion_pets');
+    const response = await api.invoke<ListAgentCompanionPetsResponse>('list_agent_companion_pets');
     const userPets = await Promise.all(response.pets.map(withPreviewSrc));
     return [...builtinPets, ...userPets];
   } catch (error) {
@@ -182,14 +182,14 @@ export async function listAgentCompanionPets(): Promise<AgentCompanionPetPackage
 }
 
 export async function importAgentCompanionPetPackage(path: string): Promise<AgentCompanionPetPackage> {
-  const pet = await invoke<AgentCompanionPetSelection>('import_agent_companion_pet_package', {
+  const pet = await api.invoke<AgentCompanionPetSelection>('import_agent_companion_pet_package', {
     request: { path },
   });
   return withPreviewSrc(pet);
 }
 
 export async function deleteAgentCompanionPetPackage(packagePath: string): Promise<void> {
-  await invoke('delete_agent_companion_pet_package', {
+  await api.invoke('delete_agent_companion_pet_package', {
     request: { packagePath },
   });
 }

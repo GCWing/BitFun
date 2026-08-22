@@ -10,7 +10,6 @@
 import { processingStatusManager } from './ProcessingStatusManager';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { useModernFlowChatStore } from '../store/modernFlowChatStore';
-import { AgentService } from '../../shared/services/agent-service';
 import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
@@ -79,7 +78,6 @@ const EVENT_LISTENER_RETRY_MS = 2000;
 export class FlowChatManager {
   private static instance: FlowChatManager | null = null;
   private context: FlowChatContext;
-  private agentService: AgentService;
   private eventListenerInitialized = false;
   private eventListenerInitializationPromise: Promise<void> | null = null;
   private eventListenerCleanup: (() => void) | null = null;
@@ -117,8 +115,7 @@ export class FlowChatManager {
       currentWorkspacePath: null,
       ensureLiveSubscription: () => this.ensureEventListeners(),
     };
-    
-    this.agentService = AgentService.getInstance();
+
     registerDriverSessionLookup(
       sessionId => this.context.flowChatStore.getState().sessions.get(sessionId),
     );
@@ -915,10 +912,6 @@ export class FlowChatManager {
     updates: { status?: 'analyzing' | 'completed' | 'error'; error?: string; result?: any }
   ): void {
     updateImageAnalysisItemModule(this.context, sessionId, dialogTurnId, imageId, updates);
-  }
-
-  async getAvailableAgents(): Promise<string[]> {
-    return this.agentService.getAvailableAgents();
   }
 
   getCurrentSession() {
