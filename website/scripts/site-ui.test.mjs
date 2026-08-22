@@ -83,6 +83,16 @@ test('live search preserves the input node and supports IME composition', () => 
   assert.doesNotMatch(inputBinding[1], /renderIndex\(\)/u);
 });
 
+test('sidebar navigation preserves its scroll position across page loads', () => {
+  assert.match(appSource, /SIDEBAR_SCROLL_STORAGE_KEY/u);
+  assert.match(appSource, /sessionStorage\.setItem/u);
+  assert.match(appSource, /data-sidebar-scroll/u);
+  assert.match(appSource, /addEventListener\('scroll', saveSidebarScroll/u);
+  assert.match(appSource, /link\.addEventListener\('click', saveSidebarScroll\)/u);
+  assert.match(appSource, /sidebarNav\.scrollTop = savedScrollTop/u);
+  assert.match(appSource, /sidebarNav\.querySelector\('\[aria-current="page"\]'\)/u);
+});
+
 test('dark mode gives the agent callout its own subdued surface tokens', () => {
   const light = customProperties(cssBlock(':root'));
   const dark = customProperties(cssBlock("html[data-theme='dark']"));

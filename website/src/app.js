@@ -1,6 +1,7 @@
 const root = document.querySelector('#app');
 const pageData = JSON.parse(document.querySelector('#page-data')?.textContent ?? '{}');
 const THEME_STORAGE_KEY = 'bitfun-playbook-theme';
+const SIDEBAR_SCROLL_STORAGE_KEY = 'bitfun-playbook-sidebar-scroll';
 const THEME_CHOICES = ['system', 'light', 'dark'];
 
 function readPreference(key) {
@@ -16,6 +17,22 @@ function writePreference(key, value) {
     localStorage.setItem(key, value);
   } catch {
     // The selected option still applies for this page when storage is unavailable.
+  }
+}
+
+function readSessionPreference(key) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionPreference(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Sidebar continuity is a progressive enhancement when storage is unavailable.
   }
 }
 
@@ -209,7 +226,7 @@ function sidebar() {
         <input id="sidebar-search" type="search" autocomplete="off" spellcheck="false"
           placeholder="${text('筛选目录…', 'Filter contents…')}" aria-label="${text('筛选说明书目录', 'Filter playbook contents')}" />
       </div>
-      <nav>
+      <nav data-sidebar-scroll>
         <a class="sidebar-home ${pageData.kind === 'index' ? 'active' : ''}" href="/" ${pageData.kind === 'index' ? 'aria-current="page"' : ''}>
           <span aria-hidden="true">⌂</span>${text('说明书首页', 'Playbook home')}
         </a>
@@ -530,6 +547,29 @@ function renderCapability(capability) {
 }
 
 function bindCommonEvents() {
+  const sidebarNav = document.querySelector('[data-sidebar-scroll]');
+  const saveSidebarScroll = () => {
+    if (sidebarNav) writeSessionPreference(SIDEBAR_SCROLL_STORAGE_KEY, String(sidebarNav.scrollTop));
+  };
+  sidebarNav?.addEventListener('scroll', saveSidebarScroll, { passive: true });
+  document.querySelectorAll('.sidebar-home, [data-sidebar-item]').forEach((link) => {
+    link.addEventListener('click', saveSidebarScroll);
+  });
+  const storedSidebarScroll = readSessionPreference(SIDEBAR_SCROLL_STORAGE_KEY);
+  requestAnimationFrame(() => {
+    if (!sidebarNav) return;
+    const savedScrollTop = Number(storedSidebarScroll);
+    if (storedSidebarScroll !== null && Number.isFinite(savedScrollTop) && savedScrollTop >= 0) {
+      sidebarNav.scrollTop = savedScrollTop;
+    }
+    const activeItem = sidebarNav.querySelector('[aria-current="page"]');
+    if (!activeItem) return;
+    const navRect = sidebarNav.getBoundingClientRect();
+    const itemRect = activeItem.getBoundingClientRect();
+    if (itemRect.top < navRect.top || itemRect.bottom > navRect.bottom) {
+      sidebarNav.scrollTop += itemRect.top - navRect.top - (navRect.height - itemRect.height) / 2;
+    }
+  });
   const setSidebarOpen = (open) => {
     document.body.classList.toggle('sidebar-open', open);
     document.querySelector('#sidebar-toggle')?.setAttribute('aria-expanded', String(open));
@@ -555,6 +595,7 @@ function bindCommonEvents() {
     if (empty) empty.hidden = hasResults;
   });
   document.querySelector('#language-toggle')?.addEventListener('click', () => {
+    saveSidebarScroll();
     document.body.classList.remove('sidebar-open');
     state.language = state.language === 'zh' ? 'en' : 'zh';
     writePreference('bitfun-playbook-language', state.language);
