@@ -8,7 +8,7 @@
 
 本 crate 暴露两个可加性的角色 feature。`client` 负责 ACP 进程发现、配置、远程探测、会话传输和
 tool-card 投影，选择 Core Agent Runtime 与具体 SSH 能力；`server` 负责 CLI 托管的 ACP 服务端，
-通过 `DeliveryProfile::Acp` 投影 runtime，并精确选择该路径使用的工具、文档、订阅、LSP 与外部来源 owner，
+通过 `DeliveryProfile::Acp` 投影 runtime，并精确选择该路径使用的工具、文档、订阅与外部来源 owner，
 但不选择 SSH。兼容默认值必须精确等于 `client + server`；Desktop 只选择 `client`，CLI 选择两者。
 两个角色保持加法语义，不得用 `product-full` 替代任一闭包。
 

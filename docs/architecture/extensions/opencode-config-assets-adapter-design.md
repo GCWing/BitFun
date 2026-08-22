@@ -8,6 +8,9 @@
 外部来源的统一产品体验、风险分级和变化提示见
 [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。
 
+其中 LSP 仅作为 OpenCode 上游配置事实进入清单：BitFun LSP Runtime 已退役，这类声明固定为 `unsupported`，
+不得导入、应用或执行，也不进入后续兼容阶段。
+
 配置字段与来源以 [OpenCode 配置文档](https://opencode.ai/docs/config/)和稳定提交中的主/TUI 配置实现为准。
 
 本文同时记录当前可用切片与后续目标。BitFun 已实现本地用户全局/项目 Prompt Command 的来源发现、
@@ -21,7 +24,7 @@ JSON/JSONC/Markdown 解析、参数展开、运行时刷新和冲突选择，也
 
 1. OpenCode 用户可以直接打开已有项目，常用配置和声明式资产无需手工转换即可生效。
 2. 保留 OpenCode 的来源使用范围、合并顺序、冲突和相对路径语义，并能解释最终值来自哪里。
-3. 尽量复用 BitFun 已有配置、Agent、Skill、MCP、LSP、主题等归属模块，不复制第二套产品内核。
+3. 尽量复用 BitFun 已有配置、Agent、Skill、MCP、主题等归属模块，不复制第二套产品内核。
 4. 未知字段和未支持资产局部降级，不导致整个配置、项目启动或界面卡死。
 5. 低风险内容默认无感应用并可撤销；可执行、联网、凭据或外部进程能力在首次启用和能力扩大时等待非阻塞确认。
 6. 本地激活后的运行语义以兼容优先；用户或组织可以收紧权限，策略差异必须与解析或插件错误分开显示。
@@ -163,7 +166,7 @@ OpenCode 来源顺序决定兼容输入如何合并；BitFun 产品能力上限�
 | OpenCode 来源发现器 | 在本地或 Remote 执行域寻找主配置、独立 TUI 配置、目录资产、环境指定来源和组织默认 | 合并配置、执行插件、保存最终产品状态 |
 | OpenCode 配置解析器 | JSON/JSONC、变量引用、字段版本、来源位置和未知字段保留 | 使用 BitFun 默认值猜测 OpenCode 语义 |
 | 来源合并器 | 按固定 OpenCode 版本合并并记录每个最终值的来源和覆盖关系 | 应用 BitFun 产品或组织策略 |
-| 资产适配器 | 把 Rule、Agent、Skill、Command、MCP、LSP、Formatter、Theme、Keybind、Reference 和模型配置分别交给已存在或阶段内补齐的真实消费接口 | 因“看起来已有”而跳过基础能力或边界整理，或创建第二套 Agent、MCP、LSP、Formatter 或主题运行时 |
+| 资产适配器 | 把 Rule、Agent、Skill、Command、MCP、Formatter、Theme、Keybind、Reference 和模型配置分别交给已存在或阶段内补齐的真实消费接口；LSP 只输出 L0 `unsupported` 诊断 | 因“看起来已有”而跳过基础能力或边界整理，创建第二套 Agent、MCP、Formatter 或主题运行时，或为已退役的 LSP 建立 DTO/进程/执行路径 |
 | 策略检查 | 在 OpenCode 合并结果上应用用户、产品和组织上限，生成可解释差异 | 改写原始 OpenCode 文件或伪装成解析错误 |
 | 状态与诊断服务 | 原子发布新结果、保留上一有效结果、聚合错误并区分已发现/已应用/需确认/暂时过期/已移除 | 在界面线程同步解析远程来源或安装依赖 |
 
@@ -211,7 +214,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 | References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | OpenCode adapter 输出来源无关的 Reference provider snapshot；Product Assembly 生命周期协调器与 BitFun 原生关联目录合成唯一有效引用目录；关联目录视图和既有目录选择器消费 | 当前支持本地声明路径、description/hidden、异步刷新和 `@alias` 展示；原生关联目录始终在 OpenCode 引用之前，外部引用只读、不自动进入 Prompt 且不改变权限 | Git 引用、Remote 发现和下载/缓存不实现；无效高优先级 entry 阻断同 alias 的旧值并给出诊断，不回退到更宽松来源。 |
 | Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用与 shell 计划，Product Assembly 负责审批指纹和装配，Terminal owner 负责进程执行 | prompt 与静态 workspace 相对 UTF-8 `@file` 可发送；`!shell` 展示精确命令、工作目录与绝对 shell 路径，经重新校验后以不加载 profile 的隔离式 argv 执行，并仅把 stdout 按模板顺序加入 Prompt。为保持 OpenCode 语义，正常退出后的非零退出码仍使用 stdout。静态计划可记住，参数相关计划仅可单次运行；显式 agent 加缺省/true subtask 可走 approved fresh Subagent，其余 agent/model/variant/subtask 组合以及 shell 与委派的组合整体受限 | 任一文件读取、进程启动、超时或超限失败时不发送部分 Prompt；进程副作用不可回滚。最多 8 文件、单文件 64 KiB、文件总量 128 KiB；最多 8 条 shell 指令、单条 64 KiB、总计 128 KiB、每条 stdout 256 Ki 字符、30 秒；最终命令 1 MiB。安全模式禁用，Remote 不回退到本机。 |
 | MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；显式 V1 `timeout` 作为毫秒值约束启动、目录读取和执行，并在 GUI/TUI 审阅详情中可见；C0a 快照导入只复制无 env/cwd/timeout 的 local command/args 或无 header/query/fragment/timeout 的 HTTPS remote，并保持 disabled | `{env:NAME}` 当前只允许用于运行期兼容来源的 environment/Header 值，不进入 C0a 快照；SSE、OpenCode OAuth client 配置、Agent 范围、Remote 执行域与 V2 分阶段 timeout 配置格式保持明确不支持；凭据、超时或网络失败只影响单个 Server。 |
-| LSP | command、extensions、env、initialization | LSP 归属模块注册兼容实例 | 首次确认外部进程和使用范围后按文件类型启动 | 自定义 Server 缺少 extensions 或启动失败时只禁用该项。 |
+| LSP | command、extensions、env、initialization | **Runtime 已退役**：adapter 只保留来源位置与字段存在事实，不创建运行时 DTO | 固定显示 `unsupported`；永不导入、应用或执行 | 不启动本地或 Remote 进程，不安装 Server，不回退到控制端本机；该项不进入任何 OC-R 阶段。 |
 | Formatters | command、environment、extensions、`$FILE` | **基础能力缺失**：先补文件写入后的 Formatter 执行消费点，再做格式转换 | 首次确认命令后执行匹配 Formatter | 超时后标记未格式化，文件写入结果保留。 |
 | Themes | builtin/user/project/cwd JSON | **部分已有**：GUI Theme 已有；TUI 主题消费边界在终端阶段补齐 | 保留覆盖顺序和语义角色 | 颜色能力不支持时做可见降级。 |
 | Keybinds | `tui.json` 的 leader、组合键、禁用和命令标识 | **已有行为、边界未抽取**：从现有 TUI 输入/命令路径提取最小接口 | 保留用户和项目覆盖 | 平台冲突时显示最终绑定与原因。 |
@@ -394,7 +397,9 @@ OpenCode 生态内部仍按其规则覆盖同名内置命令，但跨独立 prov
   和执行；缺省值继续使用 BitFun 既有行为。当前是每次请求的硬期限，不因 progress 重置；超时只停止 BitFun 的当前等待，
   不承诺服务端工作已经取消，也不自动重放或重启。SSE、OpenCode
   `clientId/clientSecret/scope/callbackPort/redirectUri`、V2 分阶段 timeout 配置格式和 Agent 范围仍需后续接入，不能静默忽略。
-- LSP 必须覆盖 initialization、扩展名匹配、环境变量和工作区生命周期。
+- LSP 只解析到来源清单和 `unsupported` 诊断。BitFun LSP Runtime 已退役，因此 command、extensions、env、
+  initialization 不进入产品 DTO，不触发审批、安装或进程启动，在本地、Remote Workspace、Peer Device 和 Detached
+  Dispatch 中都不得执行或回退。
 - Formatter 必须覆盖写入后时机、`$FILE` 替换、`environment`、多个 Formatter 顺序和失败行为。
 
 ### 5.5 其他稳定配置项
@@ -447,8 +452,9 @@ OpenCode 配置文档还包含下列不属于声明式目录资产、但会改�
 
 - 项目 `.opencode` 在实际工作区所在执行域发现、解析和监听；远程项目不回到本机扫描同名路径。
 - 用户全局根必须明确属于本地用户还是远程用户，不能按路径字符串猜测。
-- 本地界面可以展示远程兼容结果和诊断，但依赖安装、LSP、Formatter、local MCP、Command shell 和插件 worker
+- 本地界面可以展示远程兼容结果和诊断，但依赖安装、Formatter、local MCP、Command shell 和插件 worker
   在远程执行域运行。
+- 远程来源中的 LSP 字段仍只显示 `unsupported`；不在远端启动，也不回退到本机。
 - OC-R5 在远端实现同一窄访问接口，并路由到远端已有领域存储或执行环境；R5 之前远程插件路径返回明确
   `unsupported`。不存在通用 Remote credential broker，也不从本机静默复制原值。
 - 两端先交换兼容版本和能力；远端不支持的资产局部降级，不能把整个会话标记为失败。

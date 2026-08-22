@@ -2,7 +2,7 @@
 
 [中文版](./SECURITY_CN.md)
 
-BitFun is a desktop-grade Agent runtime (Rust core + Tauri shell) that runs on your own machine with broad capabilities—filesystem, terminal, Git, MCP/LSP, and remote control. Because of this reach, we take security reports seriously and appreciate the community's help in keeping users safe.
+BitFun is a desktop-grade Agent runtime (Rust core + Tauri shell) that runs on your own machine with broad capabilities—filesystem, terminal, Git, MCP, and remote control. Because of this reach, we take security reports seriously and appreciate the community's help in keeping users safe.
 
 ## Supported Versions
 

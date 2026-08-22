@@ -16,14 +16,14 @@
 ## 1. 基础边界
 
 - 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一事实源。
-- 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约；LSP protocol DTO 和 plugin manifest DTO 已进入 `bitfun-core-types`。
+- 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约。
 - 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-harness`、`bitfun-product-domains`、`bitfun-product-capabilities` 等归属 crate。
 - `src/crates` 已按 `interfaces / assembly / adapters / services / execution / contracts` 六层布局整理，DeepReview path classifier、边界规则、Cargo workspace 路径和根/层级 AGENTS 已同步。
 - Cargo metadata 实际解析图检查已覆盖 workspace 与独立 manifest 的 normal、build、dev 依赖及 optional/target 变体；未知 crate 层级与反向依赖会直接失败。
 
 ## 2. 已迁移归属
 
-- `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、generic JSON persistence、storage cleanup、front-matter markdown、workspace instruction file IO/order、filesystem primitives、managed runtime command resolution / PATH merge、LSP plugin registry / extension matching / command-target mapping、diagnostic redaction、session usage/token usage 持久化与查询服务。
+- `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、generic JSON persistence、storage cleanup、front-matter markdown、workspace instruction file IO/order、filesystem primitives、managed runtime command resolution / PATH merge、diagnostic redaction、session usage/token usage 持久化与查询服务。
 - `services-core` 已承接 workspace-runtime legacy session-store merge、metadata 冲突选择、index rebuild 和 legacy path copy/move fallback；core workspace-runtime 只保留路径计算、runtime layout ensure 和错误兼容映射。
 - `services-core` 已承接 LocalSystemAction 的稳定错误码转换；core Computer Use 系统动作路径只把这些 stable code 适配到既有 ControlHub 工具调用对象。
 - `services-core` 已承接 memory workspace Git baseline、diff collection 和 diff file rendering；core memory workspace 只保留业务文件生成、Phase2 diff 清理、兼容 API 路径和错误类别映射。
@@ -42,8 +42,6 @@
 - 插件运行时边界基础已建立：`runtime-ports` 持有 `PluginRuntimeClient`、binding、availability、插件调用与响应 DTO、disabled stub 和 `ProjectionOnlyPluginRuntimeClient`；产品组装输出扩展可用性事实与插件运行时绑定，并通过 Agent Runtime 内部 builder 注入该 binding；Agent Runtime SDK 接口不导出原始插件运行时 client 契约。默认产品启动不运行 JS/TS、worker 或子进程。
 - OpenCode-compatible P0-C.1/P0-C.2 已建立受管包发现、完整性校验、工作区来源审核、精确内容哈希激活、CLI 管理与诊断，以及按需创建 OpenCode 适配器、`PluginRuntimeClient` 和 `PluginRuntimeBinding` 的唯一生产组装点。当前组装只返回需要权限的 custom tool 静态候选，不注册工具或执行插件代码。
 - 插件停用已支持按工作区和包清理缺失或损坏包的残留激活记录；停用状态在扫描前提交，后续受限发现负责结果分类，并在稳定发现同 ID 不同来源时协调旧审核记录。包暂时缺失或损坏时保留来源审核记录；同一 `idempotency_key` 沿用已保存结果；请求携带的项目、信任、策略或工具目录版本过期时会被拒绝；持久化结果不确定时不报告成功。
-- LSP plugin runtime target 和命令占位符解析已从 `services-core` 收口到 `core-types`；`services-core` 保留兼容 re-export、registry、current-target detection 和 filesystem / runtime service 逻辑。
-
 - Agent session/workspace owner routing 已继续收敛：`AgentRuntime` 提供 port-backed session workspace resolution entrypoint；Cron、SessionControl、SessionMessage 和 SessionHistory 不再在工具实现中直接解析目标 session workspace，Cron 保留 target session 可见性验证，workspace identity 中的 `workspace_id` / remote connection / remote host 通过 runtime contract 传递。
 - `/goal` model tool management 已继续收敛：`AgentRuntime` 提供 thread-goal management port，`get_goal` / `create_goal` / `update_goal` 经 `CoreServiceAgentRuntime` 路由到 core concrete adapter；goal lifecycle、metadata、tool response wire shape 和错误类别保持等价。
 - `services-integrations` workspace search result mapping 已承接 flashgrep hit conversion 与 preview split owner，保持缺失 `line_text` 时的既有输出语义，并由 focused tests 覆盖有无 preview 两种路径。

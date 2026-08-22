@@ -159,7 +159,7 @@ BitFun 的扩展路径从轻到重连续展开：
 
 1. Code Agent、Deep Review、调试和长任务执行能力
 2. Cowork、调研、文档和桌面工作流
-3. MCP、Skills、Mini App、LSP 插件和新领域 Agent
+3. MCP、Skills、Mini App 和新领域 Agent
 4. Runtime 稳定性、性能、上下文效率和可验证性
 
 请将 PR 直接提交至 `main` 分支。更多说明见 [CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md)。

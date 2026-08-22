@@ -32,7 +32,6 @@ export const ALL_NAMESPACES = [
   'settings/editor',
   'settings/external-apps',
   'settings/hooks',
-  'settings/lsp',
   'settings/mcp',
   'settings/mcp-tools',
   'settings/memory',
@@ -56,7 +55,6 @@ export const WEB_UI_BOOTSTRAP_NAMESPACES = [
   'panels/files',
   'panels/git',
   'settings/models',
-  'settings/lsp',
   'shared',
   'tools',
 ] as const satisfies readonly (typeof ALL_NAMESPACES)[number][];

@@ -95,7 +95,7 @@
   },
   "advanced": {
     "semanticHighlighting": "语义高亮",
-    "semanticHighlightingDesc": "基于语义分析的代码高亮（需要 LSP 支持）",
+    "semanticHighlightingDesc": "使用语义信息改进代码高亮",
     "bracketPairColorization": "括号对着色",
     "bracketPairColorizationDesc": "用不同颜色区分嵌套的括号对",
     "formatOnSave": "保存时格式化",

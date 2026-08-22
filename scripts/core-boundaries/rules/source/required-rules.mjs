@@ -343,129 +343,6 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/core-types/src/lsp.rs',
-    reason:
-      'core-types must own shared LSP protocol DTOs, plugin manifest wire contracts, and plugin runtime target DTOs',
-    patterns: [
-      {
-        regex: /\bpub struct LspPlugin\b/,
-        message: 'missing LSP plugin manifest contract owner',
-      },
-      {
-        regex: /\bpub struct ServerConfig\b/,
-        message: 'missing LSP plugin server config contract',
-      },
-      {
-        regex: /\bpub enum JsonRpcMessage\b/,
-        message: 'missing LSP JSON-RPC wire DTO contract',
-      },
-      {
-        regex: /\bpub enum PluginSource\b/,
-        message: 'missing LSP plugin source contract',
-      },
-      {
-        regex: /\bpub struct LspPluginRuntimeTarget\b/,
-        message: 'missing LSP plugin runtime target contract',
-      },
-      {
-        regex: /\bpub fn resolve_lsp_plugin_command_for_target\b/,
-        message: 'missing pure LSP plugin command placeholder resolver',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/services/services-core/src/lsp.rs',
-    reason:
-      'services-core must own pure LSP plugin registry and current-target mapping rules',
-    patterns: [
-      {
-        regex: /\bpub struct PluginRegistry\b/,
-        message: 'missing services-owned LSP plugin registry',
-      },
-      {
-        regex: /\bpub struct LspSupportedExtensions\b/,
-        message: 'missing supported extension summary owner',
-      },
-      {
-        regex: /\bpub fn resolve_plugin_command_for_current_target\b/,
-        message: 'missing current-target LSP plugin command resolver',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/service/lsp/types.rs',
-    reason:
-      'core LSP types path must remain a compatibility facade over core-types',
-    patterns: [
-      {
-        regex: /\bpub use bitfun_core_types::lsp::\*/,
-        message: 'core LSP types must re-export bitfun-core-types contracts',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/service/lsp/registry.rs',
-    reason:
-      'core LSP registry path must remain a compatibility facade over services-core',
-    patterns: [
-      {
-        regex: /\bpub use bitfun_services_core::lsp::\{/,
-        message: 'core LSP registry must re-export services-core registry',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/contracts/core-types/tests/core_type_contracts/lsp_contracts.rs',
-    reason:
-      'core-types must keep LSP manifest serialization, default-value, and placeholder regressions',
-    patterns: [
-      {
-        regex: /\blsp_plugin_manifest_defaults_preserve_legacy_shape\b/,
-        message: 'missing LSP manifest default regression',
-      },
-      {
-        regex: /\blsp_capability_config_missing_fields_default_to_false\b/,
-        message: 'missing LSP capability default regression',
-      },
-      {
-        regex: /\blsp_plugin_command_placeholder_resolution_is_contract_owned\b/,
-        message: 'missing LSP command placeholder contract regression',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/services/services-core/tests/lsp_plugin_registry_contracts.rs',
-    reason:
-      'services-core must keep behavior-equivalence contracts for LSP plugin registry and command mapping',
-    patterns: [
-      {
-        regex: /\bregistry_preserves_language_extension_and_file_path_lookup\b/,
-        message: 'missing LSP registry lookup regression',
-      },
-      {
-        regex: /\bregistry_unregister_removes_plugin_indexes\b/,
-        message: 'missing LSP registry unregister regression',
-      },
-      {
-        regex: /\bregistry_unregister_preserves_indexes_owned_by_newer_plugin\b/,
-        message:
-          'missing LSP registry overlapping-plugin unregister regression',
-      },
-      {
-        regex: /\bregistry_duplicate_and_missing_errors_keep_legacy_messages\b/,
-        message: 'missing LSP registry error-message regression',
-      },
-      {
-        regex: /\bregistry_supported_extensions_matches_desktop_api_shape\b/,
-        message: 'missing LSP supported extension summary regression',
-      },
-      {
-        regex: /\bplugin_command_placeholder_resolution_is_target_driven\b/,
-        message: 'missing LSP plugin command placeholder regression',
-      },
-    ],
-  },
-  {
     path: 'src/crates/execution/runtime-services/src/lib.rs',
     reason:
       'runtime-services must own typed runtime service assembly and capability validation contracts',
@@ -8652,10 +8529,6 @@ export const requiredContentRules = [
         message: 'missing narrow tool startup entry',
       },
       {
-        regex: /\binitializeLsp\b/,
-        message: 'missing LSP startup initializer call',
-      },
-      {
         regex: /\binitializeGit\b/,
         message: 'missing Git startup initializer call',
       },
@@ -10131,10 +10004,6 @@ export const requiredContentRules = [
       {
         regex: /#\[cfg\(feature = "dispatch-store"\)\]\s*pub mod dispatch\b/s,
         message: 'dispatch store facade must stay gated behind dispatch-store',
-      },
-      {
-        regex: /#\[cfg\(feature = "lsp"\)\]\s*pub mod lsp\b/s,
-        message: 'LSP facade must stay gated behind lsp',
       },
       {
         regex: /#\[cfg\(feature = "remote-workspace"\)\]\s*pub mod remote_ssh\b/s,

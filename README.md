@@ -159,7 +159,7 @@ Stars, Issues, and PRs are welcome. We especially care about:
 
 1. Code Agent, Deep Review, debugging, and long-task execution capabilities
 2. Cowork, research, document, and desktop workflows
-3. MCP, Skills, Mini App, LSP plugins, and new domain Agents
+3. MCP, Skills, Mini App, and new domain Agents
 4. Runtime stability, performance, context efficiency, and verifiability
 
 Please submit PRs directly to the `main` branch. For more details, see [CONTRIBUTING.md](./CONTRIBUTING.md).

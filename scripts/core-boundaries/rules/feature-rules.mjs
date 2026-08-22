@@ -33,10 +33,10 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'services-core optional implementation dependencies must stay behind their exact owner capability',
     dependencies: [
-      { depName: 'anyhow', ownerFeatures: ['dispatch-workspace', 'lsp', 'workspace-runtime'] },
+      { depName: 'anyhow', ownerFeatures: ['dispatch-workspace', 'workspace-runtime'] },
       { depName: 'async-trait', ownerFeatures: ['permission', 'workspace-runtime'] },
       { depName: 'base64', ownerFeatures: ['filesystem'] },
-      { depName: 'bitfun-core-types', ownerFeatures: ['local-storage', 'lsp'] },
+      { depName: 'bitfun-core-types', ownerFeatures: ['local-storage'] },
       { depName: 'bitfun-events', ownerFeatures: ['local-storage'] },
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['permission', 'workspace-runtime'] },
       { depName: 'chrono', ownerFeatures: ['filesystem', 'local-storage'] },
@@ -47,7 +47,6 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'globset', ownerFeatures: ['workspace-instructions'] },
       { depName: 'ignore', ownerFeatures: ['filesystem'] },
       { depName: 'libc', ownerFeatures: ['local-storage', 'process-runtime'] },
-      { depName: 'notify', ownerFeatures: ['lsp'] },
       {
         depName: 'regex',
         ownerFeatures: [
@@ -74,7 +73,6 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'which', ownerFeatures: ['process-runtime'] },
       { depName: 'win32job', ownerFeatures: ['process-runtime'] },
       { depName: 'windows', ownerFeatures: ['json-io', 'local-storage', 'process-runtime'] },
-      { depName: 'zip', ownerFeatures: ['lsp'] },
       {
         depName: 'tokio',
         ownerFeatures: [
@@ -82,7 +80,6 @@ export const optionalDependencyFeatureOwnerRules = [
           'filesystem',
           'json-io',
           'local-storage',
-          'lsp',
           'permission',
           'process-runtime',
           'session-search',
@@ -229,7 +226,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'serde_yaml', ownerFeatures: ['workspace-runtime'] },
       { depName: 'similar', ownerFeatures: ['agent-runtime'] },
       { depName: 'terminal-core', ownerFeatures: ['terminal'] },
-      { depName: 'notify', ownerFeatures: ['lsp', 'workspace-watch'] },
+      { depName: 'notify', ownerFeatures: ['workspace-watch'] },
       { depName: 'tokio-tungstenite', ownerFeatures: ['browser-control'] },
       { depName: 'tokio-util', ownerFeatures: ['agent-runtime'] },
       { depName: 'unic-langid', ownerFeatures: ['i18n-runtime'] },
@@ -667,7 +664,6 @@ export const coreProductFullFeatureAssemblyRule = {
     'file-watch',
     'filesystem',
     'git',
-    'lsp',
     'local-storage',
     'process-runtime',
     'external-sources',
@@ -695,7 +691,6 @@ export const acpServerCoreFeatures = [
   'document-read',
   'subscription-auth',
   'deep-research',
-  'lsp',
   'external-sources',
   'tools-basic',
   'tools-git',
@@ -917,7 +912,6 @@ export const coreClosedFeatureProfileRules = [
     allowedTransitiveFeatureRefs: [
       'ai-adapter-runtime',
       'filesystem',
-      'lsp',
       'local-storage',
       'process-runtime',
       'remote-workspace',
@@ -955,7 +949,6 @@ export const coreClosedFeatureProfileRules = [
       'workspace-watch',
       'ai-adapter-runtime',
       'filesystem',
-      'lsp',
       'local-storage',
       'process-runtime',
       'remote-workspace',
@@ -1411,22 +1404,6 @@ export const coreClosedFeatureProfileRules = [
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
-    featureName: 'lsp',
-    requiredFeatureRefs: [
-      'dep:anyhow',
-      'dep:bitfun-core-types',
-      'dep:notify',
-      'dep:zip',
-      'process-runtime',
-      'tokio/fs',
-      'tokio/io-util',
-      'tokio/sync',
-    ],
-    exact: true,
-    reason: 'services-core lsp must compose process supervision with only its protocol and watcher capabilities',
-  },
-  {
-    manifestPath: 'src/crates/services/services-core/Cargo.toml',
     featureName: 'workspace-runtime',
     requiredFeatureRefs: [
       'dep:anyhow',
@@ -1488,13 +1465,6 @@ export const coreClosedFeatureProfileRules = [
     requiredFeatureRefs: ['bitfun-services-core/process-runtime'],
     exact: true,
     reason: 'bitfun-core process-runtime must select only managed process and local action owners',
-  },
-  {
-    manifestPath: 'src/crates/assembly/core/Cargo.toml',
-    featureName: 'lsp',
-    requiredFeatureRefs: ['dep:notify', 'bitfun-services-core/lsp', 'tokio/macros'],
-    exact: true,
-    reason: 'bitfun-core lsp must select only the LSP owner and its workspace watcher dependency',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',

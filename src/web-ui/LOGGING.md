@@ -64,7 +64,7 @@ log.error('Failed to load', { location: 'initializeApp', error });
 Examples:
 ```
 [WorkspaceManager] Loading workspace configuration
-[LspService] Failed to start server {"code":"ENOENT"}, Error: spawn node ENOENT
+[FileSystemService] Failed to read workspace file {"code":"ENOENT"}, Error: file not found
     at ChildProcess._handle.onexit (...)
 ```
 

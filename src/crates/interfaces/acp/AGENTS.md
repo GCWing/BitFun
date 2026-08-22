@@ -12,7 +12,7 @@ The crate exposes two additive roles. `client` owns ACP process discovery,
 configuration, remote probing, session transport, and tool-card projection; it
 selects the Core Agent Runtime plus concrete SSH support. `server` owns the
 CLI-hosted ACP server and runtime projection through `DeliveryProfile::Acp`; it
-selects the exact Core tool, document, subscription, LSP, and external-source
+selects the exact Core tool, document, subscription, and external-source
 owners used by that path, but does not select SSH. The compatibility default is
 exactly `client + server`. Desktop selects only `client`; CLI selects both.
 Keep these role features additive and do not replace either closure with

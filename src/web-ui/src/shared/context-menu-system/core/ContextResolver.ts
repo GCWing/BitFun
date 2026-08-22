@@ -19,6 +19,31 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ContextResolver');
 
+const EDITOR_ACTION_IDS = [
+  'editor.action.formatDocument',
+  'editor.action.revealDefinition',
+  'editor.action.goToTypeDefinition',
+  'editor.action.referenceSearch.trigger',
+  'editor.action.rename',
+  'editor.action.quickFix',
+  'editor.action.quickOutline',
+  'editor.action.wordHighlight.trigger'
+] as const;
+
+function findAttachedMonacoEditor(target: HTMLElement, boundary: HTMLElement): any | null {
+  let currentElement: HTMLElement | null = target;
+  while (currentElement) {
+    if ((currentElement as any).__monacoEditor) {
+      return (currentElement as any).__monacoEditor;
+    }
+    if (currentElement === boundary) {
+      break;
+    }
+    currentElement = currentElement.parentElement;
+  }
+  return null;
+}
+
  
 export class ContextResolver {
   
@@ -249,25 +274,17 @@ export class ContextResolver {
     
     let cursorPosition: { line: number; column: number } | undefined;
     let selectionRange: EditorContext['selectionRange'];
+    let supportedActionIds: string[] | undefined;
     
     try {
       const monacoGlobal = (window as any).monaco;
+      const attachedEditor = findAttachedMonacoEditor(base.targetElement, editorElement);
       
-      if (monacoGlobal?.editor) {
-        let targetEditor = null;
+      if (attachedEditor || monacoGlobal?.editor) {
+        let targetEditor = attachedEditor;
         
         
-        let currentElement: HTMLElement | null = editorElement;
-        while (currentElement && !targetEditor) {
-          if ((currentElement as any).__monacoEditor) {
-            targetEditor = (currentElement as any).__monacoEditor;
-            break;
-          }
-          currentElement = currentElement.parentElement;
-        }
-        
-        
-        if (!targetEditor) {
+        if (!targetEditor && monacoGlobal?.editor) {
           const editors = monacoGlobal.editor.getEditors?.() || [];
           for (const editor of editors) {
             const domNode = editor.getDomNode?.();
@@ -285,6 +302,10 @@ export class ContextResolver {
         
         
         if (targetEditor) {
+          supportedActionIds = EDITOR_ACTION_IDS.filter((actionId) => {
+            const action = targetEditor.getAction?.(actionId);
+            return action?.isSupported?.() === true;
+          });
           
           try {
             if (typeof targetEditor.getTargetAtClientPoint === 'function') {
@@ -366,6 +387,7 @@ export class ContextResolver {
       cursorPosition,
       selectedText,
       selectionRange,
+      supportedActionIds,
       isReadOnly
     };
   }

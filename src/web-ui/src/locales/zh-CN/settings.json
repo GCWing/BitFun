@@ -471,13 +471,6 @@
     "minimap": "显示缩略图",
     "lineNumbers": "显示行号"
   },
-  "lspConfig": {
-    "title": "语言服务",
-    "subtitle": "配置语言服务器",
-    "installedServers": "已安装的语言服务器",
-    "noServers": "暂无语言服务器",
-    "noServersHint": "语言服务器提供代码智能功能"
-  },
   "terminalConfig": {
     "title": "终端",
     "subtitle": "配置集成终端",

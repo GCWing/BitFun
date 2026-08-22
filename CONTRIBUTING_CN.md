@@ -95,7 +95,7 @@ DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Sh
    > 欢迎产品经理、UI 设计师通过 PI 快速提交创意，我们会帮助完善开发
 2. 优化 Agent 系统和效果
 3. 对提升系统稳定性和完善基础能力
-4. 扩展生态（Skills、MCP、LSP 插件，或者对某些垂域开发场景的更好支持）
+4. 扩展生态（Skills、MCP，或者对某些垂域开发场景的更好支持）
 
 ## 贡献流程与 PR 约定
 

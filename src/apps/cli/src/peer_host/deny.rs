@@ -117,7 +117,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.
-/// Prefix match is applied for `lsp_`, `canvas_`, `editor_`, `ssh_`,
+/// Prefix match is applied for `canvas_`, `editor_`, `ssh_`,
 /// `terminal_`, `search_` unless the command is explicitly allowlisted.
 ///
 /// `git_*` is intentionally not prefix-denied: `git_is_repository` and the
@@ -136,6 +136,11 @@ pub(crate) fn is_local_only_command(command: &str) -> bool {
     LOCAL_ONLY_COMMANDS.contains(&command)
 }
 
+/// Commands kept as protocol tombstones after their runtime owner was removed.
+pub(crate) fn is_retired_command(command: &str) -> bool {
+    command.starts_with("lsp_")
+}
+
 pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
     if command == "search_session_content" {
         return false;
@@ -144,7 +149,6 @@ pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
         return true;
     }
     let prefixes = [
-        "lsp_",
         "canvas_",
         "editor_",
         "ssh_",
@@ -159,7 +163,13 @@ pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_cli_unsupported_command, is_local_only_command};
+    use super::{is_cli_unsupported_command, is_local_only_command, is_retired_command};
+
+    #[test]
+    fn retired_lsp_commands_are_matched_without_overmatching_external_names() {
+        assert!(is_retired_command("lsp_open_workspace"));
+        assert!(!is_retired_command("custom_lsp_wrapper"));
+    }
 
     #[test]
     fn session_content_search_executes_on_the_peer_host() {

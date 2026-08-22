@@ -54,7 +54,6 @@ export interface EditorExtensionContext {
   language: string;
   workspacePath?: string;
   readOnly: boolean;
-  enableLsp: boolean;
 }
 
 interface ExtensionRegistration {

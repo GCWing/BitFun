@@ -1534,7 +1534,6 @@ dependencies = [
  "ignore",
  "libc",
  "log",
- "notify",
  "regex",
  "rusqlite",
  "serde",
@@ -1548,7 +1547,6 @@ dependencies = [
  "which 8.0.5",
  "win32job",
  "windows 0.61.3",
- "zip 4.6.1",
 ]
 
 [[package]]

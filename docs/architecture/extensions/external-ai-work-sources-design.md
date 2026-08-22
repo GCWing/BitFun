@@ -234,10 +234,14 @@ provider 失败事实，避免在空目录界面中伪装成“成功但没有�
 
 | 等级 | 示例 | 默认行为 |
 |---|---|---|
-| L0 仅清单 | 尚未支持的字段、静态插件/工具名称、来源元数据 | 自动发现和展示，绝不宣称已经应用或可执行。 |
+| L0 仅清单 | 尚未支持的字段、静态插件/工具名称、来源元数据、外部生态的 LSP 声明 | 自动发现和展示，绝不宣称已经应用或可执行。 |
 | L1 被动声明 | 本地 Rules、Instructions、纯声明配置、Skill 的说明和索引 | 校验后默认自动应用；显示一次可撤销摘要。不得启动进程、读取凭据或主动联网。 |
-| L2 受归属模块保护的外部能力 | 可执行 Skill/Command、远程 Reference、MCP、LSP、Formatter、Provider 连接 | 发现后进入“需确认”；由真实归属模块展示命令、网络、凭据和使用范围后启用。 |
+| L2 受归属模块保护的外部能力 | 可执行 Skill/Command、远程 Reference、MCP、Formatter、Provider 连接 | 发现后进入“需确认”；由真实归属模块展示命令、网络、凭据和使用范围后启用。 |
 | L3 任意第三方代码 | JS/TS Tool、服务插件、动态 Hook/TUI 入口、动态 import | 默认发现但不 import；只有能在执行前完整枚举命令与依赖、并由既有归属模块承担执行的窄切片可经独立设计和精确审阅启用。不能承诺动态 import 前已知全部贡献。 |
+
+LSP 是明确的退役边界，不参与 L2 升级：Claude Code、OpenCode 或其他来源中的 LSP 字段只能作为 L0 来源事实或
+`unsupported` 诊断保留。BitFun LSP Runtime 已退役，adapter 不得导入、应用或执行这些声明，不得为其创建产品 DTO、
+启动进程，也不得在 Remote 不支持时回退到控制端本机。
 
 OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；激活仍需确认实际模型、工具、执行域和来源关系。
 仅 description 等 catalog 文案变化不会扩大运行权限，因此不重复询问；prompt 行为、来源、模型或工具变化必须重新确认。
@@ -307,7 +311,8 @@ Desktop、交互式 TUI 以及未来通过 Host 能力访问该状态的界面�
 
 本切片明确不实现：内置厂商/型号别名表、按名称推断能力、模型质量评分、成本优化、自动跨 provider fallback、在线模型目录、
 模型下载或安装、请求级配置覆盖、通用 options map、temperature/top_p/thinking budget/reasoning summary/verbosity、
-Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capability 标签只用于验证模型是否具备调用所需的已声明功能，
+Plugin Host Runtime、已退役的 LSP Runtime，以及通用动态模型路由器。外部 LSP 声明只形成 L0/`unsupported`
+事实，永不导入、应用或执行。现有 capability 标签只用于验证模型是否具备调用所需的已声明功能，
 不能据此宣称两个模型在质量、成本、隐私或上下文行为上等价。
 
 完成判定使用表驱动契约覆盖 Claude、GPT、GLM、DeepSeek 风格以及未知未来名称，证明生产解析不依赖任何厂商列表；同时
@@ -392,10 +397,12 @@ Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capabilit
 - 同一 provider 先完成原生覆盖，再把一个 effective candidate 交给产品管理模块；跨 provider 或 BitFun-native 同名才生成
   用户冲突。选择绑定参与者与行为版本，仅展示变化不重问，候选删除或不可用不静默回退。
 
-该矩阵不是“除 Runtime 外全部兼容”的声明。Rules/Instructions、References、模型/Provider 配置、LSP、Formatter、
+该矩阵不是“除 Runtime 外全部兼容”的声明。Rules/Instructions、References、模型/Provider 配置、Formatter、
 Theme、Keybind、完整插件清单，以及各生态新增的 managed/session/plugin 配置层仍需按具名消费场景逐项评估；其中能够
 安全静态解析的部分也尚未全部实现。后续不得为了填满矩阵建立通用配置 DTO 或第二套归属模块，应继续以端到端收益和
 真实消费方为前提扩展现有能力契约。
+
+LSP 不属于上述待评估能力：上游声明可以被发现并解释为不支持，但不得进入应用层、运行层或未来阶段计划。
 
 声明式 adapter 共同遵守以下边界：
 

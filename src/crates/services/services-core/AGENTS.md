@@ -4,8 +4,8 @@ Scope: this guide applies to `src/crates/services/services-core`.
 
 `bitfun-services-core` owns cross-platform service DTOs and helpers that compile
 without the full product runtime. This includes generic filesystem/search/JSON
-IO helpers, bounded local Instruction file reads, LSP package/protocol/watch/process primitives, session metadata
-storage helpers, and local OS action primitives such as command lookup,
+IO helpers, bounded local Instruction file reads, session metadata storage
+helpers, and local OS action primitives such as command lookup,
 clipboard, file/url opening, script execution, workspace runtime FS/shell
 providers, managed process-tree lifecycle, process-level Agent Runtime ownership locks, and system facts. Product crates may layer routing, policy,
 capability selection, event emission, or legacy error mapping outside this
@@ -24,20 +24,16 @@ crate.
   (JSON/session/usage persistence), `process-runtime` (command
   lookup and supervised child lifecycle), and `workspace-instructions`
   (declarative instruction discovery). Consumers enable those or the narrower
-  `lsp`, `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
+  `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
   `permission`, `dispatch-workspace`, `markdown`, `session-git`, and
   `workspace-text-runtime` extensions only for behavior they use. Products
   needing IANA time-zone ranges and dashboard aggregation additionally select
   `token-usage-statistics`. In particular, session metadata consumers must
   not compile libgit2 unless they use the memory-workspace baseline/diff API.
   Keep Tokio and platform API capabilities owner-scoped too: the empty profile
-  carries no Tokio dependency, `lsp` and `workspace-runtime`
-  explicitly compose `process-runtime`, and Windows storage/process bindings
+  carries no Tokio dependency, `workspace-runtime` explicitly composes
+  `process-runtime`, and Windows storage/process bindings
   must not be enabled from one shared dependency feature union.
-- LSP manifest and protocol DTOs belong in `bitfun-core-types`; reusable LSP
-  package, protocol, detection, debounce, watch, and process-manager helpers
-  belong in `services-core`; product workspace state, event emission, global
-  singletons, and file-sync orchestration stay outside this crate.
 - Runtime call sites that touch agent execution, scheduler state, workspace
   managers, filesystem orchestration, or product behavior stay outside this
   crate. `workspace-runtime` may implement local `bitfun-runtime-ports`

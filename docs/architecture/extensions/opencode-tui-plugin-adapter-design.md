@@ -252,7 +252,9 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 ### 5.10 State、KV、Client 与 Events
 
 - `api.tuiConfig` 和 TUI synced state 通过实时兼容视图映射，不暴露 BitFun 内部 reducer 对象。状态至少覆盖
-  config、provider、path、vcs、session count/diff/todo/messages/status/permission/question、part、LSP 和 MCP。
+  config、provider、path、vcs、session count/diff/todo/messages/status/permission/question、part、上游 LSP 字段事实和 MCP。
+  LSP 只用于版本化 schema 识别和明确的 `unsupported` 状态；BitFun 不消费或发布 LSP Runtime 状态，不创建 DTO、
+  启动进程，也不从 Remote 回退到本机。
 - OpenCode v1 的 `api.kv` 是同一 TUI 应用共享的 KV，不按插件命名空间隔离。默认兼容策略必须保持共享键和
   ready 语义；这意味着插件可能发生键冲突。用户选择受限策略时可以按插件隔离，但必须显示兼容降级。
 - KV 读写在 Plugin Host 外由现有归属模块持久化，写入失败返回稳定错误且不阻塞渲染线程。

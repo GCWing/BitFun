@@ -16,8 +16,6 @@ import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { clearAgentCanvasForPeerSwitch } from '@/app/components/panels/content-canvas/stores';
 import { editorManager } from '@/tools/editor/services/EditorManager';
-import { WorkspaceLspManager } from '@/tools/lsp/services/WorkspaceLspManager';
-import { lspAdapterManager } from '@/tools/lsp/services/LspAdapterManager';
 import { TerminalService } from '@/tools/terminal/services/TerminalService';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -75,13 +73,6 @@ async function resetProductSurface(assertCurrent: () => void): Promise<void> {
     log.warn('Failed to disconnect terminal listeners during device surface switch', { error });
   }
   assertCurrent();
-
-  try {
-    lspAdapterManager.disposeAll();
-    WorkspaceLspManager.detachAllForSurfaceSwitch();
-  } catch (error) {
-    log.warn('Failed to reset LSP during device surface switch', { error });
-  }
 
   try {
     editorManager.destroy();

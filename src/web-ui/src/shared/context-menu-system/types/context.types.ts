@@ -105,6 +105,9 @@ export interface EditorContext extends BaseContext {
     startColumn: number;
     endColumn: number;
   };
+
+  /** Monaco actions supported by the concrete editor at menu-open time. */
+  supportedActionIds?: string[];
    
   isReadOnly?: boolean;
 }

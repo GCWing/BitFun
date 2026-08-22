@@ -19,7 +19,7 @@ MiniApp **能且只能**用以下 API，没有任何"通用 BitFun 后端通道"
 - `app.call('xxx', ...)` + `worker.js` —— 自定义 Node 后端（仅 `node.enabled = true` 时）
 - `app.appearanceMode / locale / on*` —— 主题与 i18n
 
-**框架不暴露**的 BitFun 后端能力（截至当前版本）：WorkspaceService（结构化搜索 / 索引）、GitService（结构化 status/diff/blame）、TerminalService、Session/AgenticSystem、LSP / Snapshot / Mermaid / Skills / Browser / Computer Use / Config 等。需要这些能力时：
+**框架不暴露**的 BitFun 后端能力（截至当前版本）：WorkspaceService（结构化搜索 / 索引）、GitService（结构化 status/diff/blame）、TerminalService、Session/AgenticSystem、Snapshot / Mermaid / Skills / Browser / Computer Use / Config 等。需要这些能力时：
 
 1. 能用裸命令行解决就用 `app.shell.exec`（如 git → 在 `permissions.shell.allow` 加 `"git"`，参考 `builtin-coding-selfie`）；
 2. 只是要读 BitFun 工作区里的文件就用 `app.fs.*`（把 `{workspace}` 加到 `permissions.fs.read`）；

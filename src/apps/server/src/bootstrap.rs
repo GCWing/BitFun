@@ -218,11 +218,6 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
             .map(|w| w.root_path)
     };
 
-    // LSP
-    if let Err(e) = bitfun_core::service::lsp::initialize_global_lsp_manager().await {
-        log::error!("Failed to initialize LSP manager: {}", e);
-    }
-
     let state = Arc::new(ServerAppState {
         ai_client_factory,
         workspace_service,

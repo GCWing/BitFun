@@ -5,7 +5,6 @@
 
 pub mod ai;
 pub mod errors;
-pub mod lsp;
 pub mod model;
 pub mod session;
 pub mod session_usage;

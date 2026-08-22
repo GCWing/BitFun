@@ -30,7 +30,6 @@ export const PEER_EVENT_WRAPPED_PAYLOAD_KEY = '__bitfunSourcePayload';
 const SURFACE_SCOPED_EVENTS = new Set<string>([
   'terminal_event',
   'file-system-changed',
-  'lsp-event',
   'permission://event',
   'account://settings-applied',
   'ai://model-catalog-updated',

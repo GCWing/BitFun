@@ -9,7 +9,7 @@
 | 主题 | 详细设计 |
 |---|---|
 | 外部 AI 工作内容的发现、非阻塞提示、风险分级、导入与持续更新 | [外部 AI 工作内容体验](external-ai-work-sources-design.md) |
-| 配置来源、Rules、Agents、Skills、Commands、MCP、LSP、Formatter、Theme、Keybind | [配置与声明式资产适配](opencode-config-assets-adapter-design.md) |
+| 配置来源、Rules、Agents、Skills、Commands、MCP、LSP（仅 `unsupported` 来源事实）、Formatter、Theme、Keybind | [配置与声明式资产适配](opencode-config-assets-adapter-design.md) |
 | JS/TS 工具、软件包插件、稳定 Hook、`client`、`serverUrl`、`$` | [服务插件运行时适配](opencode-plugin-runtime-adapter-design.md) |
 | TUI 插件入口、Route、Command、Keymap、Dialog、Slot、Theme、State、KV | [终端界面插件适配](opencode-tui-plugin-adapter-design.md) |
 | SDK、Server、ACP、IDE、Web、GitHub、GitLab、Slack | [外部集成适配](opencode-external-integration-adapter-design.md) |
@@ -24,7 +24,7 @@
 - 最新稳定版为 [`v1.18.9`](https://github.com/anomalyco/opencode/releases/tag/v1.18.9)，提交为 [`4da7bb44c84e013fa53e9c5d02ac753d1435c81a`](https://github.com/anomalyco/opencode/commit/4da7bb44c84e013fa53e9c5d02ac753d1435c81a)。
 - 开发分支前瞻检查记录为提交 [`7565e03536d19e850f9996c407f9bf5e932b5f7a`](https://github.com/anomalyco/opencode/commit/7565e03536d19e850f9996c407f9bf5e932b5f7a)。该值会持续变化，只用于发现差异，不计入稳定兼容承诺。
 - `v2` 前瞻分支检查记录为提交 [`247f14f9556c31ee532cb4a79a83283e753adc62`](https://github.com/anomalyco/opencode/commit/247f14f9556c31ee532cb4a79a83283e753adc62)：仓库仍以 Bun 作为 package manager、开发和默认编译路径，同时提供 Node 26 SEA 并行构建与 Node 启动器。它不是“已经完全切换 Node”的稳定承诺。
-- 配置、插件、工具、Agent、Skill、Command、Rule、MCP、LSP、Formatter、Theme、Keybind、开发工具包、Server 和 ACP 以 [OpenCode 官方文档](https://opencode.ai/docs/) 为准。
+- 配置、插件、工具、Agent、Skill、Command、Rule、MCP、Formatter、Theme、Keybind、开发工具包、Server 和 ACP 以 [OpenCode 官方文档](https://opencode.ai/docs/) 为准。
 - 稳定服务插件接口以 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/index.ts) 为准；
 - custom tool 接口以 [`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/tool.ts) 为准；
 - 终端插件接口以 [`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/tui.ts) 为准；
@@ -113,7 +113,7 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
 | Commands | 补扩展接口 + 转换参数 | 部分实现：prompt、本地文本文件、经审阅的 shell 上下文与显式 Subagent 委派 | 可完整适配 | OC-R2 | 已支持全局/项目 JSON、JSONC、Markdown 命令、参数展开、动态目录、刷新和显式冲突选择；模板中的静态 workspace 相对 `@file` 可在调用时有界读取，`!shell` 经精确计划审阅后仅把 stdout 加入 Prompt，静态计划可记住、参数相关计划仅可单次运行。仅 `agent` 加缺省/`true` 的 `subtask` 可委派给同 workspace、同 OpenCode 生态、已审批且仍有效的精确 Subagent，并复用现有 fresh Task 生命周期；shell 与委派的组合、`model`、`variant`、`subtask: false`、隐式默认 Agent、Remote 与附件上下文保持受限，不回退到当前 Agent 或本机执行 | [Commands](opencode-config-assets-adapter-design.md#53-commands) |
 | Models / Providers 配置 | 融合现有能力 | 未实现 | 可主要适配 | OC-R1 | 静态字段进入模型归属模块；动态模型、鉴权和请求头交给插件运行时 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
 | MCP | 转换参数 | 部分实现：local stdio 与 HTTPS remote | 可完整适配 | OC-R2 | 已接入发现、审批、冲突、workspace 隔离、更新和启动反馈；SSE、OAuth、完整 timeout/Agent 范围仍不支持；Remote 不回退本机实例 | [MCP、LSP 与 Formatter](opencode-config-assets-adapter-design.md#54-mcplsp-与-formatter) |
-| LSP | 转换参数 | 未实现 | 可完整适配 | OC-R2 | R1 解析；R2 转换 command、extensions、env 和 initialization 并由 LSP 归属模块启动 | [MCP、LSP 与 Formatter](opencode-config-assets-adapter-design.md#54-mcplsp-与-formatter) |
+| LSP | 明确退役 | Runtime 已删除；仅可保留上游来源事实 | 明确降级：不适配 | 不安排 | command、extensions、env、initialization 只能形成 L0 `unsupported` 诊断；不得导入、应用、执行、创建 DTO、启动进程或 Remote fallback | [MCP、LSP 与 Formatter](opencode-config-assets-adapter-design.md#54-mcplsp-与-formatter) |
 | Formatters | 补基础能力 + 转换参数 | 未实现 | 可主要适配 | OC-R2 | R1 解析；R2 补文件写入后的格式化执行能力，再映射 command/environment/extensions/`$FILE` | [MCP、LSP 与 Formatter](opencode-config-assets-adapter-design.md#54-mcplsp-与-formatter) |
 | Themes | 转换参数 | 未实现 | 可主要适配 | OC-R1 | 保留 builtin/user/project/cwd 覆盖顺序，分别映射 GUI 和 TUI 色彩能力 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
 | Keybinds | 补扩展接口 + 转换参数 | 未实现 | 可主要适配 | OC-R1 | 为运行时 TUI 输入增加 `tui.json` 兼容入口，处理 leader、组合键、禁用和冲突 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |

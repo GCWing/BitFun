@@ -105,7 +105,7 @@ terms:
    > Product managers and UI designers are welcome to submit ideas quickly via PI. We will help refine them for development.
 2. Improve the Agent system and overall quality
 3. Improve system stability and strengthen foundational capabilities
-4. Expand the ecosystem (Skills, MCP, LSP plugins, or better support for domain-specific development scenarios)
+4. Expand the ecosystem (Skills, MCP, or better support for domain-specific development scenarios)
 
 ## Contribution Workflow and PR Expectations
 

@@ -41,11 +41,9 @@ Still to migrate, in order: the interaction mailbox, then history positions.
    - Everything in `resetProductSurface()` must be **frontend-only**.
      `resetProductSurface` runs before the transport swap, so any backend call
      it makes lands on the device being *left*. `terminal_shutdown_all` and
-     `lsp_close_workspace` were exactly that bug: switching away killed the
-     PTYs and language servers an agent turn there was still using
-     (regression: 2026-08-14 multi-device switch). Use
-     `TerminalService.disconnect()` and
-     `WorkspaceLspManager.detachAllForSurfaceSwitch()`.
+     similar lifecycle calls can kill work an agent turn there is still using
+     (regression: 2026-08-14 multi-device switch). Use frontend-only listener
+     detachment such as `TerminalService.disconnect()`.
    - **Identity includes the device surface.** Workspace paths and session ids
      can be equal on different machines. FlowChat/workspace containers,
      state machines, processing status, pending messages, composer drafts,

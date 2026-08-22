@@ -79,7 +79,7 @@
   Git / PR provider / CI / Issue / 文档 / 发布 / 观测 / 知识库
 
 智能体与工具运行时
-  会话 / 智能体 / 终端 / 文件系统 / MCP-LSP / Tool ABI / 适配器
+  会话 / 智能体 / 终端 / 文件系统 / MCP / Tool ABI / 适配器
 ```
 
 关键边界：

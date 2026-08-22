@@ -207,7 +207,7 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 - GitService（结构化 status / diff / blame，区别于裸 `git` 命令）
 - TerminalService（创建/读写交互式终端）
 - Session / AgenticSystem 的**通用**会话管理（任意会话的创建、接管、读写）——小应用只能通过 `app.agent.*` 启动**自己的**隐藏会话并消费其事件，再通过 `app.chat.*` 借用悬浮会话气泡做输入与过程展示；不能访问其他会话
-- LSP / Snapshot / Mermaid / Skills / Browser API / Computer Use / Config 等
+- Snapshot / Mermaid / Skills / Browser API / Computer Use / Config 等
 
 需要这类能力时的合规姿势：
 

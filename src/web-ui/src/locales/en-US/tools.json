@@ -178,9 +178,6 @@
       "indentSettings": "Indent Settings",
       "fileEncoding": "File Encoding",
       "selectLanguageMode": "Select Language Mode",
-      "lspConnected": "LSP Connected",
-      "lspConnecting": "LSP Connecting...",
-      "lspDisconnected": "LSP Disconnected",
       "selectionLinesChars": "{{lines}} lines, {{chars}} chars",
       "selectionChars": "{{count}} selected",
       "ln": "Ln",
@@ -277,23 +274,6 @@
       "viewHistory": "View History",
       "viewChanges": "View Changes",
       "resolveConflict": "Resolve Conflict"
-    }
-  },
-  "lsp": {
-    "referencesPanel": {
-      "previewFallback": "(no preview)",
-      "emptyTitle": "No references found",
-      "emptyWithSymbol": "No references found for symbol \"{{symbol}}\"",
-      "emptyDescription": "No references found",
-      "titleWithSymbol": "References for \"{{symbol}}\"",
-      "title": "References",
-      "emptyLine": "(empty line)"
-    },
-    "errors": {
-      "loadPluginsFailed": "Failed to load plugins",
-      "installPluginFailed": "Failed to install plugin",
-      "uninstallPluginFailed": "Failed to uninstall plugin",
-      "initializeFailed": "Failed to initialize LSP"
     }
   },
   "fileTree": {

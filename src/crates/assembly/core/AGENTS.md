@@ -17,7 +17,7 @@ and `docs/architecture/agent-runtime-services-design.md`.
 Main areas:
 
 - `src/agentic/`: agents, prompts, tools, sessions, execution, persistence
-- `src/service/`: config, filesystem, terminal, git, LSP, MCP, remote connect, AI memory
+- `src/service/`: config, filesystem, terminal, git, MCP, remote connect, AI memory
 - `src/infrastructure/`: AI clients, app paths, event system, storage, debug log server
 - `src/product_runtime/`: Core Agent Runtime compatibility adapters and runtime service provider wiring
 
@@ -113,7 +113,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   not hide an unreviewed Core capability behind mutually exclusive Cargo `cfg`
   branches.
 - Keep the light compatibility features independently compilable. Local service
-  profiles are `dispatch-store`, `lsp`, `terminal`, `workspace-runtime`, and
+  profiles are `dispatch-store`, `terminal`, `workspace-runtime`, and
   `workspace-watch`; `remote-workspace` adds only the remote workspace facade,
   while `ssh-remote` adds concrete SSH transport. Integration facades
   `announcement`, `file-watch`, `git`, and `review-platform` remain independent,

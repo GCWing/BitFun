@@ -120,8 +120,7 @@
     "openError": "Failed to open editor",
     "saveError": "Failed to save file",
     "formatError": "Formatting failed",
-    "parseError": "Failed to parse file",
-    "lspError": "Language server error"
+    "parseError": "Failed to parse file"
   },
   "config": {
     "loadError": "Failed to load configuration",

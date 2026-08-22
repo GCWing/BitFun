@@ -1058,7 +1058,6 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
                   showBreadcrumb={false}
                   showLineNumbers
                   showMinimap
-                  enableLsp={false}
                   isActiveTab={sourceVisible}
                   className="bitfun-canvas-panel__source-code-editor"
                 />
