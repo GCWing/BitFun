@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "96ed05db5779762ef80bffd13f8c363f66846a055778b3f00f9c2ecc05a2bcb5",
-  "commandCount": 691,
+  "catalogDigest": "3207e4dc899c9109f0be952b9497d2f6169f9e2bb3ba9a859dda7e6959903470",
+  "commandCount": 692,
   "commands": [
     {
       "id": "accept_file",
@@ -572,6 +572,16 @@
       "rustPath": "api::browser_api::browser_webview_reload",
       "sourceFile": "src/apps/desktop/src/api/browser_api.rs",
       "signature": "fn browser_webview_reload( app: tauri::AppHandle, request: WebviewLabelRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "browser_webview_set_agent_target_state",
+      "moduleId": "browser",
+      "capabilityId": "feature.browser",
+      "visibility": "implementation",
+      "rustPath": "api::browser_api::browser_webview_set_agent_target_state",
+      "sourceFile": "src/apps/desktop/src/api/browser_api.rs",
+      "signature": "fn browser_webview_set_agent_target_state( request: BrowserAgentTargetStateRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {

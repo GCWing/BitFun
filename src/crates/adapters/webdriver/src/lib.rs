@@ -1,3 +1,4 @@
+mod automation;
 mod executor;
 pub mod platform;
 mod runtime;
@@ -5,16 +6,33 @@ pub mod server;
 pub mod webdriver;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use serde_json::Value;
 use tauri::AppHandle;
 
 use server::AppState;
 
+pub use automation::EmbeddedWebviewAutomation;
+
 const DEFAULT_WEBDRIVER_LABEL: &str = "main";
 
 static SERVER_STARTED: AtomicBool = AtomicBool::new(false);
+static SHARED_STATE: OnceLock<Arc<AppState>> = OnceLock::new();
+
+fn shared_state(app: AppHandle, preferred_label: String, port: u16) -> Arc<AppState> {
+    SHARED_STATE
+        .get_or_init(|| {
+            let state = Arc::new(AppState::new(app.clone(), preferred_label, port));
+            runtime::register_listener(app, state.clone());
+            state
+        })
+        .clone()
+}
+
+pub(crate) fn automation_state(app: AppHandle) -> Arc<AppState> {
+    shared_state(app, DEFAULT_WEBDRIVER_LABEL.to_string(), 0)
+}
 
 pub fn maybe_start(app: AppHandle) {
     if !(cfg!(debug_assertions) || cfg!(feature = "embedded")) {
@@ -34,9 +52,7 @@ pub fn maybe_start(app: AppHandle) {
 
     let preferred_label =
         std::env::var("BITFUN_WEBDRIVER_LABEL").unwrap_or_else(|_| DEFAULT_WEBDRIVER_LABEL.into());
-    let state = Arc::new(AppState::new(app.clone(), preferred_label, port));
-
-    runtime::register_listener(app, state.clone());
+    let state = shared_state(app, preferred_label, port);
     server::start(state);
 }
 

@@ -17,6 +17,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
 use super::browser_launcher::BrowserKind;
+use super::{BrowserAutomationCapabilities, BrowserAutomationClient, BrowserAutomationEvent};
 
 type WsSink = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 type WsStream = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
@@ -27,12 +28,8 @@ type SessionStatuses = Arc<RwLock<HashMap<String, Weak<AtomicBool>>>>;
 const PAGE_CDP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const USER_PROFILE_APPROVAL_TIMEOUT: Duration = Duration::from_secs(90);
 
-/// A single CDP event emitted by the browser (no `id`, has `method` + `params`).
-#[derive(Debug, Clone)]
-pub struct CdpEvent {
-    pub method: String,
-    pub params: Value,
-}
+/// Backward-compatible name for events recorded by CDP-only diagnostics.
+pub type CdpEvent = BrowserAutomationEvent;
 
 struct CdpTransport {
     sink: Arc<Mutex<WsSink>>,
@@ -534,6 +531,29 @@ impl CdpClient {
                 status.store(false, Ordering::SeqCst);
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl BrowserAutomationClient for CdpClient {
+    async fn send(&self, method: &str, params: Option<Value>) -> BitFunResult<Value> {
+        CdpClient::send(self, method, params).await
+    }
+
+    fn subscribe_events(&self) -> broadcast::Receiver<CdpEvent> {
+        CdpClient::subscribe_events(self)
+    }
+
+    fn is_connected(&self) -> bool {
+        CdpClient::is_connected(self)
+    }
+
+    fn capabilities(&self) -> BrowserAutomationCapabilities {
+        BrowserAutomationCapabilities::cdp()
+    }
+
+    fn target_kind(&self) -> &'static str {
+        "external_cdp"
     }
 }
 

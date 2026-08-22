@@ -58,6 +58,12 @@ export interface InteractiveCapabilityItem {
   destination?: InteractiveCapabilityDestination;
 }
 
+export interface InteractiveCapabilityAgentControl {
+  tool: string;
+  workflowZh: string[];
+  workflowEn: string[];
+}
+
 export interface InteractiveCapability {
   id: string;
   kind: InteractiveCapabilityKind;
@@ -75,6 +81,7 @@ export interface InteractiveCapability {
   stepsEn: string[];
   agentExamplesZh: string[];
   agentExamplesEn: string[];
+  agentControl?: InteractiveCapabilityAgentControl;
   destination: InteractiveCapabilityDestination;
   operations: InteractiveCapabilityOperation[];
   options: InteractiveCapabilityOption[];

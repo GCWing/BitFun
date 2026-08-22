@@ -74,7 +74,7 @@ impl BridgeExecutor {
     }
 }
 
-fn to_webdriver_cookie(cookie: &NativeCookie<'_>) -> Cookie {
+pub(crate) fn to_webdriver_cookie(cookie: &NativeCookie<'_>) -> Cookie {
     Cookie {
         name: cookie.name().to_string(),
         value: cookie.value().to_string(),
@@ -102,7 +102,9 @@ fn parse_same_site(value: Option<&str>) -> Result<Option<SameSite>, WebDriverErr
     }
 }
 
-fn build_native_cookie(cookie: &Cookie) -> Result<NativeCookie<'static>, WebDriverErrorResponse> {
+pub(crate) fn build_native_cookie(
+    cookie: &Cookie,
+) -> Result<NativeCookie<'static>, WebDriverErrorResponse> {
     let mut builder = NativeCookie::build((cookie.name.clone(), cookie.value.clone()));
 
     if let Some(path) = cookie.path.clone() {

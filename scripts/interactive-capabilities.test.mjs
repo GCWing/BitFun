@@ -80,6 +80,52 @@ test('the built-in browser manual covers its element picker in both languages', 
   assert.ok(browser.searchTerms.includes('Start the element picker to highlight hovered elements and show tag, ID, and class details'));
 });
 
+test('built-in and external browsers share one agent action contract', async () => {
+  const { publicCatalog } = buildCapabilityCatalog();
+  const browser = publicCatalog.capabilities.find(({ id }) => id === 'feature.browser');
+  assert.ok(browser);
+  assert.ok(browser.items.some(({ id }) => id === 'agent-page-automation'));
+  assert.ok(browser.items.some(({ id }) => id === 'shared-browser-action-contract'));
+  assert.ok(browser.searchTerms.some((term) => /Agent.*内置网页/u.test(term)));
+  assert.ok(browser.searchTerms.some((term) => /one BrowserActions/iu.test(term)));
+  assert.equal(browser.agentControl.tool, 'ControlHub');
+  assert.ok(browser.agentControl.workflowZh.some((step) => step.includes('browser.open_builtin')));
+  assert.ok(browser.agentControl.workflowEn.some((step) => /share.*contract/iu.test(step)));
+
+  const actions = await read(
+    'src/crates/assembly/core/src/agentic/tools/browser_control/actions.rs',
+  );
+  const clientContract = await read(
+    'src/crates/assembly/core/src/agentic/tools/browser_control/automation_client.rs',
+  );
+  const cdpAdapter = await read(
+    'src/crates/assembly/core/src/agentic/tools/browser_control/cdp_client.rs',
+  );
+  const builtinCoreAdapter = await read(
+    'src/crates/assembly/core/src/agentic/tools/browser_control/builtin_browser.rs',
+  );
+  const builtinDesktopAdapter = await read('src/apps/desktop/src/builtin_browser_host.rs');
+  const controlHub = await read(
+    'src/crates/assembly/core/src/agentic/tools/implementations/control_hub_tool.rs',
+  );
+  const browserSurface = await read(
+    'src/web-ui/src/app/scenes/browser/useEmbeddedBrowserWebview.ts',
+  );
+
+  assert.match(actions, /client: &'a dyn BrowserAutomationClient/u);
+  assert.match(clientContract, /trait BrowserAutomationClient/u);
+  assert.match(clientContract, /struct BrowserAutomationEvent/u);
+  assert.doesNotMatch(clientContract, /use super::cdp_client/u);
+  assert.match(cdpAdapter, /impl BrowserAutomationClient for CdpClient/u);
+  assert.match(builtinCoreAdapter, /impl BrowserAutomationClient for BuiltInBrowserClient/u);
+  assert.match(builtinDesktopAdapter, /EmbeddedWebviewAutomation/u);
+  assert.doesNotMatch(builtinDesktopAdapter, /SNAPSHOT_SCRIPT|data-cdp-ref|element_center_js/u);
+  assert.match(controlHub, /SHARED_BROWSER_ACTIONS/u);
+  assert.match(controlHub, /BrowserActions::new\(target\.client\(\)\)/u);
+  assert.match(browserSurface, /browser_webview_set_agent_target_state/u);
+  assert.doesNotMatch(browserSurface, /BrowserActions|SHARED_BROWSER_ACTIONS/u);
+});
+
 test('docs, runtime, and technical views are generated projections of one semantic source', async () => {
   const source = JSON.parse(await read('src/shared/interactive-capabilities/catalog.json'));
   const publicCatalog = JSON.parse(await read('docs/interactive-capabilities/capabilities.json'));

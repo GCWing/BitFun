@@ -293,6 +293,19 @@ function validateSource(source) {
         throw new Error(`${capability.id}.${field} must have matching Chinese and English entries`);
       }
     }
+    if (capability.agentControl) {
+      if (typeof capability.agentControl.tool !== 'string' || !capability.agentControl.tool.trim()) {
+        throw new Error(`${capability.id}.agentControl.tool must name the controlling Agent tool`);
+      }
+      for (const field of ['workflowZh', 'workflowEn']) {
+        if (!Array.isArray(capability.agentControl[field]) || capability.agentControl[field].length === 0) {
+          throw new Error(`${capability.id}.agentControl.${field} must be a non-empty array`);
+        }
+      }
+      if (capability.agentControl.workflowZh.length !== capability.agentControl.workflowEn.length) {
+        throw new Error(`${capability.id}.agentControl workflows must have matching Chinese and English entries`);
+      }
+    }
     const minimumItems = capability.kind === 'feature' ? 6 : 4;
     if (!Array.isArray(capability.items) || capability.items.length < minimumItems) {
       throw new Error(`${capability.id}.items must document at least ${minimumItems} user-visible sub-capabilities`);
@@ -565,6 +578,9 @@ function searchTerms(capability, category) {
     ...capability.highlightsZh,
     ...capability.highlightsEn,
     ...capability.items.flatMap((item) => [item.titleZh, item.titleEn]),
+    ...(capability.agentControl?.workflowZh ?? []),
+    ...(capability.agentControl?.workflowEn ?? []),
+    ...(capability.agentControl?.tool ? [capability.agentControl.tool] : []),
   ])];
 }
 
@@ -646,7 +662,11 @@ function schemaLabel(schema) {
 function renderCapabilityMarkdown(capability) {
   const kindZh = capability.kind === 'feature' ? '功能' : '设置';
   const kindEn = capability.kind === 'feature' ? 'Feature' : 'Setting';
-  const operations = capability.operations.length
+  const operations = capability.agentControl
+    ? capability.agentControl.workflowZh.map((step, index) =>
+      `| ${capability.agentControl.tool} · ${index + 1} | ${step} | ${capability.agentControl.workflowEn[index] ?? ''} |`,
+    ).join('\n')
+    : capability.operations.length
     ? capability.operations.map((operation) =>
       `| ${operation.titleZh} / ${operation.titleEn} | ${operation.descriptionZh} | ${operation.descriptionEn} |`,
     ).join('\n')

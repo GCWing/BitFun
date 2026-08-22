@@ -103,6 +103,8 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // This-machine computer-use / OS permission prompts
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    // Native child-WebView lifecycle belongs to the controller window.
+    "browser_webview_set_agent_target_state",
     // Detached dispatch uses controller-owned SSH credentials and observers.
     "dispatch_list_targets",
     "dispatch_probe_target",
@@ -528,6 +530,13 @@ mod tests {
         ] {
             assert!(is_local_only_command(command), "{command}");
         }
+    }
+
+    #[test]
+    fn built_in_browser_target_lifecycle_is_refused_on_the_peer() {
+        assert!(is_local_only_command(
+            "browser_webview_set_agent_target_state"
+        ));
     }
 
     /// Reading why Git refuses a repository is safe to answer for a

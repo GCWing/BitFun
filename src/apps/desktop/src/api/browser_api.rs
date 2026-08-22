@@ -3,7 +3,10 @@
 //! Browser webviews are created as native child webviews by this desktop
 //! adapter so stream-specific initialization can run before page scripts.
 
+use bitfun_core::agentic::tools::browser_control::BuiltInBrowserTarget;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
 const VIDEO_DECODER_MODE_ENV: &str = "BITFUN_BROWSER_VIDEO_DECODER_MODE";
@@ -98,7 +101,37 @@ pub struct WebviewCreateRequest {
     pub height: f64,
 }
 
-fn validate_browser_label(label: &str) -> Result<(), String> {
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserAgentTargetStateRequest {
+    pub label: String,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+struct BrowserTargetRecord {
+    active: bool,
+    last_active_seq: u64,
+    url: String,
+    title: Option<String>,
+}
+
+#[derive(Default)]
+struct BrowserTargetRegistry {
+    next_seq: u64,
+    records: HashMap<String, BrowserTargetRecord>,
+}
+
+static BROWSER_TARGETS: OnceLock<Mutex<BrowserTargetRegistry>> = OnceLock::new();
+
+fn lock_browser_targets() -> std::sync::MutexGuard<'static, BrowserTargetRegistry> {
+    BROWSER_TARGETS
+        .get_or_init(|| Mutex::new(BrowserTargetRegistry::default()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+pub(crate) fn validate_browser_label(label: &str) -> Result<(), String> {
     if label.starts_with("embedded-browser-view-")
         || label.starts_with("embedded-browser-panel-view-")
     {
@@ -106,6 +139,71 @@ fn validate_browser_label(label: &str) -> Result<(), String> {
     } else {
         Err("invalid browser webview label".to_string())
     }
+}
+
+fn register_browser_target(label: &str, url: &str) {
+    lock_browser_targets().records.insert(
+        label.to_string(),
+        BrowserTargetRecord {
+            url: url.to_string(),
+            ..BrowserTargetRecord::default()
+        },
+    );
+}
+
+pub(crate) fn update_browser_target_url(label: &str, url: &str) {
+    if let Some(record) = lock_browser_targets().records.get_mut(label) {
+        record.url = url.to_string();
+        // A navigation invalidates the cached document title. The async
+        // automation host refreshes it from the page before target discovery
+        // is returned to ControlHub.
+        record.title = None;
+    }
+}
+
+pub(crate) fn update_browser_target_metadata(label: &str, url: &str, title: &str) {
+    if let Some(record) = lock_browser_targets().records.get_mut(label) {
+        record.url = url.to_string();
+        record.title = Some(title.to_string());
+    }
+}
+
+pub(crate) fn unregister_browser_target(label: &str) {
+    lock_browser_targets().records.remove(label);
+}
+
+pub(crate) fn list_browser_targets(app: &tauri::AppHandle) -> Vec<BuiltInBrowserTarget> {
+    let mut registry = lock_browser_targets();
+    registry
+        .records
+        .retain(|label, _| app.get_webview(label).is_some());
+    let mut targets = registry
+        .records
+        .iter()
+        .map(|(label, record)| {
+            let url = app
+                .get_webview(label)
+                .and_then(|webview| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| webview.url()))
+                        .ok()
+                        .and_then(Result::ok)
+                })
+                .map(|url| url.to_string())
+                .filter(|url| !url.is_empty())
+                .unwrap_or_else(|| record.url.clone());
+            (
+                record.last_active_seq,
+                BuiltInBrowserTarget {
+                    id: label.clone(),
+                    url,
+                    title: record.title.clone().unwrap_or_default(),
+                    active: record.active,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    targets.sort_by(|left, right| right.0.cmp(&left.0));
+    targets.into_iter().map(|(_, target)| target).collect()
 }
 
 fn validate_webview_bounds(x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
@@ -163,7 +261,34 @@ pub async fn browser_webview_create(
 
     webview
         .hide()
-        .map_err(|e| format!("failed to hide browser webview before positioning: {e}"))
+        .map_err(|e| format!("failed to hide browser webview before positioning: {e}"))?;
+    let target_url = webview.url().map(|url| url.to_string()).unwrap_or_default();
+    register_browser_target(webview.label(), &target_url);
+    Ok(())
+}
+
+/// Advertise which built-in browser surface the Agent should target. This is
+/// lifecycle metadata only; browser actions remain in the shared Rust action
+/// layer and native WebView adapter.
+#[tauri::command]
+pub async fn browser_webview_set_agent_target_state(
+    request: BrowserAgentTargetStateRequest,
+) -> Result<(), String> {
+    validate_browser_label(&request.label)?;
+    let mut registry = lock_browser_targets();
+    if request.active {
+        registry.next_seq = registry.next_seq.saturating_add(1);
+        let next_seq = registry.next_seq;
+        for record in registry.records.values_mut() {
+            record.active = false;
+        }
+        let record = registry.records.entry(request.label).or_default();
+        record.active = true;
+        record.last_active_seq = next_seq;
+    } else if let Some(record) = registry.records.get_mut(&request.label) {
+        record.active = false;
+    }
+    Ok(())
 }
 
 #[tauri::command]

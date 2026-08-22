@@ -74,6 +74,8 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'peer_controller_set_active',
   'computer_use_request_permissions',
   'computer_use_open_system_settings',
+  // Native child-WebView lifecycle belongs to this controller window.
+  'browser_webview_set_agent_target_state',
   // Detached dispatch uses this controller's SSH credentials and observer index.
   'dispatch_list_targets',
   'dispatch_probe_target',

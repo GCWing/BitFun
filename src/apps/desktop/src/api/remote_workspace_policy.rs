@@ -240,6 +240,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "browser_webview_set_bounds",
         RemoteWorkspacePolicy::LocalOnly,
     ),
+    (
+        "browser_webview_set_agent_target_state",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("btw_ask_stream", RemoteWorkspacePolicy::RemoteRouted),
     ("btw_cancel", RemoteWorkspacePolicy::RemoteRouted),
     (

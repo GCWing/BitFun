@@ -23,6 +23,7 @@
 pub mod api;
 pub mod appearance;
 mod bitfun_control_host;
+mod builtin_browser_host;
 pub mod computer_use;
 pub mod crash_diagnostics;
 mod embedded_relay_host;
@@ -758,13 +759,20 @@ pub async fn run() {
                     tauri::webview::PageLoadEvent::Started => "started",
                     tauri::webview::PageLoadEvent::Finished => "finished",
                 };
+                let url = payload.url().to_string();
+                api::browser_api::update_browser_target_url(label, &url);
+                bitfun_core::agentic::tools::browser_control::builtin_browser::publish_builtin_browser_page_load(
+                    label,
+                    event,
+                    &url,
+                );
                 let _ = webview.emit_to(
                     "main",
                     BROWSER_WEBVIEW_PAGE_LOAD_EVENT,
                     serde_json::json!({
                         "label": label,
                         "event": event,
-                        "url": payload.url(),
+                        "url": url,
                     }),
                 );
             }
@@ -1021,6 +1029,7 @@ pub async fn run() {
             );
             let webdriver_started = Instant::now();
             bitfun_webdriver::maybe_start(app_handle.clone());
+            builtin_browser_host::install(app_handle.clone());
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "maybe_start_webdriver",
@@ -1844,6 +1853,7 @@ pub async fn run() {
             api::browser_api::browser_webview_navigate,
             api::browser_api::browser_webview_reload,
             api::browser_api::browser_webview_set_bounds,
+            api::browser_api::browser_webview_set_agent_target_state,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_list_browsers,

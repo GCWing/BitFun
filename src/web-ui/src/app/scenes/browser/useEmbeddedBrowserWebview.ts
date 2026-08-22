@@ -140,6 +140,13 @@ async function setWebviewBounds(label: string, bounds: WebviewBounds): Promise<v
   });
 }
 
+async function setAgentTargetState(label: string, active: boolean): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('browser_webview_set_agent_target_state', {
+    request: { label, active },
+  });
+}
+
 async function createBrowserWebview(label: string, url: string, bounds: WebviewBounds): Promise<BrowserWebviewHandle> {
   const [{ invoke }, { Webview }] = await Promise.all([
     import('@tauri-apps/api/core'),
@@ -283,6 +290,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     if (!target) return;
 
     try {
+      await setAgentTargetState(target.label, false).catch(() => {});
       await target.close();
     } catch (closeError) {
       if (!isWebviewNotFoundError(closeError)) {
@@ -418,6 +426,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
       if (isVisible) {
         await handle.show();
         await handle.setFocus();
+        await setAgentTargetState(handle.label, true);
       }
     } catch (loadError) {
       const message = formatUnknownError(loadError);
@@ -457,6 +466,10 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
       void syncWebviewBounds()
         .then(() => webviewRef.current?.show())
         .then(() => webviewRef.current?.setFocus())
+        .then(() => {
+          const label = webviewRef.current?.label;
+          return label ? setAgentTargetState(label, true) : undefined;
+        })
         .catch((syncError) => {
           log.warn('Activate browser webview failed', syncError);
         });
@@ -469,9 +482,13 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
         label: webviewRef.current.label,
       });
       // #endregion
-      void webviewRef.current.hide().catch((hideError) => {
-        log.warn('Hide browser webview on deactivate failed', hideError);
-      });
+      const handle = webviewRef.current;
+      void setAgentTargetState(handle.label, false)
+        .catch(() => {})
+        .then(() => handle.hide())
+        .catch((hideError) => {
+          log.warn('Hide browser webview on deactivate failed', hideError);
+        });
     }
   }, [isTauri, isVisible, loadUrl, log, syncWebviewBounds]);
 

@@ -429,6 +429,11 @@ function schemaLabel(schema) {
 }
 
 function operationCards(capability) {
+  if (capability.agentControl) {
+    const workflow = localized(capability.agentControl, 'workflow');
+    return `<ol class="step-list agent-control-list">${workflow.map((step, index) => `
+      <li><span>${index + 1}</span><p><strong>${escapeHtml(capability.agentControl.tool)}</strong> · ${escapeHtml(step)}</p></li>`).join('')}</ol>`;
+  }
   if (!capability.operations.length) {
     return `<div class="manual-empty">${text(
       '这个功能通过“打开”进入界面，具体操作在页面里完成。',

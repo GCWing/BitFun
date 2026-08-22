@@ -11,9 +11,9 @@ title_en: "Built-in browser"
 
 > 功能 / Feature
 
-在 BitFun 内打开网页、预览本地服务，并把可见页面上下文交给 Agent。
+在 BitFun 内打开网页和本地服务；Agent 可直接读取页面、选择元素并点击、填写、滚动或截图。
 
-Open webpages and preview local services inside BitFun while sharing visible page context with an agent.
+Open webpages and local services inside BitFun, where an agent can inspect the page and select, click, fill, scroll, or capture elements directly.
 
 ## 完整功能清单 / Everything included
 
@@ -31,17 +31,23 @@ Open webpages and preview local services inside BitFun while sharing visible pag
   - Click an element to capture its CSS path, attributes, text, and HTML into the current session context
 - 再次点击选择按钮或按 Esc 取消元素选择并清理高亮
   - Click the picker again or press Escape to cancel selection and remove overlays
+- 让 Agent 对内置网页执行快照、读取、点击、悬停、填写、按键、滚动、等待、脚本求值和截图
+  - Let an agent snapshot, read, click, hover, fill, press keys, scroll, wait, evaluate scripts, and capture the built-in page
+- 内置 WebView 与外部 CDP 浏览器共用同一套 BrowserActions 参数、元素引用、结果与错误契约
+  - Use one BrowserActions parameter, element-ref, result, and error contract across the built-in WebView and external CDP browsers
+- 通过 target 选择内置或外部浏览器，并用 session_id、URL 或标题精确定位页面
+  - Choose the built-in or external browser with target and locate a page by session_id, URL, or title
 - 桌面端使用原生 WebView，Web 端回退到受限 iframe，并在当前页打开新窗口链接
   - Use a native WebView on desktop, a sandboxed iframe on web, and open new-window links in place
 
 ## 怎么用 / How to use it
 
-1. 打开浏览器
-   Open Browser
-2. 输入网址或本地端口
-   Enter a URL or local port
-3. 需要时让 Agent 根据页面继续处理
-   Ask the agent to continue using the page context
+1. 打开浏览器并输入网址或本地端口
+   Open Browser and enter a URL or local port
+2. 直接告诉 Agent 要在页面上完成什么
+   Tell the agent what to accomplish on the page
+3. Agent 先读取页面，再用元素引用执行操作
+   The agent inspects the page, then acts through element refs
 
 入口 / Entry: BitFun 功能入口
 
@@ -49,7 +55,9 @@ Open webpages and preview local services inside BitFun while sharing visible pag
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| ControlHub · 1 | 用 browser.open_builtin 打开网址并取得内置页面的 session_id | Open the URL with browser.open_builtin and keep the returned built-in session_id |
+| ControlHub · 2 | 对同一个 session_id 指定 target 为 builtin，也可用 target_url 或 target_title 定位；快照、点击、填写、滚动和截图等动作与外部 CDP 浏览器共用同一套契约 | Address that session_id with target set to builtin, or locate it by target_url or target_title; snapshots, clicks, fills, scrolling, screenshots, and other portable actions share the external CDP contract |
+| ControlHub · 3 | 页面变化后重新快照并使用最新元素引用；只有网络追踪、原始 CDP 和文件输入等协议扩展才切换到 external | Take a new snapshot after page changes and use fresh element refs; switch to external only for protocol extensions such as network tracing, raw CDP, or file-input injection |
 
 ## 可配置选项 / Configurable options
 
@@ -59,10 +67,12 @@ Open webpages and preview local services inside BitFun while sharing visible pag
 
 ## 可以直接对 Agent 说 / Try saying
 
-- “打开浏览器”
-  - “Open the browser”
-- “给我一个网页预览面板”
-  - “Give me a web preview panel”
+- “在内置浏览器打开这个网址，然后找到登录按钮”
+  - “Open this URL in the built-in browser and find the sign-in button”
+- “读取当前内置网页并填写这个表单”
+  - “Inspect the current built-in page and fill this form”
+- “用内置浏览器点开搜索结果并总结页面”
+  - “Use the built-in browser to open the search result and summarize the page”
 
 Agent 会先查找相关功能或设置，确认目标后再替你打开、执行或修改。完整能力目录不会预先塞进对话上下文。
 

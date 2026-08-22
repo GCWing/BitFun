@@ -57,6 +57,21 @@ describe('BitFunControl discovery', () => {
     expect(browser?.matchedItems.some(({ id }) => id === 'element-picker')).toBe(true);
   });
 
+  it('returns the on-demand shared browser control workflow to the agent', async () => {
+    const result = await executeBitFunControlRequest({
+      requestId: 'get-browser-control',
+      action: 'get',
+      capabilityId: 'feature.browser',
+    }) as {
+      capability: {
+        agentControl?: { tool: string; workflowZh: string[]; workflowEn: string[] };
+      };
+    };
+    expect(result.capability.agentControl?.tool).toBe('ControlHub');
+    expect(result.capability.agentControl?.workflowZh.join(' ')).toContain('browser.open_builtin');
+    expect(result.capability.agentControl?.workflowEn.join(' ')).toContain('external CDP contract');
+  });
+
   it('discovers personal-assistant configuration as its own user feature', () => {
     const result = discoverBitFunCapabilities({
       requestId: 'assistant-persona',
