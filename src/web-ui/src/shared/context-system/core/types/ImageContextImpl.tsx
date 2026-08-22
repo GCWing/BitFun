@@ -1,7 +1,7 @@
  
 
 import React from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { Image as ImageIcon, Eye } from 'lucide-react';
 import { Modal, Button } from '@/component-library';
 import type { ImageContext, ValidationResult, RenderOptions } from '../../../types/context';
@@ -86,7 +86,7 @@ export class ImageContextValidator implements ContextValidator<'image'> {
       
       if (context.isLocal && context.imagePath) {
         try {
-          const exists = await invoke<boolean>('check_path_exists', {
+          const exists = await api.invoke<boolean>('check_path_exists', {
             request: {
               path: context.imagePath
             }
