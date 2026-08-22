@@ -338,7 +338,7 @@ impl Tool for FileEditTool {
                 &resolved.logical_path,
                 vec![resolved.logical_path.clone()],
             )
-            .await;
+            .await?;
 
         // For remote workspace paths, use the abstract FS to read → edit in memory → write back.
         if resolved.uses_remote_workspace_backend() {

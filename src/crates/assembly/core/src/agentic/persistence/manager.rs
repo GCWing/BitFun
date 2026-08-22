@@ -17,6 +17,9 @@ use crate::agentic::session::transcript_render::{
 use crate::agentic::session::{
     CoreSessionStorePort, SessionPromptCache, TokenAnchor, PROMPT_CACHE_SCHEMA_VERSION,
 };
+use crate::agentic::session::{
+    EvidenceLedgerEvent, PersistedEvidenceLedgerFile, EVIDENCE_LEDGER_SCHEMA_VERSION,
+};
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::PathManager;
 use crate::service::config::get_global_config_service;
@@ -485,6 +488,8 @@ pub struct PersistenceManager {
     #[cfg(test)]
     fail_next_session_state_write: std::sync::Mutex<Option<String>>,
     #[cfg(test)]
+    fail_next_evidence_ledger_write: std::sync::Mutex<Option<String>>,
+    #[cfg(test)]
     fail_next_session_metadata_write: std::sync::Mutex<Option<String>>,
     #[cfg(test)]
     fail_next_session_metadata_rollback: std::sync::Mutex<Option<String>>,
@@ -499,6 +504,8 @@ impl PersistenceManager {
             path_manager,
             #[cfg(test)]
             fail_next_session_state_write: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            fail_next_evidence_ledger_write: std::sync::Mutex::new(None),
             #[cfg(test)]
             fail_next_session_metadata_write: std::sync::Mutex::new(None),
             #[cfg(test)]
@@ -527,6 +534,14 @@ impl PersistenceManager {
             .fail_next_session_state_write
             .lock()
             .expect("session state fault lock") = Some(session_id.to_string());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_evidence_ledger_write_for_test(&self, session_id: &str) {
+        *self
+            .fail_next_evidence_ledger_write
+            .lock()
+            .expect("evidence ledger fault lock") = Some(session_id.to_string());
     }
 
     #[cfg(test)]
@@ -606,6 +621,12 @@ impl PersistenceManager {
 
     fn state_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
         self.session_layout(workspace_path).state_path(session_id)
+    }
+
+    fn evidence_ledger_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.session_layout(workspace_path)
+            .session_dir(session_id)
+            .join("evidence-ledger.json")
     }
 
     fn prompt_cache_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -1557,6 +1578,74 @@ impl PersistenceManager {
         }
         self.write_json_atomic(&self.state_path(workspace_path, session_id), state)
             .await
+    }
+
+    pub(crate) async fn load_evidence_ledger_events(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Vec<EvidenceLedgerEvent>> {
+        Self::validate_session_id(session_id)?;
+        let path = self.evidence_ledger_path(workspace_path, session_id);
+        let file = JsonFileStore
+            .read_locked_optional::<PersistedEvidenceLedgerFile>(&path)
+            .await
+            .map_err(Self::json_store_error)?;
+        file.map(|file| {
+            file.validated_events(session_id)
+                .map_err(|error| BitFunError::parse(error.to_string()))
+        })
+        .transpose()
+        .map(Option::unwrap_or_default)
+    }
+
+    pub(crate) async fn append_evidence_ledger_event(
+        &self,
+        workspace_path: &Path,
+        event: &EvidenceLedgerEvent,
+    ) -> BitFunResult<Vec<EvidenceLedgerEvent>> {
+        Self::validate_session_id(&event.session_id)?;
+        let _session_write =
+            self.lock_session_write_operation(workspace_path, &event.session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, &event.session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
+        self.ensure_session_dir(workspace_path, &event.session_id)
+            .await?;
+
+        #[cfg(test)]
+        {
+            let mut fault = self
+                .fail_next_evidence_ledger_write
+                .lock()
+                .expect("evidence ledger fault lock");
+            if fault.as_deref() == Some(event.session_id.as_str()) {
+                *fault = None;
+                return Err(BitFunError::io("Injected evidence ledger write failure"));
+            }
+        }
+
+        let path = self.evidence_ledger_path(workspace_path, &event.session_id);
+        let _file_lock = JsonFileStore
+            .acquire_cross_process_lock(&path)
+            .await
+            .map_err(Self::json_store_error)?;
+        let mut file = JsonFileStore
+            .read_optional::<PersistedEvidenceLedgerFile>(&path)
+            .await
+            .map_err(Self::json_store_error)?
+            .unwrap_or_else(|| PersistedEvidenceLedgerFile::new(event.session_id.clone()));
+        file.append(event.clone())
+            .map_err(|error| BitFunError::parse(error.to_string()))?;
+        file.schema_version = EVIDENCE_LEDGER_SCHEMA_VERSION;
+        JsonFileStore
+            .write_atomic_strict(&path, &file)
+            .await
+            .map_err(Self::json_store_error)?;
+        file.validated_events(&event.session_id)
+            .map_err(|error| BitFunError::parse(error.to_string()))
     }
 
     pub async fn load_prompt_cache(

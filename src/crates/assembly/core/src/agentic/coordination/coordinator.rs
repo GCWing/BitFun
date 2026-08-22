@@ -10062,14 +10062,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         partial_result.text.len()
                     );
                     if let Some(parent_info) = subagent_parent_info.as_ref() {
-                        let event = self.session_manager.record_subagent_partial_timeout(
-                            &parent_info.session_id,
-                            &parent_info.dialog_turn_id,
-                            &logical_agent_type,
-                            &partial_result.text,
-                            Some("timeout"),
-                        );
-                        partial_result = partial_result.with_ledger_event_id(event.event_id);
+                        match self
+                            .session_manager
+                            .record_subagent_partial_timeout(
+                                &parent_info.session_id,
+                                &parent_info.dialog_turn_id,
+                                &logical_agent_type,
+                                &partial_result.text,
+                                Some("timeout"),
+                            )
+                            .await
+                        {
+                            Ok(event) => {
+                                partial_result =
+                                    partial_result.with_ledger_event_id(event.event_id);
+                            }
+                            Err(error) => {
+                                warn!(
+                                    "Failed to persist partial subagent evidence: parent_session_id={}, parent_turn_id={}, agent_type={}, error={}",
+                                    parent_info.session_id,
+                                    parent_info.dialog_turn_id,
+                                    logical_agent_type,
+                                    error
+                                );
+                            }
+                        }
                     }
                     if let Err(cleanup_err) = self.cleanup_subagent_resources(&session_id).await {
                         warn!(
