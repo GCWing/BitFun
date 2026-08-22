@@ -11,9 +11,9 @@ title_en: "Files & code editing"
 
 > 功能 / Feature
 
-浏览、搜索和编辑项目文件，查看差异、代码符号、诊断与 Agent 产生的改动。
+浏览、搜索和编辑项目文件，查看差异、按语言可用的编辑操作与 Agent 产生的改动。
 
-Browse, search, and edit project files while inspecting diffs, symbols, diagnostics, and agent changes.
+Browse, search, and edit project files while inspecting diffs, language-aware editor actions, and agent changes.
 
 ## 完整功能清单 / Everything included
 
@@ -29,12 +29,8 @@ Browse, search, and edit project files while inspecting diffs, symbols, diagnost
   - Accept or reject agent changes by file, operation, or whole session
 - 查看文件变更历史和快照，并回滚整个会话或指定轮次
   - Review file history and snapshots, then roll back a session or selected turn
-- 使用 Hover、跳转定义、查找引用、文档符号与高亮
-  - Use hover, go to definition, references, document symbols, and highlights
-- 使用补全、格式化、重命名、代码操作、内联提示与语义高亮
-  - Use completion, formatting, rename, code actions, inlay hints, and semantic highlighting
-- 检测项目并安装、启动、停止或卸载 LSP 插件
-  - Detect projects and install, start, stop, or uninstall LSP plugins
+- 仅在当前语言提供器实际支持时显示格式化、定义与类型跳转、引用、重命名、快速修复和符号导航
+  - Show formatting, definition and type navigation, references, rename, quick fixes, and symbol navigation only when supported by the active language provider
 - 粘贴、拖放或上传文件与图片作为会话上下文
   - Paste, drop, or upload files and images as session context
 

@@ -80,6 +80,19 @@ test('the built-in browser manual covers its element picker in both languages', 
   assert.ok(browser.searchTerms.includes('Start the element picker to highlight hovered elements and show tag, ID, and class details'));
 });
 
+test('the files and editor manual exposes provider-backed actions without retired LSP facts', async () => {
+  const source = JSON.parse(await read('src/shared/interactive-capabilities/catalog.json'));
+  const filesEditor = source.capabilities.find(({ id }) => id === 'feature.files-editor');
+  assert.ok(filesEditor);
+  assert.ok(filesEditor.items.some(({ id }) => id === 'language-actions'));
+  assert.doesNotMatch(JSON.stringify(filesEditor), /\blsp\b|language server/iu);
+  assert.equal(Object.hasOwn(source.implementationOwners, 'lsp'), false);
+  assert.equal(Object.hasOwn(source.implementationOwners, 'lsp_workspace'), false);
+
+  const { technicalMap } = buildCapabilityCatalog();
+  assert.equal(technicalMap.commands.some(({ id }) => id.startsWith('lsp_')), false);
+});
+
 test('built-in and external browsers share one agent action contract', async () => {
   const { publicCatalog } = buildCapabilityCatalog();
   const browser = publicCatalog.capabilities.find(({ id }) => id === 'feature.browser');
@@ -153,6 +166,9 @@ test('docs, runtime, and technical views are generated projections of one semant
   assert.equal(interactionMap.digest, source.reviewedInteractionContract.digest);
   assert.ok(interactionMap.fileCount >= 300);
   assert.ok(interactionMap.interactionCount >= 4_000);
+  const interactionSourceFiles = interactionMap.files.map(({ sourceFile }) => sourceFile);
+  assert.deepEqual(interactionSourceFiles, [...interactionSourceFiles].sort());
+  assert.ok(interactionSourceFiles.every((sourceFile) => !sourceFile.includes('/generated/')));
   assert.ok(interactionMap.files.some(({ sourceFile }) =>
     sourceFile.endsWith('/BrowserPanel.tsx')));
   assert.ok(interactionMap.files.some(({ sourceFile }) =>

@@ -43,9 +43,9 @@
   },
   "reviewedInteractionContract": {
     "roots": ["src/web-ui/src"],
-    "digest": "644f35d8f903d81ae15754aca9ac5c0ff23d26b6da878cbc1c5cfd2c480d90d0"
+    "digest": "9dd485a7d47621da8491ecac62d2b16f7a91d47f0bda1ea73989d7e82cc212a6"
   },
-  "reviewedDocumentedItemCount": 297,
+  "reviewedDocumentedItemCount": 295,
   "capabilities": [
     {
       "id": "feature.ai-assistant",
@@ -203,12 +203,12 @@
       "categoryId": "workspace",
       "titleZh": "文件与代码编辑",
       "titleEn": "Files & code editing",
-      "summaryZh": "浏览、搜索和编辑项目文件，查看差异、代码符号、诊断与 Agent 产生的改动。",
-      "summaryEn": "Browse, search, and edit project files while inspecting diffs, symbols, diagnostics, and agent changes.",
-      "keywordsZh": ["文件", "代码", "编辑器", "搜索文件", "差异", "诊断", "LSP"],
-      "keywordsEn": ["files", "code", "editor", "file search", "diff", "diagnostics", "LSP"],
-      "highlightsZh": ["文件树与全文搜索", "代码导航、格式化和诊断", "查看、接受或撤销 Agent 改动"],
-      "highlightsEn": ["File tree and full-text search", "Code navigation, formatting, and diagnostics", "Review, accept, or revert agent changes"],
+      "summaryZh": "浏览、搜索和编辑项目文件，查看差异、按语言可用的编辑操作与 Agent 产生的改动。",
+      "summaryEn": "Browse, search, and edit project files while inspecting diffs, language-aware editor actions, and agent changes.",
+      "keywordsZh": ["文件", "代码", "编辑器", "搜索文件", "差异", "格式化", "符号导航"],
+      "keywordsEn": ["files", "code", "editor", "file search", "diff", "formatting", "symbol navigation"],
+      "highlightsZh": ["文件树与全文搜索", "按当前语言实际支持情况提供格式化与代码导航", "查看、接受或撤销 Agent 改动"],
+      "highlightsEn": ["File tree and full-text search", "Language-aware formatting and code navigation when supported", "Review, accept, or revert agent changes"],
       "items": [
         { "id": "file-tree", "titleZh": "浏览文件树并创建、重命名、删除或在系统中显示文件和目录", "titleEn": "Browse the file tree and create, rename, delete, or reveal files and directories", "evidence": ["command:explorer_get_file_tree", "command:create_file", "command:create_directory", "command:rename_file", "command:delete_file", "command:delete_directory", "command:reveal_in_explorer"] },
         { "id": "indexed-search", "titleZh": "建立或重建索引，按文件名和全文内容流式搜索", "titleEn": "Build or rebuild an index and stream filename and full-text search results", "evidence": ["command:search_build_index", "command:search_rebuild_index", "command:start_search_filenames_stream", "command:start_search_file_contents_stream"] },
@@ -216,9 +216,7 @@
         { "id": "diffs", "titleZh": "查看修改文件、会话、轮次和单次操作的差异与统计", "titleEn": "Inspect diffs and statistics by file, session, turn, or operation", "evidence": ["command:get_all_modified_files", "command:get_file_diff", "command:get_session_file_diff_stats", "command:get_turn_files", "command:get_operation_diff"] },
         { "id": "accept-reject", "titleZh": "按文件、操作或整个会话接受或拒绝 Agent 改动", "titleEn": "Accept or reject agent changes by file, operation, or whole session", "evidence": ["command:accept_file", "command:reject_file", "command:accept_operation", "command:reject_operation", "command:accept_session"] },
         { "id": "snapshots-rollback", "titleZh": "查看文件变更历史和快照，并回滚整个会话或指定轮次", "titleEn": "Review file history and snapshots, then roll back a session or selected turn", "evidence": ["command:get_file_change_history", "command:get_snapshot_sessions", "command:rollback_session", "command:rollback_session_to_turn"] },
-        { "id": "lsp-navigation", "titleZh": "使用 Hover、跳转定义、查找引用、文档符号与高亮", "titleEn": "Use hover, go to definition, references, document symbols, and highlights", "evidence": ["command:lsp_get_hover_workspace", "command:lsp_goto_definition_workspace", "command:lsp_find_references_workspace", "command:lsp_get_document_symbols_workspace", "command:lsp_get_document_highlight_workspace"] },
-        { "id": "lsp-editing", "titleZh": "使用补全、格式化、重命名、代码操作、内联提示与语义高亮", "titleEn": "Use completion, formatting, rename, code actions, inlay hints, and semantic highlighting", "evidence": ["command:lsp_get_completions_workspace", "command:lsp_format_document_workspace", "command:lsp_rename_workspace", "command:lsp_get_code_actions_workspace", "command:lsp_get_inlay_hints_workspace", "command:lsp_get_semantic_tokens_workspace"] },
-        { "id": "lsp-plugins", "titleZh": "检测项目并安装、启动、停止或卸载 LSP 插件", "titleEn": "Detect projects and install, start, stop, or uninstall LSP plugins", "evidence": ["command:lsp_detect_project", "command:lsp_install_plugin", "command:lsp_prestart_server", "command:lsp_stop_server_workspace", "command:lsp_uninstall_plugin"] },
+        { "id": "language-actions", "titleZh": "仅在当前语言提供器实际支持时显示格式化、定义与类型跳转、引用、重命名、快速修复和符号导航", "titleEn": "Show formatting, definition and type navigation, references, rename, quick fixes, and symbol navigation only when supported by the active language provider", "evidence": ["source:src/web-ui/src/shared/context-menu-system/providers/EditorMenuProvider.ts#supportsEditorAction"] },
         { "id": "attachments", "titleZh": "粘贴、拖放或上传文件与图片作为会话上下文", "titleEn": "Paste, drop, or upload files and images as session context", "evidence": ["command:get_clipboard_files", "command:paste_files", "command:upload_image_contexts"] }
       ],
       "stepsZh": ["先打开一个项目", "打开“文件”", "选择文件进行编辑，或搜索内容与符号"],
@@ -1541,11 +1539,9 @@
     "git": { "capabilityId": "feature.git", "reviewedCommandCount": 31 },
     "external_sources": { "capabilityId": "feature.ecosystem-compatibility", "reviewedCommandCount": 25 },
     "snapshot_service": { "capabilityId": "feature.files-editor", "reviewedCommandCount": 24 },
-    "lsp_workspace": { "capabilityId": "feature.files-editor", "reviewedCommandCount": 24 },
     "mcp": { "capabilityId": "setting.tools.mcp", "reviewedCommandCount": 23 },
     "config": { "capabilityId": "setting.application.general", "reviewedCommandCount": 19 },
     "session": { "capabilityId": "feature.ai-assistant", "reviewedCommandCount": 19 },
-    "lsp": { "capabilityId": "feature.files-editor", "reviewedCommandCount": 19 },
     "dispatch": { "capabilityId": "feature.detached-dispatch", "reviewedCommandCount": 18 },
     "system": { "capabilityId": "setting.application.general", "reviewedCommandCount": 17 },
     "miniapp_market": { "capabilityId": "feature.miniapps", "reviewedCommandCount": 17 },
