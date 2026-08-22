@@ -42,6 +42,9 @@ The check detects:
   bitfun-desktop Tauri build script references this directory as a resource,
   so `cargo check -p bitfun-desktop` and `cargo check --workspace` fail
   without it)
+- Missing `src/apps/extension-host/dist` Node/Bun entries (fix:
+  `pnpm run plugin-host:prepare` — CLI packages bundle this directory as the
+  plugin Host resource)
 - Missing sherpa-onnx prebuilt libs (the sherpa-onnx-sys build script
   downloads from GitHub at build time; if the download fails on poor
   connectivity, set `SHERPA_ONNX_LIB_DIR` to the prebuilt lib directory
