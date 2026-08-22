@@ -309,7 +309,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
       detail: { clientId: client.id },
     }));
     notification.info(t('run.starting', { name: client.name || client.id }), { duration: 2400 });
-  }, [notification, t, workspacePath]);
+  }, [notification, setOwnerSurface, t, workspacePath]);
 
   const handleConfigureSubagent = useCallback((client: AcpClientInfo) => {
     if (!client.subagent) return;
