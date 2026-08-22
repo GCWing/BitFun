@@ -1,13 +1,13 @@
  
 
 import React from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { FileIcon, CheckCircle } from 'lucide-react';
 import type { FileContext, ValidationResult, RenderOptions } from '../../../types/context';
-import type { 
-  ContextTransformer, 
-  ContextValidator, 
-  ContextCardRenderer 
+import type {
+  ContextTransformer,
+  ContextValidator,
+  ContextCardRenderer
 } from '../../../services/ContextRegistry';
 import { i18nService } from '@/infrastructure/i18n';
 
@@ -42,7 +42,7 @@ export class FileContextValidator implements ContextValidator<'file'> {
   async validate(context: FileContext): Promise<ValidationResult> {
     try {
       
-      const exists = await invoke<boolean>('fs_exists', { path: context.filePath });
+      const exists = await api.invoke<boolean>('fs_exists', { path: context.filePath });
       
       if (!exists) {
         return {
