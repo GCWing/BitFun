@@ -24,7 +24,7 @@ describe('SettingsNav typography', () => {
   it('matches the main navigation category and item reading rhythm', () => {
     const stylesheet = readSettingsNavStylesheet();
 
-    expect(stylesheet).toContain('font-size: var(--bf-appearance-token-font-size-xs);\n    font-weight: 500;\n    letter-spacing: 0.015em;\n    line-height: 1.25;');
+    expect(stylesheet).toContain('font-size: calc(var(--bf-appearance-token-font-size-xs) - 1px);\n    font-weight: 500;\n    letter-spacing: 0.015em;\n    line-height: 1.25;');
     expect(stylesheet).toContain('font-size: var(--bf-appearance-token-font-size-sm);\n    font-weight: 400;\n    line-height: 1.25;');
     expect(stylesheet).toContain('&.is-active {\n      @include nav-font.nav-panel-text-heading;\n\n      background: var(--bf-appearance-token-element-bg-soft);\n      font-weight: 600;');
   });
