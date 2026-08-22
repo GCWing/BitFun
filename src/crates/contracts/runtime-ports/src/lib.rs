@@ -23,8 +23,9 @@ mod plugin;
 mod script_tool;
 #[cfg(feature = "permission")]
 pub use bitfun_product_domains::tool_permissions::{
-    deserialize_optional_permission_mode, resolve_child_permission_policy, resolve_permission_mode,
-    resolve_permission_policy, wildcard_matches, ChildPermissionPolicyLayers, PermissionAuditEvent,
+    deserialize_optional_ai_auto_approve_mode, deserialize_optional_permission_mode,
+    resolve_child_permission_policy, resolve_permission_mode, resolve_permission_policy,
+    wildcard_matches, AiAutoApproveMode, ChildPermissionPolicyLayers, PermissionAuditEvent,
     PermissionAuditRecord, PermissionConstraintLayer, PermissionDelegationContext,
     PermissionEffect, PermissionEvaluator, PermissionGrant, PermissionGrantKey,
     PermissionInteractionConfig, PermissionMode, PermissionModeLayers, PermissionModeSource,

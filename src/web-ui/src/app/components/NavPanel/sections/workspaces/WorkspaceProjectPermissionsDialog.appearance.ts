@@ -7,5 +7,6 @@ export const workspaceProjectPermissionsDialogAppearanceDescriptor: AppearanceSu
     { id: 'grants' }, { id: 'grant' }, { id: 'rules' }, { id: 'rule' },
     { id: 'ruleActions' }, { id: 'empty' }, { id: 'footer' },
     { id: 'sensitiveResources' }, { id: 'sensitiveResource' }, { id: 'sensitiveBody' },
+    { id: 'sensitiveGroup' }, { id: 'sensitiveGroupHeader' }, { id: 'sensitiveGroupTitle' },
   ],
 };

@@ -275,6 +275,19 @@ impl RoundExecutor {
         permission_mode_from_context(global, context_vars)
     }
 
+    /// Reads the AI auto-approve sub-mode this round runs with.
+    ///
+    /// The coordinator resolves `turn -> session -> global` once per submission
+    /// and publishes the value into the execution context, so every round of
+    /// the turn reads the same decision. The global value is only a fallback
+    /// for rounds that did not cross the coordinator path.
+    fn resolve_ai_auto_approve_mode(
+        global: &crate::service::config::types::GlobalConfig,
+        context_vars: &std::collections::HashMap<String, String>,
+    ) -> bitfun_runtime_ports::AiAutoApproveMode {
+        crate::agentic::permission_policy::ai_auto_approve_mode_from_context(global, context_vars)
+    }
+
     async fn sleep_with_cancellation(
         delay_ms: u64,
         cancel_token: &CancellationToken,
@@ -1077,6 +1090,8 @@ impl RoundExecutor {
                 Self::resolve_permission_mode(&global_config, &context.context_vars);
             let auto_approve_ask = permission_mode.auto_approve_ask();
             let ai_auto_approve_ask = permission_mode.ai_auto_approve_ask();
+            let ai_auto_approve_mode =
+                Self::resolve_ai_auto_approve_mode(&global_config, &context.context_vars);
 
             let project_rules = match context.workspace.as_ref() {
                 Some(workspace) if workspace.is_remote() => {
@@ -1122,10 +1137,7 @@ impl RoundExecutor {
                 permission_policy,
                 auto_approve_ask,
                 ai_auto_approve_ask,
-                ai_auto_approve_mode: global_config
-                    .tool_permissions
-                    .interaction
-                    .ai_auto_approve_mode,
+                ai_auto_approve_mode,
                 ..ToolExecutionOptions::default()
             };
 

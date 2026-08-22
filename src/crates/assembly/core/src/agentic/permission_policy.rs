@@ -2,12 +2,13 @@ use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
 use crate::util::errors::BitFunResult;
 use bitfun_agent_runtime::permission::{
-    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AI_AUTO_APPROVE_MODE_CONTEXT_KEY,
+    AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
 };
 use bitfun_runtime_ports::{
-    resolve_child_permission_policy, resolve_permission_policy, ChildPermissionPolicyLayers,
-    PermissionConstraintLayer, PermissionEffect, PermissionMode, PermissionPolicyLayers,
-    PermissionRule, PermissionRuntimeCeiling, ResolvedPermissionPolicy,
+    resolve_child_permission_policy, resolve_permission_policy, AiAutoApproveMode,
+    ChildPermissionPolicyLayers, PermissionConstraintLayer, PermissionEffect, PermissionMode,
+    PermissionPolicyLayers, PermissionRule, PermissionRuntimeCeiling, ResolvedPermissionPolicy,
 };
 
 /// Reads the effective mode a submission carried into tool execution.
@@ -54,6 +55,24 @@ pub(crate) fn permission_mode_from_context(
         Some(false) if default_mode == PermissionMode::AutoApprove => PermissionMode::Ask,
         _ => default_mode,
     }
+}
+
+/// Reads the AI auto-approve sub-mode a submission carried into tool execution.
+///
+/// The owning surface resolves `turn -> session -> global` once and writes the
+/// result to the execution context (see the coordinator's
+/// `resolve_submission_permission_mode`). This is a lookup, not a second
+/// resolution. The global config value only backstops executions that did not
+/// come from that path, such as standalone rounds without a coordinator.
+pub(crate) fn ai_auto_approve_mode_from_context(
+    global: &GlobalConfig,
+    context_vars: &std::collections::HashMap<String, String>,
+) -> AiAutoApproveMode {
+    context_vars
+        .get(AI_AUTO_APPROVE_MODE_CONTEXT_KEY)
+        .map(String::as_str)
+        .and_then(AiAutoApproveMode::parse)
+        .unwrap_or(global.tool_permissions.interaction.ai_auto_approve_mode)
 }
 
 pub(crate) fn derive_parent_permission_runtime_ceiling(
@@ -341,6 +360,42 @@ mod tests {
         assert_eq!(
             evaluator.evaluate_policy_resource("external_directory", "C:/outside", &resolved),
             PermissionEffect::Ask
+        );
+    }
+
+    #[test]
+    fn ai_auto_approve_mode_context_key_outranks_the_global_default() {
+        let mut global = GlobalConfig::default();
+        global.tool_permissions.interaction.ai_auto_approve_mode =
+            bitfun_runtime_ports::AiAutoApproveMode::Passive;
+
+        // No context value: the global default applies.
+        assert_eq!(
+            ai_auto_approve_mode_from_context(&global, &std::collections::HashMap::new()),
+            bitfun_runtime_ports::AiAutoApproveMode::Passive
+        );
+
+        // The coordinator publishes the resolved per-submission mode.
+        let mut context_vars = std::collections::HashMap::new();
+        context_vars.insert(
+            AI_AUTO_APPROVE_MODE_CONTEXT_KEY.to_string(),
+            "aggressive".to_string(),
+        );
+        assert_eq!(
+            ai_auto_approve_mode_from_context(&global, &context_vars),
+            bitfun_runtime_ports::AiAutoApproveMode::Aggressive
+        );
+
+        // An unrecognized context value falls back to the global default
+        // rather than guessing a mode nobody selected.
+        let mut broken = std::collections::HashMap::new();
+        broken.insert(
+            AI_AUTO_APPROVE_MODE_CONTEXT_KEY.to_string(),
+            "nuclear".to_string(),
+        );
+        assert_eq!(
+            ai_auto_approve_mode_from_context(&global, &broken),
+            bitfun_runtime_ports::AiAutoApproveMode::Passive
         );
     }
 }

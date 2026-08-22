@@ -65,12 +65,16 @@ use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
-use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+use bitfun_agent_runtime::permission::{
+    AI_AUTO_APPROVE_MODE_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+};
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use bitfun_core_types::{ModelRequestContext, SessionModelBindingPolicy};
-use bitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
+use bitfun_runtime_ports::{
+    resolve_permission_mode, AiAutoApproveMode, PermissionMode, PermissionModeLayers,
+};
 use dashmap::DashMap;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
@@ -581,6 +585,38 @@ impl ExecutionEngine {
         context_vars.insert(
             PERMISSION_MODE_CONTEXT_KEY.to_string(),
             resolved.as_str().to_string(),
+        );
+        // The AI auto-approve sub-mode re-resolves at the same round boundary
+        // with the same layering: a one-off turn override wins, then the
+        // session's own selection, then the value the coordinator resolved at
+        // submission time, then the user-level default. This keeps a selection
+        // made while the turn is live from leaking out of its turn or from
+        // being ignored until the next submission.
+        let global_ai_auto_approve_default = match get_global_config_service().await {
+            Ok(service) => service
+                .get_config(None)
+                .await
+                .map(|config: crate::service::config::types::GlobalConfig| {
+                    config.tool_permissions.interaction.ai_auto_approve_mode
+                })
+                .unwrap_or_default(),
+            Err(_) => AiAutoApproveMode::default(),
+        };
+        let resolved_ai_auto_approve_mode = self
+            .session_manager
+            .active_turn_ai_auto_approve_mode(session_id, turn_id)
+            .or_else(|| {
+                self.session_manager
+                    .session_ai_auto_approve_mode(session_id)
+            })
+            .or_else(|| {
+                base.get(AI_AUTO_APPROVE_MODE_CONTEXT_KEY)
+                    .and_then(|value| AiAutoApproveMode::parse(value))
+            })
+            .unwrap_or(global_ai_auto_approve_default);
+        context_vars.insert(
+            AI_AUTO_APPROVE_MODE_CONTEXT_KEY.to_string(),
+            resolved_ai_auto_approve_mode.as_str().to_string(),
         );
         context_vars
     }

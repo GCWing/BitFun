@@ -159,6 +159,28 @@
     gap: 10px;
   }
 
+  &__sensitive-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: 8px;
+  }
+
+  &__sensitive-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__sensitive-group-title {
+    font-weight: var(--bf-appearance-token-font-weight-medium);
+    font-size: var(--bf-appearance-token-font-size-sm);
+  }
+
   &__sensitive-description {
     margin: 0;
     color: var(--bf-appearance-token-color-text-secondary);

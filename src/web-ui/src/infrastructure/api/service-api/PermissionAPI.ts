@@ -9,10 +9,20 @@ export interface ProjectPermissionRule {
   effect: ProjectPermissionEffect;
 }
 
+/**
+ * User-configured sensitive-resource markers, split by protection class.
+ * `read` markers escalate/deny any access to those resources; `write`
+ * markers keep write-class operations (edit/write/bash) out of aggressive
+ * auto-approval while leaving their names visible to the judge.
+ */
+export interface ProjectSensitiveResources {
+  read: string[];
+  write: string[];
+}
+
 export interface ProjectPermissionRulesResponse {
   rules: ProjectPermissionRule[];
-  /** User-configured sensitive-resource markers for this project. */
-  sensitiveResources: string[];
+  sensitiveResources: ProjectSensitiveResources;
   revision: string;
 }
 
@@ -65,7 +75,7 @@ class PermissionAPI {
   async saveProjectRules(
     workspaceId: string,
     rules: ProjectPermissionRule[],
-    sensitiveResources: string[],
+    sensitiveResources: ProjectSensitiveResources,
     revision: string,
   ): Promise<ProjectPermissionRulesResponse> {
     const request = { workspaceId, rules, sensitiveResources, revision };

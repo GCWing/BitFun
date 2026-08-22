@@ -55,7 +55,9 @@ use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
 use bitfun_core_types::SessionExecutionTarget;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
-use bitfun_runtime_ports::{PermissionMode, SessionStoragePathRequest, SessionStorePort};
+use bitfun_runtime_ports::{
+    AiAutoApproveMode, PermissionMode, SessionStoragePathRequest, SessionStorePort,
+};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
@@ -359,6 +361,10 @@ pub struct SessionManager {
 pub struct ActiveTurnPermissionMode {
     pub turn_id: String,
     pub mode: PermissionMode,
+    /// One-off AI auto-approve sub-mode chosen for this exact turn. `None`
+    /// means the turn carries no override and falls through to the session
+    /// selection and then the user-level default.
+    pub ai_auto_approve_mode: Option<AiAutoApproveMode>,
 }
 
 fn clear_session_runtime_stores(
@@ -4255,13 +4261,116 @@ impl SessionManager {
             .and_then(|session| session.config.permission_mode)
     }
 
+    /// Sets the session's own AI auto-approve sub-mode (in-memory +
+    /// persistence).
+    ///
+    /// `None` clears the override so the session follows the user-level default
+    /// again, including later changes to that default. The value only takes
+    /// effect from the next model round; a running round keeps the policy it
+    /// resolved at its boundary, while later rounds read the updated session.
+    pub async fn update_session_ai_auto_approve_mode(
+        &self,
+        session_id: &str,
+        ai_auto_approve_mode: Option<AiAutoApproveMode>,
+    ) -> BitFunResult<()> {
+        // Same restore-before-mutation path as `update_session_permission_mode`:
+        // an evicted session is restored before the mutation permit is taken,
+        // because restore owns the same keyed lock.
+        if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
+            let session_storage_path = self
+                .session_storage_path_index
+                .get(session_id)
+                .map(|entry| entry.value().path.clone());
+            if let Some(session_storage_path) = session_storage_path {
+                debug!(
+                    "Session evicted from memory, restoring for AI auto-approve mode update: session_id={}",
+                    session_id
+                );
+                let _ = self
+                    .restore_session_from_storage_path(&session_storage_path, session_id)
+                    .await;
+            }
+        }
+
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+
+        let original_session = self
+            .sessions
+            .get(session_id)
+            .map(|session| session.clone())
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        if original_session.config.ai_auto_approve_mode == ai_auto_approve_mode {
+            return Ok(());
+        }
+
+        let mut updated_session = original_session.clone();
+        updated_session.config.ai_auto_approve_mode = ai_auto_approve_mode;
+        let now = SystemTime::now();
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            if let Some(workspace_path) = effective_path {
+                if let Err(error) = self
+                    .persistence_manager
+                    .save_session(&workspace_path, &updated_session)
+                    .await
+                {
+                    // A selection that is not durable must not stay applied in
+                    // memory, so restore the previous value before failing.
+                    if let Err(rollback_error) = self
+                        .persistence_manager
+                        .save_session(&workspace_path, &original_session)
+                        .await
+                    {
+                        return Err(BitFunError::session(format!(
+                            "Session AI auto-approve mode persistence failed and rollback did not complete: session_id={session_id}, error={error}, rollback_error={rollback_error}"
+                        )));
+                    }
+                    return Err(error);
+                }
+            }
+        }
+
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.config.ai_auto_approve_mode = ai_auto_approve_mode;
+            session.updated_at = now;
+            session.last_activity_at = now;
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        debug!(
+            "Session AI auto-approve mode updated: session_id={}, ai_auto_approve_mode={:?}",
+            session_id, ai_auto_approve_mode
+        );
+
+        Ok(())
+    }
+
+    /// Reads the session's own AI auto-approve sub-mode without falling back to
+    /// the user-level default. `None` means the session never chose one.
+    pub fn session_ai_auto_approve_mode(&self, session_id: &str) -> Option<AiAutoApproveMode> {
+        self.sessions
+            .get(session_id)
+            .and_then(|session| session.config.ai_auto_approve_mode)
+    }
+
     /// Installs or replaces the ephemeral permission mode for one exact active
     /// turn. A stale update can never leak into a newer turn in the session.
+    ///
+    /// `ai_auto_approve_mode` is the optional one-off sub-mode chosen for the
+    /// same turn; `None` keeps the turn on the session/global resolution.
     pub fn set_active_turn_permission_mode(
         &self,
         session_id: &str,
         turn_id: &str,
         permission_mode: PermissionMode,
+        ai_auto_approve_mode: Option<AiAutoApproveMode>,
     ) -> bool {
         let Some(session) = self.sessions.get(session_id) else {
             return false;
@@ -4281,6 +4390,7 @@ impl SessionManager {
             ActiveTurnPermissionMode {
                 turn_id: turn_id.to_string(),
                 mode: permission_mode,
+                ai_auto_approve_mode,
             },
         );
         true
@@ -4302,6 +4412,27 @@ impl SessionManager {
             .get(session_id)
             .filter(|entry| entry.turn_id == turn_id)
             .map(|entry| entry.mode)
+    }
+
+    /// Reads the one-off AI auto-approve sub-mode installed for the exact
+    /// active turn, if any. `None` means either no turn-level override exists
+    /// or the turn is no longer active.
+    pub fn active_turn_ai_auto_approve_mode(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Option<AiAutoApproveMode> {
+        let session = self.sessions.get(session_id)?;
+        if !matches!(
+            &session.state,
+            SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+        ) {
+            return None;
+        }
+        self.active_turn_permission_modes
+            .get(session_id)
+            .filter(|entry| entry.turn_id == turn_id)
+            .and_then(|entry| entry.ai_auto_approve_mode)
     }
 
     /// Clears an ephemeral override only when it belongs to the expected turn.
@@ -11333,6 +11464,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ai_auto_approve_mode_is_per_session_isolated_and_clearable() {
+        let manager = in_memory_test_manager();
+        let session_a_id = Uuid::new_v4().to_string();
+        let session_b_id = Uuid::new_v4().to_string();
+        for (session_id, session_name) in [
+            (session_a_id.clone(), "Session A".to_string()),
+            (session_b_id.clone(), "Session B".to_string()),
+        ] {
+            manager.sessions.insert(
+                session_id.clone(),
+                Session::new_with_id(
+                    session_id.clone(),
+                    session_name,
+                    "agentic".to_string(),
+                    SessionConfig::default(),
+                ),
+            );
+        }
+
+        // A new session starts without a sub-mode override and follows the
+        // user-level default.
+        assert_eq!(manager.session_ai_auto_approve_mode(&session_a_id), None);
+        assert_eq!(manager.session_ai_auto_approve_mode(&session_b_id), None);
+
+        manager
+            .update_session_ai_auto_approve_mode(
+                &session_a_id,
+                Some(bitfun_runtime_ports::AiAutoApproveMode::Aggressive),
+            )
+            .await
+            .expect("set session A sub-mode");
+        manager
+            .update_session_ai_auto_approve_mode(
+                &session_b_id,
+                Some(bitfun_runtime_ports::AiAutoApproveMode::Passive),
+            )
+            .await
+            .expect("set session B sub-mode");
+
+        // Each selection stays inside the session it was made in.
+        assert_eq!(
+            manager.session_ai_auto_approve_mode(&session_a_id),
+            Some(bitfun_runtime_ports::AiAutoApproveMode::Aggressive)
+        );
+        assert_eq!(
+            manager.session_ai_auto_approve_mode(&session_b_id),
+            Some(bitfun_runtime_ports::AiAutoApproveMode::Passive)
+        );
+
+        // Clearing one session leaves the other untouched.
+        manager
+            .update_session_ai_auto_approve_mode(&session_a_id, None)
+            .await
+            .expect("clear session A sub-mode");
+        assert_eq!(manager.session_ai_auto_approve_mode(&session_a_id), None);
+        assert_eq!(
+            manager.session_ai_auto_approve_mode(&session_b_id),
+            Some(bitfun_runtime_ports::AiAutoApproveMode::Passive)
+        );
+
+        // The active-turn accessor only reports a live turn and its override.
+        assert_eq!(
+            manager.active_turn_ai_auto_approve_mode(&session_a_id, "missing-turn"),
+            None
+        );
+    }
+
+    #[tokio::test]
     async fn active_turn_permission_mode_is_exact_mutable_and_stale_safe() {
         let manager = in_memory_test_manager();
         let session_id = Uuid::new_v4().to_string();
@@ -11352,11 +11551,13 @@ mod tests {
             &session_id,
             "turn-1",
             PermissionMode::Ask,
+            None,
         ));
         assert!(manager.set_active_turn_permission_mode(
             &session_id,
             "turn-1",
             PermissionMode::FullAccess,
+            None,
         ));
         assert_eq!(
             manager.active_turn_permission_mode(&session_id, "turn-1"),
@@ -11366,6 +11567,7 @@ mod tests {
             &session_id,
             "stale-turn",
             PermissionMode::AutoApprove,
+            None,
         ));
 
         manager
@@ -11384,6 +11586,7 @@ mod tests {
             &session_id,
             "turn-2",
             PermissionMode::AutoApprove,
+            None,
         ));
         assert!(!manager.clear_active_turn_permission_mode(&session_id, "turn-1"));
         assert_eq!(

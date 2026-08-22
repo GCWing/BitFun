@@ -50,7 +50,7 @@ use bitfun_core::agentic::tools::implementations::exec_command::{
 };
 use bitfun_core::service::config::project_permission_store::{
     deserialize_project_permission_config, project_permission_file_path,
-    project_permission_file_path_for_remote, ProjectPermissionConfig,
+    project_permission_file_path_for_remote, ProjectPermissionConfig, SensitiveResourceConfig,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
@@ -66,7 +66,9 @@ use bitfun_core_types::{
     WorktreeError, WorktreeErrorCode,
 };
 use bitfun_product_domains::tool_permissions::PermissionRule;
-use bitfun_runtime_ports::{PermissionMode, PortErrorKind, SessionTurnWindowRequest};
+use bitfun_runtime_ports::{
+    AiAutoApproveMode, PermissionMode, PortErrorKind, SessionTurnWindowRequest,
+};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -252,6 +254,13 @@ pub struct UpdateSessionPermissionModeRequest {
     /// user-level default again, including later changes to that default.
     #[serde(default)]
     pub mode: Option<String>,
+    /// AI auto-approve sub-mode for this session. The outer `Option`
+    /// distinguishes "field absent" (leave the current selection untouched)
+    /// from `null`/empty (clear the override and follow the user-level
+    /// default), so older callers that only set `mode` never erase a sub-mode
+    /// they know nothing about.
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub ai_auto_approve_mode: Option<Option<String>>,
     #[serde(default)]
     pub turn_id: Option<String>,
     #[serde(default)]
@@ -273,6 +282,11 @@ pub struct UpdateActiveTurnPermissionModeRequest {
     /// session mode at the next model-round boundary.
     #[serde(default)]
     pub mode: Option<String>,
+    /// One-off AI auto-approve sub-mode for this exact turn. The outer
+    /// `Option` distinguishes "field absent" (keep the current turn selection)
+    /// from `null`/empty (clear it).
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub ai_auto_approve_mode: Option<Option<String>>,
     #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
@@ -288,8 +302,14 @@ pub struct UpdateActiveTurnPermissionModeRequest {
 pub struct SessionPermissionModeResponse {
     /// The session's own selection, or `null` when it follows the default.
     pub mode: Option<PermissionMode>,
+    /// The session's own AI auto-approve sub-mode, or `null` when it follows
+    /// the user-level default.
+    pub ai_auto_approve_mode: Option<AiAutoApproveMode>,
     /// Ephemeral override for the requested active turn, when one exists.
     pub turn_mode: Option<PermissionMode>,
+    /// Ephemeral AI auto-approve sub-mode for the requested active turn, when
+    /// one exists.
+    pub turn_ai_auto_approve_mode: Option<AiAutoApproveMode>,
     pub active_turn_id: Option<String>,
 }
 
@@ -1074,7 +1094,7 @@ pub struct PermissionAuditPage {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectPermissionRulesResponse {
     pub rules: Vec<PermissionRule>,
-    pub sensitive_resources: Vec<String>,
+    pub sensitive_resources: SensitiveResourceConfig,
     pub revision: String,
 }
 
@@ -1084,13 +1104,17 @@ pub struct SaveProjectPermissionRulesRequest {
     pub workspace_id: String,
     pub rules: Vec<PermissionRule>,
     #[serde(default)]
-    pub sensitive_resources: Vec<String>,
+    pub sensitive_resources: SensitiveResourceConfig,
     pub revision: String,
 }
 
 #[derive(Debug, Clone)]
 struct ProjectPermissionConfigTarget {
+    /// Full path of the `tool_permissions.json` file on the owning host.
     path: String,
+    /// Workspace root in the same string form used as the sensitive-marker
+    /// cache key by the tool pipeline (`Workspace::root_path_string`).
+    workspace_root: String,
     remote_connection_id: Option<String>,
 }
 
@@ -1151,6 +1175,7 @@ async fn project_permission_config_target_for_workspace(
             .to_string();
         return Ok(ProjectPermissionConfigTarget {
             path: project_permission_file_path_for_remote(&workspace.root_path.to_string_lossy()),
+            workspace_root: workspace.root_path.to_string_lossy().to_string(),
             remote_connection_id: Some(remote_connection_id),
         });
     }
@@ -1159,6 +1184,7 @@ async fn project_permission_config_target_for_workspace(
         path: project_permission_file_path(&workspace.root_path)
             .to_string_lossy()
             .to_string(),
+        workspace_root: workspace.root_path.to_string_lossy().to_string(),
         remote_connection_id: None,
     })
 }
@@ -1280,12 +1306,18 @@ fn validate_project_permission_rules(rules: &[PermissionRule]) -> Result<(), Str
 /// would grow the config with markers that can never match anything. The
 /// filter is deliberately silent — empty rows are not an error, they are
 /// just unfinished input.
-fn normalize_sensitive_resources(resources: Vec<String>) -> Vec<String> {
-    resources
-        .into_iter()
-        .map(|resource| resource.trim().to_string())
-        .filter(|resource| !resource.is_empty())
-        .collect()
+fn normalize_sensitive_resources(config: SensitiveResourceConfig) -> SensitiveResourceConfig {
+    let normalize = |values: Vec<String>| {
+        values
+            .into_iter()
+            .map(|resource| resource.trim().to_string())
+            .filter(|resource| !resource.is_empty())
+            .collect::<Vec<_>>()
+    };
+    SensitiveResourceConfig {
+        read: normalize(config.read),
+        write: normalize(config.write),
+    }
 }
 
 #[tauri::command]
@@ -1312,10 +1344,11 @@ pub async fn get_project_permission_rules(
 #[tauri::command]
 pub async fn save_project_permission_rules(
     state: State<'_, AppState>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: SaveProjectPermissionRulesRequest,
 ) -> Result<ProjectPermissionRulesResponse, String> {
     validate_project_permission_rules(&request.rules)?;
-    let sensitive_resources = normalize_sensitive_resources(request.sensitive_resources.clone());
+    let sensitive_resources = normalize_sensitive_resources(request.sensitive_resources);
 
     let target =
         project_permission_config_target_for_workspace(&state, &request.workspace_id).await?;
@@ -1336,6 +1369,13 @@ pub async fn save_project_permission_rules(
         .map_err(|error| format!("Failed to serialize project permission rules: {error}"))?
     );
     write_project_permission_config_content(&state, &target, &content).await?;
+    // The saved markers must take effect immediately: drop the tool pipeline's
+    // per-workspace marker cache so the next permission check reloads the file
+    // instead of waiting for the TTL. The key is the workspace root string,
+    // which is identical for local and remote workspaces.
+    coordinator
+        .clear_sensitive_markers_cache(&target.workspace_root)
+        .await;
     Ok(ProjectPermissionRulesResponse {
         rules: request.rules,
         sensitive_resources,
@@ -2011,6 +2051,17 @@ pub async fn update_session_permission_mode(
         ),
     };
 
+    let requested_ai_auto_approve_mode = match request.ai_auto_approve_mode {
+        None => None,
+        Some(value) => Some(match value.as_deref().map(str::trim) {
+            None | Some("") => None,
+            Some(text) => Some(
+                AiAutoApproveMode::parse(text)
+                    .ok_or_else(|| format!("unsupported AI auto-approve mode: {text}"))?,
+            ),
+        }),
+    };
+
     ensure_session_loaded_for_selector_update(
         runtime.inner(),
         &session_id,
@@ -2031,6 +2082,12 @@ pub async fn update_session_permission_mode(
         .update_session_permission_mode(&session_id, mode)
         .await
         .map_err(|error| format!("Failed to update session permission mode: {error}"))?;
+    if let Some(ai_auto_approve_update) = requested_ai_auto_approve_mode {
+        session_manager
+            .update_session_ai_auto_approve_mode(&session_id, ai_auto_approve_update)
+            .await
+            .map_err(|error| format!("Failed to update session AI auto-approve mode: {error}"))?;
+    }
     if let Some(turn_id) = requested_turn_id {
         session_manager.clear_active_turn_permission_mode(&session_id, turn_id);
     }
@@ -2048,9 +2105,13 @@ pub async fn update_session_permission_mode(
     });
     Ok(SessionPermissionModeResponse {
         mode: session_manager.session_permission_mode(&session_id),
+        ai_auto_approve_mode: session_manager.session_ai_auto_approve_mode(&session_id),
         turn_mode: active_turn_id
             .as_deref()
             .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
+        turn_ai_auto_approve_mode: active_turn_id.as_deref().and_then(|turn_id| {
+            session_manager.active_turn_ai_auto_approve_mode(&session_id, turn_id)
+        }),
         active_turn_id,
     })
 }
@@ -2093,10 +2154,25 @@ pub async fn update_active_turn_permission_mode(
     .await?;
 
     let session_manager = coordinator.get_session_manager();
+    // The one-off sub-mode resolves against the turn's current selection:
+    // field absent keeps it, `null`/empty clears it, a value replaces it.
+    let ai_auto_approve_mode = match request.ai_auto_approve_mode {
+        None => session_manager.active_turn_ai_auto_approve_mode(&session_id, &turn_id),
+        Some(value) => match value.as_deref().map(str::trim) {
+            None | Some("") => None,
+            Some(text) => Some(
+                AiAutoApproveMode::parse(text)
+                    .ok_or_else(|| format!("unsupported AI auto-approve mode: {text}"))?,
+            ),
+        },
+    };
     let is_active = match mode {
-        Some(turn_mode) => {
-            session_manager.set_active_turn_permission_mode(&session_id, &turn_id, turn_mode)
-        }
+        Some(turn_mode) => session_manager.set_active_turn_permission_mode(
+            &session_id,
+            &turn_id,
+            turn_mode,
+            ai_auto_approve_mode,
+        ),
         None => {
             let is_active = session_manager
                 .get_session(&session_id)
@@ -2121,7 +2197,10 @@ pub async fn update_active_turn_permission_mode(
 
     Ok(SessionPermissionModeResponse {
         mode: session_manager.session_permission_mode(&session_id),
+        ai_auto_approve_mode: session_manager.session_ai_auto_approve_mode(&session_id),
         turn_mode: session_manager.active_turn_permission_mode(&session_id, &turn_id),
+        turn_ai_auto_approve_mode: session_manager
+            .active_turn_ai_auto_approve_mode(&session_id, &turn_id),
         active_turn_id: Some(turn_id),
     })
 }
@@ -2168,9 +2247,13 @@ pub async fn get_session_permission_mode(
     });
     Ok(SessionPermissionModeResponse {
         mode: session_manager.session_permission_mode(&session_id),
+        ai_auto_approve_mode: session_manager.session_ai_auto_approve_mode(&session_id),
         turn_mode: active_turn_id
             .as_deref()
             .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
+        turn_ai_auto_approve_mode: active_turn_id.as_deref().and_then(|turn_id| {
+            session_manager.active_turn_ai_auto_approve_mode(&session_id, turn_id)
+        }),
         active_turn_id,
     })
 }
@@ -4066,16 +4149,29 @@ mod tests {
 
     #[test]
     fn sensitive_resources_normalization_trims_and_drops_empty_markers() {
-        assert_eq!(
-            normalize_sensitive_resources(vec![
+        let normalized = normalize_sensitive_resources(SensitiveResourceConfig {
+            read: vec![
                 "secrets/".to_string(),
                 "  ".to_string(),
                 "".to_string(),
                 " .cursorrules ".to_string(),
-            ]),
+            ],
+            write: vec![
+                "crash-reports/".to_string(),
+                "  ".to_string(),
+                "".to_string(),
+                " logs ".to_string(),
+            ],
+        });
+        assert_eq!(
+            normalized.read,
             vec!["secrets/".to_string(), ".cursorrules".to_string()]
         );
-        assert!(normalize_sensitive_resources(Vec::new()).is_empty());
+        assert_eq!(
+            normalized.write,
+            vec!["crash-reports/".to_string(), "logs".to_string()]
+        );
+        assert!(normalize_sensitive_resources(SensitiveResourceConfig::default()).is_empty());
     }
 
     #[tokio::test]

@@ -93,7 +93,8 @@ use bitfun_agent_runtime::output_surface::{
     supports_inline_markdown_images_for_source, TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY,
 };
 use bitfun_agent_runtime::permission::{
-    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+    AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AI_AUTO_APPROVE_MODE_CONTEXT_KEY,
+    AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::remote_file_delivery::{
     needs_computer_links_for_source, remote_file_delivery_reminder,
@@ -4156,16 +4157,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // here instead of letting the child fall back to the global
             // default. The parent runtime ceiling is applied separately and
             // still bounds the child.
+            let session_ai_auto_approve_mode = self
+                .session_manager
+                .get_session(&session_id)
+                .and_then(|session| session.config.ai_auto_approve_mode);
             let delegated_permission_mode = resolve_submission_permission_mode(
                 permission_mode_from_metadata(Some(&user_message_metadata)),
                 self.session_manager
                     .get_session(&session_id)
                     .and_then(|session| session.config.permission_mode),
                 default_permission_mode_from_global_config().await,
+                session_ai_auto_approve_mode,
             );
             child_context.insert(
                 PERMISSION_MODE_CONTEXT_KEY.to_string(),
                 delegated_permission_mode.mode.as_str().to_string(),
+            );
+            // The child inherits the same resolved AI auto-approve sub-mode
+            // (session override first, then the user-level default).
+            child_context.insert(
+                AI_AUTO_APPROVE_MODE_CONTEXT_KEY.to_string(),
+                delegated_permission_mode
+                    .ai_auto_approve_mode
+                    .unwrap_or(default_ai_auto_approve_mode_from_global_config().await)
+                    .as_str()
+                    .to_string(),
             );
             let request = SubagentExecutionRequest {
                 task_description: prompt.clone(),
@@ -6075,6 +6091,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             permission_mode_from_metadata(user_message_metadata.as_ref()),
             session.config.permission_mode,
             default_permission_mode_from_global_config().await,
+            session.config.ai_auto_approve_mode,
         );
         let mut metadata = Self::ensure_user_message_metadata_object(user_message_metadata.take());
         if let Some(object) = metadata.as_object_mut() {
@@ -6134,6 +6151,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 &session_id,
                 &turn_id,
                 turn_mode,
+                None,
             ) {
                 self.session_manager
                     .reset_session_state_if_processing(&session_id, &turn_id);
@@ -6373,10 +6391,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             permission_mode_from_metadata(user_message_metadata.as_ref()),
             session.config.permission_mode,
             default_permission_mode_from_global_config().await,
+            session.config.ai_auto_approve_mode,
         );
         context_vars.insert(
             PERMISSION_MODE_CONTEXT_KEY.to_string(),
             submission_permission_mode.mode.as_str().to_string(),
+        );
+        // The AI auto-approve sub-mode resolves the same way (session override
+        // first, then the user-level default) and is carried in the execution
+        // context so every round and delegated subagent reads the same value.
+        let submission_ai_auto_approve_mode = submission_permission_mode
+            .ai_auto_approve_mode
+            .unwrap_or(default_ai_auto_approve_mode_from_global_config().await);
+        context_vars.insert(
+            AI_AUTO_APPROVE_MODE_CONTEXT_KEY.to_string(),
+            submission_ai_auto_approve_mode.as_str().to_string(),
         );
         if let Some(ai_auto_approve_ask) = metadata_bool(
             user_message_metadata.as_ref(),
@@ -8945,6 +8974,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     pub async fn reply_to_tool(&self, tool_id: &str, reply: PermissionReply) -> BitFunResult<()> {
         self.tool_pipeline.reply_to_tool(tool_id, reply).await
+    }
+
+    /// Clears the tool pipeline's cached sensitive-resource markers for a
+    /// workspace, so a just-saved project permission config takes effect
+    /// immediately instead of waiting for the cache TTL.
+    pub async fn clear_sensitive_markers_cache(&self, workspace_root: &str) {
+        self.tool_pipeline
+            .clear_sensitive_markers_cache_for_workspace(workspace_root)
+            .await;
     }
 
     async fn get_subagent_concurrency_limiter(&self) -> SubagentConcurrencyLimiter {
@@ -14099,6 +14137,24 @@ async fn default_permission_mode_from_global_config() -> PermissionMode {
     }
 }
 
+/// Reads the user-level default AI auto-approve sub-mode.
+///
+/// Falls back to `Standard` on a config failure: the standard tier is the
+/// safest unattended default (escalated requests prompt the user).
+async fn default_ai_auto_approve_mode_from_global_config(
+) -> bitfun_product_domains::tool_permissions::AiAutoApproveMode {
+    match crate::service::config::get_global_config_service().await {
+        Ok(service) => service
+            .get_config(None)
+            .await
+            .map(|config: crate::service::config::types::GlobalConfig| {
+                config.tool_permissions.interaction.ai_auto_approve_mode
+            })
+            .unwrap_or_default(),
+        Err(_) => bitfun_product_domains::tool_permissions::AiAutoApproveMode::Standard,
+    }
+}
+
 /// Resolves the mode one submission runs with: `turn -> session -> global`.
 ///
 /// The result is written into the execution context once so every round, tool
@@ -14107,11 +14163,15 @@ fn resolve_submission_permission_mode(
     turn_override: Option<PermissionMode>,
     session_mode: Option<PermissionMode>,
     global_default: PermissionMode,
+    session_ai_auto_approve_mode: Option<
+        bitfun_product_domains::tool_permissions::AiAutoApproveMode,
+    >,
 ) -> ResolvedPermissionMode {
     resolve_permission_mode(
         PermissionModeLayers::new(global_default)
             .with_session(session_mode)
-            .with_turn(turn_override),
+            .with_turn(turn_override)
+            .with_ai_auto_approve_mode(session_ai_auto_approve_mode),
     )
 }
 
@@ -15029,7 +15089,7 @@ mod tests {
     fn submission_permission_mode_prefers_turn_then_session_then_global() {
         use bitfun_runtime_ports::PermissionModeSource;
 
-        let global_only = resolve_submission_permission_mode(None, None, PermissionMode::Ask);
+        let global_only = resolve_submission_permission_mode(None, None, PermissionMode::Ask, None);
         assert_eq!(global_only.mode, PermissionMode::Ask);
         assert_eq!(global_only.source, PermissionModeSource::GlobalDefault);
 
@@ -15038,6 +15098,7 @@ mod tests {
             None,
             Some(PermissionMode::FullAccess),
             PermissionMode::Ask,
+            None,
         );
         assert_eq!(session_scoped.mode, PermissionMode::FullAccess);
         assert_eq!(session_scoped.source, PermissionModeSource::Session);
@@ -15048,6 +15109,7 @@ mod tests {
             Some(PermissionMode::Ask),
             Some(PermissionMode::FullAccess),
             PermissionMode::AutoApprove,
+            None,
         );
         assert_eq!(turn_scoped.mode, PermissionMode::Ask);
         assert_eq!(turn_scoped.source, PermissionModeSource::Turn);

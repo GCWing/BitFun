@@ -41,6 +41,15 @@ pub const PERMISSION_MODE_CONTEXT_KEY: &str = "permission_mode";
 /// the user. Takes precedence over the persisted interaction preference.
 pub const AI_AUTO_APPROVE_ASK_CONTEXT_KEY: &str = "ai_auto_approve_ask";
 
+/// Effective AI auto-approve sub-mode (aggressive/standard/passive) for one
+/// dialog turn.
+///
+/// The owning surface resolves `turn -> session -> user-level default` once at
+/// submission time and writes the result here, mirroring
+/// [`PERMISSION_MODE_CONTEXT_KEY`]. Everything downstream, including delegated
+/// subagents, reads this single value instead of touching the global config.
+pub const AI_AUTO_APPROVE_MODE_CONTEXT_KEY: &str = "ai_auto_approve_mode";
+
 /// Provider-neutral result of applying resolved policy and remembered grants.
 ///
 /// Product orchestration remains responsible for scope derivation, native hooks,

@@ -6,6 +6,7 @@ import {
   type PermissionGrant,
   type ProjectPermissionEffect,
   type ProjectPermissionRule,
+  type ProjectSensitiveResources,
 } from '@/infrastructure/api/service-api/PermissionAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
@@ -64,6 +65,13 @@ function arraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function sensitiveResourcesEqual(
+  left: ProjectSensitiveResources,
+  right: ProjectSensitiveResources,
+): boolean {
+  return arraysEqual(left.read, right.read) && arraysEqual(left.write, right.write);
+}
+
 export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermissionsDialogProps> = ({
   workspace,
   isOpen,
@@ -77,8 +85,12 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
   const [mutationKey, setMutationKey] = useState<string | null>(null);
   const [savedRules, setSavedRules] = useState<ProjectPermissionRule[]>([]);
   const [draftRules, setDraftRules] = useState<DraftRule[]>([]);
-  const [savedSensitiveResources, setSavedSensitiveResources] = useState<string[]>([]);
-  const [draftSensitiveResources, setDraftSensitiveResources] = useState<string[]>([]);
+  const [savedSensitiveResources, setSavedSensitiveResources] = useState<ProjectSensitiveResources>(
+    { read: [], write: [] },
+  );
+  const [draftSensitiveResources, setDraftSensitiveResources] = useState<ProjectSensitiveResources>(
+    { read: [], write: [] },
+  );
   const [rulesRevision, setRulesRevision] = useState<string | null>(null);
   const effectOptions = useMemo<SelectOption[]>(
     () => EFFECTS.map((effect) => ({
@@ -200,7 +212,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
   const isMutationRunning = mutationKey !== null;
   const projectRules = useMemo(() => toProjectRules(draftRules), [draftRules]);
   const rulesDirty = !rulesEqual(projectRules, savedRules);
-  const sensitiveResourcesDirty = !arraysEqual(draftSensitiveResources, savedSensitiveResources);
+  const sensitiveResourcesDirty = !sensitiveResourcesEqual(draftSensitiveResources, savedSensitiveResources);
   const rulesValid = projectRules.every((rule) => rule.action.trim() && rule.resource.trim());
   const isBusy = grantsLoading || rulesLoading || rulesSaving || isMutationRunning;
 
@@ -242,9 +254,12 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
 
     // Trim and drop empty rows before persisting; an unfinished draft row is
     // not an error, it is just input the user never filled.
-    const normalized = draftSensitiveResources
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0);
+    const normalize = (values: string[]) =>
+      values.map((value) => value.trim()).filter((value) => value.length > 0);
+    const normalized: ProjectSensitiveResources = {
+      read: normalize(draftSensitiveResources.read),
+      write: normalize(draftSensitiveResources.write),
+    };
 
     setRulesSaving(true);
     try {
@@ -464,52 +479,36 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
         <section data-bf-component="workspace-project-permissions-dialog" data-bf-part="section" className="workspace-project-permissions-dialog__section workspace-project-permissions-dialog__sensitive-section">
           <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sectionHeader" className="workspace-project-permissions-dialog__section-header">
             <span>{t('projectPermissions.sensitiveResourcesTitle')}</span>
-            <Button
-              size="small"
-              variant="secondary"
-              disabled={isBusy || rulesRevision === null}
-              onClick={() => setDraftSensitiveResources((values) => [...values, ''])}
-            >
-              <Plus size={14} />
-              {t('projectPermissions.addSensitiveResource')}
-            </Button>
           </div>
 
           <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sensitiveBody" className="workspace-project-permissions-dialog__sensitive-body">
-            <p className="workspace-project-permissions-dialog__sensitive-description">
-              {t('projectPermissions.sensitiveResourcesDescription')}
-            </p>
-
             {rulesLoading ? (
               <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="empty" className="workspace-project-permissions-dialog__empty">{t('loading.text')}</div>
-            ) : draftSensitiveResources.length === 0 ? (
-              <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="empty" className="workspace-project-permissions-dialog__empty">{t('projectPermissions.sensitiveResourcesEmpty')}</div>
             ) : (
-              <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sensitiveResources" className="workspace-project-permissions-dialog__sensitive-resources">
-                {draftSensitiveResources.map((value, index) => (
-                  <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sensitiveResource" key={index} className="workspace-project-permissions-dialog__sensitive-row">
-                    <Input
-                      inputSize="small"
-                      value={value}
-                      placeholder={t('projectPermissions.sensitiveResourcePlaceholder')}
-                      aria-label={t('projectPermissions.sensitiveResourcePlaceholder')}
-                      disabled={isBusy}
-                      onChange={(event) => setDraftSensitiveResources((values) => values.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))}
-                    />
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('projectPermissions.removeSensitiveResource')}
-                      tooltip={t('projectPermissions.removeSensitiveResource')}
-                      disabled={isBusy}
-                      onClick={() => setDraftSensitiveResources((values) => values.filter((_, itemIndex) => itemIndex !== index))}
-                    >
-                      <Trash2 size={14} />
-                    </IconButton>
-                  </div>
-                ))}
-              </div>
+              <>
+                <SensitiveResourceGroup
+                  title={t('projectPermissions.sensitiveResourcesReadTitle')}
+                  description={t('projectPermissions.sensitiveResourcesDescription')}
+                  values={draftSensitiveResources.read}
+                  addLabel={t('projectPermissions.addSensitiveResource')}
+                  emptyLabel={t('projectPermissions.sensitiveResourcesEmpty')}
+                  placeholder={t('projectPermissions.sensitiveResourcePlaceholder')}
+                  removeLabel={t('projectPermissions.removeSensitiveResource')}
+                  disabled={isBusy || rulesRevision === null}
+                  onChange={(values) => setDraftSensitiveResources((prev) => ({ ...prev, read: values }))}
+                />
+                <SensitiveResourceGroup
+                  title={t('projectPermissions.sensitiveResourcesWriteTitle')}
+                  description={t('projectPermissions.sensitiveResourcesWriteDescription')}
+                  values={draftSensitiveResources.write}
+                  addLabel={t('projectPermissions.addSensitiveResource')}
+                  emptyLabel={t('projectPermissions.sensitiveResourcesEmpty')}
+                  placeholder={t('projectPermissions.sensitiveResourcePlaceholder')}
+                  removeLabel={t('projectPermissions.removeSensitiveResource')}
+                  disabled={isBusy || rulesRevision === null}
+                  onChange={(values) => setDraftSensitiveResources((prev) => ({ ...prev, write: values }))}
+                />
+              </>
             )}
 
             {sensitiveResourcesDirty ? (
@@ -535,5 +534,94 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
     </Modal>
   );
 };
+
+interface SensitiveResourceGroupProps {
+  title: string;
+  description: string;
+  values: string[];
+  addLabel: string;
+  emptyLabel: string;
+  placeholder: string;
+  removeLabel: string;
+  disabled: boolean;
+  onChange: (values: string[]) => void;
+}
+
+function SensitiveResourceGroup({
+  title,
+  description,
+  values,
+  addLabel,
+  emptyLabel,
+  placeholder,
+  removeLabel,
+  disabled,
+  onChange,
+}: SensitiveResourceGroupProps) {
+  return (
+    <div
+      data-bf-component="workspace-project-permissions-dialog"
+      data-bf-part="sensitiveGroup"
+      className="workspace-project-permissions-dialog__sensitive-group"
+    >
+      <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sensitiveGroupHeader" className="workspace-project-permissions-dialog__sensitive-group-header">
+        <span data-bf-component="workspace-project-permissions-dialog" data-bf-part="sensitiveGroupTitle" className="workspace-project-permissions-dialog__sensitive-group-title">{title}</span>
+        <Button size="small" variant="secondary" disabled={disabled} onClick={() => onChange([...values, ''])}>
+          <Plus size={14} />
+          {addLabel}
+        </Button>
+      </div>
+
+      <p className="workspace-project-permissions-dialog__sensitive-description">{description}</p>
+
+      {values.length === 0 ? (
+        <div
+          data-bf-component="workspace-project-permissions-dialog"
+          data-bf-part="empty"
+          className="workspace-project-permissions-dialog__empty"
+        >
+          {emptyLabel}
+        </div>
+      ) : (
+        <div
+          data-bf-component="workspace-project-permissions-dialog"
+          data-bf-part="sensitiveResources"
+          className="workspace-project-permissions-dialog__sensitive-resources"
+        >
+          {values.map((value, index) => (
+            <div
+              data-bf-component="workspace-project-permissions-dialog"
+              data-bf-part="sensitiveResource"
+              key={index}
+              className="workspace-project-permissions-dialog__sensitive-row"
+            >
+              <Input
+                inputSize="small"
+                value={value}
+                placeholder={placeholder}
+                aria-label={placeholder}
+                disabled={disabled}
+                onChange={(event) =>
+                  onChange(values.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))
+                }
+              />
+              <IconButton
+                type="button"
+                size="small"
+                variant="ghost"
+                aria-label={removeLabel}
+                tooltip={removeLabel}
+                disabled={disabled}
+                onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+              >
+                <Trash2 size={14} />
+              </IconButton>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default WorkspaceProjectPermissionsDialog;

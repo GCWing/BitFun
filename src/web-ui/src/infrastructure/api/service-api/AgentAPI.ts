@@ -454,10 +454,19 @@ export interface UpdateSessionModelRequest {
 /** `ask` | `auto_approve` | `ai_auto` | `full_access`; `null` clears the session override. */
 export type SessionPermissionMode = 'ask' | 'auto_approve' | 'ai_auto' | 'full_access';
 
+/** `aggressive` | `standard` | `passive`; `null` clears the session override. */
+export type AiAutoApproveMode = 'aggressive' | 'standard' | 'passive';
+
 export interface SessionPermissionModeRequest {
   sessionId: string;
   /** Omit or pass null to clear the override and follow the global default. */
   mode?: SessionPermissionMode | null;
+  /**
+   * AI auto-approve sub-mode for this session. Omit to leave the current
+   * selection untouched; pass null or an empty string to clear the override
+   * and follow the user-level default.
+   */
+  aiAutoApproveMode?: AiAutoApproveMode | null;
   /** Exact active turn whose temporary override should be read or cleared. */
   turnId?: string;
   workspacePath?: string;
@@ -468,7 +477,9 @@ export interface SessionPermissionModeRequest {
 
 export interface SessionPermissionModeResponse {
   mode: SessionPermissionMode | null;
+  aiAutoApproveMode?: AiAutoApproveMode | null;
   turnMode?: SessionPermissionMode | null;
+  turnAiAutoApproveMode?: AiAutoApproveMode | null;
   activeTurnId?: string | null;
 }
 

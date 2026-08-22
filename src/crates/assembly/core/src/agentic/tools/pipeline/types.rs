@@ -141,6 +141,16 @@ pub struct ToolTask {
     /// when any. Surfaced to the AI judge as part of the tool history so the
     /// intent stays visible for the rest of the turn.
     pub approved_user_feedback: Option<String>,
+    /// The permission action this call was authorized under, when the call
+    /// crossed the permission flow (for example `write_file`, `run_shell`,
+    /// or a wildcard intent). Tool history uses this instead of the wire tool
+    /// name so history entries stay semantically meaningful for the AI judge
+    /// even when provider tool names are remapped.
+    pub permission_action: Option<String>,
+    /// Monotonically increasing sequence assigned when the task is registered.
+    /// `get_dialog_turn_tasks` orders by this value so the AI judge history is
+    /// stable across concurrent rounds and only ever appends completed calls.
+    pub turn_sequence: u64,
     pub created_at: SystemTime,
     pub started_at: Option<SystemTime>,
     pub completed_at: Option<SystemTime>,
@@ -175,6 +185,8 @@ impl ToolTask {
             options,
             state: ToolExecutionState::Queued { position: 0 },
             approved_user_feedback: None,
+            permission_action: None,
+            turn_sequence: 0,
             created_at: SystemTime::now(),
             started_at: None,
             completed_at: None,

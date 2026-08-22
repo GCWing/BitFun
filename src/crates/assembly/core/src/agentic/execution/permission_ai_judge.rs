@@ -105,6 +105,19 @@ pub struct ToolHistoryEntry {
     pub user_note: Option<String>,
 }
 
+/// Project-configured sensitive-resource markers, split by protection class.
+///
+/// `read` markers protect content that must never be read without the user
+/// deciding; `write` markers protect content that must not be written
+/// automatically. They are used ONLY by the deterministic paths (the read-only
+/// fast path and the sensitivity matrix) and are never rendered into the judge
+/// prompt as marker text.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SensitiveMarkers {
+    pub read: Vec<String>,
+    pub write: Vec<String>,
+}
+
 /// Structured context passed to the judge for one permission request.
 #[derive(Debug, Clone)]
 pub struct AiJudgeInput {
@@ -131,10 +144,10 @@ pub struct AiJudgeInput {
     /// Workspace root used ONLY to relativize absolute paths before rendering.
     /// Never rendered into the prompt itself.
     pub workspace_root: Option<String>,
-    /// Project-configured sensitive-resource markers. Used ONLY by the
-    /// read-only fast path to keep sensitive resources out of deterministic
-    /// approval; never rendered into the judge prompt.
-    pub sensitive_resource_markers: Vec<String>,
+    /// Project-configured sensitive-resource markers, split by protection
+    /// class. Used ONLY by the deterministic fast path and the sensitivity
+    /// matrix; never rendered into the judge prompt.
+    pub sensitive_markers: SensitiveMarkers,
     /// Unattended sub-mode deciding what happens to judge-escalated requests.
     pub auto_approve_mode: AiAutoApproveMode,
 }
@@ -248,45 +261,134 @@ pub fn is_read_only_permission_request(action: &str, tool_name: &str) -> bool {
 /// model. Matched requests still enter the tool history, so later judge calls
 /// keep seeing the read as part of the turn's context.
 pub fn is_deterministically_read_only(action: &str, tool_name: &str, resources: &[String]) -> bool {
-    is_deterministically_read_only_with_markers(action, tool_name, resources, &[])
+    is_deterministically_read_only_with_markers(
+        action,
+        tool_name,
+        resources,
+        &SensitiveMarkers::default(),
+    )
 }
 
 /// Same as [`is_deterministically_read_only`], but also keeps resources that
-/// match the project's user-configured sensitive markers out of the fast path.
+/// match read-sensitive markers (built-in defaults plus the project's
+/// user-configured read markers) out of the fast path.
 ///
-/// `custom_sensitive_markers` come from the project's `tool_permissions.json`;
-/// they are matched here ONLY to route such resources through the judge and are
-/// never rendered into the judge prompt.
+/// `markers` come from the project's `tool_permissions.json`; they are matched
+/// here ONLY to route such resources through the judge and are never rendered
+/// into the judge prompt.
 pub fn is_deterministically_read_only_with_markers(
     action: &str,
     tool_name: &str,
     resources: &[String],
-    custom_sensitive_markers: &[String],
+    markers: &SensitiveMarkers,
 ) -> bool {
     if !is_read_only_permission_request(action, tool_name) {
         return false;
     }
     resources
         .iter()
-        .all(|resource| !resource_is_sensitive(resource, custom_sensitive_markers))
+        .all(|resource| !resource_is_read_sensitive(resource, &markers.read))
 }
 
-/// True when a resource path or command touches credentials or secret files.
+/// True when a resource path or command touches read-sensitive content.
 ///
 /// Combines the built-in default markers with the project's user-configured
-/// markers (case-insensitive substring match). Used ONLY by the read-only fast
-/// path; the resulting list is never shown to the model.
-pub fn resource_is_sensitive(resource: &str, custom_markers: &[String]) -> bool {
+/// read markers (case-insensitive substring match). Used ONLY by the
+/// deterministic paths; the marker list itself is never shown to the model.
+pub fn resource_is_read_sensitive(resource: &str, custom_read_markers: &[String]) -> bool {
     let lower = resource.to_ascii_lowercase();
     let matches_default =
         bitfun_product_domains::tool_permissions::DEFAULT_SENSITIVE_RESOURCE_MARKERS
             .iter()
             .any(|marker| lower.contains(marker));
-    let matches_custom = custom_markers.iter().any(|marker| {
+    let matches_custom = custom_read_markers.iter().any(|marker| {
         let trimmed = marker.trim();
         !trimmed.is_empty() && lower.contains(&trimmed.to_ascii_lowercase())
     });
     (matches_default || matches_custom) && !lower.contains(".env.example")
+}
+
+/// True when a resource path or command touches user-configured
+/// write-sensitive content (project `write` markers only, case-insensitive
+/// substring match). Used ONLY by the deterministic write-sensitivity checks;
+/// the marker list itself is never shown to the model.
+pub fn resource_is_write_sensitive(resource: &str, custom_write_markers: &[String]) -> bool {
+    let lower = resource.to_ascii_lowercase();
+    custom_write_markers.iter().any(|marker| {
+        let trimmed = marker.trim();
+        !trimmed.is_empty() && lower.contains(&trimmed.to_ascii_lowercase())
+    })
+}
+
+/// Deterministic verdict of the sensitivity matrix for one permission intent.
+///
+/// The matrix runs after the static policy so protection classes never depend
+/// on the model: read-sensitive resources are a hard line (escalate in
+/// standard mode, deny in aggressive/passive and unattended runs), and
+/// write-sensitive resources keep write-class operations out of aggressive
+/// auto-approval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SensitivityVerdict {
+    ReadSensitive,
+    WriteSensitive,
+    None,
+}
+
+/// True when the action or tool name identifies a write-class operation
+/// (editing, writing, deleting files, or running a shell command). Bash is
+/// included because its read-only-ness is judged by the model; git is
+/// deliberately excluded from the write-sensitivity class.
+pub fn is_write_class_action(action: &str, tool_name: &str) -> bool {
+    let action_lower = action.to_ascii_lowercase();
+    if matches!(action_lower.as_str(), "edit" | "write" | "delete" | "bash") {
+        return true;
+    }
+    let tool_lower = tool_name.to_ascii_lowercase();
+    tool_lower.contains("edit") || tool_lower.contains("write") || tool_lower.contains("delete")
+}
+
+/// Classifies one permission intent against the read/write sensitivity
+/// classes. Read-sensitive wins over write-sensitive: content that must not
+/// be read must also not be written automatically.
+pub fn classify_intent_sensitivity(
+    action: &str,
+    tool_name: &str,
+    resources: &[String],
+    markers: &SensitiveMarkers,
+) -> SensitivityVerdict {
+    if resources
+        .iter()
+        .any(|resource| resource_is_read_sensitive(resource, &markers.read))
+    {
+        return SensitivityVerdict::ReadSensitive;
+    }
+    if is_write_class_action(action, tool_name)
+        && resources
+            .iter()
+            .any(|resource| resource_is_write_sensitive(resource, &markers.write))
+    {
+        return SensitivityVerdict::WriteSensitive;
+    }
+    SensitivityVerdict::None
+}
+
+/// Drops tool-history entries whose resources touch read-sensitive markers,
+/// so the protected paths never reach the judge prompt in the turn history.
+/// Write-class markers stay visible: the judge needs their names.
+pub fn filter_read_sensitive_history(
+    history: &[ToolHistoryEntry],
+    markers: &SensitiveMarkers,
+) -> Vec<ToolHistoryEntry> {
+    history
+        .iter()
+        .filter(|entry| {
+            !entry
+                .resources
+                .iter()
+                .any(|resource| resource_is_read_sensitive(resource, &markers.read))
+        })
+        .cloned()
+        .collect()
 }
 
 /// Derives the stable id of one user rule.
@@ -498,6 +600,20 @@ pub async fn evaluate_risk_with_model(
     input: AiJudgeInput,
     model: &dyn AiJudgeModel,
 ) -> AiPermissionDecision {
+    let mut input = input;
+    input.tool_history =
+        filter_read_sensitive_history(&input.tool_history, &input.sensitive_markers);
+    let Some(input) = sanitize_input_for_prompt(input) else {
+        warn!(
+            "AI permission judge skipped: unredactable secret material in the request; escalating"
+        );
+        return AiPermissionDecision::Escalate {
+            reason: Some(
+                "The permission request contains secret material that cannot be redacted reliably."
+                    .to_string(),
+            ),
+        };
+    };
     let task_message = render_task_message(&input);
     for attempt in 1..=MAX_MODEL_ATTEMPTS {
         let response = match model
@@ -526,7 +642,14 @@ pub async fn evaluate_risk_with_model(
             continue;
         };
         match serde_json::from_str::<JudgeResponse>(&json_string) {
-            Ok(parsed) => return resolve_verdict(parsed),
+            Ok(parsed) => match resolve_verdict(parsed) {
+                Ok(verdict) => return verdict,
+                Err(JudgeParseError::UnknownRiskLevel) => {
+                    warn!(
+                        "AI permission judge returned unknown risk_level; retrying: attempt={attempt}"
+                    );
+                }
+            },
             Err(error) => {
                 warn!(
                     "AI permission judge response failed schema validation: attempt={attempt}, error={}",
@@ -540,6 +663,14 @@ pub async fn evaluate_risk_with_model(
     AiPermissionDecision::Escalate { reason: None }
 }
 
+/// A judge response problem that a retry may fix. When every retry fails the
+/// request is escalated instead of being allowed or rejected from a malformed
+/// verdict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum JudgeParseError {
+    UnknownRiskLevel,
+}
+
 /// Maps a parsed judge response to the final verdict.
 ///
 /// Only a `deny` verdict combined with `critical` risk rejects the request
@@ -549,7 +680,12 @@ pub async fn evaluate_risk_with_model(
 ///
 /// An `allow` verdict with `critical` risk is also escalated: the two fields
 /// are contradictory and the fail-closed path is to let the user decide.
-fn resolve_verdict(parsed: JudgeResponse) -> AiPermissionDecision {
+///
+/// An unknown `risk_level` is a retryable parse error: the verdict is never
+/// derived from it (fail-open would auto-approve `{"decision":"allow",
+/// "risk_level":"critcal"}`), and exhausting the retries escalates to the
+/// user.
+fn resolve_verdict(parsed: JudgeResponse) -> Result<AiPermissionDecision, JudgeParseError> {
     let decision = match parse_decision(&parsed.decision) {
         Some(decision) => decision,
         None => {
@@ -557,14 +693,20 @@ fn resolve_verdict(parsed: JudgeResponse) -> AiPermissionDecision {
                 "AI permission judge returned unknown decision {:?}; escalating",
                 parsed.decision
             );
-            return AiPermissionDecision::Escalate { reason: None };
+            return Ok(AiPermissionDecision::Escalate { reason: None });
         }
     };
-    let risk_level = parse_risk_level(&parsed.risk_level);
+    let Some(risk_level) = parse_risk_level(&parsed.risk_level) else {
+        warn!(
+            "AI permission judge returned unknown risk_level {:?}; retrying",
+            parsed.risk_level
+        );
+        return Err(JudgeParseError::UnknownRiskLevel);
+    };
     let reason = parsed.reason.filter(|reason| !reason.trim().is_empty());
 
-    match (decision, risk_level) {
-        (JudgeDecision::Allow, Some(RiskLevel::Critical)) => {
+    let verdict = match (decision, risk_level) {
+        (JudgeDecision::Allow, RiskLevel::Critical) => {
             warn!("AI permission judge returned allow with critical risk; escalating to user");
             AiPermissionDecision::Escalate {
                 reason: Some(
@@ -576,7 +718,7 @@ fn resolve_verdict(parsed: JudgeResponse) -> AiPermissionDecision {
             }
         }
         (JudgeDecision::Allow, _) => AiPermissionDecision::Allow,
-        (JudgeDecision::Deny, Some(RiskLevel::Critical)) => AiPermissionDecision::Reject {
+        (JudgeDecision::Deny, RiskLevel::Critical) => AiPermissionDecision::Reject {
             reason: reason.unwrap_or_else(|| {
                 "The AI permission judge classified this operation as critical-risk.".to_string()
             }),
@@ -588,7 +730,8 @@ fn resolve_verdict(parsed: JudgeResponse) -> AiPermissionDecision {
             AiPermissionDecision::Escalate { reason }
         }
         (JudgeDecision::Escalate, _) => AiPermissionDecision::Escalate { reason },
-    }
+    };
+    Ok(verdict)
 }
 
 fn parse_decision(value: &str) -> Option<JudgeDecision> {
@@ -669,6 +812,345 @@ fn redact_secrets_in_value(value: &mut serde_json::Value) {
     }
 }
 
+/// Secret keywords whose inline values inside a command string must be
+/// redacted before the command is shown to the fast model. These cover HTTP
+/// headers, CLI flags, and environment-variable assignments such as
+/// `curl -H "Authorization: Bearer ..."`, `npm publish --token ...`, or
+/// `export GITHUB_TOKEN=...`. Matching is case-insensitive and respects word
+/// boundaries so ordinary words like `tokenize` are left untouched.
+const SECRET_TEXT_KEYWORDS: &[&str] = &[
+    "authorization",
+    "bearer",
+    "auth_token",
+    "x-api-key",
+    "github_token",
+    "api_key",
+    "apikey",
+    "access_key",
+    "private_key",
+    "client_secret",
+    "token",
+    "password",
+    "passwd",
+    "secret",
+];
+
+fn is_secret_keyword_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+fn find_next_secret_keyword(lower: &str, from: usize) -> Option<(usize, usize)> {
+    let bytes = lower.as_bytes();
+    let mut index = from;
+    while index < bytes.len() {
+        for keyword in SECRET_TEXT_KEYWORDS {
+            if bytes[index..].starts_with(keyword.as_bytes()) {
+                let end = index + keyword.len();
+                let after_ok = end >= bytes.len() || !is_secret_keyword_byte(bytes[end]);
+                let before_ok = index == 0 || !is_secret_keyword_byte(bytes[index - 1]);
+                // Environment-variable style assignments prefix the keyword
+                // (`PGPASSWORD=`, `MY_GITHUB_TOKEN=`): a candidate whose whole
+                // word ends with the keyword is accepted too, since the caller
+                // only redacts when an assignment or flag value follows.
+                // Word-internal matches such as `tokenize` stay rejected by
+                // `after_ok`.
+                let word_ends_with_keyword = {
+                    let mut word_start = index;
+                    while word_start > 0 && is_secret_keyword_byte(bytes[word_start - 1]) {
+                        word_start -= 1;
+                    }
+                    word_start != index
+                };
+                if (before_ok || word_ends_with_keyword) && after_ok {
+                    return Some((index, end));
+                }
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+/// Outcome of locating the secret value that follows a keyword.
+enum SecretValueRange {
+    /// Byte range of the value content (quotes excluded) within the string.
+    Value((usize, usize)),
+    /// No value follows the keyword (nothing to leak).
+    NoValue,
+    /// A quoted value is unterminated: the value cannot be bounded reliably,
+    /// so the caller must escalate instead of leaking it to the model.
+    Unbounded,
+}
+
+/// Locates the secret value that follows a keyword.
+fn secret_value_range(bytes: &[u8], from: usize) -> SecretValueRange {
+    let mut index = from;
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+    if index >= bytes.len() {
+        return SecretValueRange::NoValue;
+    }
+    if bytes[index] == b'"' || bytes[index] == b'\'' {
+        let quote = bytes[index];
+        let content_start = index + 1;
+        let mut cursor = content_start;
+        while cursor < bytes.len() && bytes[cursor] != quote {
+            if bytes[cursor] == b'\\' {
+                cursor = (cursor + 2).min(bytes.len());
+                continue;
+            }
+            cursor += 1;
+        }
+        if cursor >= bytes.len() {
+            return SecretValueRange::Unbounded;
+        }
+        return SecretValueRange::Value((content_start, cursor));
+    }
+    // Unquoted value: the value may contain spaces (`Authorization: Bearer
+    // xyz`), so it runs to a command separator or until it meets a quote. An
+    // unmatched quote that is directly followed by content is an unterminated
+    // quoted value and makes the whole range unreliable.
+    let content_start = index;
+    let mut cursor = index;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        if byte == b'"' || byte == b'\'' {
+            // A paired quote stays inside the value; look past it for the
+            // closing occurrence before deciding it is a value boundary.
+            if let Some(relative_close) = bytes[cursor + 1..]
+                .iter()
+                .position(|&candidate| candidate == byte)
+            {
+                cursor = cursor + 1 + relative_close + 1;
+                continue;
+            }
+            let after_quote = bytes
+                .get(cursor + 1)
+                .map(|next| next.is_ascii_whitespace())
+                .unwrap_or(true);
+            if after_quote {
+                // Closing quote of a quoted argument: the value ends here.
+                break;
+            }
+            return SecretValueRange::Unbounded;
+        }
+        if matches!(byte, b';' | b'&' | b'|' | b',' | b')' | b'<' | b'>') {
+            break;
+        }
+        cursor += 1;
+    }
+    SecretValueRange::Value((content_start, cursor))
+}
+
+/// Redacts credentials embedded in URL userinfo (`scheme://user:pass@host`).
+///
+/// Returns `None` when a userinfo contains an unterminated quote, so the
+/// password cannot be bounded reliably and the caller escalates instead of
+/// leaking it. Bracket-literal authorities (`https://[::1]@host`) are not
+/// credentials and are left untouched.
+fn redact_url_userinfo(text: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut result = String::with_capacity(text.len());
+    let mut cursor = 0;
+    let mut redacted_any = false;
+    while let Some(scheme_offset) = lower[cursor..].find("://") {
+        let scheme_end = cursor + scheme_offset + 3;
+        // The authority runs to whitespace, a quote, or a common URL
+        // terminator; the `@` that separates userinfo lives inside it.
+        let mut authority_end = scheme_end;
+        while authority_end < bytes.len()
+            && !bytes[authority_end].is_ascii_whitespace()
+            && !matches!(
+                bytes[authority_end],
+                b'"' | b'\'' | b',' | b';' | b'|' | b'<' | b'>'
+            )
+        {
+            authority_end += 1;
+        }
+        let authority = &lower[scheme_end..authority_end];
+        // A quote truncating the authority means the URL boundary is not
+        // trustworthy: if a credential-looking segment continues past the
+        // quote, escalate instead of leaking it.
+        if authority_end < bytes.len() && matches!(bytes[authority_end], b'"' | b'\'') {
+            let rest_end = bytes[authority_end..]
+                .iter()
+                .position(|&byte| byte.is_ascii_whitespace())
+                .map(|index| authority_end + index)
+                .unwrap_or(bytes.len());
+            let tail = &lower[scheme_end..rest_end];
+            if tail.contains('@') && tail.contains(':') {
+                return None;
+            }
+        }
+        let Some(at) = authority.find('@').map(|index| scheme_end + index) else {
+            result.push_str(&text[cursor..authority_end]);
+            cursor = authority_end;
+            continue;
+        };
+        let userinfo = &text[scheme_end..at];
+        let Some(colon) = authority[..at - scheme_end].find(':') else {
+            // A bare user (`git fetch https://user@host`) is not a credential.
+            result.push_str(&text[cursor..at + 1]);
+            cursor = at + 1;
+            continue;
+        };
+        // `[::1]@host` is an IPv6 literal in userinfo position, not a secret.
+        if userinfo.starts_with('[') {
+            result.push_str(&text[cursor..authority_end]);
+            cursor = authority_end;
+            continue;
+        }
+        if userinfo.contains('"') || userinfo.contains('\'') {
+            return None;
+        }
+        redacted_any = true;
+        let colon_absolute = scheme_end + colon;
+        result.push_str(&text[cursor..colon_absolute + 1]);
+        result.push_str("[REDACTED]");
+        cursor = at;
+    }
+    if !redacted_any {
+        return Some(text.to_string());
+    }
+    result.push_str(&text[cursor..]);
+    Some(result)
+}
+
+/// Redacts secret values embedded inside a command string.
+///
+/// Handles `key: value` headers, `key=value` assignments (including exported
+/// environment variables), `--flag value` CLI options, and URL userinfo
+/// (`user:pass@host`); a `Bearer` scheme keeps its scheme word while the token
+/// itself is replaced. Returns `None`
+/// when some detected secret value cannot be bounded reliably (for example an
+/// unterminated quote), so the caller escalates instead of sending raw
+/// secrets to the model.
+pub fn redact_secrets_in_text(text: &str) -> Option<String> {
+    let text = redact_url_userinfo(text)?;
+    let lower = text.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut result = String::with_capacity(text.len());
+    let mut cursor = 0usize;
+    let mut redacted_any = false;
+    while let Some((keyword_start, keyword_end)) = find_next_secret_keyword(&lower, cursor) {
+        // Skip whitespace to see whether an assignment or flag value follows.
+        let mut probe = keyword_end;
+        while probe < bytes.len() && bytes[probe].is_ascii_whitespace() {
+            probe += 1;
+        }
+        let is_assignment = probe < bytes.len() && matches!(bytes[probe], b':' | b'=');
+        let is_flag = keyword_start >= 1
+            && bytes[keyword_start - 1] == b'-'
+            && (keyword_end >= bytes.len() || bytes[keyword_end].is_ascii_whitespace());
+        if !is_assignment && !is_flag {
+            cursor = keyword_end;
+            continue;
+        }
+        let value_start = if is_assignment { probe + 1 } else { probe };
+        let (content_start, content_end) = match secret_value_range(bytes, value_start) {
+            SecretValueRange::Value(range) => range,
+            SecretValueRange::NoValue => {
+                // Keyword without a value: nothing to leak, keep scanning.
+                cursor = keyword_end;
+                continue;
+            }
+            SecretValueRange::Unbounded => return None,
+        };
+        if content_end <= content_start {
+            cursor = keyword_end;
+            continue;
+        }
+        // A `Bearer <token>` value keeps its scheme word and redacts the token.
+        let content = &lower[content_start..content_end];
+        let trimmed_len = content.len() - content.trim_start().len();
+        let trimmed = content.trim_start();
+        let mut token_start = content_start + trimmed_len;
+        if trimmed.starts_with("bearer ") {
+            token_start += "bearer ".len();
+            if token_start >= content_end {
+                // Bare `Bearer` with no token: redact the whole value.
+                redacted_any = true;
+                result.push_str(&text[cursor..content_start + trimmed_len]);
+                result.push_str("[REDACTED]");
+                cursor = content_end;
+                continue;
+            }
+        }
+        redacted_any = true;
+        result.push_str(&text[cursor..token_start]);
+        result.push_str("[REDACTED]");
+        cursor = content_end;
+    }
+    if !redacted_any {
+        return Some(text.to_string());
+    }
+    result.push_str(&text[cursor..]);
+    Some(result)
+}
+
+/// Applies both redaction passes to a serialized arguments preview: key-level
+/// values via [`redact_secrets_in_value`] and secrets embedded inside string
+/// values (for example a `command` containing `Authorization: Bearer ...`)
+/// via [`redact_secrets_in_text`]. Returns `None` when some string value
+/// contains secret material that cannot be redacted reliably.
+pub fn redact_arguments_preview(preview: &str) -> Option<String> {
+    let mut value: serde_json::Value = serde_json::from_str(preview).ok()?;
+    redact_secrets_in_value(&mut value);
+    redact_text_secrets_in_json_value(&mut value)?;
+    serde_json::to_string(&value).ok()
+}
+
+fn redact_text_secrets_in_json_value(value: &mut serde_json::Value) -> Option<()> {
+    match value {
+        serde_json::Value::String(text) => {
+            *text = redact_secrets_in_text(text)?;
+        }
+        serde_json::Value::Object(map) => {
+            for child in map.values_mut() {
+                redact_text_secrets_in_json_value(child)?;
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                redact_text_secrets_in_json_value(item)?;
+            }
+        }
+        _ => {}
+    }
+    Some(())
+}
+
+/// Applies all redaction passes to one judge input before rendering: resource
+/// strings (which may be shell commands), tool-history resources, and the
+/// arguments preview. Returns `None` when some string contains secret
+/// material that cannot be redacted reliably — the caller must escalate
+/// instead of showing the raw text to the model.
+fn sanitize_input_for_prompt(mut input: AiJudgeInput) -> Option<AiJudgeInput> {
+    let mut resources = Vec::with_capacity(input.resources.len());
+    for resource in &input.resources {
+        resources.push(redact_secrets_in_text(resource)?);
+    }
+    input.resources = resources;
+
+    let mut history = Vec::with_capacity(input.tool_history.len());
+    for mut entry in input.tool_history {
+        let mut entry_resources = Vec::with_capacity(entry.resources.len());
+        for resource in &entry.resources {
+            entry_resources.push(redact_secrets_in_text(resource)?);
+        }
+        entry.resources = entry_resources;
+        history.push(entry);
+    }
+    input.tool_history = history;
+
+    if let Some(preview) = input.arguments_preview.as_deref() {
+        input.arguments_preview = Some(redact_arguments_preview(preview)?);
+    }
+    Some(input)
+}
+
 fn render_task_message(input: &AiJudgeInput) -> String {
     let mut message = render_session_context(input);
     let rules = render_user_rules(&input.user_rules, input.workspace_root.as_deref());
@@ -735,7 +1217,12 @@ fn render_user_rules(rules: &[UserRule], workspace_root: Option<&str>) -> String
         let action = escape_judge_text(&rule.action);
         let text = match rule.kind {
             UserRuleKind::AlwaysApproved => {
-                format!("Always approved: {action} on {resources}")
+                let note = rule
+                    .note
+                    .as_deref()
+                    .map(|note| format!(" with note: \"{}\"", escape_judge_text(note)))
+                    .unwrap_or_default();
+                format!("Always approved: {action} on {resources}{note}")
             }
             UserRuleKind::ApprovedWithNote => format!(
                 "User approved {action} on {resources} with note: \"{}\"",
@@ -828,9 +1315,17 @@ fn render_current_tool_call(input: &AiJudgeInput) -> String {
     )
 }
 
-/// Strips the workspace root prefix from an absolute path so the judge sees
+/// Strips the workspace root prefix from absolute paths so the judge sees
 /// workspace-relative paths instead of leaking the user's directory layout.
-/// Returns the input unchanged when it is not under the workspace root.
+///
+/// One string may hold more than the path itself: shell commands embed paths
+/// (`cd /home/user/proj && make`), so root-prefixed path fragments are also
+/// replaced wherever they occur inside the string. Fragments are only replaced
+/// at a plausible path boundary (before the root: string start, `/`, `\`,
+/// whitespace, quote, `=`, `:`; after the root: path separator, quote,
+/// whitespace, or the string end), which keeps ordinary words that merely
+/// contain the root untouched. Returns the input unchanged when it contains
+/// no path under the workspace root.
 fn relativize_path(value: &str, workspace_root: Option<&str>) -> String {
     let Some(root) = workspace_root else {
         return value.to_string();
@@ -839,15 +1334,80 @@ fn relativize_path(value: &str, workspace_root: Option<&str>) -> String {
     if root.is_empty() {
         return value.to_string();
     }
-    let stripped = value.strip_prefix(root).unwrap_or(value);
-    if stripped == value {
-        return value.to_string();
+    if let Some(stripped) = value.strip_prefix(root) {
+        return relativize_root_string(stripped);
     }
+    replace_root_path_fragments(value, root)
+}
+
+fn relativize_root_string(stripped: &str) -> String {
     let stripped = stripped.trim_start_matches(['/', '\\']);
     if stripped.is_empty() {
         return ".".to_string();
     }
     format!("./{stripped}")
+}
+
+fn is_path_fragment_boundary_before(value: &str, match_start: usize) -> bool {
+    if match_start == 0 {
+        return true;
+    }
+    matches!(
+        value.as_bytes()[match_start - 1],
+        b'/' | b'\\' | b' ' | b'\t' | b'"' | b'\'' | b'=' | b':'
+    )
+}
+
+/// After the root the next character must continue the path or end the
+/// fragment (quote, whitespace, command separators, or string end).
+fn is_path_fragment_boundary_after(value: &str, match_end: usize) -> bool {
+    match value.as_bytes().get(match_end) {
+        None => true,
+        Some(&byte) => matches!(byte, b'/' | b'\\') || is_path_fragment_terminator(byte),
+    }
+}
+
+fn is_path_fragment_terminator(byte: u8) -> bool {
+    byte.is_ascii_whitespace()
+        || matches!(
+            byte,
+            b'"' | b'\'' | b',' | b';' | b'&' | b'|' | b'(' | b')' | b'<' | b'>'
+        )
+}
+
+fn replace_root_path_fragments(value: &str, root: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut cursor = 0;
+    while let Some(relative) = value[cursor..].find(root) {
+        let match_start = cursor + relative;
+        let match_end = match_start + root.len();
+        if !is_path_fragment_boundary_before(value, match_start)
+            || !is_path_fragment_boundary_after(value, match_end)
+        {
+            result.push_str(&value[cursor..match_end]);
+            cursor = match_end;
+            continue;
+        }
+        result.push_str(&value[cursor..match_start]);
+        let rest_start = match_end;
+        let rest = &value[rest_start..];
+        let rest_end = rest
+            .as_bytes()
+            .iter()
+            .position(|&byte| is_path_fragment_terminator(byte))
+            .map(|index| rest_start + index)
+            .unwrap_or(value.len());
+        let fragment = rest[..rest_end - rest_start].trim_start_matches(['/', '\\']);
+        result.push_str("./");
+        result.push_str(fragment);
+        cursor = rest_end;
+    }
+    if result.is_empty() {
+        value.to_string()
+    } else {
+        result.push_str(&value[cursor..]);
+        result
+    }
 }
 
 /// Applies [`relativize_path`] to every string value in a serialized JSON
@@ -928,13 +1488,15 @@ mod tests {
 
     #[test]
     fn allow_always_allows() {
-        let verdict = resolve_verdict(response("allow", "low", Some("routine edit")));
+        let verdict = resolve_verdict(response("allow", "low", Some("routine edit")))
+            .expect("valid response");
         assert_eq!(verdict, AiPermissionDecision::Allow);
     }
 
     #[test]
     fn allow_with_critical_escalates() {
-        let verdict = resolve_verdict(response("allow", "critical", Some("model contradiction")));
+        let verdict = resolve_verdict(response("allow", "critical", Some("model contradiction")))
+            .expect("valid response");
         assert!(
             matches!(verdict, AiPermissionDecision::Escalate { .. }),
             "allow + critical must fail closed: {verdict:?}"
@@ -947,7 +1509,8 @@ mod tests {
             "deny",
             "critical",
             Some("rm -rf on workspace root"),
-        ));
+        ))
+        .expect("valid response");
         assert_eq!(
             verdict,
             AiPermissionDecision::Reject {
@@ -958,7 +1521,8 @@ mod tests {
 
     #[test]
     fn deny_without_critical_escalates() {
-        let verdict = resolve_verdict(response("deny", "high", Some("risky but maybe intended")));
+        let verdict = resolve_verdict(response("deny", "high", Some("risky but maybe intended")))
+            .expect("valid response");
         assert_eq!(
             verdict,
             AiPermissionDecision::Escalate {
@@ -969,13 +1533,14 @@ mod tests {
 
     #[test]
     fn deny_missing_reason_still_rejects_when_critical() {
-        let verdict = resolve_verdict(response("deny", "critical", None));
+        let verdict = resolve_verdict(response("deny", "critical", None)).expect("valid response");
         assert!(matches!(verdict, AiPermissionDecision::Reject { .. }));
     }
 
     #[test]
     fn escalate_escalates() {
-        let verdict = resolve_verdict(response("escalate", "medium", Some("not sure")));
+        let verdict = resolve_verdict(response("escalate", "medium", Some("not sure")))
+            .expect("valid response");
         assert_eq!(
             verdict,
             AiPermissionDecision::Escalate {
@@ -986,14 +1551,20 @@ mod tests {
 
     #[test]
     fn unknown_decision_escalates() {
-        let verdict = resolve_verdict(response("maybe", "low", None));
+        let verdict = resolve_verdict(response("maybe", "low", None)).expect("valid response");
         assert_eq!(verdict, AiPermissionDecision::Escalate { reason: None });
     }
 
     #[test]
-    fn unknown_risk_level_treats_deny_as_escalate() {
-        let verdict = resolve_verdict(response("deny", "super", None));
-        assert_eq!(verdict, AiPermissionDecision::Escalate { reason: None });
+    fn unknown_risk_level_is_a_retryable_parse_error() {
+        assert_eq!(
+            resolve_verdict(response("deny", "super", None)),
+            Err(JudgeParseError::UnknownRiskLevel)
+        );
+        assert_eq!(
+            resolve_verdict(response("allow", "critcal", None)),
+            Err(JudgeParseError::UnknownRiskLevel)
+        );
     }
 
     #[test]
@@ -1017,7 +1588,7 @@ mod tests {
             tool_history: vec![],
             workspace_root: None,
             user_rules: vec![],
-            sensitive_resource_markers: vec![],
+            sensitive_markers: SensitiveMarkers::default(),
             auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
@@ -1102,7 +1673,10 @@ mod tests {
 
     #[test]
     fn custom_sensitive_markers_keep_read_only_calls_out_of_the_fast_path() {
-        let custom = vec!["secrets/".to_string(), ".cursorrules".to_string()];
+        let custom = SensitiveMarkers {
+            read: vec!["secrets/".to_string(), ".cursorrules".to_string()],
+            write: vec![],
+        };
         // A resource matching a custom marker never fast-tracks.
         assert!(!is_deterministically_read_only_with_markers(
             "read",
@@ -1130,18 +1704,28 @@ mod tests {
             &["src/main.rs".to_string()],
             &custom,
         ));
+        // Write markers never affect the read-only fast path.
+        assert!(is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &["src/prod.json".to_string()],
+            &SensitiveMarkers {
+                read: vec![],
+                write: vec!["prod".to_string()],
+            },
+        ));
         // Empty custom markers behave like the default list.
         assert!(is_deterministically_read_only_with_markers(
             "read",
             "Read",
             &["src/main.rs".to_string()],
-            &[],
+            &SensitiveMarkers::default(),
         ));
         assert!(!is_deterministically_read_only_with_markers(
             "read",
             "Read",
             &["/work/.env".to_string()],
-            &[],
+            &SensitiveMarkers::default(),
         ));
     }
 
@@ -1149,7 +1733,10 @@ mod tests {
     fn custom_sensitive_markers_are_trimmed_before_matching() {
         // Markers with surrounding whitespace must still match, matching the
         // normalization applied by the desktop save path.
-        let custom = vec!["  secrets/  ".to_string(), " .cursorrules ".to_string()];
+        let custom = SensitiveMarkers {
+            read: vec!["  secrets/  ".to_string(), " .cursorrules ".to_string()],
+            write: vec![],
+        };
         assert!(!is_deterministically_read_only_with_markers(
             "read",
             "Read",
@@ -1167,7 +1754,10 @@ mod tests {
             "read",
             "Read",
             &[".cursorrules".to_string()],
-            &["   ".to_string()],
+            &SensitiveMarkers {
+                read: vec!["   ".to_string()],
+                write: vec![],
+            },
         ));
     }
 
@@ -1184,10 +1774,10 @@ mod tests {
             user_rules: vec![],
             tool_history: vec![],
             workspace_root: None,
-            sensitive_resource_markers: vec![
-                "my-secret-dir".to_string(),
-                ".cursorrules".to_string(),
-            ],
+            sensitive_markers: SensitiveMarkers {
+                read: vec!["my-secret-dir".to_string(), ".cursorrules".to_string()],
+                write: vec![],
+            },
             auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
@@ -1223,7 +1813,7 @@ mod tests {
             tool_history: vec![],
             workspace_root: Some("/Users/alice/projects/my-app".to_string()),
             user_rules: vec![],
-            sensitive_resource_markers: vec![],
+            sensitive_markers: SensitiveMarkers::default(),
             auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
@@ -1265,7 +1855,7 @@ mod tests {
             ],
             workspace_root: None,
             user_rules: vec![],
-            sensitive_resource_markers: vec![],
+            sensitive_markers: SensitiveMarkers::default(),
             auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
@@ -1306,7 +1896,7 @@ mod tests {
             tool_history: vec![],
             workspace_root: None,
             user_rules: vec![],
-            sensitive_resource_markers: vec![],
+            sensitive_markers: SensitiveMarkers::default(),
             auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
@@ -1395,7 +1985,7 @@ mod tests {
             tool_history: vec![],
             workspace_root: None,
             user_rules: vec![],
-            sensitive_resource_markers: vec![],
+            sensitive_markers: SensitiveMarkers::default(),
             auto_approve_mode: AiAutoApproveMode::Standard,
         }
     }
@@ -1739,7 +2329,7 @@ mod tests {
             }],
             tool_history: vec![],
             workspace_root: None,
-            sensitive_resource_markers: vec![],
+            sensitive_markers: SensitiveMarkers::default(),
             auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
@@ -1774,7 +2364,7 @@ mod tests {
                 user_note: Some("Approve all log-viewing commands".to_string()),
             }],
             workspace_root: None,
-            sensitive_resource_markers: vec![],
+            sensitive_markers: SensitiveMarkers::default(),
             auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
@@ -1791,5 +2381,281 @@ mod tests {
             once,
             user_rule_id(UserRuleKind::ApprovedWithNote, "edit", &resources)
         );
+    }
+
+    // ---------- F1: unknown risk_level ----------
+
+    struct CountingJudgeModel {
+        response_text: String,
+        call_count: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl AiJudgeModel for CountingJudgeModel {
+        async fn send_judge_messages(&self, _messages: Vec<Message>) -> Result<GeminiResponse> {
+            self.call_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            Ok(GeminiResponse {
+                text: self.response_text.clone(),
+                reasoning_content: None,
+                tool_calls: None,
+                usage: None,
+                finish_reason: None,
+                provider_metadata: None,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_risk_level_exhausts_retries_then_escalates() {
+        let model = CountingJudgeModel {
+            response_text:
+                "```json\n{\"decision\":\"allow\",\"risk_level\":\"critcal\",\"reason\":\"x\"}\n```"
+                    .to_string(),
+            call_count: std::sync::atomic::AtomicUsize::new(0),
+        };
+        let decision = evaluate_risk_with_model(test_input(), &model).await;
+        assert_eq!(decision, AiPermissionDecision::Escalate { reason: None });
+        assert_eq!(
+            model.call_count.load(std::sync::atomic::Ordering::Relaxed),
+            MAX_MODEL_ATTEMPTS,
+            "every retry must consume one judge call before escalating"
+        );
+    }
+
+    // ---------- F2: command secret redaction ----------
+
+    #[test]
+    fn bearer_and_password_values_are_redacted_in_commands() {
+        let text = "curl -H \"Authorization: Bearer s3cret-token\" https://api.example.com; export PGPASSWORD=hunter2 && ./run.sh";
+        let redacted = redact_secrets_in_text(text).expect("redactable command");
+        assert!(
+            !redacted.contains("s3cret-token"),
+            "bearer token must be redacted: {redacted}"
+        );
+        assert!(
+            !redacted.contains("hunter2"),
+            "password must be redacted: {redacted}"
+        );
+        // The scheme word survives so the judge still sees the shape.
+        assert!(redacted.contains("Bearer"));
+        assert_eq!(redacted.matches("[REDACTED]").count(), 2);
+        // Non-secret parts stay intact.
+        assert!(redacted.contains("https://api.example.com"));
+        assert!(redacted.contains("./run.sh"));
+    }
+
+    #[test]
+    fn assignment_flag_header_and_url_forms_are_redacted() {
+        for text in [
+            "curl -H 'X-Api-Key: abc-123' https://example.com",
+            "curl -H 'X-Token: abc-123' https://example.com",
+            "node --password=p@ss https://example.com",
+            "export API_KEY=abc-123 && make",
+            "export PGPASSWORD=hunter2 && pg_dump",
+            "git fetch https://u:t0ken@github.com/org/repo.git",
+            "git clone ssh://deploy:key-xyz@git.example.com/repo.git",
+        ] {
+            let redacted = redact_secrets_in_text(text).expect("redactable");
+            assert!(
+                !redacted.contains("abc-123")
+                    && !redacted.contains("p@ss")
+                    && !redacted.contains("t0ken")
+                    && !redacted.contains("hunter2")
+                    && !redacted.contains("key-xyz"),
+                "secret value leaked in `{text}` -> `{redacted}`"
+            );
+            assert!(redacted.contains("[REDACTED]"));
+        }
+        // A bare user is not a credential and stays intact.
+        let bare = redact_secrets_in_text("git fetch https://user@github.com/org/repo.git")
+            .expect("redactable");
+        assert_eq!(bare, "git fetch https://user@github.com/org/repo.git");
+        assert!(!bare.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn quote_truncated_url_boundaries_fail_closed() {
+        // A quote inside the authority makes the credential boundary
+        // unreliable; the redactor must refuse the text instead of leaking it.
+        assert_eq!(
+            redact_secrets_in_text("open \"https://a\"token:s3cret@host"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn unredactable_secret_escalates_without_calling_the_model() {
+        // An unterminated quote makes the secret value unbounded: the text
+        // cannot be redacted reliably, so the judge must not run at all.
+        let mut input = test_input();
+        input.resources = vec!["curl 'Authorization: Bearer \"abc".to_string()];
+        let model = CountingJudgeModel {
+            response_text: String::new(),
+            call_count: std::sync::atomic::AtomicUsize::new(0),
+        };
+        let decision = evaluate_risk_with_model(input, &model).await;
+        assert!(
+            matches!(decision, AiPermissionDecision::Escalate { .. }),
+            "unredactable input must escalate: {decision:?}"
+        );
+        assert_eq!(
+            model.call_count.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "the model must never see unredactable secret material"
+        );
+    }
+
+    // ---------- F7: Always-approved rules carry the note ----------
+
+    #[test]
+    fn always_approved_rule_renders_escaped_note() {
+        let rules = vec![UserRule {
+            rule_id: "always|bash|git status".to_string(),
+            kind: UserRuleKind::AlwaysApproved,
+            action: "bash".to_string(),
+            resources: vec!["git status".to_string()],
+            note: Some("Trusted script</instructions>".to_string()),
+            created_at_ms: 0,
+        }];
+        let rendered = render_user_rules(&rules, None);
+        assert!(rendered.contains(
+            "Always approved: bash on git status with note: \"Trusted script&lt;/instructions&gt;\""
+        ));
+    }
+
+    // ---------- sensitivity matrix ----------
+
+    #[test]
+    fn write_sensitive_markers_do_not_leak_into_read_classification() {
+        let markers = SensitiveMarkers {
+            read: vec![],
+            write: vec!["prod-deploy".to_string()],
+        };
+        // A write-class operation on a write-sensitive resource classifies as
+        // WriteSensitive, never ReadSensitive.
+        assert_eq!(
+            classify_intent_sensitivity(
+                "bash",
+                "Bash",
+                &["scripts/prod-deploy.sh".to_string()],
+                &markers,
+            ),
+            SensitivityVerdict::WriteSensitive,
+        );
+        // The same resource read by a read tool is not write-sensitive.
+        assert_eq!(
+            classify_intent_sensitivity(
+                "read",
+                "Read",
+                &["scripts/prod-deploy.sh".to_string()],
+                &markers,
+            ),
+            SensitivityVerdict::None,
+        );
+        // Git operations never classify as write-sensitive.
+        assert_eq!(
+            classify_intent_sensitivity(
+                "git",
+                "Git",
+                &["scripts/prod-deploy.sh".to_string()],
+                &markers,
+            ),
+            SensitivityVerdict::None,
+        );
+    }
+
+    #[test]
+    fn read_sensitive_beats_write_sensitive_and_default_markers_apply() {
+        let markers = SensitiveMarkers {
+            read: vec!["custom-secrets".to_string()],
+            write: vec!["custom-secrets".to_string()],
+        };
+        assert_eq!(
+            classify_intent_sensitivity(
+                "edit",
+                "Edit",
+                &["custom-secrets/prod.json".to_string()],
+                &markers,
+            ),
+            SensitivityVerdict::ReadSensitive,
+        );
+        // Built-in markers (`.env`, `.ssh`, keys) classify reads.
+        assert_eq!(
+            classify_intent_sensitivity(
+                "read",
+                "Read",
+                &["/work/.env".to_string()],
+                &SensitiveMarkers::default(),
+            ),
+            SensitivityVerdict::ReadSensitive,
+        );
+        // `.env.example` stays exempt.
+        assert_eq!(
+            classify_intent_sensitivity(
+                "read",
+                "Read",
+                &["/work/.env.example".to_string()],
+                &SensitiveMarkers::default(),
+            ),
+            SensitivityVerdict::None,
+        );
+    }
+
+    #[test]
+    fn read_sensitive_history_entries_are_filtered_before_the_prompt() {
+        let markers = SensitiveMarkers {
+            read: vec![".env".to_string()],
+            write: vec![],
+        };
+        let history = vec![
+            ToolHistoryEntry {
+                tool_name: "Read".to_string(),
+                action: "read".to_string(),
+                resources: vec!["/work/.env.production".to_string()],
+                outcome: ToolHistoryOutcome::Succeeded,
+                user_note: None,
+            },
+            ToolHistoryEntry {
+                tool_name: "Bash".to_string(),
+                action: "bash".to_string(),
+                resources: vec!["cargo build".to_string()],
+                outcome: ToolHistoryOutcome::Allowed,
+                user_note: None,
+            },
+        ];
+        let filtered = filter_read_sensitive_history(&history, &markers);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].action, "bash");
+    }
+
+    // ---------- relativization: command fragments and directory boundary ----------
+
+    #[test]
+    fn command_text_absolute_paths_are_relativized_at_directory_boundaries() {
+        let root = "/Users/alice/projects/my-app";
+        let command =
+            format!("cd {root} && npm test; rm -rf {root}-backup {root}2/dist; cat /etc/hosts");
+        let relativized = relativize_path(&command, Some(root));
+        // The exact root fragment becomes `./`.
+        assert!(relativized.contains("cd ./ && npm test"));
+        // `my-app-backup` and `my-app2` are different paths: they must stay
+        // absolute so the judge can recognize out-of-scope operations.
+        assert!(relativized.contains(format!("{root}-backup").as_str()));
+        assert!(relativized.contains(format!("{root}2/dist").as_str()));
+        // The absolute workspace root never leaks.
+        assert!(!relativized.contains(&format!("{root} &&")));
+        // Out-of-workspace paths keep their absolute form.
+        assert!(relativized.contains("/etc/hosts"));
+    }
+
+    #[test]
+    fn remote_workspace_root_fragments_are_relativized() {
+        let root = "/home/deploy/projects/remote-app";
+        let command = format!("ls {root}/src && cd {root}/tests && pwd");
+        let relativized = relativize_path(&command, Some(root));
+        assert!(relativized.contains("ls ./src"));
+        assert!(relativized.contains("cd ./tests"));
+        assert!(!relativized.contains(root));
     }
 }

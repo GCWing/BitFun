@@ -408,6 +408,23 @@ where
         .and_then(PermissionMode::parse))
 }
 
+/// Deserializes an optional AI auto-approve sub-mode with the same
+/// degradation contract as [`deserialize_optional_permission_mode`]: an
+/// unrecognized value becomes `None` ("follow the user-level default") instead
+/// of failing the whole persisted record.
+pub fn deserialize_optional_ai_auto_approve_mode<'de, D>(
+    deserializer: D,
+) -> Result<Option<AiAutoApproveMode>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value
+        .as_ref()
+        .and_then(Value::as_str)
+        .and_then(AiAutoApproveMode::parse))
+}
+
 /// The layer that owns the effective mode of one dialog turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -430,6 +447,10 @@ pub struct PermissionModeLayers {
     pub project: Option<PermissionMode>,
     pub session: Option<PermissionMode>,
     pub turn: Option<PermissionMode>,
+    /// AI auto-approve sub-mode (aggressive/standard/passive) carried through
+    /// the same layering chain as the mode itself. `None` means no layer set
+    /// it and callers fall back to the user-level global default.
+    pub ai_auto_approve_mode: Option<AiAutoApproveMode>,
 }
 
 impl PermissionModeLayers {
@@ -439,6 +460,7 @@ impl PermissionModeLayers {
             project: None,
             session: None,
             turn: None,
+            ai_auto_approve_mode: None,
         }
     }
 
@@ -451,6 +473,14 @@ impl PermissionModeLayers {
         self.turn = turn;
         self
     }
+
+    pub const fn with_ai_auto_approve_mode(
+        mut self,
+        ai_auto_approve_mode: Option<AiAutoApproveMode>,
+    ) -> Self {
+        self.ai_auto_approve_mode = ai_auto_approve_mode;
+        self
+    }
 }
 
 /// One effective mode plus the layer that owns it.
@@ -459,31 +489,27 @@ impl PermissionModeLayers {
 pub struct ResolvedPermissionMode {
     pub mode: PermissionMode,
     pub source: PermissionModeSource,
+    /// Session/turn-layer AI auto-approve sub-mode, when one was set. `None`
+    /// means the caller uses the user-level global default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_auto_approve_mode: Option<AiAutoApproveMode>,
 }
 
 /// Resolves `turn -> session -> project -> global default`.
 pub const fn resolve_permission_mode(layers: PermissionModeLayers) -> ResolvedPermissionMode {
-    if let Some(mode) = layers.turn {
-        return ResolvedPermissionMode {
-            mode,
-            source: PermissionModeSource::Turn,
-        };
-    }
-    if let Some(mode) = layers.session {
-        return ResolvedPermissionMode {
-            mode,
-            source: PermissionModeSource::Session,
-        };
-    }
-    if let Some(mode) = layers.project {
-        return ResolvedPermissionMode {
-            mode,
-            source: PermissionModeSource::Project,
-        };
-    }
+    let (mode, source) = if let Some(mode) = layers.turn {
+        (mode, PermissionModeSource::Turn)
+    } else if let Some(mode) = layers.session {
+        (mode, PermissionModeSource::Session)
+    } else if let Some(mode) = layers.project {
+        (mode, PermissionModeSource::Project)
+    } else {
+        (layers.global_default, PermissionModeSource::GlobalDefault)
+    };
     ResolvedPermissionMode {
-        mode: layers.global_default,
-        source: PermissionModeSource::GlobalDefault,
+        mode,
+        source,
+        ai_auto_approve_mode: layers.ai_auto_approve_mode,
     }
 }
 

@@ -34,6 +34,12 @@ pub struct ToolStateManager {
 
     /// Event sink
     event_sink: Arc<dyn StreamEventSink>,
+
+    /// Monotonic source of `ToolTask::turn_sequence`. Assignment order follows
+    /// task registration, which happens after model parse and tool admission,
+    /// so history ordering stays deterministic even when a round finishes
+    /// concurrently with the previous one.
+    next_turn_sequence: std::sync::atomic::AtomicU64,
 }
 
 impl ToolStateManager {
@@ -44,12 +50,18 @@ impl ToolStateManager {
         Self {
             tasks: Arc::new(DashMap::new()),
             event_sink,
+            next_turn_sequence: std::sync::atomic::AtomicU64::new(1),
         }
     }
 
     /// Create task
-    pub async fn create_task(&self, task: ToolTask) -> String {
+    pub async fn create_task(&self, mut task: ToolTask) -> String {
         let tool_id = task.tool_call.tool_id.clone();
+        if task.turn_sequence == 0 {
+            task.turn_sequence = self
+                .next_turn_sequence
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
         self.tasks.insert(tool_id.clone(), task);
         tool_id
     }
@@ -114,6 +126,17 @@ impl ToolStateManager {
         }
     }
 
+    /// Records the permission action this call was authorized under so the AI
+    /// judge history can show the semantic intent instead of the wire tool name.
+    pub fn update_permission_action(&self, tool_id: &str, action: Option<String>) -> bool {
+        if let Some(mut task) = self.tasks.get_mut(tool_id) {
+            task.permission_action = action;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Get all tasks of a session
     pub fn get_session_tasks(&self, session_id: &str) -> Vec<ToolTask> {
         self.tasks
@@ -123,13 +146,24 @@ impl ToolStateManager {
             .collect()
     }
 
-    /// Get all tasks of a dialog turn
+    /// Get all tasks of a dialog turn in stable execution order.
+    ///
+    /// Ordering is by `(turn_sequence, tool_id)`: the sequence is assigned on
+    /// registration, so history only appends completed calls and never reorders
+    /// them when rounds complete concurrently.
     pub fn get_dialog_turn_tasks(&self, dialog_turn_id: &str) -> Vec<ToolTask> {
-        self.tasks
+        let mut tasks = self
+            .tasks
             .iter()
             .filter(|entry| entry.value().context.dialog_turn_id == dialog_turn_id)
             .map(|entry| entry.value().clone())
-            .collect()
+            .collect::<Vec<_>>();
+        tasks.sort_by(|left, right| {
+            left.turn_sequence
+                .cmp(&right.turn_sequence)
+                .then_with(|| left.tool_call.tool_id.cmp(&right.tool_call.tool_id))
+        });
+        tasks
     }
 
     /// Delete task
@@ -441,6 +475,87 @@ mod tests {
         );
         assert_eq!(identity.effective_name(), "CreatePlan");
         assert_eq!(params, &wire_arguments);
+    }
+
+    #[tokio::test]
+    async fn dialog_turn_tasks_are_ordered_by_turn_sequence() {
+        let sink = Arc::new(CapturingEventSink::default());
+        let manager = ToolStateManager::new(sink.clone());
+        // Registered in this order; the second task must not leap ahead even
+        // though its tool id sorts first.
+        let tool_b_id = manager.create_task(test_task("tool-b")).await;
+        let tool_a_id = manager.create_task(test_task("tool-a")).await;
+
+        let tasks = manager.get_dialog_turn_tasks("turn-1");
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].tool_call.tool_id, "tool-b");
+        assert_eq!(tasks[1].tool_call.tool_id, "tool-a");
+        assert!(tasks[0].turn_sequence < tasks[1].turn_sequence);
+
+        // Sequences are unique and monotonic across registrations.
+        let mut task = test_task("tool-c");
+        task.tool_call.tool_id = "tool-c".to_string();
+        manager.create_task(task).await;
+        let tasks = manager.get_dialog_turn_tasks("turn-1");
+        let sequences = tasks
+            .iter()
+            .map(|task| task.turn_sequence)
+            .collect::<Vec<_>>();
+        let mut sorted = sequences.clone();
+        sorted.sort_unstable();
+        assert_eq!(sequences, sorted);
+        assert_eq!(sequences.len(), 3);
+
+        // A task that already carries a sequence keeps it (no renumbering).
+        let mut owned = test_task("tool-d");
+        owned.tool_call.tool_id = "tool-d".to_string();
+        owned.turn_sequence = 1;
+        manager.create_task(owned).await;
+        let tasks = manager.get_dialog_turn_tasks("turn-1");
+        let owned_sequence = tasks
+            .iter()
+            .find(|task| task.tool_call.tool_id == "tool-d")
+            .map(|task| task.turn_sequence);
+        assert_eq!(owned_sequence, Some(1));
+        // Ordering is a deterministic total order on (turn_sequence, tool_id).
+        let keyed = tasks
+            .iter()
+            .map(|task| (task.turn_sequence, task.tool_call.tool_id.clone()))
+            .collect::<Vec<_>>();
+        let mut sorted_keyed = keyed.clone();
+        sorted_keyed.sort();
+        assert_eq!(keyed, sorted_keyed);
+        let _ = (tool_b_id, tool_a_id);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn sequence_assignment_is_monotonic_even_with_concurrent_creation() {
+        let sink = Arc::new(CapturingEventSink::default());
+        let manager = Arc::new(ToolStateManager::new(sink));
+        let mut handles = Vec::new();
+        for index in 0..16 {
+            let manager = Arc::clone(&manager);
+            handles.push(tokio::spawn(async move {
+                let tool_id = format!("concurrent-{index}");
+                let mut task = test_task("placeholder");
+                task.tool_call.tool_id = tool_id.clone();
+                manager.create_task(task).await;
+                tool_id
+            }));
+        }
+        let mut sequences = Vec::new();
+        for handle in handles {
+            let tool_id = handle.await.expect("creator join");
+            let task = manager.get_task(&tool_id).expect("task exists");
+            assert!(task.turn_sequence > 0);
+            sequences.push(task.turn_sequence);
+        }
+        // Every registration gets a unique sequence.
+        let unique = sequences
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(unique.len(), sequences.len());
     }
 }
 
