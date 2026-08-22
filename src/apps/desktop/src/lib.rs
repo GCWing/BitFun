@@ -22,6 +22,7 @@
 
 pub mod api;
 pub mod appearance;
+mod bitfun_control_host;
 pub mod computer_use;
 pub mod crash_diagnostics;
 mod embedded_relay_host;
@@ -1327,6 +1328,7 @@ pub async fn run() {
             initialize_workspace_startup_state,
             get_available_tools,
             report_ide_control_result,
+            bitfun_control_host::report_bitfun_control_result,
             get_health_status,
             get_statistics,
             test_ai_connection,
@@ -1971,6 +1973,8 @@ async fn init_agentic_system() -> anyhow::Result<(
     Arc<bitfun_core::service::token_usage::TokenUsageService>,
 )> {
     use bitfun_core::agentic::*;
+
+    bitfun_control_host::install();
 
     let ai_client_factory = AIClientFactory::get_global().await?;
 

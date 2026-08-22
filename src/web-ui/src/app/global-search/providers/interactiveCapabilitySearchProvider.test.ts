@@ -1,0 +1,86 @@
+import { describe, expect, it } from 'vitest';
+import { INTERACTIVE_CAPABILITY_CATALOG } from '../interactiveCapabilityCatalog';
+import type { GlobalSearchRequest } from '../types';
+import { interactiveCapabilitySearchProvider } from './interactiveCapabilitySearchProvider';
+
+function request(query: string): GlobalSearchRequest {
+  return {
+    rawQuery: query,
+    query,
+    scope: 'all',
+    workspaces: [],
+    currentWorkspace: null,
+    limitPerGroup: 20,
+    tCommon: (key) => key,
+    tSettings: (key) => key,
+  };
+}
+
+describe('interactiveCapabilitySearchProvider', () => {
+  it('uses the curated feature-and-settings contract', () => {
+    expect(INTERACTIVE_CAPABILITY_CATALOG.capabilities).toHaveLength(38);
+    expect(new Set(INTERACTIVE_CAPABILITY_CATALOG.capabilities.map(({ id }) => id)).size)
+      .toBe(INTERACTIVE_CAPABILITY_CATALOG.capabilities.length);
+    expect(INTERACTIVE_CAPABILITY_CATALOG.capabilities.every(({ kind }) =>
+      kind === 'feature' || kind === 'setting')).toBe(true);
+  });
+
+  it('finds a capability by its English terms', async () => {
+    const result = await interactiveCapabilitySearchProvider.search(
+      request('terminal'),
+      new AbortController().signal,
+    );
+    expect(result.items.some((item) => item.target.kind === 'capability'
+      && item.target.capabilityId === 'feature.terminal')).toBe(true);
+  });
+
+  it('finds the same catalog by Chinese terms', async () => {
+    const result = await interactiveCapabilitySearchProvider.search(
+      request('终端'),
+      new AbortController().signal,
+    );
+    expect(result.items.some((item) => item.target.kind === 'capability'
+      && item.target.capabilityId === 'feature.terminal')).toBe(true);
+  });
+
+  it('returns settings from the same semantic provider in the settings group', async () => {
+    const result = await interactiveCapabilitySearchProvider.search(
+      request('MCP server'),
+      new AbortController().signal,
+    );
+    const mcp = result.items.find((item) => item.target.kind === 'capability'
+      && item.target.capabilityId === 'setting.tools.mcp');
+    expect(mcp?.providerId).toBe('interactive-capabilities');
+    expect(mcp?.group).toBe('settings');
+  });
+
+  it('finds the browser element picker from Chinese and English sub-capability text', async () => {
+    for (const query of ['元素选择器', 'element picker']) {
+      const result = await interactiveCapabilitySearchProvider.search(
+        request(query),
+        new AbortController().signal,
+      );
+      const browser = result.items.find((item) => item.target.kind === 'capability'
+        && item.target.capabilityId === 'feature.browser');
+      expect(browser).toBeDefined();
+      expect(browser?.subtitle.toLowerCase()).toContain(
+        query === '元素选择器' ? '元素选择器' : 'element picker',
+      );
+      expect(browser?.context).toContain('feature.browser:element-picker');
+    }
+  });
+
+  it('keeps personal assistants separate from subagent management', async () => {
+    for (const query of ['育苗场', 'persona documents']) {
+      const result = await interactiveCapabilitySearchProvider.search(
+        request(query),
+        new AbortController().signal,
+      );
+      const assistant = result.items.find((item) => item.target.kind === 'capability'
+        && item.target.capabilityId === 'feature.personal-assistants');
+      expect(assistant).toBeDefined();
+      expect(assistant?.target.kind === 'capability' && assistant.target.capabilityId)
+        .not.toBe('feature.agents');
+    }
+  });
+});

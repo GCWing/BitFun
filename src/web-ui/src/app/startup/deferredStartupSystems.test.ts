@@ -25,7 +25,7 @@ describe('shouldScheduleDeferredStartupSystems', () => {
 });
 
 describe('scheduleDeferredStartupSystems', () => {
-  it('schedules MCP, ACP clients, IDE startup, and renderer preloads as deferred idle work', async () => {
+  it('schedules product control, MCP, ACP clients, IDE startup, and renderer preloads as deferred idle work', async () => {
     let scheduledTask: ((signal: AbortSignal) => Promise<void>) | null = null;
     const schedule = vi.fn((task: (signal: AbortSignal) => Promise<void>, options) => {
       scheduledTask = task;
@@ -45,6 +45,9 @@ describe('scheduleDeferredStartupSystems', () => {
       },
       trace: {
         markPhase: vi.fn(),
+      },
+      initializeBitFunControl: async () => {
+        order.push('bitfun-control');
       },
       initializeIdeControl: async () => {
         order.push('ide');
@@ -70,7 +73,7 @@ describe('scheduleDeferredStartupSystems', () => {
 
     await scheduledTask?.(new AbortController().signal);
 
-    expect(order).toEqual(['ide', 'mcp', 'acp', 'renderer-preloads']);
+    expect(order).toEqual(['bitfun-control', 'ide', 'mcp', 'acp', 'renderer-preloads']);
   });
 
   it('skips deferred startup systems when cancelled before execution', async () => {
@@ -95,6 +98,7 @@ describe('scheduleDeferredStartupSystems', () => {
       trace: {
         markPhase: vi.fn(),
       },
+      initializeBitFunControl: vi.fn(),
       initializeIdeControl,
       initializeMcpServers: vi.fn(),
       initializeAcpClients: vi.fn(),

@@ -102,6 +102,7 @@ const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> =
   files: FileText,
   workspaces: FolderOpen,
   assistants: Bot,
+  capabilities: Blocks,
   settings: SlidersHorizontal,
 };
 

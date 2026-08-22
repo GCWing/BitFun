@@ -9,6 +9,7 @@ pub mod analyze_image_tool;
 pub mod appearance_publish_tool;
 pub mod ask_user_question_tool;
 pub mod bash_tool;
+pub mod bitfun_control_tool;
 #[cfg(feature = "tools-canvas")]
 pub mod canvas_tools;
 pub mod code_review_tool;
@@ -86,6 +87,7 @@ pub use analyze_image_tool::AnalyzeImageTool;
 pub use appearance_publish_tool::PublishAppearanceTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
+pub use bitfun_control_tool::BitFunControlTool;
 #[cfg(feature = "tools-canvas")]
 pub use canvas_tools::{CreateCanvasTool, PatchCanvasTool, ReadCanvasTool, UpdateCanvasTool};
 pub use code_review_tool::CodeReviewTool;

@@ -105,7 +105,7 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
         | "AgentDelete" | "AgentWait" | "LaunchReviewAgent" | "Skill" | "AskUserQuestion"
         | "TodoWrite" | "get_goal" | "create_goal" | "update_goal" | "CreatePlan"
         | "submit_code_review" | "GetToolSpec" | "CallDeferredTool" | "SessionControl"
-        | "SessionMessage" | "SessionHistory" | "Cron" | "PortForward" => {
+        | "SessionMessage" | "SessionHistory" | "Cron" | "PortForward" | "BitFunControl" => {
             Some(ToolPackFeatureGroup::AgentControl)
         }
         _ => None,
@@ -205,6 +205,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
+            "BitFunControl",
             "GetFileDiff",
         ],
     },
@@ -505,6 +506,7 @@ mod tests {
                 "submit_code_review",
                 "GetToolSpec",
                 "CallDeferredTool",
+                "BitFunControl",
                 "GetFileDiff",
                 "CreateCanvas",
                 "ReadCanvas",

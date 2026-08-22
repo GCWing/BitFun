@@ -11,6 +11,7 @@ export type GlobalSearchGroupId =
   | 'files'
   | 'workspaces'
   | 'assistants'
+  | 'capabilities'
   | 'settings';
 
 export type GlobalSearchTarget =
@@ -36,7 +37,8 @@ export type GlobalSearchTarget =
       fileName: string;
       lineNumber?: number;
     }
-  | { kind: 'settings'; destination: SettingsDestination };
+  | { kind: 'settings'; destination: SettingsDestination }
+  | { kind: 'capability'; capabilityId: string };
 
 export interface GlobalSearchItem {
   id: string;
@@ -100,5 +102,6 @@ export const GLOBAL_SEARCH_GROUP_ORDER: readonly GlobalSearchGroupId[] = [
   'files',
   'workspaces',
   'assistants',
+  'capabilities',
   'settings',
 ];

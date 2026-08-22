@@ -1,6 +1,7 @@
 //! Tool system - includes Tool interface, tool registry and tool executor
 
 pub mod account_login_capability;
+pub mod bitfun_control_host;
 #[cfg(feature = "browser-control")]
 pub mod browser_control;
 pub mod computer_use_capability;

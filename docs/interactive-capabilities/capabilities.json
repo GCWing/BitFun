@@ -1,0 +1,5838 @@
+{
+  "schemaVersion": 2,
+  "product": "BitFun",
+  "title": "BitFun Playbook",
+  "origin": "https://playbook.openbitfun.com",
+  "source": "src/shared/interactive-capabilities/catalog.json",
+  "digest": "fe3d647ed174d0cd2dd69f0dc65cd294d3dc6fab02cb36874f4309ce1783c6a2",
+  "counts": {
+    "features": 22,
+    "settings": 16,
+    "userFacing": 38,
+    "documentedItems": 294
+  },
+  "categories": {
+    "assistant": {
+      "titleZh": "AI 与协作",
+      "titleEn": "AI & collaboration",
+      "descriptionZh": "会话、Agent、记忆与智能协作。",
+      "descriptionEn": "Sessions, agents, memory, and AI collaboration."
+    },
+    "workspace": {
+      "titleZh": "项目与开发",
+      "titleEn": "Projects & development",
+      "descriptionZh": "项目、文件、终端、Git、浏览器与开发工具。",
+      "descriptionEn": "Projects, files, terminal, Git, browser, and development tools."
+    },
+    "automation": {
+      "titleZh": "扩展与自动化",
+      "titleEn": "Extensions & automation",
+      "descriptionZh": "Skills、Mini Apps、任务、Hooks 与生态兼容。",
+      "descriptionEn": "Skills, Mini Apps, tasks, hooks, and ecosystem compatibility."
+    },
+    "connect": {
+      "titleZh": "连接与发布",
+      "titleEn": "Connect & publish",
+      "descriptionZh": "远程工作、多设备控制、派发与页面发布。",
+      "descriptionEn": "Remote work, multi-device control, dispatch, and publishing."
+    },
+    "application": {
+      "titleZh": "应用设置",
+      "titleEn": "Application settings",
+      "descriptionZh": "外观、输入、开发环境与应用行为。",
+      "descriptionEn": "Appearance, input, development environment, and app behavior."
+    },
+    "data": {
+      "titleZh": "数据与诊断",
+      "titleEn": "Data & diagnostics",
+      "descriptionZh": "用量、归档、日志与问题诊断。",
+      "descriptionEn": "Usage, archives, logs, and troubleshooting."
+    }
+  },
+  "capabilities": [
+    {
+      "id": "feature.ai-assistant",
+      "kind": "feature",
+      "categoryId": "assistant",
+      "titleZh": "AI 助手与会话",
+      "titleEn": "AI assistant & sessions",
+      "summaryZh": "在项目上下文中与 AI 协作，创建会话、继续任务、处理权限请求，并保留完整的工作记录。",
+      "summaryEn": "Work with AI in project context, create sessions, continue tasks, answer permission requests, and keep a durable work record.",
+      "keywordsZh": [
+        "对话",
+        "聊天",
+        "会话",
+        "新建会话",
+        "继续任务",
+        "权限",
+        "目标"
+      ],
+      "keywordsEn": [
+        "chat",
+        "conversation",
+        "session",
+        "new session",
+        "continue task",
+        "permission",
+        "goal"
+      ],
+      "highlightsZh": [
+        "创建、归档、恢复和分叉会话",
+        "暂停、继续或引导正在运行的任务",
+        "查看工具调用、权限请求和用量"
+      ],
+      "highlightsEn": [
+        "Create, archive, restore, and fork sessions",
+        "Pause, continue, or steer running work",
+        "Inspect tool calls, permission requests, and usage"
+      ],
+      "items": [
+        {
+          "id": "session-lifecycle",
+          "titleZh": "新建、重命名、归档、恢复、删除、分叉与导出会话",
+          "titleEn": "Create, rename, archive, restore, delete, fork, and export sessions"
+        },
+        {
+          "id": "model-mode-permissions",
+          "titleZh": "为会话选择模型、工作模式、记忆模式与权限模式",
+          "titleEn": "Choose the model, work mode, memory mode, and permission mode per session"
+        },
+        {
+          "id": "turn-control",
+          "titleZh": "开始、引导、打断、取消或恢复一次 Agent 运行",
+          "titleEn": "Start, steer, interrupt, cancel, or recover an agent turn"
+        },
+        {
+          "id": "permission-mailbox",
+          "titleZh": "查看并逐个或批量回答等待中的权限请求",
+          "titleEn": "Review and answer pending permission requests individually or in a batch"
+        },
+        {
+          "id": "history-search",
+          "titleZh": "分页加载、搜索和回填历史消息与会话内容",
+          "titleEn": "Page through, search, and backfill historical turns and session content"
+        },
+        {
+          "id": "tool-activity",
+          "titleZh": "查看工具调用与后台命令，读取输出并继续输入或停止",
+          "titleEn": "Inspect tool calls and background commands, read output, send input, or stop them"
+        },
+        {
+          "id": "goals",
+          "titleZh": "创建会话目标、更新目标内容与状态并清除目标",
+          "titleEn": "Create session goals, update their objective and status, and clear them"
+        },
+        {
+          "id": "usage",
+          "titleZh": "查看单个会话的请求、Token 与成本用量报告",
+          "titleEn": "View request, token, and cost usage for an individual session"
+        },
+        {
+          "id": "context-memory",
+          "titleZh": "重新加载会话上下文、运行 AGENTS.md 初始化并管理长期记忆",
+          "titleEn": "Reload session context, initialize AGENTS.md, and manage long-term memory"
+        },
+        {
+          "id": "btw-editor-ai",
+          "titleZh": "使用 BTW 轻量问答与编辑器内联 AI，并可随时取消",
+          "titleEn": "Use lightweight BTW questions and inline editor AI, with cancellation"
+        }
+      ],
+      "stepsZh": [
+        "打开 AI 助手或新建会话",
+        "选择项目、模型和工作模式",
+        "描述目标；BitFun 会在会话中持续记录进度"
+      ],
+      "stepsEn": [
+        "Open the AI assistant or create a session",
+        "Choose a project, model, and working mode",
+        "Describe the goal; BitFun keeps progress in the session"
+      ],
+      "agentExamplesZh": [
+        "新建一个会话，我们来排查这个构建错误",
+        "打开 AI 助手，我想继续刚才的任务"
+      ],
+      "agentExamplesEn": [
+        "Start a new session so we can debug this build error",
+        "Open the AI assistant; I want to continue my previous task"
+      ],
+      "destination": {
+        "kind": "scene",
+        "sceneId": "session"
+      },
+      "operations": [
+        {
+          "id": "new-session",
+          "titleZh": "新建会话",
+          "titleEn": "Create a session",
+          "descriptionZh": "打开一个新的 AI 会话。",
+          "descriptionEn": "Open a new AI session.",
+          "risk": "ui",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        }
+      ],
+      "options": [],
+      "searchTerms": [
+        "feature.ai-assistant",
+        "AI 助手与会话",
+        "AI assistant & sessions",
+        "AI 与协作",
+        "AI & collaboration",
+        "对话",
+        "聊天",
+        "会话",
+        "新建会话",
+        "继续任务",
+        "权限",
+        "目标",
+        "chat",
+        "conversation",
+        "session",
+        "new session",
+        "continue task",
+        "permission",
+        "goal",
+        "创建、归档、恢复和分叉会话",
+        "暂停、继续或引导正在运行的任务",
+        "查看工具调用、权限请求和用量",
+        "Create, archive, restore, and fork sessions",
+        "Pause, continue, or steer running work",
+        "Inspect tool calls, permission requests, and usage",
+        "新建、重命名、归档、恢复、删除、分叉与导出会话",
+        "Create, rename, archive, restore, delete, fork, and export sessions",
+        "为会话选择模型、工作模式、记忆模式与权限模式",
+        "Choose the model, work mode, memory mode, and permission mode per session",
+        "开始、引导、打断、取消或恢复一次 Agent 运行",
+        "Start, steer, interrupt, cancel, or recover an agent turn",
+        "查看并逐个或批量回答等待中的权限请求",
+        "Review and answer pending permission requests individually or in a batch",
+        "分页加载、搜索和回填历史消息与会话内容",
+        "Page through, search, and backfill historical turns and session content",
+        "查看工具调用与后台命令，读取输出并继续输入或停止",
+        "Inspect tool calls and background commands, read output, send input, or stop them",
+        "创建会话目标、更新目标内容与状态并清除目标",
+        "Create session goals, update their objective and status, and clear them",
+        "查看单个会话的请求、Token 与成本用量报告",
+        "View request, token, and cost usage for an individual session",
+        "重新加载会话上下文、运行 AGENTS.md 初始化并管理长期记忆",
+        "Reload session context, initialize AGENTS.md, and manage long-term memory",
+        "使用 BTW 轻量问答与编辑器内联 AI，并可随时取消",
+        "Use lightweight BTW questions and inline editor AI, with cancellation"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.ai-assistant/"
+    },
+    {
+      "id": "feature.agents",
+      "kind": "feature",
+      "categoryId": "assistant",
+      "titleZh": "Agent 管理",
+      "titleEn": "Agents",
+      "summaryZh": "管理内置、自定义和子 Agent，让不同角色分工处理研究、编码、评审等任务。",
+      "summaryEn": "Manage built-in, custom, and subagents so specialized roles can handle research, coding, review, and more.",
+      "keywordsZh": [
+        "智能体",
+        "子 Agent",
+        "自定义 Agent",
+        "多 Agent",
+        "并行协作"
+      ],
+      "keywordsEn": [
+        "agent",
+        "subagent",
+        "custom agent",
+        "multi-agent",
+        "parallel collaboration"
+      ],
+      "highlightsZh": [
+        "查看可用 Agent",
+        "创建和编辑自定义 Agent",
+        "让主 Agent 委派并行任务"
+      ],
+      "highlightsEn": [
+        "Browse available agents",
+        "Create and edit custom agents",
+        "Let the primary agent delegate parallel work"
+      ],
+      "items": [
+        {
+          "id": "browse-agents",
+          "titleZh": "查看内置、用户、项目与当前环境可见的 Agent",
+          "titleEn": "Browse built-in, user, project, and currently visible agents"
+        },
+        {
+          "id": "custom-agent-create",
+          "titleZh": "创建自定义 Agent 并设置名称、说明和角色",
+          "titleEn": "Create custom agents with a name, description, and role"
+        },
+        {
+          "id": "custom-agent-manage",
+          "titleZh": "读取、编辑、重新加载或删除自定义 Agent",
+          "titleEn": "Inspect, edit, reload, or delete custom agents"
+        },
+        {
+          "id": "subagent-manage",
+          "titleZh": "创建、配置、查看和删除可委派的子 Agent",
+          "titleEn": "Create, configure, inspect, and delete delegatable subagents"
+        },
+        {
+          "id": "capability-summary",
+          "titleZh": "查看每个 Agent 的工具、Skills、只读状态和能力摘要",
+          "titleEn": "Inspect each agent's tools, Skills, read-only state, and capability summary"
+        },
+        {
+          "id": "tools-skills",
+          "titleZh": "按 Agent 选择工具组、单个工具、Skill 组与 Skills",
+          "titleEn": "Choose tool groups, individual tools, skill groups, and Skills per agent"
+        },
+        {
+          "id": "delegation",
+          "titleZh": "让主 Agent 委派并行研究、编码和评审任务并设置超时",
+          "titleEn": "Let the primary agent delegate parallel research, coding, and review work with timeouts"
+        }
+      ],
+      "stepsZh": [
+        "打开 Agents",
+        "选择现有 Agent 或创建一个角色",
+        "在会话中指定角色，或让主 Agent 自动委派"
+      ],
+      "stepsEn": [
+        "Open Agents",
+        "Choose an existing agent or create a role",
+        "Select the role in a session or let the primary agent delegate"
+      ],
+      "agentExamplesZh": [
+        "打开 Agents，我想看看有哪些专门角色",
+        "帮我进入 Agent 管理页"
+      ],
+      "agentExamplesEn": [
+        "Open Agents so I can see the specialized roles",
+        "Take me to agent management"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.agents.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.agents",
+        "Agent 管理",
+        "Agents",
+        "AI 与协作",
+        "AI & collaboration",
+        "智能体",
+        "子 Agent",
+        "自定义 Agent",
+        "多 Agent",
+        "并行协作",
+        "agent",
+        "subagent",
+        "custom agent",
+        "multi-agent",
+        "parallel collaboration",
+        "查看可用 Agent",
+        "创建和编辑自定义 Agent",
+        "让主 Agent 委派并行任务",
+        "Browse available agents",
+        "Create and edit custom agents",
+        "Let the primary agent delegate parallel work",
+        "查看内置、用户、项目与当前环境可见的 Agent",
+        "Browse built-in, user, project, and currently visible agents",
+        "创建自定义 Agent 并设置名称、说明和角色",
+        "Create custom agents with a name, description, and role",
+        "读取、编辑、重新加载或删除自定义 Agent",
+        "Inspect, edit, reload, or delete custom agents",
+        "创建、配置、查看和删除可委派的子 Agent",
+        "Create, configure, inspect, and delete delegatable subagents",
+        "查看每个 Agent 的工具、Skills、只读状态和能力摘要",
+        "Inspect each agent's tools, Skills, read-only state, and capability summary",
+        "按 Agent 选择工具组、单个工具、Skill 组与 Skills",
+        "Choose tool groups, individual tools, skill groups, and Skills per agent",
+        "让主 Agent 委派并行研究、编码和评审任务并设置超时",
+        "Let the primary agent delegate parallel research, coding, and review work with timeouts"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.agents/"
+    },
+    {
+      "id": "feature.personal-assistants",
+      "kind": "feature",
+      "categoryId": "assistant",
+      "titleZh": "个人助理",
+      "titleEn": "Personal assistants",
+      "summaryZh": "在助理空间中创建和管理自己的长期 AI 助理，定义身份与人设、配置默认能力，并从同一处开始会话或安排定时任务。",
+      "summaryEn": "Create and manage persistent AI assistants, define their identity and persona, configure default capabilities, and start chats or scheduled work from one place.",
+      "keywordsZh": [
+        "助理",
+        "个人助理",
+        "育苗场",
+        "主助理",
+        "身份",
+        "头像",
+        "人设",
+        "Persona",
+        "默认工具",
+        "默认技能"
+      ],
+      "keywordsEn": [
+        "assistant",
+        "personal assistant",
+        "nursery",
+        "primary assistant",
+        "identity",
+        "avatar",
+        "persona",
+        "default tools",
+        "default skills"
+      ],
+      "highlightsZh": [
+        "创建、设为主助理或删除助理",
+        "编辑身份、头像与 Persona 文档",
+        "配置默认 Skills、内置工具和 MCP 工具"
+      ],
+      "highlightsEn": [
+        "Create, select a primary assistant, or delete assistants",
+        "Edit identity, avatar, and persona documents",
+        "Configure default Skills, built-in tools, and MCP tools"
+      ],
+      "items": [
+        {
+          "id": "assistant-gallery",
+          "titleZh": "浏览已有助理、创建新助理并查看每个助理的身份与能力概览",
+          "titleEn": "Browse existing assistants, create a new one, and review each assistant's identity and capability summary"
+        },
+        {
+          "id": "primary-delete-reset",
+          "titleZh": "设为主助理、删除非主助理，或将助理工作区重置为默认状态",
+          "titleEn": "Set the primary assistant, delete non-primary assistants, or reset an assistant workspace to defaults"
+        },
+        {
+          "id": "identity-avatar",
+          "titleZh": "编辑助理名称、角色类型和气质，并选择官方头像、Emoji 或自定义头像字符",
+          "titleEn": "Edit an assistant's name, creature type, and vibe, then choose an official avatar, emoji, or custom avatar character"
+        },
+        {
+          "id": "persona-documents",
+          "titleZh": "读取和编辑 IDENTITY.md、SOUL.md 与 USER.md，并自动保存 Markdown 正文和 Frontmatter",
+          "titleEn": "Read and edit IDENTITY.md, SOUL.md, and USER.md with autosaved Markdown body and frontmatter"
+        },
+        {
+          "id": "default-skills",
+          "titleZh": "为新助理选择默认 Skills，识别用户级与项目级来源、遮蔽关系和当前可用状态",
+          "titleEn": "Choose default Skills for new assistants while seeing user/project sources, shadowing, and availability"
+        },
+        {
+          "id": "default-builtin-tools",
+          "titleZh": "逐个或批量启用默认内置工具，并查看说明、只读或可执行属性及产品默认状态",
+          "titleEn": "Enable default built-in tools individually or in groups and inspect descriptions, read-only or executable access, and product defaults"
+        },
+        {
+          "id": "default-mcp-tools",
+          "titleZh": "按 MCP 服务器查看连接状态、工具详情与传输信息，并为新助理启用整个服务或单个工具",
+          "titleEn": "Inspect MCP server status, tool details, and transport, then enable a whole server or individual tools for new assistants"
+        },
+        {
+          "id": "defaults-discovery-reset",
+          "titleZh": "按 Skills、内置工具或 MCP 分类搜索，筛选启用、停用、已更改或不可用项，查看详情并恢复产品默认值",
+          "titleEn": "Search Skills, built-in tools, or MCP entries; filter enabled, disabled, changed, or unavailable items; inspect details; and restore product defaults"
+        },
+        {
+          "id": "assistant-sessions",
+          "titleZh": "从助理卡片新建会话，或在助理详情中选择模型、输入消息并查看该助理的历史会话",
+          "titleEn": "Start a session from an assistant card, or choose a model, send a message, and browse that assistant's sessions from its detail page"
+        },
+        {
+          "id": "assistant-schedules",
+          "titleZh": "查看和管理仅属于当前助理工作区的定时会话与自动任务",
+          "titleEn": "Review and manage scheduled sessions and automated jobs scoped to the current assistant workspace"
+        }
+      ],
+      "stepsZh": [
+        "打开“助理”",
+        "创建助理或选择现有助理",
+        "编辑身份与人设，配置默认能力，然后开始会话或定时任务"
+      ],
+      "stepsEn": [
+        "Open Assistants",
+        "Create an assistant or choose an existing one",
+        "Edit its identity and persona, configure defaults, then start a chat or scheduled task"
+      ],
+      "agentExamplesZh": [
+        "打开我的个人助理",
+        "带我去育苗场配置助理的默认工具",
+        "我想修改主助理的人设"
+      ],
+      "agentExamplesEn": [
+        "Open my personal assistants",
+        "Take me to the nursery to configure default assistant tools",
+        "I want to edit my primary assistant's persona"
+      ],
+      "destination": {
+        "kind": "scene",
+        "sceneId": "profile"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.personal-assistants",
+        "个人助理",
+        "Personal assistants",
+        "AI 与协作",
+        "AI & collaboration",
+        "助理",
+        "育苗场",
+        "主助理",
+        "身份",
+        "头像",
+        "人设",
+        "Persona",
+        "默认工具",
+        "默认技能",
+        "assistant",
+        "personal assistant",
+        "nursery",
+        "primary assistant",
+        "identity",
+        "avatar",
+        "persona",
+        "default tools",
+        "default skills",
+        "创建、设为主助理或删除助理",
+        "编辑身份、头像与 Persona 文档",
+        "配置默认 Skills、内置工具和 MCP 工具",
+        "Create, select a primary assistant, or delete assistants",
+        "Edit identity, avatar, and persona documents",
+        "Configure default Skills, built-in tools, and MCP tools",
+        "浏览已有助理、创建新助理并查看每个助理的身份与能力概览",
+        "Browse existing assistants, create a new one, and review each assistant's identity and capability summary",
+        "设为主助理、删除非主助理，或将助理工作区重置为默认状态",
+        "Set the primary assistant, delete non-primary assistants, or reset an assistant workspace to defaults",
+        "编辑助理名称、角色类型和气质，并选择官方头像、Emoji 或自定义头像字符",
+        "Edit an assistant's name, creature type, and vibe, then choose an official avatar, emoji, or custom avatar character",
+        "读取和编辑 IDENTITY.md、SOUL.md 与 USER.md，并自动保存 Markdown 正文和 Frontmatter",
+        "Read and edit IDENTITY.md, SOUL.md, and USER.md with autosaved Markdown body and frontmatter",
+        "为新助理选择默认 Skills，识别用户级与项目级来源、遮蔽关系和当前可用状态",
+        "Choose default Skills for new assistants while seeing user/project sources, shadowing, and availability",
+        "逐个或批量启用默认内置工具，并查看说明、只读或可执行属性及产品默认状态",
+        "Enable default built-in tools individually or in groups and inspect descriptions, read-only or executable access, and product defaults",
+        "按 MCP 服务器查看连接状态、工具详情与传输信息，并为新助理启用整个服务或单个工具",
+        "Inspect MCP server status, tool details, and transport, then enable a whole server or individual tools for new assistants",
+        "按 Skills、内置工具或 MCP 分类搜索，筛选启用、停用、已更改或不可用项，查看详情并恢复产品默认值",
+        "Search Skills, built-in tools, or MCP entries; filter enabled, disabled, changed, or unavailable items; inspect details; and restore product defaults",
+        "从助理卡片新建会话，或在助理详情中选择模型、输入消息并查看该助理的历史会话",
+        "Start a session from an assistant card, or choose a model, send a message, and browse that assistant's sessions from its detail page",
+        "查看和管理仅属于当前助理工作区的定时会话与自动任务",
+        "Review and manage scheduled sessions and automated jobs scoped to the current assistant workspace"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.personal-assistants/"
+    },
+    {
+      "id": "feature.projects",
+      "kind": "feature",
+      "categoryId": "workspace",
+      "titleZh": "项目与工作区",
+      "titleEn": "Projects & workspaces",
+      "summaryZh": "打开本地目录或创建项目，让文件、会话、终端和 Agent 围绕同一工作区协作。",
+      "summaryEn": "Open a local directory or create a project so files, sessions, terminals, and agents share one workspace.",
+      "keywordsZh": [
+        "项目",
+        "工作区",
+        "打开文件夹",
+        "新建项目",
+        "切换项目"
+      ],
+      "keywordsEn": [
+        "project",
+        "workspace",
+        "open folder",
+        "new project",
+        "switch project"
+      ],
+      "highlightsZh": [
+        "打开现有目录",
+        "创建新项目",
+        "在多个工作区间切换"
+      ],
+      "highlightsEn": [
+        "Open an existing directory",
+        "Create a new project",
+        "Switch between workspaces"
+      ],
+      "items": [
+        {
+          "id": "open-close-switch",
+          "titleZh": "打开、关闭、切换并重新排序多个工作区",
+          "titleEn": "Open, close, switch, and reorder multiple workspaces"
+        },
+        {
+          "id": "recent-workspaces",
+          "titleZh": "查看、清理和重新打开最近使用的项目",
+          "titleEn": "Review, clean up, and reopen recently used projects"
+        },
+        {
+          "id": "workspace-metadata",
+          "titleZh": "扫描并维护工作区名称、信息、关联目录和 Persona 文件",
+          "titleEn": "Scan and maintain workspace names, metadata, related directories, and persona files"
+        },
+        {
+          "id": "file-watch",
+          "titleZh": "监听项目文件变化并查看当前监听路径",
+          "titleEn": "Watch project file changes and inspect active watched paths"
+        },
+        {
+          "id": "workspace-search",
+          "titleZh": "按文件名、路径或文件内容搜索本地工作区",
+          "titleEn": "Search local workspaces by filename, path, or file content"
+        },
+        {
+          "id": "remote-open",
+          "titleZh": "从项目流程打开 SSH 或其他远程工作区",
+          "titleEn": "Open SSH and other remote workspaces from the project flow"
+        },
+        {
+          "id": "project-health",
+          "titleZh": "查看当前工作区、应用状态、健康状态与统计信息",
+          "titleEn": "Inspect the current workspace, app state, health, and statistics"
+        }
+      ],
+      "stepsZh": [
+        "选择“打开项目”或“新建项目”",
+        "选择本地目录或配置远程位置",
+        "从侧边栏进入项目文件与会话"
+      ],
+      "stepsEn": [
+        "Choose Open Project or New Project",
+        "Select a local directory or configure a remote location",
+        "Use the sidebar to access files and sessions"
+      ],
+      "agentExamplesZh": [
+        "帮我打开一个项目",
+        "打开新建项目的界面"
+      ],
+      "agentExamplesEn": [
+        "Help me open a project",
+        "Open the new-project flow"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "project.open"
+      },
+      "operations": [
+        {
+          "id": "open-project",
+          "titleZh": "打开项目",
+          "titleEn": "Open project",
+          "descriptionZh": "选择并打开一个已有目录。",
+          "descriptionEn": "Choose and open an existing directory.",
+          "risk": "ui",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        {
+          "id": "new-project",
+          "titleZh": "新建项目",
+          "titleEn": "Create project",
+          "descriptionZh": "打开新建项目流程。",
+          "descriptionEn": "Open the new-project flow.",
+          "risk": "ui",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        }
+      ],
+      "options": [],
+      "searchTerms": [
+        "feature.projects",
+        "项目与工作区",
+        "Projects & workspaces",
+        "项目与开发",
+        "Projects & development",
+        "项目",
+        "工作区",
+        "打开文件夹",
+        "新建项目",
+        "切换项目",
+        "project",
+        "workspace",
+        "open folder",
+        "new project",
+        "switch project",
+        "打开现有目录",
+        "创建新项目",
+        "在多个工作区间切换",
+        "Open an existing directory",
+        "Create a new project",
+        "Switch between workspaces",
+        "打开、关闭、切换并重新排序多个工作区",
+        "Open, close, switch, and reorder multiple workspaces",
+        "查看、清理和重新打开最近使用的项目",
+        "Review, clean up, and reopen recently used projects",
+        "扫描并维护工作区名称、信息、关联目录和 Persona 文件",
+        "Scan and maintain workspace names, metadata, related directories, and persona files",
+        "监听项目文件变化并查看当前监听路径",
+        "Watch project file changes and inspect active watched paths",
+        "按文件名、路径或文件内容搜索本地工作区",
+        "Search local workspaces by filename, path, or file content",
+        "从项目流程打开 SSH 或其他远程工作区",
+        "Open SSH and other remote workspaces from the project flow",
+        "查看当前工作区、应用状态、健康状态与统计信息",
+        "Inspect the current workspace, app state, health, and statistics"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.projects/"
+    },
+    {
+      "id": "feature.files-editor",
+      "kind": "feature",
+      "categoryId": "workspace",
+      "titleZh": "文件与代码编辑",
+      "titleEn": "Files & code editing",
+      "summaryZh": "浏览、搜索和编辑项目文件，查看差异、代码符号、诊断与 Agent 产生的改动。",
+      "summaryEn": "Browse, search, and edit project files while inspecting diffs, symbols, diagnostics, and agent changes.",
+      "keywordsZh": [
+        "文件",
+        "代码",
+        "编辑器",
+        "搜索文件",
+        "差异",
+        "诊断",
+        "LSP"
+      ],
+      "keywordsEn": [
+        "files",
+        "code",
+        "editor",
+        "file search",
+        "diff",
+        "diagnostics",
+        "LSP"
+      ],
+      "highlightsZh": [
+        "文件树与全文搜索",
+        "代码导航、格式化和诊断",
+        "查看、接受或撤销 Agent 改动"
+      ],
+      "highlightsEn": [
+        "File tree and full-text search",
+        "Code navigation, formatting, and diagnostics",
+        "Review, accept, or revert agent changes"
+      ],
+      "items": [
+        {
+          "id": "file-tree",
+          "titleZh": "浏览文件树并创建、重命名、删除或在系统中显示文件和目录",
+          "titleEn": "Browse the file tree and create, rename, delete, or reveal files and directories"
+        },
+        {
+          "id": "indexed-search",
+          "titleZh": "建立或重建索引，按文件名和全文内容流式搜索",
+          "titleEn": "Build or rebuild an index and stream filename and full-text search results"
+        },
+        {
+          "id": "edit-save",
+          "titleZh": "读取、编辑、保存文件并同步编辑器状态",
+          "titleEn": "Read, edit, and save files while synchronizing editor state"
+        },
+        {
+          "id": "diffs",
+          "titleZh": "查看修改文件、会话、轮次和单次操作的差异与统计",
+          "titleEn": "Inspect diffs and statistics by file, session, turn, or operation"
+        },
+        {
+          "id": "accept-reject",
+          "titleZh": "按文件、操作或整个会话接受或拒绝 Agent 改动",
+          "titleEn": "Accept or reject agent changes by file, operation, or whole session"
+        },
+        {
+          "id": "snapshots-rollback",
+          "titleZh": "查看文件变更历史和快照，并回滚整个会话或指定轮次",
+          "titleEn": "Review file history and snapshots, then roll back a session or selected turn"
+        },
+        {
+          "id": "lsp-navigation",
+          "titleZh": "使用 Hover、跳转定义、查找引用、文档符号与高亮",
+          "titleEn": "Use hover, go to definition, references, document symbols, and highlights"
+        },
+        {
+          "id": "lsp-editing",
+          "titleZh": "使用补全、格式化、重命名、代码操作、内联提示与语义高亮",
+          "titleEn": "Use completion, formatting, rename, code actions, inlay hints, and semantic highlighting"
+        },
+        {
+          "id": "lsp-plugins",
+          "titleZh": "检测项目并安装、启动、停止或卸载 LSP 插件",
+          "titleEn": "Detect projects and install, start, stop, or uninstall LSP plugins"
+        },
+        {
+          "id": "attachments",
+          "titleZh": "粘贴、拖放或上传文件与图片作为会话上下文",
+          "titleEn": "Paste, drop, or upload files and images as session context"
+        }
+      ],
+      "stepsZh": [
+        "先打开一个项目",
+        "打开“文件”",
+        "选择文件进行编辑，或搜索内容与符号"
+      ],
+      "stepsEn": [
+        "Open a project first",
+        "Open Files",
+        "Choose a file to edit, or search content and symbols"
+      ],
+      "agentExamplesZh": [
+        "打开项目文件",
+        "带我去文件和代码编辑器"
+      ],
+      "agentExamplesEn": [
+        "Open the project files",
+        "Take me to the file and code editor"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.files.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.files-editor",
+        "文件与代码编辑",
+        "Files & code editing",
+        "项目与开发",
+        "Projects & development",
+        "文件",
+        "代码",
+        "编辑器",
+        "搜索文件",
+        "差异",
+        "诊断",
+        "LSP",
+        "files",
+        "code",
+        "editor",
+        "file search",
+        "diff",
+        "diagnostics",
+        "文件树与全文搜索",
+        "代码导航、格式化和诊断",
+        "查看、接受或撤销 Agent 改动",
+        "File tree and full-text search",
+        "Code navigation, formatting, and diagnostics",
+        "Review, accept, or revert agent changes",
+        "浏览文件树并创建、重命名、删除或在系统中显示文件和目录",
+        "Browse the file tree and create, rename, delete, or reveal files and directories",
+        "建立或重建索引，按文件名和全文内容流式搜索",
+        "Build or rebuild an index and stream filename and full-text search results",
+        "读取、编辑、保存文件并同步编辑器状态",
+        "Read, edit, and save files while synchronizing editor state",
+        "查看修改文件、会话、轮次和单次操作的差异与统计",
+        "Inspect diffs and statistics by file, session, turn, or operation",
+        "按文件、操作或整个会话接受或拒绝 Agent 改动",
+        "Accept or reject agent changes by file, operation, or whole session",
+        "查看文件变更历史和快照，并回滚整个会话或指定轮次",
+        "Review file history and snapshots, then roll back a session or selected turn",
+        "使用 Hover、跳转定义、查找引用、文档符号与高亮",
+        "Use hover, go to definition, references, document symbols, and highlights",
+        "使用补全、格式化、重命名、代码操作、内联提示与语义高亮",
+        "Use completion, formatting, rename, code actions, inlay hints, and semantic highlighting",
+        "检测项目并安装、启动、停止或卸载 LSP 插件",
+        "Detect projects and install, start, stop, or uninstall LSP plugins",
+        "粘贴、拖放或上传文件与图片作为会话上下文",
+        "Paste, drop, or upload files and images as session context"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.files-editor/"
+    },
+    {
+      "id": "feature.terminal",
+      "kind": "feature",
+      "categoryId": "workspace",
+      "titleZh": "终端",
+      "titleEn": "Terminal",
+      "summaryZh": "在当前项目中运行 Shell、查看输出、保留命令历史，并让 Agent 与同一终端环境协作。",
+      "summaryEn": "Run a shell in the current project, inspect output, keep command history, and share the same terminal context with agents.",
+      "keywordsZh": [
+        "终端",
+        "命令行",
+        "Shell",
+        "控制台",
+        "运行命令"
+      ],
+      "keywordsEn": [
+        "terminal",
+        "command line",
+        "shell",
+        "console",
+        "run command"
+      ],
+      "highlightsZh": [
+        "创建多个终端",
+        "选择默认 Shell",
+        "查看运行状态和历史"
+      ],
+      "highlightsEn": [
+        "Create multiple terminals",
+        "Choose the default shell",
+        "Inspect running state and history"
+      ],
+      "items": [
+        {
+          "id": "multiple-terminals",
+          "titleZh": "创建、列出、切换和关闭多个终端会话",
+          "titleEn": "Create, list, switch, and close multiple terminal sessions"
+        },
+        {
+          "id": "shells",
+          "titleZh": "检测可用 Shell，并为终端选择默认或指定 Shell",
+          "titleEn": "Detect available shells and choose a default or explicit shell"
+        },
+        {
+          "id": "working-directory",
+          "titleZh": "在当前项目目录或指定起始目录创建终端",
+          "titleEn": "Create terminals in the current project or a chosen starting directory"
+        },
+        {
+          "id": "command-control",
+          "titleZh": "执行命令、写入输入并发送中断或其他信号",
+          "titleEn": "Execute commands, write input, and send interrupt or other signals"
+        },
+        {
+          "id": "resize",
+          "titleZh": "随终端面板大小变化同步行列尺寸",
+          "titleEn": "Synchronize terminal rows and columns as the panel resizes"
+        },
+        {
+          "id": "history-integration",
+          "titleZh": "查看命令历史并检测 Shell Integration 支持",
+          "titleEn": "Review command history and detect shell-integration support"
+        },
+        {
+          "id": "shutdown",
+          "titleZh": "确认输出接收并安全关闭单个或全部终端",
+          "titleEn": "Acknowledge output and safely shut down one or all terminals"
+        }
+      ],
+      "stepsZh": [
+        "打开终端",
+        "确认当前目录",
+        "输入命令；需要时新建额外终端"
+      ],
+      "stepsEn": [
+        "Open Terminal",
+        "Confirm the current directory",
+        "Enter a command and create extra terminals as needed"
+      ],
+      "agentExamplesZh": [
+        "打开一个终端",
+        "切到终端界面"
+      ],
+      "agentExamplesEn": [
+        "Open a terminal",
+        "Switch to the terminal"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.terminal.open"
+      },
+      "operations": [
+        {
+          "id": "new-terminal",
+          "titleZh": "新建终端",
+          "titleEn": "Create terminal",
+          "descriptionZh": "在当前工作区创建终端。",
+          "descriptionEn": "Create a terminal in the current workspace.",
+          "risk": "ui",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        }
+      ],
+      "options": [],
+      "searchTerms": [
+        "feature.terminal",
+        "终端",
+        "Terminal",
+        "项目与开发",
+        "Projects & development",
+        "命令行",
+        "Shell",
+        "控制台",
+        "运行命令",
+        "terminal",
+        "command line",
+        "shell",
+        "console",
+        "run command",
+        "创建多个终端",
+        "选择默认 Shell",
+        "查看运行状态和历史",
+        "Create multiple terminals",
+        "Choose the default shell",
+        "Inspect running state and history",
+        "创建、列出、切换和关闭多个终端会话",
+        "Create, list, switch, and close multiple terminal sessions",
+        "检测可用 Shell，并为终端选择默认或指定 Shell",
+        "Detect available shells and choose a default or explicit shell",
+        "在当前项目目录或指定起始目录创建终端",
+        "Create terminals in the current project or a chosen starting directory",
+        "执行命令、写入输入并发送中断或其他信号",
+        "Execute commands, write input, and send interrupt or other signals",
+        "随终端面板大小变化同步行列尺寸",
+        "Synchronize terminal rows and columns as the panel resizes",
+        "查看命令历史并检测 Shell Integration 支持",
+        "Review command history and detect shell-integration support",
+        "确认输出接收并安全关闭单个或全部终端",
+        "Acknowledge output and safely shut down one or all terminals"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.terminal/"
+    },
+    {
+      "id": "feature.git",
+      "kind": "feature",
+      "categoryId": "workspace",
+      "titleZh": "Git 版本控制",
+      "titleEn": "Git version control",
+      "summaryZh": "查看改动、分支和提交，完成暂存、提交、合并、Cherry-pick 与 Worktree 工作流。",
+      "summaryEn": "Inspect changes, branches, and commits; stage, commit, merge, cherry-pick, and work with Git worktrees.",
+      "keywordsZh": [
+        "Git",
+        "版本控制",
+        "分支",
+        "提交",
+        "暂存",
+        "合并",
+        "Worktree"
+      ],
+      "keywordsEn": [
+        "git",
+        "source control",
+        "branch",
+        "commit",
+        "stage",
+        "merge",
+        "worktree"
+      ],
+      "highlightsZh": [
+        "查看工作区改动",
+        "管理分支与提交",
+        "使用 Worktree 隔离并行任务"
+      ],
+      "highlightsEn": [
+        "Inspect workspace changes",
+        "Manage branches and commits",
+        "Use worktrees to isolate parallel work"
+      ],
+      "items": [
+        {
+          "id": "status-diff",
+          "titleZh": "查看仓库状态、修改文件和逐文件 Diff",
+          "titleEn": "Inspect repository status, changed files, and per-file diffs"
+        },
+        {
+          "id": "stage-reset",
+          "titleZh": "暂存文件、取消暂存并重置到指定提交",
+          "titleEn": "Stage files, unstage changes, and reset to a selected commit"
+        },
+        {
+          "id": "commit",
+          "titleZh": "预览或生成提交信息并创建提交",
+          "titleEn": "Preview or generate a commit message and create the commit"
+        },
+        {
+          "id": "sync",
+          "titleZh": "从远端 Pull 并向远端 Push",
+          "titleEn": "Pull from and push to remotes"
+        },
+        {
+          "id": "branches",
+          "titleZh": "查看、创建、切换和删除本地分支",
+          "titleEn": "Browse, create, check out, and delete local branches"
+        },
+        {
+          "id": "graph-history",
+          "titleZh": "浏览提交图谱与仓库历史并保存最近访问记录",
+          "titleEn": "Browse the commit graph and repository history, including recent-history persistence"
+        },
+        {
+          "id": "revision-content",
+          "titleZh": "解析 Revision 并查看任意提交中的文件内容",
+          "titleEn": "Resolve revisions and inspect file content from any commit"
+        },
+        {
+          "id": "cherry-pick",
+          "titleZh": "执行、继续或中止 Cherry-pick",
+          "titleEn": "Start, continue, or abort a cherry-pick"
+        },
+        {
+          "id": "trust-worktrees",
+          "titleZh": "管理仓库信任与 Worktree 的创建、绑定、提升、重建和删除",
+          "titleEn": "Manage repository trust and create, bind, promote, recreate, or remove worktrees"
+        }
+      ],
+      "stepsZh": [
+        "打开 Git",
+        "选择改动或分支",
+        "执行暂存、提交或分支操作"
+      ],
+      "stepsEn": [
+        "Open Git",
+        "Choose changes or a branch",
+        "Stage, commit, or perform a branch operation"
+      ],
+      "agentExamplesZh": [
+        "打开 Git 面板",
+        "带我查看当前代码改动"
+      ],
+      "agentExamplesEn": [
+        "Open the Git panel",
+        "Show me the current code changes"
+      ],
+      "destination": {
+        "kind": "scene",
+        "sceneId": "git"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.git",
+        "Git 版本控制",
+        "Git version control",
+        "项目与开发",
+        "Projects & development",
+        "Git",
+        "版本控制",
+        "分支",
+        "提交",
+        "暂存",
+        "合并",
+        "Worktree",
+        "git",
+        "source control",
+        "branch",
+        "commit",
+        "stage",
+        "merge",
+        "worktree",
+        "查看工作区改动",
+        "管理分支与提交",
+        "使用 Worktree 隔离并行任务",
+        "Inspect workspace changes",
+        "Manage branches and commits",
+        "Use worktrees to isolate parallel work",
+        "查看仓库状态、修改文件和逐文件 Diff",
+        "Inspect repository status, changed files, and per-file diffs",
+        "暂存文件、取消暂存并重置到指定提交",
+        "Stage files, unstage changes, and reset to a selected commit",
+        "预览或生成提交信息并创建提交",
+        "Preview or generate a commit message and create the commit",
+        "从远端 Pull 并向远端 Push",
+        "Pull from and push to remotes",
+        "查看、创建、切换和删除本地分支",
+        "Browse, create, check out, and delete local branches",
+        "浏览提交图谱与仓库历史并保存最近访问记录",
+        "Browse the commit graph and repository history, including recent-history persistence",
+        "解析 Revision 并查看任意提交中的文件内容",
+        "Resolve revisions and inspect file content from any commit",
+        "执行、继续或中止 Cherry-pick",
+        "Start, continue, or abort a cherry-pick",
+        "管理仓库信任与 Worktree 的创建、绑定、提升、重建和删除",
+        "Manage repository trust and create, bind, promote, recreate, or remove worktrees"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.git/"
+    },
+    {
+      "id": "feature.code-review",
+      "kind": "feature",
+      "categoryId": "workspace",
+      "titleZh": "代码评审与 Pull Request",
+      "titleEn": "Code review & pull requests",
+      "summaryZh": "阅读改动与 PR 上下文，查看 CI 日志，生成提交信息，并组织深度代码评审。",
+      "summaryEn": "Review changes and pull-request context, inspect CI logs, generate commit messages, and run deeper code reviews.",
+      "keywordsZh": [
+        "代码评审",
+        "PR",
+        "Pull Request",
+        "CI 日志",
+        "提交信息",
+        "Deep Review"
+      ],
+      "keywordsEn": [
+        "code review",
+        "PR",
+        "pull request",
+        "CI log",
+        "commit message",
+        "deep review"
+      ],
+      "highlightsZh": [
+        "查看 PR、Issue 和 CI 上下文",
+        "生成提交信息",
+        "针对改动发起深度评审"
+      ],
+      "highlightsEn": [
+        "Inspect PR, issue, and CI context",
+        "Generate commit messages",
+        "Run deep reviews against changes"
+      ],
+      "items": [
+        {
+          "id": "workspace-context",
+          "titleZh": "读取仓库、分支、工作区快照和评审目标",
+          "titleEn": "Load repository, branch, workspace snapshot, and review-target context"
+        },
+        {
+          "id": "pull-request",
+          "titleZh": "查看 Pull Request 详情、分页内容与关联改动",
+          "titleEn": "Inspect pull-request details, paged content, and related changes"
+        },
+        {
+          "id": "ci-logs",
+          "titleZh": "读取 Pull Request 的 CI 运行日志",
+          "titleEn": "Read CI run logs for a pull request"
+        },
+        {
+          "id": "issues",
+          "titleZh": "读取关联 Issue 的标题、描述与上下文",
+          "titleEn": "Read the title, body, and context of linked issues"
+        },
+        {
+          "id": "authentication",
+          "titleZh": "保存或清除评审平台访问令牌",
+          "titleEn": "Store or clear review-platform access tokens"
+        },
+        {
+          "id": "commit-message",
+          "titleZh": "预览、生成或快速采用提交信息",
+          "titleEn": "Preview, generate, or quickly apply a commit message"
+        },
+        {
+          "id": "deep-review",
+          "titleZh": "针对工作区、提交或 PR 发起 Deep Review 并控制评审队列",
+          "titleEn": "Run Deep Review against a workspace, commit, or pull request and control its queue"
+        }
+      ],
+      "stepsZh": [
+        "打开项目文件或 Git",
+        "选择改动或评审目标",
+        "在会话中请求评审或打开对应详情"
+      ],
+      "stepsEn": [
+        "Open project files or Git",
+        "Choose a change or review target",
+        "Ask for a review in the session or open its details"
+      ],
+      "agentExamplesZh": [
+        "打开文件面板，我要评审当前改动",
+        "带我查看 Pull Request 相关能力"
+      ],
+      "agentExamplesEn": [
+        "Open Files so I can review the current changes",
+        "Take me to the pull-request workflow"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.files.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.code-review",
+        "代码评审与 Pull Request",
+        "Code review & pull requests",
+        "项目与开发",
+        "Projects & development",
+        "代码评审",
+        "PR",
+        "Pull Request",
+        "CI 日志",
+        "提交信息",
+        "Deep Review",
+        "code review",
+        "pull request",
+        "CI log",
+        "commit message",
+        "deep review",
+        "查看 PR、Issue 和 CI 上下文",
+        "生成提交信息",
+        "针对改动发起深度评审",
+        "Inspect PR, issue, and CI context",
+        "Generate commit messages",
+        "Run deep reviews against changes",
+        "读取仓库、分支、工作区快照和评审目标",
+        "Load repository, branch, workspace snapshot, and review-target context",
+        "查看 Pull Request 详情、分页内容与关联改动",
+        "Inspect pull-request details, paged content, and related changes",
+        "读取 Pull Request 的 CI 运行日志",
+        "Read CI run logs for a pull request",
+        "读取关联 Issue 的标题、描述与上下文",
+        "Read the title, body, and context of linked issues",
+        "保存或清除评审平台访问令牌",
+        "Store or clear review-platform access tokens",
+        "预览、生成或快速采用提交信息",
+        "Preview, generate, or quickly apply a commit message",
+        "针对工作区、提交或 PR 发起 Deep Review 并控制评审队列",
+        "Run Deep Review against a workspace, commit, or pull request and control its queue"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.code-review/"
+    },
+    {
+      "id": "feature.browser",
+      "kind": "feature",
+      "categoryId": "workspace",
+      "titleZh": "内置浏览器",
+      "titleEn": "Built-in browser",
+      "summaryZh": "在 BitFun 内打开网页、预览本地服务，并把可见页面上下文交给 Agent。",
+      "summaryEn": "Open webpages and preview local services inside BitFun while sharing visible page context with an agent.",
+      "keywordsZh": [
+        "浏览器",
+        "网页",
+        "URL",
+        "本地预览",
+        "Webview"
+      ],
+      "keywordsEn": [
+        "browser",
+        "web",
+        "URL",
+        "local preview",
+        "webview"
+      ],
+      "highlightsZh": [
+        "打开网页和本地开发地址",
+        "刷新与导航",
+        "在会话旁并排查看页面"
+      ],
+      "highlightsEn": [
+        "Open webpages and local development URLs",
+        "Navigate and reload",
+        "Keep the page beside a session"
+      ],
+      "items": [
+        {
+          "id": "open-urls",
+          "titleZh": "输入完整网址、本地域名或开发服务端口并在 BitFun 内打开",
+          "titleEn": "Open full URLs, local hostnames, or development-service ports inside BitFun"
+        },
+        {
+          "id": "history-navigation",
+          "titleZh": "使用后退、前进和地址栏浏览页面历史",
+          "titleEn": "Navigate page history with Back, Forward, and the address bar"
+        },
+        {
+          "id": "reload-status",
+          "titleZh": "刷新页面，并同步当前 URL、加载状态与错误提示",
+          "titleEn": "Reload pages and synchronize the current URL, loading state, and errors"
+        },
+        {
+          "id": "scene-and-panel",
+          "titleZh": "既可作为独立浏览器场景，也可在会话旁的辅助面板中打开",
+          "titleEn": "Use the browser as a standalone scene or an auxiliary panel beside a session"
+        },
+        {
+          "id": "element-picker",
+          "titleZh": "启动元素选择器，悬停时高亮页面元素并显示标签、ID 和 Class",
+          "titleEn": "Start the element picker to highlight hovered elements and show tag, ID, and class details"
+        },
+        {
+          "id": "element-context",
+          "titleZh": "点击元素后捕获 CSS 路径、属性、文本和 HTML，并加入当前会话上下文",
+          "titleEn": "Click an element to capture its CSS path, attributes, text, and HTML into the current session context"
+        },
+        {
+          "id": "element-picker-cancel",
+          "titleZh": "再次点击选择按钮或按 Esc 取消元素选择并清理高亮",
+          "titleEn": "Click the picker again or press Escape to cancel selection and remove overlays"
+        },
+        {
+          "id": "embedded-webview",
+          "titleZh": "桌面端使用原生 WebView，Web 端回退到受限 iframe，并在当前页打开新窗口链接",
+          "titleEn": "Use a native WebView on desktop, a sandboxed iframe on web, and open new-window links in place"
+        }
+      ],
+      "stepsZh": [
+        "打开浏览器",
+        "输入网址或本地端口",
+        "需要时让 Agent 根据页面继续处理"
+      ],
+      "stepsEn": [
+        "Open Browser",
+        "Enter a URL or local port",
+        "Ask the agent to continue using the page context"
+      ],
+      "agentExamplesZh": [
+        "打开浏览器",
+        "给我一个网页预览面板"
+      ],
+      "agentExamplesEn": [
+        "Open the browser",
+        "Give me a web preview panel"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.browser.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.browser",
+        "内置浏览器",
+        "Built-in browser",
+        "项目与开发",
+        "Projects & development",
+        "浏览器",
+        "网页",
+        "URL",
+        "本地预览",
+        "Webview",
+        "browser",
+        "web",
+        "local preview",
+        "webview",
+        "打开网页和本地开发地址",
+        "刷新与导航",
+        "在会话旁并排查看页面",
+        "Open webpages and local development URLs",
+        "Navigate and reload",
+        "Keep the page beside a session",
+        "输入完整网址、本地域名或开发服务端口并在 BitFun 内打开",
+        "Open full URLs, local hostnames, or development-service ports inside BitFun",
+        "使用后退、前进和地址栏浏览页面历史",
+        "Navigate page history with Back, Forward, and the address bar",
+        "刷新页面，并同步当前 URL、加载状态与错误提示",
+        "Reload pages and synchronize the current URL, loading state, and errors",
+        "既可作为独立浏览器场景，也可在会话旁的辅助面板中打开",
+        "Use the browser as a standalone scene or an auxiliary panel beside a session",
+        "启动元素选择器，悬停时高亮页面元素并显示标签、ID 和 Class",
+        "Start the element picker to highlight hovered elements and show tag, ID, and class details",
+        "点击元素后捕获 CSS 路径、属性、文本和 HTML，并加入当前会话上下文",
+        "Click an element to capture its CSS path, attributes, text, and HTML into the current session context",
+        "再次点击选择按钮或按 Esc 取消元素选择并清理高亮",
+        "Click the picker again or press Escape to cancel selection and remove overlays",
+        "桌面端使用原生 WebView，Web 端回退到受限 iframe，并在当前页打开新窗口链接",
+        "Use a native WebView on desktop, a sandboxed iframe on web, and open new-window links in place"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.browser/"
+    },
+    {
+      "id": "feature.computer-use",
+      "kind": "feature",
+      "categoryId": "workspace",
+      "titleZh": "浏览器与桌面控制",
+      "titleEn": "Browser & desktop control",
+      "summaryZh": "授权 Agent 操作浏览器或本机界面，并明确管理辅助功能、屏幕录制与浏览器连接。",
+      "summaryEn": "Allow agents to operate a browser or local UI while explicitly managing accessibility, screen-recording, and browser connection access.",
+      "keywordsZh": [
+        "Computer Use",
+        "桌面控制",
+        "浏览器控制",
+        "CDP",
+        "辅助功能",
+        "屏幕录制"
+      ],
+      "keywordsEn": [
+        "computer use",
+        "desktop control",
+        "browser control",
+        "CDP",
+        "accessibility",
+        "screen recording"
+      ],
+      "highlightsZh": [
+        "启用或停用 Computer Use",
+        "连接受支持的浏览器",
+        "检查并打开系统权限设置"
+      ],
+      "highlightsEn": [
+        "Enable or disable Computer Use",
+        "Connect a supported browser",
+        "Inspect and open OS permission settings"
+      ],
+      "items": [
+        {
+          "id": "status",
+          "titleZh": "检查 Computer Use 可用性、辅助功能和屏幕录制授权状态",
+          "titleEn": "Check Computer Use availability plus accessibility and screen-recording permission status"
+        },
+        {
+          "id": "request-permissions",
+          "titleZh": "请求桌面控制所需的系统权限",
+          "titleEn": "Request the operating-system permissions required for desktop control"
+        },
+        {
+          "id": "system-settings",
+          "titleZh": "直接打开对应的系统隐私与安全设置",
+          "titleEn": "Open the matching operating-system privacy and security settings"
+        },
+        {
+          "id": "browser-discovery",
+          "titleZh": "发现受支持的浏览器并查看当前 CDP 连接状态",
+          "titleEn": "Discover supported browsers and inspect the current CDP connection state"
+        },
+        {
+          "id": "launch-connect",
+          "titleZh": "启动浏览器控制或连接已经开放 CDP 的浏览器",
+          "titleEn": "Launch browser control or connect to a browser that already exposes CDP"
+        },
+        {
+          "id": "default-cdp",
+          "titleZh": "启用默认 CDP 配置并按需要重启浏览器",
+          "titleEn": "Enable the default CDP setup and restart the browser when required"
+        },
+        {
+          "id": "agent-actions",
+          "titleZh": "授权后让 Agent 截图、点击、输入、滚动并读取可见界面",
+          "titleEn": "After authorization, let agents capture, click, type, scroll, and inspect the visible interface"
+        }
+      ],
+      "stepsZh": [
+        "打开执行控制设置",
+        "启用需要的能力",
+        "按提示授予系统权限或连接浏览器"
+      ],
+      "stepsEn": [
+        "Open Execution Control settings",
+        "Enable the required capability",
+        "Grant OS access or connect a browser when prompted"
+      ],
+      "agentExamplesZh": [
+        "打开桌面控制设置",
+        "带我配置浏览器控制"
+      ],
+      "agentExamplesEn": [
+        "Open desktop-control settings",
+        "Take me to browser-control setup"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.execution"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.computer-use",
+        "浏览器与桌面控制",
+        "Browser & desktop control",
+        "项目与开发",
+        "Projects & development",
+        "Computer Use",
+        "桌面控制",
+        "浏览器控制",
+        "CDP",
+        "辅助功能",
+        "屏幕录制",
+        "computer use",
+        "desktop control",
+        "browser control",
+        "accessibility",
+        "screen recording",
+        "启用或停用 Computer Use",
+        "连接受支持的浏览器",
+        "检查并打开系统权限设置",
+        "Enable or disable Computer Use",
+        "Connect a supported browser",
+        "Inspect and open OS permission settings",
+        "检查 Computer Use 可用性、辅助功能和屏幕录制授权状态",
+        "Check Computer Use availability plus accessibility and screen-recording permission status",
+        "请求桌面控制所需的系统权限",
+        "Request the operating-system permissions required for desktop control",
+        "直接打开对应的系统隐私与安全设置",
+        "Open the matching operating-system privacy and security settings",
+        "发现受支持的浏览器并查看当前 CDP 连接状态",
+        "Discover supported browsers and inspect the current CDP connection state",
+        "启动浏览器控制或连接已经开放 CDP 的浏览器",
+        "Launch browser control or connect to a browser that already exposes CDP",
+        "启用默认 CDP 配置并按需要重启浏览器",
+        "Enable the default CDP setup and restart the browser when required",
+        "授权后让 Agent 截图、点击、输入、滚动并读取可见界面",
+        "After authorization, let agents capture, click, type, scroll, and inspect the visible interface"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.computer-use/"
+    },
+    {
+      "id": "feature.skills",
+      "kind": "feature",
+      "categoryId": "automation",
+      "titleZh": "Skills 技能",
+      "titleEn": "Skills",
+      "summaryZh": "为 Agent 安装和管理可复用的专业工作流，并控制哪些模式可以使用它们。",
+      "summaryEn": "Install and manage reusable expert workflows for agents, and control which modes can use them.",
+      "keywordsZh": [
+        "Skill",
+        "技能",
+        "工作流",
+        "技能市场",
+        "安装技能"
+      ],
+      "keywordsEn": [
+        "skill",
+        "workflow",
+        "skill market",
+        "install skill",
+        "agent capability"
+      ],
+      "highlightsZh": [
+        "浏览与搜索 Skills",
+        "安装、更新或移除 Skill",
+        "按模式启用或停用"
+      ],
+      "highlightsEn": [
+        "Browse and search Skills",
+        "Install, update, or remove a Skill",
+        "Enable or disable by mode"
+      ],
+      "items": [
+        {
+          "id": "installed-catalog",
+          "titleZh": "统一查看用户级、项目级、本地和远程来源的已安装 Skills",
+          "titleEn": "Browse installed Skills from user, project, local, and remote sources in one catalog"
+        },
+        {
+          "id": "market",
+          "titleZh": "浏览、搜索和刷新 Skill 市场",
+          "titleEn": "Browse, search, and refresh the Skill market"
+        },
+        {
+          "id": "market-install",
+          "titleZh": "把市场 Skill 下载到用户级或当前项目",
+          "titleEn": "Download a market Skill for the user or current project"
+        },
+        {
+          "id": "local-add",
+          "titleZh": "校验本地 Skill 路径并添加到用户级或项目级",
+          "titleEn": "Validate a local Skill path and add it at user or project scope"
+        },
+        {
+          "id": "remove",
+          "titleZh": "删除已安装的用户级或项目级 Skill",
+          "titleEn": "Remove an installed user-level or project-level Skill"
+        },
+        {
+          "id": "global-enable",
+          "titleZh": "在全局范围启用或停用单个 Skill",
+          "titleEn": "Enable or disable an individual Skill globally"
+        },
+        {
+          "id": "mode-selection",
+          "titleZh": "按 Agent 模式选择 Skill 与 Skill 组，并可恢复默认选择",
+          "titleEn": "Choose Skills and skill groups per agent mode and restore defaults"
+        },
+        {
+          "id": "shadowing",
+          "titleZh": "识别同名 Skill 的用户级与项目级遮蔽优先级",
+          "titleEn": "Understand user-versus-project shadowing precedence for same-named Skills"
+        }
+      ],
+      "stepsZh": [
+        "打开 Skills",
+        "搜索需要的工作流",
+        "安装后在会话中调用"
+      ],
+      "stepsEn": [
+        "Open Skills",
+        "Search for the workflow you need",
+        "Install it and invoke it from a session"
+      ],
+      "agentExamplesZh": [
+        "打开 Skills",
+        "带我去技能管理"
+      ],
+      "agentExamplesEn": [
+        "Open Skills",
+        "Take me to skill management"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.skills.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.skills",
+        "Skills 技能",
+        "Skills",
+        "扩展与自动化",
+        "Extensions & automation",
+        "Skill",
+        "技能",
+        "工作流",
+        "技能市场",
+        "安装技能",
+        "skill",
+        "workflow",
+        "skill market",
+        "install skill",
+        "agent capability",
+        "浏览与搜索 Skills",
+        "安装、更新或移除 Skill",
+        "按模式启用或停用",
+        "Browse and search Skills",
+        "Install, update, or remove a Skill",
+        "Enable or disable by mode",
+        "统一查看用户级、项目级、本地和远程来源的已安装 Skills",
+        "Browse installed Skills from user, project, local, and remote sources in one catalog",
+        "浏览、搜索和刷新 Skill 市场",
+        "Browse, search, and refresh the Skill market",
+        "把市场 Skill 下载到用户级或当前项目",
+        "Download a market Skill for the user or current project",
+        "校验本地 Skill 路径并添加到用户级或项目级",
+        "Validate a local Skill path and add it at user or project scope",
+        "删除已安装的用户级或项目级 Skill",
+        "Remove an installed user-level or project-level Skill",
+        "在全局范围启用或停用单个 Skill",
+        "Enable or disable an individual Skill globally",
+        "按 Agent 模式选择 Skill 与 Skill 组，并可恢复默认选择",
+        "Choose Skills and skill groups per agent mode and restore defaults",
+        "识别同名 Skill 的用户级与项目级遮蔽优先级",
+        "Understand user-versus-project shadowing precedence for same-named Skills"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.skills/"
+    },
+    {
+      "id": "feature.miniapps",
+      "kind": "feature",
+      "categoryId": "automation",
+      "titleZh": "Mini Apps 小应用",
+      "titleEn": "Mini Apps",
+      "summaryZh": "在 BitFun 内安装、创建和运行轻量应用，让界面、数据与 Agent 工作流组合在一起。",
+      "summaryEn": "Install, create, and run lightweight apps inside BitFun, combining UI, data, and agent workflows.",
+      "keywordsZh": [
+        "Mini App",
+        "小应用",
+        "应用市场",
+        "创建应用",
+        "运行应用"
+      ],
+      "keywordsEn": [
+        "mini app",
+        "app market",
+        "create app",
+        "run app",
+        "embedded app"
+      ],
+      "highlightsZh": [
+        "浏览 Mini App 市场",
+        "安装或创建 Mini App",
+        "在独立场景中运行并与 Agent 对话"
+      ],
+      "highlightsEn": [
+        "Browse the Mini App market",
+        "Install or create a Mini App",
+        "Run it in its own scene and chat with its agent"
+      ],
+      "items": [
+        {
+          "id": "gallery-lifecycle",
+          "titleZh": "查看、搜索、创建、导入、编辑和删除 Mini App",
+          "titleEn": "Browse, search, create, import, edit, and delete Mini Apps"
+        },
+        {
+          "id": "market",
+          "titleZh": "浏览市场、查看详情并安装或更新发布版本",
+          "titleEn": "Browse the market, inspect listings, and install or update releases"
+        },
+        {
+          "id": "market-account",
+          "titleZh": "登录市场账户并收藏、评分和查看已安装来源",
+          "titleEn": "Sign in to the market, favorite and rate apps, and inspect installed origins"
+        },
+        {
+          "id": "permissions",
+          "titleZh": "按路径或工作区授予权限，并在定制前审查权限差异",
+          "titleEn": "Grant path or workspace access and review permission changes before customization"
+        },
+        {
+          "id": "runtime",
+          "titleZh": "运行 Mini App Host 与 Worker，查看状态并停止后台 Worker",
+          "titleEn": "Run Mini App host and worker calls, inspect status, and stop background workers"
+        },
+        {
+          "id": "storage",
+          "titleZh": "为正式应用和定制草稿分别读取与保存持久状态",
+          "titleEn": "Read and save persistent state separately for installed apps and customization drafts"
+        },
+        {
+          "id": "agent-ai",
+          "titleZh": "在 Mini App 中调用模型补全、聊天和专属 Agent 会话",
+          "titleEn": "Use model completion, chat, and dedicated agent sessions inside Mini Apps"
+        },
+        {
+          "id": "customization",
+          "titleZh": "创建定制草稿、实时预览，并应用、同步或丢弃修改",
+          "titleEn": "Create customization drafts, preview them live, and apply, sync, or discard changes"
+        },
+        {
+          "id": "versions",
+          "titleZh": "查看版本历史并回滚到旧版本",
+          "titleEn": "Inspect version history and roll back to an earlier release"
+        },
+        {
+          "id": "publishing",
+          "titleZh": "提交、撤回和审查市场发布，并可渲染幻灯片页面",
+          "titleEn": "Submit, withdraw, and review market releases, and render slide pages"
+        }
+      ],
+      "stepsZh": [
+        "打开 Mini Apps",
+        "选择市场、已安装或创建",
+        "打开应用并按页面提示使用"
+      ],
+      "stepsEn": [
+        "Open Mini Apps",
+        "Choose Market, Installed, or Create",
+        "Launch the app and follow its interface"
+      ],
+      "agentExamplesZh": [
+        "打开 Mini Apps",
+        "带我去小应用市场"
+      ],
+      "agentExamplesEn": [
+        "Open Mini Apps",
+        "Take me to the Mini App market"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.miniapps.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.miniapps",
+        "Mini Apps 小应用",
+        "Mini Apps",
+        "扩展与自动化",
+        "Extensions & automation",
+        "Mini App",
+        "小应用",
+        "应用市场",
+        "创建应用",
+        "运行应用",
+        "mini app",
+        "app market",
+        "create app",
+        "run app",
+        "embedded app",
+        "浏览 Mini App 市场",
+        "安装或创建 Mini App",
+        "在独立场景中运行并与 Agent 对话",
+        "Browse the Mini App market",
+        "Install or create a Mini App",
+        "Run it in its own scene and chat with its agent",
+        "查看、搜索、创建、导入、编辑和删除 Mini App",
+        "Browse, search, create, import, edit, and delete Mini Apps",
+        "浏览市场、查看详情并安装或更新发布版本",
+        "Browse the market, inspect listings, and install or update releases",
+        "登录市场账户并收藏、评分和查看已安装来源",
+        "Sign in to the market, favorite and rate apps, and inspect installed origins",
+        "按路径或工作区授予权限，并在定制前审查权限差异",
+        "Grant path or workspace access and review permission changes before customization",
+        "运行 Mini App Host 与 Worker，查看状态并停止后台 Worker",
+        "Run Mini App host and worker calls, inspect status, and stop background workers",
+        "为正式应用和定制草稿分别读取与保存持久状态",
+        "Read and save persistent state separately for installed apps and customization drafts",
+        "在 Mini App 中调用模型补全、聊天和专属 Agent 会话",
+        "Use model completion, chat, and dedicated agent sessions inside Mini Apps",
+        "创建定制草稿、实时预览，并应用、同步或丢弃修改",
+        "Create customization drafts, preview them live, and apply, sync, or discard changes",
+        "查看版本历史并回滚到旧版本",
+        "Inspect version history and roll back to an earlier release",
+        "提交、撤回和审查市场发布，并可渲染幻灯片页面",
+        "Submit, withdraw, and review market releases, and render slide pages"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.miniapps/"
+    },
+    {
+      "id": "feature.canvas",
+      "kind": "feature",
+      "categoryId": "automation",
+      "titleZh": "Canvas 与交互产物",
+      "titleEn": "Canvas & interactive artifacts",
+      "summaryZh": "在会话旁展示和保存 Agent 生成的可视化、交互页面与结构化产物。",
+      "summaryEn": "Display and save visualizations, interactive pages, and structured artifacts generated beside a session.",
+      "keywordsZh": [
+        "Canvas",
+        "画布",
+        "可视化",
+        "交互产物",
+        "Artifact"
+      ],
+      "keywordsEn": [
+        "canvas",
+        "visualization",
+        "interactive artifact",
+        "artifact",
+        "preview"
+      ],
+      "highlightsZh": [
+        "在会话中打开交互内容",
+        "保留画布状态",
+        "在面板中查看运行错误"
+      ],
+      "highlightsEn": [
+        "Open interactive content from a session",
+        "Persist canvas state",
+        "Inspect runtime errors in the panel"
+      ],
+      "items": [
+        {
+          "id": "artifact-open",
+          "titleZh": "从会话工具结果加载并打开持久化 Canvas 产物",
+          "titleEn": "Load and open persistent Canvas artifacts from session tool results"
+        },
+        {
+          "id": "html-react",
+          "titleZh": "渲染 HTML 或 React 交互界面、图表和可视化",
+          "titleEn": "Render HTML or React interfaces, charts, and interactive visualizations"
+        },
+        {
+          "id": "state",
+          "titleZh": "在重新打开或刷新 Canvas 时加载和保存交互状态",
+          "titleEn": "Load and save interactive state when a Canvas is reopened or refreshed"
+        },
+        {
+          "id": "source-inspection",
+          "titleZh": "查看 Canvas 源码、编译版本和最后可用版本",
+          "titleEn": "Inspect Canvas source, compiled revisions, and the last known good revision"
+        },
+        {
+          "id": "element-context",
+          "titleZh": "选择 Canvas 内的元素并把元素引用加入会话上下文",
+          "titleEn": "Select an element inside Canvas and add its reference to session context"
+        },
+        {
+          "id": "runtime-errors",
+          "titleZh": "捕获运行错误、上报诊断并请求 Agent 自动修复",
+          "titleEn": "Capture runtime errors, report diagnostics, and ask the agent to repair them"
+        },
+        {
+          "id": "export-html",
+          "titleZh": "把当前 Canvas 导出为可独立打开的 HTML 文件",
+          "titleEn": "Export the current Canvas as a standalone HTML file"
+        }
+      ],
+      "stepsZh": [
+        "打开一个 AI 会话",
+        "让 Agent 创建可视化或交互工具",
+        "从工具结果打开 Canvas"
+      ],
+      "stepsEn": [
+        "Open an AI session",
+        "Ask the agent for a visualization or interactive tool",
+        "Open the Canvas from the tool result"
+      ],
+      "agentExamplesZh": [
+        "打开 AI 助手，我想做一个交互可视化",
+        "创建一个可交互的 Canvas"
+      ],
+      "agentExamplesEn": [
+        "Open the AI assistant; I want an interactive visualization",
+        "Create an interactive Canvas"
+      ],
+      "destination": {
+        "kind": "scene",
+        "sceneId": "session"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.canvas",
+        "Canvas 与交互产物",
+        "Canvas & interactive artifacts",
+        "扩展与自动化",
+        "Extensions & automation",
+        "Canvas",
+        "画布",
+        "可视化",
+        "交互产物",
+        "Artifact",
+        "canvas",
+        "visualization",
+        "interactive artifact",
+        "artifact",
+        "preview",
+        "在会话中打开交互内容",
+        "保留画布状态",
+        "在面板中查看运行错误",
+        "Open interactive content from a session",
+        "Persist canvas state",
+        "Inspect runtime errors in the panel",
+        "从会话工具结果加载并打开持久化 Canvas 产物",
+        "Load and open persistent Canvas artifacts from session tool results",
+        "渲染 HTML 或 React 交互界面、图表和可视化",
+        "Render HTML or React interfaces, charts, and interactive visualizations",
+        "在重新打开或刷新 Canvas 时加载和保存交互状态",
+        "Load and save interactive state when a Canvas is reopened or refreshed",
+        "查看 Canvas 源码、编译版本和最后可用版本",
+        "Inspect Canvas source, compiled revisions, and the last known good revision",
+        "选择 Canvas 内的元素并把元素引用加入会话上下文",
+        "Select an element inside Canvas and add its reference to session context",
+        "捕获运行错误、上报诊断并请求 Agent 自动修复",
+        "Capture runtime errors, report diagnostics, and ask the agent to repair them",
+        "把当前 Canvas 导出为可独立打开的 HTML 文件",
+        "Export the current Canvas as a standalone HTML file"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.canvas/"
+    },
+    {
+      "id": "feature.tasks-automation",
+      "kind": "feature",
+      "categoryId": "automation",
+      "titleZh": "任务板与定时任务",
+      "titleEn": "Task board & scheduled jobs",
+      "summaryZh": "集中查看待办事项，并让任务在指定时间或目标主机上持续运行。",
+      "summaryEn": "Track work in one task board and let scheduled jobs run at a chosen time or host.",
+      "keywordsZh": [
+        "任务板",
+        "待办",
+        "Todo",
+        "定时任务",
+        "计划任务",
+        "Cron"
+      ],
+      "keywordsEn": [
+        "task board",
+        "todo",
+        "scheduled job",
+        "automation",
+        "cron",
+        "recurring task"
+      ],
+      "highlightsZh": [
+        "查看和整理待办",
+        "创建一次性或重复任务",
+        "为本地或远程工作区安排执行"
+      ],
+      "highlightsEn": [
+        "Review and organize todos",
+        "Create one-time or recurring jobs",
+        "Schedule work for local or remote workspaces"
+      ],
+      "items": [
+        {
+          "id": "board-views",
+          "titleZh": "按待处理、日历和已停用视图浏览任务",
+          "titleEn": "Browse tasks in Pending, Calendar, and Inactive views"
+        },
+        {
+          "id": "create-edit",
+          "titleZh": "创建、编辑、启用、停用和删除定时任务",
+          "titleEn": "Create, edit, enable, disable, and delete scheduled jobs"
+        },
+        {
+          "id": "schedule-types",
+          "titleZh": "设置一次性、每日、每周或自定义 Cron 时间表",
+          "titleEn": "Choose one-time, daily, weekly, or custom cron schedules"
+        },
+        {
+          "id": "calendar-occurrences",
+          "titleZh": "在日历中预览任务的下一次与后续运行时间",
+          "titleEn": "Preview the next and future job occurrences on a calendar"
+        },
+        {
+          "id": "agent-workspace",
+          "titleZh": "为任务选择 Agent、模型、工作模式和工作区",
+          "titleEn": "Choose the agent, model, work mode, and workspace for a job"
+        },
+        {
+          "id": "local-remote-target",
+          "titleZh": "把任务安排在当前主机或已连接的远程目标上运行",
+          "titleEn": "Schedule jobs to run on the current host or a connected remote target"
+        },
+        {
+          "id": "host-readiness",
+          "titleZh": "查看任务列表并等待桌面 Host 就绪后可靠执行",
+          "titleEn": "List jobs and wait for desktop-host readiness before reliable execution"
+        }
+      ],
+      "stepsZh": [
+        "打开任务板",
+        "选择待办或定时任务",
+        "创建任务并确认运行目标与时间"
+      ],
+      "stepsEn": [
+        "Open the Task Board",
+        "Choose todos or scheduled jobs",
+        "Create the job and confirm its target and timing"
+      ],
+      "agentExamplesZh": [
+        "打开任务板",
+        "带我去看定时任务"
+      ],
+      "agentExamplesEn": [
+        "Open the task board",
+        "Take me to scheduled jobs"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.todos.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.tasks-automation",
+        "任务板与定时任务",
+        "Task board & scheduled jobs",
+        "扩展与自动化",
+        "Extensions & automation",
+        "任务板",
+        "待办",
+        "Todo",
+        "定时任务",
+        "计划任务",
+        "Cron",
+        "task board",
+        "todo",
+        "scheduled job",
+        "automation",
+        "cron",
+        "recurring task",
+        "查看和整理待办",
+        "创建一次性或重复任务",
+        "为本地或远程工作区安排执行",
+        "Review and organize todos",
+        "Create one-time or recurring jobs",
+        "Schedule work for local or remote workspaces",
+        "按待处理、日历和已停用视图浏览任务",
+        "Browse tasks in Pending, Calendar, and Inactive views",
+        "创建、编辑、启用、停用和删除定时任务",
+        "Create, edit, enable, disable, and delete scheduled jobs",
+        "设置一次性、每日、每周或自定义 Cron 时间表",
+        "Choose one-time, daily, weekly, or custom cron schedules",
+        "在日历中预览任务的下一次与后续运行时间",
+        "Preview the next and future job occurrences on a calendar",
+        "为任务选择 Agent、模型、工作模式和工作区",
+        "Choose the agent, model, work mode, and workspace for a job",
+        "把任务安排在当前主机或已连接的远程目标上运行",
+        "Schedule jobs to run on the current host or a connected remote target",
+        "查看任务列表并等待桌面 Host 就绪后可靠执行",
+        "List jobs and wait for desktop-host readiness before reliable execution"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.tasks-automation/"
+    },
+    {
+      "id": "feature.insights",
+      "kind": "feature",
+      "categoryId": "automation",
+      "titleZh": "Insights 工作洞察",
+      "titleEn": "Insights",
+      "summaryZh": "把会话和项目活动汇总成可读的洞察，帮助回顾工作方式、用量和进展。",
+      "summaryEn": "Turn session and project activity into readable insights about working patterns, usage, and progress.",
+      "keywordsZh": [
+        "洞察",
+        "分析",
+        "统计",
+        "工作报告",
+        "用量"
+      ],
+      "keywordsEn": [
+        "insights",
+        "analytics",
+        "statistics",
+        "work report",
+        "usage"
+      ],
+      "highlightsZh": [
+        "生成工作洞察",
+        "查看最新报告",
+        "结合 Token 用量理解成本"
+      ],
+      "highlightsEn": [
+        "Generate work insights",
+        "Read the latest report",
+        "Relate activity to token usage"
+      ],
+      "items": [
+        {
+          "id": "availability",
+          "titleZh": "检查当前账户与会话是否已有可分析的洞察数据",
+          "titleEn": "Check whether the current account and sessions contain analyzable insight data"
+        },
+        {
+          "id": "generate",
+          "titleZh": "按所选日期范围和模型生成工作洞察报告",
+          "titleEn": "Generate a work-insights report for a selected date range and model"
+        },
+        {
+          "id": "cancel",
+          "titleZh": "取消正在运行的洞察生成任务",
+          "titleEn": "Cancel an in-progress insights generation job"
+        },
+        {
+          "id": "latest-report",
+          "titleZh": "查看最新报告或加载指定的历史报告",
+          "titleEn": "Open the latest report or load a selected historical report"
+        },
+        {
+          "id": "usage-statistics",
+          "titleZh": "把工作活动与模型、Token 和缓存用量统计关联起来",
+          "titleEn": "Relate work activity to model, token, and cache-usage statistics"
+        },
+        {
+          "id": "patterns",
+          "titleZh": "回顾项目分布、工作时段、任务类型和协作习惯",
+          "titleEn": "Review project distribution, working hours, task types, and collaboration patterns"
+        }
+      ],
+      "stepsZh": [
+        "打开 Insights",
+        "选择可用的数据范围",
+        "生成或查看最新报告"
+      ],
+      "stepsEn": [
+        "Open Insights",
+        "Choose the available data scope",
+        "Generate or read the latest report"
+      ],
+      "agentExamplesZh": [
+        "打开 Insights",
+        "带我查看工作洞察"
+      ],
+      "agentExamplesEn": [
+        "Open Insights",
+        "Show me my work insights"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.insights.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.insights",
+        "Insights 工作洞察",
+        "Insights",
+        "扩展与自动化",
+        "Extensions & automation",
+        "洞察",
+        "分析",
+        "统计",
+        "工作报告",
+        "用量",
+        "insights",
+        "analytics",
+        "statistics",
+        "work report",
+        "usage",
+        "生成工作洞察",
+        "查看最新报告",
+        "结合 Token 用量理解成本",
+        "Generate work insights",
+        "Read the latest report",
+        "Relate activity to token usage",
+        "检查当前账户与会话是否已有可分析的洞察数据",
+        "Check whether the current account and sessions contain analyzable insight data",
+        "按所选日期范围和模型生成工作洞察报告",
+        "Generate a work-insights report for a selected date range and model",
+        "取消正在运行的洞察生成任务",
+        "Cancel an in-progress insights generation job",
+        "查看最新报告或加载指定的历史报告",
+        "Open the latest report or load a selected historical report",
+        "把工作活动与模型、Token 和缓存用量统计关联起来",
+        "Relate work activity to model, token, and cache-usage statistics",
+        "回顾项目分布、工作时段、任务类型和协作习惯",
+        "Review project distribution, working hours, task types, and collaboration patterns"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.insights/"
+    },
+    {
+      "id": "feature.ecosystem-compatibility",
+      "kind": "feature",
+      "categoryId": "automation",
+      "titleZh": "外部 AI 生态兼容",
+      "titleEn": "External AI ecosystem compatibility",
+      "summaryZh": "发现并迁移 OpenCode、Claude Code、Codex 等外部 AI 工具的配置、命令、Hooks 与 MCP 资源。",
+      "summaryEn": "Discover and migrate configuration, commands, hooks, and MCP resources from OpenCode, Claude Code, Codex, and other AI tools.",
+      "keywordsZh": [
+        "生态兼容",
+        "外部 AI",
+        "迁移配置",
+        "OpenCode",
+        "Claude Code",
+        "Codex",
+        "导入"
+      ],
+      "keywordsEn": [
+        "ecosystem compatibility",
+        "external AI",
+        "configuration migration",
+        "OpenCode",
+        "Claude Code",
+        "Codex",
+        "import"
+      ],
+      "highlightsZh": [
+        "扫描外部 AI 应用",
+        "预览冲突与迁移计划",
+        "按项导入提示词、Hooks、Agent 与 MCP"
+      ],
+      "highlightsEn": [
+        "Scan external AI applications",
+        "Preview conflicts and migration plans",
+        "Import prompts, hooks, agents, and MCP selectively"
+      ],
+      "items": [
+        {
+          "id": "source-discovery",
+          "titleZh": "发现 OpenCode、Claude Code、Codex 等外部 AI 来源与可用内容",
+          "titleEn": "Discover OpenCode, Claude Code, Codex, and other external AI sources and content"
+        },
+        {
+          "id": "source-policy",
+          "titleZh": "按来源启用或停用集成，并选择管理、预览或只读策略",
+          "titleEn": "Enable or disable each source and choose managed, preview, or read-only policy"
+        },
+        {
+          "id": "prompts-commands",
+          "titleZh": "展开外部 Prompt/Command 内容并处理与原生命令的冲突",
+          "titleEn": "Expand external prompt/command content and resolve conflicts with native commands"
+        },
+        {
+          "id": "subagents",
+          "titleZh": "导入或启用外部 Agent，处理同名冲突并绑定模型",
+          "titleEn": "Import or enable external agents, resolve naming conflicts, and bind models"
+        },
+        {
+          "id": "mcp-import",
+          "titleZh": "预览 MCP 导入计划，逐个处理服务器冲突并应用",
+          "titleEn": "Preview MCP import plans, resolve server conflicts individually, and apply them"
+        },
+        {
+          "id": "tool-targets",
+          "titleZh": "选择外部工具目标、解决冲突并控制是否启用",
+          "titleEn": "Choose external tool targets, resolve conflicts, and control activation"
+        },
+        {
+          "id": "hooks",
+          "titleZh": "查看外部 Hooks 目录、规划导入、修改选择并应用",
+          "titleEn": "Inspect external hook catalogs, plan imports, edit selections, and apply"
+        },
+        {
+          "id": "security-review",
+          "titleZh": "在迁移前查看冲突、安全影响和来源控制快照",
+          "titleEn": "Review conflicts, security impact, and source-control snapshots before migration"
+        },
+        {
+          "id": "reveal-source",
+          "titleZh": "在文件管理器或远程环境中定位外部配置来源",
+          "titleEn": "Reveal external configuration sources in the file manager or remote environment"
+        }
+      ],
+      "stepsZh": [
+        "打开“生态兼容”",
+        "选择来源并查看扫描结果",
+        "确认计划后导入需要的内容"
+      ],
+      "stepsEn": [
+        "Open Ecosystem Compatibility",
+        "Choose a source and review the scan",
+        "Confirm the plan and import selected content"
+      ],
+      "agentExamplesZh": [
+        "打开外部 AI 生态兼容",
+        "我想迁移 Claude Code 的配置"
+      ],
+      "agentExamplesEn": [
+        "Open external AI ecosystem compatibility",
+        "I want to migrate my Claude Code configuration"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "surface.ecosystemCompatibility.open"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.ecosystem-compatibility",
+        "外部 AI 生态兼容",
+        "External AI ecosystem compatibility",
+        "扩展与自动化",
+        "Extensions & automation",
+        "生态兼容",
+        "外部 AI",
+        "迁移配置",
+        "OpenCode",
+        "Claude Code",
+        "Codex",
+        "导入",
+        "ecosystem compatibility",
+        "external AI",
+        "configuration migration",
+        "import",
+        "扫描外部 AI 应用",
+        "预览冲突与迁移计划",
+        "按项导入提示词、Hooks、Agent 与 MCP",
+        "Scan external AI applications",
+        "Preview conflicts and migration plans",
+        "Import prompts, hooks, agents, and MCP selectively",
+        "发现 OpenCode、Claude Code、Codex 等外部 AI 来源与可用内容",
+        "Discover OpenCode, Claude Code, Codex, and other external AI sources and content",
+        "按来源启用或停用集成，并选择管理、预览或只读策略",
+        "Enable or disable each source and choose managed, preview, or read-only policy",
+        "展开外部 Prompt/Command 内容并处理与原生命令的冲突",
+        "Expand external prompt/command content and resolve conflicts with native commands",
+        "导入或启用外部 Agent，处理同名冲突并绑定模型",
+        "Import or enable external agents, resolve naming conflicts, and bind models",
+        "预览 MCP 导入计划，逐个处理服务器冲突并应用",
+        "Preview MCP import plans, resolve server conflicts individually, and apply them",
+        "选择外部工具目标、解决冲突并控制是否启用",
+        "Choose external tool targets, resolve conflicts, and control activation",
+        "查看外部 Hooks 目录、规划导入、修改选择并应用",
+        "Inspect external hook catalogs, plan imports, edit selections, and apply",
+        "在迁移前查看冲突、安全影响和来源控制快照",
+        "Review conflicts, security impact, and source-control snapshots before migration",
+        "在文件管理器或远程环境中定位外部配置来源",
+        "Reveal external configuration sources in the file manager or remote environment"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.ecosystem-compatibility/"
+    },
+    {
+      "id": "feature.remote-workspaces",
+      "kind": "feature",
+      "categoryId": "connect",
+      "titleZh": "远程工作区",
+      "titleEn": "Remote workspaces",
+      "summaryZh": "通过 SSH 或容器在远程主机上打开项目，让文件、搜索、终端和 Agent 都在目标环境执行。",
+      "summaryEn": "Open projects over SSH or in containers so files, search, terminal, and agents all execute in the target environment.",
+      "keywordsZh": [
+        "远程工作区",
+        "SSH",
+        "远程项目",
+        "容器",
+        "跳板机",
+        "远程开发"
+      ],
+      "keywordsEn": [
+        "remote workspace",
+        "SSH",
+        "remote project",
+        "container",
+        "jump host",
+        "remote development"
+      ],
+      "highlightsZh": [
+        "保存 SSH 连接配置",
+        "上传下载与远程文件操作",
+        "在远程环境运行终端和 Agent"
+      ],
+      "highlightsEn": [
+        "Save SSH connection profiles",
+        "Transfer and edit remote files",
+        "Run terminals and agents in the remote environment"
+      ],
+      "items": [
+        {
+          "id": "ssh-profiles",
+          "titleZh": "保存、列出、测试和删除 SSH 连接配置",
+          "titleEn": "Save, list, test, and delete SSH connection profiles"
+        },
+        {
+          "id": "ssh-auth",
+          "titleZh": "使用密码、私钥、证书、SSH Config Host 与跳板机连接",
+          "titleEn": "Connect with passwords, private keys, certificates, SSH config hosts, and jump hosts"
+        },
+        {
+          "id": "docker",
+          "titleZh": "发现远程 Docker 容器并把容器作为工作环境",
+          "titleEn": "Discover remote Docker containers and use a container as the work environment"
+        },
+        {
+          "id": "remote-open",
+          "titleZh": "打开、关闭和移除远程工作区，并读取服务器信息",
+          "titleEn": "Open, close, and remove remote workspaces, and inspect server information"
+        },
+        {
+          "id": "remote-files",
+          "titleZh": "浏览、读取、写入、创建、重命名和删除远程文件与目录",
+          "titleEn": "Browse, read, write, create, rename, and remove remote files and directories"
+        },
+        {
+          "id": "transfer",
+          "titleZh": "上传本地文件、下载远程文件并取消进行中的传输",
+          "titleEn": "Upload local files, download remote files, and cancel active transfers"
+        },
+        {
+          "id": "remote-execution",
+          "titleZh": "在目标主机执行命令，让终端、搜索和 Agent 使用远程数据面",
+          "titleEn": "Execute commands on the target so terminals, search, and agents use the remote data plane"
+        },
+        {
+          "id": "port-forwarding",
+          "titleZh": "发现远程监听端口并启动、查看或停止端口转发",
+          "titleEn": "Discover remote listening ports and start, inspect, or stop port forwarding"
+        },
+        {
+          "id": "connection-lifecycle",
+          "titleZh": "查看连接状态并断开单个或全部 SSH 会话",
+          "titleEn": "Inspect connection status and disconnect one or all SSH sessions"
+        }
+      ],
+      "stepsZh": [
+        "打开新建项目",
+        "选择远程连接方式",
+        "配置主机并测试连接后打开工作区"
+      ],
+      "stepsEn": [
+        "Open New Project",
+        "Choose a remote connection type",
+        "Configure and test the host, then open the workspace"
+      ],
+      "agentExamplesZh": [
+        "打开远程项目配置",
+        "我想连接一个 SSH 工作区"
+      ],
+      "agentExamplesEn": [
+        "Open remote-project setup",
+        "I want to connect to an SSH workspace"
+      ],
+      "destination": {
+        "kind": "action",
+        "actionId": "project.new"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.remote-workspaces",
+        "远程工作区",
+        "Remote workspaces",
+        "连接与发布",
+        "Connect & publish",
+        "SSH",
+        "远程项目",
+        "容器",
+        "跳板机",
+        "远程开发",
+        "remote workspace",
+        "remote project",
+        "container",
+        "jump host",
+        "remote development",
+        "保存 SSH 连接配置",
+        "上传下载与远程文件操作",
+        "在远程环境运行终端和 Agent",
+        "Save SSH connection profiles",
+        "Transfer and edit remote files",
+        "Run terminals and agents in the remote environment",
+        "保存、列出、测试和删除 SSH 连接配置",
+        "Save, list, test, and delete SSH connection profiles",
+        "使用密码、私钥、证书、SSH Config Host 与跳板机连接",
+        "Connect with passwords, private keys, certificates, SSH config hosts, and jump hosts",
+        "发现远程 Docker 容器并把容器作为工作环境",
+        "Discover remote Docker containers and use a container as the work environment",
+        "打开、关闭和移除远程工作区，并读取服务器信息",
+        "Open, close, and remove remote workspaces, and inspect server information",
+        "浏览、读取、写入、创建、重命名和删除远程文件与目录",
+        "Browse, read, write, create, rename, and remove remote files and directories",
+        "上传本地文件、下载远程文件并取消进行中的传输",
+        "Upload local files, download remote files, and cancel active transfers",
+        "在目标主机执行命令，让终端、搜索和 Agent 使用远程数据面",
+        "Execute commands on the target so terminals, search, and agents use the remote data plane",
+        "发现远程监听端口并启动、查看或停止端口转发",
+        "Discover remote listening ports and start, inspect, or stop port forwarding",
+        "查看连接状态并断开单个或全部 SSH 会话",
+        "Inspect connection status and disconnect one or all SSH sessions"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.remote-workspaces/"
+    },
+    {
+      "id": "feature.remote-connect",
+      "kind": "feature",
+      "categoryId": "connect",
+      "titleZh": "Remote Connect 与多设备",
+      "titleEn": "Remote Connect & devices",
+      "summaryZh": "从手机、Bot 或另一台 BitFun 设备连接当前主机，远程查看会话、回答权限并继续工作。",
+      "summaryEn": "Connect to this host from mobile, a bot, or another BitFun device to inspect sessions, answer permissions, and continue work remotely.",
+      "keywordsZh": [
+        "Remote Connect",
+        "远程控制",
+        "手机",
+        "飞书",
+        "Telegram",
+        "微信",
+        "多设备",
+        "Peer Device",
+        "账户同步"
+      ],
+      "keywordsEn": [
+        "remote connect",
+        "remote control",
+        "mobile",
+        "Feishu",
+        "Telegram",
+        "WeChat",
+        "multi-device",
+        "peer device",
+        "account sync"
+      ],
+      "highlightsZh": [
+        "通过局域网、Ngrok 或自建 Relay 连接",
+        "接入飞书、Telegram 或微信 Bot",
+        "登录账户、同步会话并进入 Peer Device Mode"
+      ],
+      "highlightsEn": [
+        "Connect through LAN, Ngrok, or a self-hosted relay",
+        "Use Feishu, Telegram, or WeChat bots",
+        "Sign in, sync sessions, and enter Peer Device Mode"
+      ],
+      "items": [
+        {
+          "id": "connection-methods",
+          "titleZh": "选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器",
+          "titleEn": "Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server"
+        },
+        {
+          "id": "start-stop-status",
+          "titleZh": "启动、停止 Remote Connect 并查看实时连接状态和设备信息",
+          "titleEn": "Start or stop Remote Connect and inspect live status and device information"
+        },
+        {
+          "id": "network",
+          "titleZh": "查看局域网 IP、网络信息与可分享的连接配置",
+          "titleEn": "Inspect LAN IP, network details, and shareable connection configuration"
+        },
+        {
+          "id": "bots",
+          "titleZh": "配置飞书、Telegram、微信等 Bot 并单独停止 Bot",
+          "titleEn": "Configure Feishu, Telegram, WeChat, and other bots, and stop a bot independently"
+        },
+        {
+          "id": "relay-wizard",
+          "titleZh": "通过向导预检、安装 Docker、部署、注册并验证自建 Relay",
+          "titleEn": "Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard"
+        },
+        {
+          "id": "account",
+          "titleZh": "登录、退出并查看账户状态和凭据提示",
+          "titleEn": "Sign in, sign out, and inspect account status and credential hints"
+        },
+        {
+          "id": "devices",
+          "titleZh": "列出、连接、查看在线状态和删除同账户设备",
+          "titleEn": "List, connect, inspect online status, and remove same-account devices"
+        },
+        {
+          "id": "session-sync",
+          "titleZh": "同步、导出、导入、删除或发送会话到另一台设备",
+          "titleEn": "Sync, export, import, delete, or send sessions to another device"
+        },
+        {
+          "id": "settings-sync",
+          "titleZh": "在设备间自动或手动同步 BitFun 设置",
+          "titleEn": "Synchronize BitFun settings across devices automatically or on demand"
+        },
+        {
+          "id": "peer-device",
+          "titleZh": "进入 Peer Device Mode，把另一台 BitFun 设备作为命令与事件数据面",
+          "titleEn": "Enter Peer Device Mode and use another BitFun device as the command and event data plane"
+        }
+      ],
+      "stepsZh": [
+        "打开 Remote Connect",
+        "选择网络、Bot 或账户",
+        "按向导连接并确认安全提示"
+      ],
+      "stepsEn": [
+        "Open Remote Connect",
+        "Choose Network, Bot, or Account",
+        "Follow the connection flow and review its security notice"
+      ],
+      "agentExamplesZh": [
+        "打开 Remote Connect",
+        "我想配置手机远程控制",
+        "带我管理已连接设备"
+      ],
+      "agentExamplesEn": [
+        "Open Remote Connect",
+        "I want to configure mobile remote control",
+        "Take me to connected-device management"
+      ],
+      "destination": {
+        "kind": "event",
+        "eventName": "bitfun:open-remote-connect"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.remote-connect",
+        "Remote Connect 与多设备",
+        "Remote Connect & devices",
+        "连接与发布",
+        "Connect & publish",
+        "Remote Connect",
+        "远程控制",
+        "手机",
+        "飞书",
+        "Telegram",
+        "微信",
+        "多设备",
+        "Peer Device",
+        "账户同步",
+        "remote connect",
+        "remote control",
+        "mobile",
+        "Feishu",
+        "WeChat",
+        "multi-device",
+        "peer device",
+        "account sync",
+        "通过局域网、Ngrok 或自建 Relay 连接",
+        "接入飞书、Telegram 或微信 Bot",
+        "登录账户、同步会话并进入 Peer Device Mode",
+        "Connect through LAN, Ngrok, or a self-hosted relay",
+        "Use Feishu, Telegram, or WeChat bots",
+        "Sign in, sync sessions, and enter Peer Device Mode",
+        "选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器",
+        "Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server",
+        "启动、停止 Remote Connect 并查看实时连接状态和设备信息",
+        "Start or stop Remote Connect and inspect live status and device information",
+        "查看局域网 IP、网络信息与可分享的连接配置",
+        "Inspect LAN IP, network details, and shareable connection configuration",
+        "配置飞书、Telegram、微信等 Bot 并单独停止 Bot",
+        "Configure Feishu, Telegram, WeChat, and other bots, and stop a bot independently",
+        "通过向导预检、安装 Docker、部署、注册并验证自建 Relay",
+        "Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard",
+        "登录、退出并查看账户状态和凭据提示",
+        "Sign in, sign out, and inspect account status and credential hints",
+        "列出、连接、查看在线状态和删除同账户设备",
+        "List, connect, inspect online status, and remove same-account devices",
+        "同步、导出、导入、删除或发送会话到另一台设备",
+        "Sync, export, import, delete, or send sessions to another device",
+        "在设备间自动或手动同步 BitFun 设置",
+        "Synchronize BitFun settings across devices automatically or on demand",
+        "进入 Peer Device Mode，把另一台 BitFun 设备作为命令与事件数据面",
+        "Enter Peer Device Mode and use another BitFun device as the command and event data plane"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.remote-connect/"
+    },
+    {
+      "id": "feature.detached-dispatch",
+      "kind": "feature",
+      "categoryId": "connect",
+      "titleZh": "Detached Dispatch 远程派发",
+      "titleEn": "Detached Dispatch",
+      "summaryZh": "把可持续运行的任务派发到另一台 BitFun 主机；控制端可以断开，目标主机继续执行并保留记录。",
+      "summaryEn": "Dispatch durable work to another BitFun host; the controller may disconnect while the target continues and keeps the record.",
+      "keywordsZh": [
+        "派发任务",
+        "Detached Dispatch",
+        "远程执行",
+        "目标主机",
+        "离线任务"
+      ],
+      "keywordsEn": [
+        "detached dispatch",
+        "dispatch task",
+        "remote execution",
+        "target host",
+        "offline job"
+      ],
+      "highlightsZh": [
+        "发现与探测目标主机",
+        "派发、继续或取消任务",
+        "断线后重新加载事件与执行记录"
+      ],
+      "highlightsEn": [
+        "Discover and probe target hosts",
+        "Dispatch, continue, or cancel jobs",
+        "Reload events and execution history after reconnecting"
+      ],
+      "items": [
+        {
+          "id": "targets",
+          "titleZh": "列出可派发目标并探测版本、连接和运行能力",
+          "titleEn": "List dispatch targets and probe their version, connectivity, and runtime capabilities"
+        },
+        {
+          "id": "provision",
+          "titleZh": "为目标主机配置运行环境并安装或更新 BitFun CLI",
+          "titleEn": "Provision the target runtime and install or update the BitFun CLI"
+        },
+        {
+          "id": "model-sync",
+          "titleZh": "在提交任务前同步目标所需的模型配置",
+          "titleEn": "Synchronize required model configuration before submitting a job"
+        },
+        {
+          "id": "submit",
+          "titleZh": "把包含工作区、会话、模型和权限策略的持久任务提交到目标",
+          "titleEn": "Submit a durable job with workspace, session, model, and permission policy to the target"
+        },
+        {
+          "id": "status-list",
+          "titleZh": "列出派发任务并查询运行状态、结果和错误",
+          "titleEn": "List dispatched jobs and query their status, result, and errors"
+        },
+        {
+          "id": "transcript",
+          "titleZh": "保存、追加和重新加载可断线恢复的执行记录",
+          "titleEn": "Save, append, and reload reconnectable execution transcripts"
+        },
+        {
+          "id": "permission-continuation",
+          "titleZh": "远程回答权限请求，并继续或取消目标端任务",
+          "titleEn": "Answer permission requests remotely and continue or cancel target-side work"
+        },
+        {
+          "id": "result-sync",
+          "titleZh": "将目标端结果同步回控制端，而不把控制端当作远程文件系统代理",
+          "titleEn": "Synchronize target-side results back without treating the controller as a remote-filesystem proxy"
+        }
+      ],
+      "stepsZh": [
+        "先在 Remote Connect 中登录并连接设备",
+        "从会话的派发入口选择目标",
+        "提交任务后在任务状态中跟踪"
+      ],
+      "stepsEn": [
+        "Sign in and connect devices through Remote Connect",
+        "Choose a target from the session dispatch flow",
+        "Submit the work and follow its job status"
+      ],
+      "agentExamplesZh": [
+        "打开设备管理，我想把任务派发到另一台机器",
+        "带我配置远程任务派发"
+      ],
+      "agentExamplesEn": [
+        "Open device management so I can dispatch work to another machine",
+        "Take me to remote task dispatch setup"
+      ],
+      "destination": {
+        "kind": "event",
+        "eventName": "bitfun:open-remote-connect",
+        "detail": {
+          "group": "account"
+        }
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.detached-dispatch",
+        "Detached Dispatch 远程派发",
+        "Detached Dispatch",
+        "连接与发布",
+        "Connect & publish",
+        "派发任务",
+        "远程执行",
+        "目标主机",
+        "离线任务",
+        "detached dispatch",
+        "dispatch task",
+        "remote execution",
+        "target host",
+        "offline job",
+        "发现与探测目标主机",
+        "派发、继续或取消任务",
+        "断线后重新加载事件与执行记录",
+        "Discover and probe target hosts",
+        "Dispatch, continue, or cancel jobs",
+        "Reload events and execution history after reconnecting",
+        "列出可派发目标并探测版本、连接和运行能力",
+        "List dispatch targets and probe their version, connectivity, and runtime capabilities",
+        "为目标主机配置运行环境并安装或更新 BitFun CLI",
+        "Provision the target runtime and install or update the BitFun CLI",
+        "在提交任务前同步目标所需的模型配置",
+        "Synchronize required model configuration before submitting a job",
+        "把包含工作区、会话、模型和权限策略的持久任务提交到目标",
+        "Submit a durable job with workspace, session, model, and permission policy to the target",
+        "列出派发任务并查询运行状态、结果和错误",
+        "List dispatched jobs and query their status, result, and errors",
+        "保存、追加和重新加载可断线恢复的执行记录",
+        "Save, append, and reload reconnectable execution transcripts",
+        "远程回答权限请求，并继续或取消目标端任务",
+        "Answer permission requests remotely and continue or cancel target-side work",
+        "将目标端结果同步回控制端，而不把控制端当作远程文件系统代理",
+        "Synchronize target-side results back without treating the controller as a remote-filesystem proxy"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.detached-dispatch/"
+    },
+    {
+      "id": "feature.pages",
+      "kind": "feature",
+      "categoryId": "connect",
+      "titleZh": "Pages 发布",
+      "titleEn": "Pages publishing",
+      "summaryZh": "保存页面版本并发布到公开或私有地址，管理标题、可见性、历史版本和分享链接。",
+      "summaryEn": "Save page versions and publish them to public or private URLs while managing titles, visibility, history, and share links.",
+      "keywordsZh": [
+        "Pages",
+        "发布网页",
+        "页面托管",
+        "分享链接",
+        "版本",
+        "部署"
+      ],
+      "keywordsEn": [
+        "pages",
+        "publish website",
+        "page hosting",
+        "share link",
+        "version",
+        "deploy"
+      ],
+      "highlightsZh": [
+        "保存页面版本",
+        "发布、取消发布或删除页面",
+        "更新标题和访问可见性"
+      ],
+      "highlightsEn": [
+        "Save page versions",
+        "Publish, unpublish, or delete pages",
+        "Update titles and access visibility"
+      ],
+      "items": [
+        {
+          "id": "pages-list",
+          "titleZh": "查看账户下的 Pages 与每个页面的当前发布状态",
+          "titleEn": "List account Pages and inspect each page's current publishing state"
+        },
+        {
+          "id": "immutable-versions",
+          "titleZh": "保存不可变页面版本并浏览版本历史",
+          "titleEn": "Save immutable page versions and browse version history"
+        },
+        {
+          "id": "publish",
+          "titleZh": "发布或重新部署选中的页面版本",
+          "titleEn": "Publish or redeploy a selected page version"
+        },
+        {
+          "id": "visibility",
+          "titleZh": "更新标题、公开/私有可见性和访问设置",
+          "titleEn": "Update titles, public/private visibility, and access settings"
+        },
+        {
+          "id": "share-open",
+          "titleZh": "创建可打开和分享的页面链接",
+          "titleEn": "Create an openable, shareable link for a page"
+        },
+        {
+          "id": "unpublish",
+          "titleZh": "取消发布页面，同时保留可再次发布的版本",
+          "titleEn": "Unpublish a page while retaining versions for later publication"
+        },
+        {
+          "id": "delete",
+          "titleZh": "删除单个版本或整个 Page",
+          "titleEn": "Delete an individual version or an entire Page"
+        }
+      ],
+      "stepsZh": [
+        "登录 BitFun 账户",
+        "打开 Pages",
+        "选择页面并确认发布与可见性"
+      ],
+      "stepsEn": [
+        "Sign in to a BitFun account",
+        "Open Pages",
+        "Choose a page and confirm publishing and visibility"
+      ],
+      "agentExamplesZh": [
+        "打开 Pages",
+        "带我管理已发布的页面"
+      ],
+      "agentExamplesEn": [
+        "Open Pages",
+        "Take me to my published pages"
+      ],
+      "destination": {
+        "kind": "scene",
+        "sceneId": "pages"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.pages",
+        "Pages 发布",
+        "Pages publishing",
+        "连接与发布",
+        "Connect & publish",
+        "Pages",
+        "发布网页",
+        "页面托管",
+        "分享链接",
+        "版本",
+        "部署",
+        "pages",
+        "publish website",
+        "page hosting",
+        "share link",
+        "version",
+        "deploy",
+        "保存页面版本",
+        "发布、取消发布或删除页面",
+        "更新标题和访问可见性",
+        "Save page versions",
+        "Publish, unpublish, or delete pages",
+        "Update titles and access visibility",
+        "查看账户下的 Pages 与每个页面的当前发布状态",
+        "List account Pages and inspect each page's current publishing state",
+        "保存不可变页面版本并浏览版本历史",
+        "Save immutable page versions and browse version history",
+        "发布或重新部署选中的页面版本",
+        "Publish or redeploy a selected page version",
+        "更新标题、公开/私有可见性和访问设置",
+        "Update titles, public/private visibility, and access settings",
+        "创建可打开和分享的页面链接",
+        "Create an openable, shareable link for a page",
+        "取消发布页面，同时保留可再次发布的版本",
+        "Unpublish a page while retaining versions for later publication",
+        "删除单个版本或整个 Page",
+        "Delete an individual version or an entire Page"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.pages/"
+    },
+    {
+      "id": "feature.voice-input",
+      "kind": "feature",
+      "categoryId": "application",
+      "titleZh": "语音输入",
+      "titleEn": "Voice input",
+      "summaryZh": "在聊天输入框中录音并转成文字，可选择本地模型、语言、麦克风与最长录音时间。",
+      "summaryEn": "Record speech in the chat composer and transcribe it to text, with control over local models, language, microphone, and duration.",
+      "keywordsZh": [
+        "语音输入",
+        "录音",
+        "转写",
+        "麦克风",
+        "语音模型",
+        "听写"
+      ],
+      "keywordsEn": [
+        "voice input",
+        "recording",
+        "transcription",
+        "microphone",
+        "speech model",
+        "dictation"
+      ],
+      "highlightsZh": [
+        "下载和校验本地语音模型",
+        "选择识别语言与麦克风",
+        "在发送前编辑转写文本"
+      ],
+      "highlightsEn": [
+        "Download and verify local speech models",
+        "Choose a recognition language and microphone",
+        "Edit transcribed text before sending"
+      ],
+      "items": [
+        {
+          "id": "composer-recording",
+          "titleZh": "从聊天输入框开始、结束或取消一次录音",
+          "titleEn": "Start, finish, or cancel a recording from the chat composer"
+        },
+        {
+          "id": "stream-audio",
+          "titleZh": "录音过程中分块传输音频并显示识别进度",
+          "titleEn": "Stream audio chunks during recording and show recognition progress"
+        },
+        {
+          "id": "local-models",
+          "titleZh": "查看本地语音模型及安装、下载、验证、修复和删除状态",
+          "titleEn": "Browse local speech models and their install, download, verify, repair, and delete states"
+        },
+        {
+          "id": "cancel-download",
+          "titleZh": "取消正在进行的语音模型下载",
+          "titleEn": "Cancel an in-progress speech-model download"
+        },
+        {
+          "id": "language-microphone",
+          "titleZh": "选择自动检测或指定识别语言，并选择系统麦克风",
+          "titleEn": "Use automatic language detection or choose a language and system microphone"
+        },
+        {
+          "id": "diagnostic-test",
+          "titleZh": "在设置页进行麦克风与语音识别测试并查看耗时和错误",
+          "titleEn": "Test the microphone and speech recognition in Settings, including timing and errors"
+        },
+        {
+          "id": "edit-transcript",
+          "titleZh": "把转写结果放回输入框，在发送前继续编辑",
+          "titleEn": "Return the transcript to the composer for editing before sending"
+        }
+      ],
+      "stepsZh": [
+        "打开输入设置的“语音”页",
+        "启用语音并准备模型",
+        "在聊天输入框点击麦克风开始录音"
+      ],
+      "stepsEn": [
+        "Open the Voice input settings view",
+        "Enable voice and prepare a model",
+        "Use the microphone button in the chat composer"
+      ],
+      "agentExamplesZh": [
+        "打开语音输入设置",
+        "帮我配置听写功能"
+      ],
+      "agentExamplesEn": [
+        "Open voice-input settings",
+        "Help me configure dictation"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.input",
+        "viewId": "voice"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.voice-input",
+        "语音输入",
+        "Voice input",
+        "应用设置",
+        "Application settings",
+        "录音",
+        "转写",
+        "麦克风",
+        "语音模型",
+        "听写",
+        "voice input",
+        "recording",
+        "transcription",
+        "microphone",
+        "speech model",
+        "dictation",
+        "下载和校验本地语音模型",
+        "选择识别语言与麦克风",
+        "在发送前编辑转写文本",
+        "Download and verify local speech models",
+        "Choose a recognition language and microphone",
+        "Edit transcribed text before sending",
+        "从聊天输入框开始、结束或取消一次录音",
+        "Start, finish, or cancel a recording from the chat composer",
+        "录音过程中分块传输音频并显示识别进度",
+        "Stream audio chunks during recording and show recognition progress",
+        "查看本地语音模型及安装、下载、验证、修复和删除状态",
+        "Browse local speech models and their install, download, verify, repair, and delete states",
+        "取消正在进行的语音模型下载",
+        "Cancel an in-progress speech-model download",
+        "选择自动检测或指定识别语言，并选择系统麦克风",
+        "Use automatic language detection or choose a language and system microphone",
+        "在设置页进行麦克风与语音识别测试并查看耗时和错误",
+        "Test the microphone and speech recognition in Settings, including timing and errors",
+        "把转写结果放回输入框，在发送前继续编辑",
+        "Return the transcript to the composer for editing before sending"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.voice-input/"
+    },
+    {
+      "id": "feature.desktop-pet",
+      "kind": "feature",
+      "categoryId": "application",
+      "titleZh": "Agent 桌面伙伴",
+      "titleEn": "Agent desktop companion",
+      "summaryZh": "在输入框或桌面上显示 Agent 伙伴，并选择、导入或管理 Petdex 角色包。",
+      "summaryEn": "Show an agent companion in the composer or on the desktop, and choose, import, or manage Petdex character packs.",
+      "keywordsZh": [
+        "桌面宠物",
+        "Agent 伙伴",
+        "Petdex",
+        "像素宠物",
+        "角色包"
+      ],
+      "keywordsEn": [
+        "desktop pet",
+        "agent companion",
+        "Petdex",
+        "pixel pet",
+        "character pack"
+      ],
+      "highlightsZh": [
+        "在桌面或输入框显示伙伴",
+        "选择预设角色",
+        "导入和删除 Petdex 包"
+      ],
+      "highlightsEn": [
+        "Show the companion on desktop or in the composer",
+        "Choose a preset character",
+        "Import and remove Petdex packs"
+      ],
+      "items": [
+        {
+          "id": "enable",
+          "titleZh": "整体启用或停用 Agent 桌面伙伴",
+          "titleEn": "Enable or disable the agent desktop companion globally"
+        },
+        {
+          "id": "display-modes",
+          "titleZh": "选择在聊天输入框、独立桌面窗口或两处显示",
+          "titleEn": "Show the companion in the chat composer, a desktop window, or both"
+        },
+        {
+          "id": "presets",
+          "titleZh": "查看并切换内置 Petdex 角色预设",
+          "titleEn": "Browse and switch among built-in Petdex character presets"
+        },
+        {
+          "id": "petdex-import",
+          "titleZh": "从本地 Petdex 包导入新的角色与动画",
+          "titleEn": "Import new characters and animations from a local Petdex package"
+        },
+        {
+          "id": "petdex-delete",
+          "titleZh": "删除已导入的 Petdex 包并回退到可用角色",
+          "titleEn": "Delete an imported Petdex package and fall back to an available character"
+        },
+        {
+          "id": "desktop-window",
+          "titleZh": "显示、隐藏和调整独立桌面伙伴窗口大小，并可回到主窗口",
+          "titleEn": "Show, hide, and resize the desktop companion window, and return to the main window"
+        }
+      ],
+      "stepsZh": [
+        "打开桌面伙伴设置",
+        "启用伙伴并选择显示位置",
+        "选择预设或导入 Petdex 包"
+      ],
+      "stepsEn": [
+        "Open Companion settings",
+        "Enable it and choose where it appears",
+        "Choose a preset or import a Petdex pack"
+      ],
+      "agentExamplesZh": [
+        "打开桌面宠物设置",
+        "带我配置 Agent 伙伴"
+      ],
+      "agentExamplesEn": [
+        "Open desktop-pet settings",
+        "Take me to agent-companion setup"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.pet"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.desktop-pet",
+        "Agent 桌面伙伴",
+        "Agent desktop companion",
+        "应用设置",
+        "Application settings",
+        "桌面宠物",
+        "Agent 伙伴",
+        "Petdex",
+        "像素宠物",
+        "角色包",
+        "desktop pet",
+        "agent companion",
+        "pixel pet",
+        "character pack",
+        "在桌面或输入框显示伙伴",
+        "选择预设角色",
+        "导入和删除 Petdex 包",
+        "Show the companion on desktop or in the composer",
+        "Choose a preset character",
+        "Import and remove Petdex packs",
+        "整体启用或停用 Agent 桌面伙伴",
+        "Enable or disable the agent desktop companion globally",
+        "选择在聊天输入框、独立桌面窗口或两处显示",
+        "Show the companion in the chat composer, a desktop window, or both",
+        "查看并切换内置 Petdex 角色预设",
+        "Browse and switch among built-in Petdex character presets",
+        "从本地 Petdex 包导入新的角色与动画",
+        "Import new characters and animations from a local Petdex package",
+        "删除已导入的 Petdex 包并回退到可用角色",
+        "Delete an imported Petdex package and fall back to an available character",
+        "显示、隐藏和调整独立桌面伙伴窗口大小，并可回到主窗口",
+        "Show, hide, and resize the desktop companion window, and return to the main window"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.desktop-pet/"
+    },
+    {
+      "id": "setting.application.general",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "常规设置",
+      "titleEn": "General settings",
+      "summaryZh": "管理启动、更新、关闭行为、通知与睡眠保持等应用级偏好。",
+      "summaryEn": "Manage app-level preferences for startup, updates, close behavior, notifications, and sleep prevention.",
+      "keywordsZh": [
+        "常规设置",
+        "开机启动",
+        "自动更新",
+        "通知",
+        "关闭按钮",
+        "阻止睡眠"
+      ],
+      "keywordsEn": [
+        "general settings",
+        "launch at login",
+        "auto update",
+        "notifications",
+        "close button",
+        "prevent sleep"
+      ],
+      "highlightsZh": [
+        "开机启动与自动更新",
+        "窗口关闭和托盘行为",
+        "任务完成、权限请求与启动提示通知"
+      ],
+      "highlightsEn": [
+        "Launch-at-login and automatic updates",
+        "Window close and tray behavior",
+        "Completion, permission, and startup-tip notifications"
+      ],
+      "items": [
+        {
+          "id": "automatic-updates",
+          "titleZh": "启用或停用自动检查更新",
+          "titleEn": "Enable or disable automatic update checks"
+        },
+        {
+          "id": "manual-update",
+          "titleZh": "手动检查、下载并安装可用更新，然后按需重启",
+          "titleEn": "Check for, download, and install an available update manually, then restart when needed"
+        },
+        {
+          "id": "launch-at-login",
+          "titleZh": "控制 BitFun 是否在登录系统后自动启动",
+          "titleEn": "Choose whether BitFun launches automatically after system sign-in"
+        },
+        {
+          "id": "prevent-sleep",
+          "titleZh": "在长任务运行时阻止电脑自动睡眠",
+          "titleEn": "Prevent the computer from sleeping while long-running work is active"
+        },
+        {
+          "id": "close-behavior",
+          "titleZh": "选择关闭主窗口时退出、最小化到托盘或每次询问",
+          "titleEn": "Choose whether closing the main window quits, minimizes to tray, or asks each time"
+        },
+        {
+          "id": "notifications",
+          "titleZh": "分别控制任务完成、权限请求和启动提示通知",
+          "titleEn": "Control completion, permission-request, and startup-tip notifications independently"
+        },
+        {
+          "id": "announcements",
+          "titleZh": "查看、标记已读、忽略或永久隐藏产品公告与提示",
+          "titleEn": "Review, mark seen, dismiss, or permanently hide product announcements and tips"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用 > 常规”",
+        "修改开关；变更会自动保存"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Application > General",
+        "Change a control; updates are saved automatically"
+      ],
+      "agentExamplesZh": [
+        "关闭自动更新",
+        "以后关闭窗口时最小化到托盘",
+        "打开常规设置"
+      ],
+      "agentExamplesEn": [
+        "Turn off automatic updates",
+        "Minimize to tray when I close the window",
+        "Open General settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.general"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "auto-update",
+          "titleZh": "自动检查更新",
+          "titleEn": "Automatic updates",
+          "descriptionZh": "启动后自动检查可用更新。",
+          "descriptionEn": "Check for available updates automatically after startup.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "close-button-behavior",
+          "titleZh": "关闭按钮行为",
+          "titleEn": "Close button behavior",
+          "descriptionZh": "选择退出应用或最小化到托盘。",
+          "descriptionEn": "Choose whether closing quits the app or minimizes it to the tray.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "minimize_to_tray",
+              "quit"
+            ]
+          }
+        },
+        {
+          "id": "completion-notification",
+          "titleZh": "任务完成通知",
+          "titleEn": "Completion notifications",
+          "descriptionZh": "会话任务完成时发送系统通知。",
+          "descriptionEn": "Send an OS notification when session work completes.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "permission-notification",
+          "titleZh": "权限请求通知",
+          "titleEn": "Permission request notifications",
+          "descriptionZh": "Agent 等待权限确认时发送系统通知。",
+          "descriptionEn": "Send an OS notification when an agent waits for permission.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "startup-tips",
+          "titleZh": "启动提示",
+          "titleEn": "Startup tips",
+          "descriptionZh": "启动后显示功能提示。",
+          "descriptionEn": "Show product tips after startup.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.application.general",
+        "常规设置",
+        "General settings",
+        "应用设置",
+        "Application settings",
+        "开机启动",
+        "自动更新",
+        "通知",
+        "关闭按钮",
+        "阻止睡眠",
+        "general settings",
+        "launch at login",
+        "auto update",
+        "notifications",
+        "close button",
+        "prevent sleep",
+        "开机启动与自动更新",
+        "窗口关闭和托盘行为",
+        "任务完成、权限请求与启动提示通知",
+        "Launch-at-login and automatic updates",
+        "Window close and tray behavior",
+        "Completion, permission, and startup-tip notifications",
+        "启用或停用自动检查更新",
+        "Enable or disable automatic update checks",
+        "手动检查、下载并安装可用更新，然后按需重启",
+        "Check for, download, and install an available update manually, then restart when needed",
+        "控制 BitFun 是否在登录系统后自动启动",
+        "Choose whether BitFun launches automatically after system sign-in",
+        "在长任务运行时阻止电脑自动睡眠",
+        "Prevent the computer from sleeping while long-running work is active",
+        "选择关闭主窗口时退出、最小化到托盘或每次询问",
+        "Choose whether closing the main window quits, minimizes to tray, or asks each time",
+        "分别控制任务完成、权限请求和启动提示通知",
+        "Control completion, permission-request, and startup-tip notifications independently",
+        "查看、标记已读、忽略或永久隐藏产品公告与提示",
+        "Review, mark seen, dismiss, or permanently hide product announcements and tips"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.general/"
+    },
+    {
+      "id": "setting.application.appearance",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "外观与语言",
+      "titleEn": "Appearance & language",
+      "summaryZh": "切换主题与语言，调整字体和动效，并安装或导入外观包。",
+      "summaryEn": "Switch themes and languages, tune typography and motion, and install or import appearance packs.",
+      "keywordsZh": [
+        "外观",
+        "主题",
+        "深色模式",
+        "浅色模式",
+        "语言",
+        "字体",
+        "动效",
+        "皮肤"
+      ],
+      "keywordsEn": [
+        "appearance",
+        "theme",
+        "dark mode",
+        "light mode",
+        "language",
+        "font",
+        "motion",
+        "skin"
+      ],
+      "highlightsZh": [
+        "系统、深色与浅色主题",
+        "界面语言与字号",
+        "鼠标光效、动效和外观包"
+      ],
+      "highlightsEn": [
+        "System, dark, and light themes",
+        "UI language and font size",
+        "Mouse glow, motion, and appearance packs"
+      ],
+      "items": [
+        {
+          "id": "built-in-appearance",
+          "titleZh": "选择跟随系统、浅色、深色、单色、Midnight、中国风、Cyber、Slate 或 Tokyo Night 等内置外观",
+          "titleEn": "Choose system, light, dark, monochrome, Midnight, China, Cyber, Slate, Tokyo Night, and other built-in appearances"
+        },
+        {
+          "id": "language",
+          "titleZh": "切换简体中文、繁体中文、英文等受支持界面语言",
+          "titleEn": "Switch among Simplified Chinese, Traditional Chinese, English, and other supported UI languages"
+        },
+        {
+          "id": "ui-font-size",
+          "titleZh": "分别调整整个界面与聊天区字号，并支持自定义像素值",
+          "titleEn": "Adjust global UI and chat font sizes independently, including custom pixel values"
+        },
+        {
+          "id": "visual-effects",
+          "titleZh": "控制鼠标光效，并让动态背景尊重系统的减少动效偏好",
+          "titleEn": "Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference"
+        },
+        {
+          "id": "local-packages",
+          "titleZh": "导入、预览、应用、导出和删除本地外观包",
+          "titleEn": "Import, preview, apply, export, and delete local appearance packages"
+        },
+        {
+          "id": "appearance-market",
+          "titleZh": "浏览、搜索、筛选并安装或更新 Skin 市场外观",
+          "titleEn": "Browse, search, filter, install, and update appearances from the Skin market"
+        },
+        {
+          "id": "market-submissions",
+          "titleZh": "提交、查看和撤回自己的外观市场投稿",
+          "titleEn": "Submit, review, and withdraw your appearance-market submissions"
+        },
+        {
+          "id": "market-review",
+          "titleZh": "在具备权限时查看并批准或拒绝外观投稿",
+          "titleEn": "When authorized, inspect and approve or reject appearance submissions"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用 > 外观”",
+        "选择主题、语言或外观效果"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Application > Appearance",
+        "Choose a theme, language, or visual effect"
+      ],
+      "agentExamplesZh": [
+        "切换成深色主题",
+        "把界面语言改成英文",
+        "打开外观设置"
+      ],
+      "agentExamplesEn": [
+        "Switch to the dark theme",
+        "Change the interface language to English",
+        "Open Appearance settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.appearance"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "theme",
+          "titleZh": "主题",
+          "titleEn": "Theme",
+          "descriptionZh": "使用系统、BitFun 深色或 BitFun 浅色外观。",
+          "descriptionEn": "Use the system, BitFun dark, or BitFun light appearance.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "system",
+              "bitfun-dark",
+              "bitfun-light"
+            ]
+          }
+        },
+        {
+          "id": "language",
+          "titleZh": "界面语言",
+          "titleEn": "Interface language",
+          "descriptionZh": "设置 BitFun 的界面语言。",
+          "descriptionEn": "Set the BitFun interface language.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "en-US",
+              "zh-CN",
+              "zh-TW"
+            ]
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.application.appearance",
+        "外观与语言",
+        "Appearance & language",
+        "应用设置",
+        "Application settings",
+        "外观",
+        "主题",
+        "深色模式",
+        "浅色模式",
+        "语言",
+        "字体",
+        "动效",
+        "皮肤",
+        "appearance",
+        "theme",
+        "dark mode",
+        "light mode",
+        "language",
+        "font",
+        "motion",
+        "skin",
+        "系统、深色与浅色主题",
+        "界面语言与字号",
+        "鼠标光效、动效和外观包",
+        "System, dark, and light themes",
+        "UI language and font size",
+        "Mouse glow, motion, and appearance packs",
+        "选择跟随系统、浅色、深色、单色、Midnight、中国风、Cyber、Slate 或 Tokyo Night 等内置外观",
+        "Choose system, light, dark, monochrome, Midnight, China, Cyber, Slate, Tokyo Night, and other built-in appearances",
+        "切换简体中文、繁体中文、英文等受支持界面语言",
+        "Switch among Simplified Chinese, Traditional Chinese, English, and other supported UI languages",
+        "分别调整整个界面与聊天区字号，并支持自定义像素值",
+        "Adjust global UI and chat font sizes independently, including custom pixel values",
+        "控制鼠标光效，并让动态背景尊重系统的减少动效偏好",
+        "Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference",
+        "导入、预览、应用、导出和删除本地外观包",
+        "Import, preview, apply, export, and delete local appearance packages",
+        "浏览、搜索、筛选并安装或更新 Skin 市场外观",
+        "Browse, search, filter, install, and update appearances from the Skin market",
+        "提交、查看和撤回自己的外观市场投稿",
+        "Submit, review, and withdraw your appearance-market submissions",
+        "在具备权限时查看并批准或拒绝外观投稿",
+        "When authorized, inspect and approve or reject appearance submissions"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.appearance/"
+    },
+    {
+      "id": "setting.application.pet",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "桌面伙伴设置",
+      "titleEn": "Companion settings",
+      "summaryZh": "启用 Agent 伙伴、选择显示位置，并管理当前角色。",
+      "summaryEn": "Enable the agent companion, choose where it appears, and manage the active character.",
+      "keywordsZh": [
+        "桌面伙伴设置",
+        "桌面宠物",
+        "显示位置",
+        "Petdex"
+      ],
+      "keywordsEn": [
+        "companion settings",
+        "desktop pet",
+        "display location",
+        "Petdex"
+      ],
+      "highlightsZh": [
+        "启用或停用伙伴",
+        "桌面与输入框显示模式",
+        "角色选择与 Petdex 导入"
+      ],
+      "highlightsEn": [
+        "Enable or disable the companion",
+        "Desktop and composer display modes",
+        "Character selection and Petdex import"
+      ],
+      "items": [
+        {
+          "id": "enabled",
+          "titleZh": "整体启用或停用 Agent 伙伴",
+          "titleEn": "Enable or disable the agent companion"
+        },
+        {
+          "id": "composer-display",
+          "titleZh": "控制伙伴是否显示在聊天输入框旁",
+          "titleEn": "Choose whether the companion appears beside the chat composer"
+        },
+        {
+          "id": "desktop-display",
+          "titleZh": "控制伙伴是否显示为独立桌面窗口",
+          "titleEn": "Choose whether the companion appears as a standalone desktop window"
+        },
+        {
+          "id": "preset-selection",
+          "titleZh": "从内置与已导入角色中选择当前伙伴",
+          "titleEn": "Choose the active companion from built-in and imported characters"
+        },
+        {
+          "id": "import",
+          "titleZh": "导入本地 Petdex 角色包",
+          "titleEn": "Import a local Petdex character package"
+        },
+        {
+          "id": "delete-refresh",
+          "titleZh": "刷新角色列表并删除不再需要的导入包",
+          "titleEn": "Refresh the character list and delete imported packages you no longer need"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用 > 桌面伙伴”",
+        "选择开关、位置和角色"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Application > Companion",
+        "Choose its state, location, and character"
+      ],
+      "agentExamplesZh": [
+        "关闭桌面伙伴",
+        "把 Agent 伙伴放到输入框里"
+      ],
+      "agentExamplesEn": [
+        "Turn off the desktop companion",
+        "Put the agent companion in the composer"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.pet"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "enabled",
+          "titleZh": "启用桌面伙伴",
+          "titleEn": "Enable companion",
+          "descriptionZh": "显示或隐藏 Agent 伙伴。",
+          "descriptionEn": "Show or hide the agent companion.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "display-mode",
+          "titleZh": "显示位置",
+          "titleEn": "Display location",
+          "descriptionZh": "在桌面或聊天输入框中显示。",
+          "descriptionEn": "Show on the desktop or in the chat composer.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "input"
+            ]
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.application.pet",
+        "桌面伙伴设置",
+        "Companion settings",
+        "应用设置",
+        "Application settings",
+        "桌面宠物",
+        "显示位置",
+        "Petdex",
+        "companion settings",
+        "desktop pet",
+        "display location",
+        "启用或停用伙伴",
+        "桌面与输入框显示模式",
+        "角色选择与 Petdex 导入",
+        "Enable or disable the companion",
+        "Desktop and composer display modes",
+        "Character selection and Petdex import",
+        "整体启用或停用 Agent 伙伴",
+        "Enable or disable the agent companion",
+        "控制伙伴是否显示在聊天输入框旁",
+        "Choose whether the companion appears beside the chat composer",
+        "控制伙伴是否显示为独立桌面窗口",
+        "Choose whether the companion appears as a standalone desktop window",
+        "从内置与已导入角色中选择当前伙伴",
+        "Choose the active companion from built-in and imported characters",
+        "导入本地 Petdex 角色包",
+        "Import a local Petdex character package",
+        "刷新角色列表并删除不再需要的导入包",
+        "Refresh the character list and delete imported packages you no longer need"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.pet/"
+    },
+    {
+      "id": "setting.application.input",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "输入与快捷键",
+      "titleEn": "Input & shortcuts",
+      "summaryZh": "配置语音输入、麦克风、识别语言以及键盘快捷键。",
+      "summaryEn": "Configure voice input, microphone, recognition language, and keyboard shortcuts.",
+      "keywordsZh": [
+        "输入设置",
+        "语音",
+        "麦克风",
+        "快捷键",
+        "热键",
+        "键位"
+      ],
+      "keywordsEn": [
+        "input settings",
+        "voice",
+        "microphone",
+        "shortcut",
+        "hotkey",
+        "keybinding"
+      ],
+      "highlightsZh": [
+        "语音输入与本地模型",
+        "识别语言和最长录音时间",
+        "应用与编辑器快捷键"
+      ],
+      "highlightsEn": [
+        "Voice input and local models",
+        "Recognition language and maximum recording time",
+        "App and editor shortcuts"
+      ],
+      "items": [
+        {
+          "id": "voice-enabled",
+          "titleZh": "在聊天输入框启用或停用语音输入",
+          "titleEn": "Enable or disable voice input in the chat composer"
+        },
+        {
+          "id": "language",
+          "titleZh": "选择自动检测或中文、粤语、英文、日文等识别语言",
+          "titleEn": "Choose automatic detection or Chinese, Cantonese, English, Japanese, and other recognition languages"
+        },
+        {
+          "id": "microphone-test",
+          "titleZh": "选择麦克风并执行语音识别测试",
+          "titleEn": "Choose a microphone and run a speech-recognition test"
+        },
+        {
+          "id": "local-models",
+          "titleZh": "下载、选择、验证、修复或删除本地语音模型",
+          "titleEn": "Download, select, verify, repair, or delete local speech models"
+        },
+        {
+          "id": "recording-limit",
+          "titleZh": "设置单次语音输入的最长录音时间",
+          "titleEn": "Set the maximum duration of one voice-input recording"
+        },
+        {
+          "id": "shortcut-browser",
+          "titleZh": "搜索和查看全部应用、场景、编辑器与终端快捷键",
+          "titleEn": "Search and browse all app, scene, editor, and terminal shortcuts"
+        },
+        {
+          "id": "shortcut-remap",
+          "titleZh": "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
+          "titleEn": "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用 > 输入”",
+        "切换“语音”或“快捷键”视图"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Application > Input",
+        "Switch between Voice and Shortcuts"
+      ],
+      "agentExamplesZh": [
+        "打开快捷键设置",
+        "把语音输入的默认语言设为中文"
+      ],
+      "agentExamplesEn": [
+        "Open keyboard-shortcut settings",
+        "Set the voice-input language to Chinese"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.input"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "voice-enabled",
+          "titleZh": "启用语音输入",
+          "titleEn": "Enable voice input",
+          "descriptionZh": "在聊天输入框显示并启用录音入口。",
+          "descriptionEn": "Show and enable recording in the chat composer.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "voice-language",
+          "titleZh": "默认识别语言",
+          "titleEn": "Default recognition language",
+          "descriptionZh": "选择自动检测、中文、英文、日文或粤语。",
+          "descriptionEn": "Choose automatic detection, Chinese, English, Japanese, or Cantonese.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "zh",
+              "en",
+              "ja",
+              "yue"
+            ]
+          }
+        },
+        {
+          "id": "max-recording-seconds",
+          "titleZh": "最长录音时间",
+          "titleEn": "Maximum recording duration",
+          "descriptionZh": "单次语音输入允许的最长秒数。",
+          "descriptionEn": "Maximum seconds allowed for one voice input.",
+          "valueSchema": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 600
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.application.input",
+        "输入与快捷键",
+        "Input & shortcuts",
+        "应用设置",
+        "Application settings",
+        "输入设置",
+        "语音",
+        "麦克风",
+        "快捷键",
+        "热键",
+        "键位",
+        "input settings",
+        "voice",
+        "microphone",
+        "shortcut",
+        "hotkey",
+        "keybinding",
+        "语音输入与本地模型",
+        "识别语言和最长录音时间",
+        "应用与编辑器快捷键",
+        "Voice input and local models",
+        "Recognition language and maximum recording time",
+        "App and editor shortcuts",
+        "在聊天输入框启用或停用语音输入",
+        "Enable or disable voice input in the chat composer",
+        "选择自动检测或中文、粤语、英文、日文等识别语言",
+        "Choose automatic detection or Chinese, Cantonese, English, Japanese, and other recognition languages",
+        "选择麦克风并执行语音识别测试",
+        "Choose a microphone and run a speech-recognition test",
+        "下载、选择、验证、修复或删除本地语音模型",
+        "Download, select, verify, repair, or delete local speech models",
+        "设置单次语音输入的最长录音时间",
+        "Set the maximum duration of one voice-input recording",
+        "搜索和查看全部应用、场景、编辑器与终端快捷键",
+        "Search and browse all app, scene, editor, and terminal shortcuts",
+        "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
+        "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.input/"
+    },
+    {
+      "id": "setting.application.development",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "终端与编辑器设置",
+      "titleEn": "Terminal & editor settings",
+      "summaryZh": "选择默认 Shell，并调整代码编辑器的字体、缩进、换行、格式化与 Minimap。",
+      "summaryEn": "Choose the default shell and tune editor font, indentation, wrapping, formatting, and minimap behavior.",
+      "keywordsZh": [
+        "开发设置",
+        "默认 Shell",
+        "编辑器",
+        "字体大小",
+        "缩进",
+        "自动换行",
+        "Minimap"
+      ],
+      "keywordsEn": [
+        "development settings",
+        "default shell",
+        "editor",
+        "font size",
+        "indentation",
+        "word wrap",
+        "minimap"
+      ],
+      "highlightsZh": [
+        "默认终端 Shell",
+        "编辑器字号与缩进",
+        "自动换行、格式化和 Minimap"
+      ],
+      "highlightsEn": [
+        "Default terminal shell",
+        "Editor font size and indentation",
+        "Word wrapping, formatting, and minimap"
+      ],
+      "items": [
+        {
+          "id": "default-shell",
+          "titleZh": "自动检测并选择默认终端 Shell",
+          "titleEn": "Automatically detect and choose the default terminal shell"
+        },
+        {
+          "id": "terminal-position",
+          "titleZh": "把终端面板放在右侧或底部",
+          "titleEn": "Place the terminal panel on the right or at the bottom"
+        },
+        {
+          "id": "editor-appearance",
+          "titleZh": "设置编辑器字体、字重、字号、行高与光标样式",
+          "titleEn": "Configure editor font, weight, size, line height, and cursor style"
+        },
+        {
+          "id": "indent-wrap",
+          "titleZh": "设置 Tab 宽度、空格缩进、自动换行、行号与平滑滚动",
+          "titleEn": "Configure tab size, space indentation, word wrapping, line numbers, and smooth scrolling"
+        },
+        {
+          "id": "editor-display",
+          "titleZh": "控制 Minimap、空白字符、当前行高亮和滚动边界",
+          "titleEn": "Control the minimap, whitespace rendering, current-line highlight, and scroll bounds"
+        },
+        {
+          "id": "editor-advanced",
+          "titleZh": "控制语义高亮、括号配色、保存/粘贴时格式化和空白清理",
+          "titleEn": "Control semantic highlighting, bracket colors, format-on-save/paste, and whitespace trimming"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用 > 开发”",
+        "切换“终端”或“编辑器”视图"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Application > Development",
+        "Switch between Terminal and Editor"
+      ],
+      "agentExamplesZh": [
+        "把编辑器字号改成 15",
+        "打开终端设置"
+      ],
+      "agentExamplesEn": [
+        "Set the editor font size to 15",
+        "Open terminal settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.development"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "editor-font-size",
+          "titleZh": "编辑器字号",
+          "titleEn": "Editor font size",
+          "descriptionZh": "设置代码编辑器的字体大小。",
+          "descriptionEn": "Set the code editor font size.",
+          "valueSchema": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 32
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.application.development",
+        "终端与编辑器设置",
+        "Terminal & editor settings",
+        "应用设置",
+        "Application settings",
+        "开发设置",
+        "默认 Shell",
+        "编辑器",
+        "字体大小",
+        "缩进",
+        "自动换行",
+        "Minimap",
+        "development settings",
+        "default shell",
+        "editor",
+        "font size",
+        "indentation",
+        "word wrap",
+        "minimap",
+        "默认终端 Shell",
+        "编辑器字号与缩进",
+        "自动换行、格式化和 Minimap",
+        "Default terminal shell",
+        "Editor font size and indentation",
+        "Word wrapping, formatting, and minimap",
+        "自动检测并选择默认终端 Shell",
+        "Automatically detect and choose the default terminal shell",
+        "把终端面板放在右侧或底部",
+        "Place the terminal panel on the right or at the bottom",
+        "设置编辑器字体、字重、字号、行高与光标样式",
+        "Configure editor font, weight, size, line height, and cursor style",
+        "设置 Tab 宽度、空格缩进、自动换行、行号与平滑滚动",
+        "Configure tab size, space indentation, word wrapping, line numbers, and smooth scrolling",
+        "控制 Minimap、空白字符、当前行高亮和滚动边界",
+        "Control the minimap, whitespace rendering, current-line highlight, and scroll bounds",
+        "控制语义高亮、括号配色、保存/粘贴时格式化和空白清理",
+        "Control semantic highlighting, bracket colors, format-on-save/paste, and whitespace trimming"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.development/"
+    },
+    {
+      "id": "setting.ai.models",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "模型与供应商",
+      "titleEn": "Models & providers",
+      "summaryZh": "添加 AI 供应商和模型，选择默认模型，配置网络代理、订阅与流式超时。",
+      "summaryEn": "Add AI providers and models, choose defaults, and configure proxy, subscription, and streaming timeouts.",
+      "keywordsZh": [
+        "模型设置",
+        "供应商",
+        "API Key",
+        "默认模型",
+        "代理",
+        "订阅",
+        "超时"
+      ],
+      "keywordsEn": [
+        "model settings",
+        "provider",
+        "API key",
+        "default model",
+        "proxy",
+        "subscription",
+        "timeout"
+      ],
+      "highlightsZh": [
+        "模型与供应商连接",
+        "主模型、快速模型和任务模型",
+        "代理、订阅与流式超时"
+      ],
+      "highlightsEn": [
+        "Model and provider connections",
+        "Primary, fast, and task-specific defaults",
+        "Proxy, subscriptions, and streaming timeouts"
+      ],
+      "items": [
+        {
+          "id": "providers",
+          "titleZh": "添加、编辑和删除内置或自定义 AI 供应商",
+          "titleEn": "Add, edit, and remove built-in or custom AI providers"
+        },
+        {
+          "id": "credentials-endpoint",
+          "titleZh": "配置 API Key、Base URL、请求格式和模型列表",
+          "titleEn": "Configure API keys, base URLs, request formats, and model lists"
+        },
+        {
+          "id": "subscription-auth",
+          "titleZh": "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户",
+          "titleEn": "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, and other subscription accounts"
+        },
+        {
+          "id": "default-models",
+          "titleZh": "选择主模型、快速模型以及图像理解、图像生成和语音识别模型",
+          "titleEn": "Choose primary, fast, image-understanding, image-generation, and speech-recognition models"
+        },
+        {
+          "id": "reasoning",
+          "titleZh": "为模型选择推理预设或自定义推理强度",
+          "titleEn": "Choose reasoning presets or a custom reasoning effort per model"
+        },
+        {
+          "id": "proxy",
+          "titleZh": "配置 AI 请求使用的网络代理与绕过规则",
+          "titleEn": "Configure network proxies and bypass rules for AI requests"
+        },
+        {
+          "id": "stream-timeouts",
+          "titleZh": "设置首 Token 等待和流式空闲超时",
+          "titleEn": "Set time-to-first-token and streaming idle timeouts"
+        },
+        {
+          "id": "model-catalog",
+          "titleZh": "查看 models.dev 目录状态、手动刷新并定位本地缓存",
+          "titleEn": "Inspect models.dev catalog status, refresh it manually, and reveal its local cache"
+        },
+        {
+          "id": "advanced-request",
+          "titleZh": "为供应商添加自定义 Header、请求体字段与 SSL 行为",
+          "titleEn": "Add custom headers, request-body fields, and SSL behavior per provider"
+        },
+        {
+          "id": "connection-test",
+          "titleZh": "保存前测试供应商或模型连接并刷新运行时客户端",
+          "titleEn": "Test provider or model connectivity before saving and refresh the runtime client"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“AI > 模型”",
+        "添加供应商并测试连接，再选择默认模型"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to AI > Models",
+        "Add and test a provider, then choose defaults"
+      ],
+      "agentExamplesZh": [
+        "打开模型设置",
+        "带我配置默认模型",
+        "我想检查代理设置"
+      ],
+      "agentExamplesEn": [
+        "Open model settings",
+        "Take me to default-model setup",
+        "I want to inspect proxy settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "ai.models"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.ai.models",
+        "模型与供应商",
+        "Models & providers",
+        "AI 与协作",
+        "AI & collaboration",
+        "模型设置",
+        "供应商",
+        "API Key",
+        "默认模型",
+        "代理",
+        "订阅",
+        "超时",
+        "model settings",
+        "provider",
+        "API key",
+        "default model",
+        "proxy",
+        "subscription",
+        "timeout",
+        "模型与供应商连接",
+        "主模型、快速模型和任务模型",
+        "代理、订阅与流式超时",
+        "Model and provider connections",
+        "Primary, fast, and task-specific defaults",
+        "Proxy, subscriptions, and streaming timeouts",
+        "添加、编辑和删除内置或自定义 AI 供应商",
+        "Add, edit, and remove built-in or custom AI providers",
+        "配置 API Key、Base URL、请求格式和模型列表",
+        "Configure API keys, base URLs, request formats, and model lists",
+        "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户",
+        "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, and other subscription accounts",
+        "选择主模型、快速模型以及图像理解、图像生成和语音识别模型",
+        "Choose primary, fast, image-understanding, image-generation, and speech-recognition models",
+        "为模型选择推理预设或自定义推理强度",
+        "Choose reasoning presets or a custom reasoning effort per model",
+        "配置 AI 请求使用的网络代理与绕过规则",
+        "Configure network proxies and bypass rules for AI requests",
+        "设置首 Token 等待和流式空闲超时",
+        "Set time-to-first-token and streaming idle timeouts",
+        "查看 models.dev 目录状态、手动刷新并定位本地缓存",
+        "Inspect models.dev catalog status, refresh it manually, and reveal its local cache",
+        "为供应商添加自定义 Header、请求体字段与 SSL 行为",
+        "Add custom headers, request-body fields, and SSL behavior per provider",
+        "保存前测试供应商或模型连接并刷新运行时客户端",
+        "Test provider or model connectivity before saving and refresh the runtime client"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.ai.models/"
+    },
+    {
+      "id": "setting.ai.memory",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "记忆设置",
+      "titleEn": "Memory settings",
+      "summaryZh": "控制 BitFun 是否从会话中提取和使用长期记忆，以及保留、整理和模型策略。",
+      "summaryEn": "Control whether BitFun extracts and uses long-term memory from sessions, including retention, consolidation, and model policy.",
+      "keywordsZh": [
+        "记忆设置",
+        "长期记忆",
+        "学习",
+        "召回",
+        "整理",
+        "保留时间"
+      ],
+      "keywordsEn": [
+        "memory settings",
+        "long-term memory",
+        "learning",
+        "recall",
+        "consolidation",
+        "retention"
+      ],
+      "highlightsZh": [
+        "启用记忆生成与召回",
+        "BTW 会话与外部上下文策略",
+        "提取、整理模型和后台并发"
+      ],
+      "highlightsEn": [
+        "Enable memory generation and recall",
+        "BTW sessions and external-context policy",
+        "Extraction, consolidation models, and background concurrency"
+      ],
+      "items": [
+        {
+          "id": "generation-recall",
+          "titleZh": "分别控制长期记忆生成与会话召回，也可一键同时启用",
+          "titleEn": "Control long-term memory generation and recall independently or enable both together"
+        },
+        {
+          "id": "btw",
+          "titleZh": "决定 BTW 轻量会话是否参与记忆生成",
+          "titleEn": "Choose whether lightweight BTW sessions contribute memories"
+        },
+        {
+          "id": "external-context",
+          "titleZh": "存在外部工具上下文时选择清除工具结果、允许或跳过会话",
+          "titleEn": "When external tool context exists, clear tool results, allow it, or skip the session"
+        },
+        {
+          "id": "rollout-policy",
+          "titleZh": "设置空闲时长、最大年龄、启动处理上限和扫描上限",
+          "titleEn": "Set idle time, maximum age, startup rollout limit, and scan limit"
+        },
+        {
+          "id": "extraction",
+          "titleZh": "选择记忆提取模型、并发数和单次原始候选上限",
+          "titleEn": "Choose the extraction model, concurrency, and raw-candidate limit"
+        },
+        {
+          "id": "retention",
+          "titleZh": "设置未使用记忆的最长保留天数",
+          "titleEn": "Set how long unused memories are retained"
+        },
+        {
+          "id": "consolidation",
+          "titleZh": "选择记忆整理模型并让它跟随主模型或提取模型",
+          "titleEn": "Choose the consolidation model or make it follow the primary or extraction model"
+        },
+        {
+          "id": "maintenance",
+          "titleZh": "打开记忆目录、恢复默认设置或显式清空全部记忆",
+          "titleEn": "Open the memory directory, restore defaults, or explicitly erase all memories"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“AI > 记忆”",
+        "先启用记忆，再按需要调整高级参数"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to AI > Memory",
+        "Enable memory first, then tune advanced controls if needed"
+      ],
+      "agentExamplesZh": [
+        "关闭长期记忆",
+        "允许 BTW 会话生成记忆",
+        "打开记忆设置"
+      ],
+      "agentExamplesEn": [
+        "Turn off long-term memory",
+        "Allow BTW sessions to generate memories",
+        "Open Memory settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "ai.memory"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "enabled",
+          "titleZh": "启用记忆",
+          "titleEn": "Enable memory",
+          "descriptionZh": "同时启用记忆生成和召回。",
+          "descriptionEn": "Enable both memory generation and recall.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "btw-sessions",
+          "titleZh": "BTW 会话生成记忆",
+          "titleEn": "Generate memory from BTW sessions",
+          "descriptionZh": "允许轻量 BTW 会话参与记忆提取。",
+          "descriptionEn": "Allow lightweight BTW sessions to contribute memories.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "external-context-policy",
+          "titleZh": "外部上下文策略",
+          "titleEn": "External context policy",
+          "descriptionZh": "决定存在外部工具上下文时如何生成记忆。",
+          "descriptionEn": "Choose how memory generation handles external tool context.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "clear_tool_results",
+              "allow",
+              "skip_session"
+            ]
+          }
+        },
+        {
+          "id": "startup-rollout-limit",
+          "titleZh": "每次启动整理上限",
+          "titleEn": "Startup rollout limit",
+          "descriptionZh": "每次启动最多处理的待整理记忆批次。",
+          "descriptionEn": "Maximum pending memory rollouts processed after startup.",
+          "valueSchema": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.ai.memory",
+        "记忆设置",
+        "Memory settings",
+        "AI 与协作",
+        "AI & collaboration",
+        "长期记忆",
+        "学习",
+        "召回",
+        "整理",
+        "保留时间",
+        "memory settings",
+        "long-term memory",
+        "learning",
+        "recall",
+        "consolidation",
+        "retention",
+        "启用记忆生成与召回",
+        "BTW 会话与外部上下文策略",
+        "提取、整理模型和后台并发",
+        "Enable memory generation and recall",
+        "BTW sessions and external-context policy",
+        "Extraction, consolidation models, and background concurrency",
+        "分别控制长期记忆生成与会话召回，也可一键同时启用",
+        "Control long-term memory generation and recall independently or enable both together",
+        "决定 BTW 轻量会话是否参与记忆生成",
+        "Choose whether lightweight BTW sessions contribute memories",
+        "存在外部工具上下文时选择清除工具结果、允许或跳过会话",
+        "When external tool context exists, clear tool results, allow it, or skip the session",
+        "设置空闲时长、最大年龄、启动处理上限和扫描上限",
+        "Set idle time, maximum age, startup rollout limit, and scan limit",
+        "选择记忆提取模型、并发数和单次原始候选上限",
+        "Choose the extraction model, concurrency, and raw-candidate limit",
+        "设置未使用记忆的最长保留天数",
+        "Set how long unused memories are retained",
+        "选择记忆整理模型并让它跟随主模型或提取模型",
+        "Choose the consolidation model or make it follow the primary or extraction model",
+        "打开记忆目录、恢复默认设置或显式清空全部记忆",
+        "Open the memory directory, restore defaults, or explicitly erase all memories"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.ai.memory/"
+    },
+    {
+      "id": "setting.workspace.session",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "会话与工作区设置",
+      "titleEn": "Session & workspace settings",
+      "summaryZh": "控制会话标题生成、工作区加速搜索和与项目上下文相关的行为。",
+      "summaryEn": "Control session-title generation, accelerated workspace search, and project-context behavior.",
+      "keywordsZh": [
+        "会话设置",
+        "工作区设置",
+        "标题生成",
+        "项目搜索",
+        "索引"
+      ],
+      "keywordsEn": [
+        "session settings",
+        "workspace settings",
+        "title generation",
+        "project search",
+        "index"
+      ],
+      "highlightsZh": [
+        "自动生成会话标题",
+        "本地工作区加速搜索",
+        "会话使用的标题模型"
+      ],
+      "highlightsEn": [
+        "Automatic session titles",
+        "Accelerated local-workspace search",
+        "Model used for session titles"
+      ],
+      "items": [
+        {
+          "id": "automatic-titles",
+          "titleZh": "启用或停用根据会话内容自动生成标题",
+          "titleEn": "Enable or disable automatic titles generated from session content"
+        },
+        {
+          "id": "title-model",
+          "titleZh": "让标题模型继承主模型、快速模型或使用指定模型",
+          "titleEn": "Make title generation inherit the primary or fast model, or use a selected model"
+        },
+        {
+          "id": "accelerated-search",
+          "titleZh": "为本地工作区启用 Flashgrep 加速搜索",
+          "titleEn": "Enable Flashgrep-backed accelerated search for local workspaces"
+        },
+        {
+          "id": "search-index",
+          "titleZh": "查看索引状态并在需要时重建工作区索引",
+          "titleEn": "Inspect index status and rebuild the workspace index when needed"
+        },
+        {
+          "id": "remote-behavior",
+          "titleZh": "远程工作区明确降级搜索实现，不把远程路径回退到本机",
+          "titleEn": "Use an explicit remote-workspace search path without silently falling back to local files"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工作区 > 会话与工作区”",
+        "调整标题或搜索选项"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Workspace > Session & Workspace",
+        "Tune title or search controls"
+      ],
+      "agentExamplesZh": [
+        "关闭自动生成会话标题",
+        "启用工作区加速搜索"
+      ],
+      "agentExamplesEn": [
+        "Turn off automatic session titles",
+        "Enable accelerated workspace search"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "workspace.session"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "session-title-generation",
+          "titleZh": "自动生成会话标题",
+          "titleEn": "Automatic session titles",
+          "descriptionZh": "根据会话内容生成易识别的标题。",
+          "descriptionEn": "Generate a recognizable title from session content.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "workspace-search",
+          "titleZh": "工作区加速搜索",
+          "titleEn": "Accelerated workspace search",
+          "descriptionZh": "为本地项目启用 Flashgrep 加速搜索。",
+          "descriptionEn": "Enable Flashgrep-backed search for local projects.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.workspace.session",
+        "会话与工作区设置",
+        "Session & workspace settings",
+        "AI 与协作",
+        "AI & collaboration",
+        "会话设置",
+        "工作区设置",
+        "标题生成",
+        "项目搜索",
+        "索引",
+        "session settings",
+        "workspace settings",
+        "title generation",
+        "project search",
+        "index",
+        "自动生成会话标题",
+        "本地工作区加速搜索",
+        "会话使用的标题模型",
+        "Automatic session titles",
+        "Accelerated local-workspace search",
+        "Model used for session titles",
+        "启用或停用根据会话内容自动生成标题",
+        "Enable or disable automatic titles generated from session content",
+        "让标题模型继承主模型、快速模型或使用指定模型",
+        "Make title generation inherit the primary or fast model, or use a selected model",
+        "为本地工作区启用 Flashgrep 加速搜索",
+        "Enable Flashgrep-backed accelerated search for local workspaces",
+        "查看索引状态并在需要时重建工作区索引",
+        "Inspect index status and rebuild the workspace index when needed",
+        "远程工作区明确降级搜索实现，不把远程路径回退到本机",
+        "Use an explicit remote-workspace search path without silently falling back to local files"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.workspace.session/"
+    },
+    {
+      "id": "setting.workspace.worktrees",
+      "kind": "setting",
+      "categoryId": "workspace",
+      "titleZh": "Worktree 设置",
+      "titleEn": "Worktree settings",
+      "summaryZh": "配置 Git Worktree 的根目录、分支前缀和自动清理规则，并查看现有隔离工作区。",
+      "summaryEn": "Configure the root, branch prefix, and cleanup rules for Git worktrees, and inspect existing isolated workspaces.",
+      "keywordsZh": [
+        "Worktree 设置",
+        "并行分支",
+        "隔离工作区",
+        "分支前缀",
+        "自动清理"
+      ],
+      "keywordsEn": [
+        "worktree settings",
+        "parallel branch",
+        "isolated workspace",
+        "branch prefix",
+        "automatic cleanup"
+      ],
+      "highlightsZh": [
+        "Worktree 根目录与分支前缀",
+        "自动清理数量",
+        "现有 Worktree 和关联会话管理"
+      ],
+      "highlightsEn": [
+        "Worktree root and branch prefix",
+        "Automatic cleanup count",
+        "Existing worktree and linked-session management"
+      ],
+      "items": [
+        {
+          "id": "isolation",
+          "titleZh": "控制新会话是否默认使用独立 Git Worktree",
+          "titleEn": "Choose whether new sessions use isolated Git worktrees by default"
+        },
+        {
+          "id": "root-path",
+          "titleZh": "设置受管 Worktree 的统一根目录",
+          "titleEn": "Set the common root directory for managed worktrees"
+        },
+        {
+          "id": "branch-prefix",
+          "titleZh": "设置自动创建分支使用的名称前缀",
+          "titleEn": "Set the branch-name prefix used for automatically created branches"
+        },
+        {
+          "id": "copy-changes",
+          "titleZh": "创建隔离工作区时选择是否复制当前未提交改动",
+          "titleEn": "Choose whether current uncommitted changes are copied into a new isolated workspace"
+        },
+        {
+          "id": "auto-cleanup",
+          "titleZh": "启用自动清理并设置最多保留的受管 Worktree 数量",
+          "titleEn": "Enable automatic cleanup and set the maximum number of managed worktrees to retain"
+        },
+        {
+          "id": "management",
+          "titleZh": "查看 Worktree 生命周期、脏状态、未发布提交与关联会话",
+          "titleEn": "Inspect worktree lifecycle, dirty state, unpublished commits, and linked sessions"
+        },
+        {
+          "id": "open-restore-delete",
+          "titleZh": "打开或恢复关联会话，并在保护检查后删除或强制删除 Worktree",
+          "titleEn": "Open or restore linked sessions and delete or force-delete a worktree after protection checks"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工作区 > Worktrees”",
+        "保存规则或管理现有 Worktree"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Workspace > Worktrees",
+        "Save policy or manage existing worktrees"
+      ],
+      "agentExamplesZh": [
+        "打开 Worktree 设置",
+        "带我管理并行工作区"
+      ],
+      "agentExamplesEn": [
+        "Open Worktree settings",
+        "Take me to parallel-workspace management"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "workspace.worktrees"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.workspace.worktrees",
+        "Worktree 设置",
+        "Worktree settings",
+        "项目与开发",
+        "Projects & development",
+        "并行分支",
+        "隔离工作区",
+        "分支前缀",
+        "自动清理",
+        "worktree settings",
+        "parallel branch",
+        "isolated workspace",
+        "branch prefix",
+        "automatic cleanup",
+        "Worktree 根目录与分支前缀",
+        "自动清理数量",
+        "现有 Worktree 和关联会话管理",
+        "Worktree root and branch prefix",
+        "Automatic cleanup count",
+        "Existing worktree and linked-session management",
+        "控制新会话是否默认使用独立 Git Worktree",
+        "Choose whether new sessions use isolated Git worktrees by default",
+        "设置受管 Worktree 的统一根目录",
+        "Set the common root directory for managed worktrees",
+        "设置自动创建分支使用的名称前缀",
+        "Set the branch-name prefix used for automatically created branches",
+        "创建隔离工作区时选择是否复制当前未提交改动",
+        "Choose whether current uncommitted changes are copied into a new isolated workspace",
+        "启用自动清理并设置最多保留的受管 Worktree 数量",
+        "Enable automatic cleanup and set the maximum number of managed worktrees to retain",
+        "查看 Worktree 生命周期、脏状态、未发布提交与关联会话",
+        "Inspect worktree lifecycle, dirty state, unpublished commits, and linked sessions",
+        "打开或恢复关联会话，并在保护检查后删除或强制删除 Worktree",
+        "Open or restore linked sessions and delete or force-delete a worktree after protection checks"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.workspace.worktrees/"
+    },
+    {
+      "id": "setting.tools.execution",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "执行与权限控制",
+      "titleEn": "Execution & permissions",
+      "summaryZh": "管理 Agent 工具权限、并行度、超时、延迟加载、Computer Use 与浏览器控制。",
+      "summaryEn": "Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer Use, and browser control.",
+      "keywordsZh": [
+        "执行控制",
+        "工具权限",
+        "审批",
+        "并行",
+        "超时",
+        "Computer Use",
+        "浏览器控制",
+        "JSON 修复"
+      ],
+      "keywordsEn": [
+        "execution control",
+        "tool permissions",
+        "approval",
+        "parallel",
+        "timeout",
+        "computer use",
+        "browser control",
+        "JSON repair"
+      ],
+      "highlightsZh": [
+        "询问、自动批准与完全访问策略",
+        "子 Agent 并行度和工具超时",
+        "Computer Use、浏览器连接与工具参数修复"
+      ],
+      "highlightsEn": [
+        "Ask, auto-approve, and full-access policies",
+        "Subagent concurrency and tool timeouts",
+        "Computer Use, browser connection, and tool-argument repair"
+      ],
+      "items": [
+        {
+          "id": "permission-mode",
+          "titleZh": "选择询问、自动批准或完全访问权限模式，并确认高风险警告",
+          "titleEn": "Choose Ask, Auto-approve, or Full Access permission mode and acknowledge high-risk warnings"
+        },
+        {
+          "id": "permission-selector",
+          "titleZh": "控制权限模式选择器是否显示在聊天输入框下方",
+          "titleEn": "Choose whether the permission-mode selector appears below the chat composer"
+        },
+        {
+          "id": "global-project-rules",
+          "titleZh": "创建、排序和保存全局或项目级 Allow、Ask、Deny 规则",
+          "titleEn": "Create, reorder, and save global or project-level Allow, Ask, and Deny rules"
+        },
+        {
+          "id": "remembered-grants",
+          "titleZh": "查看、撤销或清空项目中记住的权限授权与审计记录",
+          "titleEn": "Review, revoke, or clear remembered project permission grants and audit records"
+        },
+        {
+          "id": "deferred-tools",
+          "titleZh": "按需延迟加载大型工具定义以减少 Agent 初始上下文",
+          "titleEn": "Load large tool definitions on demand to reduce initial agent context"
+        },
+        {
+          "id": "parallelism",
+          "titleZh": "设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略",
+          "titleEn": "Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy"
+        },
+        {
+          "id": "timeouts",
+          "titleZh": "设置权限确认等待和单次工具执行超时",
+          "titleEn": "Set permission-confirmation and per-tool execution timeouts"
+        },
+        {
+          "id": "review-capacity",
+          "titleZh": "设置 Deep Review 最大并行评审者和队列等待时间",
+          "titleEn": "Set the maximum parallel Deep Review workers and queue wait time"
+        },
+        {
+          "id": "computer-use",
+          "titleZh": "启用 Computer Use 并查看辅助功能与屏幕录制权限",
+          "titleEn": "Enable Computer Use and inspect accessibility and screen-recording permissions"
+        },
+        {
+          "id": "browser-control",
+          "titleZh": "选择浏览器、配置默认 CDP 并控制启动时自动连接",
+          "titleEn": "Choose a browser, configure default CDP, and control automatic connection at startup"
+        },
+        {
+          "id": "json-repair",
+          "titleZh": "控制是否在安全边界内修复模型生成的非法工具参数 JSON",
+          "titleEn": "Choose whether malformed model-generated tool-argument JSON may be repaired within safety boundaries"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > 执行与权限”",
+        "先确认安全影响，再修改权限或执行参数"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > Execution & Permissions",
+        "Review the security impact before changing permissions or execution controls"
+      ],
+      "agentExamplesZh": [
+        "启用 Computer Use",
+        "把子 Agent 最大并发改为 8",
+        "打开权限设置"
+      ],
+      "agentExamplesEn": [
+        "Enable Computer Use",
+        "Set maximum subagent concurrency to 8",
+        "Open permission settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.execution"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "deferred-tool-loading",
+          "titleZh": "延迟加载工具",
+          "titleEn": "Deferred tool loading",
+          "descriptionZh": "按需加载大型工具定义，减少 Agent 初始上下文。",
+          "descriptionEn": "Load large tool definitions on demand to reduce initial agent context.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "subagent-batch-policy",
+          "titleZh": "子 Agent 批量执行策略",
+          "titleEn": "Subagent batch policy",
+          "descriptionZh": "选择仅安全任务并行、强制并行或串行执行。",
+          "descriptionEn": "Choose safe-only parallelism, forced parallelism, or serial execution.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "safe_only",
+              "force_parallel",
+              "serial"
+            ]
+          }
+        },
+        {
+          "id": "subagent-max-concurrency",
+          "titleZh": "子 Agent 最大并发",
+          "titleEn": "Maximum subagent concurrency",
+          "descriptionZh": "限制同时运行的子 Agent 数量。",
+          "descriptionEn": "Limit the number of subagents that may run at once.",
+          "valueSchema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          }
+        },
+        {
+          "id": "swarm-max-concurrency",
+          "titleZh": "Swarm 最大并发",
+          "titleEn": "Maximum swarm concurrency",
+          "descriptionZh": "限制 Swarm 中同时执行的工作单元。",
+          "descriptionEn": "Limit concurrent work units inside a swarm.",
+          "valueSchema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          }
+        },
+        {
+          "id": "tool-timeout-seconds",
+          "titleZh": "工具执行超时",
+          "titleEn": "Tool execution timeout",
+          "descriptionZh": "单次工具调用的超时秒数。",
+          "descriptionEn": "Timeout in seconds for one tool call.",
+          "valueSchema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          }
+        },
+        {
+          "id": "computer-use-enabled",
+          "titleZh": "Computer Use 桌面控制",
+          "titleEn": "Computer Use",
+          "descriptionZh": "允许 Agent 使用已授权的桌面控制能力。",
+          "descriptionEn": "Allow agents to use authorized desktop-control capabilities.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "browser-auto-connect",
+          "titleZh": "启动时连接浏览器",
+          "titleEn": "Connect browser on startup",
+          "descriptionZh": "BitFun 启动后自动尝试连接浏览器控制。",
+          "descriptionEn": "Automatically try to connect browser control after BitFun starts.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "tool-json-repair",
+          "titleZh": "工具参数 JSON 修复",
+          "titleEn": "Tool-argument JSON repair",
+          "descriptionZh": "允许在安全边界内修复模型生成的轻微 JSON 格式错误。",
+          "descriptionEn": "Allow minor model-generated JSON formatting errors to be repaired within the safety boundary.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.tools.execution",
+        "执行与权限控制",
+        "Execution & permissions",
+        "AI 与协作",
+        "AI & collaboration",
+        "执行控制",
+        "工具权限",
+        "审批",
+        "并行",
+        "超时",
+        "Computer Use",
+        "浏览器控制",
+        "JSON 修复",
+        "execution control",
+        "tool permissions",
+        "approval",
+        "parallel",
+        "timeout",
+        "computer use",
+        "browser control",
+        "JSON repair",
+        "询问、自动批准与完全访问策略",
+        "子 Agent 并行度和工具超时",
+        "Computer Use、浏览器连接与工具参数修复",
+        "Ask, auto-approve, and full-access policies",
+        "Subagent concurrency and tool timeouts",
+        "Computer Use, browser connection, and tool-argument repair",
+        "选择询问、自动批准或完全访问权限模式，并确认高风险警告",
+        "Choose Ask, Auto-approve, or Full Access permission mode and acknowledge high-risk warnings",
+        "控制权限模式选择器是否显示在聊天输入框下方",
+        "Choose whether the permission-mode selector appears below the chat composer",
+        "创建、排序和保存全局或项目级 Allow、Ask、Deny 规则",
+        "Create, reorder, and save global or project-level Allow, Ask, and Deny rules",
+        "查看、撤销或清空项目中记住的权限授权与审计记录",
+        "Review, revoke, or clear remembered project permission grants and audit records",
+        "按需延迟加载大型工具定义以减少 Agent 初始上下文",
+        "Load large tool definitions on demand to reduce initial agent context",
+        "设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略",
+        "Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy",
+        "设置权限确认等待和单次工具执行超时",
+        "Set permission-confirmation and per-tool execution timeouts",
+        "设置 Deep Review 最大并行评审者和队列等待时间",
+        "Set the maximum parallel Deep Review workers and queue wait time",
+        "启用 Computer Use 并查看辅助功能与屏幕录制权限",
+        "Enable Computer Use and inspect accessibility and screen-recording permissions",
+        "选择浏览器、配置默认 CDP 并控制启动时自动连接",
+        "Choose a browser, configure default CDP, and control automatic connection at startup",
+        "控制是否在安全边界内修复模型生成的非法工具参数 JSON",
+        "Choose whether malformed model-generated tool-argument JSON may be repaired within safety boundaries"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.execution/"
+    },
+    {
+      "id": "setting.tools.automation",
+      "kind": "setting",
+      "categoryId": "automation",
+      "titleZh": "快捷操作与 Hooks",
+      "titleEn": "Quick actions & hooks",
+      "summaryZh": "自定义编码后的快捷操作，并配置在 Agent 生命周期事件上运行的 Hooks。",
+      "summaryEn": "Customize post-coding quick actions and configure hooks that run on agent lifecycle events.",
+      "keywordsZh": [
+        "自动化设置",
+        "快捷操作",
+        "提交",
+        "创建 PR",
+        "Hooks",
+        "生命周期"
+      ],
+      "keywordsEn": [
+        "automation settings",
+        "quick action",
+        "commit",
+        "create PR",
+        "hooks",
+        "lifecycle"
+      ],
+      "highlightsZh": [
+        "编码后快捷操作",
+        "内置提交与创建 PR 动作",
+        "会话、工具与权限事件 Hooks"
+      ],
+      "highlightsEn": [
+        "Post-coding quick actions",
+        "Built-in commit and create-PR actions",
+        "Hooks for session, tool, and permission events"
+      ],
+      "items": [
+        {
+          "id": "built-in-actions",
+          "titleZh": "启用和调整内置的提交与创建 Pull Request 快捷操作",
+          "titleEn": "Enable and tune the built-in Commit and Create Pull Request quick actions"
+        },
+        {
+          "id": "custom-actions",
+          "titleZh": "添加、编辑和删除自定义编码后快捷操作及 Prompt",
+          "titleEn": "Add, edit, and delete custom post-coding quick actions and prompts"
+        },
+        {
+          "id": "hooks-enabled",
+          "titleZh": "整体启用或停用 Agent 生命周期 Hooks",
+          "titleEn": "Enable or disable agent lifecycle hooks globally"
+        },
+        {
+          "id": "project-hooks",
+          "titleZh": "对可信仓库单独启用项目级 .bitfun/config/hooks.json",
+          "titleEn": "Enable project-level .bitfun/config/hooks.json separately for trusted repositories"
+        },
+        {
+          "id": "hook-files",
+          "titleZh": "定位用户级和项目级 Hooks 配置文件并在修改后即时生效",
+          "titleEn": "Locate user and project hook configuration files and apply edits without restarting"
+        },
+        {
+          "id": "hook-events",
+          "titleZh": "在会话、Agent、工具、权限和用户输入等 Codex Hook 事件上运行处理器",
+          "titleEn": "Run handlers on Codex hook events for sessions, agents, tools, permissions, and user input"
+        },
+        {
+          "id": "external-hooks",
+          "titleZh": "查看外部 AI 应用的只读 Hook 目录并选择导入项",
+          "titleEn": "Inspect read-only external-AI hook catalogs and choose entries to import"
+        },
+        {
+          "id": "hook-import",
+          "titleZh": "预览、修改和应用 Hook 导入计划，并保留冲突诊断",
+          "titleEn": "Preview, edit, and apply hook import plans while retaining conflict diagnostics"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > 自动化”",
+        "在“快捷操作”或“Hooks”中配置"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > Automation",
+        "Configure Quick Actions or Hooks"
+      ],
+      "agentExamplesZh": [
+        "打开 Hooks 设置",
+        "带我编辑编码后的快捷操作"
+      ],
+      "agentExamplesEn": [
+        "Open Hooks settings",
+        "Take me to post-coding quick actions"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.automation"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "hooks-enabled",
+          "titleZh": "启用 Hooks",
+          "titleEn": "Enable hooks",
+          "descriptionZh": "允许已配置的 Agent 生命周期 Hooks 运行。",
+          "descriptionEn": "Allow configured agent lifecycle hooks to run.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "id": "project-hooks-enabled",
+          "titleZh": "启用项目 Hooks",
+          "titleEn": "Enable project hooks",
+          "descriptionZh": "允许当前项目中的 Hooks 配置生效。",
+          "descriptionEn": "Allow hook configuration from the current project.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.tools.automation",
+        "快捷操作与 Hooks",
+        "Quick actions & hooks",
+        "扩展与自动化",
+        "Extensions & automation",
+        "自动化设置",
+        "快捷操作",
+        "提交",
+        "创建 PR",
+        "Hooks",
+        "生命周期",
+        "automation settings",
+        "quick action",
+        "commit",
+        "create PR",
+        "hooks",
+        "lifecycle",
+        "编码后快捷操作",
+        "内置提交与创建 PR 动作",
+        "会话、工具与权限事件 Hooks",
+        "Post-coding quick actions",
+        "Built-in commit and create-PR actions",
+        "Hooks for session, tool, and permission events",
+        "启用和调整内置的提交与创建 Pull Request 快捷操作",
+        "Enable and tune the built-in Commit and Create Pull Request quick actions",
+        "添加、编辑和删除自定义编码后快捷操作及 Prompt",
+        "Add, edit, and delete custom post-coding quick actions and prompts",
+        "整体启用或停用 Agent 生命周期 Hooks",
+        "Enable or disable agent lifecycle hooks globally",
+        "对可信仓库单独启用项目级 .bitfun/config/hooks.json",
+        "Enable project-level .bitfun/config/hooks.json separately for trusted repositories",
+        "定位用户级和项目级 Hooks 配置文件并在修改后即时生效",
+        "Locate user and project hook configuration files and apply edits without restarting",
+        "在会话、Agent、工具、权限和用户输入等 Codex Hook 事件上运行处理器",
+        "Run handlers on Codex hook events for sessions, agents, tools, permissions, and user input",
+        "查看外部 AI 应用的只读 Hook 目录并选择导入项",
+        "Inspect read-only external-AI hook catalogs and choose entries to import",
+        "预览、修改和应用 Hook 导入计划，并保留冲突诊断",
+        "Preview, edit, and apply hook import plans while retaining conflict diagnostics"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.automation/"
+    },
+    {
+      "id": "setting.tools.mcp",
+      "kind": "setting",
+      "categoryId": "automation",
+      "titleZh": "MCP 服务器",
+      "titleEn": "MCP servers",
+      "summaryZh": "添加和管理 Model Context Protocol 服务器，查看工具、资源、提示词与远程授权状态。",
+      "summaryEn": "Add and manage Model Context Protocol servers, including tools, resources, prompts, and remote authorization state.",
+      "keywordsZh": [
+        "MCP",
+        "MCP 服务器",
+        "工具服务器",
+        "stdio",
+        "SSE",
+        "OAuth",
+        "资源"
+      ],
+      "keywordsEn": [
+        "MCP",
+        "MCP server",
+        "tool server",
+        "stdio",
+        "SSE",
+        "OAuth",
+        "resource"
+      ],
+      "highlightsZh": [
+        "添加本地或远程 MCP 服务器",
+        "查看连接健康与工具清单",
+        "完成远程 OAuth 授权"
+      ],
+      "highlightsEn": [
+        "Add local or remote MCP servers",
+        "Inspect connection health and tool inventory",
+        "Complete remote OAuth authorization"
+      ],
+      "items": [
+        {
+          "id": "json-config",
+          "titleZh": "用表单或 JSON 查看和保存全部 MCP 服务器配置",
+          "titleEn": "View and save all MCP server configuration through forms or JSON"
+        },
+        {
+          "id": "server-types",
+          "titleZh": "添加本地进程、远程 HTTP/SSE 或容器 MCP 服务器",
+          "titleEn": "Add local-process, remote HTTP/SSE, or container MCP servers"
+        },
+        {
+          "id": "lifecycle",
+          "titleZh": "启动、停止、重启和删除单个 MCP 服务器",
+          "titleEn": "Start, stop, restart, and delete individual MCP servers"
+        },
+        {
+          "id": "status",
+          "titleZh": "查看初始化、连接、健康、重连、鉴权和失败状态",
+          "titleEn": "Inspect initialization, connection, health, reconnecting, authentication, and failure states"
+        },
+        {
+          "id": "remote-auth",
+          "titleZh": "配置远程 Header/环境变量认证或清除已有凭据",
+          "titleEn": "Configure remote header/environment authentication or clear stored credentials"
+        },
+        {
+          "id": "oauth",
+          "titleZh": "发起、轮询、取消或重新连接远程 MCP OAuth",
+          "titleEn": "Start, poll, cancel, or reconnect remote MCP OAuth"
+        },
+        {
+          "id": "tools-prompts",
+          "titleZh": "查看 MCP 工具、Prompt 列表并读取指定 Prompt",
+          "titleEn": "Browse MCP tools and prompts and load a selected prompt"
+        },
+        {
+          "id": "resources",
+          "titleZh": "列出、读取和打开 MCP Resources",
+          "titleEn": "List, read, and open MCP resources"
+        },
+        {
+          "id": "mcp-apps",
+          "titleZh": "打开 MCP App/UI、双向发送消息并回答交互请求",
+          "titleEn": "Open MCP App/UI surfaces, exchange messages, and answer interaction requests"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > MCP”",
+        "添加服务器并确认其权限与连接状态"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > MCP",
+        "Add a server and review its permissions and connection state"
+      ],
+      "agentExamplesZh": [
+        "打开 MCP 设置",
+        "带我管理 MCP 服务器"
+      ],
+      "agentExamplesEn": [
+        "Open MCP settings",
+        "Take me to MCP server management"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.mcp"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.tools.mcp",
+        "MCP 服务器",
+        "MCP servers",
+        "扩展与自动化",
+        "Extensions & automation",
+        "MCP",
+        "工具服务器",
+        "stdio",
+        "SSE",
+        "OAuth",
+        "资源",
+        "MCP server",
+        "tool server",
+        "resource",
+        "添加本地或远程 MCP 服务器",
+        "查看连接健康与工具清单",
+        "完成远程 OAuth 授权",
+        "Add local or remote MCP servers",
+        "Inspect connection health and tool inventory",
+        "Complete remote OAuth authorization",
+        "用表单或 JSON 查看和保存全部 MCP 服务器配置",
+        "View and save all MCP server configuration through forms or JSON",
+        "添加本地进程、远程 HTTP/SSE 或容器 MCP 服务器",
+        "Add local-process, remote HTTP/SSE, or container MCP servers",
+        "启动、停止、重启和删除单个 MCP 服务器",
+        "Start, stop, restart, and delete individual MCP servers",
+        "查看初始化、连接、健康、重连、鉴权和失败状态",
+        "Inspect initialization, connection, health, reconnecting, authentication, and failure states",
+        "配置远程 Header/环境变量认证或清除已有凭据",
+        "Configure remote header/environment authentication or clear stored credentials",
+        "发起、轮询、取消或重新连接远程 MCP OAuth",
+        "Start, poll, cancel, or reconnect remote MCP OAuth",
+        "查看 MCP 工具、Prompt 列表并读取指定 Prompt",
+        "Browse MCP tools and prompts and load a selected prompt",
+        "列出、读取和打开 MCP Resources",
+        "List, read, and open MCP resources",
+        "打开 MCP App/UI、双向发送消息并回答交互请求",
+        "Open MCP App/UI surfaces, exchange messages, and answer interaction requests"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.mcp/"
+    },
+    {
+      "id": "setting.tools.acp",
+      "kind": "setting",
+      "categoryId": "automation",
+      "titleZh": "ACP 外部 Agents",
+      "titleEn": "ACP external agents",
+      "summaryZh": "配置通过 Agent Client Protocol 接入的外部 Agent，并检查适配器、命令与会话选项。",
+      "summaryEn": "Configure external agents connected through Agent Client Protocol and inspect adapters, commands, and session options.",
+      "keywordsZh": [
+        "ACP",
+        "外部 Agent",
+        "Agent Client Protocol",
+        "OpenCode",
+        "Claude Code",
+        "Codex"
+      ],
+      "keywordsEn": [
+        "ACP",
+        "external agent",
+        "Agent Client Protocol",
+        "OpenCode",
+        "Claude Code",
+        "Codex"
+      ],
+      "highlightsZh": [
+        "注册外部 Agent",
+        "探测并安装 CLI 适配器",
+        "配置 ACP 会话选项"
+      ],
+      "highlightsEn": [
+        "Register external agents",
+        "Probe and install CLI adapters",
+        "Configure ACP session options"
+      ],
+      "items": [
+        {
+          "id": "presets",
+          "titleZh": "使用 OpenCode、dsh、OMP、Claude Code 和 Codex 等预设",
+          "titleEn": "Use presets for OpenCode, dsh, OMP, Claude Code, Codex, and others"
+        },
+        {
+          "id": "json-config",
+          "titleZh": "通过 JSON 查看、添加和保存 ACP Agent 配置",
+          "titleEn": "View, add, and save ACP agent configuration through JSON"
+        },
+        {
+          "id": "probe",
+          "titleZh": "探测 CLI、适配器、路径、版本、连接与权限要求",
+          "titleEn": "Probe CLI, adapter, path, version, connection, and permission requirements"
+        },
+        {
+          "id": "install",
+          "titleZh": "安装外部 Agent CLI 并预下载 ACP 客户端适配器",
+          "titleEn": "Install external-agent CLIs and predownload ACP client adapters"
+        },
+        {
+          "id": "remote-detection",
+          "titleZh": "在 SSH 远程工作区探测可用外部 Agent 并显示不支持原因",
+          "titleEn": "Detect available external agents in SSH workspaces and show explicit unsupported reasons"
+        },
+        {
+          "id": "session-model-options",
+          "titleZh": "为 ACP 会话选择模型并修改客户端声明的配置选项",
+          "titleEn": "Choose an ACP session model and edit client-declared configuration options"
+        },
+        {
+          "id": "session-commands",
+          "titleZh": "查看并执行外部 Agent 暴露的会话命令",
+          "titleEn": "Browse and run session commands exposed by an external agent"
+        },
+        {
+          "id": "dialog-permissions",
+          "titleZh": "开始或取消 ACP 对话，并远程回答外部 Agent 权限请求",
+          "titleEn": "Start or cancel ACP turns and answer external-agent permission requests remotely"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > ACP”",
+        "添加客户端并通过探测检查可用性"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > ACP",
+        "Add a client and probe its availability"
+      ],
+      "agentExamplesZh": [
+        "打开 ACP 设置",
+        "带我配置外部 Agent"
+      ],
+      "agentExamplesEn": [
+        "Open ACP settings",
+        "Take me to external-agent setup"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.acp"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.tools.acp",
+        "ACP 外部 Agents",
+        "ACP external agents",
+        "扩展与自动化",
+        "Extensions & automation",
+        "ACP",
+        "外部 Agent",
+        "Agent Client Protocol",
+        "OpenCode",
+        "Claude Code",
+        "Codex",
+        "external agent",
+        "注册外部 Agent",
+        "探测并安装 CLI 适配器",
+        "配置 ACP 会话选项",
+        "Register external agents",
+        "Probe and install CLI adapters",
+        "Configure ACP session options",
+        "使用 OpenCode、dsh、OMP、Claude Code 和 Codex 等预设",
+        "Use presets for OpenCode, dsh, OMP, Claude Code, Codex, and others",
+        "通过 JSON 查看、添加和保存 ACP Agent 配置",
+        "View, add, and save ACP agent configuration through JSON",
+        "探测 CLI、适配器、路径、版本、连接与权限要求",
+        "Probe CLI, adapter, path, version, connection, and permission requirements",
+        "安装外部 Agent CLI 并预下载 ACP 客户端适配器",
+        "Install external-agent CLIs and predownload ACP client adapters",
+        "在 SSH 远程工作区探测可用外部 Agent 并显示不支持原因",
+        "Detect available external agents in SSH workspaces and show explicit unsupported reasons",
+        "为 ACP 会话选择模型并修改客户端声明的配置选项",
+        "Choose an ACP session model and edit client-declared configuration options",
+        "查看并执行外部 Agent 暴露的会话命令",
+        "Browse and run session commands exposed by an external agent",
+        "开始或取消 ACP 对话，并远程回答外部 Agent 权限请求",
+        "Start or cancel ACP turns and answer external-agent permission requests remotely"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.acp/"
+    },
+    {
+      "id": "setting.data.usage",
+      "kind": "setting",
+      "categoryId": "data",
+      "titleZh": "Token 用量",
+      "titleEn": "Token usage",
+      "summaryZh": "查看请求、输入输出 Token、缓存命中和估算成本等使用统计。",
+      "summaryEn": "Inspect request counts, input and output tokens, cache hits, and estimated cost statistics.",
+      "keywordsZh": [
+        "Token 用量",
+        "成本",
+        "缓存",
+        "请求统计",
+        "用量历史"
+      ],
+      "keywordsEn": [
+        "token usage",
+        "cost",
+        "cache",
+        "request statistics",
+        "usage history"
+      ],
+      "highlightsZh": [
+        "按时间查看用量",
+        "区分输入、输出与缓存 Token",
+        "理解不同模型和会话的成本"
+      ],
+      "highlightsEn": [
+        "Review usage over time",
+        "Separate input, output, and cached tokens",
+        "Understand cost by model and session"
+      ],
+      "items": [
+        {
+          "id": "time-range",
+          "titleZh": "按最近 24 小时、今天、本周、本月或全部时间查看用量",
+          "titleEn": "Review usage for the last 24 hours, today, this week, this month, or all time"
+        },
+        {
+          "id": "granularity",
+          "titleZh": "按小时或天切换趋势粒度",
+          "titleEn": "Switch trend granularity between hourly and daily views"
+        },
+        {
+          "id": "filter",
+          "titleZh": "按供应商、模型或搜索关键词筛选用量",
+          "titleEn": "Filter usage by provider, model, or search text"
+        },
+        {
+          "id": "summary",
+          "titleZh": "查看请求数、总 Token、缓存 Token 与缓存命中率",
+          "titleEn": "View request count, total tokens, cached tokens, and cache-hit rate"
+        },
+        {
+          "id": "distribution",
+          "titleZh": "按模型、供应商组和请求端点比较分布",
+          "titleEn": "Compare distributions by model, provider group, and request endpoint"
+        },
+        {
+          "id": "trend",
+          "titleZh": "分别查看输入、输出、缓存创建、缓存读取和命中率趋势",
+          "titleEn": "Track input, output, cache creation, cache read, and hit-rate trends separately"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“数据 > 用量”",
+        "选择时间范围并查看统计"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Data > Usage",
+        "Choose a time range and inspect statistics"
+      ],
+      "agentExamplesZh": [
+        "打开 Token 用量",
+        "带我查看使用统计"
+      ],
+      "agentExamplesEn": [
+        "Open Token usage",
+        "Show me usage statistics"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "data.usage"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.data.usage",
+        "Token 用量",
+        "Token usage",
+        "数据与诊断",
+        "Data & diagnostics",
+        "成本",
+        "缓存",
+        "请求统计",
+        "用量历史",
+        "token usage",
+        "cost",
+        "cache",
+        "request statistics",
+        "usage history",
+        "按时间查看用量",
+        "区分输入、输出与缓存 Token",
+        "理解不同模型和会话的成本",
+        "Review usage over time",
+        "Separate input, output, and cached tokens",
+        "Understand cost by model and session",
+        "按最近 24 小时、今天、本周、本月或全部时间查看用量",
+        "Review usage for the last 24 hours, today, this week, this month, or all time",
+        "按小时或天切换趋势粒度",
+        "Switch trend granularity between hourly and daily views",
+        "按供应商、模型或搜索关键词筛选用量",
+        "Filter usage by provider, model, or search text",
+        "查看请求数、总 Token、缓存 Token 与缓存命中率",
+        "View request count, total tokens, cached tokens, and cache-hit rate",
+        "按模型、供应商组和请求端点比较分布",
+        "Compare distributions by model, provider group, and request endpoint",
+        "分别查看输入、输出、缓存创建、缓存读取和命中率趋势",
+        "Track input, output, cache creation, cache read, and hit-rate trends separately"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.data.usage/"
+    },
+    {
+      "id": "setting.data.archived",
+      "kind": "setting",
+      "categoryId": "data",
+      "titleZh": "已归档会话",
+      "titleEn": "Archived sessions",
+      "summaryZh": "查找、恢复或永久删除已归档的会话，管理长期会话历史。",
+      "summaryEn": "Find, restore, or permanently delete archived sessions and manage long-term conversation history.",
+      "keywordsZh": [
+        "已归档会话",
+        "会话历史",
+        "恢复会话",
+        "取消归档",
+        "删除历史"
+      ],
+      "keywordsEn": [
+        "archived sessions",
+        "session history",
+        "restore session",
+        "unarchive",
+        "delete history"
+      ],
+      "highlightsZh": [
+        "浏览归档会话",
+        "恢复到原工作区",
+        "显式永久删除历史"
+      ],
+      "highlightsEn": [
+        "Browse archived sessions",
+        "Restore to the original workspace",
+        "Explicitly delete history permanently"
+      ],
+      "items": [
+        {
+          "id": "browse",
+          "titleZh": "按工作区浏览分页归档会话及其元数据",
+          "titleEn": "Browse paged archived sessions and metadata by workspace"
+        },
+        {
+          "id": "search",
+          "titleZh": "按标题、内容和工作区搜索已归档会话",
+          "titleEn": "Search archived sessions by title, content, and workspace"
+        },
+        {
+          "id": "restore",
+          "titleZh": "恢复会话、轮次和原工作区视图并取消归档",
+          "titleEn": "Restore a session, its turns, and original workspace view, then unarchive it"
+        },
+        {
+          "id": "delete-selected",
+          "titleZh": "明确确认后永久删除选中的归档会话",
+          "titleEn": "Permanently delete a selected archived session after explicit confirmation"
+        },
+        {
+          "id": "delete-all",
+          "titleZh": "明确确认后永久删除全部归档会话",
+          "titleEn": "Permanently delete all archived sessions after explicit confirmation"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“数据 > 已归档会话”",
+        "选择会话后恢复或删除"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Data > Archived Sessions",
+        "Choose a session to restore or delete"
+      ],
+      "agentExamplesZh": [
+        "打开已归档会话",
+        "带我恢复一个旧会话"
+      ],
+      "agentExamplesEn": [
+        "Open archived sessions",
+        "Take me to restore an old session"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "data.archived"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.data.archived",
+        "已归档会话",
+        "Archived sessions",
+        "数据与诊断",
+        "Data & diagnostics",
+        "会话历史",
+        "恢复会话",
+        "取消归档",
+        "删除历史",
+        "archived sessions",
+        "session history",
+        "restore session",
+        "unarchive",
+        "delete history",
+        "浏览归档会话",
+        "恢复到原工作区",
+        "显式永久删除历史",
+        "Browse archived sessions",
+        "Restore to the original workspace",
+        "Explicitly delete history permanently",
+        "按工作区浏览分页归档会话及其元数据",
+        "Browse paged archived sessions and metadata by workspace",
+        "按标题、内容和工作区搜索已归档会话",
+        "Search archived sessions by title, content, and workspace",
+        "恢复会话、轮次和原工作区视图并取消归档",
+        "Restore a session, its turns, and original workspace view, then unarchive it",
+        "明确确认后永久删除选中的归档会话",
+        "Permanently delete a selected archived session after explicit confirmation",
+        "明确确认后永久删除全部归档会话",
+        "Permanently delete all archived sessions after explicit confirmation"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.data.archived/"
+    },
+    {
+      "id": "setting.data.diagnostics",
+      "kind": "setting",
+      "categoryId": "data",
+      "titleZh": "日志与诊断",
+      "titleEn": "Logs & diagnostics",
+      "summaryZh": "调整日志级别，查看运行日志路径，并导出用于排查问题的诊断包。",
+      "summaryEn": "Adjust logging level, inspect runtime log locations, and export diagnostic bundles for troubleshooting.",
+      "keywordsZh": [
+        "诊断",
+        "日志",
+        "调试",
+        "日志级别",
+        "诊断包",
+        "故障排查"
+      ],
+      "keywordsEn": [
+        "diagnostics",
+        "logs",
+        "debug",
+        "log level",
+        "diagnostic bundle",
+        "troubleshooting"
+      ],
+      "highlightsZh": [
+        "调整后端日志级别",
+        "查看当前与上次异常退出日志",
+        "导出诊断包并控制敏感信息"
+      ],
+      "highlightsEn": [
+        "Adjust backend log level",
+        "Inspect current and previous-crash logs",
+        "Export bundles and control sensitive diagnostics"
+      ],
+      "items": [
+        {
+          "id": "log-level",
+          "titleZh": "设置 Trace、Debug、Info、Warn、Error 或关闭后端日志",
+          "titleEn": "Set backend logging to Trace, Debug, Info, Warn, Error, or Off"
+        },
+        {
+          "id": "sensitive-diagnostics",
+          "titleZh": "选择诊断中是否允许包含敏感上下文，并在导出前明确提示",
+          "titleEn": "Choose whether diagnostics may include sensitive context, with an explicit warning before export"
+        },
+        {
+          "id": "log-path",
+          "titleZh": "查看日志路径并打开日志文件夹",
+          "titleEn": "Inspect the log path and open the log folder"
+        },
+        {
+          "id": "export-bundle",
+          "titleZh": "导出包含系统、配置健康和日志信息的诊断包",
+          "titleEn": "Export a diagnostics bundle containing system, configuration-health, and log information"
+        },
+        {
+          "id": "crash-recovery",
+          "titleZh": "查看上次崩溃、非正常退出、启动恢复和配置恢复信息",
+          "titleEn": "Inspect previous crashes, unclean shutdowns, startup recovery, and configuration recovery"
+        },
+        {
+          "id": "devtools",
+          "titleZh": "在开发构建中检查 DevTools 是否可用并打开或关闭",
+          "titleEn": "In development builds, check DevTools availability and open or close them"
+        },
+        {
+          "id": "element-inspector",
+          "titleZh": "在开发构建中启用主窗口元素检查并回传选中的元素",
+          "titleEn": "In development builds, inspect main-window elements and report the selected element"
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“数据 > 日志与诊断”",
+        "选择日志级别，或按需导出诊断包"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Data > Logs & Diagnostics",
+        "Choose a log level or export a bundle when needed"
+      ],
+      "agentExamplesZh": [
+        "把日志级别改成 debug",
+        "打开诊断设置",
+        "带我导出诊断包"
+      ],
+      "agentExamplesEn": [
+        "Set the log level to debug",
+        "Open diagnostics settings",
+        "Take me to export a diagnostic bundle"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "data.diagnostics"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "log-level",
+          "titleZh": "日志级别",
+          "titleEn": "Log level",
+          "descriptionZh": "设置后端运行日志的详细程度。",
+          "descriptionEn": "Set the verbosity of backend runtime logs.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warn",
+              "info",
+              "debug",
+              "trace"
+            ]
+          }
+        },
+        {
+          "id": "sensitive-diagnostics",
+          "titleZh": "诊断包包含敏感信息",
+          "titleEn": "Include sensitive diagnostics",
+          "descriptionZh": "仅在明确需要并理解隐私风险时启用。",
+          "descriptionEn": "Enable only when explicitly needed and after reviewing the privacy risk.",
+          "valueSchema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.data.diagnostics",
+        "日志与诊断",
+        "Logs & diagnostics",
+        "数据与诊断",
+        "Data & diagnostics",
+        "诊断",
+        "日志",
+        "调试",
+        "日志级别",
+        "诊断包",
+        "故障排查",
+        "diagnostics",
+        "logs",
+        "debug",
+        "log level",
+        "diagnostic bundle",
+        "troubleshooting",
+        "调整后端日志级别",
+        "查看当前与上次异常退出日志",
+        "导出诊断包并控制敏感信息",
+        "Adjust backend log level",
+        "Inspect current and previous-crash logs",
+        "Export bundles and control sensitive diagnostics",
+        "设置 Trace、Debug、Info、Warn、Error 或关闭后端日志",
+        "Set backend logging to Trace, Debug, Info, Warn, Error, or Off",
+        "选择诊断中是否允许包含敏感上下文，并在导出前明确提示",
+        "Choose whether diagnostics may include sensitive context, with an explicit warning before export",
+        "查看日志路径并打开日志文件夹",
+        "Inspect the log path and open the log folder",
+        "导出包含系统、配置健康和日志信息的诊断包",
+        "Export a diagnostics bundle containing system, configuration-health, and log information",
+        "查看上次崩溃、非正常退出、启动恢复和配置恢复信息",
+        "Inspect previous crashes, unclean shutdowns, startup recovery, and configuration recovery",
+        "在开发构建中检查 DevTools 是否可用并打开或关闭",
+        "In development builds, check DevTools availability and open or close them",
+        "在开发构建中启用主窗口元素检查并回传选中的元素",
+        "In development builds, inspect main-window elements and report the selected element"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.data.diagnostics/"
+    }
+  ]
+}

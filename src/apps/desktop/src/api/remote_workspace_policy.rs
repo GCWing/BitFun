@@ -1573,6 +1573,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "report_bitfun_control_result",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "report_canvas_runtime_error",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

@@ -139,14 +139,29 @@ const PersistentFooterActions: React.FC = () => {
       return;
     }
 
+    setRemoteInitialGroup(undefined);
     setShowRemoteDisclaimer(true);
+  }, [hasAgreedRemoteDisclaimer]);
+
+  useEffect(() => {
+    const handlePlaybookOpen = (event: Event) => {
+      const requestedGroup = (event as CustomEvent<{ group?: 'network' | 'bot' | 'account' }>).detail?.group;
+      setRemoteInitialGroup(requestedGroup);
+      if (hasAgreedRemoteDisclaimer || getRemoteConnectDisclaimerAgreed()) {
+        setHasAgreedRemoteDisclaimer(true);
+        setShowRemoteConnect(true);
+      } else {
+        setShowRemoteDisclaimer(true);
+      }
+    };
+    window.addEventListener('bitfun:open-remote-connect', handlePlaybookOpen);
+    return () => window.removeEventListener('bitfun:open-remote-connect', handlePlaybookOpen);
   }, [hasAgreedRemoteDisclaimer]);
 
   const handleAgreeDisclaimer = useCallback(() => {
     setRemoteConnectDisclaimerAgreed();
     setHasAgreedRemoteDisclaimer(true);
     setShowRemoteDisclaimer(false);
-    setRemoteInitialGroup(undefined);
     setShowRemoteConnect(true);
   }, []);
 
