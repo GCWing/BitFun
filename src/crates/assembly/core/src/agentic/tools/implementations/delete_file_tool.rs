@@ -338,7 +338,7 @@ Important notes:
                 &resolved.logical_path,
                 vec![resolved.logical_path.clone()],
             )
-            .await;
+            .await?;
 
         // Remote workspace path: delete via shell command
         if resolved.uses_remote_workspace_backend() {
