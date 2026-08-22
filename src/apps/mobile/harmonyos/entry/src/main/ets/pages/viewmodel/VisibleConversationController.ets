@@ -58,7 +58,10 @@ export class VisibleConversationController {
       this.openGeneralSession(session);
       return;
     }
-    this.createFlow.openRemoteSession(session, inPlace);
+    void this.createFlow.openRemoteSession(session, inPlace).catch((err: Object) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.notify(message);
+    });
   }
 
   async deleteHomeSession(session: RemoteSession): Promise<void> {

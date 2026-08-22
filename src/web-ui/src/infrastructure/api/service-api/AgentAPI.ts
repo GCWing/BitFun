@@ -364,6 +364,8 @@ export type LoadSessionTurnWindowResponse =
 
 export interface RollbackSessionToTurnRequest {
   workspacePath: string;
+  workspaceId?: string;
+  workspaceHostname?: string;
   sessionId: string;
   targetTurnId: string;
   expectedStorageTurnIndex?: number;
@@ -1383,6 +1385,10 @@ export class AgentAPI {
 
   onSessionStateChanged(callback: (event: AgenticEvent) => void): () => void {
     return api.listen<AgenticEvent>('agentic://session-state-changed', callback);
+  }
+
+  onSessionHistoryChanged(callback: (event: AgenticEvent) => void): () => void {
+    return api.listen<AgenticEvent>('agentic://session-history-changed', callback);
   }
 
   onSessionModelAutoMigrated(

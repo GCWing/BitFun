@@ -76,9 +76,6 @@ ssh_config = { workspace = true, optional = true }
 terminal-core = { path = "../terminal", optional = true }
 x25519-dalek = { workspace = true, optional = true }
 
-[target.'cfg(not(windows))'.dependencies]
-git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
-
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { workspace = true, optional = true }
 
@@ -88,8 +85,6 @@ windows-native-keyring-store = { workspace = true, optional = true }
 windows = { workspace = true, optional = true, features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Threading",
 ] }
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
@@ -204,6 +199,10 @@ miniapp-market = [
     "dep:zbus-secret-service-keyring-store",
     "hex",
     "image",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
     "miniapp-runtime",
     "reqwest",
     "reqwest/json",
@@ -264,6 +263,11 @@ remote-connect = [
     "hostname",
     "hex",
     "image",
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
     "local-ip-address",
     "mac_address",
     "md5",
@@ -285,7 +289,8 @@ remote-connect = [
     "tokio/rt",
     "tokio/sync",
     "tokio/time",
-    "tokio-tungstenite",
+    "dep:tokio-tungstenite",
+    "tokio-tungstenite?/rustls-tls-native-roots",
     "urlencoding",
     "uuid",
     "which",

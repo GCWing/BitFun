@@ -18,4 +18,11 @@ describe('ModernFlowChatContainer natural navigation contract', () => {
     expect(componentSource).not.toContain('pinTurnToTop');
     expect(componentSource).not.toContain('prepareTurnPinToTop');
   });
+
+  it('keeps provisional mount snapshots and auto-tail placement out of session restoration', () => {
+    expect(componentSource).toContain('viewportRestorePendingSessionIdRef');
+    expect(componentSource).toContain('viewport.sessionSnapshotIgnoredDuringRestore');
+    expect(componentSource).toContain('onViewportRestoreSettled={handleViewportRestoreSettled}');
+    expect(componentSource).toContain('viewportRestorePendingSessionId === sessionId');
+  });
 });

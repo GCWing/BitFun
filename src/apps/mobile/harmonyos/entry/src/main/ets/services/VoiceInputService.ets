@@ -3,6 +3,7 @@ import { audio } from '@kit.AudioKit';
 import { speechRecognizer } from '@kit.CoreSpeechKit';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { Encoding } from './Encoding';
+import { OhosError } from './OhosError';
 
 export type VoiceInputState = 'idle' | 'listening';
 
@@ -23,6 +24,7 @@ export class VoiceInputService {
   private listening: boolean = false;
   private reading: boolean = false;
   private callbacks?: VoiceInputCallbacks;
+  private readDataListener?: (buffer: ArrayBuffer) => void;
 
   isListening(): boolean {
     return this.listening;
@@ -35,10 +37,10 @@ export class VoiceInputService {
       await this.ensureMicrophonePermission(context);
       this.sessionId = Encoding.randomId('voice');
       this.engine = await speechRecognizer.createEngine({
-        language: 'zh-CN',
+        language: RemoteI18n.speechLanguage(),
         online: 1,
         extraParams: {
-          locate: 'CN',
+          locate: RemoteI18n.speechLocate(),
           recognizerMode: 'short'
         }
       });
@@ -59,11 +61,11 @@ export class VoiceInputService {
           maxAudioDuration: 55000
         }
       });
+      this.attachReadData(this.sessionId);
       await this.capturer.start();
       this.listening = true;
       this.reading = true;
       this.callbacks?.onState?.('listening');
-      this.captureLoop(this.sessionId);
     } catch (err) {
       await this.cancelInternal(true);
       throw new Error(this.errorMessage(err));
@@ -95,11 +97,15 @@ export class VoiceInputService {
   }
 
   private async ensureMicrophonePermission(context: Context): Promise<void> {
-    const atManager = abilityAccessCtrl.createAtManager();
-    const result = await atManager.requestPermissionsFromUser(context, [MICROPHONE_PERMISSION]);
-    if (result.authResults.length === 0 ||
-      result.authResults[0] !== abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
-      throw new Error(RemoteI18n.t('errors.voicePermissionDenied'));
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const result = await atManager.requestPermissionsFromUser(context, [MICROPHONE_PERMISSION]);
+      if (result.authResults.length === 0 ||
+        result.authResults[0] !== abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+        throw new Error(RemoteI18n.t('errors.voicePermissionDenied'));
+      }
+    } catch (err) {
+      throw OhosError.wrap('voice microphone permission', err);
     }
   }
 
@@ -151,25 +157,40 @@ export class VoiceInputService {
     };
   }
 
-  private async captureLoop(sessionId: string): Promise<void> {
-    while (this.reading && this.sessionId === sessionId) {
-      const capturer = this.capturer;
-      if (!capturer) {
-        break;
+  private attachReadData(sessionId: string): void {
+    const capturer = this.capturer;
+    if (!capturer) {
+      return;
+    }
+    this.detachReadData();
+    this.readDataListener = (buffer: ArrayBuffer): void => {
+      if (!this.reading || this.sessionId !== sessionId) {
+        return;
       }
       try {
-        const buffer = await capturer.read(AUDIO_CHUNK_BYTES, true);
-        if (!this.reading || this.sessionId !== sessionId) {
-          break;
-        }
         this.writeAudioBuffer(sessionId, buffer);
       } catch (err) {
-        if (this.reading) {
-          this.callbacks?.onError?.(this.errorMessage(err));
-          await this.cancelInternal(true);
-        }
-        break;
+        this.callbacks?.onError?.(this.errorMessage(err));
+        void this.cancelInternal(true);
       }
+    };
+    try {
+      capturer.on('readData', this.readDataListener);
+    } catch (err) {
+      throw OhosError.wrap('voice attach read data', err);
+    }
+  }
+
+  private detachReadData(): void {
+    const capturer = this.capturer;
+    const listener = this.readDataListener;
+    this.readDataListener = undefined;
+    if (!capturer || !listener) {
+      return;
+    }
+    try {
+      capturer.off('readData', listener);
+    } catch (_err) {
     }
   }
 
@@ -180,13 +201,17 @@ export class VoiceInputService {
     }
     const data = new Uint8Array(buffer);
     let offset = 0;
-    while (offset + AUDIO_CHUNK_BYTES <= data.length) {
-      engine.writeAudio(sessionId, data.subarray(offset, offset + AUDIO_CHUNK_BYTES));
-      offset += AUDIO_CHUNK_BYTES;
-    }
-    const remaining = data.length - offset;
-    if (remaining === HALF_AUDIO_CHUNK_BYTES) {
-      engine.writeAudio(sessionId, data.subarray(offset, offset + HALF_AUDIO_CHUNK_BYTES));
+    try {
+      while (offset + AUDIO_CHUNK_BYTES <= data.length) {
+        engine.writeAudio(sessionId, data.subarray(offset, offset + AUDIO_CHUNK_BYTES));
+        offset += AUDIO_CHUNK_BYTES;
+      }
+      const remaining = data.length - offset;
+      if (remaining === HALF_AUDIO_CHUNK_BYTES) {
+        engine.writeAudio(sessionId, data.subarray(offset, offset + HALF_AUDIO_CHUNK_BYTES));
+      }
+    } catch (err) {
+      throw OhosError.wrap('voice write audio', err);
     }
   }
 
@@ -219,6 +244,7 @@ export class VoiceInputService {
   }
 
   private async releaseCapturer(): Promise<void> {
+    this.detachReadData();
     const capturer = this.capturer;
     this.capturer = undefined;
     if (!capturer) {

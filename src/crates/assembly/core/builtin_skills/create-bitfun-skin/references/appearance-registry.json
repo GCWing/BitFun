@@ -1,9 +1,9 @@
 {
   "schema": "bitfun.appearance.registry",
   "schemaVersion": 1,
-  "generatedFrom": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
-  "generatedAt": "2026-08-16T16:09:40.016459+00:00",
-  "sourceRevision": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
+  "generatedFrom": "b5869b8d2ff5ffd03a558e0839e8a96837873c11",
+  "generatedAt": "2026-08-21T10:23:12.731577+00:00",
+  "sourceRevision": "b5869b8d2ff5ffd03a558e0839e8a96837873c11",
   "sourceDirty": false,
   "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "components": [
@@ -3091,6 +3091,52 @@
       ]
     },
     {
+      "id": "acp-mode-selector",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "label",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "option",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "open",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"open\"]"
+          }
+        },
+        {
+          "id": "selected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "flow-chat-header",
       "parts": [
         {
@@ -5409,6 +5455,20 @@
       ],
       "facets": [],
       "states": [
+        {
+          "id": "active",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"active\"]"
+          }
+        },
+        {
+          "id": "completed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"completed\"]"
+          }
+        },
         {
           "id": "cancelled",
           "selector": {
@@ -11352,6 +11412,41 @@
       ]
     },
     {
+      "id": "usage-statistics-config",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "filters",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "summary",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "distributions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "modelHitRate",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trendPanel",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "empty",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
       "id": "settings-nav",
       "parts": [
         {
@@ -15839,37 +15934,10 @@
         {
           "id": "root",
           "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "section",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "description",
-          "propertyProfile": "container"
         }
       ],
       "facets": [],
       "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
         {
           "id": "failed",
           "selector": {

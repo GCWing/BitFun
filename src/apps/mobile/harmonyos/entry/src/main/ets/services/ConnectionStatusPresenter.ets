@@ -1,23 +1,27 @@
 import { RemoteI18n } from '../i18n/RemoteI18n';
 
 export class ConnectionStatusPresenter {
-  static label(connectionState: string): string {
+  static labelKey(connectionState: string): string {
     if (connectionState === 'connected') {
-      return RemoteI18n.t('connection.connected');
+      return 'connection.connected';
     }
     if (connectionState === 'reconnecting') {
-      return RemoteI18n.t('connection.reconnecting');
+      return 'connection.reconnecting';
     }
     if (connectionState === 'pairing' || connectionState === 'parsing') {
-      return RemoteI18n.t('connection.connecting');
+      return 'connection.connecting';
     }
     if (connectionState === 'failed') {
-      return RemoteI18n.t('connection.error');
+      return 'connection.error';
     }
     if (connectionState === 'disconnected') {
-      return RemoteI18n.t('connection.disconnected');
+      return 'connection.disconnected';
     }
-    return RemoteI18n.t('connection.waiting');
+    return 'connection.waiting';
+  }
+
+  static label(connectionState: string): string {
+    return RemoteI18n.t(ConnectionStatusPresenter.labelKey(connectionState));
   }
 
   static detail(connectionState: string, statusText: string, desktopName: string, userId: string): string {

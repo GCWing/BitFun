@@ -36,6 +36,7 @@ export interface AgenticEventCallbacks {
   onSessionCreated?: (event: AgenticEvent) => void;
   onSessionDeleted?: (event: AgenticEvent) => void;
   onSessionStateChanged?: (event: AgenticEvent) => void;
+  onSessionHistoryChanged?: (event: AgenticEvent) => void;
   onImageAnalysisStarted?: (event: ImageAnalysisEvent) => void;
   onImageAnalysisCompleted?: (event: ImageAnalysisEvent) => void;
   onDialogTurnStarted?: (event: AgenticEvent) => void;
@@ -101,6 +102,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onSessionStateChanged((event) => {
           logger.debug('Session state changed:', event);
           callbacks.onSessionStateChanged?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onSessionHistoryChanged) {
+        const unlisten = agentAPI.onSessionHistoryChanged((event) => {
+          logger.debug('Session history changed:', event);
+          callbacks.onSessionHistoryChanged?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }
@@ -343,6 +352,9 @@ export class AgenticEventListener {
         break;
       case 'agentic://session-state-changed':
         callbacks.onSessionStateChanged?.(payload as AgenticEvent);
+        break;
+      case 'agentic://session-history-changed':
+        callbacks.onSessionHistoryChanged?.(payload as AgenticEvent);
         break;
       case 'agentic://image-analysis-started':
         callbacks.onImageAnalysisStarted?.(payload as unknown as ImageAnalysisEvent);

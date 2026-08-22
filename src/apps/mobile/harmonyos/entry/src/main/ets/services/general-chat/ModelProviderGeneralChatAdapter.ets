@@ -7,6 +7,7 @@ import {
 } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { Encoding } from '../Encoding';
+import { OhosError } from '../OhosError';
 import { GeneralChatConfigStore } from './GeneralChatConfigStore';
 import { GeneralChatPort, GeneralChatSendResult, GeneralChatStreamObserver } from './GeneralChatPort';
 import { ModelProviderSseParser } from './ModelProviderSseParser';
@@ -136,6 +137,8 @@ export class HarmonyModelProviderHttpTransport implements ModelProviderHttpTrans
         statusCode,
         body: responseBody
       };
+    } catch (err) {
+      throw OhosError.wrap('general chat stream request', err);
     } finally {
       request.off('dataReceive', dataCallback);
       request.destroy();

@@ -400,11 +400,11 @@ pub struct RestartAppRequest {}
 #[allow(unreachable_code)]
 pub async fn restart_app(app: AppHandle, request: RestartAppRequest) -> Result<(), String> {
     let _ = request;
-    crate::crash_diagnostics::mark_clean_shutdown("restart_app");
     crate::save_main_window_state(&app);
-    crate::perform_process_exit_cleanup();
+    crate::perform_process_exit_cleanup().await;
+    crate::crash_diagnostics::mark_clean_shutdown("restart_app");
+    log::info!("Desktop restart authorized after graceful shutdown");
     app.restart();
-    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -659,9 +659,10 @@ pub async fn set_main_window_transient_geometry(
 #[tauri::command]
 pub async fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
     log::info!("Quit requested via quit_app command");
-    crate::crash_diagnostics::mark_clean_shutdown("quit_app_command");
     crate::save_main_window_state(&app);
-    crate::perform_process_exit_cleanup();
+    crate::perform_process_exit_cleanup().await;
+    crate::crash_diagnostics::mark_clean_shutdown("quit_app_command");
+    log::info!("Desktop exit authorized after graceful shutdown: reason=quit_app_command");
     app.exit(0);
     Ok(())
 }
@@ -731,9 +732,12 @@ pub async fn startup_window_control(
 
             if behavior == "quit" {
                 log::info!("Quit requested from startup window control");
-                crate::crash_diagnostics::mark_clean_shutdown("startup_window_control");
                 crate::save_main_window_state(&app);
-                crate::perform_process_exit_cleanup();
+                crate::perform_process_exit_cleanup().await;
+                crate::crash_diagnostics::mark_clean_shutdown("startup_window_control");
+                log::info!(
+                    "Desktop exit authorized after graceful shutdown: reason=startup_window_control"
+                );
                 app.exit(0);
             } else {
                 if let Err(error) = crate::tray::setup_tray(&app, &startup_trace) {

@@ -4,7 +4,13 @@ import {
 } from '../actions/AppRootPresentationActions';
 import { AppRouteContract } from '../navigation/AppRouteContract';
 import { AppShellState, CONNECT_INTENT_AUTO } from '../state/AppShellState';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
+import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
 import { AppSidebar } from './AppSidebar';
 import { ConnectView } from './ConnectView';
@@ -16,7 +22,10 @@ import { SidebarWorkspaceSection } from './SidebarWorkspaceSection';
 @ComponentV2
 export struct AppSidebarSurface {
   @Param shellState: AppShellState = new AppShellState();
+  @Param sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Param remotePageState: RemotePageState = new RemotePageState();
+  @Param deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
   @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
   @Param remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
   @Param actions: AppRootPresentationActions = emptyAppRootPresentationActions();
@@ -25,6 +34,7 @@ export struct AppSidebarSurface {
   build() {
     AppSidebar({
       sessions: this.generalPageState.recentSessions(),
+      sessionDetailsPlacement: this.sessionDetailsPlacement,
       pinnedSessionId: this.generalPageState.pinnedSessionId(),
       selectedSessionId: AppRouteContract.isGeneralComposerRoute(this.shellState.activeRoute) ?
         this.generalPageState.conversation.activeSession.sessionId : '',
@@ -54,31 +64,40 @@ export struct AppSidebarSurface {
   @Builder
   private WorkspaceContent() {
     SidebarWorkspaceSection({
+      directoryState: this.deviceDirectoryState,
       sessions: this.remotePageState.visibleSessions(),
       recentWorkspaces: this.remotePageState.recentWorkspaces,
       workspaceName: this.remotePageState.workspaceName,
       workspacePath: this.remotePageState.workspacePath,
       workspaceKind: this.remotePageState.workspaceKind,
       connectionState: this.remotePageState.connectionState,
+      controlTargetDeviceId: this.remotePageState.controlTargetDeviceId,
+      controlTargetDeviceName: this.remotePageState.controlTargetDeviceName ||
+        this.remotePageState.desktopName,
       selectedSessionId: this.remoteSelectedSessionId(),
       runningSessionId: this.remoteRunningSessionId(),
-      // `openSession` already routes by agentType, so a workspace session needs
-      // no source switch ahead of it — the tap is the whole gesture.
       onOpenSession: this.actions.onSidebar.openSession,
-      onCreateInWorkspace: (path: string) => {
+      onCreateInWorkspace: (deviceId: string, path: string) => {
         this.actions.onSidebar.close();
-        this.actions.onRemoteHome.createInWorkspace(path, 'code');
+        this.actions.onRemoteHome.createInWorkspace(path, 'code', deviceId);
       },
-      onOpenWorkspace: (path: string) => {
-        this.actions.onRemoteHome.selectWorkspace(path);
+      onOpenWorkspace: (deviceId: string, path: string) => {
+        this.actions.onRemoteHome.selectWorkspace(path, deviceId);
       },
+      onToggleDevice: this.actions.onRemoteHome.toggleDirectoryDevice,
+      onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
       onConnect: this.actions.onSidebar.connectDesktop
     })
   }
 
   private remoteSelectedSessionId(): string {
-    return AppRouteContract.isGeneralComposerRoute(this.shellState.activeRoute) ?
-      '' : this.remotePageState.activeSession.sessionId;
+    if (AppRouteContract.isGeneralComposerRoute(this.shellState.activeRoute)) {
+      return '';
+    }
+    if (this.remotePageState.pendingSessionId.length > 0) {
+      return this.remotePageState.pendingSessionId;
+    }
+    return this.remotePageState.activeSession.sessionId;
   }
 
   private remoteRunningSessionId(): string {
@@ -123,6 +142,7 @@ export struct AppSettingsSurface {
       })
     } else {
       SettingsSheet({
+        sheetState: this.shellState.settingsSheet,
         generalChatApiUrl: this.generalPageState.apiUrl,
         generalChatModelName: this.generalPageState.modelName,
         hasGeneralChatApiKey: this.generalPageState.hasApiKey,
@@ -134,6 +154,8 @@ export struct AppSettingsSurface {
         onOpenAccount: this.actions.onSettings.openAccount,
         onTestGeneralChatConfig: this.actions.onSettings.testGeneral,
         onSaveGeneralChatConfig: this.actions.onSettings.saveGeneral,
+        onSelectGeneralChatModel: this.actions.onSettings.selectGeneralModel,
+        onSetLanguage: this.actions.onSettings.setLanguage,
         onClose: this.actions.onSettings.close
       })
     }

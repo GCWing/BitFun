@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   estimateTextHeightFromLength,
+  describeVirtualItemEstimate,
   estimateVirtualMessageItemHeightWithContext,
   estimateVirtualMessageItemHeight,
   getVirtualMessageDefaultItemHeight,
@@ -179,15 +180,18 @@ describe('estimateVirtualMessageItemHeight', () => {
         rounds: [],
         isGroupStreaming: false,
         isLastGroupInTurn: true,
-        wasCutByCritical: true,
+        wasCutByCritical: false,
       },
     } as VirtualItem;
     const collapsed = estimateVirtualMessageItemHeightWithContext(exploreItem, {
       exploreGroupStates: new Map([['group-1', false]]),
     });
+    const defaultHeight = estimateVirtualMessageItemHeightWithContext(exploreItem);
     const expanded = estimateVirtualMessageItemHeightWithContext(exploreItem, {
       exploreGroupStates: new Map([['group-1', true]]),
     });
+    expect(describeVirtualItemEstimate(exploreItem)).toMatchObject({ defaultExpanded: false });
+    expect(defaultHeight).toBe(collapsed);
     expect(expanded).toBeGreaterThan(collapsed);
   });
 });

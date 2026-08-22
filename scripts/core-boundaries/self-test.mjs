@@ -4387,11 +4387,19 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/services/services-integrations/src/workspace_search/service.rs',
-      contracts: ['WorkspaceSearchRepoConfig', 'with_scan_fallback'],
+      contracts: ['WorkspaceSearchRepoConfig'],
     },
     {
       path: 'src/crates/services/services-integrations/src/workspace_search/result_mapping.rs',
-      contracts: ['convert_hits_to_file_search_results', 'split_preview', 'preview_inside'],
+      contracts: ['convert_hits_to_file_search_results', 'line_hydration', 'preview_inside'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/workspace_search/line_hydration.rs',
+      contracts: ['hydrate_grouped_line_matches', 'MAX_HYDRATED_LINE_COLUMNS', 'ContentMatchPreviewBuilder'],
+    },
+    {
+      path: 'src/crates/services/services-core/src/filesystem/content_preview.rs',
+      contracts: ['compile_content_search_regex', 'build_content_match_preview', 'ContentMatchPreviewBuilder'],
     },
     {
       path: 'src/crates/assembly/core/src/service/search/service.rs',
@@ -4415,7 +4423,7 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/service.rs',
-      contracts: ['RemoteWorkspaceSearchProvider', 'RemoteWorkspaceSearchService', 'RemoteWorkspaceSearchStdioProtocol', 'REMOTE_STDIO_SESSIONS', 'ensure_remote_search_context', 'allow_scan_fallback', 'fallback_query', 'remote_search_rejects_non_linux_before_stdio_open'],
+      contracts: ['RemoteWorkspaceSearchProvider', 'RemoteWorkspaceSearchService', 'RemoteWorkspaceSearchStdioProtocol', 'REMOTE_STDIO_SESSIONS', 'ensure_remote_search_context', 'fallback_query', 'remote_search_rejects_non_linux_before_stdio_open'],
     },
     {
       path: 'src/crates/assembly/core/src/service/search/mod.rs',
@@ -5590,14 +5598,32 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
   const cliManifestPattern = cliManifestRule?.patterns[0]?.regex;
   if (
     !cliManifestPattern ||
-    !cliManifestPattern.test('bitfun-app-server = { path = "..." }') ||
+    cliManifestPattern.test('bitfun-app-server = { path = "..." }') ||
     !cliManifestPattern.test('bitfun-app-server-client = { path = "..." }') ||
     !cliManifestPattern.test('bitfun-tui-management = { path = "..." }') ||
     !cliManifestPattern.test('bitfun-app-server-protocol = { path = "..." }') ||
     cliManifestPattern.test('bitfun-agent-runtime-ipc = { path = "..." }')
   ) {
-    throw new Error('CLI manifest guard must forbid App Server, wire DTOs, and shared TUI management implementations while allowing contracts and Runtime IPC');
+    throw new Error('CLI manifest guard must allow the App Server stdio host while forbidding the typed client transport, wire DTOs, and shared TUI management implementations, and allowing contracts and Runtime IPC');
   }
+  const cliServerHostRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/apps/cli/src',
+  );
+  const cliServerHostPattern = cliServerHostRule?.patterns[0];
+  if (!cliServerHostPattern) {
+    throw new Error('CLI source must carry a bitfun_app_server import guard');
+  }
+  if (!cliServerHostPattern.regex.test('use bitfun_app_server::BitfunAppServer;')) {
+    throw new Error('CLI app-server import guard must match implementation imports');
+  }
+  if (
+    !cliServerHostPattern.allowPaths ||
+    cliServerHostPattern.allowPaths.length !== 1 ||
+    cliServerHostPattern.allowPaths[0] !== 'src/apps/cli/src/server_host.rs'
+  ) {
+    throw new Error('CLI app-server import guard must allow only the reviewed stdio Server Host assembly point');
+  }
+
   const runtimeIpcOperationPattern = runtimeIpcOperationRule?.patterns[0]?.regex;
   if (
     !runtimeIpcOperationPattern ||

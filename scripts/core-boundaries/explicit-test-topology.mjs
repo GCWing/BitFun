@@ -25,6 +25,7 @@ export const agentRuntimeIntegrationTestTargets = [
 
 export const cliIntegrationTestTargets = [
   { name: 'acp_stdio_cli', path: 'tests/acp_stdio_cli.rs' },
+  { name: 'app_server_stdio_cli', path: 'tests/app_server_stdio_cli.rs' },
   { name: 'cli_command_contracts', path: 'tests/cli_command_contracts.rs' },
   { name: 'terminal_process_contracts', path: 'tests/terminal_process_contracts.rs' },
 ];

@@ -2,8 +2,8 @@
 
 FlowChat reserves a resident tail spacer below the transcript, and pairs it with
 a follow target that does not move backwards for free. Together these give a
-newly submitted Turn a top-aligned position and keep a tool-card collapse from
-dragging earlier content down.
+newly submitted Turn a one-shot reveal with room below it and keep a tool-card
+collapse from dragging earlier content down.
 
 That is this document. Four siblings carry the rest.
 
@@ -11,7 +11,7 @@ That is this document. Four siblings carry the rest.
 
 | Changing | Read |
 |---|---|
-| the tail spacer, the follow target, pinning, holding, resizing, the footer | this file |
+| the tail spacer, the follow target, new-Turn reveal, holding, resizing, the footer | this file |
 | history paging, the prepend, the viewport anchor, history presentation | `FLOWCHAT_HISTORY_PAGING.md` |
 | anything that writes `scrollTop`, one-shot navigation, the diagnostic trail | `FLOWCHAT_VIEWPORT_REGISTER.md` |
 | the virtualizer, item measurement, item keys, anything a row renders | `FLOWCHAT_VIRTUALIZATION.md` |
@@ -33,30 +33,22 @@ that under a new name.
 
 ## How Much To Reserve
 
-The spacer keeps two offsets inside the scroll range, and is the larger of what
-they need. Both are bounds, not estimates: reserving more than the larger one is
-pure blank at the end of the scroll range, and reserving less than either is a
-clamp.
+The input-stack footer and spacer together occupy at most three quarters of the
+viewport:
 
-- **A pinned Turn.** Worst case its user message is the newest item with nothing
-  answering it yet, so the message, the input inset and the spacer are all that
-  lie below the message top. `clientHeight - bottomInsetPx -
-  PINNED_TURN_MIN_ITEM_HEIGHT_PX` is exactly enough to put it on the top edge.
-- **A held collapse gap.** `hold-tail` parks up to `tailHoldMaxGapPx` past the
-  content end, and an offset the browser clamps is one the hold rule does not
-  actually get to hold.
+```text
+tailSpacerPx = max(0, round(clientHeight * 0.75 - bottomInsetPx))
+```
 
-`PINNED_TURN_MIN_ITEM_HEIGHT_PX` must stay an **under**estimate of a
-user-message item. Too low costs a few spare pixels of blank; too high puts the
-pinned offset past the end of the scroll range, and the Turn is clamped back
-down from the viewport top while the follow loop rewrites the clamped offset
-every frame.
+At the physical bottom this leaves at least one quarter of the viewport showing
+transcript content. For an 800px viewport and a 168px footer, the spacer is
+432px and 200px of transcript remains visible. An expanded composer consumes
+the reservation first; the spacer never becomes negative.
 
-While the pin reserve is the binding bound, the spacer and the footer sum to a
-constant: growing the composer moves the content end without moving the end of
-the scroll range. Under the hold-gap floor the spacer stops tracking the inset
-and the range grows with the composer, exactly as it did when the spacer was a
-flat viewport.
+`hold-tail` still needs its collapse allowance to exist inside the physical
+scroll range, so its effective maximum is the smaller of 60% of the viewport
+and the rendered spacer. This makes the reservation the hard bound rather than
+silently asking the browser to hold an offset it must clamp.
 
 ## Why Both Halves Are Required
 
@@ -65,17 +57,13 @@ clamp when content shrinks, which is *permission* to hold position. A follow
 target that re-aligns the content end to the viewport bottom every frame will
 still drag earlier content down by the collapse delta, spacer or not.
 
-`flowChatTailFollow.ts` supplies the second half:
-
-- `pin-turn-top` holds a freshly submitted Turn's user message at the viewport
-  top while its answer is shorter than one viewport, then hands off at the
-  crossover. The blank below a pinned Turn is the mode, not a defect.
-- `hold-tail` keeps its previous offset when content shrinks, and gives ground
+`flowChatTailFollow.ts` supplies the second half: `hold-tail` keeps its previous
+offset when content shrinks, and gives ground
   only once the blank below the live output exceeds `tailHoldMaxGapPx`
-  (a share of the viewport, not a measured delta).
+  (a share of the viewport capped by the physical spacer, not a measured delta).
 
-Both are pure functions over geometry. They hold no timers and observe no
-mutation.
+These rules are pure functions over geometry. They hold no timers and observe
+no mutation.
 
 `useFlowChatFollowOutput` is the only continuous outer viewport writer. Three
 things about how it runs are load-bearing:
@@ -83,11 +71,11 @@ things about how it runs are load-bearing:
 - **`scheduleFollowToLatest` re-asserts ownership after a layout change but does
   not force the content end.** A collapse resizes content too, and the hold rule
   is what keeps that from moving the viewport.
-- **The pinned Turn's offset is re-resolved from live layout every frame.**
-  Items above it are estimates until they are measured, so a cached absolute
-  offset would drift.
+- **A new Turn reveal runs no follow frame.** It places the viewport at the
+  physical bottom once and samples only whether streamed output has consumed
+  the blank.
 - **When streaming stops, `hold-tail` settles any remaining blank with one
-  smooth scroll.** A pinned Turn does not settle.
+  smooth scroll.** A short new-Turn reveal remains at its reveal position.
 
 `tailHoldMaxGapPx` is a **streaming allowance**. Blank below the live output is
 tolerable only because more output is about to fill it. Do not reuse it to
@@ -131,40 +119,53 @@ stop changing. Before the virtualizer renders anything, `scrollHeight` and the
 end sit unchanged at their unmeasured values, which is indistinguishable from
 having finished; a stability test reveals on frame 3 and shows the whole settle.
 
+## Revealing a New Turn
+
+A newly submitted Turn does not enter continuous follow immediately. Once that
+Turn exists in the live-tail projection, follow-output performs one placement at
+the **physical bottom** (`scrollHeight - clientHeight`). That exposes the whole
+resident spacer at once. The reveal then keeps viewport ownership, but runs no
+RAF scroll writer:
+
+```text
+idle -> revealing-tail -> following-tail
+```
+
+As output streams, `scrollTop` stays fixed while `contentEndScrollTop` rises, so
+the visible blank shrinks naturally. The transcript history therefore stays
+still; content consumes the blank instead of a follow write moving history up.
+When `blankPx = scrollTop - contentEndScrollTop` crosses from positive to zero,
+the existing `content-caught-up` path enters ordinary `hold-tail` without a
+one-shot correction. Subsequent growth follows normally.
+
+A short response may never consume the blank. That is intentional: the reveal
+position remains, and stopping streaming does not settle it. A user gesture
+releases reveal ownership and opens the ordinary user-departure watch. A delayed
+`jump-to-latest` from presentation restoration is ignored while reveal is
+active, because the reveal already is the latest placement.
+
+The arrival can precede the live-tail projection that renders it, especially
+when submission starts from a history window. `pendingNewTurnIdRef` preserves
+that arrival and retries the same one-shot placement when the presentation next
+changes; it does not substitute the old content end.
+
 ## User-Controlled Reserved Blank
 
-The spacer is a full viewport the user can scroll into. Once a reader exits
-follow-output, their own scroll position is preserved even when it lands in the
-blank. There is no `scrollend` correction or quiet-period fallback that takes
-the viewport back. Explicit actions such as opening a session, submitting a new
-Turn, navigating a Turn, rolling back, or choosing jump-to-latest remain the
-ways to re-enter follow-output.
+The spacer is bounded by the three-quarter reservation the user can scroll into.
+Once a reader exits follow-output, their own scroll position is preserved even
+when it lands in the blank. There is no `scrollend` correction or quiet-period
+fallback that takes the viewport back. Explicit actions such as opening a
+session, submitting a new Turn, navigating a Turn, rolling back, or choosing
+jump-to-latest remain the ways to re-enter follow-output.
 
 The remaining follow rules carry the live-tail design:
 
-**The target is the follow target, never the content end.** A short new Turn is
-pinned above the content end, so aiming at the content end would scroll *up*
-and shove the message the user just sent into the middle of the viewport. A
-held collapse gap is likewise a legitimate offset up to `tailHoldMaxGapPx` past
-the content end; judged against the content end it would read as an overshoot
-and fight the hold rule on every collapse. `memorylessFollowState` computes the
-target from live geometry with no remembered offset, because the offset the hold
-rule was protecting stopped being meaningful the moment the user took over.
-
-The pin's *identity* therefore outlives a user takeover; only its *activity*
-stops. Three things retire a pin: the crossover to `hold-tail`, a newer Turn,
-and a session change. The crossover has to be one-way — a collapse can pull
-content back under one viewport, and re-pinning there would jump the viewport
-backwards. Since nothing re-pins a Turn whose identity was dropped, that is
-automatic.
-
-**Where a jump to latest lands.** Every entry into follow-output resumes at the
-end of real content, with one exception: a jump to latest while the **newest**
-Turn is still pinned returns to the pin. That mode only holds while the Turn's
-answer is shorter than one viewport, so everything it has produced is already on
-screen, and aiming at the content end would scroll *up* and shove the message
-the user just sent into the middle. The exemption therefore outlives the Turn:
-a short Turn stays pinned until a newer one replaces it.
+**The target is the follow target, never unconditionally the content end.** A
+held collapse gap is a legitimate offset up to `tailHoldMaxGapPx` past the
+content end; judged against the content end it would read as an overshoot and
+fight the hold rule on every collapse. Once a user takes over, ordinary resume
+starts from live geometry because the offset the hold rule protected no longer
+belongs to follow-output.
 
 ## Output Catching Up With a Reader in the Blank
 
@@ -173,10 +174,10 @@ looking at reserved blank, and whom output then overtakes.
 
 Scrolling up gives the follow away permanently, and that is right only for a
 reader who left the live region. A small scroll up may not have. The blank is up
-to `tailHoldMaxGapPx` under `hold-tail` and the whole gap under a pinned Turn,
-so the reader can be a few hundred pixels off the tail with nothing hidden from
-them at all — until output grows past the bottom edge, and they silently stop
-seeing it with no affordance saying so.
+to `tailHoldMaxGapPx` under `hold-tail` and starts at the whole spacer during a
+new-Turn reveal, so the reader can be a few hundred pixels off the tail with
+nothing hidden from them at all — until output grows past the bottom edge, and
+they silently stop seeing it with no affordance saying so.
 
 So a watch runs for as long as the reader holds the viewport — from the scroll
 that took it to whatever hands it back. `scrollTop > contentEnd` is the
@@ -232,9 +233,8 @@ the reader was standing before it.
 Resuming does not scroll. The blank closing *is* the two offsets meeting, so
 what remains is one sample of growth, and the follow loop's ease covers it; a
 one-shot scroll here would be a snap the reader can see for a correction they
-cannot. It also retires the pin, even when the departure happened under one: the
-pin's reservation is the blank the reader just scrolled out of, and restoring it
-would pull them back down to the offset they left.
+cannot. A reveal uses the same crossing before any gesture, while a gesture
+replaces it with the reader-owned form of the watch.
 
 The whole watch is a ref. `followOutput.tailWatch` and
 `followOutput.tailWatchEnded` bracket it — the second carrying `crossings`, so a
@@ -298,16 +298,15 @@ against a nominal 0.25, which is also the evidence that nothing else was
 writing the viewport in between.
 
 "At bottom" is a band, not a point: from the end of real content down to
-whatever the follow rule owns. A pinned Turn and a held collapse gap are both
-inside it, so neither raises the jump-to-latest affordance; the reserved blank
-is outside it, so parking there does. No virtualizer-reported "at bottom" can
-express this: the end of the scroll range is the bottom of the reserved blank,
-not the end of content.
+whatever the follow rule owns. A reveal position and a held collapse gap are
+inside it while follow-output owns them, so neither raises the jump-to-latest
+affordance; reader-owned reserved blank is outside it. No virtualizer-reported
+"at bottom" can express this: the end of the scroll range is the bottom of the
+reserved blank, not the end of content.
 
 The band is recomputed on scroll, on resize, **and when follow ownership
 changes** — its lower edge is the follow target, which can move while the
-viewport is perfectly still. A jump to latest that lands on a pin the viewport
-already sits on writes
+viewport is perfectly still. A delayed jump to latest during a reveal writes
 nothing at all. Driving the band from scroll events alone left the affordance
 visible over a viewport that was at the tail, and clicking it then had nothing
 to do — an inert button is worse than a missing one.
@@ -402,7 +401,7 @@ through more of an animation they cannot read.
 
 The other `'smooth'` request in `useFlowChatFollowOutput`, the post-streaming
 settle, needs no such test: the gap it closes is bounded by `tailHoldMaxGapPx`,
-which is 60% of one viewport.
+which is at most 60% of one viewport and never larger than the spacer.
 
 `followOutput.jumpBehavior` records the decision and the distance in viewports.
 It is also how the constant is checked: if `followOutput.animatedScrollEnded`

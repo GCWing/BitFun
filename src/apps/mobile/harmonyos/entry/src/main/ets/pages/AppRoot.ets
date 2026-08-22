@@ -10,7 +10,11 @@ struct AppRoot {
   private readonly runtime: AppRootRuntime = new AppRootRuntime(this.hostAdapter);
 
   async aboutToAppear(): Promise<void> {
-    this.hostAdapter.attach(getContext(this), this.getUIContext());
+    const hostContext = this.getUIContext().getHostContext();
+    if (!hostContext) {
+      throw new Error('App root host context is unavailable.');
+    }
+    this.hostAdapter.attach(hostContext, this.getUIContext());
     await this.runtime.aboutToAppear();
   }
 
@@ -36,6 +40,7 @@ struct AppRoot {
         shellState: this.runtime.appShellState,
         navigationStack: this.runtime.navigationStack,
         remotePageState: this.runtime.remotePageState,
+        deviceDirectoryState: this.runtime.deviceDirectoryState,
         remoteCreateState: this.runtime.remoteCreateState,
         generalPageState: this.runtime.generalChatPageState,
         filePreviewState: this.runtime.filePreviewState,

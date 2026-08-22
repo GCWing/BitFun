@@ -3,6 +3,7 @@ import { huks } from '@kit.UniversalKeystoreKit';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { Encoding } from '../Encoding';
+import { OhosError } from '../OhosError';
 import { GeneralChatTokenProvider } from './GeneralChatHttpTransport';
 
 const STORE_NAME = 'bitfun_general_chat_config';
@@ -77,23 +78,31 @@ export class GeneralChatConfigStore implements GeneralChatTokenProvider {
   private catalogRevision: number = 1;
 
   async init(context: Context): Promise<GeneralChatConfigSnapshot> {
-    this.store = await preferences.getPreferences(context, STORE_NAME);
-    this.preferredModelId = await this.getString(SELECTED_MODEL_ID_KEY) || GENERAL_CHAT_LOCAL_MODEL_ID;
-    return this.snapshot();
+    try {
+      this.store = await preferences.getPreferences(context, STORE_NAME);
+      this.preferredModelId = await this.getString(SELECTED_MODEL_ID_KEY) || GENERAL_CHAT_LOCAL_MODEL_ID;
+      return this.snapshot();
+    } catch (err) {
+      throw OhosError.wrap('general chat config init', err);
+    }
   }
 
   async snapshot(): Promise<GeneralChatConfigSnapshot> {
-    const store = this.requireStore();
-    const cipher = await store.get(API_KEY_CIPHER_KEY, '');
-    const iv = await store.get(API_KEY_IV_KEY, '');
-    const hasStoredSecret = typeof cipher === 'string' && cipher.length > 0 &&
-      typeof iv === 'string' && iv.length > 0;
-    const hasKeyItem = hasStoredSecret ? await this.keyItemExists() : false;
-    return {
-      apiUrl: await this.getString(API_URL_KEY),
-      modelName: await this.getString(MODEL_NAME_KEY),
-      hasApiKey: hasStoredSecret && hasKeyItem
-    };
+    try {
+      const store = this.requireStore();
+      const cipher = await store.get(API_KEY_CIPHER_KEY, '');
+      const iv = await store.get(API_KEY_IV_KEY, '');
+      const hasStoredSecret = typeof cipher === 'string' && cipher.length > 0 &&
+        typeof iv === 'string' && iv.length > 0;
+      const hasKeyItem = hasStoredSecret ? await this.keyItemExists() : false;
+      return {
+        apiUrl: await this.getString(API_URL_KEY),
+        modelName: await this.getString(MODEL_NAME_KEY),
+        hasApiKey: hasStoredSecret && hasKeyItem
+      };
+    } catch (err) {
+      throw OhosError.wrap('general chat config snapshot', err);
+    }
   }
 
   async save(update: GeneralChatConfigUpdate): Promise<GeneralChatConfigSnapshot> {
@@ -102,23 +111,27 @@ export class GeneralChatConfigStore implements GeneralChatTokenProvider {
     if (validationError.length > 0) {
       throw new Error(validationError);
     }
-    const store = this.requireStore();
-    await store.put(API_URL_KEY, GeneralChatConfigStore.normalizeBaseUrl(update.apiUrl));
-    await store.put(MODEL_NAME_KEY, update.modelName.trim());
-    if (update.clearApiKey) {
-      await store.delete(API_KEY_CIPHER_KEY);
-      await store.delete(API_KEY_IV_KEY);
-    } else if (update.apiKey.trim().length > 0) {
-      try {
-        const encrypted = await this.encryptApiKey(update.apiKey.trim());
-        await store.put(API_KEY_CIPHER_KEY, encrypted.cipherText);
-        await store.put(API_KEY_IV_KEY, encrypted.iv);
-      } catch (_err) {
-        throw new Error(RemoteI18n.t('settings.modelService.secureStoreFailed'));
+    try {
+      const store = this.requireStore();
+      await store.put(API_URL_KEY, GeneralChatConfigStore.normalizeBaseUrl(update.apiUrl));
+      await store.put(MODEL_NAME_KEY, update.modelName.trim());
+      if (update.clearApiKey) {
+        await store.delete(API_KEY_CIPHER_KEY);
+        await store.delete(API_KEY_IV_KEY);
+      } else if (update.apiKey.trim().length > 0) {
+        try {
+          const encrypted = await this.encryptApiKey(update.apiKey.trim());
+          await store.put(API_KEY_CIPHER_KEY, encrypted.cipherText);
+          await store.put(API_KEY_IV_KEY, encrypted.iv);
+        } catch (_err) {
+          throw new Error(RemoteI18n.t('settings.modelService.secureStoreFailed'));
+        }
       }
+      await store.flush();
+      return this.snapshot();
+    } catch (err) {
+      throw OhosError.wrap('general chat config save', err);
     }
-    await store.flush();
-    return this.snapshot();
   }
 
   async accessToken(): Promise<string> {
@@ -187,18 +200,26 @@ export class GeneralChatConfigStore implements GeneralChatTokenProvider {
       return false;
     }
     this.preferredModelId = modelId;
-    const store = this.requireStore();
-    await store.put(SELECTED_MODEL_ID_KEY, modelId);
-    await store.flush();
+    try {
+      const store = this.requireStore();
+      await store.put(SELECTED_MODEL_ID_KEY, modelId);
+      await store.flush();
+    } catch (err) {
+      throw OhosError.wrap('general chat config select model', err);
+    }
     this.catalogRevision += 1;
     return true;
   }
 
   async selectLocalModel(): Promise<void> {
     this.preferredModelId = GENERAL_CHAT_LOCAL_MODEL_ID;
-    const store = this.requireStore();
-    await store.put(SELECTED_MODEL_ID_KEY, GENERAL_CHAT_LOCAL_MODEL_ID);
-    await store.flush();
+    try {
+      const store = this.requireStore();
+      await store.put(SELECTED_MODEL_ID_KEY, GENERAL_CHAT_LOCAL_MODEL_ID);
+      await store.flush();
+    } catch (err) {
+      throw OhosError.wrap('general chat config select local model', err);
+    }
     this.catalogRevision += 1;
   }
 
@@ -222,54 +243,66 @@ export class GeneralChatConfigStore implements GeneralChatTokenProvider {
   }
 
   private async encryptApiKey(apiKey: string): Promise<EncryptedApiKey> {
-    await this.ensureHuksKey();
-    const iv = Encoding.randomBytes(16);
-    const options = this.operationOptions(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT, iv);
-    const session = await huks.initSession(HUKS_ALIAS, options);
-    const result = await huks.finishSession(session.handle, {
-      properties: options.properties,
-      inData: Encoding.utf8ToBytes(apiKey)
-    });
-    if (!result.outData || result.outData.length === 0) {
-      throw new Error(RemoteI18n.t('settings.modelService.encryptFailed'));
+    try {
+      await this.ensureHuksKey();
+      const iv = Encoding.randomBytes(16);
+      const options = this.operationOptions(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT, iv);
+      const session = await huks.initSession(HUKS_ALIAS, options);
+      const result = await huks.finishSession(session.handle, {
+        properties: options.properties,
+        inData: Encoding.utf8ToBytes(apiKey)
+      });
+      if (!result.outData || result.outData.length === 0) {
+        throw new Error(RemoteI18n.t('settings.modelService.encryptFailed'));
+      }
+      return {
+        cipherText: Encoding.bytesToBase64(result.outData),
+        iv: Encoding.bytesToBase64(iv)
+      };
+    } catch (err) {
+      throw OhosError.wrap('general chat encrypt api key', err);
     }
-    return {
-      cipherText: Encoding.bytesToBase64(result.outData),
-      iv: Encoding.bytesToBase64(iv)
-    };
   }
 
   private async decryptApiKey(cipherText: string, ivText: string): Promise<string> {
-    const iv = Encoding.base64ToBytes(ivText);
-    const options = this.operationOptions(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT, iv);
-    const session = await huks.initSession(HUKS_ALIAS, options);
-    const result = await huks.finishSession(session.handle, {
-      properties: options.properties,
-      inData: Encoding.base64ToBytes(cipherText)
-    });
-    if (!result.outData) {
-      return '';
+    try {
+      const iv = Encoding.base64ToBytes(ivText);
+      const options = this.operationOptions(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT, iv);
+      const session = await huks.initSession(HUKS_ALIAS, options);
+      const result = await huks.finishSession(session.handle, {
+        properties: options.properties,
+        inData: Encoding.base64ToBytes(cipherText)
+      });
+      if (!result.outData) {
+        return '';
+      }
+      return Encoding.bytesToUtf8(result.outData);
+    } catch (err) {
+      throw OhosError.wrap('general chat decrypt api key', err);
     }
-    return Encoding.bytesToUtf8(result.outData);
   }
 
   private async ensureHuksKey(): Promise<void> {
     if (await this.keyItemExists()) {
       return;
     }
-    await huks.generateKeyItem(HUKS_ALIAS, {
-      properties: [
-        { tag: huks.HuksTag.HUKS_TAG_ALGORITHM, value: huks.HuksKeyAlg.HUKS_ALG_AES },
-        { tag: huks.HuksTag.HUKS_TAG_KEY_SIZE, value: huks.HuksKeySize.HUKS_AES_KEY_SIZE_256 },
-        {
-          tag: huks.HuksTag.HUKS_TAG_PURPOSE,
-          value: huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT |
-            huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT
-        },
-        { tag: huks.HuksTag.HUKS_TAG_BLOCK_MODE, value: huks.HuksCipherMode.HUKS_MODE_CBC },
-        { tag: huks.HuksTag.HUKS_TAG_PADDING, value: huks.HuksKeyPadding.HUKS_PADDING_PKCS7 }
-      ]
-    });
+    try {
+      await huks.generateKeyItem(HUKS_ALIAS, {
+        properties: [
+          { tag: huks.HuksTag.HUKS_TAG_ALGORITHM, value: huks.HuksKeyAlg.HUKS_ALG_AES },
+          { tag: huks.HuksTag.HUKS_TAG_KEY_SIZE, value: huks.HuksKeySize.HUKS_AES_KEY_SIZE_256 },
+          {
+            tag: huks.HuksTag.HUKS_TAG_PURPOSE,
+            value: huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT |
+              huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT
+          },
+          { tag: huks.HuksTag.HUKS_TAG_BLOCK_MODE, value: huks.HuksCipherMode.HUKS_MODE_CBC },
+          { tag: huks.HuksTag.HUKS_TAG_PADDING, value: huks.HuksKeyPadding.HUKS_PADDING_PKCS7 }
+        ]
+      });
+    } catch (err) {
+      throw OhosError.wrap('general chat generate huks key', err);
+    }
   }
 
   private async keyItemExists(): Promise<boolean> {
@@ -297,8 +330,12 @@ export class GeneralChatConfigStore implements GeneralChatTokenProvider {
   }
 
   private async getString(key: string): Promise<string> {
-    const value = await this.requireStore().get(key, '');
-    return typeof value === 'string' ? value : '';
+    try {
+      const value = await this.requireStore().get(key, '');
+      return typeof value === 'string' ? value : '';
+    } catch (err) {
+      throw OhosError.wrap('general chat config get string', err);
+    }
   }
 
   private requireStore(): preferences.Preferences {

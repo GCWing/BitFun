@@ -27,6 +27,17 @@ $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 $primary = Join-Path $ReleaseDir 'bitfun.exe'
 $legacy = Join-Path $ReleaseDir 'bitfun-cli.exe'
 $deprecation = 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.'
+$pluginHostDist = Join-Path $repoRoot 'src\apps\extension-host\dist'
+$pluginHostResourceRelative = 'resources\ext-host'
+
+function Assert-PluginHostResources([string]$Directory) {
+    foreach ($entry in @('extension-host.js')) {
+        $path = Join-Path $Directory $entry
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Plugin Host resource is missing: $path"
+        }
+    }
+}
 
 function Assert-LastExitCode([string]$Description) {
     if ($LASTEXITCODE -ne 0) {
@@ -83,6 +94,7 @@ Assert-LastExitCode 'bitfun --help'
 Assert-LegacyEntrypoint $legacy
 Assert-NoRedistributableRuntime $primary
 Assert-NoRedistributableRuntime $legacy
+Assert-PluginHostResources $pluginHostDist
 
 $stageName = "bitfun-cli-$Version-$Target"
 $stageDir = Join-Path (Join-Path $OutputDir 'dist-cli') $stageName
@@ -111,6 +123,10 @@ if (Test-Path -LiteralPath $themes -PathType Container) {
 if (Test-Path -LiteralPath $prompts -PathType Container) {
     Copy-Item -LiteralPath $prompts -Destination (Join-Path $stageDir 'prompts') -Recurse -Force
 }
+$pluginHostResources = Join-Path $stageDir $pluginHostResourceRelative
+New-Item -ItemType Directory -Path $pluginHostResources -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $pluginHostDist 'extension-host.js') -Destination $pluginHostResources -Force
+Assert-PluginHostResources $pluginHostResources
 
 $archive = Join-Path $OutputDir "$stageName.zip"
 Compress-Archive -Path $stageDir -DestinationPath $archive -CompressionLevel Optimal -Force
@@ -136,7 +152,8 @@ try {
         'PROJECT-README.md',
         'THIRD_PARTY_NOTICES.md',
         'third-party\models.dev\LICENSE.txt',
-        'third-party\models.dev\provenance.json'
+        'third-party\models.dev\provenance.json',
+        'resources\ext-host\extension-host.js'
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $primaryCandidates[0].DirectoryName $requiredFile) -PathType Leaf)) {
             throw "Packaged archive is missing $requiredFile"

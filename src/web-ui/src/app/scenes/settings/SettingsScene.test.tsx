@@ -63,6 +63,19 @@ vi.mock('../../../infrastructure/config/components/SessionConfig', () => ({
   SessionPermissionsConfig: () => <div data-testid="session-permissions-config" />,
 }));
 
+/**
+ * The scene runs its own external-application lookup on mount, which reaches
+ * the real transport: outside Tauri that is the WebSocket adapter, and once its
+ * connection to a server nobody started fails it keeps retrying — and logging —
+ * on a timer that outlives this file. A console write from that timer can land
+ * in a worker whose rpc is already closing, failing the run with an
+ * EnvironmentTeardownError attributed here. Tab routing is what this file
+ * covers; the lookup is chrome it does not assert on.
+ */
+vi.mock('../../../infrastructure/config/components/external-sources/useExternalAppAwareness', () => ({
+  useExternalAppAwareness: () => {},
+}));
+
 vi.mock('./components/ArchivedSessionsConfig', () => ({
   default: () => <div data-testid="archived-sessions-config" />,
 }));

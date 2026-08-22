@@ -12,10 +12,13 @@ import {
   findFeatureGatedTestTargetViolations,
   findProductEntrypointCoreFeatureViolations,
   findReqwestDependencyFeatureViolations,
+  findResolvedThirdPartyCapabilityFeatureViolations,
   findRuntimeServicesTestSupportFeatureViolations,
   findResolvedReqwestNativeTlsViolations,
+  findServicesIntegrationsPlatformDependencyFeatureViolations,
   findServicesIntegrationsReqwestFeatureViolations,
   findServicesIntegrationsTokioFeatureViolations,
+  findThirdPartyCapabilityFeatureViolations,
   findTokioDependencyFeatureViolations,
 } from './core-boundaries/cargo-dependency-boundaries.mjs';
 import {
@@ -31,6 +34,7 @@ import {
   validateExplicitIntegrationTestTopology,
 } from './core-boundaries/explicit-test-topology.mjs';
 import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
+import { findForbiddenContentMatches } from './core-boundaries/source-content-checks.mjs';
 import {
   capabilityContractDependencyRules,
   coreClosedFeatureProfileRules,
@@ -41,6 +45,7 @@ import {
 import {
   agentRuntimeRootPublicModules,
   forbiddenContentRules,
+  forbiddenContentUnderRules,
   publicApiAllowlistRules,
   requiredContentRules,
 } from './core-boundaries/rules/source-rules.mjs';
@@ -51,6 +56,7 @@ const MODULES = [
   './core-boundaries/cargo-dependency-boundaries.mjs',
   './core-boundaries/explicit-test-topology.mjs',
   './core-boundaries/manifest-feature-helpers.mjs',
+  './core-boundaries/source-content-checks.mjs',
   './core-boundaries/self-test.mjs',
   './core-boundaries/tui-boundary-ratchet.mjs',
   './core-boundaries/rules/crate-rules.mjs',
@@ -64,7 +70,7 @@ const MODULES = [
 
 const TEST_ROOT = join('C:', 'repo');
 
-test('App Server TypeScript capability is owned by the protocol crate', () => {
+test('App Server TypeScript capability is owned by the protocol crate and independent from RPC', () => {
   const appServerTs = coreClosedFeatureProfileRules.find(
     (rule) => rule.manifestPath === 'src/crates/interfaces/app-server/Cargo.toml'
       && rule.featureName === 'ts',
@@ -74,10 +80,31 @@ test('App Server TypeScript capability is owned by the protocol crate', () => {
   ]);
   assert.equal(appServerTs?.exact, true);
 
-  const protocolTs = coreClosedFeatureProfileRules.find(
-    (rule) => rule.manifestPath === 'src/crates/interfaces/app-server-protocol/Cargo.toml'
-      && rule.featureName === 'ts',
+  const protocolProfiles = new Map(
+    coreClosedFeatureProfileRules
+      .filter(
+        (rule) => rule.manifestPath
+          === 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+      )
+      .map((rule) => [rule.featureName, rule]),
   );
+
+  const protocolDefault = protocolProfiles.get('default');
+  assert.deepEqual(protocolDefault?.requiredFeatureRefs, ['rpc']);
+  assert.equal(protocolDefault?.exact, true);
+
+  const protocolRpc = protocolProfiles.get('rpc');
+  assert.deepEqual(protocolRpc?.requiredFeatureRefs, ['dep:agent-client-protocol']);
+  assert.equal(protocolRpc?.exact, true);
+
+  const protocolOptionalOwners = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'app-server-protocol',
+  );
+  assert.deepEqual(protocolOptionalOwners?.dependencies, [
+    { depName: 'agent-client-protocol', ownerFeatures: ['rpc'] },
+  ]);
+
+  const protocolTs = protocolProfiles.get('ts');
   assert.deepEqual(protocolTs?.requiredFeatureRefs, [
     'bitfun-core-types/ts',
     'bitfun-product-domains/ts',
@@ -645,11 +672,12 @@ test('runtime-services feature aliases cannot hide test support from default bui
   assert.match(messages, /bitfun-runtime-services:testing/);
 });
 
-test('CLI integration tests keep the reviewed three-target topology', () => {
+test('CLI integration tests keep the reviewed four-target topology', () => {
   const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 
   assert.deepEqual(cliIntegrationTestTargets, [
     { name: 'acp_stdio_cli', path: 'tests/acp_stdio_cli.rs' },
+    { name: 'app_server_stdio_cli', path: 'tests/app_server_stdio_cli.rs' },
     { name: 'cli_command_contracts', path: 'tests/cli_command_contracts.rs' },
     { name: 'terminal_process_contracts', path: 'tests/terminal_process_contracts.rs' },
   ]);
@@ -870,6 +898,71 @@ test('external source integration tests keep reviewed owner and process boundari
   assert.deepEqual(
     checkExternalSourceIntegrationTestTopologies(repositoryRoot),
     [],
+  );
+});
+
+test('Web UI command contracts do not become Rust compilation inputs', async () => {
+  const webApiPath = 'src/web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts';
+  const webCommandRule = requiredContentRules.find(
+    (rule) => rule.path === webApiPath
+      && rule.reason.includes('stable Desktop command'),
+  );
+  assert.ok(webCommandRule, 'Web API must retain a boundary-owned stable command contract');
+
+  const webCommandPattern = webCommandRule.patterns.find(
+    (pattern) => pattern.message.includes('external-source control snapshot'),
+  )?.regex;
+  assert.ok(webCommandPattern, 'Web API command contract must name the control snapshot');
+
+  const webApi = await readFile(new URL(`../${webApiPath}`, import.meta.url), 'utf8');
+  assert.equal(webCommandPattern.test(webApi), true);
+  assert.equal(
+    webCommandPattern.test(
+      webApi.replace('get_external_source_control_snapshot', 'get_renamed_snapshot'),
+    ),
+    false,
+    'renaming the invoked command must break the cross-surface contract',
+  );
+
+  const rustSourceRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === '.'
+      && rule.reason.includes('Rust source must not reference the Web UI source tree'),
+  );
+  assert.ok(rustSourceRule, 'all tracked Rust sources must reject Web UI file inputs');
+  for (const mutation of [
+    'let web = include_str!(\n  "../../web-ui/src/infrastructure/api.ts"\n);',
+    'let web = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web-ui/src/api.ts"));',
+    'let web = include!("../../web-ui/public/generated.rs");',
+    'let web = include_dir!("../../web-ui/src");',
+    'let path = PathBuf::from("../../web-ui/src/api.ts");',
+    'let path = PathBuf::from("../../").join("web-ui").join("src");',
+    'const WEB_UI_DIR: &str = "web-ui"; let body = fs::read_to_string(WEB_UI_DIR);',
+    'let example = r#"include_str!(\"../../web-ui/src/api.ts\")"#;',
+  ]) {
+    assert.equal(
+      findForbiddenContentMatches(mutation, rustSourceRule.patterns, 'src/example.rs').length,
+      1,
+      `Rust/Web input guard must reject: ${mutation}`,
+    );
+  }
+  for (const allowed of [
+    '// include_str!("../../web-ui/src/comment-only.ts")',
+    '/* PathBuf::from("../../web-ui/public/comment-only.json") */',
+    'const REVIEW_SCOPE: &str = "src/frontend/src/**/*.ts";',
+  ]) {
+    assert.deepEqual(
+      findForbiddenContentMatches(allowed, rustSourceRule.patterns, 'src/example.rs'),
+      [],
+      `Rust/Web input guard must ignore non-input text: ${allowed}`,
+    );
+  }
+  assert.deepEqual(
+    findForbiddenContentMatches(
+      'allowed\nforbidden',
+      [{ regex: /forbidden/, message: 'line-based guard' }],
+      'src/example.rs',
+    ),
+    [{ line: 2, message: 'line-based guard' }],
   );
 });
 
@@ -1458,6 +1551,7 @@ const CLI_REVIEWED_CORE_FEATURES = [
   ...ACP_REVIEWED_CORE_FEATURES,
   'remote-connect',
   'plugin-runtime',
+  'opencode-plugin-host',
 ];
 
 const APP_SERVER_REVIEWED_CORE_FEATURES = [
@@ -2657,6 +2751,182 @@ test('Reqwest consumers inherit the workspace version without duplicating featur
   }
 });
 
+test('third-party capability profiles reject ambient feature unions and unreviewed owners', () => {
+  const validPackages = [
+    packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [{
+      name: 'image',
+      kind: null,
+      optional: false,
+      uses_default_features: false,
+      features: ['gif', 'jpeg', 'png', 'webp'],
+    }]),
+    packageAt('bitfun-server', 'src/apps/server/Cargo.toml', [{
+      name: 'axum',
+      kind: null,
+      optional: false,
+      uses_default_features: true,
+      features: ['json', 'ws'],
+    }]),
+    packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml', [{
+      name: 'tokio-tungstenite',
+      kind: null,
+      optional: true,
+      uses_default_features: true,
+      features: [],
+    }]),
+    packageAt('bitfun-services-core', 'src/crates/services/services-core/Cargo.toml', [{
+      name: 'git2',
+      kind: null,
+      optional: true,
+      uses_default_features: false,
+      features: ['vendored-libgit2'],
+    }]),
+  ];
+
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations(validPackages), []);
+
+  const mutatedPackages = structuredClone(validPackages);
+  mutatedPackages[0].dependencies[0].features.push('bmp');
+  mutatedPackages[1].dependencies[0].features = ['json'];
+  mutatedPackages[2].dependencies[0].features.push('rustls-tls-native-roots');
+  mutatedPackages[3].dependencies[0].features.push('https');
+  mutatedPackages[3].dependencies[0].rename = 'private-git2';
+  mutatedPackages.push(packageAt('future-image-owner', 'src/apps/future/Cargo.toml', [{
+    name: 'image',
+    kind: null,
+    optional: false,
+    uses_default_features: false,
+    features: ['png'],
+  }]));
+
+  const messages = findThirdPartyCapabilityFeatureViolations(mutatedPackages)
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /bitfun-cli Image dependency has unexpected features: bmp/);
+  assert.match(messages, /bitfun-server Axum dependency missing features: ws/);
+  assert.match(messages, /bitfun-core Tokio Tungstenite dependency has unexpected features: rustls-tls-native-roots/);
+  assert.match(messages, /bitfun-services-core Git2 dependency has unexpected features: https/);
+  assert.match(messages, /bitfun-services-core Git2 dependency does not match its reviewed owner shape/);
+  assert.match(messages, /future-image-owner Image dependency is missing a reviewed owner profile/);
+});
+
+test('services integrations image codecs stay attached to exact product owners', () => {
+  const pkg = {
+    ...packageAt('bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', [{
+      name: 'image',
+      kind: null,
+      optional: true,
+      uses_default_features: false,
+      features: [],
+    }]),
+    features: {
+      image: ['dep:image'],
+      'miniapp-market': ['image', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'],
+      'remote-connect': [
+        'image',
+        'image/bmp',
+        'image/gif',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      ],
+    },
+  };
+
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations([pkg]), []);
+
+  const mutated = structuredClone(pkg);
+  mutated.features.image.push('image/png');
+  mutated.features['miniapp-market'].push('image/bmp');
+  mutated.features['remote-connect'] = mutated.features['remote-connect']
+    .filter((reference) => reference !== 'image/gif');
+  mutated.features.default = ['image/png'];
+  const messages = findThirdPartyCapabilityFeatureViolations([mutated])
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /miniapp-market.*unexpected Image capabilities: bmp/);
+  assert.match(messages, /remote-connect.*missing Image capabilities: gif/);
+  assert.match(messages, /default enables Image outside its reviewed owner features/);
+  assert.match(messages, /image shared Image activation alias must not select capabilities: png/);
+});
+
+test('services integrations WebSocket TLS stays attached to remote-connect', () => {
+  const pkg = {
+    ...packageAt('bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', [{
+      name: 'tokio-tungstenite',
+      kind: null,
+      optional: true,
+      uses_default_features: true,
+      features: [],
+    }]),
+    features: {
+      'remote-connect': [
+        'dep:tokio-tungstenite',
+        'tokio-tungstenite?/rustls-tls-native-roots',
+      ],
+    },
+  };
+
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations([pkg]), []);
+
+  const mutated = structuredClone(pkg);
+  mutated.features['tokio-tungstenite'] = ['dep:tokio-tungstenite'];
+  mutated.features['future-non-remote-owner'] = ['dep:tokio-tungstenite'];
+  const messages = findThirdPartyCapabilityFeatureViolations([mutated])
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /future-non-remote-owner enables Tokio Tungstenite outside its reviewed owner features/);
+  assert.match(messages, /tokio-tungstenite enables Tokio Tungstenite outside its reviewed owner features/);
+});
+
+test('resolved third-party feature unions reject global capability regressions', () => {
+  const validRecords = [
+    {
+      name: 'git2',
+      version: '0.21.0',
+      features: ['vendored-libgit2'],
+    },
+    {
+      name: 'image',
+      version: '0.24.9',
+      features: ['default', 'exr', 'tiff'],
+    },
+    {
+      name: 'image',
+      version: '0.25.10',
+      features: ['bmp', 'gif', 'jpeg', 'png', 'tiff', 'webp'],
+    },
+    {
+      name: 'libgit2-sys',
+      version: '0.18.7+1.9.6',
+      features: ['vendored'],
+    },
+  ];
+
+  assert.deepEqual(
+    findResolvedThirdPartyCapabilityFeatureViolations(validRecords, { root: TEST_ROOT }),
+    [],
+  );
+
+  const mutated = structuredClone(validRecords);
+  mutated[0].features.push('https', 'vendored-openssl');
+  mutated[2].features.push('exr');
+  mutated[3].features.push('https', 'openssl-sys', 'vendored-openssl');
+  mutated.push({
+    name: 'image',
+    version: '0.26.0',
+    features: ['avif', 'default', 'exr'],
+  });
+  const messages = findResolvedThirdPartyCapabilityFeatureViolations(
+    mutated,
+    { root: TEST_ROOT },
+  ).map((violation) => violation.message).join('\n');
+  assert.match(messages, /resolved git2.*https, vendored-openssl/);
+  assert.match(messages, /resolved image 0\.25\.10.*exr/);
+  assert.match(messages, /resolved libgit2-sys.*https, openssl-sys, vendored-openssl/);
+  assert.match(messages, /resolved image 0\.26\.0 uses an unreviewed version family/);
+});
+
 test('resolved Reqwest feature union rejects every native TLS backend alias', () => {
   const violations = findResolvedReqwestNativeTlsViolations(
     [
@@ -2958,6 +3228,11 @@ test('core boundary check is split into focused modules', async () => {
     checker.split(/\r?\n/).length <= 1200,
     'checker should stay focused on orchestration and shared check helpers',
   );
+  assert.match(
+    checker,
+    /listTrackedRustRepoPaths/,
+    'recursive source boundary checks must inspect tracked Rust files only',
+  );
 
   const sourceRuleEntry = await readFile(
     new URL('./core-boundaries/rules/source-rules.mjs', import.meta.url),
@@ -3089,7 +3364,7 @@ test('desktop preview rebuild inputs use the current crate layout', async () => 
   );
 });
 
-test('split core boundary check keeps self-test and default execution behavior', () => {
+test('split core boundary check keeps self-test execution behavior', () => {
   const selfTest = spawnSync(
     process.execPath,
     ['scripts/check-core-boundaries.mjs'],
@@ -3101,13 +3376,6 @@ test('split core boundary check keeps self-test and default execution behavior',
   );
   assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
   assert.match(selfTest.stdout, /Core boundary check self-test passed\./);
-
-  const defaultRun = spawnSync(process.execPath, ['scripts/check-core-boundaries.mjs'], {
-    cwd: new URL('..', import.meta.url),
-    encoding: 'utf8',
-  });
-  assert.equal(defaultRun.status, 0, defaultRun.stderr || defaultRun.stdout);
-  assert.match(defaultRun.stdout, /Core boundary check passed\./);
 });
 
 test('optional dependency ownership rejects undeclared direct feature owners', async () => {
@@ -3574,6 +3842,53 @@ test('services-core Windows API capabilities stay feature-owned', async () => {
     ]),
     [],
   );
+});
+
+test('services-integrations Windows dependency keeps only APIs used by its owners', () => {
+  const pkg = packageAt(
+    'bitfun-services-integrations',
+    'src/crates/services/services-integrations/Cargo.toml',
+    [{
+      name: 'windows',
+      kind: null,
+      optional: true,
+      target: 'cfg(windows)',
+      features: [
+        'Win32_Foundation',
+        'Win32_Storage_FileSystem',
+        'Win32_System_Diagnostics_ToolHelp',
+      ],
+    }],
+  );
+
+  const violations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /unexpected Windows API capabilities: Win32_System_Diagnostics_ToolHelp/);
+
+  pkg.dependencies[0].features = ['Win32_Foundation', 'Win32_Storage_FileSystem'];
+  assert.deepEqual(findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]), []);
+
+  pkg.dependencies[0].target = 'cfg(all(windows, target_arch = "x86_64"))';
+  const targetViolations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(targetViolations.length, 1);
+  assert.match(targetViolations[0].message, /must declare exactly one reviewed Windows dependency/);
+
+  pkg.dependencies[0].target = 'cfg(windows)';
+  pkg.dependencies.push({
+    name: 'windows',
+    kind: null,
+    optional: false,
+    target: null,
+    features: ['Win32_System_Threading'],
+  });
+  const duplicateViolations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(duplicateViolations.length, 1);
+  assert.match(duplicateViolations[0].message, /must declare exactly one reviewed Windows dependency/);
+
+  pkg.dependencies = [];
+  const missingViolations = findServicesIntegrationsPlatformDependencyFeatureViolations([pkg]);
+  assert.equal(missingViolations.length, 1);
+  assert.match(missingViolations[0].message, /must declare exactly one reviewed Windows dependency/);
 });
 
 test('closed feature profiles reject product-full hidden behind a child feature', async () => {

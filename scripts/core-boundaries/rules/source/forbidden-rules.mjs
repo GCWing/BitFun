@@ -22,13 +22,13 @@ export const forbiddenContentRules = [
   {
     path: 'src/apps/cli/Cargo.toml',
     reason:
-      'CLI/TUI consumes stable contracts and must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
+      'CLI/TUI consumes stable contracts; the `server` command may host the App Server stdio surface, but the CLI must not depend on the typed App Server client transport, wire DTOs, or a shared TUI management crate',
     patterns: [
       {
         regex:
-          /^\s*bitfun-(?:app-server|app-server-client|app-server-protocol|tui-management)\s*=/m,
+          /^\s*bitfun-(?:app-server-client|app-server-protocol|tui-management)\s*=/m,
         message:
-          'bitfun-cli must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
+          'bitfun-cli must not depend on the typed App Server client transport, wire DTOs, or a shared TUI management crate',
       },
     ],
   },
@@ -4064,7 +4064,53 @@ export const forbiddenContentRules = [
   },
 ];
 
+export const rustWebUiSourceBoundaryRule = {
+  path: '.',
+  reason:
+    'Rust source must not reference the Web UI source tree; cross-surface contracts belong in surface tests and repository boundary checks',
+  patterns: [
+    {
+      regex: /\bweb-ui\b/g,
+      wholeFile: true,
+      ignoreRustComments: true,
+      allowLines: [
+        {
+          path: 'src/crates/assembly/core/src/agentic/tools/implementations/code_review_tool.rs',
+          text: 'touched_files: vec!["src/web-ui/src/flow_chat/utils/codeReviewReport.ts".to_string()],',
+        },
+        {
+          path: 'src/crates/assembly/core/src/agentic/tools/implementations/code_review_tool.rs',
+          text: 'target: "pnpm --dir src/web-ui run test:run".to_string(),',
+        },
+        {
+          path: 'src/crates/execution/agent-runtime/src/deep_review/manifest.rs',
+          text: '"changed_files": ["src/web-ui/src/locales/en-US/flow-chat.json"],',
+        },
+        {
+          path: 'src/crates/execution/agent-runtime/src/deep_review/manifest.rs',
+          text: '"file_path": "src/web-ui/src/locales/en-US/flow-chat.json",',
+        },
+        {
+          path: 'src/crates/execution/agent-runtime/src/deep_review/manifest.rs',
+          text: '"src/web-ui/src/locales/en-US/flow-chat.json"',
+        },
+        {
+          path: 'src/crates/services/services-integrations/src/canvas/compiler/tests.rs',
+          text: "nodes: [{ id: 'web-ui' }, { id: 'core' }],",
+        },
+        {
+          path: 'src/crates/services/services-integrations/src/canvas/compiler/tests.rs',
+          text: "edges: [{ from: 'web-ui', to: 'core' }],",
+        },
+      ],
+      message:
+        'non-comment Rust source must not spell the web-ui path token outside reviewed fixture lines',
+    },
+  ],
+};
+
 export const forbiddenContentUnderRules = [
+  rustWebUiSourceBoundaryRule,
   {
     path: 'src/crates/adapters/agent-runtime-ipc/src',
     reason: 'agent-runtime-ipc transport is restricted to Named Pipe and Unix Domain Socket',
@@ -4092,6 +4138,19 @@ export const forbiddenContentUnderRules = [
           /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_client|bitfun_agent_runtime::runtime)\b/,
         message:
           'product entrypoints must not consume raw plugin runtime client contracts; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src',
+    reason:
+      'only the reviewed stdio Server Host assembly point may import the App Server implementation; TUI, controller, and headless CLI must stay on stable contracts',
+    patterns: [
+      {
+        regex: /\bbitfun_app_server\b/,
+        message:
+          'bitfun-app-server implementation imports belong only in src/apps/cli/src/server_host.rs, the reviewed stdio Server Host assembly point',
+        allowPaths: ['src/apps/cli/src/server_host.rs'],
       },
     ],
   },

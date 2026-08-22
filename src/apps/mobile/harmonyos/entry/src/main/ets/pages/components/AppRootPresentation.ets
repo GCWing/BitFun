@@ -12,10 +12,21 @@ import {
 import { AppShellState } from '../state/AppShellState';
 import {
   ConversationLayoutCrease,
+  ConversationLayoutHorizontalCrease,
   ConversationLayoutPolicy,
   ConversationLayoutRect
 } from '../policy/ConversationLayoutPolicy';
+import { AdaptiveLayoutInput } from '../policy/AdaptiveLayoutInput';
+import {
+  SettingsPlacement,
+  SettingsPlacementPolicy,
+  SettingsSheetKind
+} from '../policy/SettingsPlacementPolicy';
+import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
+import { i18n } from '@kit.LocalizationKit';
+import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
+import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
 import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
 import { FilePreviewState } from '../state/FilePreviewState';
@@ -39,11 +50,7 @@ import {
 } from './remote/RemoteSurfaceHost';
 
 function safeFoldStatus(): display.FoldStatus {
-  try {
-    return display.getFoldStatus();
-  } catch (_err) {
-    return display.FoldStatus.FOLD_STATUS_UNKNOWN;
-  }
+  try { return display.getFoldStatus(); } catch (_err) { return display.FoldStatus.FOLD_STATUS_UNKNOWN; }
 }
 
 @ComponentV2
@@ -51,6 +58,7 @@ export struct AppRootPresentation {
   @Param shellState: AppShellState = new AppShellState();
   @Param navigationStack: NavPathStack = new NavPathStack();
   @Param remotePageState: RemotePageState = new RemotePageState();
+  @Param deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
   @Param remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
   @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
   @Param filePreviewState: FilePreviewState = new FilePreviewState();
@@ -71,7 +79,16 @@ export struct AppRootPresentation {
   @Local restoreCollapsedMasterAfterPreview: boolean = false;
   @Local showRemoteViewSettings: boolean = false;
   @Local remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
+  @Local settingsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.Settings);
+  @Local connectPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.Connect);
+  @Local sessionDetailsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
+  @Local remoteViewSettingsPlacement: SettingsPlacement =
+    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.RemoteViewSettings);
   private verticalCreases: ConversationLayoutCrease[] = [];
+  private horizontalCreases: ConversationLayoutHorizontalCrease[] = [];
   private wideQueryListener?: mediaQuery.MediaQueryListener;
   private foldStatusChanged: (status: display.FoldStatus) => void =
     (status: display.FoldStatus): void => {
@@ -112,13 +129,24 @@ export struct AppRootPresentation {
 
   build() {
     Stack() {
-      AppShell({ shellState: this.shellState, useWideLayout: this.isWideLayout(), content: () => { this.NavigationContent(); },
-        sidebar: () => { this.SidebarContent(); }, settings: () => { this.SettingsContent(); },
-        connect: () => { this.ConnectContent(); }, onCloseSidebar: this.actions.onCloseSidebar })
+      AppShell({
+        shellState: this.shellState,
+        useWideLayout: this.isWideLayout(),
+        settingsPlacement: this.settingsPlacement,
+        connectPlacement: this.connectPlacement,
+        content: () => { this.NavigationContent(); },
+        sidebar: () => { this.SidebarContent(); },
+        settings: () => { this.SettingsContent(); },
+        connect: () => { this.ConnectContent(); },
+        onCloseSidebar: this.actions.onCloseSidebar
+      })
       if (this.filePreviewPlacement() === FilePreviewPlacement.CompactFullPage) {
         this.FilePreviewPane()
       }
-    }.width('100%').height('100%')
+    }
+    .width('100%')
+    .height('100%')
+    .id(`app-root-locale-${this.shellState.localeRevision}`)
     .bindSheet($$this.showRemoteViewSettings, this.RemoteViewSettingsSheet(), this.remoteViewSettingsSheetOptions())
     .onAreaChange((_oldArea: Area, newArea: Area) => {
       const areaWidth = this.areaWidth(newArea.width);
@@ -180,12 +208,14 @@ export struct AppRootPresentation {
       route: this.shellState.activeRoute,
       shellState: this.shellState,
       remotePageState: this.remotePageState,
+      deviceDirectoryState: this.deviceDirectoryState,
       remoteCreateState: this.remoteCreateState,
       generalPageState: this.generalPageState,
       filePreviewState: this.filePreviewState,
       remoteSurfaceState: this.remoteSurfaceState,
       actions: this.actions,
       filePreviewLayout: this.filePreviewLayout(),
+      sessionDetailsPlacement: this.sessionDetailsPlacement,
       wideMasterPaneWidth: this.wideMasterPaneWidth,
       wideMasterDetailGap: this.wideMasterDetailGap,
       wideDetailContentOffset: this.wideDetailContentOffset,
@@ -351,7 +381,18 @@ export struct AppRootPresentation {
 
   private refreshWideGeometry(): void {
     const wasWideLayout = this.largeScreenLayout;
-    const verticalCreases = this.currentVerticalCreases();
+    const creaseRects = this.reportedCreaseRects();
+    const reportedVertical = ConversationLayoutPolicy.verticalCreasesFromRects(
+      this.viewportWidth,
+      this.viewportHeight,
+      creaseRects
+    );
+    this.horizontalCreases = ConversationLayoutPolicy.horizontalCreasesFromRects(
+      this.viewportWidth,
+      this.viewportHeight,
+      creaseRects
+    );
+    const verticalCreases = this.currentVerticalCreases(reportedVertical);
     this.verticalCreases = verticalCreases;
     this.largeScreenLayout = ConversationLayoutPolicy.useMasterDetail(
       this.viewportWidth,
@@ -371,9 +412,40 @@ export struct AppRootPresentation {
     this.wideDetailContentWidth = geometry.detailContentWidth;
     this.wideCollapsedDetailContentOffset = geometry.collapsedDetailContentOffset;
     this.wideCollapsedDetailContentWidth = geometry.collapsedDetailContentWidth;
+    this.refreshSheetPlacements(reportedVertical);
     this.actions.onLayoutModeChanged(this.largeScreenLayout);
     if (wasWideLayout && !this.largeScreenLayout) {
       this.actions.onCompactLayoutEntered();
+    }
+  }
+
+  private refreshSheetPlacements(reportedVertical: ConversationLayoutCrease[]): void {
+    const input = new AdaptiveLayoutInput(
+      this.viewportWidth,
+      this.viewportHeight,
+      this.foldStatus,
+      ConversationLayoutPolicy.isFoldedStatus(this.foldStatus),
+      this.isExpandedFoldable(),
+      this.isHoverLayout(),
+      this.wideLayoutMatched,
+      reportedVertical,
+      this.horizontalCreases,
+      this.isRtlLayout()
+    );
+    this.settingsPlacement = SettingsPlacementPolicy.resolve(input, SettingsSheetKind.Settings);
+    this.connectPlacement = SettingsPlacementPolicy.resolve(input, SettingsSheetKind.Connect);
+    this.sessionDetailsPlacement = SettingsPlacementPolicy.resolve(input, SettingsSheetKind.SessionDetails);
+    this.remoteViewSettingsPlacement = SettingsPlacementPolicy.resolve(
+      input,
+      SettingsSheetKind.RemoteViewSettings
+    );
+  }
+
+  private isRtlLayout(): boolean {
+    try {
+      return i18n.isRTL(RemoteI18n.language());
+    } catch (_err) {
+      return false;
     }
   }
 
@@ -411,25 +483,25 @@ export struct AppRootPresentation {
     }
   }
 
-  private currentVerticalCreases(): ConversationLayoutCrease[] {
+  private currentVerticalCreases(reportedVertical: ConversationLayoutCrease[]): ConversationLayoutCrease[] {
     if (ConversationLayoutPolicy.isFoldedStatus(this.foldStatus) || this.isHoverLayout()) {
       return [];
     }
     return ConversationLayoutPolicy.effectiveVerticalCreases(
       this.viewportWidth,
-      this.reportedVerticalCreases(),
+      reportedVertical,
       this.isExpandedFoldable()
     );
   }
 
-  private reportedVerticalCreases(): ConversationLayoutCrease[] {
+  private reportedCreaseRects(): ConversationLayoutRect[] {
     try {
       const region = display.getCurrentFoldCreaseRegion();
       const creaseRects = region.creaseRects;
       if (!creaseRects) {
         return [];
       }
-      const rects = creaseRects.map((rect: display.Rect): ConversationLayoutRect => {
+      return creaseRects.map((rect: display.Rect): ConversationLayoutRect => {
         return new ConversationLayoutRect(
           this.getUIContext().px2vp(rect.left),
           this.getUIContext().px2vp(rect.top),
@@ -437,41 +509,21 @@ export struct AppRootPresentation {
           this.getUIContext().px2vp(rect.height)
         );
       });
-      return ConversationLayoutPolicy.verticalCreasesFromRects(
-        this.viewportWidth,
-        this.viewportHeight,
-        rects
-      );
     } catch (_err) {
       return [];
     }
   }
 
   private remoteViewSettingsSheetOptions(): SheetOptions {
-    if (!this.isWideLayout()) {
-      return {
-        height: 520,
-        backgroundColor: '#00000000',
-        maskColor: '#44000000',
-        showClose: false,
-        dragBar: true
-      };
-    }
-    return {
-      height: 520,
-      width: 560,
-      preferType: SheetType.CENTER,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
-      showClose: false,
-      dragBar: false
-    };
+    return AdaptiveSheetOptions.fromPlacement(this.remoteViewSettingsPlacement, true);
   }
 
   @Builder SidebarContent() {
     AppSidebarSurface({
       shellState: this.shellState,
+      sessionDetailsPlacement: this.sessionDetailsPlacement,
       remotePageState: this.remotePageState,
+      deviceDirectoryState: this.deviceDirectoryState,
       generalPageState: this.generalPageState,
       remoteSurfaceState: this.remoteSurfaceState,
       actions: this.actions,

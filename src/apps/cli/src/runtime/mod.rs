@@ -218,3 +218,66 @@ impl AcpRuntimeContext {
         (self.agent_runtime.clone(), self.compatibility.clone())
     }
 }
+
+/// Minimal runtime context for the `server` command's app-server host.
+///
+/// Reuses the CLI product runtime (`DeliveryProfile::Cli` + the reviewed CLI
+/// assembly) so the stdio app server exposes the same agent-kernel
+/// capabilities as the CLI, without importing ACP protocol semantics or the
+/// TUI-facing `CliRuntimeContext` owners.
+#[derive(Clone)]
+pub(crate) struct AppServerRuntimeContext {
+    agent_runtime: AgentRuntime,
+    event_source: AgentEventSource,
+    compatibility: CoreAgentRuntimeCompatibility,
+    _agent_event_queue_owner: CoreProductEventQueueOwner,
+}
+
+impl AppServerRuntimeContext {
+    pub(crate) fn build(
+        agentic_system: AgenticSystem,
+        workspace_root: impl AsRef<Path>,
+    ) -> Result<Self> {
+        let scheduler = ensure_product_dialog_scheduler(&agentic_system);
+        let (_, services) = build_local_runtime_services(workspace_root, RUNTIME_EVENT_BUFFER)?;
+        let parts = assemble_cli_runtime_parts(services)
+            .context("Failed to assemble CLI product runtime")?;
+        let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
+        let agent_event_queue_owner =
+            CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
+        let agent_runtime = CoreProductAgentRuntime::build_with_event_source(
+            agentic_system.coordinator.clone(),
+            scheduler.clone(),
+            agentic_system.token_usage_service.clone(),
+            agent_event_queue_owner.runtime_source(),
+            services,
+            harness_registry,
+        )
+        .map_err(anyhow::Error::msg)
+        .context("Failed to build App Server Agent Runtime SDK")?;
+        let event_source = agent_event_queue_owner.runtime_source();
+        let compatibility =
+            CoreAgentRuntimeCompatibility::build(agentic_system.coordinator.clone(), scheduler);
+
+        Ok(Self {
+            agent_runtime,
+            event_source,
+            compatibility,
+            _agent_event_queue_owner: agent_event_queue_owner,
+        })
+    }
+
+    pub(crate) fn parts(
+        &self,
+    ) -> (
+        AgentRuntime,
+        AgentEventSource,
+        CoreAgentRuntimeCompatibility,
+    ) {
+        (
+            self.agent_runtime.clone(),
+            self.event_source.clone(),
+            self.compatibility.clone(),
+        )
+    }
+}

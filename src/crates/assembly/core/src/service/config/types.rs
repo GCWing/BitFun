@@ -72,6 +72,9 @@ pub struct GlobalConfig {
     /// ACP client configuration (stored as `{ "acpClients": { ... } }`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acp_clients: Option<serde_json::Value>,
+    /// OpenCode-compatible plugin declarations loaded by the process-wide plugin host.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plugin: Vec<PluginDeclarationConfig>,
     /// Web UI appearance selection. The full package contract is owned by the frontend.
     pub appearance: AppearanceConfig,
     /// Web UI font size preferences (`get_config` / `set_config` path `font`).
@@ -84,6 +87,44 @@ pub struct GlobalConfig {
     pub version: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub last_modified: chrono::DateTime<chrono::Utc>,
+}
+
+impl GlobalConfig {
+    pub fn has_configured_plugins(&self) -> bool {
+        self.plugin
+            .iter()
+            .any(PluginDeclarationConfig::has_non_empty_spec)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PluginDeclarationConfig {
+    Spec(String),
+    Detailed(PluginDeclarationDetails),
+}
+
+impl PluginDeclarationConfig {
+    pub fn spec(&self) -> &str {
+        match self {
+            Self::Spec(spec) => spec,
+            Self::Detailed(details) => &details.spec,
+        }
+    }
+
+    fn has_non_empty_spec(&self) -> bool {
+        !self.spec().trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginDeclarationDetails {
+    pub spec: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub options: Option<serde_json::Map<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_directory: Option<String>,
 }
 
 /// Project-scoped configuration overlay.
@@ -707,6 +748,18 @@ pub struct ReviewTeamConfig {
     pub reviewer_file_split_threshold: usize,
     /// Maximum number of same-role reviewer instances per role when file splitting is active.
     pub max_same_role_instances: usize,
+    /// Maximum retries for a failed same-role reviewer instance.
+    pub max_retries_per_role: usize,
+    /// Maximum number of review instances that may run at the same time.
+    pub max_parallel_reviewers: usize,
+    /// Seconds to wait for provider capacity before skipping unstarted work. 0 skips immediately.
+    pub max_queue_wait_seconds: u64,
+    /// Whether unstarted review work may wait for provider capacity.
+    pub allow_provider_capacity_queue: bool,
+    /// Whether bounded automatic retry is allowed after a reviewer failure.
+    pub allow_bounded_auto_retry: bool,
+    /// Elapsed-seconds guard that blocks bounded automatic retry after this delay.
+    pub auto_retry_elapsed_guard_seconds: u64,
 }
 
 impl Default for ReviewTeamConfig {
@@ -720,6 +773,12 @@ impl Default for ReviewTeamConfig {
             auto_fix_enabled: false,
             reviewer_file_split_threshold: 20,
             max_same_role_instances: 3,
+            max_retries_per_role: 1,
+            max_parallel_reviewers: 2,
+            max_queue_wait_seconds: 1200,
+            allow_provider_capacity_queue: true,
+            allow_bounded_auto_retry: false,
+            auto_retry_elapsed_guard_seconds: 180,
         }
     }
 }
@@ -1736,6 +1795,7 @@ impl Default for GlobalConfig {
             tool_permissions: ToolPermissionConfig::default(),
             mcp_servers: None,
             acp_clients: None,
+            plugin: Vec::new(),
             appearance: AppearanceConfig::default(),
             font: None,
             schema_version: CURRENT_CONFIG_SCHEMA_VERSION,
@@ -2225,6 +2285,43 @@ mod tests {
             serde_json::from_value::<AuthConfig>(serialized).expect("Go auth should roundtrip"),
             go
         );
+    }
+
+    #[test]
+    fn plugin_config_defaults_to_empty_when_missing() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("empty global config should default");
+
+        assert!(config.plugin.is_empty());
+        assert!(!config.has_configured_plugins());
+    }
+
+    #[test]
+    fn non_empty_plugin_config_requests_runtime_startup() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "plugin": [
+                "file:///C:/plugins/demo.mjs",
+                {
+                    "spec": "@my-org/custom-plugin",
+                    "options": { "mode": "strict" },
+                    "baseDirectory": "C:/workspace"
+                }
+            ]
+        }))
+        .expect("plugin config should deserialize");
+
+        assert_eq!(config.plugin.len(), 2);
+        assert!(config.has_configured_plugins());
+    }
+
+    #[test]
+    fn empty_plugin_specs_do_not_request_runtime_startup() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "plugin": ["", "   ", { "spec": "" }]
+        }))
+        .expect("empty plugin declarations should deserialize");
+
+        assert!(!config.has_configured_plugins());
     }
 
     #[test]
@@ -3048,6 +3145,80 @@ mod tests {
         assert_eq!(
             serialized["review_teams"]["default"]["member_strategy_overrides"]["ReviewSecurity"],
             "quick"
+        );
+    }
+
+    #[test]
+    fn preserves_review_team_concurrency_fields_through_config_round_trip() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "default_models": {},
+            "agent_profiles": {},
+            "review_teams": {
+                "default": {
+                    "extra_subagent_ids": [],
+                    "strategy_level": "normal",
+                    "member_strategy_overrides": {},
+                    "reviewer_timeout_seconds": 3600,
+                    "judge_timeout_seconds": 2400,
+                    "reviewer_file_split_threshold": 20,
+                    "max_same_role_instances": 3,
+                    "max_retries_per_role": 1,
+                    "max_parallel_reviewers": 1,
+                    "max_queue_wait_seconds": 0,
+                    "allow_provider_capacity_queue": true,
+                    "allow_bounded_auto_retry": false,
+                    "auto_retry_elapsed_guard_seconds": 180
+                }
+            },
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("review team concurrency config should deserialize");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        let stored = &serialized["review_teams"]["default"];
+        assert_eq!(stored["max_retries_per_role"], serde_json::json!(1));
+        assert_eq!(stored["max_parallel_reviewers"], serde_json::json!(1));
+        assert_eq!(stored["max_queue_wait_seconds"], serde_json::json!(0));
+        assert_eq!(
+            stored["allow_provider_capacity_queue"],
+            serde_json::json!(true)
+        );
+        assert_eq!(stored["allow_bounded_auto_retry"], serde_json::json!(false));
+        assert_eq!(
+            stored["auto_retry_elapsed_guard_seconds"],
+            serde_json::json!(180)
+        );
+    }
+
+    #[test]
+    fn missing_review_team_concurrency_fields_use_product_defaults() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "review_teams": {
+                "default": {
+                    "strategy_level": "normal"
+                }
+            }
+        }))
+        .expect("legacy review team config should deserialize");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        let stored = &serialized["review_teams"]["default"];
+        assert_eq!(stored["max_retries_per_role"], serde_json::json!(1));
+        assert_eq!(stored["max_parallel_reviewers"], serde_json::json!(2));
+        assert_eq!(stored["max_queue_wait_seconds"], serde_json::json!(1200));
+        assert_eq!(
+            stored["allow_provider_capacity_queue"],
+            serde_json::json!(true)
+        );
+        assert_eq!(stored["allow_bounded_auto_retry"], serde_json::json!(false));
+        assert_eq!(
+            stored["auto_retry_elapsed_guard_seconds"],
+            serde_json::json!(180)
         );
     }
 

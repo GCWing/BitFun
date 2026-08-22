@@ -15,6 +15,9 @@
 /** Blank tail tolerated below the live output, as a share of the viewport. */
 export const FLOWCHAT_TAIL_HOLD_GAP_RATIO = 0.6;
 
+/** Maximum combined height of the input footer and resident tail spacer. */
+export const FLOWCHAT_TAIL_RESERVATION_RATIO = 0.75;
+
 /**
  * Distance from an owned offset still treated as being on it.
  *
@@ -25,10 +28,7 @@ export const FLOWCHAT_TAIL_HOLD_GAP_RATIO = 0.6;
  */
 export const FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX = 50;
 
-export type TailFollowMode = 'pin-turn-top' | 'hold-tail';
-
 export interface TailFollowState {
-  mode: TailFollowMode;
   /** Scroll offset the viewport currently owns. */
   target: number;
 }
@@ -42,8 +42,6 @@ export interface TailFollowGeometry {
 export interface TailFollowInput {
   /** Offset placing the end of real content at the viewport bottom. */
   desiredScrollTop: number;
-  /** Offset placing the pinned Turn's user message at the viewport top. */
-  pinScrollTop: number | null;
   /** Largest blank tail the hold rule accepts before it gives ground. */
   maxGapPx: number;
 }
@@ -62,45 +60,22 @@ export interface TailFollowInput {
 export const FLOWCHAT_TURN_TOP_GAP_PX = 8;
 
 /**
- * Lower bound on the rendered height of a user-message item.
- *
- * This sizes the pin reserve below, so it must be an *under*estimate. Too low
- * only leaves the pin a few spare pixels; too high makes the pinned offset
- * exceed the scroll range, and the browser clamps the Turn back down from the
- * viewport top with the follow loop rewriting the clamped offset every frame.
- * A single line with no timestamp row is comfortably above this at any
- * supported font size, and the item is free to be taller.
- */
-const PINNED_TURN_MIN_ITEM_HEIGHT_PX = 40;
-
-/**
  * Height of the resident tail spacer.
  *
- * The spacer exists to keep two offsets inside the scroll range, and it is
- * sized to the larger of what they need — one viewport was simply the cheapest
- * bound that covered both, and it costs a full screen of blank at the end of
- * the scroll range.
- *
- * - **A pinned Turn.** Worst case its user message is the newest item and
- *   nothing has answered it yet, so everything below the message top is the
- *   message, the input-stack inset, and this spacer. Reserving
- *   `clientHeight - bottomInsetPx - PINNED_TURN_MIN_ITEM_HEIGHT_PX` is exactly
- *   enough to put that message on the top edge.
- * - **A held collapse gap.** `hold-tail` keeps an offset up to
- *   `tailHoldMaxGapPx` past the content end, and an offset the browser clamps
- *   is an offset the hold rule does not actually get to hold.
- *
- * `bottomInsetPx` is the input-stack footer, which grows as the composer does.
- * That is a layout input, not a content measurement — and while the pin reserve
- * is the binding bound the two sum to a constant, so growing the composer moves
- * the content end without moving the end of the scroll range.
+ * A new Turn is revealed by scrolling to the physical bottom once, then
+ * allowing streamed output to consume this blank without further writes. The
+ * footer and spacer together are capped at three quarters of the viewport, so
+ * the reveal always leaves at least one quarter of the transcript visible.
+ * `bottomInsetPx` is layout input only; no content measurement feeds this size.
  */
 export function tailSpacerPxForViewport(
   clientHeight: number,
   bottomInsetPx: number,
 ): number {
-  const pinnedTurnReservePx = clientHeight - bottomInsetPx - PINNED_TURN_MIN_ITEM_HEIGHT_PX;
-  return Math.max(0, Math.round(Math.max(pinnedTurnReservePx, tailHoldMaxGapPx(clientHeight))));
+  return Math.max(
+    0,
+    Math.round(clientHeight * FLOWCHAT_TAIL_RESERVATION_RATIO - bottomInsetPx),
+  );
 }
 
 /**
@@ -114,8 +89,11 @@ export function contentEndScrollTop(geometry: TailFollowGeometry): number {
   );
 }
 
-export function tailHoldMaxGapPx(clientHeight: number): number {
-  return Math.max(0, Math.round(clientHeight * FLOWCHAT_TAIL_HOLD_GAP_RATIO));
+export function tailHoldMaxGapPx(clientHeight: number, tailSpacerPx: number): number {
+  return Math.max(
+    0,
+    Math.min(Math.round(clientHeight * FLOWCHAT_TAIL_HOLD_GAP_RATIO), tailSpacerPx),
+  );
 }
 
 export interface TurnTopAlignmentInput {
@@ -127,8 +105,8 @@ export interface TurnTopAlignmentInput {
 /**
  * Whether top-aligning a Turn would park the viewport in the reserved blank.
  *
- * The blank belongs to follow-output. `pin-turn-top` holds it for output that
- * is on its way, and nothing is on its way under a Turn the user navigated to
+ * The blank belongs to follow-output's new-Turn reveal, and nothing is on its
+ * way under a Turn the user navigated to
  * — so a navigation that lands there shows a screen of nothing, and the snap
  * back then reclaims it as a second, visible movement.
  *
@@ -148,11 +126,6 @@ export function turnTopAlignmentEntersReservedBlank(
 /**
  * Resolve the next follow target.
  *
- * `pin-turn-top` holds a freshly submitted Turn at the viewport top while its
- * answer is still shorter than one viewport, then hands off to `hold-tail` at
- * the crossover. The pinned phase ignores `maxGapPx`: the blank below a new
- * Turn is the point of the mode, not a failure of it.
- *
  * `hold-tail` never moves backwards for free. It keeps its previous offset when
  * content shrinks, which is what leaves earlier content visually still, and
  * only gives ground once the blank below the live output exceeds `maxGapPx`.
@@ -161,47 +134,12 @@ export function nextTailFollowState(
   previous: TailFollowState,
   input: TailFollowInput,
 ): TailFollowState {
-  if (previous.mode === 'pin-turn-top') {
-    if (input.pinScrollTop === null) {
-      // The Turn is not measurable yet; behave like a plain tail follow so the
-      // viewport is never stranded, and pin once the element resolves.
-      return { mode: 'pin-turn-top', target: input.desiredScrollTop };
-    }
-    if (input.desiredScrollTop < input.pinScrollTop) {
-      return { mode: 'pin-turn-top', target: input.pinScrollTop };
-    }
-    return { mode: 'hold-tail', target: input.desiredScrollTop };
-  }
-
   return {
-    mode: 'hold-tail',
     target: Math.max(
       input.desiredScrollTop,
       Math.min(previous.target, input.desiredScrollTop + input.maxGapPx),
     ),
   };
-}
-
-/**
- * The state the follow rule would hold right now, judged from live geometry
- * alone.
- *
- * `hold-tail` normally refuses to move backwards, and that refusal is what
- * keeps a collapse from dragging earlier content down. The memory it refuses
- * with belongs to a viewport the follow rule has been holding continuously;
- * once the user has taken over and come to rest somewhere else there is nothing
- * left to preserve, and carrying the stale offset forward would land them on a
- * position neither side chose.
- *
- * The returned mode still matters: a pinned Turn whose answer has outgrown the
- * viewport reports `hold-tail`, which is how a caller learns the pin has
- * crossed over even though no follow loop was running to notice.
- */
-export function memorylessFollowState(
-  mode: TailFollowMode,
-  input: TailFollowInput,
-): TailFollowState {
-  return nextTailFollowState({ mode, target: input.desiredScrollTop }, input);
 }
 
 export type TailDepartureCrossing =
@@ -218,12 +156,12 @@ export type TailDepartureCrossing =
  *
  * Losing the follow permanently is right only for a reader who left the live
  * region, and `scrollTop > contentEnd` says they have not. The reserved blank
- * is up to `tailHoldMaxGapPx` under `hold-tail` and the whole gap under a
- * pinned Turn, so a small scroll up can leave the reader looking at empty space
- * below the newest output — nothing hidden from them yet — until output grows
- * past the bottom edge and they silently stop seeing it.
+ * is up to `tailHoldMaxGapPx` under `hold-tail`, while a new-Turn reveal starts
+ * at the physical bottom. A small scroll up can therefore leave the reader
+ * looking at empty space below the newest output — nothing hidden from them yet
+ * — until output grows past the bottom edge and they silently stop seeing it.
  *
- * The follow target may sit inside the blank while a new Turn is pinned, but
+ * The reveal position sits inside the blank after a new Turn arrives, but
  * this watch deliberately uses the real content end: it only observes output
  * catching up with a reader, never a user's resting position.
  *
@@ -328,7 +266,7 @@ export interface ViewportAtTailInput {
  * Whether the viewport counts as being at the end of the transcript.
  *
  * The band runs from the content end down to whatever the follow rule owns, so
- * a pinned Turn and a held collapse gap both sit inside it — neither is a
+ * a new-Turn reveal and a held collapse gap both sit inside it — neither is a
  * reason to offer a jump to the latest output. Past the lower bound is reserved
  * blank, which is.
  */

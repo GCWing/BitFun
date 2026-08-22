@@ -31,9 +31,10 @@ interface HarnessProps {
   header: HTMLElement;
   items: Item[];
   onApi: (api: FlowChatVirtualizer) => void;
+  isViewportSuspended?: () => boolean;
 }
 
-function Harness({ scroller, header, items, onApi }: HarnessProps) {
+function Harness({ scroller, header, items, onApi, isViewportSuspended }: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
   const headerRef = React.useRef<HTMLElement | null>(header);
   onApi(useFlowChatVirtualizer({
@@ -42,6 +43,7 @@ function Harness({ scroller, header, items, onApi }: HarnessProps) {
     headerRef,
     getItemKey: (item: Item) => item.key,
     estimateItemHeightPx: () => ESTIMATE_PX,
+    isViewportSuspended,
     scrollPaddingStartPx: 0,
     writeViewport: () => true,
   }));
@@ -140,6 +142,24 @@ describe('useFlowChatVirtualizer measurement', () => {
     expect(measureAndRead([0, 1])).toEqual([
       { startPx: 0, endPx: REAL_PX },
       { startPx: REAL_PX, endPx: REAL_PX + ESTIMATE_PX },
+    ]);
+  });
+
+  it('does not measure rendered rows while the native host has suspended the viewport', () => {
+    act(() => root.render(
+      <Harness
+        scroller={scroller}
+        header={header}
+        items={[{ key: 'a' }, { key: 'b' }, { key: 'c' }]}
+        onApi={next => { api = next; }}
+        isViewportSuspended={() => true}
+      />,
+    ));
+    renderRow(0, REAL_PX);
+
+    expect(measureAndRead([0, 1])).toEqual([
+      { startPx: 0, endPx: ESTIMATE_PX },
+      { startPx: ESTIMATE_PX, endPx: ESTIMATE_PX * 2 },
     ]);
   });
 

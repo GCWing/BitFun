@@ -11,7 +11,7 @@ export class TimeFormat {
     const day = 24 * hour;
     const rawDiffMs = nowMs - timestamp;
     if (rawDiffMs < -minute) {
-      return TimeFormat.absoluteDate(timestamp);
+      return RemoteI18n.formatAbsoluteDate(timestamp);
     }
     const diffMs = Math.max(0, rawDiffMs);
     if (diffMs < minute) {
@@ -26,7 +26,7 @@ export class TimeFormat {
     if (diffMs < 7 * day) {
       return RemoteI18n.f('time.daysAgo', `${Math.floor(diffMs / day)}`);
     }
-    return TimeFormat.absoluteDate(timestamp);
+    return RemoteI18n.formatAbsoluteDate(timestamp);
   }
 
   static timestampMs(value: string): number {
@@ -61,11 +61,4 @@ export class TimeFormat {
     return Number.isNaN(parsed) ? Number.NaN : parsed;
   }
 
-  private static absoluteDate(timestamp: number): string {
-    const date = new Date(timestamp);
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
 }

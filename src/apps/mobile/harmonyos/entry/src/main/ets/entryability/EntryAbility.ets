@@ -66,11 +66,15 @@ export default class EntryAbility extends UIAbility {
       return;
     }
     const dark = colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
-    this.mainWindow.setWindowSystemBarProperties({
-      statusBarColor: dark ? '#151514' : '#FDFDFB',
-      navigationBarColor: dark ? '#151514' : '#FDFDFB',
-      statusBarContentColor: dark ? '#F4F3EF' : '#171717',
-      navigationBarContentColor: dark ? '#F4F3EF' : '#171717'
-    });
+    try {
+      this.mainWindow.setWindowSystemBarProperties({
+        statusBarColor: dark ? '#151514' : '#FDFDFB',
+        navigationBarColor: dark ? '#151514' : '#FDFDFB',
+        statusBarContentColor: dark ? '#F4F3EF' : '#171717',
+        navigationBarContentColor: dark ? '#F4F3EF' : '#171717'
+      });
+    } catch (err) {
+      hilog.error(DOMAIN, TAG, 'Failed to update system bars. Cause: %{public}s', JSON.stringify(err));
+    }
   }
 }

@@ -7,6 +7,8 @@ export const execProcessToolCardAppearanceDescriptor: AppearanceSurfaceDescripto
     { id: 'result' }, { id: 'footer' }, { id: 'waiting' }, { id: 'error' },
   ],
   states: [
+    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
+    { id: 'completed', selector: { kind: 'self', suffix: '[data-bf-state~="completed"]' } },
     { id: 'cancelled', selector: { kind: 'self', suffix: '[data-bf-state~="cancelled"]' } },
     { id: 'waiting', selector: { kind: 'self', suffix: '[data-bf-state~="waiting"]' } },
     { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },

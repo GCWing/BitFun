@@ -191,7 +191,7 @@ export class SessionListProjector {
   ): RecentWorkspaceEntry[] {
     const entries: RecentWorkspaceEntry[] = [];
     const currentIsAssistant = SessionListProjector.isAssistantWorkspace(inputs.workspacePath, inputs, assistantPaths);
-    if ((inputs.workspacePath.length > 0 || inputs.workspaceName.length > 0) && !currentIsAssistant) {
+    if (inputs.workspacePath.length > 0 && !currentIsAssistant) {
       entries.push({
         path: inputs.workspacePath,
         name: inputs.workspaceName,
@@ -348,7 +348,7 @@ export class SessionListProjectionCache {
 
   private static sessionFingerprint(sessions: RemoteSession[]): string[] {
     return sessions.map((item: RemoteSession): string => {
-      return `${item.id}${item.title}${item.status}${item.agentType}` +
+      return `${item.deviceId || ''}${item.id}${item.title}${item.status}${item.agentType}` +
         `${item.workspacePath}${item.workspaceName}${item.updatedAt}${item.createdAt}`;
     });
   }

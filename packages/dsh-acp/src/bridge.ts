@@ -21,7 +21,9 @@ import { randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import Schema from '@deepseek-ai/schemastery'
-import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
+import {
+  createUserMessage, errorChain, type LlmModelInfo, type LlmProviderInfo,
+} from '@deepseek-ai/dsh-llm'
 import {
   AgentSideConnection,
   ndJsonStream,
@@ -40,6 +42,7 @@ import {
   type PromptRequest,
   type PromptResponse,
   type SessionConfigOption,
+  type SessionConfigSelectGroup,
   type SessionConfigSelectOption,
   type SessionNotification,
   type SetSessionConfigOptionRequest,
@@ -48,7 +51,9 @@ import {
   type Stream,
   type ToolCallUpdate,
 } from '@agentclientprotocol/sdk'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import {
+  installModelSelection, type Agent, type ModelSelection, type ModelSelectionRef,
+} from '@deepseek-ai/dsh-agent'
 // The roster itself is read through `ctx.get`; only the stored-preset resolver
 // is a value here. This import also carries the `agent-preset/selected`
 // session-event declaration the switch below logs and the resolver reads back.
@@ -169,13 +174,26 @@ interface SessionRecord {
    */
   presetId: string | undefined
   /**
-   * Tail of this session's preset switches. Two `session/set_config_option`
-   * requests must not recompose concurrently: the second one's blank-session
-   * check has to see the first one's result, not the state it raced past.
+   * Tail of this session's `session/set_config_option` requests. Two of them
+   * must not run concurrently: a preset switch's blank-session check has to see
+   * the one ahead of it, and every reply carries the WHOLE option set, so an
+   * out-of-order reply would re-render the picker from state that has moved on.
    */
-  presetSwitch: Promise<void> | undefined
+  configSwitch: Promise<void> | undefined
   /** Whether the client has been told the mode is now fixed, so it is said once. */
   presetLockPublished: boolean
+  /**
+   * This session's live model override, installed into its agent's prompt
+   * assembly and request routing. `current` is undefined until the client picks
+   * a model, which leaves the agent on the provider/model it was created with.
+   */
+  modelSelection: ModelSelectionRef
+  /**
+   * The provider/model the agent was created with, captured at creation rather
+   * than re-read: the deployment default is a live setting, and the picker must
+   * report what THIS session runs on, not what the next one would.
+   */
+  modelSeed: { provider?: string; model?: string }
   /** In-flight prompt and its captured turn number for exact settlement. */
   inflight: {
     resolve: (reason: StopReason) => void
@@ -211,6 +229,43 @@ const PRESET_CONFIG_ID = 'agent-preset'
  */
 const PRESET_LOCKED = 'This conversation has already started, so its mode is fixed. '
   + 'Start a new session to pick another mode.'
+
+/**
+ * The session config option the model catalog is offered under.
+ *
+ * ACP 0.25 has no model state of its own — `session/set_model` and
+ * `SessionModelState` do not exist in this schema version — so a model picker
+ * IS a config option, distinguished from the mode picker only by its category.
+ * Clients key off `category: 'model'` first and fall back to matching the id,
+ * which is why the id is the bare word rather than something namespaced.
+ */
+const MODEL_CONFIG_ID = 'model'
+
+/**
+ * Encode one provider/model pair as a config option value.
+ *
+ * A value id is one opaque string, but a model is only identified by its pair,
+ * and the same model id can be served by two providers. Joining them on the
+ * first `/` is also what clients parse to label a value with its provider when
+ * they render an ungrouped list: provider routes carry no `/`, model ids may.
+ * @param provider - the registered provider route.
+ * @param model - the provider-owned model id.
+ * @returns the wire value.
+ */
+function modelValue(provider: string, model: string): string {
+  return `${provider}/${model}`
+}
+
+/**
+ * Split a config option value back into its provider/model pair.
+ * @param value - a value id previously produced by {@link modelValue}.
+ * @returns the pair, or undefined when the value carries no separator.
+ */
+function parseModelValue(value: string): { provider: string; model: string } | undefined {
+  const cut = value.indexOf('/')
+  if (cut <= 0 || cut === value.length - 1) return undefined
+  return { provider: value.slice(0, cut), model: value.slice(cut + 1) }
+}
 
 /**
  * Whether a session may still change its preset.
@@ -251,6 +306,11 @@ export function apply(ctx: Context, config: AcpConfig): void {
   // plugin in its host composition has no modes to offer, and this bridge then
   // behaves exactly as it did before they existed.
   const presets = ctx.get('agentPresets')
+  // Optional for the same reason: a composition whose model routing lives
+  // elsewhere simply offers no model picker, and the bridge behaves as it did
+  // before there was one. The catalog itself is read lazily, so an adapter
+  // registered after this plugin still appears in the list.
+  const llm = ctx.get('llm')
   const logger = ctx.logger
   const sessions = new Map<SessionId, SessionRecord>()
   const publishReasoning = config.reasoning ?? true
@@ -320,6 +380,120 @@ export function apply(ctx: Context, config: AcpConfig): void {
       options: offered.map(presetValue),
     }]
   }
+
+  /**
+   * The provider/model this session is running on right now.
+   *
+   * Three sources in falling order of authority: an explicit pick, the request
+   * header the session's own turns were logged under, and the selection the
+   * agent was created with. A resumed session therefore reports what it
+   * actually ran on rather than what the deployment default has since become.
+   * @param record - the session.
+   * @returns the pair, or undefined when nothing pins one.
+   */
+  const currentModel = (record: SessionRecord): { provider: string; model: string } | undefined => {
+    const picked = record.modelSelection.current
+    if (picked !== undefined) return { provider: picked.provider, model: picked.model }
+    const logged = record.agent.session.requestHeader()?.config
+    if (logged !== undefined) return { provider: logged.provider, model: logged.model }
+    const { provider, model } = record.modelSeed
+    if (provider === undefined || model === undefined) return undefined
+    return { provider, model }
+  }
+
+  /**
+   * The session's model picker: the harness's model catalog as one `select`
+   * config option, grouped by provider, one row per model.
+   *
+   * Unlike the mode, the model is switchable for the whole life of a session —
+   * a mid-conversation switch changes only which model answers the next step,
+   * and leaves the logged history valid. The catalog is advisory (an adapter
+   * may accept ids it does not advertise), so the model in force is offered
+   * even when it is not listed: a picker whose current value is missing from
+   * its own options renders blank.
+   *
+   * A model reachable through two providers is listed once. The harness's own
+   * DeepSeek adapter and a pi-ai profile pointed at the same account are both
+   * routes to the same models, and a user who configured the second in dsh gets
+   * every model twice — same name, same vendor, nothing to choose between. The
+   * provider carrying the session's current model owns those rows, so the list
+   * stays on the route the session is actually running.
+   * @param record - the session.
+   * @returns the one option, or nothing when no model can be named.
+   */
+  const modelOptions = async (record: SessionRecord): Promise<SessionConfigOption[]> => {
+    if (llm === undefined) return []
+    const current = currentModel(record)
+    if (current === undefined) return []
+    const currentValue = modelValue(current.provider, current.model)
+
+    const listed: { provider: LlmProviderInfo; models: LlmModelInfo[] }[] = []
+    for (const provider of llm.listProviders()) {
+      // One unreachable provider costs its own entries, not the whole picker.
+      const models = await llm.listModels(provider.id).catch((error: unknown) => {
+        logger.warn(`acp: cannot list models for "${provider.id}": ${String(error)}`)
+        return []
+      })
+      listed.push({ provider, models })
+    }
+
+    // Which provider each model id is listed under. Seeded with the session's
+    // own route so the model in force keeps its provider even when that
+    // provider's listing failed, then filled current-provider-first so a
+    // duplicated catalog collapses onto the route already in use.
+    const owner = new Map<string, string>([[current.model, current.provider]])
+    const byCurrentFirst = [
+      ...listed.filter(entry => entry.provider.id === current.provider),
+      ...listed.filter(entry => entry.provider.id !== current.provider),
+    ]
+    for (const { provider, models } of byCurrentFirst) {
+      for (const model of models) {
+        if (!owner.has(model.id)) owner.set(model.id, provider.id)
+      }
+    }
+
+    const groups: SessionConfigSelectGroup[] = []
+    for (const { provider, models } of listed) {
+      const values: SessionConfigSelectOption[] = models
+        .filter(model => owner.get(model.id) === provider.id)
+        .map(model => ({
+          value: modelValue(provider.id, model.id),
+          name: model.name,
+          ...model.description === undefined ? {} : { description: model.description },
+        }))
+      if (provider.id === current.provider && !values.some(value => value.value === currentValue)) {
+        values.push({ value: currentValue, name: current.model })
+      }
+      if (values.length === 0) continue
+      groups.push({ group: provider.id, name: provider.name, options: values })
+    }
+    if (!groups.some(group => group.group === current.provider)) {
+      groups.push({
+        group: current.provider,
+        name: current.provider,
+        options: [{ value: currentValue, name: current.model }],
+      })
+    }
+    return [{ type: 'select', id: MODEL_CONFIG_ID, name: 'Model', category: 'model', currentValue, options: groups }]
+  }
+
+  /**
+   * Everything this session lets the client configure.
+   *
+   * Always published as one set, because that is how a client consumes it: a
+   * `session/new` response, a `set_config_option` reply, and a
+   * `config_option_update` each REPLACE the picker row wholesale, so an answer
+   * that carried only the option that changed would drop the other one.
+   * @param record - the session.
+   * @param locked - whether the mode is already fixed; read off the session by default.
+   * @returns the options, in the order a composer renders them.
+   */
+  const sessionOptions = async (
+    record: SessionRecord, locked?: boolean,
+  ): Promise<SessionConfigOption[]> => [
+    ...await presetOptions(record, locked),
+    ...await modelOptions(record),
+  ]
 
   const settlePrompt = (record: SessionRecord, reason: StopReason): void => {
     const inflight = record.inflight
@@ -450,7 +624,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
         // Locked is asserted rather than read: whether this very event is
         // already in `session.events` is the session's business, not the
         // bridge's, and the answer here is known.
-        void presetOptions(record, true).then(configOptions => {
+        void sessionOptions(record, true).then(configOptions => {
           if (closed || configOptions.length === 0) return
           if (sessions.get(record.agent.session.id) !== record) return
           update(record, { sessionUpdate: 'config_option_update', configOptions })
@@ -623,16 +797,19 @@ export function apply(ctx: Context, config: AcpConfig): void {
         // default is a hot-reloaded setting, and a resumed session must rebuild
         // the composition its turns actually ran under.
         const composed = presets === undefined ? undefined : (await presets.resolve()).id
+        const modelSeed = agentOptions(ctx, config)
+        const modelSelection: ModelSelectionRef = { current: undefined, assembled: undefined }
         const handle = await agents.create({
           sessionId,
           meta: { cwd: params.cwd, ...composed === undefined ? {} : { agentPreset: composed } },
-          agentOptions: agentOptions(ctx, config),
+          agentOptions: modelSeed,
           // Composition belongs in `setup`, which the factory awaits before the
           // agent is published: a preset that fails to mount rolls the whole
           // creation back rather than yielding a session on the empty global
           // tool layer.
-          ...presets === undefined || composed === undefined ? {} : {
-            setup: async (agentCtx: Context) => void await presets.mount(agentCtx, composed),
+          setup: async (agentCtx: Context) => {
+            installModelSelection(agentCtx, modelSelection)
+            if (presets !== undefined && composed !== undefined) await presets.mount(agentCtx, composed)
           },
         })
         /* v8 ignore next 4 -- a real stdio close can race an in-flight create. */
@@ -647,15 +824,17 @@ export function apply(ctx: Context, config: AcpConfig): void {
           streamedReasoning: new Set(),
           published: new Map(),
           presetId: composed,
-          presetSwitch: undefined,
+          configSwitch: undefined,
           presetLockPublished: false,
+          modelSelection,
+          modelSeed,
           inflight: undefined,
         }
         sessions.set(sessionId, record)
         // Carried by the response rather than announced afterwards: a client
         // registers its update handler for a session only once `session/new`
         // has returned, so anything published before that can be dropped.
-        const configOptions = await presetOptions(record, false)
+        const configOptions = await sessionOptions(record, false)
         return { sessionId, ...configOptions.length === 0 ? {} : { configOptions } }
       },
 
@@ -683,7 +862,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
         const live = sessions.get(sessionId)
         if (live !== undefined) {
           replayHistory(live)
-          const configOptions = await presetOptions(live)
+          const configOptions = await sessionOptions(live)
           return configOptions.length === 0 ? {} : { configOptions }
         }
 
@@ -704,11 +883,14 @@ export function apply(ctx: Context, config: AcpConfig): void {
         const composed = presets === undefined
           ? undefined
           : resolveSessionPreset({ header: inspected.meta, events: inspected.events })
+        const modelSeed = agentOptions(ctx, config)
+        const modelSelection: ModelSelectionRef = { current: undefined, assembled: undefined }
         const handle = await agents.resume({
           resumeSessionId: sessionId,
-          agentOptions: agentOptions(ctx, config),
-          ...presets === undefined || composed === undefined ? {} : {
-            setup: async (agentCtx: Context) => void await presets.mount(agentCtx, composed),
+          agentOptions: modelSeed,
+          setup: async (agentCtx: Context) => {
+            installModelSelection(agentCtx, modelSelection)
+            if (presets !== undefined && composed !== undefined) await presets.mount(agentCtx, composed)
           },
         })
         /* v8 ignore next 4 -- a real stdio close can race an in-flight resume. */
@@ -723,33 +905,66 @@ export function apply(ctx: Context, config: AcpConfig): void {
           streamedReasoning: new Set(),
           published: new Map(),
           presetId: composed,
-          presetSwitch: undefined,
+          configSwitch: undefined,
           // A session with turns is already locked, and the response below says
           // so; only a session reopened before its first turn can still be
           // told, by the `turn/start` that starts it.
           presetLockPublished: !sessionBlank(handle.agent.session),
+          modelSelection,
+          modelSeed,
           inflight: undefined,
         }
         sessions.set(sessionId, record)
         replayHistory(record)
-        const configOptions = await presetOptions(record)
+        const configOptions = await sessionOptions(record)
         return configOptions.length === 0 ? {} : { configOptions }
       },
 
       /**
-       * Choose the session's mode.
+       * Choose the session's mode or its model.
        *
-       * Refused once the conversation has started, for the same reason the
-       * picker is down to one entry by then: the turns already logged ran on the
-       * current preset's tools.
+       * A mode switch is refused once the conversation has started, for the same
+       * reason the picker is down to one entry by then: the turns already logged
+       * ran on the current preset's tools. A model switch is not — swapping which
+       * model answers the next step leaves every logged turn valid — so the model
+       * picker stays live for the whole session.
        */
       async setSessionConfigOption(
         params: SetSessionConfigOptionRequest,
       ): Promise<SetSessionConfigOptionResponse> {
         assertOpen()
         const record = requireSession(SessionId(params.sessionId))
-        if (params.configId !== PRESET_CONFIG_ID) {
+        if (params.configId !== PRESET_CONFIG_ID && params.configId !== MODEL_CONFIG_ID) {
           throw invalidParams(`unknown config option: ${params.configId}`)
+        }
+        if (params.configId === MODEL_CONFIG_ID) {
+          if (llm === undefined) throw invalidParams('this deployment offers no models')
+          if (typeof params.value !== 'string') {
+            throw invalidParams(`"${MODEL_CONFIG_ID}" is a select option, not a boolean`)
+          }
+          const value = params.value
+          const pair = parseModelValue(value)
+          if (pair === undefined) throw invalidParams(`unknown model: ${value}`)
+          // Resolved rather than trusted: this both rejects a route the harness
+          // cannot serve — before it becomes a failing turn — and materializes
+          // the adapter's own defaults, so a model whose provider configures a
+          // reasoning effort runs at that effort instead of the previous
+          // model's inherited one.
+          const resolved = await llm.resolveCallConfig(pair).catch((error: unknown) => {
+            throw invalidParams(`cannot use model "${value}": ${errorChain(error)}`)
+          })
+          const selection: ModelSelection = {
+            provider: resolved.provider,
+            model: resolved.model,
+            ...resolved.reasoningEffort === undefined ? {} : { reasoningEffort: resolved.reasoningEffort },
+          }
+          const pick = async (): Promise<SessionConfigOption[]> => {
+            record.modelSelection.current = selection
+            return await sessionOptions(record)
+          }
+          const queuedPick = (record.configSwitch ?? Promise.resolve()).then(pick)
+          record.configSwitch = queuedPick.then(() => undefined, () => undefined)
+          return { configOptions: await queuedPick }
         }
         if (presets === undefined) throw invalidParams('this deployment offers no modes')
         if (typeof params.value !== 'string') {
@@ -764,7 +979,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
           }
           // Asking for the mode already in force is not a switch, so it is
           // answered even on a locked session: it changes nothing either way.
-          if (record.presetId === target.id) return await presetOptions(record)
+          if (record.presetId === target.id) return await sessionOptions(record)
           // Re-read inside the queue: a switch ahead of this one may have run,
           // and a conversation may have started, since this request arrived.
           if (!sessionBlank(record.agent.session)) throw invalidParams(PRESET_LOCKED)
@@ -781,11 +996,11 @@ export function apply(ctx: Context, config: AcpConfig): void {
             // the session stays usable and the user can pick again.
             throw internalError(`failed to switch to "${id}": ${errorChain(error)}`)
           }
-          return await presetOptions(record)
+          return await sessionOptions(record)
         }
-        const queued = record.presetSwitch ?? Promise.resolve()
+        const queued = record.configSwitch ?? Promise.resolve()
         const turn = queued.then(swap)
-        record.presetSwitch = turn.then(() => undefined, () => undefined)
+        record.configSwitch = turn.then(() => undefined, () => undefined)
         return { configOptions: await turn }
       },
 

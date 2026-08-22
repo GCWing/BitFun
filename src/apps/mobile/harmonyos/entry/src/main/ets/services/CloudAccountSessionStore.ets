@@ -1,6 +1,7 @@
 import { huks } from '@kit.UniversalKeystoreKit';
 import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
+import { OhosError } from './OhosError';
 
 const STORE_NAME: string = 'bitfun_cloud_account';
 const CIPHER_KEY: string = 'session_cipher';
@@ -22,67 +23,87 @@ export class CloudAccountSessionStore {
   private store?: preferences.Preferences;
 
   async init(context: Context): Promise<void> {
-    this.store = await preferences.getPreferences(context, STORE_NAME);
+    try {
+      this.store = await preferences.getPreferences(context, STORE_NAME);
+    } catch (err) {
+      throw OhosError.wrap('cloud account session init', err);
+    }
   }
 
   async save(session: PersistedCloudAccountSession): Promise<void> {
-    const store = this.requireStore();
-    await this.ensureKey();
-    const iv = Encoding.randomBytes(16);
-    const options = this.options(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT, iv);
-    const handle = await huks.initSession(HUKS_ALIAS, options);
-    const encrypted = await huks.finishSession(handle.handle, {
-      properties: options.properties,
-      inData: Encoding.utf8ToBytes(JSON.stringify(session))
-    });
-    if (!encrypted.outData || encrypted.outData.length === 0) {
-      throw new Error('Cloud account session encryption failed.');
+    try {
+      const store = this.requireStore();
+      await this.ensureKey();
+      const iv = Encoding.randomBytes(16);
+      const options = this.options(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT, iv);
+      const handle = await huks.initSession(HUKS_ALIAS, options);
+      const encrypted = await huks.finishSession(handle.handle, {
+        properties: options.properties,
+        inData: Encoding.utf8ToBytes(JSON.stringify(session))
+      });
+      if (!encrypted.outData || encrypted.outData.length === 0) {
+        throw new Error('Cloud account session encryption failed.');
+      }
+      await store.put(CIPHER_KEY, Encoding.bytesToBase64(encrypted.outData));
+      await store.put(IV_KEY, Encoding.bytesToBase64(iv));
+      await store.flush();
+    } catch (err) {
+      throw OhosError.wrap('cloud account session save', err);
     }
-    await store.put(CIPHER_KEY, Encoding.bytesToBase64(encrypted.outData));
-    await store.put(IV_KEY, Encoding.bytesToBase64(iv));
-    await store.flush();
   }
 
   async load(): Promise<PersistedCloudAccountSession | undefined> {
-    const store = this.requireStore();
-    const cipher = await store.get(CIPHER_KEY, '');
-    const ivText = await store.get(IV_KEY, '');
-    if (typeof cipher !== 'string' || typeof ivText !== 'string' || cipher.length === 0 || ivText.length === 0) {
-      return undefined;
+    try {
+      const store = this.requireStore();
+      const cipher = await store.get(CIPHER_KEY, '');
+      const ivText = await store.get(IV_KEY, '');
+      if (typeof cipher !== 'string' || typeof ivText !== 'string' || cipher.length === 0 || ivText.length === 0) {
+        return undefined;
+      }
+      const iv = Encoding.base64ToBytes(ivText);
+      const options = this.options(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT, iv);
+      const handle = await huks.initSession(HUKS_ALIAS, options);
+      const decrypted = await huks.finishSession(handle.handle, {
+        properties: options.properties,
+        inData: Encoding.base64ToBytes(cipher)
+      });
+      if (!decrypted.outData) {
+        return undefined;
+      }
+      return JSON.parse(Encoding.bytesToUtf8(decrypted.outData)) as PersistedCloudAccountSession;
+    } catch (err) {
+      throw OhosError.wrap('cloud account session load', err);
     }
-    const iv = Encoding.base64ToBytes(ivText);
-    const options = this.options(huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT, iv);
-    const handle = await huks.initSession(HUKS_ALIAS, options);
-    const decrypted = await huks.finishSession(handle.handle, {
-      properties: options.properties,
-      inData: Encoding.base64ToBytes(cipher)
-    });
-    if (!decrypted.outData) {
-      return undefined;
-    }
-    return JSON.parse(Encoding.bytesToUtf8(decrypted.outData)) as PersistedCloudAccountSession;
   }
 
   async clear(): Promise<void> {
-    const store = this.requireStore();
-    await store.delete(CIPHER_KEY);
-    await store.delete(IV_KEY);
-    await store.flush();
+    try {
+      const store = this.requireStore();
+      await store.delete(CIPHER_KEY);
+      await store.delete(IV_KEY);
+      await store.flush();
+    } catch (err) {
+      throw OhosError.wrap('cloud account session clear', err);
+    }
   }
 
   private async ensureKey(): Promise<void> {
     if (await this.keyItemExists()) {
       return;
     }
-    await huks.generateKeyItem(HUKS_ALIAS, {
-      properties: [
-        { tag: huks.HuksTag.HUKS_TAG_ALGORITHM, value: huks.HuksKeyAlg.HUKS_ALG_AES },
-        { tag: huks.HuksTag.HUKS_TAG_KEY_SIZE, value: huks.HuksKeySize.HUKS_AES_KEY_SIZE_256 },
-        { tag: huks.HuksTag.HUKS_TAG_PURPOSE, value: huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT | huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT },
-        { tag: huks.HuksTag.HUKS_TAG_BLOCK_MODE, value: huks.HuksCipherMode.HUKS_MODE_CBC },
-        { tag: huks.HuksTag.HUKS_TAG_PADDING, value: huks.HuksKeyPadding.HUKS_PADDING_PKCS7 }
-      ]
-    });
+    try {
+      await huks.generateKeyItem(HUKS_ALIAS, {
+        properties: [
+          { tag: huks.HuksTag.HUKS_TAG_ALGORITHM, value: huks.HuksKeyAlg.HUKS_ALG_AES },
+          { tag: huks.HuksTag.HUKS_TAG_KEY_SIZE, value: huks.HuksKeySize.HUKS_AES_KEY_SIZE_256 },
+          { tag: huks.HuksTag.HUKS_TAG_PURPOSE, value: huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_ENCRYPT | huks.HuksKeyPurpose.HUKS_KEY_PURPOSE_DECRYPT },
+          { tag: huks.HuksTag.HUKS_TAG_BLOCK_MODE, value: huks.HuksCipherMode.HUKS_MODE_CBC },
+          { tag: huks.HuksTag.HUKS_TAG_PADDING, value: huks.HuksKeyPadding.HUKS_PADDING_PKCS7 }
+        ]
+      });
+    } catch (err) {
+      throw OhosError.wrap('cloud account session generate key', err);
+    }
   }
 
   private async keyItemExists(): Promise<boolean> {

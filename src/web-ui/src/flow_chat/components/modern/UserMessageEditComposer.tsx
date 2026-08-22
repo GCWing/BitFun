@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Loader2, X } from 'lucide-react';
 import { Textarea } from '@/component-library';
+import { useImeOwnedKeyGuard } from '@/flow_chat/hooks/useImeOwnedKeyGuard';
 import type { ContextItem } from '@/shared/types/context';
 import { FileMentionPicker } from '../FileMentionPicker';
 import {
@@ -190,6 +191,7 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
   excludeSessionId,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { isImeOwnedKey, handleCompositionStart, handleCompositionEnd } = useImeOwnedKeyGuard();
   const trimmedValue = value.trim();
   const canSubmit = trimmedValue.length > 0 && !isSubmitting;
 
@@ -207,6 +209,10 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
   }, [canSubmit, onSubmit]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.key === 'Enter' || event.key === 'Escape') && isImeOwnedKey(event)) {
+      return;
+    }
+
     if (event.key === 'Escape') {
       event.preventDefault();
       onCancel();
@@ -217,7 +223,7 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
       event.preventDefault();
       handleSubmit();
     }
-  }, [handleSubmit, onCancel]);
+  }, [handleSubmit, isImeOwnedKey, onCancel]);
 
   if (presentation) {
     return (
@@ -248,6 +254,8 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
         autoResize
         disabled={isSubmitting}

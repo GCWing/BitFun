@@ -30,6 +30,14 @@ export const guardedEmptyInternalDefaultManifestPaths = [
 
 export const optionalDependencyFeatureOwnerRules = [
   {
+    crateName: 'app-server-protocol',
+    reason:
+      'App Server Protocol must keep the ACP runtime dependency behind its RPC integration',
+    dependencies: [
+      { depName: 'agent-client-protocol', ownerFeatures: ['rpc'] },
+    ],
+  },
+  {
     crateName: 'services-core',
     reason:
       'services-core optional implementation dependencies must stay behind their exact owner capability',
@@ -410,7 +418,7 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('ts', 'ts'),
         ],
         [],
-        ['external-sources', 'mcp-runtime', 'product-full', 'remote-connect', 'tools-mcp'],
+        ['external-sources', 'mcp-runtime', 'opencode-plugin-host', 'product-full', 'remote-connect', 'tools-mcp'],
       )],
       ['bitfun-desktop', capabilityConsumer([
         capabilityEdge(['agent-api', 'permission', 'workspace-ports']),
@@ -509,6 +517,7 @@ export const capabilityContractDependencyRules = [
         [
           'dispatch-store',
           'external-sources',
+          'opencode-plugin-host',
           'plugin-runtime',
           'product-full',
           'remote-connect',
@@ -599,7 +608,7 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('deep-research', 'deep-research', true),
         ],
         ['agent-runtime'],
-        ['external-sources', 'mcp-runtime', 'plugin-runtime', 'product-full', 'remote-connect', 'tools-mcp'],
+        ['external-sources', 'mcp-runtime', 'opencode-plugin-host', 'plugin-runtime', 'product-full', 'remote-connect', 'tools-mcp'],
       )],
       ['bitfun-desktop', capabilityConsumer([
         capabilityEdge(['agent-runtime']),
@@ -668,6 +677,7 @@ export const coreProductFullFeatureAssemblyRule = {
     'process-runtime',
     'external-sources',
     'plugin-runtime',
+    'opencode-plugin-host',
     'remote-workspace',
     'review-platform',
     'ssh-remote',
@@ -757,6 +767,20 @@ export const coreClosedFeatureProfileRules = [
     requiredFeatureRefs: ['bitfun-app-server-protocol/ts'],
     exact: true,
     reason: 'App Server must delegate TypeScript wire export to the protocol owner',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+    featureName: 'default',
+    requiredFeatureRefs: ['rpc'],
+    exact: true,
+    reason: 'App Server Protocol must preserve RPC compatibility for default consumers',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+    featureName: 'rpc',
+    requiredFeatureRefs: ['dep:agent-client-protocol'],
+    exact: true,
+    reason: 'App Server Protocol RPC bindings must own the ACP runtime dependency',
   },
   {
     manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
@@ -943,6 +967,43 @@ export const coreClosedFeatureProfileRules = [
     exact: true,
     reason:
       'bitfun-core plugin-runtime must add only the executable client boundary to external source composition',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'opencode-plugin-host',
+    requiredFeatureRefs: [
+      'plugin-runtime',
+      'remote-connect',
+      'git',
+      'lsp',
+      'dep:bitfun-opencode-plugin-host',
+    ],
+    allowedTransitiveFeatureRefs: [
+      'agent-runtime',
+      'external-sources',
+      'model-catalog',
+      'mcp-runtime',
+      'script-tool-runtime',
+      'plugin-source',
+      'file-watch',
+      'workspace-watch',
+      'ai-adapter-runtime',
+      'filesystem',
+      'local-storage',
+      'process-runtime',
+      'terminal',
+      'workspace-runtime',
+      'product-capabilities',
+      'runtime-services',
+      'tool-packs',
+      'tools-basic',
+      'tools-agent-control',
+      'workspace-search',
+      'scheduled-jobs',
+    ],
+    exact: true,
+    reason:
+      'the managed OpenCode Host must keep its product-shaped route dependencies separate from the portable plugin runtime client boundary',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',

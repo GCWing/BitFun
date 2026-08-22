@@ -65,6 +65,10 @@ pub use management::{
     NATIVE_HOOKS_CAPABILITY,
 };
 pub use role::{AppClient, AppServer};
+pub use server::host_policy::{
+    AppServerDisconnect, AppServerHostLimits, AppServerHostPolicy, HostPolicyViolation,
+    DEFAULT_EVENT_BUFFER_CAPACITY, DEFAULT_MAX_FRAME_BYTES,
+};
 pub use server::BitfunAppServer;
 
 /// Convenience prelude for consumers building an app-server connection.

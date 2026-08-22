@@ -1,4 +1,5 @@
 import { http } from '@kit.NetworkKit';
+import { OhosError } from '../OhosError';
 
 export enum GeneralChatHttpMethod {
   Get = 'GET',
@@ -56,6 +57,8 @@ export class HarmonyGeneralChatHttpTransport implements GeneralChatHttpTransport
         statusCode: response.responseCode,
         body: typeof response.result === 'string' ? response.result : JSON.stringify(response.result)
       };
+    } catch (err) {
+      throw OhosError.wrap('general chat http request', err);
     } finally {
       request.destroy();
     }

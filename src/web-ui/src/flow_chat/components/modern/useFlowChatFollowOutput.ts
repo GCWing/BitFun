@@ -19,7 +19,6 @@ import {
   contentEndScrollTop,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
   isTailBlankMeasurable,
-  memorylessFollowState,
   nextTailFollowState,
   resolveAnimatedJumpBehavior,
   resolveTailDepartureCrossing,
@@ -44,17 +43,21 @@ export type FollowOutputExitReason =
 /**
  * Why a watch over a reader who owns the viewport ended.
  *
- * All four are follow taking it back or the transcript going away. A *crossing*
- * is deliberately not on this list: the reader can climb out of the reserved
- * blank and scroll back down into it any number of times before either happens,
- * and each of those is another chance for output to catch up with them.
+ * These are follow taking it back, a reader replacing a reveal, or the
+ * transcript going away. A *crossing* is deliberately not on this list: the
+ * reader can climb out of the reserved blank and scroll back down into it any
+ * number of times before either happens, and each is another chance for output
+ * to catch up with them.
  */
 type TailWatchOutcome =
   /** Something handed the viewport back — a new Turn, a jump, a snap, this. */
   | 'followed-again'
   | 'navigated'
+  | 'reader-took-over'
   | 'session-changed'
   | 'unmounted';
+
+type TailWatchOrigin = 'new-turn-reveal' | 'user-departure';
 
 interface UseFlowChatFollowOutputOptions {
   activeSessionId?: string;
@@ -68,15 +71,17 @@ interface UseFlowChatFollowOutputOptions {
   virtualItemCount: number;
   isStreaming: boolean;
   isViewportActive: boolean;
+  /** Restored history presentations must not start by pinning the tail. */
+  startAtTailOnMount?: boolean;
+  /** The native host has temporarily withdrawn the scroller from layout. */
+  isViewportSuspended?: () => boolean;
   scrollerRef: RefObject<HTMLElement | null>;
   /** Height of the resident tail spacer currently rendered below the content. */
   getTailSpacerPx: () => number;
   /** One-shot scroll placing the end of real content at the viewport bottom. */
   scrollToContentEnd: (behavior: ScrollBehavior) => void;
-  /** One-shot scroll placing a Turn's user message at the viewport top. */
-  scrollTurnToTop: (turnId: string) => boolean;
-  /** Offset that would place a Turn's user message at the viewport top, if rendered. */
-  resolveTurnTopScrollTop: (turnId: string) => number | null;
+  /** Reveal a rendered new Turn by placing the viewport at the physical bottom once. */
+  revealNewTurnTail: (turnId: string) => boolean;
   /** True while the transcript is still hidden for the opening reveal. */
   isOpeningViewport: () => boolean;
   /**
@@ -135,13 +140,6 @@ interface UseFlowChatFollowOutputResult {
 }
 
 const BOTTOM_EPSILON_PX = 2;
-
-/**
- * Frames a pinned Turn may stay unmeasurable before the pin is abandoned.
- * The virtualizer renders the tail immediately, so this only guards against a Turn
- * that never mounts at all.
- */
-const PIN_RESOLVE_MAX_ATTEMPTS = 30;
 
 /**
  * How long a programmatic smooth scroll of ours may own the viewport before the
@@ -205,11 +203,12 @@ export function useFlowChatFollowOutput({
   virtualItemCount,
   isStreaming,
   isViewportActive,
+  startAtTailOnMount = true,
+  isViewportSuspended = () => false,
   scrollerRef,
   getTailSpacerPx,
   scrollToContentEnd,
-  scrollTurnToTop,
-  resolveTurnTopScrollTop,
+  revealNewTurnTail,
   isOpeningViewport,
   viewportOwner,
   viewportId = 0,
@@ -219,6 +218,8 @@ export function useFlowChatFollowOutput({
   const isStreamingRef = useRef(isStreaming);
   const isViewportActiveRef = useRef(isViewportActive);
   const latestTurnIdRef = useRef(latestTurnId);
+  const isViewportSuspendedRef = useRef(isViewportSuspended);
+  isViewportSuspendedRef.current = isViewportSuspended;
   const followFrameRef = useRef<number | null>(null);
   const previousSessionIdRef = useRef(activeSessionId);
   const previousLatestTurnIdRef = useRef<string | null>(latestTurnId);
@@ -226,10 +227,8 @@ export function useFlowChatFollowOutput({
   const hasMountedRef = useRef(false);
   const wasStreamingRef = useRef(isStreaming);
 
-  const followStateRef = useRef<TailFollowState>({ mode: 'hold-tail', target: 0 });
-  const pinTurnIdRef = useRef<string | null>(null);
-  const pinScrollTopRef = useRef<number | null>(null);
-  const pinAttemptsRef = useRef(0);
+  const followStateRef = useRef<TailFollowState>({ target: 0 });
+  const followPhaseRef = useRef<'idle' | 'revealing-tail' | 'following-tail'>('idle');
   /**
    * A Turn that arrived while it was not in the transcript on screen.
    *
@@ -237,7 +236,7 @@ export function useFlowChatFollowOutput({
    * Turn a beat before the presentation is restored to the live tail, so the
    * one moment the arrival is *detectable* is not a moment it can be answered.
    * The answer is deferred rather than dropped — kept until the Turn can
-   * actually be aligned, which is what the reader is waiting to see.
+   * actually be revealed, which is what the reader is waiting to see.
    */
   const pendingNewTurnIdRef = useRef<string | null>(null);
   const settleFramesRef = useRef(0);
@@ -307,72 +306,14 @@ export function useFlowChatFollowOutput({
   ), [getTailSpacerPx]);
 
   /**
-   * Forget which Turn is pinned.
-   *
-   * This is the pin's *identity*, not its activity. A user takeover suspends
-   * the pin, while an explicit jump to latest may still return to it. Only
-   * three things retire a pin: the crossover to `hold-tail`, a newer Turn
-   * replacing it, and the session changing. The crossover is one-way by
-   * construction, since nothing re-pins a Turn whose identity has been
-   * dropped; a card collapse that pulls content back under one viewport must
-   * not resurrect the pin.
-   */
-  const retirePin = useCallback(() => {
-    pinTurnIdRef.current = null;
-    pinScrollTopRef.current = null;
-    pinAttemptsRef.current = 0;
-  }, []);
-
-  /**
-   * Resolve the pinned Turn's offset from live layout every frame rather than
-   * caching it once. Unrendered items are estimates until measured, and every
-   * measurement shifts the absolute offsets below it; a cached pin would drift.
-   */
-  const readPinScrollTop = useCallback((): number | null => {
-    const pinTurnId = pinTurnIdRef.current;
-    if (!pinTurnId) {
-      return null;
-    }
-
-    const resolved = resolveTurnTopScrollTop(pinTurnId);
-    if (resolved !== null) {
-      pinScrollTopRef.current = resolved;
-      pinAttemptsRef.current = 0;
-      return resolved;
-    }
-
-    if (pinScrollTopRef.current === null) {
-      pinAttemptsRef.current += 1;
-      if (pinAttemptsRef.current >= PIN_RESOLVE_MAX_ATTEMPTS) {
-        retirePin();
-      }
-    }
-    return pinScrollTopRef.current;
-  }, [retirePin, resolveTurnTopScrollTop]);
-
-  /**
    * The state the follow rule would hold for the current geometry, ignoring any
    * offset it was holding. Used to resolve explicit follow targets and to
    * resume on the live content end.
-   *
-   * Retires a pin that has crossed over on the way past: with no frame loop
-   * running, this is the only place that crossover can be noticed.
    */
   const resolveFollowState = useCallback((scroller: HTMLElement): TailFollowState => {
     const desired = readContentEndScrollTop(scroller);
-    const next = memorylessFollowState(
-      pinTurnIdRef.current ? 'pin-turn-top' : 'hold-tail',
-      {
-        desiredScrollTop: desired,
-        pinScrollTop: readPinScrollTop(),
-        maxGapPx: tailHoldMaxGapPx(scroller.clientHeight),
-      },
-    );
-    if (next.mode === 'hold-tail') {
-      retirePin();
-    }
-    return next;
-  }, [readContentEndScrollTop, readPinScrollTop, retirePin]);
+    return { target: desired };
+  }, [readContentEndScrollTop]);
 
   const resolveFollowTargetScrollTop = useCallback((scroller: HTMLElement) => (
     resolveFollowState(scroller).target
@@ -382,12 +323,10 @@ export function useFlowChatFollowOutput({
    * ---------------------------------------------------------------------------
    * A viewport in the reader's hands, watched for output catching up with them.
    *
-   * Scrolling up gives the follow away, and that is right only if the reader
-   * actually left the live region. They may not have. The reserved blank is up
-   * to 60% of a viewport under `hold-tail` and the whole gap under a pinned
-   * Turn, so a small scroll up can leave the reader still looking at empty space
-   * below the newest output — nothing is being hidden from them yet — and then
-   * output grows past the bottom edge and they silently stop seeing it.
+   * The same crossing has two origins. A new Turn reveal deliberately starts in
+   * the resident blank while follow-output still owns the viewport; a user
+   * departure starts after a gesture releases it. In both cases output reaching
+   * the fixed viewport bottom is the event that may start ordinary tail follow.
    *
    * "Still looking at the blank" is `scrollTop > contentEnd`, because
    * `contentEnd` is by definition the offset that puts the end of real content
@@ -411,12 +350,12 @@ export function useFlowChatFollowOutput({
    * ---------------------------------------------------------------------------
    */
   const tailWatchRef = useRef<{
+    origin: TailWatchOrigin;
     openedAtMs: number;
-    /** Blank on screen when the reader took the viewport. */
+    /** Blank on screen when the watch opened. */
     exitBlankPx: number;
     exitScrollTopPx: number;
     exitContentEndPx: number;
-    exitPinned: boolean;
     exitStreaming: boolean;
     /** Previous sample, so a crossing can be attributed to whatever moved. */
     lastScrollTopPx: number;
@@ -441,9 +380,12 @@ export function useFlowChatFollowOutput({
       : watch.lastContentEndPx;
     traceViewport({
       location: 'followOutput.tailWatchEnded',
-      message: 'follow-output has the viewport back',
+      message: outcome === 'reader-took-over'
+        ? 'the reader replaced the passive new Turn reveal'
+        : 'the tail watch ended',
       data: () => ({
         outcome,
+        origin: watch.origin,
         viewportId,
         forMs: Math.round(performance.now() - watch.openedAtMs),
         samples: watch.samples,
@@ -453,7 +395,6 @@ export function useFlowChatFollowOutput({
         // The two movements, over the whole life of the watch.
         contentGrewPx: roundViewportPx(contentEndPx - watch.exitContentEndPx),
         readerMovedPx: roundViewportPx(scrollTopPx - watch.exitScrollTopPx),
-        pinnedAtExit: watch.exitPinned,
         streamingAtExit: watch.exitStreaming,
         streamingNow: isStreamingRef.current,
         ...(extra ?? {}),
@@ -482,33 +423,33 @@ export function useFlowChatFollowOutput({
    * blank at any point afterwards, and the whole question is where they are when
    * output next reaches the bottom edge.
    */
-  const openTailWatch = useCallback(() => {
+  const openTailWatch = useCallback((origin: TailWatchOrigin) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
     const contentEndPx = readContentEndScrollTop(scroller);
     const blankPx = scroller.scrollTop - contentEndPx;
-    const pinned = pinTurnIdRef.current !== null;
     traceViewport({
       location: 'followOutput.tailWatch',
-      message: 'the reader has the viewport, and is watched for output catching up',
+      message: origin === 'new-turn-reveal'
+        ? 'the new Turn is revealed in the blank and watched for output catching up'
+        : 'the reader has the viewport and is watched for output catching up',
       data: () => ({
+        origin,
         viewportId,
         blankPx: roundViewportPx(blankPx),
         blankVisible: blankPx > 0,
         scrollTopPx: roundViewportPx(scroller.scrollTop),
         contentEndPx: roundViewportPx(contentEndPx),
         clientHeightPx: scroller.clientHeight,
-        // A pin is the case where the gap between the two predicates is widest.
-        pinned,
         isStreaming: isStreamingRef.current,
       }),
     });
     tailWatchRef.current = {
+      origin,
       openedAtMs: performance.now(),
       exitBlankPx: blankPx,
       exitScrollTopPx: scroller.scrollTop,
       exitContentEndPx: contentEndPx,
-      exitPinned: pinned,
       exitStreaming: isStreamingRef.current,
       lastScrollTopPx: scroller.scrollTop,
       lastContentEndPx: contentEndPx,
@@ -619,7 +560,7 @@ export function useFlowChatFollowOutput({
   /** Move the viewport to whatever the follow state currently owns. */
   const applyFollowTarget = useCallback(() => {
     const scroller = scrollerRef.current;
-    if (!scroller) {
+    if (!scroller || isViewportSuspendedRef.current()) {
       return;
     }
 
@@ -636,18 +577,13 @@ export function useFlowChatFollowOutput({
      * output is about to fill it.
      */
     const previous: TailFollowState = isOpeningViewport()
-      ? { mode: remembered.mode, target: desired }
+      ? { target: desired }
       : remembered;
-    const pin = readPinScrollTop();
     const next = nextTailFollowState(previous, {
       desiredScrollTop: desired,
-      pinScrollTop: pin,
-      maxGapPx: tailHoldMaxGapPx(scroller.clientHeight),
+      maxGapPx: tailHoldMaxGapPx(scroller.clientHeight, getTailSpacerPx()),
     });
     followStateRef.current = next;
-    if (next.mode === 'hold-tail') {
-      retirePin();
-    }
     // Content is still moving, so keep the settle window open.
     if (Math.abs(next.target - previous.target) > BOTTOM_EPSILON_PX) {
       settleFramesRef.current = SETTLE_FRAMES;
@@ -670,7 +606,7 @@ export function useFlowChatFollowOutput({
       // the key would be a string built sixty times a second for a switch that
       // is off.
       traceViewportRepeating(
-        `follow|frame|${onTarget}|${isOpeningViewport()}|${next.mode}`,
+        `follow|frame|${onTarget}|${isOpeningViewport()}`,
         {
           location: 'followOutput.frame',
           message: onTarget
@@ -680,11 +616,10 @@ export function useFlowChatFollowOutput({
           data: () => ({
             viewportId,
             onTarget,
-            mode: next.mode,
+            phase: followPhaseRef.current,
             isOpening: isOpeningViewport(),
             desiredPx: roundViewportPx(desired),
             targetPx: roundViewportPx(next.target),
-            pinPx: pin === null ? null : roundViewportPx(pin),
             scrollTopPx: roundViewportPx(scroller.scrollTop),
             scrollRangePx: roundViewportPx(scroller.scrollHeight),
             settleFrames: settleFramesRef.current,
@@ -786,10 +721,9 @@ export function useFlowChatFollowOutput({
     }
   }, [
     endSmoothScrollYield,
+    getTailSpacerPx,
     isOpeningViewport,
     readContentEndScrollTop,
-    readPinScrollTop,
-    retirePin,
     scrollerRef,
     viewportId,
     viewportOwner,
@@ -809,8 +743,12 @@ export function useFlowChatFollowOutput({
      */
     const standDownReason = !isFollowingOutputRef.current
       ? 'not-following'
+      : followPhaseRef.current !== 'following-tail'
+        ? 'revealing-tail'
       : !isViewportActiveRef.current
         ? 'viewport-inactive'
+        : isViewportSuspendedRef.current()
+          ? 'viewport-suspended'
         : document.hidden
           ? 'document-hidden'
           : (!isStreamingRef.current && settleFramesRef.current <= 0)
@@ -846,6 +784,8 @@ export function useFlowChatFollowOutput({
     if (
       followFrameRef.current === null &&
       isFollowingOutputRef.current &&
+      followPhaseRef.current === 'following-tail' &&
+      !isViewportSuspendedRef.current() &&
       (isStreamingRef.current || settleFramesRef.current > 0)
     ) {
       followFrameRef.current = requestAnimationFrame(runFollowFrame);
@@ -873,22 +813,22 @@ export function useFlowChatFollowOutput({
       return;
     }
 
-    /*
-     * A newly submitted Turn opens at the viewport top, and that is the whole
-     * of the answer to one arriving. Until it is in the transcript on screen
-     * there is nothing to align, and the fallback below — the end of real
-     * content — is not a stand-in for it: it would leave the Turn unpinned
-     * where the reader was, or pull them out of a history window entirely.
-     *
-     * So the answer waits for the Turn instead. Resolved before ownership
-     * changes hands, because waiting has to leave the viewport exactly as it
-     * was found.
-     */
-    const pinTurnId = reason === 'new-turn' ? latestTurnIdRef.current : null;
-    const pinnedTurnToTop = pinTurnId !== null && scrollTurnToTop(pinTurnId);
+    if (reason === 'jump-to-latest' && followPhaseRef.current === 'revealing-tail') {
+      traceViewportRepeating('follow|jumpIgnored|revealing-tail', {
+        location: 'followOutput.jumpIgnored',
+        message: 'jump to latest was already satisfied by the new Turn reveal',
+        data: () => ({ viewportId }),
+      });
+      return;
+    }
+
+    /* A new Turn may arrive before the live-tail projection contains it. The
+     * one detectable arrival is retained until its one-shot reveal can run. */
+    const revealTurnId = reason === 'new-turn' ? latestTurnIdRef.current : null;
+    const revealedNewTurn = revealTurnId !== null && revealNewTurnTail(revealTurnId);
     if (reason === 'new-turn') {
-      pendingNewTurnIdRef.current = pinnedTurnToTop ? null : pinTurnId;
-      if (!pinnedTurnToTop) {
+      pendingNewTurnIdRef.current = revealedNewTurn ? null : revealTurnId;
+      if (!revealedNewTurn) {
         /*
          * The viewport is deliberately left exactly as it was, so the only
          * evidence that a submission was answered at all is this line. A
@@ -897,8 +837,8 @@ export function useFlowChatFollowOutput({
          */
         traceViewportRepeating('follow|deferred-new-turn', {
           location: 'followOutput.deferNewTurn',
-          message: 'new Turn is not in the transcript on screen yet, so the answer waits',
-          data: () => ({ turnId: pinTurnId }),
+          message: 'new Turn is not in the transcript on screen yet, so the reveal waits',
+          data: () => ({ turnId: revealTurnId }),
         });
         return;
       }
@@ -917,7 +857,7 @@ export function useFlowChatFollowOutput({
       data: () => ({
         reason,
         viewportId,
-        pinnedTurnId: pinnedTurnToTop ? pinTurnId : pinTurnIdRef.current,
+        phase: revealedNewTurn ? 'revealing-tail' : 'following-tail',
         isStreaming: isStreamingRef.current,
         scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
       }),
@@ -934,62 +874,18 @@ export function useFlowChatFollowOutput({
     const scroller = scrollerRef.current;
     const contentEnd = scroller ? readContentEndScrollTop(scroller) : 0;
 
-    /*
-     * A pin on the newest Turn already satisfies "show me the latest output".
-     * The mode only holds while that Turn's answer is shorter than one
-     * viewport, so everything it has produced is on screen; re-aiming at the
-     * content end would scroll *up* and shove the message the user just sent
-     * into the middle of the viewport.
-     *
-     * This fires for real: restoring the tail presentation asks for a jump to
-     * latest one frame after the Turn that caused it got pinned, which
-     * overwrote the pin every time.
-     */
-    if (
-      reason === 'jump-to-latest' &&
-      pinTurnIdRef.current !== null &&
-      pinTurnIdRef.current === latestTurnIdRef.current
-    ) {
-      const pinTarget = readPinScrollTop() ?? scroller?.scrollTop ?? contentEnd;
-      followStateRef.current = { mode: 'pin-turn-top', target: pinTarget };
-      // Travels like every other jump to latest, animated or not. The frame
-      // loop would cancel an animation on its next tick, so it stands down for
-      // this one exactly as it does for `runContentEndScroll` — and an instant
-      // write of ours replaces whatever was still travelling.
-      if (scroller && Math.abs(scroller.scrollTop - pinTarget) > BOTTOM_EPSILON_PX) {
-        const behavior = resolveJumpBehavior(scroller, pinTarget);
-        if (behavior === 'smooth') {
-          beginSmoothScrollYield();
-        } else {
-          endSmoothScrollYield('superseded');
-        }
-        viewportOwner.write({
-          owner: 'follow-output',
-          topPx: pinTarget,
-          behavior,
-        });
-      }
-      startFollowFrame();
+    if (revealedNewTurn && scroller && scroller.scrollTop > contentEnd) {
+      followPhaseRef.current = 'revealing-tail';
+      endSmoothScrollYield('superseded');
+      followStateRef.current = { target: scroller.scrollTop };
+      stopFollowFrame();
+      openTailWatch('new-turn-reveal');
       return;
     }
 
-    // Every other entry reason resumes at the end of real content.
-    if (pinnedTurnToTop) {
-      pinTurnIdRef.current = pinTurnId;
-      pinScrollTopRef.current = null;
-      pinAttemptsRef.current = 0;
-      endSmoothScrollYield('superseded');
-      followStateRef.current = { mode: 'pin-turn-top', target: scroller?.scrollTop ?? contentEnd };
-    } else {
-      /*
-       * The pin is dropped here even when the departure happened under one, and
-       * that is deliberate. The pin's reservation is the blank the reader just
-       * scrolled out of; restoring it would pull them back down to the offset
-       * they left. Following the content end keeps them where they put
-       * themselves and shows what arrives below.
-       */
-      retirePin();
-      followStateRef.current = { mode: 'hold-tail', target: contentEnd };
+    followPhaseRef.current = 'following-tail';
+    followStateRef.current = { target: contentEnd };
+    {
       /*
        * Output that caught up with a stationary reader is already at the end —
        * the blank between them closing is what raised this — so the whole
@@ -1015,25 +911,20 @@ export function useFlowChatFollowOutput({
     startFollowFrame();
   }, [
     viewportOwner,
-    beginSmoothScrollYield,
     closeTailWatch,
     endSmoothScrollYield,
+    openTailWatch,
     readContentEndScrollTop,
-    readPinScrollTop,
+    revealNewTurnTail,
     resolveJumpBehavior,
-    retirePin,
     runContentEndScroll,
-    scrollTurnToTop,
     scrollerRef,
     startFollowFrame,
+    stopFollowFrame,
     viewportId,
   ]);
 
-  /**
-   * Release the viewport without forgetting the pin. The user owns it from
-   * here; the pin stays on record so an explicit jump to latest can restore
-   * the mode rather than fall through to the tail.
-   */
+  /** Release the viewport. A user gesture replaces any reveal watch with a reader watch. */
   const exitFollowOutput = useCallback((reason: FollowOutputExitReason) => {
     /*
      * Traced whether or not there was anything to give up. An exit that finds
@@ -1050,11 +941,12 @@ export function useFlowChatFollowOutput({
         reason,
         viewportId,
         wasFollowing: isFollowingOutputRef.current,
-        pinnedTurnId: pinTurnIdRef.current,
+        phase: followPhaseRef.current,
         scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
       }),
     });
     isFollowingOutputRef.current = false;
+    followPhaseRef.current = 'idle';
     setIsFollowingOutput(false);
     endSmoothScrollYield('superseded');
     viewportOwner.release('follow-output');
@@ -1082,8 +974,11 @@ export function useFlowChatFollowOutput({
       // watch starts again from there rather than carrying offsets across it.
       closeTailWatch('navigated', { navigationReason: reason });
     }
+    if (reason === 'user-scroll' && tailWatchRef.current?.origin === 'new-turn-reveal') {
+      closeTailWatch('reader-took-over');
+    }
     if (tailWatchRef.current === null) {
-      openTailWatch();
+      openTailWatch('user-departure');
     }
   }, [
     closeTailWatch,
@@ -1110,7 +1005,7 @@ export function useFlowChatFollowOutput({
     const watch = tailWatchRef.current;
     if (!watch) return;
     const scroller = scrollerRef.current;
-    if (!scroller) return;
+    if (!scroller || isViewportSuspendedRef.current()) return;
 
     const scrollTopPx = scroller.scrollTop;
     const contentEndPx = readContentEndScrollTop(scroller);
@@ -1170,6 +1065,7 @@ export function useFlowChatFollowOutput({
         : 'the blank closed under the reader, and follow leaves it alone',
       data: () => ({
         crossing,
+        origin: watch.origin,
         resumed,
         gestureLive,
         viewportId,
@@ -1201,6 +1097,17 @@ export function useFlowChatFollowOutput({
    * down.
    */
   const scheduleFollowToLatest = useCallback(() => {
+    if (isViewportSuspendedRef.current()) return;
+    if (
+      isFollowingOutputRef.current
+      && isViewportActiveRef.current
+      && followPhaseRef.current === 'revealing-tail'
+    ) {
+      // The reveal is intentionally passive: streamed growth consumes the
+      // visible blank while scrollTop stays fixed. Only the crossing is sampled.
+      sampleTailWatch();
+      return;
+    }
     if (!isFollowingOutputRef.current || !isViewportActiveRef.current) {
       /*
        * This is the transcript's content-change signal — the resize observer
@@ -1227,9 +1134,8 @@ export function useFlowChatFollowOutput({
    *
    * The ledger cannot say this on its own — a shorter `dialogTurns` is also
    * what a window re-cut and a hydration merge look like — so the rollback
-   * announces it, the same way a submission does. What it asks for is the
-   * *absence* of the pin: the Turn that was pinned is one of the ones that just
-   * stopped existing, and the transcript now ends somewhere else.
+   * announces it, the same way a submission does. The transcript now ends
+   * somewhere else, so the answer is an ordinary content-end placement.
    *
    * This takes the viewport whether or not follow owned it. A rollback at
    * Turn N removes N and everything after it, and the reader had N on screen —
@@ -1250,6 +1156,7 @@ export function useFlowChatFollowOutput({
   }, [enterFollowOutput]);
 
   const handleScroll = useCallback(() => {
+    if (isViewportSuspendedRef.current()) return;
     // Scroll events describe the resulting viewport position, but do not prove user intent.
     // Layout growth and virtualizer remeasurement can emit them while output follow still owns
     // the viewport. Explicit wheel, touch, and keyboard handlers release that ownership instead.
@@ -1311,7 +1218,7 @@ export function useFlowChatFollowOutput({
    */
   const handleViewportResize = useCallback((input: ViewportResizeInput) => {
     const scroller = scrollerRef.current;
-    if (!scroller || isFollowingOutputRef.current) {
+    if (!scroller || isViewportSuspendedRef.current() || isFollowingOutputRef.current) {
       // Follow re-asserts its own target through `scheduleFollowToLatest`.
       return;
     }
@@ -1349,7 +1256,7 @@ export function useFlowChatFollowOutput({
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
-      if (virtualItemCount > 0) {
+      if (virtualItemCount > 0 && startAtTailOnMount) {
         enterFollowOutput(isStreaming ? 'streaming-resumed' : 'session-open');
       }
       return;
@@ -1360,10 +1267,9 @@ export function useFlowChatFollowOutput({
       previousLatestTurnIdRef.current = latestTurnId;
       previousDialogTurnCountRef.current = dialogTurnCount;
       exitFollowOutput('session-changed');
-      retirePin();
       // A Turn waiting to be shown belongs to the session that gained it.
       pendingNewTurnIdRef.current = null;
-      if (virtualItemCount > 0) {
+      if (virtualItemCount > 0 && startAtTailOnMount) {
         enterFollowOutput(isStreaming ? 'streaming-resumed' : 'session-open');
       }
       return;
@@ -1373,7 +1279,7 @@ export function useFlowChatFollowOutput({
      * An arrival, not a change. `latestTurnId` is the ledger's last Turn and it
      * is the right identity — but a rollback truncates the ledger, which moves
      * that identity *backwards* onto a Turn that has been there all along. Read
-     * as an arrival it pinned the survivor to the viewport top, which is the
+     * as an arrival it revealed the survivor as though it were new, which is the
      * reader's "I undid my message and it jumped to the one before it".
      *
      * The ledger growing is what separates the two. Nothing else that rewrites
@@ -1398,8 +1304,8 @@ export function useFlowChatFollowOutput({
     }
     /*
      * The transcript changed without a new Turn, which is the moment a deferred
-     * one can become alignable — the presentation being restored to the live
-     * tail is exactly that. A retry that still cannot align it leaves the
+     * one can become revealable — the presentation being restored to the live
+     * tail is exactly that. A retry that still cannot reveal it leaves the
      * viewport alone and stays pending.
      */
     if (pendingNewTurnIdRef.current === latestTurnId && latestTurnId !== null) {
@@ -1411,8 +1317,8 @@ export function useFlowChatFollowOutput({
     enterFollowOutput,
     exitFollowOutput,
     isStreaming,
+    startAtTailOnMount,
     latestTurnId,
-    retirePin,
     virtualItemCount,
   ]);
 
@@ -1427,14 +1333,17 @@ export function useFlowChatFollowOutput({
   }, [isFollowingOutput, isStreaming, isViewportActive, scheduleFollowToLatest, stopFollowFrame]);
 
   // Settle any blank the hold rule accumulated once output stops arriving.
-  // A pinned Turn keeps its blank: that space is the mode, not a leftover.
+  // A short new-Turn reveal keeps its blank and its fixed viewport position.
   useEffect(() => {
     const wasStreaming = wasStreamingRef.current;
     wasStreamingRef.current = isStreaming;
     if (wasStreaming === isStreaming || isStreaming) {
       return;
     }
-    if (!isFollowingOutputRef.current || followStateRef.current.mode !== 'hold-tail') {
+    if (
+      !isFollowingOutputRef.current
+      || followPhaseRef.current !== 'following-tail'
+    ) {
       return;
     }
 
@@ -1444,7 +1353,7 @@ export function useFlowChatFollowOutput({
     }
     const contentEnd = readContentEndScrollTop(scroller);
     if (followStateRef.current.target - contentEnd > BOTTOM_EPSILON_PX) {
-      followStateRef.current = { mode: 'hold-tail', target: contentEnd };
+      followStateRef.current = { target: contentEnd };
       runContentEndScroll('smooth');
     }
   }, [isStreaming, readContentEndScrollTop, runContentEndScroll, scrollerRef]);

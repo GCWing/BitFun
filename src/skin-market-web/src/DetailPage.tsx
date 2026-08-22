@@ -16,8 +16,8 @@ import {
   formatPackageSize,
   shortHash,
 } from './format';
+import { GetBitfunCta } from './GetBitfunCta';
 import type { Locale, Translate } from './i18n';
-import { BITFUN_RELEASES_URL } from './links';
 import { PosterImage } from './PosterImage';
 import type {
   AppearanceListingDetail,
@@ -184,16 +184,11 @@ export function DetailPage({ catalogSearch, isAdmin, locale, onNavigate, slug, t
                 {t('detailDownload')}
               </a>
             ) : null}
-            <div className="desktop-guidance">
-              <Desktop size={21} weight="regular" aria-hidden="true" />
-              <a href={BITFUN_RELEASES_URL} target="_blank" rel="noreferrer">
-                <strong>
-                  {t('desktopInstallTitle')}
-                  <ArrowSquareOut size={15} weight="regular" aria-hidden="true" />
-                </strong>
-                <span>{t('desktopInstallNote')}</span>
-              </a>
-            </div>
+            <p className="import-hint">
+              <Desktop size={19} weight="regular" aria-hidden="true" />
+              <span>{t('desktopInstallNote')}</span>
+            </p>
+            <GetBitfunCta placement="listing" t={t} />
           </div>
         </section>
 

@@ -20,6 +20,7 @@ import {
   type Client,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type SessionConfigOption,
   type SessionNotification,
   type Stream,
 } from '@agentclientprotocol/sdk'
@@ -30,23 +31,44 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as AcpPlugin from '../src/bridge.ts'
 import type { AcpConfig } from '../src/bridge.ts'
 
+/** One provider route the fixture serves, and the models it advertises. */
+export interface CatalogProvider {
+  /** Human-readable provider name — what a grouped model picker labels the group with. */
+  name: string
+  /** Advertised models, in the order a picker lists them. */
+  models: { id: string; name: string; description?: string }[]
+}
+
+/**
+ * The single-provider, single-model catalog every test gets unless it asks for
+ * more, which is what the fixture advertised before it could advertise
+ * anything else.
+ */
+const DEFAULT_CATALOG: Record<string, CatalogProvider> = {
+  mock: { name: 'Mock', models: [{ id: 'mock', name: 'Mock' }] },
+}
+
 /** Scripted adapter for protocol tests. */
 class MockAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
   private readonly script: (StreamChunk[] | 'hang')[]
+  private readonly catalog: Record<string, CatalogProvider>
 
-  constructor(script: (StreamChunk[] | 'hang')[]) {
+  constructor(script: (StreamChunk[] | 'hang')[], catalog: Record<string, CatalogProvider>) {
     super()
     this.script = script
+    this.catalog = catalog
   }
 
   override providerInfo(provider: string) {
-    if (provider !== 'mock') throw new Error(`MockAdapter: unknown provider ${provider}`)
-    return { id: 'mock', name: 'Mock' }
+    const entry = this.catalog[provider]
+    if (entry === undefined) throw new Error(`MockAdapter: unknown provider ${provider}`)
+    return { id: provider, name: entry.name }
   }
 
   override listModels(provider: string) {
-    return Promise.resolve(provider === 'mock' ? [{ provider: 'mock', id: 'mock', name: 'Mock' }] : [])
+    const entry = this.catalog[provider]
+    return Promise.resolve((entry?.models ?? []).map(model => ({ provider, ...model })))
   }
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
@@ -147,8 +169,16 @@ export async function makeBridgeHarness(options: {
    * persists nothing and the bridge takes its no-archive path.
    */
   persistenceRoot?: string
+  /**
+   * Provider routes and models the one scripted adapter serves, so a test can
+   * exercise a model picker with something to pick. Every route runs the same
+   * script, so a switch still produces a real turn. Defaults to the lone
+   * `mock/mock` route.
+   */
+  catalog?: Record<string, CatalogProvider>
 } = {}): Promise<BridgeHarness> {
-  const adapter = new MockAdapter(options.script ?? [])
+  const catalog = options.catalog ?? DEFAULT_CATALOG
+  const adapter = new MockAdapter(options.script ?? [], catalog)
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx, { systemPrompt: { persona: options.persona ?? '' } })
   // Before the loop, as the app composes it: the coordinator captures a
@@ -157,7 +187,7 @@ export async function makeBridgeHarness(options: {
     await ctx.plugin(JsonlSessionPersistence, { root: options.persistenceRoot })
   }
   const loopFiber = await ctx.plugin(AgentLoop, { agents: [] })
-  ctx.llm.registerAdapter(['mock'], adapter)
+  ctx.llm.registerAdapter(Object.keys(catalog), adapter)
   if (options.presets !== undefined) {
     // Before the bridge: it captures the roster during `apply`, exactly as the
     // app's composition orders them.
@@ -264,6 +294,38 @@ export async function waitForUpdates<K extends CapturedUpdate['sessionUpdate']>(
     }
     await new Promise(resolve => setTimeout(resolve, 5))
   }
+}
+
+/**
+ * Every published config option of one semantic category.
+ *
+ * A session publishes several pickers at once and the set is replaced whole on
+ * every publication, so a test reads the one it means by category rather than
+ * by position.
+ * @param configOptions - a published option set, however it arrived.
+ * @param category - the `category` to keep.
+ * @returns the matching options, in publication order.
+ */
+export function optionsOfCategory(
+  configOptions: SessionConfigOption[] | null | undefined, category: string,
+): SessionConfigOption[] {
+  return (configOptions ?? []).filter(option => option.category === category)
+}
+
+/**
+ * The one option of a category, asserted to be a select so its values can be read.
+ * @param configOptions - a published option set.
+ * @param category - the `category` the option is expected under.
+ * @returns that option.
+ */
+export function selectOption(
+  configOptions: SessionConfigOption[] | null | undefined, category: string,
+): Extract<SessionConfigOption, { type: 'select' }> {
+  const [option, ...rest] = optionsOfCategory(configOptions, category)
+  if (rest.length > 0 || option?.type !== 'select') {
+    throw new Error(`expected one ${category} select option, got ${JSON.stringify(configOptions)}`)
+  }
+  return option
 }
 
 /**

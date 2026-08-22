@@ -54,10 +54,10 @@ vi.mock('../../component-library', () => ({
 vi.mock('@/tools/terminal/components/LazyTerminalOutputRenderer', () => ({
   LazyTerminalOutputRenderer: React.forwardRef<
     { getVisibleText: () => string },
-    { content: string; className?: string }
-  >(({ content, className }, ref) => {
+    { content: string; className?: string; maxRows?: number }
+  >(({ content, className, maxRows }, ref) => {
     React.useImperativeHandle(ref, () => ({ getVisibleText: () => content }), [content]);
-    return <pre className={className}>{content}</pre>;
+    return <pre className={className} data-max-rows={maxRows}>{content}</pre>;
   }),
 }));
 
@@ -165,6 +165,9 @@ describe('ExecProcessToolCardView', () => {
     expect(container.querySelector('.compact-tool-card')).toBeNull();
     expect(container.textContent).toContain('Waiting for confirmation');
     expect(container.textContent).not.toContain('Receiving parameters...');
+    expect(container.querySelector('.exec-process-output-frame')).not.toBeNull();
+    expect(container.querySelector('.terminal-result-footer')).not.toBeNull();
+    expect(container.querySelector('.terminal-xterm-output')).toBeNull();
   });
 
   it('retains a just-completed tail result during the grace period', () => {
@@ -199,6 +202,7 @@ describe('ExecProcessToolCardView', () => {
     expect(container.querySelector('.base-tool-card')).not.toBeNull();
     expect(container.querySelector('.compact-tool-card')).toBeNull();
     expect(container.textContent).toContain('All tests passed');
+    expect(container.querySelector('.terminal-xterm-output')?.getAttribute('data-max-rows')).toBe('4');
 
     act(() => {
       root.render(
@@ -214,6 +218,73 @@ describe('ExecProcessToolCardView', () => {
     expect(container.querySelector('.base-tool-card')).not.toBeNull();
     expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
     expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.querySelector('.terminal-xterm-output')?.getAttribute('data-max-rows')).toBe('4');
+  });
+
+  it('uses the expanded output preview after a completed card is manually expanded', () => {
+    const resultModel: ExecProcessCardModel = {
+      ...model,
+      resultOutput: 'All tests passed',
+    };
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={resultModel}
+        />,
+      );
+    });
+
+    act(() => {
+      container.querySelector<HTMLElement>('.base-tool-card')?.click();
+    });
+
+    expect(container.querySelector('.terminal-xterm-output')?.getAttribute('data-max-rows')).toBe('15');
+  });
+
+  it('keeps the output frame and footer mounted while content changes', () => {
+    const streamingItem = {
+      ...toolItem('running'),
+      _progressLogs: ['line 1\nline 2\nline 3\nline 4'],
+    } as FlowToolItem;
+    const completedModel: ExecProcessCardModel = {
+      ...model,
+      resultOutput: 'line 1\nline 2\nline 3\nline 4',
+      workdir: 'E:/workspace',
+      exitCode: 0,
+      wallTimeSeconds: 1.25,
+    };
+
+    act(() => {
+      root.render(<ExecProcessToolCardView toolItem={toolItem('running')} model={model} />);
+    });
+    const frameBeforeOutput = container.querySelector('.exec-process-output-frame');
+    const footerBeforeOutput = container.querySelector('.terminal-result-footer');
+    expect(frameBeforeOutput?.getAttribute('data-output-rows')).toBe('4');
+    expect(footerBeforeOutput?.getAttribute('data-filled')).toBe('false');
+    expect(container.querySelector('.terminal-xterm-output')).toBeNull();
+
+    act(() => {
+      root.render(<ExecProcessToolCardView toolItem={streamingItem} model={model} />);
+    });
+    expect(container.querySelector('.exec-process-output-frame')).toBe(frameBeforeOutput);
+    expect(container.querySelector('.terminal-result-footer')).toBe(footerBeforeOutput);
+    expect(container.querySelector('.terminal-xterm-output')).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={completedModel}
+          isLastItem
+        />,
+      );
+    });
+    expect(container.querySelector('.exec-process-output-frame')).toBe(frameBeforeOutput);
+    expect(container.querySelector('.terminal-result-footer')).toBe(footerBeforeOutput);
+    expect(footerBeforeOutput?.getAttribute('data-filled')).toBe('true');
+    expect(container.querySelector('.exec-process-output-frame')?.getAttribute('data-output-rows')).toBe('4');
   });
 
   it('collapses a completed tail result when the grace period expires', () => {

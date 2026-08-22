@@ -116,6 +116,8 @@ export async function rollbackSessionToTurn(
 
     const outcome = await agentAPI.rollbackSessionToTurn({
       workspacePath,
+      workspaceId: session.workspaceId ?? session.config.workspaceId,
+      workspaceHostname: session.workspaceHostname,
       sessionId: request.sessionId,
       targetTurnId: request.targetTurnId,
       expectedStorageTurnIndex,

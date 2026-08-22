@@ -15,10 +15,27 @@ const log = createLogger('useWorkspaceSearchIndex');
 const ACTIVE_TASK_POLL_MS = 1000;
 const IDLE_STATUS_POLL_MS = 5000;
 
-function isWorkspaceSearchUnavailableError(message: string): boolean {
-  return message.includes('Workspace search is disabled')
+// Kept in sync with `NON_GIT_WORKSPACE_MESSAGE` in `src/apps/desktop/src/api/search_api.rs`.
+const NON_GIT_WORKSPACE_MESSAGE = 'Workspace search requires a Git worktree with a HEAD commit';
+
+export type WorkspaceSearchUnsupportedReason = 'non_git' | 'other';
+
+// A workspace that flashgrep cannot index is not an error state: content search silently falls
+// back, so the caller should stop polling and render a neutral indicator rather than a red one.
+function workspaceSearchUnsupportedReason(
+  message: string
+): WorkspaceSearchUnsupportedReason | null {
+  if (message.includes(NON_GIT_WORKSPACE_MESSAGE)) {
+    return 'non_git';
+  }
+  if (
+    message.includes('Workspace search is disabled')
     || message.includes('Workspace search daemon is unavailable')
-    || message.includes('Remote workspace search status is not managed');
+    || message.includes('Remote workspace search status is not managed')
+  ) {
+    return 'other';
+  }
+  return null;
 }
 
 export interface UseWorkspaceSearchIndexOptions {
@@ -34,6 +51,7 @@ export interface UseWorkspaceSearchIndexResult {
   error: string | null;
   supported: boolean;
   hasActiveTask: boolean;
+  unsupportedReason: WorkspaceSearchUnsupportedReason | null;
   refreshStatus: (silent?: boolean) => Promise<WorkspaceSearchIndexStatus | null>;
   buildIndex: () => Promise<WorkspaceSearchIndexTaskHandle | null>;
   rebuildIndex: () => Promise<WorkspaceSearchIndexTaskHandle | null>;
@@ -54,8 +72,9 @@ export function useWorkspaceSearchIndex(
   const [refreshing, setRefreshing] = useState(false);
   const [actionRunning, setActionRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [backendSupported, setBackendSupported] = useState(true);
-  const supported = Boolean(workspacePath && enabled && backendSupported);
+  const [unsupportedReason, setUnsupportedReason] =
+    useState<WorkspaceSearchUnsupportedReason | null>(null);
+  const supported = Boolean(workspacePath && enabled && unsupportedReason === null);
 
   const mountedRef = useRef(true);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,8 +117,9 @@ export function useWorkspaceSearchIndex(
           return null;
         }
         const message = err instanceof Error ? err.message : 'Failed to load search index status';
-        if (isWorkspaceSearchUnavailableError(message)) {
-          setBackendSupported(false);
+        const reason = workspaceSearchUnsupportedReason(message);
+        if (reason) {
+          setUnsupportedReason(reason);
           setIndexStatus(null);
           setError(null);
           return null;
@@ -135,18 +155,22 @@ export function useWorkspaceSearchIndex(
             ? await workspaceAPI.buildSearchIndex(workspacePath)
             : await workspaceAPI.rebuildSearchIndex(workspacePath);
         if (mountedRef.current) {
-          setIndexStatus({
+          // The task handle carries no auto-index decision, but a manual build does not change
+          // one either, so the last known decision is kept until the next status refresh.
+          setIndexStatus((previous) => ({
             repoStatus: result.repoStatus,
             activeTask: result.task,
-          });
+            autoIndex: previous?.autoIndex ?? null,
+          }));
           setError(null);
         }
         return result;
       } catch (err) {
         if (mountedRef.current) {
           const message = err instanceof Error ? err.message : `Failed to ${action} search index`;
-          if (isWorkspaceSearchUnavailableError(message)) {
-            setBackendSupported(false);
+          const reason = workspaceSearchUnsupportedReason(message);
+          if (reason) {
+            setUnsupportedReason(reason);
             setIndexStatus(null);
             setError(null);
           } else {
@@ -175,7 +199,7 @@ export function useWorkspaceSearchIndex(
   }, [clearPollTimer]);
 
   useEffect(() => {
-    setBackendSupported(true);
+    setUnsupportedReason(null);
   }, [enabled, workspacePath]);
 
   useEffect(() => {
@@ -226,6 +250,7 @@ export function useWorkspaceSearchIndex(
       actionRunning,
       error,
       supported,
+      unsupportedReason,
       hasActiveTask: isTaskActive(indexStatus),
       refreshStatus,
       buildIndex,
@@ -241,6 +266,7 @@ export function useWorkspaceSearchIndex(
       refreshStatus,
       refreshing,
       supported,
+      unsupportedReason,
     ]
   );
 }

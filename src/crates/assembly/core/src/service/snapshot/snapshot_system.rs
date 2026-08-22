@@ -277,6 +277,11 @@ impl FileSnapshotSystem {
     }
 
     /// Loads the existing snapshot index.
+    ///
+    /// Workspaces accumulate thousands of small metadata files, and this load
+    /// gates the first snapshot view of a workspace. Reading them sequentially
+    /// on one thread costs seconds, so the files are read and parsed on a
+    /// bounded set of blocking threads and merged on the async side.
     async fn load_snapshot_index(&mut self) -> SnapshotResult<()> {
         let started_at = Instant::now();
         let metadata_dir = self.snapshot_metadata_dir.clone();
@@ -285,31 +290,59 @@ impl FileSnapshotSystem {
             return Ok(());
         }
 
-        let mut loaded_count = 0;
-
+        let mut metadata_paths = Vec::new();
         for entry in fs::read_dir(&metadata_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
+            let path = entry?.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                match self.load_snapshot_metadata(&path).await {
-                    Ok(snapshot) => {
-                        self.hash_to_path.insert(
-                            snapshot.content_hash.clone(),
-                            self.get_content_path(&snapshot.content_hash),
-                        );
-                        self.active_snapshots
-                            .insert(snapshot.snapshot_id.clone(), snapshot);
-                        loaded_count += 1;
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to load snapshot metadata: path={} error={}",
-                            path.display(),
-                            e
-                        );
+                metadata_paths.push(path);
+            }
+        }
+
+        const MAX_LOAD_THREADS: usize = 8;
+        const MIN_FILES_PER_THREAD: usize = 64;
+        let thread_count = (metadata_paths.len() / MIN_FILES_PER_THREAD).clamp(1, MAX_LOAD_THREADS);
+        let chunk_size = metadata_paths.len().div_ceil(thread_count).max(1);
+
+        let mut load_tasks = Vec::with_capacity(thread_count);
+        for chunk in metadata_paths.chunks(chunk_size) {
+            let chunk = chunk.to_vec();
+            load_tasks.push(tokio::task::spawn_blocking(move || {
+                let mut snapshots = Vec::with_capacity(chunk.len());
+                for path in chunk {
+                    let parsed = fs::read_to_string(&path)
+                        .map_err(SnapshotError::from)
+                        .and_then(|content| {
+                            serde_json::from_str::<FileSnapshot>(&content)
+                                .map_err(SnapshotError::from)
+                        });
+                    match parsed {
+                        Ok(snapshot) => snapshots.push(snapshot),
+                        Err(e) => {
+                            warn!(
+                                "Failed to load snapshot metadata: path={} error={}",
+                                path.display(),
+                                e
+                            );
+                        }
                     }
                 }
+                snapshots
+            }));
+        }
+
+        let mut loaded_count = 0;
+        for task in load_tasks {
+            let snapshots = task.await.map_err(|e| {
+                SnapshotError::ConfigError(format!("Snapshot metadata load task failed: {e}"))
+            })?;
+            for snapshot in snapshots {
+                self.hash_to_path.insert(
+                    snapshot.content_hash.clone(),
+                    self.get_content_path(&snapshot.content_hash),
+                );
+                self.active_snapshots
+                    .insert(snapshot.snapshot_id.clone(), snapshot);
+                loaded_count += 1;
             }
         }
 

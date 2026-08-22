@@ -26,12 +26,14 @@ mod model_selection;
 mod modes;
 mod peer_host;
 mod plugin_diagnostics;
+mod plugin_host_activation;
 mod product_assembly;
 mod prompt_stash;
 mod prompts;
 mod root_handlers;
 mod runtime;
 mod self_update;
+mod server_host;
 mod shared_runtime;
 mod terminal_attention;
 mod ui;
@@ -48,6 +50,9 @@ use hook_import::HookAction;
 use mcp_import::{McpImportCommand, McpImportOutputFormat};
 use modes::chat::ChatMode;
 use modes::exec::{ExecApprovalMode, ExecOutputFormat};
+
+pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
+    bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
 
 // ======================== Global MCP Service ========================
 
@@ -327,6 +332,11 @@ enum Commands {
         action: DispatchAction,
     },
 
+    /// Start the BitFun app server over stdio
+    ///
+    /// stdout carries JSON-RPC traffic only; logs are written to stderr.
+    Server,
+
     /// Start or inspect the Agent Client Protocol (ACP) server
     Acp {
         #[command(subcommand)]
@@ -550,6 +560,13 @@ impl BootstrapProfile {
 
     const fn starts_mcp(self) -> bool {
         matches!(self, Self::Interactive | Self::Execution)
+    }
+
+    const fn starts_plugin_host(self) -> bool {
+        matches!(
+            PLUGIN_HOST_LAUNCH_POLICY,
+            bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled
+        ) && matches!(self, Self::Interactive | Self::Execution)
     }
 }
 
@@ -804,6 +821,24 @@ async fn initialize_core_services_for_deployment(
         .await
         .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
     tracing::info!("Global config service initialized");
+    if matches!(
+        bootstrap_profile,
+        BootstrapProfile::Interactive | BootstrapProfile::Execution
+    ) {
+        plugin_host_activation::ensure_configured_plugin_execution_supported().await?;
+    }
+    if bootstrap_profile.starts_plugin_host() {
+        match bitfun_core::plugin_host::initialize_configured_plugin_host_with_log_file(
+            PLUGIN_HOST_LAUNCH_POLICY,
+            logging::active_plugin_host_log_path(),
+        )
+        .await
+        {
+            Ok(bitfun_core::plugin_host::PluginHostStartup::Disabled) => {}
+            Ok(status) => tracing::info!("Plugin host initialization completed: {:?}", status),
+            Err(error) => tracing::error!("Failed to initialize configured plugin host: {error}"),
+        }
+    }
     let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
         .map_err(|error| anyhow!(error.to_string()))?;
     let entrypoint = match (deployment, bootstrap_profile) {
@@ -1421,6 +1456,10 @@ async fn run_cli() -> Result<()> {
             root_handlers::handle_dispatch_action(action).await?;
         }
 
+        Some(Commands::Server) => {
+            server_host::serve().await?;
+        }
+
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
         }) => {
@@ -1580,7 +1619,24 @@ fn main() {
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime");
-            runtime.block_on(run_cli())
+            runtime.block_on(async {
+                let result = run_cli().await;
+                match bitfun_core::plugin_host::shutdown_configured_plugin_host().await {
+                    Ok(Some(report)) => tracing::info!(
+                        generation = report.generation,
+                        disposition = ?report.disposition,
+                        rpc_completed = report.rpc_completed,
+                        exit_code = ?report.exit_code,
+                        duration_ms = report.duration_ms,
+                        "CLI plugin host shutdown completed"
+                    ),
+                    Ok(None) => {
+                        tracing::debug!("CLI plugin host shutdown skipped: host not started")
+                    }
+                    Err(error) => tracing::warn!("CLI plugin host shutdown failed: {error}"),
+                }
+                result
+            })
         })
         .expect("failed to spawn bitfun worker thread");
 
@@ -1597,6 +1653,18 @@ fn main() {
             eprintln!("Error: bitfun worker thread panicked");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod server_command_tests {
+    use super::{Cli, Commands};
+    use clap::Parser;
+
+    #[test]
+    fn server_command_parses_as_stdio_host() {
+        let parsed = Cli::try_parse_from(["bitfun", "server"]).expect("parse server command");
+        assert!(matches!(parsed.command, Some(Commands::Server)));
     }
 }
 
@@ -1771,12 +1839,12 @@ mod bootstrap_profile_tests {
     #[test]
     fn profiles_start_only_their_requested_background_services() {
         let cases = [
-            (BootstrapProfile::Interactive, true, true),
-            (BootstrapProfile::Execution, false, true),
-            (BootstrapProfile::Management, false, false),
+            (BootstrapProfile::Interactive, true, true, false),
+            (BootstrapProfile::Execution, false, true, false),
+            (BootstrapProfile::Management, false, false, false),
         ];
 
-        for (profile, starts_peer_host, starts_mcp) in cases {
+        for (profile, starts_peer_host, starts_mcp, starts_plugin_host) in cases {
             assert_eq!(
                 profile.starts_peer_host(
                     bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded,
@@ -1784,6 +1852,7 @@ mod bootstrap_profile_tests {
                 starts_peer_host
             );
             assert_eq!(profile.starts_mcp(), starts_mcp);
+            assert_eq!(profile.starts_plugin_host(), starts_plugin_host);
         }
     }
 

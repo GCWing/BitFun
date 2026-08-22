@@ -2,6 +2,7 @@ import { http } from '@kit.NetworkKit';
 import { CloudAccountCrypto, CloudAccountKdfParams } from './CloudAccountCrypto';
 import { Encoding } from './Encoding';
 import { HarmonyRemoteCryptoCipher } from './RemoteCrypto';
+import { OhosError } from './OhosError';
 import { RemoteLogger } from './RemoteLogger';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { CommandStatusResponse, EncryptedPayload, RemoteCommand } from '../model/RemoteModels';
@@ -42,6 +43,13 @@ export interface CloudAccountSession {
   token: string;
   userId: string;
   masterKey: Uint8Array;
+}
+
+/** The live account client plus the session it is currently signed in with. */
+export interface CloudAccountBinding {
+  client: CloudAccountClient;
+  relayUrl: string;
+  session: CloudAccountSession;
 }
 
 export interface CloudAccountDevice {
@@ -253,11 +261,17 @@ export class CloudAccountClient {
     }));
   }
 
+  /**
+   * [timeoutMs] defaults to the relay's own patience for a device that is slow
+   * to answer. A caller with a reason to give up earlier — a handshake, where
+   * silence means the desktop is gone rather than busy — passes its own.
+   */
   async deviceRpc<T extends CommandStatusResponse>(
     relayUrl: string,
     session: CloudAccountSession,
     targetDeviceId: string,
-    command: RemoteCommand
+    command: RemoteCommand,
+    timeoutMs: number = 130000
   ): Promise<T> {
     const target = targetDeviceId.trim();
     if (target.length === 0) {
@@ -280,7 +294,7 @@ export class CloudAccountClient {
       'POST',
       body,
       session.token,
-      130000
+      timeoutMs
     );
     const plain = await this.cipher.decrypt(
       Encoding.base64ToBytes(response.encrypted_data),
@@ -377,6 +391,8 @@ export class CloudAccountClient {
         throw new CloudAccountRequestError(message, response.responseCode);
       }
       return JSON.parse(text) as T;
+    } catch (err) {
+      throw OhosError.wrap('relay request', err);
     } finally {
       request.destroy();
     }

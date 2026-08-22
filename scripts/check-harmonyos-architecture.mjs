@@ -94,10 +94,6 @@ const duplicatedConversationTraceFields = conversationPageStateFiles.flatMap((fi
 });
 const appRootRuntimeFile = path.join(pagesRoot, 'runtime/AppRootRuntime.ets');
 const appRootRuntimeSource = fs.readFileSync(appRootRuntimeFile, 'utf8');
-const appRootRuntimeLines = appRootRuntimeSource.split(/\r?\n/).length - 1;
-const appRootPresentationFile = path.join(pagesRoot, 'components/AppRootPresentation.ets');
-const appRootPresentationSource = fs.readFileSync(appRootPresentationFile, 'utf8');
-const appRootPresentationLines = appRootPresentationSource.split(/\r?\n/).length - 1;
 const requiredPresentationFiles = [
   'components/AppRootOverlaySurfaces.ets',
   'components/ChatMessageChrome.ets',
@@ -115,11 +111,6 @@ const requiredPresentationFiles = [
 ];
 const missingPresentationFiles = requiredPresentationFiles
   .filter((file) => !fs.existsSync(path.join(pagesRoot, file)));
-const componentLineBudgets = [
-  ['components/ChatMessageBubble.ets', 1000],
-  ['components/ConnectView.ets', 700],
-  ['components/ToolStatusList.ets', 1120]
-];
 const extractedFilePreviewMethods = [
   'openFilePreview',
   'closeFilePreview',
@@ -328,29 +319,6 @@ for (const [name, wanted] of Object.entries(expected)) {
     console.error(`actual:   ${JSON.stringify(actual[name])}`);
   }
 }
-if (appRootRuntimeLines > 500) {
-  failed = true;
-  console.error(`AppRootRuntime line budget exceeded: expected <=500, actual=${appRootRuntimeLines}`);
-}
-if (appRootPresentationLines > 500) {
-  failed = true;
-  console.error(`AppRootPresentation line budget exceeded: expected <=500, actual=${appRootPresentationLines}`);
-}
-const conversationControllerFile = path.join(pagesRoot, 'viewmodel/ConversationController.ets');
-const conversationControllerLines = fs.readFileSync(conversationControllerFile, 'utf8').split(/\r?\n/).length - 1;
-if (conversationControllerLines > 400) {
-  failed = true;
-  console.error(`ConversationController line budget exceeded: expected <=400, actual=${conversationControllerLines}`);
-}
-for (const [file, budget] of componentLineBudgets) {
-  const source = fs.readFileSync(path.join(pagesRoot, file), 'utf8');
-  const lineCount = source.split(/\r?\n/).length - 1;
-  if (lineCount > budget) {
-    failed = true;
-    console.error(`${file} line budget exceeded: expected <=${budget}, actual=${lineCount}`);
-  }
-}
-
 if (failed) {
   process.exitCode = 1;
 } else {

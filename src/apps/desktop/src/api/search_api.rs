@@ -21,7 +21,11 @@ pub struct SearchRepoIndexRequest {
 pub struct SearchMetadataResponse {
     pub backend: WorkspaceSearchBackend,
     pub repo_phase: WorkspaceSearchRepoPhase,
-    pub rebuild_recommended: bool,
+    pub base_advance_in_progress: bool,
+    /// `true` when the daemon still owed a worktree reconcile at query time, so these results
+    /// describe the worktree as of the last observation. No query path waits for that reconcile —
+    /// stale-but-instant beats correct-but-blocked — so this is reported rather than waited out.
+    pub workspace_probe_pending: bool,
     pub candidate_docs: usize,
     pub matched_lines: usize,
     pub matched_occurrences: usize,
@@ -71,6 +75,20 @@ pub(crate) async fn remote_workspace_search_service(
         });
 
     remote_workspace_search_service_for_path(root_path, preferred_connection_id).await
+}
+
+/// flashgrep refuses to open a directory that is not a Git worktree with a HEAD commit.
+/// That is a property of the workspace, not a failure of the index, so it is normalized into a
+/// stable BitFun-owned sentence the UI can recognize instead of leaking the raw daemon error.
+pub(crate) const NON_GIT_WORKSPACE_MESSAGE: &str =
+    "Workspace search requires a Git worktree with a HEAD commit";
+
+fn repo_status_error_message(error: impl std::fmt::Display) -> String {
+    let message = error.to_string();
+    if message.contains("requires a Git worktree with a HEAD commit") {
+        return NON_GIT_WORKSPACE_MESSAGE.to_string();
+    }
+    format!("Failed to get search repository status: {message}")
 }
 
 async fn workspace_search_unavailable_message(
@@ -169,8 +187,6 @@ pub(crate) fn build_content_search_request(
         use_regex,
         whole_word,
         multiline: false,
-        before_context: 0,
-        after_context: 0,
         max_results: Some(max_results),
         globs: Vec::new(),
         file_types: Vec::new(),
@@ -226,7 +242,8 @@ pub(crate) fn search_metadata_from_content_result(
     SearchMetadataResponse {
         backend: result.backend,
         repo_phase: result.repo_status.phase,
-        rebuild_recommended: result.repo_status.rebuild_recommended,
+        base_advance_in_progress: result.repo_status.base_advance_in_progress,
+        workspace_probe_pending: result.repo_status.workspace_probe_pending,
         candidate_docs: result.candidate_docs,
         matched_lines: result.matched_lines,
         matched_occurrences: result.matched_occurrences,
@@ -248,7 +265,7 @@ pub async fn search_get_repo_status(
             .get_index_status(&request.root_path)
             .await
             .map(|status| serde_json::to_value(status).unwrap_or_else(|_| serde_json::json!({})))
-            .map_err(|error| format!("Failed to get search repository status: {}", error));
+            .map_err(repo_status_error_message);
     }
 
     state
@@ -256,7 +273,7 @@ pub async fn search_get_repo_status(
         .get_index_status(&request.root_path)
         .await
         .map(|status| serde_json::to_value(status).unwrap_or_else(|_| serde_json::json!({})))
-        .map_err(|error| format!("Failed to get search repository status: {}", error))
+        .map_err(repo_status_error_message)
 }
 
 #[tauri::command]
@@ -309,4 +326,24 @@ pub async fn search_rebuild_index(
         .await
         .map(|task| serde_json::to_value(task).unwrap_or_else(|_| serde_json::json!({})))
         .map_err(|error| format!("Failed to rebuild workspace index: {}", error))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_git_workspace_error_is_normalized() {
+        let raw = "protocol error: protocol error: indexed daemon workspace requires a Git worktree with a HEAD commit: /home";
+        assert_eq!(repo_status_error_message(raw), NON_GIT_WORKSPACE_MESSAGE);
+    }
+
+    #[test]
+    fn other_errors_keep_their_prefix() {
+        let raw = "SSH handshake timed out after 30 seconds";
+        assert_eq!(
+            repo_status_error_message(raw),
+            "Failed to get search repository status: SSH handshake timed out after 30 seconds"
+        );
+    }
 }

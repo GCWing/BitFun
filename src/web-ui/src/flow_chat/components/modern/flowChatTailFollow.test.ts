@@ -5,7 +5,6 @@ import {
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
   isTailBlankMeasurable,
   isViewportAtTail,
-  memorylessFollowState,
   nextTailFollowState,
   resolveAnimatedJumpBehavior,
   resolveTailDepartureCrossing,
@@ -19,35 +18,22 @@ import {
 const VIEWPORT = 800;
 const BOTTOM_INSET = 168;
 const SPACER = tailSpacerPxForViewport(VIEWPORT, BOTTOM_INSET);
-const MAX_GAP = tailHoldMaxGapPx(VIEWPORT);
+const MAX_GAP = tailHoldMaxGapPx(VIEWPORT, SPACER);
 const THRESHOLD = FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX;
 
 function holding(target: number): TailFollowState {
-  return { mode: 'hold-tail', target };
-}
-
-function pinning(target: number): TailFollowState {
-  return { mode: 'pin-turn-top', target };
+  return { target };
 }
 
 describe('tailSpacerPxForViewport', () => {
-  it('reserves exactly enough to put a bare new Turn on the top edge', () => {
-    // Worst case for the pin: the user message is the newest item and nothing
-    // has answered it, so the message, the input inset and the spacer are all
-    // that lie below its top. One viewport of them is what the pin needs.
+  it('caps the footer and spacer at three quarters of the viewport', () => {
     const spacer = tailSpacerPxForViewport(VIEWPORT, BOTTOM_INSET);
-    const smallestUserMessagePx = VIEWPORT - BOTTOM_INSET - spacer;
-    expect(smallestUserMessagePx).toBeGreaterThan(0);
-    expect(smallestUserMessagePx).toBeLessThan(64);
+    expect(BOTTOM_INSET + spacer).toBe(Math.round(VIEWPORT * 0.75));
+    expect(VIEWPORT - BOTTOM_INSET - spacer).toBe(200);
   });
 
-  it('never reserves less than the gap the hold rule may be holding', () => {
-    // A composer expanded most of the way up the viewport leaves the pin almost
-    // nothing to reserve, but `hold-tail` still parks up to `tailHoldMaxGapPx`
-    // past the content end — and an offset the browser clamps is an offset the
-    // hold rule does not get to hold.
-    expect(tailSpacerPxForViewport(VIEWPORT, VIEWPORT - 80))
-      .toBe(tailHoldMaxGapPx(VIEWPORT));
+  it('lets an expanded footer consume the reservation without making spacer negative', () => {
+    expect(tailSpacerPxForViewport(VIEWPORT, VIEWPORT - 80)).toBe(0);
   });
 
   it('stays well under a full viewport, so the scroll range does not end in blank', () => {
@@ -56,6 +42,11 @@ describe('tailSpacerPxForViewport', () => {
 
   it('reserves nothing before the scroller has been measured', () => {
     expect(tailSpacerPxForViewport(0, BOTTOM_INSET)).toBe(0);
+  });
+
+  it('never lets the hold gap exceed the physical spacer', () => {
+    expect(tailHoldMaxGapPx(VIEWPORT, 120)).toBe(120);
+    expect(tailHoldMaxGapPx(VIEWPORT, SPACER)).toBe(SPACER);
   });
 });
 
@@ -115,10 +106,9 @@ describe('nextTailFollowState hold-tail', () => {
   it('follows content growth', () => {
     const next = nextTailFollowState(holding(4000), {
       desiredScrollTop: 4200,
-      pinScrollTop: null,
       maxGapPx: MAX_GAP,
     });
-    expect(next).toEqual({ mode: 'hold-tail', target: 4200 });
+    expect(next).toEqual({ target: 4200 });
   });
 
   it('holds its offset when a collapse fits the tolerated gap', () => {
@@ -126,7 +116,6 @@ describe('nextTailFollowState hold-tail', () => {
     // viewport must not move or earlier content would visually drop by 300px.
     const next = nextTailFollowState(holding(4000), {
       desiredScrollTop: 3700,
-      pinScrollTop: null,
       maxGapPx: MAX_GAP,
     });
     expect(next.target).toBe(4000);
@@ -135,7 +124,6 @@ describe('nextTailFollowState hold-tail', () => {
   it('gives ground only past the tolerated gap, and only by the excess', () => {
     const next = nextTailFollowState(holding(4000), {
       desiredScrollTop: 1000,
-      pinScrollTop: null,
       maxGapPx: MAX_GAP,
     });
     expect(next.target).toBe(1000 + MAX_GAP);
@@ -144,109 +132,9 @@ describe('nextTailFollowState hold-tail', () => {
   it('never drops below the content-end target', () => {
     const next = nextTailFollowState(holding(100), {
       desiredScrollTop: 900,
-      pinScrollTop: null,
       maxGapPx: MAX_GAP,
     });
     expect(next.target).toBe(900);
-  });
-});
-
-describe('nextTailFollowState pin-turn-top', () => {
-  it('holds a new Turn at the viewport top while its answer is short', () => {
-    const next = nextTailFollowState(pinning(0), {
-      desiredScrollTop: 4300,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    });
-    expect(next).toEqual({ mode: 'pin-turn-top', target: 5000 });
-  });
-
-  it('ignores the gap tolerance while pinned', () => {
-    // The blank below a freshly submitted Turn is the point of the mode.
-    const next = nextTailFollowState(pinning(5000), {
-      desiredScrollTop: 4300,
-      pinScrollTop: 5000,
-      maxGapPx: 10,
-    });
-    expect(next.target).toBe(5000);
-  });
-
-  it('stays put while a collapse shrinks content under the pin', () => {
-    const first = nextTailFollowState(pinning(0), {
-      desiredScrollTop: 4400,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    });
-    const afterCollapse = nextTailFollowState(first, {
-      desiredScrollTop: 4100,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    });
-    expect(afterCollapse.target).toBe(5000);
-  });
-
-  it('hands off to hold-tail once the answer overflows the viewport', () => {
-    const next = nextTailFollowState(pinning(5000), {
-      desiredScrollTop: 5000,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    });
-    expect(next).toEqual({ mode: 'hold-tail', target: 5000 });
-  });
-
-  it('does not regress after handing off', () => {
-    const handoff = nextTailFollowState(pinning(5000), {
-      desiredScrollTop: 5200,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    });
-    expect(handoff.mode).toBe('hold-tail');
-    const afterCollapse = nextTailFollowState(handoff, {
-      desiredScrollTop: 5000,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    });
-    expect(afterCollapse.target).toBe(5200);
-  });
-
-  it('falls back to the tail target until the Turn can be measured', () => {
-    const next = nextTailFollowState(pinning(0), {
-      desiredScrollTop: 4300,
-      pinScrollTop: null,
-      maxGapPx: MAX_GAP,
-    });
-    expect(next).toEqual({ mode: 'pin-turn-top', target: 4300 });
-  });
-});
-
-describe('memorylessFollowState', () => {
-  it('drops a held collapse gap the user has already scrolled away from', () => {
-    // The hold rule's refusal to move backwards protects a viewport it has been
-    // holding continuously. After a takeover there is nothing left to protect,
-    // and reinstating the old offset would land on a position nobody chose.
-    expect(memorylessFollowState('hold-tail', {
-      desiredScrollTop: 3700,
-      pinScrollTop: null,
-      maxGapPx: MAX_GAP,
-    }).target).toBe(3700);
-  });
-
-  it('still prefers a pinned Turn over the content end', () => {
-    expect(memorylessFollowState('pin-turn-top', {
-      desiredScrollTop: 4300,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    })).toEqual({ mode: 'pin-turn-top', target: 5000 });
-  });
-
-  it('reports the crossover so a suspended pin can be retired', () => {
-    // No frame loop runs while the user owns the viewport, so this is the only
-    // place a pin whose answer outgrew the viewport can be noticed.
-    expect(memorylessFollowState('pin-turn-top', {
-      desiredScrollTop: 5200,
-      pinScrollTop: 5000,
-      maxGapPx: MAX_GAP,
-    })).toEqual({ mode: 'hold-tail', target: 5200 });
   });
 });
 
@@ -262,7 +150,7 @@ describe('isViewportAtTail', () => {
     })).toBe(true);
   });
 
-  it('counts a pinned Turn, which is at the tail by its own rule', () => {
+  it('counts a reveal position owned by follow-output', () => {
     expect(isViewportAtTail({
       scrollTop: 5000,
       contentEndScrollTop: contentEnd,
@@ -303,9 +191,7 @@ describe('resolveAnimatedJumpBehavior', () => {
     })).toBe('smooth');
   });
 
-  it('animates a pinned Turn coming back into place, which is under a screen', () => {
-    // The `pin-turn-top` branch of a jump to latest, where the newest Turn's
-    // answer is shorter than the viewport by construction.
+  it('animates a nearby follow target coming back into place', () => {
     expect(resolveAnimatedJumpBehavior({
       fromPx: 12_000,
       targetPx: 12_180,
@@ -356,8 +242,7 @@ describe('resolveAnimatedJumpBehavior', () => {
   });
 
   it('judges the distance travelled, whichever way it goes', () => {
-    // A jump to latest normally scrolls down, but `pin-turn-top` can aim above
-    // the viewport when a restored tail presentation arrives under a pin.
+    // A follow target can be above the viewport. Distance is absolute either way.
     expect(resolveAnimatedJumpBehavior({
       fromPx: 9000,
       targetPx: 9000 - budget - 1,

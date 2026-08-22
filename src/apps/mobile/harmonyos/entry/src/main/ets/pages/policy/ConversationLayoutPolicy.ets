@@ -8,6 +8,16 @@ export class ConversationLayoutCrease {
   }
 }
 
+export class ConversationLayoutHorizontalCrease {
+  readonly top: number;
+  readonly height: number;
+
+  constructor(top: number, height: number) {
+    this.top = top;
+    this.height = height;
+  }
+}
+
 export class ConversationLayoutRect {
   readonly left: number;
   readonly top: number;
@@ -19,6 +29,19 @@ export class ConversationLayoutRect {
     this.top = top;
     this.width = width;
     this.height = height;
+  }
+}
+
+export class ConversationLayoutCreases {
+  readonly vertical: ConversationLayoutCrease[];
+  readonly horizontal: ConversationLayoutHorizontalCrease[];
+
+  constructor(
+    vertical: ConversationLayoutCrease[],
+    horizontal: ConversationLayoutHorizontalCrease[]
+  ) {
+    this.vertical = vertical;
+    this.horizontal = horizontal;
   }
 }
 
@@ -47,16 +70,6 @@ export class ConversationLayoutGeometry {
     this.detailContentWidth = detailContentWidth;
     this.collapsedDetailContentOffset = collapsedDetailContentOffset;
     this.collapsedDetailContentWidth = collapsedDetailContentWidth;
-  }
-}
-
-class ConversationLayoutSegment {
-  readonly left: number;
-  readonly width: number;
-
-  constructor(left: number, width: number) {
-    this.left = left;
-    this.width = width;
   }
 }
 
@@ -131,30 +144,91 @@ export class ConversationLayoutPolicy {
     return areaWidth > 0 ? areaWidth : layoutWidth;
   }
 
+  static classifyCreaseRects(
+    viewportWidth: number,
+    viewportHeight: number,
+    rects: ConversationLayoutRect[]
+  ): ConversationLayoutCreases {
+    const vertical: ConversationLayoutCrease[] = [];
+    const horizontal: ConversationLayoutHorizontalCrease[] = [];
+    rects.forEach((rect: ConversationLayoutRect): void => {
+      if (rect.width < 0 || rect.height < 0) {
+        return;
+      }
+      const mappedVertical = ConversationLayoutPolicy.mapVerticalCrease(
+        viewportWidth,
+        viewportHeight,
+        rect
+      );
+      if (mappedVertical) {
+        vertical.push(mappedVertical);
+        return;
+      }
+      const mappedHorizontal = ConversationLayoutPolicy.mapHorizontalCrease(viewportWidth, rect);
+      if (mappedHorizontal) {
+        horizontal.push(mappedHorizontal);
+      }
+    });
+    return new ConversationLayoutCreases(
+      ConversationLayoutPolicy.visibleCreases(viewportWidth, vertical),
+      ConversationLayoutPolicy.visibleHorizontalCreases(viewportHeight, horizontal)
+    );
+  }
+
   static verticalCreasesFromRects(
     viewportWidth: number,
     viewportHeight: number,
     rects: ConversationLayoutRect[]
   ): ConversationLayoutCrease[] {
-    const mapped: ConversationLayoutCrease[] = [];
-    rects.forEach((rect: ConversationLayoutRect): void => {
-      if (rect.width < 0 || rect.height < 0) {
-        return;
-      }
-      if (rect.height > rect.width) {
-        mapped.push(new ConversationLayoutCrease(rect.left, rect.width));
-        return;
-      }
-      if (viewportWidth <= 0 || viewportHeight <= 0) {
-        return;
-      }
-      const spansViewportWidth = rect.width >= viewportWidth * 0.8;
-      const spansViewportHeight = rect.width >= viewportHeight * 0.8;
-      if (!spansViewportWidth && spansViewportHeight) {
-        mapped.push(new ConversationLayoutCrease(rect.top, rect.height));
-      }
-    });
-    return ConversationLayoutPolicy.visibleCreases(viewportWidth, mapped);
+    return ConversationLayoutPolicy.classifyCreaseRects(
+      viewportWidth,
+      viewportHeight,
+      rects
+    ).vertical;
+  }
+
+  static horizontalCreasesFromRects(
+    viewportWidth: number,
+    viewportHeight: number,
+    rects: ConversationLayoutRect[]
+  ): ConversationLayoutHorizontalCrease[] {
+    return ConversationLayoutPolicy.classifyCreaseRects(
+      viewportWidth,
+      viewportHeight,
+      rects
+    ).horizontal;
+  }
+
+  private static mapVerticalCrease(
+    viewportWidth: number,
+    viewportHeight: number,
+    rect: ConversationLayoutRect
+  ): ConversationLayoutCrease | undefined {
+    if (rect.height > rect.width) {
+      return new ConversationLayoutCrease(rect.left, rect.width);
+    }
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return undefined;
+    }
+    const spansViewportHeight = rect.width >= viewportHeight * 0.8;
+    const rotatedRight = rect.top + rect.height;
+    if (spansViewportHeight && rect.top > 0 && rotatedRight < viewportWidth) {
+      return new ConversationLayoutCrease(rect.top, rect.height);
+    }
+    return undefined;
+  }
+
+  private static mapHorizontalCrease(
+    viewportWidth: number,
+    rect: ConversationLayoutRect
+  ): ConversationLayoutHorizontalCrease | undefined {
+    if (rect.width <= rect.height) {
+      return undefined;
+    }
+    if (viewportWidth > 0 && rect.width < viewportWidth * 0.8) {
+      return undefined;
+    }
+    return new ConversationLayoutHorizontalCrease(rect.top, rect.height);
   }
 
   static useMasterDetail(
@@ -193,41 +267,15 @@ export class ConversationLayoutPolicy {
     const masterDetailGap = firstCrease ? Math.max(0, firstCrease.width) : 0;
     const detailStart = masterPaneWidth + masterDetailGap;
     const detailWidth = Math.max(0, viewportWidth - detailStart);
-    const collapsedContentSegment = ConversationLayoutPolicy.collapsedContentSegment(
-      viewportWidth,
-      visibleCreases,
-      detailStart,
-      detailWidth
-    );
     return new ConversationLayoutGeometry(
       masterPaneWidth,
       masterDetailGap,
       visibleCreases.length > 1 || viewportWidth >= ConversationLayoutPolicy.LG_MIN_WIDTH,
       0,
       detailWidth,
-      collapsedContentSegment.left,
-      collapsedContentSegment.width
+      0,
+      Math.max(0, viewportWidth)
     );
-  }
-
-  private static collapsedContentSegment(
-    viewportWidth: number,
-    visibleCreases: ConversationLayoutCrease[],
-    detailStart: number,
-    detailWidth: number
-  ): ConversationLayoutSegment {
-    if (visibleCreases.length === 0) {
-      return new ConversationLayoutSegment(0, Math.max(0, viewportWidth));
-    }
-    if (visibleCreases.length === 1) {
-      const widest = ConversationLayoutPolicy.widestSegment(
-        ConversationLayoutPolicy.detailSegments(viewportWidth, 0, visibleCreases)
-      );
-      if (widest && widest.width <= viewportWidth * 0.55) {
-        return new ConversationLayoutSegment(0, Math.max(0, viewportWidth));
-      }
-    }
-    return new ConversationLayoutSegment(detailStart, detailWidth);
   }
 
   static effectiveVerticalCreases(
@@ -260,38 +308,6 @@ export class ConversationLayoutPolicy {
       Math.min(centered, maximumMaster)
     );
     return new ConversationLayoutCrease(masterPaneWidth, hinge);
-  }
-
-  private static detailSegments(
-    viewportWidth: number,
-    detailStart: number,
-    visibleCreases: ConversationLayoutCrease[]
-  ): ConversationLayoutSegment[] {
-    if (viewportWidth <= detailStart) {
-      return [];
-    }
-    const detailCreases = visibleCreases.filter((crease: ConversationLayoutCrease): boolean => {
-      return crease.left >= detailStart;
-    });
-    const segments: ConversationLayoutSegment[] = [];
-    let segmentStart = detailStart;
-    detailCreases.forEach((crease: ConversationLayoutCrease): void => {
-      if (crease.left > segmentStart) {
-        segments.push(new ConversationLayoutSegment(segmentStart, crease.left - segmentStart));
-      }
-      segmentStart = Math.max(segmentStart, crease.left + crease.width);
-    });
-    segments.push(new ConversationLayoutSegment(segmentStart, viewportWidth - segmentStart));
-    return segments;
-  }
-
-  private static widestSegment(segments: ConversationLayoutSegment[]): ConversationLayoutSegment | undefined {
-    return segments.reduce((widest: ConversationLayoutSegment | undefined, segment: ConversationLayoutSegment) => {
-      if (!widest || segment.width >= widest.width) {
-        return segment;
-      }
-      return widest;
-    }, undefined);
   }
 
   private static canFitMasterDetail(
@@ -337,5 +353,21 @@ export class ConversationLayoutPolicy {
         return crease.left > 0 && crease.width >= 0 && crease.left + crease.width < viewportWidth;
       })
       .sort((left: ConversationLayoutCrease, right: ConversationLayoutCrease): number => left.left - right.left);
+  }
+
+  private static visibleHorizontalCreases(
+    viewportHeight: number,
+    creases: ConversationLayoutHorizontalCrease[]
+  ): ConversationLayoutHorizontalCrease[] {
+    return creases
+      .filter((crease: ConversationLayoutHorizontalCrease): boolean => {
+        return crease.top > 0 &&
+          crease.height >= 0 &&
+          crease.top + crease.height < viewportHeight;
+      })
+      .sort((
+        left: ConversationLayoutHorizontalCrease,
+        right: ConversationLayoutHorizontalCrease
+      ): number => left.top - right.top);
   }
 }

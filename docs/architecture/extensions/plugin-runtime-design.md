@@ -16,7 +16,7 @@
 
 | 名称 | 唯一含义 |
 |---|---|
-| Plugin Host | 运行 Node/Bun 与第三方 JS/TS 插件的受监督子进程；Host 不在 Rust 主应用进程内 |
+| Plugin Host | 运行 Bun 与第三方 JS/TS 插件的受监督子进程；Host 不在 Rust 主应用进程内 |
 | `PluginRuntimeClient` | Rust 主应用内部现有调用端口；校验请求和响应，管理超时、同一插件的串行调用、重复请求结果缓存、诊断与故障隔离 |
 | `ScriptToolRuntime` / `NodeScriptToolRuntime` | 现有脚本执行端口及 services 实现；当前负责 standalone Tool worker，后续 Plugin Host 的物理进程职责也应沿此边界扩展 |
 | 插件实例 | 由来源、插件身份和当前内容版本确定的已启用插件；启停事实仍由现有来源与能力模块管理 |
@@ -26,8 +26,9 @@ workspace、project、session、turn、run 和 working directory 是不同事实
 决定 Plugin Host 进程数量。只有某项并发或权威状态确实要求单一实例时，负责该状态的归属模块才能把 workspace
 或其他身份加入自己的状态键，并说明清理与迁移语义。
 
-Rust 主应用不执行第三方 JS/TS，也没有 Plugin Host 对象。它通过 `PluginRuntimeClient`、生态适配器和 services 层
-现有脚本执行实现向子进程发送类型明确的请求，并把结果交回 Tool、Config、Permission、Session、Event、TUI 等现有归属模块。
+当前产品运行路径不执行第三方 package 插件。仓库中的 Bun Host、RPC 和 OpenCode 适配代码是协议与进程隔离基础，
+由 fixture/mock 验证；Desktop 与 CLI 的自动启动策略保持关闭。在 contribution 归属、执行许可和故障恢复接入既有
+Tool、Config、Permission、Session、Event、TUI 等模块之前，不得把这套基础设施视为已交付的插件执行能力。
 
 ## 2. 职责
 
@@ -37,7 +38,7 @@ flowchart LR
   Client["PluginRuntimeClient"]
   Adapter["生态适配器"]
   Service["Process service"]
-  Host["Plugin Host\nNode/Bun"]
+  Host["Plugin Host\nBun"]
 
   Owners <--> Client
   Client <--> Adapter
@@ -256,6 +257,7 @@ flowchart LR
   subgraph Current["current implementation"]
     Manifest["Plugin manifest"] --> Static["Static preview"]
     Script["Standalone .js tool"] --> Worker["Dedicated worker"]
+    Fixture["Protocol fixtures"] --> Foundation["Bun Host foundation"]
   end
 
   subgraph Planned["planned runtime"]
@@ -272,6 +274,8 @@ flowchart LR
 当前受管 `bitfun.plugin.json` 链路仍只有来源校验、启停记录、CLI 诊断和 custom tool 静态预览，不执行 package
 plugin、Hook、完整 Client 或 TUI 插件入口。与其独立的 standalone `.js` Tool 端到端能力当前由
 `ScriptToolRuntime` 为每个脚本启动 Node worker；这是现有窄实现事实，不是目标 package-plugin 的进程模型。
+Bun Host 基础设施仅覆盖模块加载、RPC/HTTP 桥和进程树生命周期等隔离边界；配置插件时 CLI 会明确报告该执行链路
+尚未启用，不会静默导入或运行插件代码。
 
 因此当前代码不得声称已经具备共享 Plugin Host、安全重启、通用进程级恢复或 Bun 兼容。目标实现应先用
 固定 OpenCode fixture 验证多个插件的顺序初始化、Hook 顺序、共享进程崩溃、安全重启和状态恢复，再替换现有

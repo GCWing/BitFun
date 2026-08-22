@@ -160,36 +160,63 @@ assert_entrypoint_pair() {
   fi
 }
 
+assert_plugin_host_resources() {
+  local directory="$1"
+  local entry
+  for entry in extension-host.js; do
+    if [ ! -f "${directory}/${entry}" ]; then
+      echo "Error: plugin Host resource is missing: ${directory}/${entry}" >&2
+      return 1
+    fi
+  done
+}
+
 install_entrypoint_pair() {
   local primary_source="$1"
   local legacy_source="$2"
-  local destination="$3"
-  local stage_dir staged_primary staged_legacy primary_target legacy_target
-  local primary_backup legacy_backup
-  local primary_backed_up=0 legacy_backed_up=0 primary_committed=0 legacy_committed=0
+  local plugin_host_source="$3"
+  local destination="$4"
+  local stage_dir staged_primary staged_legacy staged_plugin_host
+  local primary_target legacy_target plugin_host_target
+  local primary_backup legacy_backup plugin_host_backup
+  local primary_backed_up=0 legacy_backed_up=0 plugin_host_backed_up=0
+  local primary_committed=0 legacy_committed=0 plugin_host_committed=0
   local failed=0
 
   mkdir -p "$destination"
   stage_dir="$(mktemp -d "${destination}/.bitfun-install.XXXXXX")"
   staged_primary="${stage_dir}/bitfun"
   staged_legacy="${stage_dir}/bitfun-cli"
+  staged_plugin_host="${stage_dir}/ext-host"
   primary_target="${destination}/bitfun"
   legacy_target="${destination}/bitfun-cli"
+  plugin_host_target="${destination}/resources/ext-host"
   primary_backup="${stage_dir}/previous-bitfun"
   legacy_backup="${stage_dir}/previous-bitfun-cli"
+  plugin_host_backup="${stage_dir}/previous-ext-host"
 
   install -m 755 "$primary_source" "$staged_primary" || failed=1
   if [ "$failed" -eq 0 ]; then
     install -m 755 "$legacy_source" "$staged_legacy" || failed=1
   fi
   if [ "$failed" -eq 0 ]; then
+    mkdir -p "$staged_plugin_host"
+    cp "$plugin_host_source/extension-host.js" "$staged_plugin_host/" || failed=1
+  fi
+  if [ "$failed" -eq 0 ]; then
     assert_entrypoint_pair "$staged_primary" "$staged_legacy" || failed=1
+  fi
+  if [ "$failed" -eq 0 ]; then
+    assert_plugin_host_resources "$staged_plugin_host" || failed=1
   fi
   if [ "$failed" -eq 0 ] && { [ -e "$primary_target" ] || [ -L "$primary_target" ]; }; then
     if mv "$primary_target" "$primary_backup"; then primary_backed_up=1; else failed=1; fi
   fi
   if [ "$failed" -eq 0 ] && { [ -e "$legacy_target" ] || [ -L "$legacy_target" ]; }; then
     if mv "$legacy_target" "$legacy_backup"; then legacy_backed_up=1; else failed=1; fi
+  fi
+  if [ "$failed" -eq 0 ] && [ -d "$plugin_host_target" ]; then
+    if mv "$plugin_host_target" "$plugin_host_backup"; then plugin_host_backed_up=1; else failed=1; fi
   fi
   if [ "$failed" -eq 0 ]; then
     if mv "$staged_primary" "$primary_target"; then primary_committed=1; else failed=1; fi
@@ -198,14 +225,26 @@ install_entrypoint_pair() {
     if mv "$staged_legacy" "$legacy_target"; then legacy_committed=1; else failed=1; fi
   fi
   if [ "$failed" -eq 0 ]; then
+    mkdir -p "$(dirname "$plugin_host_target")"
+    if mv "$staged_plugin_host" "$plugin_host_target"; then plugin_host_committed=1; else failed=1; fi
+  fi
+  if [ "$failed" -eq 0 ]; then
     assert_entrypoint_pair "$primary_target" "$legacy_target" || failed=1
+  fi
+  if [ "$failed" -eq 0 ]; then
+    assert_plugin_host_resources "$plugin_host_target" || failed=1
   fi
 
   if [ "$failed" -ne 0 ]; then
+    if [ "$plugin_host_committed" -eq 1 ]; then rm -rf "$plugin_host_target"; fi
     if [ "$legacy_committed" -eq 1 ]; then rm -f "$legacy_target"; fi
     if [ "$primary_committed" -eq 1 ]; then rm -f "$primary_target"; fi
     if [ "$legacy_backed_up" -eq 1 ]; then mv "$legacy_backup" "$legacy_target"; fi
     if [ "$primary_backed_up" -eq 1 ]; then mv "$primary_backup" "$primary_target"; fi
+    if [ "$plugin_host_backed_up" -eq 1 ]; then
+      mkdir -p "$(dirname "$plugin_host_target")"
+      mv "$plugin_host_backup" "$plugin_host_target"
+    fi
     rm -rf "$stage_dir"
     echo "Error: CLI installation failed; the previous entrypoint pair was restored." >&2
     return 1
@@ -324,19 +363,22 @@ else
 fi
 BUILT_BIN="${RELEASE_DIR}/bitfun"
 BUILT_LEGACY_BIN="${RELEASE_DIR}/bitfun-cli"
+PLUGIN_HOST_DIST="${REPO_ROOT}/src/apps/extension-host/dist"
 for binary in "$BUILT_BIN" "$BUILT_LEGACY_BIN"; do
   if [ ! -x "$binary" ]; then
     echo "Error: built binary not found at $binary"
     exit 1
   fi
 done
+assert_plugin_host_resources "$PLUGIN_HOST_DIST"
 
 echo ""
 echo "[2/4] Installing binaries..."
-install_entrypoint_pair "$BUILT_BIN" "$BUILT_LEGACY_BIN" "$BIN_DIR"
+install_entrypoint_pair "$BUILT_BIN" "$BUILT_LEGACY_BIN" "$PLUGIN_HOST_DIST" "$BIN_DIR"
 echo "Installed: ${BIN_DIR}/bitfun"
 echo "Installed deprecated compatibility entrypoint: ${BIN_DIR}/bitfun-cli"
 assert_entrypoint_pair "${BIN_DIR}/bitfun" "${BIN_DIR}/bitfun-cli"
+assert_plugin_host_resources "${BIN_DIR}/resources/ext-host"
 
 echo ""
 echo "[3/4] Configuring shell PATH..."

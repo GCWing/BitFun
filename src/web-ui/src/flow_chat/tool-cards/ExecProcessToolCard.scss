@@ -1,6 +1,71 @@
 @use './TerminalToolCard.scss';
 
 .exec-process-tool-card {
+  .exec-process-output-frame {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+
+    &--compact {
+      height: 86px;
+    }
+
+    &--expanded {
+      height: 320px;
+    }
+
+    > .terminal-execution-output,
+    > .terminal-result-output {
+      height: 100%;
+      min-height: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    > .terminal-execution-output.terminal-waiting {
+      min-height: 0;
+    }
+
+    .exec-process-output-copy-region,
+    .terminal-xterm-output,
+    .terminal-output-renderer,
+    .terminal-output-pre {
+      height: 100% !important;
+      max-height: 100% !important;
+    }
+
+    .exec-process-output-placeholder {
+      height: 100%;
+    }
+  }
+
+  .exec-process-stable-body {
+    // The shared terminal footer extends into the expanded container's bottom
+    // padding via its negative bottom margin. Exclude that padding from the
+    // compact body's minimum height so the footer reaches the card edge.
+    min-height: calc(
+      86px + 27.7px - var(--bf-appearance-token-flowchat-card-expanded-pad-y)
+    );
+  }
+
+  .exec-process-result-footer {
+    min-height: 27.7px;
+    height: 27.7px;
+    overflow: hidden;
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .exec-process-footer-placeholder {
+    display: block;
+    width: 100%;
+    height: 1em;
+  }
+
   .exec-process-output-copy-region {
     position: relative;
   }

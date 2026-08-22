@@ -14,6 +14,7 @@ import { useFlowChatVolatileContext } from './FlowChatContext';
 import { TurnCompletionNoticeItem } from './TurnCompletionNoticeItem';
 import { TurnFailureNoticeItem } from './TurnFailureNoticeItem';
 import './VirtualItemRenderer.scss';
+import { getVirtualItemStableKey } from './virtualItemIdentity';
 
 interface VirtualItemRendererProps {
   item: VirtualItem;
@@ -125,6 +126,7 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
         data-testid="flowchat-message-item"
         data-turn-id={item.turnId}
         data-item-type={item.type}
+        data-virtual-item-key={getVirtualItemStableKey(item)}
         data-virtual-index={index}
         data-item-index={index}
       >

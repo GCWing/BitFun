@@ -858,6 +858,8 @@ impl CliAgentRuntimeClient {
             self.resolve_session_workspace_binding(session_id, &project_workspace)
                 .await?
         };
+        self.ensure_embedded_plugin_workspace_ready(&binding)
+            .await?;
         let mut session_id_guard = self.session_id.lock().await;
         let mut turn_id_guard = self.current_turn_id.lock().await;
         *session_id_guard = Some(session_id.to_string());
@@ -947,6 +949,31 @@ impl CliAgentRuntimeClient {
                 "reload_session_context",
             ),
         }
+    }
+
+    async fn ensure_embedded_plugin_workspace_ready(
+        &self,
+        binding: &AgentSessionWorkspaceBinding,
+    ) -> Result<()> {
+        if matches!(&self.backend, CliAgentRuntimeBackend::Shared(_)) {
+            return Ok(());
+        }
+        crate::plugin_host_activation::ensure_plugin_workspace_ready(binding)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
+    async fn ensure_embedded_plugin_session_ready(&self, session_id: &str) -> Result<()> {
+        if matches!(&self.backend, CliAgentRuntimeBackend::Shared(_)) {
+            return Ok(());
+        }
+        // Session creation holds session_id until activation has completed.
+        // Resolve directly instead of re-locking that non-reentrant mutex.
+        let project_workspace = self.project_workspace_path_buf();
+        let binding = self
+            .resolve_session_workspace_binding(session_id, &project_workspace)
+            .await?;
+        self.ensure_embedded_plugin_workspace_ready(&binding).await
     }
 
     pub(crate) async fn delete_session(
@@ -1154,6 +1181,8 @@ impl CliAgentRuntimeClient {
             self.resolve_session_workspace_binding(&session.session_id, Path::new(&workspace_path))
                 .await?
         };
+        self.ensure_embedded_plugin_workspace_ready(&binding)
+            .await?;
         *self.session_id.lock().await = Some(session.session_id.clone());
         *self.current_turn_id.lock().await = None;
         self.shared_pending_permissions
@@ -1354,7 +1383,10 @@ impl CliAgentRuntimeClient {
             .await
         {
             Ok(_) => {
-                self.resolve_session_workspace_binding(session_id, &project_workspace)
+                let binding = self
+                    .resolve_session_workspace_binding(session_id, &project_workspace)
+                    .await?;
+                self.ensure_embedded_plugin_workspace_ready(&binding)
                     .await?;
                 tracing::info!("Backend session restored: {}", session_id);
                 Ok(())
@@ -1366,7 +1398,9 @@ impl CliAgentRuntimeClient {
                         "Session is unavailable, recreating backend session: {}",
                         session_id
                     );
-                    self.recreate_session_with_id(session_id, agent_type).await
+                    self.recreate_session_with_id(session_id, agent_type)
+                        .await?;
+                    self.ensure_embedded_plugin_session_ready(session_id).await
                 } else {
                     Err(with_session_conflict_help(anyhow::Error::new(error)))
                 }
@@ -1405,6 +1439,7 @@ impl CliAgentRuntimeClient {
             .map_err(with_session_conflict_help)?;
 
         let id = session.session_id.clone();
+        self.ensure_embedded_plugin_session_ready(&id).await?;
         *session_id_guard = Some(id.clone());
         tracing::info!("Created runtime session with fixed id: {}", id);
 
@@ -1458,6 +1493,7 @@ impl CliAgentRuntimeClient {
 
         let id = session.session_id.clone();
 
+        self.ensure_embedded_plugin_session_ready(&id).await?;
         *session_id_guard = Some(id.clone());
         drop(session_id_guard);
         self.refresh_shared_pending_permissions().await?;
@@ -1580,6 +1616,8 @@ impl CliAgentRuntimeClient {
         agent_type: &str,
     ) -> Result<String> {
         tracing::info!("Sending message to session {}: {}", session_id, message);
+        self.ensure_embedded_plugin_session_ready(&session_id)
+            .await?;
 
         // Generate a turn_id
         let turn_id = uuid::Uuid::new_v4().to_string();
@@ -1717,6 +1755,8 @@ impl CliAgentRuntimeClient {
         agent_type: &str,
     ) -> Result<String> {
         let session_id = self.ensure_session(agent_type).await?;
+        self.ensure_embedded_plugin_session_ready(&session_id)
+            .await?;
         let turn_id = uuid::Uuid::new_v4().to_string();
         let request = AgentUserShellCommandRequest {
             session_id: session_id.clone(),
@@ -1899,6 +1939,7 @@ impl CliAgentRuntimeClient {
 
         let id = session.session_id.clone();
 
+        self.ensure_embedded_plugin_session_ready(&id).await?;
         *self.session_id.lock().await = Some(id.clone());
         *self.current_turn_id.lock().await = None;
         self.shared_pending_permissions

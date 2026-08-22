@@ -53,6 +53,13 @@ export interface FlowChatContext {
   /** Session IDs that the user explicitly cancelled; used to skip unread marking */
   userCancelledSessionIds: Set<string>;
   /**
+   * Sessions whose durable history fence (`SessionHistoryChanged`) arrived
+   * while the local Turn was still finalizing. Consumed by the completion
+   * finalizer so each settled Turn performs exactly one host-tail reconcile,
+   * and only after the Runtime committed the terminal record.
+   */
+  pendingHistoryFenceSessions: Set<string>;
+  /**
    * Turn IDs whose terminal lifecycle event (cancelled / failed / completed)
    * has already been applied. Backend may emit the same terminal event twice
    * (e.g. cancelled emitted both by the execution engine when a cancel is

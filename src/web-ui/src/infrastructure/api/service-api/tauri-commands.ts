@@ -248,7 +248,13 @@ export type SearchBackendKind =
 export interface SearchMetadata {
   backend: SearchBackendKind | string;
   repoPhase: WorkspaceSearchRepoPhase | string;
-  rebuildRecommended: boolean;
+  baseAdvanceInProgress: boolean;
+  /**
+   * True when the daemon still owed a worktree reconcile at query time, so these results describe the
+   * worktree as of the last observation. Interactive search accepts that on purpose rather than
+   * blocking the panel on a worktree walk.
+   */
+  workspaceProbePending: boolean;
   candidateDocs: number;
   matchedLines: number;
   matchedOccurrences: number;
@@ -266,6 +272,8 @@ export type WorkspaceSearchRepoPhase =
 export type WorkspaceSearchTaskKind =
   | 'build'
   | 'rebuild'
+  | 'advance'
+  | 'compact'
   | 'refresh';
 
 export type WorkspaceSearchTaskState =
@@ -296,17 +304,35 @@ export interface WorkspaceSearchRepoStatus {
   workspaceOverlayRoot: string;
   phase: WorkspaceSearchRepoPhase;
   snapshotKey?: string | null;
+  baseHeadCommit?: string | null;
+  workspaceHeadCommit?: string | null;
+  /** True while the daemon is advancing the base snapshot toward a newer commit. */
+  baseAdvanceInProgress: boolean;
+  baseAdvanceTargetHead?: string | null;
+  baseDeltaDepth: number;
+  baseCompactionRecommended: boolean;
   lastProbeUnixSecs?: number | null;
   lastRebuildUnixSecs?: number | null;
   dirtyFiles: WorkspaceSearchDirtyFiles;
-  rebuildRecommended: boolean;
   activeTaskId?: string | null;
   probeHealthy: boolean;
+  /**
+   * True while the daemon still owes a worktree reconcile, which makes `dirtyFiles` and `phase` the
+   * last observed state rather than the current one. Search results stay usable; they just describe
+   * a worktree from a moment ago.
+   */
+  workspaceProbePending: boolean;
   lastError?: string | null;
+  /**
+   * Failure of the daemon's last background base-maintenance task. Survives the worktree probes
+   * that clear `lastError`, so status polling can actually observe it.
+   */
+  lastMaintenanceError?: string | null;
   overlay?: WorkspaceSearchOverlayStatus | null;
 }
 
 export interface WorkspaceSearchOverlayStatus {
+  baseManifestId?: string | null;
   committedSeqNo: number;
   lastSeqNo: number;
   uncommittedOps: number;
@@ -337,9 +363,33 @@ export interface WorkspaceSearchTaskStatus {
   error?: string | null;
 }
 
+/**
+ * Outcome of BitFun's automatic-index policy. The daemon reports `needs_index` both while the
+ * policy is still evaluating a workspace and after it deliberately declined to index one, so the
+ * daemon phase alone cannot explain to the user why nothing is happening.
+ */
+export type WorkspaceSearchAutoIndexDecision =
+  | 'pending'
+  | 'eligible'
+  | 'belowThreshold'
+  | 'unsupported';
+
+export interface WorkspaceSearchAutoIndexStatus {
+  decision: WorkspaceSearchAutoIndexDecision;
+  threshold: number;
+  /**
+   * Exact for `belowThreshold`. For `eligible` the count stops as soon as the threshold is
+   * reached, so it is only a lower bound there. Absent for `pending` and `unsupported`.
+   */
+  indexableFiles?: number | null;
+  reason?: string | null;
+}
+
 export interface WorkspaceSearchIndexStatus {
   repoStatus: WorkspaceSearchRepoStatus;
   activeTask?: WorkspaceSearchTaskStatus | null;
+  /** Absent on transports without a BitFun-side auto-index policy (remote SSH workspaces). */
+  autoIndex?: WorkspaceSearchAutoIndexStatus | null;
 }
 
 export interface WorkspaceSearchIndexTaskHandle {

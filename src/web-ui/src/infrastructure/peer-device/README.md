@@ -80,7 +80,11 @@ Still to migrate, in order: the interaction mailbox, then history positions.
      *every* turn reads as idle and qualifies for replacement.
      That combination erased the whole response and left only the prompt on
      screen (regression: 2026-08-15). `snapshotDropsProjectedTurnContent` gates
-     the replace; the refresh loop still re-attaches an executing turn when a
+     the replace. Equal item counts are not sufficient: text and thinking must
+     preserve prefix progress, and completed tool results may not disappear.
+     Recognized client-derived display cards are carried across the terminal
+     host-tail repair instead of blocking authoritative text reconciliation.
+     The refresh loop still re-attaches an executing turn when a
      snapshot is refused, or a rebuilt surface would render it as static
      history.
    - **Surface-scoped events must stay routed by source device.** Background
@@ -204,6 +208,13 @@ Still to migrate, in order: the interaction mailbox, then history positions.
     attach and freeze the receiver while the Host kept streaming.
     A CLI Peer Host still filters Host-local turns with `owns()`; that is a
     CLI Host limitation, not a reason for a Desktop receiver to freeze.
+
+    **Terminal delivery is not the durability fence.** The Host may publish
+    `DialogTurnCompleted` before its complete generation journal has been
+    committed. After the commit it publishes `SessionHistoryChanged`; local and
+    Peer surfaces then reconcile the terminal tail from that Host. The
+    controller must not echo a shorter painted prefix over the settled record,
+    even when the prefix has the same round and item counts.
 
     **The subscription and the attach loop must never be able to disable each
     other.** The agentic subscription is this window's only live view of a

@@ -1,5 +1,6 @@
 //! Account and settings-sync App Server wire schemas.
 
+#[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
@@ -7,8 +8,9 @@ pub use bitfun_product_domains::account::{
     AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus,
 };
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "account/snapshot", response = AccountSnapshotResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "account/snapshot", response = AccountSnapshotResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountSnapshotRequest {
     pub workspace_path: String,
@@ -23,7 +25,8 @@ impl std::fmt::Debug for AccountSnapshotRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSnapshotResponse {
     pub logged_in: bool,
@@ -35,8 +38,9 @@ pub struct AccountSnapshotResponse {
     pub sync: SettingsSyncProgress,
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "account/login", response = AccountLoginResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "account/login", response = AccountLoginResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountLoginRequest {
     pub operation_id: String,
@@ -57,7 +61,8 @@ impl std::fmt::Debug for AccountLoginRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct AccountLoginResponse {
     pub user_id: String,
@@ -66,8 +71,9 @@ pub struct AccountLoginResponse {
     pub status_message: String,
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "account/finalizeLogin", response = AccountSnapshotResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "account/finalizeLogin", response = AccountSnapshotResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountFinalizeLoginRequest {
     pub operation_id: String,
@@ -93,8 +99,9 @@ impl std::fmt::Debug for AccountFinalizeLoginRequest {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "account/logout", response = AccountSnapshotResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "account/logout", response = AccountSnapshotResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountLogoutRequest {
     pub operation_id: String,
@@ -111,8 +118,9 @@ impl std::fmt::Debug for AccountLogoutRequest {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "settingsSync/start", response = SettingsSyncResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "settingsSync/start", response = SettingsSyncResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettingsSyncStartRequest {
     pub operation_id: String,
@@ -131,8 +139,9 @@ impl std::fmt::Debug for SettingsSyncStartRequest {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "settingsSync/snapshot", response = SettingsSyncResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "settingsSync/snapshot", response = SettingsSyncResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettingsSyncSnapshotRequest {
     pub workspace_path: String,
@@ -147,8 +156,9 @@ impl std::fmt::Debug for SettingsSyncSnapshotRequest {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "settingsSync/cancel", response = SettingsSyncResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "settingsSync/cancel", response = SettingsSyncResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettingsSyncCancelRequest {
     pub operation_id: String,
@@ -165,8 +175,9 @@ impl std::fmt::Debug for SettingsSyncCancelRequest {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "settingsSync/localChanged", response = SettingsSyncResponse)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "settingsSync/localChanged", response = SettingsSyncResponse))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettingsSyncLocalChangedRequest {
     pub operation_id: String,
@@ -183,7 +194,8 @@ impl std::fmt::Debug for SettingsSyncLocalChangedRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsSyncResponse {
     pub progress: SettingsSyncProgress,

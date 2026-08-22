@@ -31,12 +31,15 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { downloadUrl, loginUrl, marketApi, MarketApiError } from './api';
-import { formatCompactNumber, formatMarketDate } from './format';
+import { formatCompactNumber, formatMarketDate, formatMarketDateTime } from './format';
+import { GetBitfunCta } from './GetBitfunCta';
 import { useLocale, type Locale, type MessageKey } from './i18n';
+import { BITFUN_HOME_URL } from './links';
 import { MiniAppIcon } from './MiniAppIcon';
 import { marketImageSrcSet, marketImageUrl, retryOriginalMarketImage } from './marketImages';
 import { useTheme, type Theme } from './theme';
 import type {
+  AdminSubmission,
   AdminSubmissionDetail,
   MarketConfig,
   MarketListingDetail,
@@ -145,7 +148,7 @@ function App() {
       );
     }
     if (route.path === '/admin') {
-      return <AdminPage me={me} authResolved={authResolved} t={t} />;
+      return <AdminPage me={me} authResolved={authResolved} locale={locale} t={t} />;
     }
     if (route.path === '/auth/desktop-complete') {
       return <DesktopComplete t={t} />;
@@ -190,7 +193,7 @@ function App() {
             <span>BitFun MiniApp Market</span>
           </div>
           <span className="footer-note">{t('footerNote')}</span>
-          <a href="https://openbitfun.com/" target="_blank" rel="noreferrer">
+          <a href={BITFUN_HOME_URL} target="_blank" rel="noreferrer">
             {t('bitfunHome')}
             <ArrowSquareOut aria-hidden="true" />
           </a>
@@ -452,6 +455,7 @@ function CatalogPage({
           </div>
           <h1>{t('headline')}</h1>
           <p>{t('intro')}</p>
+          <GetBitfunCta placement="catalog" t={t} />
         </div>
         <div className="hero-visual">
           <img src="/miniapp/og.png" alt={t('heroImageAlt')} />
@@ -774,6 +778,7 @@ function DetailPage({
               </button>
             )}
           </div>
+          <GetBitfunCta placement="listing" t={t} />
           <div className="rating-control" aria-label={t('ratingLabel')}>
             {[1, 2, 3, 4, 5].map((value) => (
               <button
@@ -1219,13 +1224,15 @@ function DesktopSubmissionNotice({ t }: { t: (key: MessageKey) => string }) {
 function AdminPage({
   me,
   authResolved,
+  locale,
   t,
 }: {
   me?: Me;
   authResolved: boolean;
+  locale: Locale;
   t: (key: MessageKey) => string;
 }) {
-  const [items, setItems] = useState<MarketSubmission[]>([]);
+  const [items, setItems] = useState<AdminSubmission[]>([]);
   const [selected, setSelected] = useState<AdminSubmissionDetail>();
   const [sourceName, setSourceName] = useState('meta.json');
   const [sourceMode, setSourceMode] = useState<'current' | 'diff'>('current');
@@ -1288,6 +1295,14 @@ function AdminPage({
                   <span>{item.slug}</span>
                   <span>v{item.releaseNumber}</span>
                 </small>
+                <small className="review-submission-meta">
+                  <span>{item.submitter ? `@${item.submitter.login}` : '—'}</span>
+                  <span>
+                    {item.submittedAt == null
+                      ? '—'
+                      : formatMarketDateTime(item.submittedAt, locale)}
+                  </span>
+                </small>
               </span>
               <StatusBadge status={item.status} t={t} />
             </button>
@@ -1313,6 +1328,16 @@ function AdminPage({
               </div>
               <PermissionList permissions={selected.submission.permissions} t={t} />
               <div className="review-evidence-grid">
+                <Fact
+                  label={t('submitterLabel')}
+                  value={selected.submitter ? `@${selected.submitter.login}` : '—'}
+                />
+                <Fact
+                  label={t('submittedAtLabel')}
+                  value={selected.submittedAt == null
+                    ? '—'
+                    : formatMarketDateTime(selected.submittedAt, locale)}
+                />
                 <Fact label={t('releaseLabel')} value={`v${selected.submission.releaseNumber}`} />
                 <Fact
                   label={t('minimumBitfunLabel')}
