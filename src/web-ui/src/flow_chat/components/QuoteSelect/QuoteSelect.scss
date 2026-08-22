@@ -1,0 +1,121 @@
+/**
+ * QuoteSelect 样式
+ *
+ * 说明：颜色/圆角等 token 优先走 BitFun 的 appearance/design-token 体系；
+ * 下方变量名为占位（--bf-*），合入 PR 前按仓库现有 token 对齐。
+ * （待确认项：见 README 风险项 R4）
+ */
+
+.quote-select__menu {
+  position: fixed;
+  z-index: 999999;
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  background: var(--bf-surface-primary, #fff);
+  border: 1px solid var(--bf-border-l1, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+  white-space: nowrap;
+
+  .quote-select__menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--bf-label-primary, #111827);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    font-family: inherit;
+
+    &:hover {
+      background: var(--bf-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+    }
+
+    &--copied {
+      color: var(--bf-accent, #4d6bfe);
+    }
+  }
+}
+
+.quote-select__dock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 2px 6px;
+}
+
+.quote-select__chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 8px 6px 10px;
+  background: var(--bf-interactive-bg-hover-solid, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--bf-border-l1, #e5e7eb);
+  border-radius: 10px;
+  font-size: 12px;
+
+  .quote-select__chip-ico {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    background: var(--bf-accent, #4d6bfe);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .quote-select__chip-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .quote-select__chip-label {
+    color: var(--bf-label-secondary, #6b7280);
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .quote-select__chip-text {
+    color: var(--bf-label-primary, #111827);
+    font-size: 12px;
+    line-height: 1.4;
+    max-width: 460px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .quote-select__chip-x {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--bf-label-tertiary, #9ca3af);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.14);
+      color: #ef4444;
+    }
+  }
+}

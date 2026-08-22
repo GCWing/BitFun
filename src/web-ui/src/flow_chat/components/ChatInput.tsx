@@ -226,6 +226,11 @@ export interface ChatInputProps {
    * standard composer. The registration never replaces ChatInput's UI.
    */
   registration?: ChatInputRegistration;
+  /**
+   * Host-injected area rendered above the composer (render prop so the host
+   * can subscribe to draft changes). Never replaces the composer itself.
+   */
+  composerDock?: (draft: string) => React.ReactNode;
 }
 
 type SlashActionItem = {
@@ -425,6 +430,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isSceneActive = true,
   registration,
+  composerDock,
 }) => {
   const deviceSurfaceScope = getActiveSurfaceScope();
   const { t } = useTranslation('flow-chat');
@@ -5541,6 +5547,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         <div className="bitfun-chat-input__container" data-bf-component="chat-input" data-bf-part="container">
           <AcpPlanPanel entries={acpPlanEntries} />
+          {composerDock != null && (
+            <div data-bf-component="chat-input" data-bf-part="composerDock">
+              {composerDock(inputState.value)}
+            </div>
+          )}
           <div className={`bitfun-chat-input__box ${isMultiLine ? 'bitfun-chat-input__box--multi-line' : 'bitfun-chat-input__box--capsule'}`} data-bf-component="chat-input" data-bf-part="box">
             {showTargetSwitcher && (
               <div className="bitfun-chat-input__target-switcher" data-bf-component="chat-input" data-bf-part="targetSwitcher" data-testid="chat-input-target-switcher">
