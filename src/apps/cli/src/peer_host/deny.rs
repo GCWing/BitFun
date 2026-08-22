@@ -74,6 +74,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "remote_connect_set_bot_verbose_mode",
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    "browser_webview_set_agent_target_state",
     "relay_deploy_preflight",
     "relay_deploy_install_docker",
     "relay_deploy_start",
@@ -209,6 +210,13 @@ mod tests {
         ] {
             assert!(is_local_only_command(command), "{command}");
         }
+    }
+
+    #[test]
+    fn built_in_browser_target_lifecycle_stays_on_the_controller_device() {
+        assert!(is_local_only_command(
+            "browser_webview_set_agent_target_state"
+        ));
     }
 
     /// Reading why Git refuses a repository is safe to answer for a controller

@@ -28,6 +28,7 @@ clone、`crontab` 整表安装、市场 first-install 或空 volume 的 `deploy.
 | 产品 | 公网 | 源站 | 仓库内入口 |
 | --- | --- | --- | --- |
 | 官网 + 下载页 | `https://openbitfun.com/` 、`/download` | Nginx → `BitFun-Website/dist` | 本文「官网」 |
+| BitFun Playbook | `https://playbook.openbitfun.com/` | Nginx → `/srv/bitfun-playbook/current` | 本文「BitFun Playbook」 |
 | Release 镜像 | `https://openbitfun.com/release/` | cron → `/srv/bitfun-release` | 本文「Release 镜像」；脚本在 `scripts/openbitfun-release-sync.sh` |
 | Relay | `https://remote.openbit.fun/relay` | `bitfun-relay:9700` | `src/apps/relay-server/README.md` + 本文 Nginx |
 | MiniApp 市场 | `https://market.openbitfun.com/miniapp/` | `127.0.0.1:9710` | [../miniapp-market/README.md](../miniapp-market/README.md) |
@@ -45,6 +46,7 @@ clone、`crontab` 整表安装、市场 first-install 或空 volume 的 `deploy.
 | `/root/repos/BitFun` | BitFun checkout。Relay 静态页和同步脚本从这里读 |
 | `/root/repos/BitFun-Website` | 官网独立仓库 `GCWing/BitFun-Website` |
 | `/srv/bitfun-release` | GitHub Release 镜像（禁止放进 Website `dist/`） |
+| `/srv/bitfun-playbook` | Playbook 的不可变静态版本与 `current` 软链接 |
 | `/srv/bitfun-miniapp-market` | MiniApp 专用 checkout / 数据 / 备份 |
 | `/srv/bitfun-skin-market` | Skin 专用 checkout / 数据 / 备份 |
 | `/etc/bitfun-miniapp-market/market.env` | MiniApp secrets，`root:root` `0600` |
@@ -284,6 +286,50 @@ curl -fsS -o /dev/null -w "%{http_code}\n" \
 
 更新官网：在 Website 仓库拉代码后只跑 `npm run build`，不要动 `/srv/bitfun-release`。
 
+### 5.1 BitFun Playbook
+
+Playbook 源码在 BitFun 仓库的 `website/`。功能与设置的唯一人工维护数据源是
+`src/shared/interactive-capabilities/catalog.json`；网站只读取由它生成的
+`docs/interactive-capabilities/capabilities.json`。构建与上传从开发机执行；源站只保存
+不可变静态版本，不需要 Node 运行时。
+
+```bash
+pnpm run capabilities:check
+pnpm run capabilities:test
+pnpm run website:test
+pnpm run website:build
+PLAYBOOK_RELEASE="$(node -e 'const r=require("./website/dist/release.json");process.stdout.write(r.releaseId)')"
+PLAYBOOK_SAMPLE_ID="$(node -e 'const c=require("./docs/interactive-capabilities/capabilities.json");process.stdout.write(c.capabilities[0].id)')"
+test -n "$PLAYBOOK_RELEASE"
+test -n "$PLAYBOOK_SAMPLE_ID"
+ssh lwb "install -d -m 0755 /srv/bitfun-playbook/releases/$PLAYBOOK_RELEASE"
+rsync -a --delete website/dist/ \
+  "lwb:/srv/bitfun-playbook/releases/$PLAYBOOK_RELEASE/"
+rsync -a deploy/openbitfun-host/nginx-playbook.openbitfun.com.conf \
+  lwb:/tmp/nginx-playbook.openbitfun.com.conf
+ssh lwb "set -eu
+install -m 0644 /tmp/nginx-playbook.openbitfun.com.conf \
+  /etc/nginx/sites-available/playbook.openbitfun.com
+ln -sfn /srv/bitfun-playbook/releases/$PLAYBOOK_RELEASE \
+  /srv/bitfun-playbook/current
+ln -sfn /etc/nginx/sites-available/playbook.openbitfun.com \
+  /etc/nginx/sites-enabled/playbook.openbitfun.com
+nginx -t
+systemctl reload nginx
+curl --retry 5 --retry-delay 1 --retry-all-errors -fsS -o /dev/null \
+  -H 'Host: playbook.openbitfun.com' http://127.0.0.1/
+curl --retry 5 --retry-delay 1 --retry-all-errors -fsS -o /dev/null \
+  -H 'Host: playbook.openbitfun.com' \
+  http://127.0.0.1/capabilities/$PLAYBOOK_SAMPLE_ID/
+curl --retry 5 --retry-delay 1 --retry-all-errors -fsS -o /dev/null \
+  -H 'Host: playbook.openbitfun.com' \
+  http://127.0.0.1/data/capabilities.json"
+```
+
+`systemctl reload` 返回时旧 worker 可能仍短暂接请求，所以源站验收必须带重试。
+最后通过公网检查首页、任一详情页和 `/data/capabilities.json`；若源站 Host 检查为 200、
+公网仍失败，应在云 WAF / DNS 增加该主机名，源站不要自行配置 443。
+
 ### 6. Relay
 
 必须先恢复两个 volume，再启动容器。先跑 `deploy.sh` 会建空卷，账号、同步和
@@ -414,6 +460,11 @@ install -m 0644 \
   /etc/nginx/sites-available/openbit.fun
 ln -sfn /etc/nginx/sites-available/openbit.fun /etc/nginx/sites-enabled/openbit.fun
 install -m 0644 \
+  /root/repos/BitFun/deploy/openbitfun-host/nginx-playbook.openbitfun.com.conf \
+  /etc/nginx/sites-available/playbook.openbitfun.com
+ln -sfn /etc/nginx/sites-available/playbook.openbitfun.com \
+  /etc/nginx/sites-enabled/playbook.openbitfun.com
+install -m 0644 \
   /root/repos/BitFun/deploy/openbitfun-host/nginx-remote.openbit.fun.conf \
   /etc/nginx/sites-available/remote.openbit.fun
 ln -sfn /etc/nginx/sites-available/remote.openbit.fun \
@@ -482,6 +533,7 @@ docker exec bitfun-relay /app/relay-admin --db /app/data/bitfun_relay.db list-us
 | 更新 Relay | 源码更新后 `cd src/apps/relay-server && BITFUN_MIRROR=auto bash deploy.sh`。账号 volume 会留下。 |
 | 更新 Release 镜像脚本 | 只改仓库里的 `scripts/openbitfun-release-sync.sh`。cron 已经跑这份文件。 |
 | 更新官网 | 在 `BitFun-Website` 拉代码，`source ~/.nvm/nvm.sh && nvm use 20.20.2 && npm run build`。 |
+| 更新 Playbook | 在开发机校验能力契约并运行 `pnpm run website:build`，再按「BitFun Playbook」使用 `dist/release.json` 的版本目录上传和切换 `current`。 |
 | 更新市场 | 只用对应市场手册。 |
 
 更新 BitFun 源码**不会**自动更新官网、New API 或市场容器。

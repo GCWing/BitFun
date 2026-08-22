@@ -142,6 +142,7 @@
         "files": "文件",
         "workspaces": "项目",
         "assistants": "助理",
+        "capabilities": "功能",
         "settings": "$t(shared:features.settings)"
       },
       "actions": {

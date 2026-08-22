@@ -355,6 +355,9 @@ jobs:
       - name: Check repository hygiene
         run: pnpm run check:repo-hygiene
 
+      - name: Validate interactive capability contract
+        run: pnpm run capabilities:check && pnpm run capabilities:test && pnpm run website:test && pnpm run website:build
+
       - name: Check core boundaries
         run: node --test scripts/check-core-boundaries.test.mjs
 

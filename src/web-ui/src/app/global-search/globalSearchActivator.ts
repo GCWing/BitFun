@@ -11,6 +11,7 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { activateProductAction } from './productActionActivator';
+import { activateInteractiveCapability } from './interactiveCapabilityActivator';
 import type { GlobalSearchTarget } from './types';
 
 export interface GlobalSearchActivationContext {
@@ -80,6 +81,12 @@ export async function activateGlobalSearchTarget(
     case 'settings':
       useSettingsStore.getState().openDestination(target.destination);
       useSceneStore.getState().openScene('settings');
+      return;
+    case 'capability':
+      await activateInteractiveCapability(target.capabilityId, {
+        t: context.tCommon,
+        itemId: target.itemId,
+      });
       return;
   }
 }

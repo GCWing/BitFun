@@ -1,5 +1,6 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -8,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   collectCargoMetadataGraph,
   collectCargoMetadataPackages,
+  discoverCargoManifestPaths,
   findCargoLayerViolations,
   findFeatureGatedTestTargetViolations,
   findProductEntrypointCoreFeatureViolations,
@@ -63,6 +65,26 @@ const MODULES = [
 ];
 
 const TEST_ROOT = join('C:', 'repo');
+
+test('Cargo manifest discovery ignores nested local-agent worktrees', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'bitfun-core-boundaries-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await Promise.all([
+    mkdir(join(root, 'src', 'crate'), { recursive: true }),
+    mkdir(join(root, '.claude', 'worktrees', 'other'), { recursive: true }),
+    mkdir(join(root, '.cursor', 'worktrees', 'other'), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(join(root, 'Cargo.toml'), '[workspace]\n'),
+    writeFile(join(root, 'src', 'crate', 'Cargo.toml'), '[package]\nname="kept"\nversion="0.1.0"\n'),
+    writeFile(join(root, '.claude', 'worktrees', 'other', 'Cargo.toml'), '[package]\nname="ignored-claude"\nversion="0.1.0"\n'),
+    writeFile(join(root, '.cursor', 'worktrees', 'other', 'Cargo.toml'), '[package]\nname="ignored-cursor"\nversion="0.1.0"\n'),
+  ]);
+
+  const manifests = discoverCargoManifestPaths(root)
+    .map((manifest) => manifest.slice(root.length + 1).replaceAll('\\', '/'));
+  assert.deepEqual(manifests, ['Cargo.toml', 'src/crate/Cargo.toml']);
+});
 
 test('App Server TypeScript capability is owned by the protocol crate', () => {
   const appServerTs = coreClosedFeatureProfileRules.find(

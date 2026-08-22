@@ -1,6 +1,6 @@
-//! Atomic browser actions implemented via CDP commands.
+//! Atomic browser actions shared by every browser target adapter.
 
-use super::cdp_client::{CdpClient, CdpEvent};
+use super::automation_client::{BrowserAutomationClient, BrowserAutomationEvent};
 use crate::agentic::tools::implementations::control_hub::{coded_tool_error, ErrorCode};
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::{json, Value};
@@ -17,7 +17,7 @@ pub const MAX_WAIT_MS: u64 = 60 * 60 * 1_000;
 /// not say. Matches the previous hard-coded lifecycle and selector budgets.
 pub const DEFAULT_CONDITION_TIMEOUT_MS: u64 = 15_000;
 
-/// Result of waiting for a CDP `Page.lifecycleEvent`.
+/// Result of waiting for a shared browser lifecycle event.
 enum LifecycleOutcome {
     /// One of the requested lifecycle names fired in time. Carries the name
     /// (e.g. `"load"`, `"networkIdle"`) so callers can report which condition
@@ -33,7 +33,7 @@ enum LifecycleOutcome {
 /// given `frame_id` (or any frame if `frame_id` is `None`). Bounded by a hard
 /// timeout so a hung page can never wedge the agent.
 async fn wait_for_lifecycle(
-    events: &mut broadcast::Receiver<CdpEvent>,
+    events: &mut broadcast::Receiver<BrowserAutomationEvent>,
     frame_id: Option<&str>,
     wanted: &[&str],
     timeout_ms: u64,
@@ -126,16 +126,19 @@ pub(crate) fn classify_evaluate_exception(message: &str) -> BitFunError {
     }
 }
 
-/// Classify a CDP transport failure (send/receive level). A dead WebSocket or
-/// closed target means the session is unusable and must be re-attached; a CDP
-/// timeout means the page did not answer. Anything else passes through so the
-/// heuristic fallback in `map_dispatch_error` still applies.
+/// Classify a browser-target transport failure (send/receive level). A dead
+/// WebSocket or missing native WebView means the session is unusable and must
+/// be re-attached; a transport timeout means the page did not answer. Anything
+/// else passes through so the heuristic fallback in `map_dispatch_error` still
+/// applies.
 pub(crate) fn classify_transport_error(err: BitFunError) -> BitFunError {
     let raw = err.to_string();
     let message = raw.strip_prefix("Tool error: ").unwrap_or(raw.as_str());
     if message.contains("CDP send failed")
         || message.contains("CDP response channel closed")
         || message.contains("Target closed")
+        || message.contains("Webview not found")
+        || message.contains("WebView not found")
     {
         structured_error(
             ErrorCode::WrongTab,
@@ -350,13 +353,13 @@ const SNAPSHOT_SCRIPT: &str = r#"
         })()
         "#;
 
-/// High-level browser actions backed by CDP method calls.
+/// High-level browser actions backed by a target adapter.
 pub struct BrowserActions<'a> {
-    client: &'a CdpClient,
+    client: &'a dyn BrowserAutomationClient,
 }
 
 impl<'a> BrowserActions<'a> {
-    pub fn new(client: &'a CdpClient) -> Self {
+    pub fn new(client: &'a dyn BrowserAutomationClient) -> Self {
         Self { client }
     }
 
@@ -422,7 +425,7 @@ impl<'a> BrowserActions<'a> {
             }
             LifecycleOutcome::Closed => {
                 return Err(BitFunError::tool(
-                    "Browser closed the CDP connection before page finished loading.".to_string(),
+                    "Browser target closed before the page finished loading.".to_string(),
                 ));
             }
         }
@@ -508,7 +511,7 @@ impl<'a> BrowserActions<'a> {
             .unwrap_or("{}");
         let mut parsed: Value = serde_json::from_str(text).unwrap_or(json!({}));
 
-        if with_backend_node_ids {
+        if with_backend_node_ids && self.client.capabilities().backend_node_ids {
             if let Err(e) = self.attach_backend_node_ids(&mut parsed).await {
                 // Don't fail the snapshot — the elements list is still
                 // useful without backendNodeIds. Surface the failure so the
@@ -519,6 +522,16 @@ impl<'a> BrowserActions<'a> {
                         json!(format!("Failed to resolve backendNodeIds: {}", e)),
                     );
                 }
+            }
+        } else if with_backend_node_ids {
+            if let Value::Object(map) = &mut parsed {
+                map.insert(
+                    "backend_node_ids_warning".to_string(),
+                    json!(format!(
+                        "backend node ids are not available for the {} browser target",
+                        self.client.target_kind()
+                    )),
+                );
             }
         }
         Self::attach_snapshot_text(&mut parsed);
@@ -1215,7 +1228,8 @@ impl<'a> BrowserActions<'a> {
             "jpeg"
         };
 
-        if full_page {
+        let full_page_supported = self.client.capabilities().full_page_screenshot;
+        if full_page && full_page_supported {
             if let Ok(metrics) = self.client.send("Page.getLayoutMetrics", None).await {
                 let size = metrics
                     .get("cssContentSize")
@@ -1260,7 +1274,7 @@ impl<'a> BrowserActions<'a> {
             .client
             .send("Page.captureScreenshot", Some(params))
             .await?;
-        if full_page {
+        if full_page && full_page_supported {
             let _ = self
                 .client
                 .send("Emulation.clearDeviceMetricsOverride", None)
@@ -1271,7 +1285,16 @@ impl<'a> BrowserActions<'a> {
             "success": true,
             "action": "screenshot",
             "format": normalized,
-            "full_page": full_page,
+            "full_page": full_page && full_page_supported,
+            "full_page_requested": full_page,
+            "warning": if full_page && !full_page_supported {
+                Value::String(format!(
+                    "full-page capture is not available for the {} browser target; captured the visible viewport",
+                    self.client.target_kind()
+                ))
+            } else {
+                Value::Null
+            },
             "data_length": data.len(),
             "base64_data": data,
             "data_url": format!("data:image/{};base64,{}", normalized, data),
@@ -1639,6 +1662,118 @@ impl<'a> BrowserActions<'a> {
 }
 
 #[cfg(test)]
+mod shared_target_tests {
+    use super::*;
+    use crate::agentic::tools::browser_control::{
+        BrowserAutomationCapabilities, BrowserAutomationEvent,
+    };
+    use std::sync::Mutex;
+
+    struct FakeEmbeddedClient {
+        events: broadcast::Sender<BrowserAutomationEvent>,
+        methods: Mutex<Vec<String>>,
+    }
+
+    impl FakeEmbeddedClient {
+        fn new() -> Self {
+            Self {
+                events: broadcast::channel(8).0,
+                methods: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn methods(&self) -> Vec<String> {
+            self.methods
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl BrowserAutomationClient for FakeEmbeddedClient {
+        async fn send(&self, method: &str, params: Option<Value>) -> BitFunResult<Value> {
+            self.methods
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(method.to_string());
+            match method {
+                "Runtime.evaluate" => {
+                    let expression = params
+                        .as_ref()
+                        .and_then(|value| value.get("expression"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    let value = if expression.contains("offscreen_count") {
+                        json!({
+                            "url": "https://example.test/",
+                            "title": "Example",
+                            "elements": [{ "ref": "@e1", "tag": "button", "text": "Continue" }],
+                            "offscreen_count": 0,
+                            "cross_origin_frames": 0,
+                        })
+                        .to_string()
+                    } else {
+                        json!({
+                            "x": 32,
+                            "y": 24,
+                            "visible": true,
+                            "disabled": false,
+                            "blocked_by": null,
+                            "cross_origin_frame": false,
+                        })
+                        .to_string()
+                    };
+                    Ok(json!({ "result": { "type": "string", "value": value } }))
+                }
+                "Input.dispatchMouseEvent" => Ok(json!({})),
+                other => Err(BitFunError::tool(format!("unexpected primitive: {other}"))),
+            }
+        }
+
+        fn subscribe_events(&self) -> broadcast::Receiver<BrowserAutomationEvent> {
+            self.events.subscribe()
+        }
+
+        fn is_connected(&self) -> bool {
+            true
+        }
+
+        fn capabilities(&self) -> BrowserAutomationCapabilities {
+            BrowserAutomationCapabilities::embedded_webview()
+        }
+
+        fn target_kind(&self) -> &'static str {
+            "builtin"
+        }
+    }
+
+    #[tokio::test]
+    async fn embedded_target_runs_snapshot_and_click_through_browser_actions() {
+        let client = FakeEmbeddedClient::new();
+        let actions = BrowserActions::new(&client);
+
+        let snapshot = actions.snapshot_with_options(true).await.expect("snapshot");
+        assert_eq!(snapshot["elements"][0]["ref"], "@e1");
+        assert!(snapshot["backend_node_ids_warning"]
+            .as_str()
+            .is_some_and(|warning| warning.contains("builtin")));
+
+        let clicked = actions.click("@e1").await.expect("click");
+        assert_eq!(clicked["success"], true);
+        assert_eq!(
+            client.methods(),
+            vec![
+                "Runtime.evaluate",
+                "Runtime.evaluate",
+                "Input.dispatchMouseEvent",
+                "Input.dispatchMouseEvent",
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
 mod structured_error_tests {
     use super::*;
 
@@ -1685,6 +1820,16 @@ mod structured_error_tests {
         ))
         .to_string();
         assert!(msg.contains("[TIMEOUT]"), "got: {msg}");
+    }
+
+    #[test]
+    fn classify_transport_error_maps_missing_builtin_target_to_wrong_tab() {
+        let msg = classify_transport_error(BitFunError::tool(
+            "Built-in browser adapter failed for Runtime.evaluate: Webview not found".to_string(),
+        ))
+        .to_string();
+        assert!(msg.contains("[WRONG_TAB]"), "got: {msg}");
+        assert!(msg.contains("switch_page"), "got: {msg}");
     }
 
     #[test]

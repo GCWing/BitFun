@@ -1,18 +1,27 @@
-//! Browser control via Chrome DevTools Protocol (CDP).
+//! Browser automation shared by external CDP browsers and BitFun's built-in
+//! browser WebViews.
 //!
-//! Connects to a Chromium-family browser over CDP, enabling page navigation,
-//! DOM interaction, screenshots, JS evaluation and more. Chrome 144+ and Edge
-//! use user-approved live-profile endpoints so existing tabs, cookies,
-//! extensions and login sessions are preserved. Other Chromium browsers reuse
-//! a real-profile endpoint when available and retain a managed fallback.
+//! [`BrowserActions`] owns the product-level action semantics (snapshot refs,
+//! click guards, filling, waiting, capture, and so on). Concrete browser hosts
+//! implement [`BrowserAutomationClient`], so a second target never grows a
+//! second copy of the action implementation.
 
 pub mod actions;
+pub mod automation_client;
 pub mod browser_launcher;
+pub mod builtin_browser;
 pub mod cdp_client;
 pub mod session_registry;
 
 pub use actions::BrowserActions;
+pub use automation_client::{
+    BrowserAutomationCapabilities, BrowserAutomationClient, BrowserAutomationEvent,
+};
 pub use browser_launcher::BrowserLauncher;
+pub use builtin_browser::{
+    connect_builtin_browser, connect_builtin_browser_matching, list_builtin_browser_targets,
+    BuiltInBrowserClient, BuiltInBrowserTarget,
+};
 pub use cdp_client::CdpClient;
 pub use session_registry::{
     BrowserSession, BrowserSessionRegistry, BrowserSessionState, DialogHandler,

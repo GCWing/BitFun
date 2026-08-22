@@ -92,6 +92,7 @@ function App() {
   const userCloseRequestedRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
   const interactiveShellReadyFrameRef = useRef<number | null>(null);
+  const bitFunControlStartupRef = useRef(false);
   const workspaceLoadingRef = useRef(workspaceLoading);
   const appLayoutReadyRef = useRef(false);
   const [interactiveShellReady, setInteractiveShellReady] = useState(false);
@@ -323,6 +324,26 @@ function App() {
 
     return () => window.clearTimeout(timer);
   }, [verifyMainWindowVisible]);
+
+  // Register the control listener as soon as the product surface is usable.
+  // The backend does not expose BitFunControl until this readiness handshake succeeds.
+  useEffect(() => {
+    if (
+      !isTauriRuntime()
+      || !shouldScheduleDeferredStartupSystems({ interactiveShellReady, startupOverlayVisible })
+      || bitFunControlStartupRef.current
+    ) {
+      return;
+    }
+    bitFunControlStartupRef.current = true;
+    void import('./global-search/bitfunControlBridge')
+      .then(({ initializeBitFunControlBridge }) => initializeBitFunControlBridge())
+      .then(() => startupTrace.markPhase('bitfun_control_surface_ready'))
+      .catch(error => {
+        bitFunControlStartupRef.current = false;
+        log.error('Failed to initialize the BitFun control surface', error);
+      });
+  }, [interactiveShellReady, startupOverlayVisible]);
 
   // Non-critical systems are delayed until the shell is interactive and the
   // startup overlay has fully handed off to the app surface.

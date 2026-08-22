@@ -1,7 +1,7 @@
 mod element;
 mod interaction;
 mod navigation;
-mod session;
+pub(crate) mod session;
 mod window;
 
 use std::sync::Arc;

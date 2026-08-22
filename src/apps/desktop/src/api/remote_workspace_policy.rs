@@ -240,6 +240,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "browser_webview_set_bounds",
         RemoteWorkspacePolicy::LocalOnly,
     ),
+    (
+        "browser_webview_set_agent_target_state",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("btw_ask_stream", RemoteWorkspacePolicy::RemoteRouted),
     ("btw_cancel", RemoteWorkspacePolicy::RemoteRouted),
     (
@@ -1560,6 +1564,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("remote_write_file", RemoteWorkspacePolicy::RemoteRouted),
     (
+        "mark_bitfun_control_surface_ready",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "remove_recent_workspace",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -1571,6 +1579,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "replace_mode_skill_selection",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "report_bitfun_control_result",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "report_canvas_runtime_error",

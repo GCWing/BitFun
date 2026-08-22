@@ -11,8 +11,12 @@ import {
 } from './rules/feature-rules.mjs';
 
 const SKIPPED_DIRECTORIES = new Set([
+  '.bitfun',
+  '.claude',
+  '.cursor',
   '.git',
   '.targets',
+  '.tmp',
   '.worktrees',
   'node_modules',
   'target',

@@ -1,0 +1,11 @@
+{
+  "name": "bitfun-playbook",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/serve.mjs --watch --port 4174",
+    "preview": "node scripts/serve.mjs --port 4174",
+    "test": "node --test scripts/site-ui.test.mjs"
+  }
+}

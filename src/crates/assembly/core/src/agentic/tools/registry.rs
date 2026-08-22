@@ -587,6 +587,7 @@ mod tests {
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
+            "BitFunControl",
             "GetFileDiff",
             "CreateCanvas",
             "ReadCanvas",

@@ -25,4 +25,8 @@ describe('scoreTextMatch', () => {
     expect(scoreTextMatch('term', ['open terminal'])).toBeGreaterThan(scoreTextMatch('term', ['preterminal panel']));
     expect(scoreTextMatch('missing', ['terminal'])).toBe(0);
   });
+
+  it('matches natural multi-term queries across bilingual catalog fields', () => {
+    expect(scoreTextMatch('Hooks 设置', ['Hooks', '自动化设置'])).toBeGreaterThan(0);
+  });
 });
