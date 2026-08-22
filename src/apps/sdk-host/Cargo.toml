@@ -19,7 +19,6 @@ bitfun-core = { path = "../../crates/assembly/core", features = [
     "document-read",
     "subscription-auth",
     "deep-research",
-    "lsp",
     "external-sources",
     "tools-basic",
     "tools-git",

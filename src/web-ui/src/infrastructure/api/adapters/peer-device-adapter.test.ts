@@ -128,7 +128,6 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('git_is_repository')).toBe('low');
     expect(peerInvokePriorityFor('ssh_is_connected')).toBe('low');
     expect(peerInvokePriorityFor('get_file_metadata')).toBe('low');
-    expect(peerInvokePriorityFor('lsp_detect_project')).toBe('low');
     expect(peerInvokePriorityFor('search_get_repo_status')).toBe('low');
     expect(peerInvokePriorityFor('load_canvas_artifact')).toBe('low');
     expect(peerInvokePriorityFor('get_file_tree')).toBe('low');

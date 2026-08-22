@@ -75,7 +75,6 @@ import { createPlanDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/Cr
 import { execProcessToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ExecProcessToolCardView.appearance';
 import { editorConfigAppearanceDescriptor } from '@/infrastructure/config/components/EditorConfig.appearance';
 import { appearanceSettingsAppearanceDescriptor } from '@/infrastructure/config/components/AppearanceSettingsPage.appearance';
-import { lspConfigAppearanceDescriptor } from '@/infrastructure/config/components/LspConfig.appearance';
 import { configAppearanceDescriptor } from '@/infrastructure/config/appearance';
 import { fontPreferenceAppearanceDescriptor } from '@/infrastructure/font-preference/appearance';
 import { languageSelectorAppearanceDescriptor } from '@/infrastructure/i18n/appearance';
@@ -92,7 +91,6 @@ import { generativeWidgetAppearanceDescriptor } from '@/tools/generative-widget/
 import { editorToolAppearanceDescriptor } from '@/tools/editor/appearance';
 import { fileSystemAppearanceDescriptor } from '@/tools/file-system/appearance';
 import { gitToolAppearanceDescriptor } from '@/tools/git/appearance';
-import { lspAppearanceDescriptor } from '@/tools/lsp/appearance';
 import { terminalToolAppearanceDescriptor } from '@/tools/terminal/appearance';
 import { workspaceToolAppearanceDescriptor } from '@/tools/workspace/appearance';
 import { relayDeployAppearanceDescriptor } from '@/features/relay-deploy/appearance';
@@ -175,7 +173,6 @@ import { gitSettingsViewAppearanceDescriptor } from '@/tools/git/components/GitS
 import { quickActionsConfigAppearanceDescriptor } from '@/infrastructure/config/components/QuickActionsConfig.appearance';
 import { statusBarPopoversAppearanceDescriptor } from '@/tools/editor/components/StatusBarPopovers/StatusBarPopovers.appearance';
 import { mEditorAppearanceDescriptor } from '@/tools/editor/meditor/components/MEditor.appearance';
-import { referencesPanelAppearanceDescriptor } from '@/tools/lsp/components/ReferencesPanel/ReferencesPanel.appearance';
 import { globalSearchAppearanceDescriptor } from '@/app/global-search/GlobalSearchRoot.appearance';
 import { workspaceRelatedPathsDialogAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceRelatedPathsDialog.appearance';
 import { branchSelectModalAppearanceDescriptor } from '@/app/components/panels/BranchSelectModal.appearance';
@@ -373,7 +370,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(execProcessToolCardAppearanceDescriptor)
     .registerComponent(editorConfigAppearanceDescriptor)
     .registerComponent(appearanceSettingsAppearanceDescriptor)
-    .registerComponent(lspConfigAppearanceDescriptor)
     .registerComponent(configAppearanceDescriptor)
     .registerComponent(fontPreferenceAppearanceDescriptor)
     .registerComponent(languageSelectorAppearanceDescriptor)
@@ -395,7 +391,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(editorToolAppearanceDescriptor)
     .registerComponent(fileSystemAppearanceDescriptor)
     .registerComponent(gitToolAppearanceDescriptor)
-    .registerComponent(lspAppearanceDescriptor)
     .registerComponent(terminalToolAppearanceDescriptor)
     .registerComponent(workspaceToolAppearanceDescriptor)
     .registerComponent(gitGraphViewAppearanceDescriptor)
@@ -477,7 +472,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(quickActionsConfigAppearanceDescriptor)
     .registerComponent(statusBarPopoversAppearanceDescriptor)
     .registerComponent(mEditorAppearanceDescriptor)
-    .registerComponent(referencesPanelAppearanceDescriptor)
     .registerComponent(globalSearchAppearanceDescriptor)
     .registerComponent(workspaceRelatedPathsDialogAppearanceDescriptor)
     .registerComponent(branchSelectModalAppearanceDescriptor)

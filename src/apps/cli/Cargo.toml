@@ -37,7 +37,6 @@ bitfun-core = { path = "../../crates/assembly/core", features = [
     "subscription-auth",
     "remote-connect",
     "deep-research",
-    "lsp",
     "external-sources",
     "plugin-runtime",
     "ssh-remote",

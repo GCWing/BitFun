@@ -95,7 +95,7 @@
   },
   "advanced": {
     "semanticHighlighting": "Semantic Highlighting",
-    "semanticHighlightingDesc": "Semantic-based code highlighting (requires LSP)",
+    "semanticHighlightingDesc": "Use semantic information to improve code highlighting",
     "bracketPairColorization": "Bracket Pair Colorization",
     "bracketPairColorizationDesc": "Use different colors for nested bracket pairs",
     "formatOnSave": "Format on Save",

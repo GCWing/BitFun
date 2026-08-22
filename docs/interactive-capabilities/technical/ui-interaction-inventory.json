@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "3207e4dc899c9109f0be952b9497d2f6169f9e2bb3ba9a859dda7e6959903470",
+  "catalogDigest": "39a0d386d2b6251246cceb9060eb3c3672b257d9062b67f0be73ea46e117ddeb",
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "644f35d8f903d81ae15754aca9ac5c0ff23d26b6da878cbc1c5cfd2c480d90d0",
-  "fileCount": 370,
-  "interactionCount": 4441,
+  "digest": "9dd485a7d47621da8491ecac62d2b16f7a91d47f0bda1ea73989d7e82cc212a6",
+  "fileCount": 367,
+  "interactionCount": 4424,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -1370,11 +1370,6 @@
       "digest": "c973526c84c73d048e5759050ac5c0b0b63e9fb26f6d6909bc5d09717da52191"
     },
     {
-      "sourceFile": "src/web-ui/src/infrastructure/config/components/LspConfig.tsx",
-      "interactionCount": 10,
-      "digest": "23120608db3c46d70af9b5d693cc14de002ab72d693741cc38c0756c02734d35"
-    },
-    {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/MCPResourceBrowser.tsx",
       "interactionCount": 7,
       "digest": "309d08c5c7fa5c7879a75817b2535ef091d4b5cd23598fc780fe0dcdd075049f"
@@ -1591,8 +1586,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/shared/context-menu-system/providers/EditorMenuProvider.ts",
-      "interactionCount": 2,
-      "digest": "6af7643a21c2bc21b0f4dc3e0a96016ee42b9c5a7b8dd641929093060c8f41b0"
+      "interactionCount": 3,
+      "digest": "92871ae42c86c5a737f97c6e645e1485324ea031d16bbe512509c778285bf1bd"
     },
     {
       "sourceFile": "src/web-ui/src/shared/context-menu-system/providers/FileExplorerMenuProvider.ts",
@@ -1706,8 +1701,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/CodeEditor.tsx",
-      "interactionCount": 4,
-      "digest": "f5649543b779a51fbafcc155ec4914bd7895fdd61cc51b03438f5e46c0587a8a"
+      "interactionCount": 5,
+      "digest": "e769ac327279aa6cef25bc8b6860c1cdcc1a5868f1aba3d981e10c1f984c87ce"
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/DiffEditor.tsx",
@@ -1838,16 +1833,6 @@
       "sourceFile": "src/web-ui/src/tools/git/components/PushButton/PushButton.tsx",
       "interactionCount": 12,
       "digest": "7a83675c6693beb49f8b41f8209175830b7637ff54442a706766469cd5088bae"
-    },
-    {
-      "sourceFile": "src/web-ui/src/tools/lsp/components/LspPluginList/LspPluginList.tsx",
-      "interactionCount": 6,
-      "digest": "16b654b54d296e41aa421b57a2d160b7834dbd499c9f8b68b5b93b46d3d636a0"
-    },
-    {
-      "sourceFile": "src/web-ui/src/tools/lsp/components/ReferencesPanel/ReferencesPanel.tsx",
-      "interactionCount": 3,
-      "digest": "5d6404dcad9f4764b13ae606f8ad6bbb929e844ff23ec459c70ab82d5be6e028"
     },
     {
       "sourceFile": "src/web-ui/src/tools/terminal/components/ConnectedTerminal.tsx",

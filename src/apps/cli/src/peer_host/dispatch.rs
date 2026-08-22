@@ -8,7 +8,7 @@ use super::commands;
 use super::control::{
     attach_controller, detach_controller, parse_controller_device_id, peer_mode_ping_value,
 };
-use super::deny::{is_cli_unsupported_command, is_local_only_command};
+use super::deny::{is_cli_unsupported_command, is_local_only_command, is_retired_command};
 use super::state::peer_host_state;
 
 #[derive(Debug, Clone)]
@@ -54,6 +54,12 @@ pub(crate) async fn handle_host_invoke(command: &str, args: Value) -> RemoteResp
 async fn handle_host_invoke_inner(command: &str, args: Value) -> HostInvokeBridgeResult {
     if command.is_empty() {
         return HostInvokeBridgeResult::err("HostInvoke command is empty");
+    }
+
+    if is_retired_command(command) {
+        return HostInvokeBridgeResult::err(format!(
+            "command '{command}' is unsupported because the BitFun LSP runtime has been retired"
+        ));
     }
 
     // Detached dispatch is target-owned and must not acquire a Peer controller
@@ -173,6 +179,24 @@ mod tests {
                 ..
             } => {
                 assert!(err.contains("local-only"));
+            }
+            other => panic!("unexpected response: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn retired_lsp_commands_fail_before_peer_state_or_command_dispatch() {
+        let resp = handle_host_invoke("lsp_open_workspace", json!({})).await;
+        match resp {
+            RemoteResponse::HostInvokeResult {
+                ok: false,
+                value: None,
+                error: Some(err),
+            } => {
+                assert_eq!(
+                    err,
+                    "command 'lsp_open_workspace' is unsupported because the BitFun LSP runtime has been retired"
+                );
             }
             other => panic!("unexpected response: {other:?}"),
         }

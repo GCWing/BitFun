@@ -4,7 +4,7 @@
  * Wraps monaco.editor.create(), integrates with MonacoModelManager,
  * exposes editor ref, proxies events, and calls ExtensionManager lifecycle hooks.
  *
- * Does not include: file IO, LSP integration (via Extension), UI components.
+ * Does not include file IO or UI components.
  */
 
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
@@ -44,7 +44,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       preset = 'standard',
       config,
       readOnly = false,
-      enableLsp = true,
       showLineNumbers = true,
       showMinimap = true,
       onContentChange,
@@ -75,7 +74,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
     const presetRef = useRef(preset);
     const configRef = useRef(config);
     const readOnlyRef = useRef(readOnly);
-    const enableLspRef = useRef(enableLsp);
     const showLineNumbersRef = useRef(showLineNumbers);
     const showMinimapRef = useRef(showMinimap);
     const onContentChangeRef = useRef(onContentChange);
@@ -94,7 +92,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
     presetRef.current = preset;
     configRef.current = config;
     readOnlyRef.current = readOnly;
-    enableLspRef.current = enableLsp;
     showLineNumbersRef.current = showLineNumbers;
     showMinimapRef.current = showMinimap;
     onContentChangeRef.current = onContentChange;
@@ -136,7 +133,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
         language: overrides?.language ?? languageRef.current,
         workspacePath: overrides?.workspacePath ?? workspacePathRef.current,
         readOnly: overrides?.readOnly ?? readOnlyRef.current,
-        enableLsp: overrides?.enableLsp ?? enableLspRef.current,
       };
     }, []);
 
@@ -175,7 +171,6 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
         language: languageRef.current,
         workspacePath: workspacePathRef.current,
         readOnly: readOnlyRef.current,
-        enableLsp: enableLspRef.current,
       });
       
       const initEditor = async () => {

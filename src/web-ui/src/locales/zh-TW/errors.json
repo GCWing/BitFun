@@ -120,8 +120,7 @@
     "openError": "開啟編輯器失敗",
     "saveError": "儲存檔案失敗",
     "formatError": "格式化失敗",
-    "parseError": "解析檔案失敗",
-    "lspError": "語言伺服器錯誤"
+    "parseError": "解析檔案失敗"
   },
   "config": {
     "loadError": "載入設定失敗",

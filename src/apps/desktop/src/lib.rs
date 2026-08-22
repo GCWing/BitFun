@@ -76,8 +76,6 @@ use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
 use api::i18n_api::*;
-use api::lsp_api::*;
-use api::lsp_workspace_api::*;
 use api::mcp_api::*;
 use api::review_platform_api::*;
 use api::runtime_api::*;
@@ -1600,49 +1598,6 @@ pub async fn run() {
             get_acp_session_commands,
             set_acp_session_model,
             set_acp_session_config_option,
-            lsp_initialize,
-            lsp_start_server_for_file,
-            lsp_stop_server,
-            lsp_stop_all_servers,
-            lsp_did_open,
-            lsp_did_change,
-            lsp_did_save,
-            lsp_did_close,
-            lsp_get_completions,
-            lsp_get_hover,
-            lsp_goto_definition,
-            lsp_find_references,
-            lsp_format_document,
-            lsp_install_plugin,
-            lsp_uninstall_plugin,
-            lsp_list_plugins,
-            lsp_get_plugin,
-            lsp_get_server_capabilities,
-            lsp_get_supported_extensions,
-            lsp_open_workspace,
-            lsp_close_workspace,
-            lsp_open_document,
-            lsp_change_document,
-            lsp_save_document,
-            lsp_close_document,
-            lsp_get_completions_workspace,
-            lsp_get_hover_workspace,
-            lsp_goto_definition_workspace,
-            lsp_find_references_workspace,
-            lsp_get_code_actions_workspace,
-            lsp_format_document_workspace,
-            lsp_get_inlay_hints_workspace,
-            lsp_rename_workspace,
-            lsp_get_document_highlight_workspace,
-            lsp_get_document_symbols_workspace,
-            lsp_get_semantic_tokens_workspace,
-            lsp_get_semantic_tokens_range_workspace,
-            lsp_get_server_state,
-            lsp_get_all_server_states,
-            lsp_stop_server_workspace,
-            lsp_list_workspaces,
-            lsp_detect_project,
-            lsp_prestart_server,
             reload_global_config,
             get_global_config_status,
             subscribe_config_updates,
@@ -2538,10 +2493,6 @@ fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilt
                 "Failed to initialize workspace identity watch service: {}",
                 e
             );
-        }
-
-        if let Err(e) = service::lsp::initialize_global_lsp_manager().await {
-            log::error!("Failed to initialize LSP manager: {}", e);
         }
 
         let event_system = infrastructure::events::get_global_event_system();

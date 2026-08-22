@@ -154,7 +154,7 @@ dark-light = "1.1"
 dunce = "1"
 filetime = "0.2"
 fs2 = "0.4"
-zip = { version = "4.6", default-features = false, features = ["deflate"] } # plugin load
+zip = { version = "4.6", default-features = false, features = ["deflate"] } # archive extraction
 flate2 = "1.0"
 tar = "0.4"
 bzip2 = "0.5"

@@ -211,7 +211,6 @@ describe('overlay surface contracts', () => {
     'flow_chat/components/ModelSelector.scss',
     'app/components/NavPanel/NavPanel.scss',
     'app/layout/FloatingMiniChat.scss',
-    'tools/lsp/components/ReferencesPanel/ReferencesPanel.scss',
   ])('%s consumes FloatingSurface instead of owning popup chrome', (path) => {
     expect(readSource(path)).toContain('@include surfaces.floating-surface');
   });

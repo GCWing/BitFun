@@ -1,11 +1,10 @@
 /**
- * Language and project detection.
+ * Language detection.
  */
 
 // Core services
 export { languageDetector } from './core/LanguageDetector';
 export { languageRegistry } from './core/LanguageRegistry';
-export { projectDetector } from './core/ProjectDetector';
 
 // Types
 export type {
@@ -14,20 +13,11 @@ export type {
   LanguageCategory,
   FileDetectionResult,
   
-  // Project
-  ProjectInfo,
-  ProjectType,
-  FrameworkInfo,
-  
   // Context
   DetectionContext,
   
   // Plugins
   LanguagePlugin,
-  ProjectDetectionPlugin,
-  
-  // LSP
-  LspConfig,
   
   // Events
   LanguageDetectionEvent,
@@ -39,7 +29,6 @@ export {
   getMonacoLanguage,
   getFileIconType,
   getFileColor,
-  hasLspSupport,
   getPrismLanguage,
   getPrismLanguageFromAlias,
   getEditorType,

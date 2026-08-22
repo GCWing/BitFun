@@ -23,8 +23,6 @@ pub mod jsonc;
 pub mod local_instructions;
 #[cfg(feature = "workspace-runtime")]
 pub mod local_runtime_ports;
-#[cfg(feature = "lsp")]
-pub mod lsp;
 #[cfg(feature = "process-runtime")]
 pub mod managed_runtime;
 #[cfg(feature = "markdown")]

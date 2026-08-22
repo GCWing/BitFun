@@ -14,7 +14,7 @@ export type { EditorExtension, EditorExtensionContext } from '../services/Editor
 export const ExtensionPriority = {
   /** Highest priority - core functionality */
   CRITICAL: 0,
-  /** High priority - language services like LSP */
+  /** High priority - language services */
   HIGH: 10,
   /** Medium priority - AI completion and enhancements */
   MEDIUM: 50,
@@ -23,16 +23,6 @@ export const ExtensionPriority = {
   /** Lowest priority - optional features */
   OPTIONAL: 200,
 } as const;
-
-/** LSP extension configuration */
-export interface LspExtensionConfig {
-  /** Whether enabled */
-  enabled: boolean;
-  /** Workspace path */
-  workspacePath?: string;
-  /** Languages to skip (use Monaco built-in services) */
-  skipLanguages?: string[];
-}
 
 /** AI completion extension configuration (reserved) */
 export interface AiCompletionExtensionConfig {

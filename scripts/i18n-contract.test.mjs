@@ -587,14 +587,14 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
   }
 });
 
-auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal', { concurrency: false }, () => {
-  const localePath = 'src/web-ui/src/locales/zh-TW/settings/lsp.json';
+auditIntegrationTest('i18n audit reports same-text zh-TW copy with a terminology signal', { concurrency: false }, () => {
+  const localePath = 'src/web-ui/src/locales/zh-TW/settings/external-apps.json';
   const reportPath = 'scripts/.tmp-i18n-l10n-signal-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   const source = readText(localePath);
   const fixture = source.replace(
-    '"suffix": "瞭解如何開發和貢獻 LSP 插件。"',
-    '"suffix": "了解如何开发和贡献 LSP 插件。"',
+    '"summary": "有 {{count}} 項內容需要注意，請查看詳細資料以瞭解影響範圍。"',
+    '"summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。"',
   );
 
   assert.notEqual(fixture, source, 'test fixture should introduce same-text zh-TW terminology debt');
@@ -609,8 +609,8 @@ auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal
       assert.ok(
         report.l10nQualityCandidates.some((entry) => (
           entry.surface === 'web-ui' &&
-          entry.namespace === 'settings/lsp' &&
-          entry.key === 'help.morePlugins.suffix' &&
+          entry.namespace === 'settings/external-apps' &&
+          entry.key === 'diagnostics.summary' &&
           entry.locale === 'zh-TW' &&
           entry.comparisonLocale === 'zh-CN' &&
           entry.signal?.type === 'terminology' &&
@@ -621,8 +621,8 @@ auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal
       assert.ok(
         report.sameTextLocaleInventory.some((entry) => (
           entry.surface === 'web-ui' &&
-          entry.namespace === 'settings/lsp' &&
-          entry.key === 'help.morePlugins.suffix' &&
+          entry.namespace === 'settings/external-apps' &&
+          entry.key === 'diagnostics.summary' &&
           entry.locale === 'zh-TW' &&
           entry.comparisonLocale === 'zh-CN' &&
           entry.signalType === 'terminology' &&
@@ -739,7 +739,6 @@ auditIntegrationTest('web-ui uses shared terms for stable navigation and feature
       'scenes/skills:suite.modes.claw',
       'settings:title',
       'settings:workspace.title',
-      'settings/lsp:tabs.settings',
     ]);
     const webUiDuplicates = report.sharedTermDuplicates
       .filter((entry) => entry.surface === 'web-ui' && migratedResourceKeys.has(entry.resourceKey))

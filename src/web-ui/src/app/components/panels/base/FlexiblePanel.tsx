@@ -595,11 +595,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             originalContent={originalCode}
             modifiedContent={modifiedCode}
             filePath={diffFilePath}
-            workspacePath={workspacePath || diffMigrationContext?.workspacePath}
             revealLine={diffData.revealLine}
             readOnly={false}
             renderSideBySide={true}
-            enableLsp={true}
             onSave={async (content) => {
               try {
                 const targetWorkspacePath = workspacePath || diffMigrationContext?.workspacePath;

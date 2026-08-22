@@ -178,9 +178,6 @@
       "indentSettings": "縮進設置",
       "fileEncoding": "檔案編碼",
       "selectLanguageMode": "選擇語言模式",
-      "lspConnected": "LSP 已連接",
-      "lspConnecting": "LSP 連接中...",
-      "lspDisconnected": "LSP 未連接",
       "selectionLinesChars": "{{lines}} 行, {{chars}} 字符",
       "selectionChars": "{{count}} 已選",
       "ln": "Ln",
@@ -277,23 +274,6 @@
       "viewHistory": "查看歷史",
       "viewChanges": "查看更改",
       "resolveConflict": "解決衝突"
-    }
-  },
-  "lsp": {
-    "referencesPanel": {
-      "previewFallback": "(無預覽)",
-      "emptyTitle": "未找到引用",
-      "emptyWithSymbol": "符號 \"{{symbol}}\" 沒有引用",
-      "emptyDescription": "沒有找到引用",
-      "titleWithSymbol": "\"{{symbol}}\" 的引用",
-      "title": "引用列表",
-      "emptyLine": "(空行)"
-    },
-    "errors": {
-      "loadPluginsFailed": "Failed to load plugins",
-      "installPluginFailed": "Failed to install plugin",
-      "uninstallPluginFailed": "Failed to uninstall plugin",
-      "initializeFailed": "Failed to initialize LSP"
     }
   },
   "fileTree": {

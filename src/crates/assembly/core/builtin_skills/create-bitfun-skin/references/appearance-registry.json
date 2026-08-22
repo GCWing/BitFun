@@ -1,9 +1,9 @@
 {
   "schema": "bitfun.appearance.registry",
   "schemaVersion": 1,
-  "generatedFrom": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
-  "generatedAt": "2026-08-16T16:09:40.016459+00:00",
-  "sourceRevision": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
+  "generatedFrom": "a47c21a1a5b0b28ef9d2c1e17b9e1cea1be6f94c",
+  "generatedAt": "2026-08-22T14:28:57.698830+00:00",
+  "sourceRevision": "a47c21a1a5b0b28ef9d2c1e17b9e1cea1be6f94c",
   "sourceDirty": false,
   "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "components": [
@@ -32,6 +32,7 @@
           "attribute": "data-bf-variant",
           "values": [
             "primary",
+            "inverse",
             "secondary",
             "ghost",
             "dashed",
@@ -367,7 +368,8 @@
             "small",
             "medium",
             "large",
-            "xlarge"
+            "xlarge",
+            "xxlarge"
           ]
         },
         {
@@ -571,6 +573,69 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"loading\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "popup-close-button",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "control",
+          "visualRole": "control"
+        }
+      ],
+      "facets": [
+        {
+          "id": "variant",
+          "attribute": "data-bf-variant",
+          "values": [
+            "ghost"
+          ]
+        },
+        {
+          "id": "size",
+          "attribute": "data-bf-size",
+          "values": [
+            "medium"
+          ]
+        },
+        {
+          "id": "shape",
+          "attribute": "data-bf-shape",
+          "values": [
+            "square"
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "hover",
+          "selector": {
+            "kind": "self",
+            "suffix": ":hover:not(:disabled)"
+          }
+        },
+        {
+          "id": "active",
+          "selector": {
+            "kind": "self",
+            "suffix": ":active:not(:disabled)"
+          }
+        },
+        {
+          "id": "focusVisible",
+          "selector": {
+            "kind": "self",
+            "suffix": ":focus-visible"
+          }
+        },
+        {
+          "id": "disabled",
+          "selector": {
+            "kind": "self",
+            "suffix": ":disabled"
           }
         }
       ]
@@ -2038,22 +2103,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "reproduction",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "reproductionHeader",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "reproductionContent",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "reproductionActions",
-          "propertyProfile": "container"
-        },
-        {
           "id": "math",
           "propertyProfile": "container"
         }
@@ -2430,6 +2479,7 @@
           "attribute": "data-bf-boost-item-kind",
           "values": [
             "mode",
+            "agent",
             "context",
             "skill",
             "manage"
@@ -2505,6 +2555,76 @@
       ]
     },
     {
+      "id": "harness-selector",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "profile",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [
+        {
+          "id": "profile",
+          "attribute": "data-bf-profile",
+          "values": [
+            "minimal",
+            "balanced",
+            "ultimate",
+            "creative"
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "open",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"open\"]"
+          }
+        },
+        {
+          "id": "current",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"current\"]"
+          }
+        },
+        {
+          "id": "pending",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"pending\"]"
+          }
+        },
+        {
+          "id": "newSession",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"new-session\"]"
+          }
+        },
+        {
+          "id": "comingSoon",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"coming-soon\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "composer-voice-input",
       "parts": [
         {
@@ -2517,6 +2637,14 @@
         },
         {
           "id": "pill",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "setupPill",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "setupMessage",
           "propertyProfile": "container"
         },
         {
@@ -2550,6 +2678,8 @@
           "attribute": "data-bf-phase",
           "values": [
             "idle",
+            "setup",
+            "downloading",
             "preparing",
             "recording",
             "transcribing"
@@ -2559,6 +2689,8 @@
           "id": "action",
           "attribute": "data-bf-action",
           "values": [
+            "install",
+            "dismiss",
             "cancel",
             "transcribe",
             "send"
@@ -3056,15 +3188,19 @@
           "propertyProfile": "container"
         },
         {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
           "id": "menu",
           "propertyProfile": "container"
         },
         {
           "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "auto",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "options",
           "propertyProfile": "container"
         },
         {
@@ -3114,11 +3250,31 @@
           "propertyProfile": "container"
         },
         {
+          "id": "sessionOverview",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "sessionOverviewTrigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "sessionOverviewPanel",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "sessionOverviewList",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "sessionOverviewItem",
+          "propertyProfile": "container"
+        },
+        {
           "id": "backgroundActivity",
           "propertyProfile": "container"
         },
         {
-          "id": "activityPanel",
+          "id": "rightPanelTrigger",
           "propertyProfile": "container"
         },
         {
@@ -3166,6 +3322,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "sessionTreeNodeTitle",
+          "propertyProfile": "container"
+        },
+        {
           "id": "sessionTreeMenu",
           "propertyProfile": "container"
         },
@@ -3202,6 +3362,13 @@
           }
         },
         {
+          "id": "collapsed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"collapsed\"]"
+          }
+        },
+        {
           "id": "active",
           "selector": {
             "kind": "self",
@@ -3227,6 +3394,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"empty\"]"
+          }
+        },
+        {
+          "id": "unavailable",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"unavailable\"]"
           }
         },
         {
@@ -3497,6 +3671,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "sectionHeading",
+          "propertyProfile": "container"
+        },
+        {
           "id": "field",
           "propertyProfile": "container"
         },
@@ -3518,6 +3696,14 @@
         },
         {
           "id": "tool",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "promptEditor",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "contextPreview",
           "propertyProfile": "container"
         },
         {
@@ -3666,6 +3852,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "subagentName",
+          "propertyProfile": "container"
+        },
+        {
           "id": "meta",
           "propertyProfile": "container"
         },
@@ -3717,7 +3907,7 @@
       ]
     },
     {
-      "id": "basics-config",
+      "id": "application-settings",
       "parts": [
         {
           "id": "root",
@@ -4228,11 +4418,23 @@
           "propertyProfile": "container"
         },
         {
-          "id": "zones",
+          "id": "summary",
           "propertyProfile": "container"
         },
         {
-          "id": "split",
+          "id": "tabs",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "filters",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "list",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "listHeader",
           "propertyProfile": "container"
         },
         {
@@ -4308,6 +4510,20 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"collapsed\"]"
+          }
+        },
+        {
+          "id": "unavailable",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"unavailable\"]"
+          }
+        },
+        {
+          "id": "changed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"changed\"]"
           }
         }
       ]
@@ -5118,10 +5334,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "blocks",
-          "propertyProfile": "container"
-        },
-        {
           "id": "lightbox",
           "propertyProfile": "container"
         },
@@ -5410,6 +5622,20 @@
       "facets": [],
       "states": [
         {
+          "id": "active",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"active\"]"
+          }
+        },
+        {
+          "id": "completed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"completed\"]"
+          }
+        },
+        {
           "id": "cancelled",
           "selector": {
             "kind": "self",
@@ -5471,7 +5697,7 @@
       ]
     },
     {
-      "id": "appearance-config",
+      "id": "appearance-settings",
       "parts": [
         {
           "id": "root",
@@ -5510,14 +5736,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "packageGrid",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "packageCard",
-          "propertyProfile": "container"
-        },
-        {
           "id": "packageSelect",
           "propertyProfile": "container"
         },
@@ -5526,19 +5744,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "packageCardBody",
-          "propertyProfile": "container"
-        },
-        {
           "id": "packageActions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "packageActiveIndicator",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "packageEmpty",
           "propertyProfile": "container"
         },
         {
@@ -5716,25 +5922,6 @@
       ]
     },
     {
-      "id": "lsp-config",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "plugins",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": []
-    },
-    {
       "id": "config",
       "parts": [
         {
@@ -5835,10 +6022,6 @@
         },
         {
           "id": "collectionList",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "subagentModel",
           "propertyProfile": "container"
         },
         {
@@ -6538,6 +6721,223 @@
       ]
     },
     {
+      "id": "icon-catalog",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "item",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
+      "id": "assistant-avatar",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "active",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"active\"]"
+          }
+        },
+        {
+          "id": "running",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"running\"]"
+          }
+        },
+        {
+          "id": "attention",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"attention\"]"
+          }
+        },
+        {
+          "id": "unread",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"unread\"]"
+          }
+        },
+        {
+          "id": "error",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"error\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "device-overview",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "overlay",
+          "visualRole": "popup"
+        }
+      ],
+      "facets": [
+        {
+          "id": "placement",
+          "attribute": "data-bf-placement",
+          "values": [
+            "top",
+            "bottom"
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "local",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"local\"]"
+          }
+        },
+        {
+          "id": "connected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"connected\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "session-navigation",
+      "parts": [
+        {
+          "id": "viewToggle",
+          "propertyProfile": "control",
+          "visualRole": "control"
+        }
+      ],
+      "facets": [
+        {
+          "id": "action",
+          "attribute": "data-bf-action",
+          "values": [
+            "toggle-session-view"
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "grouped",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"grouped\"]"
+          }
+        },
+        {
+          "id": "all",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"all\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "harness-profile-step",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        }
+      ],
+      "facets": [
+        {
+          "id": "profile",
+          "attribute": "data-bf-profile",
+          "values": [
+            "minimal",
+            "balanced",
+            "ultimate",
+            "creative"
+          ]
+        }
+      ],
+      "states": []
+    },
+    {
+      "id": "subagent-avatar",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "running",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"running\"]"
+          }
+        },
+        {
+          "id": "finishing",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"finishing\"]"
+          }
+        },
+        {
+          "id": "waiting",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"waiting\"]"
+          }
+        },
+        {
+          "id": "completed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"completed\"]"
+          }
+        },
+        {
+          "id": "cancelled",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"cancelled\"]"
+          }
+        },
+        {
+          "id": "error",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"error\"]"
+          }
+        },
+        {
+          "id": "idle",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"idle\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "announcement",
       "parts": [
         {
@@ -6803,6 +7203,10 @@
         },
         {
           "id": "centerHeader",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "centerClose",
           "propertyProfile": "container"
         },
         {
@@ -7124,52 +7528,6 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"empty\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "lsp",
-      "parts": [
-        {
-          "id": "pluginList",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "empty",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "items",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "plugin",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "pluginHeader",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "pluginDetails",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "empty",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"empty\"]"
-          }
-        },
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
           }
         }
       ]
@@ -7653,6 +8011,74 @@
       "states": []
     },
     {
+      "id": "mini-app-detail-modal",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "hero",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "iconStage",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "icon",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "summary",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "tags",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "highlights",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "highlight",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "footer",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "status",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "actions",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "running",
+          "selector": {
+            "kind": "ancestorPart",
+            "part": "root",
+            "suffix": "[data-bf-state~=\"running\"]"
+          }
+        },
+        {
+          "id": "customizing",
+          "selector": {
+            "kind": "ancestorPart",
+            "part": "root",
+            "suffix": "[data-bf-state~=\"customizing\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "agent-card",
       "parts": [
         {
@@ -7739,6 +8165,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "status",
+          "propertyProfile": "container"
+        },
+        {
           "id": "body",
           "propertyProfile": "container"
         },
@@ -7751,16 +8181,27 @@
           "propertyProfile": "container"
         },
         {
-          "id": "tags",
-          "propertyProfile": "container"
-        },
-        {
           "id": "meta",
           "propertyProfile": "container"
         }
       ],
       "facets": [],
-      "states": []
+      "states": [
+        {
+          "id": "connected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"connected\"]"
+          }
+        },
+        {
+          "id": "disabled",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"disabled\"]"
+          }
+        }
+      ]
     },
     {
       "id": "agent-capability-tooltip",
@@ -7894,6 +8335,14 @@
           "propertyProfile": "container"
         },
         {
+          "id": "title",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "heroActions",
+          "propertyProfile": "container"
+        },
+        {
           "id": "badges",
           "propertyProfile": "container"
         },
@@ -7915,7 +8364,22 @@
         }
       ],
       "facets": [],
-      "states": []
+      "states": [
+        {
+          "id": "heroTitle",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"heroTitle\"]"
+          }
+        },
+        {
+          "id": "stableHeight",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"stableHeight\"]"
+          }
+        }
+      ]
     },
     {
       "id": "mcp-interaction-dialog",
@@ -8027,6 +8491,10 @@
       "parts": [
         {
           "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "menuItem",
           "propertyProfile": "container"
         },
         {
@@ -8302,6 +8770,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "browserClose",
+          "propertyProfile": "container"
+        },
+        {
           "id": "breadcrumb",
           "propertyProfile": "container"
         },
@@ -8348,6 +8820,26 @@
         {
           "id": "confirmActions",
           "propertyProfile": "container"
+        },
+        {
+          "id": "portForward",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "portForwardIntro",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "portForwardForm",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "portForwardError",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "portForwardTable",
+          "propertyProfile": "container"
         }
       ],
       "facets": [],
@@ -8359,7 +8851,7 @@
         {
           "id": "root",
           "propertyProfile": "container",
-          "visualRole": "dialog",
+          "visualRole": "content",
           "continuityGroup": "about-dialog"
         },
         {
@@ -8374,30 +8866,20 @@
           "visualRole": "content"
         },
         {
-          "id": "version",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "decoration",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
           "id": "content",
           "propertyProfile": "container",
           "visualRole": "content",
           "continuityGroup": "about-dialog"
         },
         {
-          "id": "updateCard",
-          "propertyProfile": "container",
-          "visualRole": "card"
+          "id": "channelBadge",
+          "propertyProfile": "paint",
+          "visualRole": "content"
         },
         {
-          "id": "updateHeader",
+          "id": "updateCard",
           "propertyProfile": "container",
-          "visualRole": "toolbar"
+          "visualRole": "content"
         },
         {
           "id": "updateFeedback",
@@ -8420,11 +8902,6 @@
           "visualRole": "decoration"
         },
         {
-          "id": "infoCard",
-          "propertyProfile": "container",
-          "visualRole": "card"
-        },
-        {
           "id": "infoRow",
           "propertyProfile": "container",
           "visualRole": "content"
@@ -8443,6 +8920,12 @@
           "id": "copyButton",
           "propertyProfile": "control",
           "visualRole": "control"
+        },
+        {
+          "id": "starCallout",
+          "propertyProfile": "container",
+          "visualRole": "toolbar",
+          "continuityGroup": "about-dialog"
         },
         {
           "id": "footer",
@@ -8545,12 +9028,23 @@
           "continuityGroup": "nav-panel"
         },
         {
+          "id": "utilityRow",
+          "propertyProfile": "container",
+          "visualRole": "toolbar",
+          "continuityGroup": "nav-panel"
+        },
+        {
           "id": "search",
           "propertyProfile": "control",
           "visualRole": "control"
         },
         {
           "id": "searchTrigger",
+          "propertyProfile": "control",
+          "visualRole": "control"
+        },
+        {
+          "id": "todoEntry",
           "propertyProfile": "control",
           "visualRole": "control"
         },
@@ -8563,6 +9057,11 @@
           "id": "topAction",
           "propertyProfile": "control",
           "visualRole": "control"
+        },
+        {
+          "id": "topActionUnseen",
+          "propertyProfile": "paint",
+          "visualRole": "decoration"
         },
         {
           "id": "extensionGroup",
@@ -8581,6 +9080,12 @@
           "visualRole": "content"
         },
         {
+          "id": "stickySectionHeader",
+          "propertyProfile": "container",
+          "visualRole": "toolbar",
+          "continuityGroup": "nav-panel"
+        },
+        {
           "id": "sectionContent",
           "propertyProfile": "container",
           "visualRole": "content"
@@ -8596,12 +9101,6 @@
           "visualRole": "popup"
         },
         {
-          "id": "bottomBar",
-          "propertyProfile": "container",
-          "visualRole": "toolbar",
-          "continuityGroup": "nav-panel"
-        },
-        {
           "id": "miniAppFooter",
           "propertyProfile": "container",
           "visualRole": "toolbar",
@@ -8612,6 +9111,16 @@
           "propertyProfile": "container",
           "visualRole": "toolbar",
           "continuityGroup": "nav-panel"
+        },
+        {
+          "id": "deviceStatus",
+          "propertyProfile": "control",
+          "visualRole": "control"
+        },
+        {
+          "id": "settingsEntry",
+          "propertyProfile": "control",
+          "visualRole": "control"
         },
         {
           "id": "footerButton",
@@ -8672,21 +9181,29 @@
           "id": "action",
           "attribute": "data-bf-action",
           "values": [
-            "code",
-            "cowork",
-            "assistant",
+            "new-session",
+            "smart-members",
+            "long-term-tracking",
             "todos",
             "extensions",
             "agents",
-            "skills"
+            "skills",
+            "ecosystem-compatibility",
+            "session-filter",
+            "assistant-manager",
+            "floating-window",
+            "appearance-configuration",
+            "open-settings",
+            "about"
           ]
         },
         {
           "id": "section",
           "attribute": "data-bf-section",
           "values": [
-            "assistant-sessions",
-            "workspace"
+            "smart-members",
+            "workspace",
+            "sessions"
           ]
         }
       ],
@@ -8732,6 +9249,27 @@
             "kind": "self",
             "suffix": "[data-bf-state~=\"empty\"]"
           }
+        },
+        {
+          "id": "stuck",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"stuck\"]"
+          }
+        },
+        {
+          "id": "local",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"local\"]"
+          }
+        },
+        {
+          "id": "connected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"connected\"]"
+          }
         }
       ]
     },
@@ -8751,11 +9289,23 @@
           "propertyProfile": "container"
         },
         {
+          "id": "aggregateLoading",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "aggregateRetry",
+          "propertyProfile": "container"
+        },
+        {
           "id": "row",
           "propertyProfile": "container"
         },
         {
           "id": "rowMain",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "assistantAvatar",
           "propertyProfile": "container"
         },
         {
@@ -8803,6 +9353,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"loading\"]"
+          }
+        },
+        {
+          "id": "partial",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"partial\"]"
           }
         }
       ]
@@ -9780,6 +10337,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "subagentName",
+          "propertyProfile": "container"
+        },
+        {
           "id": "badge",
           "propertyProfile": "container"
         },
@@ -9939,7 +10500,7 @@
       ]
     },
     {
-      "id": "ai-model-config",
+      "id": "model-settings",
       "parts": [
         {
           "id": "root",
@@ -10370,14 +10931,6 @@
         {
           "id": "applicationToggle",
           "propertyProfile": "container"
-        },
-        {
-          "id": "hooksSection",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "hooksSummary",
-          "propertyProfile": "container"
         }
       ],
       "facets": [],
@@ -10476,7 +11029,7 @@
       "states": []
     },
     {
-      "id": "session-config",
+      "id": "runtime-settings",
       "parts": [
         {
           "id": "root",
@@ -10527,42 +11080,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "debugInputs",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "debugActions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "templateModal",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "templateCard",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "templateHeader",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "templateInfo",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "templateContent",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "templateField",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "templateNotes",
-          "propertyProfile": "container"
-        },
-        {
           "id": "modalFooter",
           "propertyProfile": "container"
         },
@@ -10576,8 +11093,11 @@
           "id": "view",
           "attribute": "data-bf-view",
           "values": [
-            "personalization",
-            "permissions"
+            "pet",
+            "session-workspace",
+            "execution",
+            "execution-control",
+            "device-control"
           ]
         }
       ],
@@ -10843,9 +11363,7 @@
           "attribute": "data-bf-phase",
           "values": [
             "idle",
-            "preparing-microphone",
-            "checking-microphone",
-            "preparing-recognition",
+            "preparing",
             "recording",
             "transcribing"
           ]
@@ -10861,14 +11379,6 @@
         }
       ],
       "states": [
-        {
-          "id": "testingMicrophone",
-          "selector": {
-            "kind": "ancestorPart",
-            "part": "root",
-            "suffix": "[data-bf-state~=\"testing-microphone\"]"
-          }
-        },
         {
           "id": "testingRecognition",
           "selector": {
@@ -10920,10 +11430,6 @@
         },
         {
           "id": "badges",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "body",
           "propertyProfile": "container"
         },
         {
@@ -11352,6 +11858,41 @@
       ]
     },
     {
+      "id": "usage-statistics-config",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "filters",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "summary",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "distributions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "modelHitRate",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "trendPanel",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "empty",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
       "id": "settings-nav",
       "parts": [
         {
@@ -11413,11 +11954,6 @@
           "visualRole": "control"
         },
         {
-          "id": "itemUnseen",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
           "id": "highlight",
           "propertyProfile": "paint",
           "visualRole": "decoration"
@@ -11440,6 +11976,112 @@
           }
         }
       ]
+    },
+    {
+      "id": "settings-view-page",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "layout",
+          "visualRole": "content"
+        },
+        {
+          "id": "loading",
+          "propertyProfile": "overlay",
+          "visualRole": "content"
+        },
+        {
+          "id": "loadingLine",
+          "propertyProfile": "paint",
+          "visualRole": "decoration"
+        },
+        {
+          "id": "loadingBlock",
+          "propertyProfile": "paint",
+          "visualRole": "decoration"
+        }
+      ],
+      "facets": [
+        {
+          "id": "view",
+          "attribute": "data-bf-view",
+          "values": [
+            "voice",
+            "shortcuts",
+            "editor",
+            "terminal",
+            "quick-actions",
+            "hooks"
+          ]
+        }
+      ],
+      "states": []
+    },
+    {
+      "id": "automation-settings-page",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "layout",
+          "visualRole": "content"
+        },
+        {
+          "id": "quickActions",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        },
+        {
+          "id": "hooks",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
+      "id": "development-settings-page",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "layout",
+          "visualRole": "content"
+        },
+        {
+          "id": "terminal",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        },
+        {
+          "id": "editor",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
+      "id": "input-settings-page",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "layout",
+          "visualRole": "content"
+        },
+        {
+          "id": "voice",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        },
+        {
+          "id": "shortcuts",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        }
+      ],
+      "facets": [],
+      "states": []
     },
     {
       "id": "background-command-output-panel",
@@ -12263,93 +12905,18 @@
       "states": []
     },
     {
-      "id": "references-panel",
+      "id": "global-search",
       "parts": [
         {
           "id": "root",
           "propertyProfile": "container"
         },
         {
-          "id": "header",
+          "id": "query",
           "propertyProfile": "container"
         },
         {
-          "id": "title",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "close",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "empty",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "fileGroup",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "fileHeader",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "filePath",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "fileCount",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "line",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "preview",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "empty",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"empty\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "nav-search-dialog",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "card",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "inputRow",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "search",
+          "id": "scopeBar",
           "propertyProfile": "container"
         },
         {
@@ -12357,49 +12924,25 @@
           "propertyProfile": "container"
         },
         {
-          "id": "empty",
-          "propertyProfile": "container"
-        },
-        {
           "id": "group",
           "propertyProfile": "container"
         },
         {
-          "id": "groupLabel",
+          "id": "result",
           "propertyProfile": "container"
         },
         {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemIcon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemContent",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemLabel",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemSublabel",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "sessionHint",
+          "id": "footer",
           "propertyProfile": "container"
         }
       ],
       "facets": [],
       "states": [
         {
-          "id": "active",
+          "id": "selected",
           "selector": {
             "kind": "self",
-            "suffix": "[data-bf-state~=\"active\"]"
+            "suffix": "[data-bf-state~=\"selected\"]"
           }
         }
       ]
@@ -12812,10 +13355,6 @@
         {
           "id": "categoryFilter",
           "propertyProfile": "container"
-        },
-        {
-          "id": "detailTags",
-          "propertyProfile": "container"
         }
       ],
       "facets": [],
@@ -13161,7 +13700,11 @@
           "propertyProfile": "container"
         },
         {
-          "id": "main",
+          "id": "context",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "next",
           "propertyProfile": "container"
         },
         {
@@ -13169,11 +13712,19 @@
           "propertyProfile": "container"
         },
         {
+          "id": "workspaceMenu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "workspaceOption",
+          "propertyProfile": "container"
+        },
+        {
           "id": "branch",
           "propertyProfile": "container"
         },
         {
-          "id": "actions",
+          "id": "divider",
           "propertyProfile": "container"
         },
         {
@@ -13223,6 +13774,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        },
+        {
+          "id": "active",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"active\"]"
           }
         },
         {
@@ -13554,11 +14112,6 @@
           "id": "greeting",
           "propertyProfile": "container",
           "visualRole": "content"
-        },
-        {
-          "id": "mascot",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
         },
         {
           "id": "heading",
@@ -14084,10 +14637,6 @@
         },
         {
           "id": "separator",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "lsp",
           "propertyProfile": "container"
         }
       ],
@@ -14738,11 +15287,19 @@
           "propertyProfile": "container"
         },
         {
+          "id": "artwork",
+          "propertyProfile": "container"
+        },
+        {
           "id": "defaultsContent",
           "propertyProfile": "container"
         },
         {
           "id": "stats",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "companion",
           "propertyProfile": "container"
         }
       ],
@@ -14848,39 +15405,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "collapsedTrigger",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "collapsedBadge",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "panel",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "heading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "headingActions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "requests",
-          "propertyProfile": "container"
-        },
-        {
           "id": "request",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "requestHeading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "requestDetails",
           "propertyProfile": "container"
         },
         {
@@ -14892,31 +15417,16 @@
           "propertyProfile": "container"
         },
         {
-          "id": "feedback",
-          "propertyProfile": "container"
-        },
-        {
           "id": "actions",
           "propertyProfile": "container"
         },
         {
-          "id": "singleActions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "batchActions",
+          "id": "scope",
           "propertyProfile": "container"
         }
       ],
       "facets": [],
       "states": [
-        {
-          "id": "collapsed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"collapsed\"]"
-          }
-        },
         {
           "id": "responding",
           "selector": {
@@ -15839,37 +16349,10 @@
         {
           "id": "root",
           "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "section",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "description",
-          "propertyProfile": "container"
         }
       ],
       "facets": [],
       "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
         {
           "id": "failed",
           "selector": {
@@ -16613,7 +17096,8 @@
           "attribute": "data-bf-session-kind",
           "values": [
             "code",
-            "cowork"
+            "cowork",
+            "unified"
           ]
         }
       ],
@@ -16712,6 +17196,18 @@
           "propertyProfile": "container"
         },
         {
+          "id": "statusCard",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "statusActions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "modelDialog",
+          "propertyProfile": "container"
+        },
+        {
           "id": "modelList",
           "propertyProfile": "container"
         },
@@ -16722,13 +17218,17 @@
         {
           "id": "modelActions",
           "propertyProfile": "container"
+        },
+        {
+          "id": "modelMore",
+          "propertyProfile": "container"
         }
       ],
       "facets": [],
       "states": []
     },
     {
-      "id": "worktrees-config",
+      "id": "worktree-settings",
       "parts": [
         {
           "id": "root",
@@ -17168,19 +17668,19 @@
           "propertyProfile": "container"
         },
         {
-          "id": "anchorBar",
-          "propertyProfile": "container"
-        },
-        {
           "id": "zones",
           "propertyProfile": "container"
         },
         {
-          "id": "coreGrid",
+          "id": "harnessPresentation",
           "propertyProfile": "container"
         },
         {
           "id": "filters",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "catalogGrid",
           "propertyProfile": "container"
         },
         {
@@ -17514,26 +18014,65 @@
       ],
       "facets": [
         {
-          "id": "tab",
-          "attribute": "data-bf-tab",
+          "id": "page",
+          "attribute": "data-bf-page",
           "values": [
-            "basics",
-            "appearance",
-            "models",
-            "archived-sessions",
-            "session-personalization",
-            "session-permissions",
-            "quick-actions",
-            "review",
-            "memories",
-            "mcp-tools",
-            "external-sources",
-            "acp-agents",
-            "editor",
-            "keyboard"
+            "application.general",
+            "application.appearance",
+            "application.pet",
+            "application.input",
+            "application.development",
+            "ai.models",
+            "ai.memory",
+            "workspace.session",
+            "workspace.worktrees",
+            "tools.execution",
+            "tools.automation",
+            "tools.mcp",
+            "tools.acp",
+            "data.usage",
+            "data.archived",
+            "data.diagnostics"
           ]
         }
       ],
+      "states": []
+    },
+    {
+      "id": "ecosystem-compatibility",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "layout",
+          "visualRole": "workspace"
+        },
+        {
+          "id": "sidebar",
+          "propertyProfile": "layout",
+          "visualRole": "panel"
+        },
+        {
+          "id": "productList",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        },
+        {
+          "id": "main",
+          "propertyProfile": "layout",
+          "visualRole": "continuous-surface"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container",
+          "visualRole": "toolbar"
+        },
+        {
+          "id": "content",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        }
+      ],
+      "facets": [],
       "states": []
     },
     {
@@ -17624,6 +18163,18 @@
           "propertyProfile": "container"
         },
         {
+          "id": "installedListHeader",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "installedListTitle",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "installedListCount",
+          "propertyProfile": "container"
+        },
+        {
           "id": "loading",
           "propertyProfile": "container"
         },
@@ -17672,7 +18223,23 @@
           "propertyProfile": "container"
         },
         {
+          "id": "installedCardSource",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "installedCardLevel",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "installedCardStatus",
+          "propertyProfile": "container"
+        },
+        {
           "id": "installedCardActions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "installedCardDetails",
           "propertyProfile": "container"
         },
         {
@@ -17971,11 +18538,19 @@
           "propertyProfile": "container"
         },
         {
+          "id": "monthNavigation",
+          "propertyProfile": "container"
+        },
+        {
           "id": "panes",
           "propertyProfile": "container"
         },
         {
           "id": "listPane",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "overview",
           "propertyProfile": "container"
         },
         {
@@ -17987,7 +18562,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "rowTime",
+          "id": "rowIcon",
           "propertyProfile": "container"
         },
         {
@@ -18027,10 +18602,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "calendarNav",
-          "propertyProfile": "container"
-        },
-        {
           "id": "calendarGrid",
           "propertyProfile": "container"
         },
@@ -18047,11 +18618,27 @@
           "propertyProfile": "container"
         },
         {
-          "id": "editorHead",
+          "id": "editorIntro",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editorBody",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editorSection",
           "propertyProfile": "container"
         },
         {
           "id": "editorGrid",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editorRuntime",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editorAdvanced",
           "propertyProfile": "container"
         },
         {
@@ -18211,6 +18798,40 @@
     "--bf-appearance-token-btn-primary-hover-transform",
     "--bf-appearance-token-btn-primary-shadow",
     "--bf-appearance-token-button-bg-hover",
+    "--bf-appearance-token-chrome-accent-100",
+    "--bf-appearance-token-chrome-accent-200",
+    "--bf-appearance-token-chrome-accent-300",
+    "--bf-appearance-token-chrome-accent-400",
+    "--bf-appearance-token-chrome-accent-50",
+    "--bf-appearance-token-chrome-accent-500",
+    "--bf-appearance-token-chrome-accent-600",
+    "--bf-appearance-token-chrome-accent-700",
+    "--bf-appearance-token-chrome-bg-elevated",
+    "--bf-appearance-token-chrome-bg-primary",
+    "--bf-appearance-token-chrome-bg-scene",
+    "--bf-appearance-token-chrome-bg-secondary",
+    "--bf-appearance-token-chrome-bg-tertiary",
+    "--bf-appearance-token-chrome-bg-workbench",
+    "--bf-appearance-token-chrome-border-accent",
+    "--bf-appearance-token-chrome-border-accent-soft",
+    "--bf-appearance-token-chrome-border-accent-strong",
+    "--bf-appearance-token-chrome-border-accent-subtle",
+    "--bf-appearance-token-chrome-border-base",
+    "--bf-appearance-token-chrome-border-medium",
+    "--bf-appearance-token-chrome-border-prominent",
+    "--bf-appearance-token-chrome-border-strong",
+    "--bf-appearance-token-chrome-border-subtle",
+    "--bf-appearance-token-chrome-element-bg-base",
+    "--bf-appearance-token-chrome-element-bg-medium",
+    "--bf-appearance-token-chrome-element-bg-soft",
+    "--bf-appearance-token-chrome-element-bg-strong",
+    "--bf-appearance-token-chrome-element-bg-subtle",
+    "--bf-appearance-token-chrome-scrollbar-thumb",
+    "--bf-appearance-token-chrome-scrollbar-thumb-hover",
+    "--bf-appearance-token-chrome-text-disabled",
+    "--bf-appearance-token-chrome-text-muted",
+    "--bf-appearance-token-chrome-text-primary",
+    "--bf-appearance-token-chrome-text-secondary",
     "--bf-appearance-token-color-accent-100",
     "--bf-appearance-token-color-accent-200",
     "--bf-appearance-token-color-accent-300",
@@ -18275,6 +18896,12 @@
     "--bf-appearance-token-color-warning",
     "--bf-appearance-token-color-warning-bg",
     "--bf-appearance-token-color-warning-border",
+    "--bf-appearance-token-config-page-divider",
+    "--bf-appearance-token-config-page-row-hover-bg",
+    "--bf-appearance-token-config-page-section-bg",
+    "--bf-appearance-token-config-page-section-border",
+    "--bf-appearance-token-config-page-section-border-width",
+    "--bf-appearance-token-config-page-section-shadow",
     "--bf-appearance-token-domain-capability-creative",
     "--bf-appearance-token-domain-capability-docs",
     "--bf-appearance-token-domain-capability-ops",

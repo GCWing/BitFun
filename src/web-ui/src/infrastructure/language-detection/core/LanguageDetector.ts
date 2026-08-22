@@ -4,69 +4,12 @@ import type {
   Language, 
   DetectionContext, 
   FileDetectionResult,
-  LanguagePlugin,
-  LspConfig 
+  LanguagePlugin
 } from '../types';
 import { languageRegistry } from './LanguageRegistry';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('LanguageDetector');
-
-// ============================================================================
-
-// ============================================================================
-
- 
-const LSP_CONFIG_MAP: Record<string, LspConfig> = {
-  typescript: {
-    serverId: 'typescript-language-server',
-    enabled: true,
-  },
-  javascript: {
-    serverId: 'typescript-language-server',
-    enabled: true,
-  },
-  python: {
-    serverId: 'pylsp',
-    enabled: true,
-  },
-  rust: {
-    serverId: 'rust-analyzer',
-    enabled: true,
-  },
-  go: {
-    serverId: 'gopls',
-    enabled: true,
-  },
-  java: {
-    serverId: 'jdtls',
-    enabled: true,
-  },
-  html: {
-    serverId: 'vscode-html-language-server',
-    enabled: true,
-  },
-  css: {
-    serverId: 'vscode-css-language-server',
-    enabled: true,
-  },
-  json: {
-    serverId: 'vscode-json-language-server',
-    enabled: true,
-  },
-  yaml: {
-    serverId: 'yaml-language-server',
-    enabled: true,
-  },
-  vue: {
-    serverId: 'vue-language-server',
-    enabled: true,
-  },
-  svelte: {
-    serverId: 'svelte-language-server',
-    enabled: true,
-  },
-};
 
 // ============================================================================
 
@@ -178,7 +121,7 @@ class LanguageDetector {
       }
       if (byExtension.length > 1) {
         
-        const primary = this.resolvePrimaryLanguage(byExtension, context);
+        const primary = this.resolvePrimaryLanguage(byExtension);
         return {
           language: primary,
           confidence: 0.8,
@@ -223,17 +166,7 @@ class LanguageDetector {
   }
   
    
-  private resolvePrimaryLanguage(candidates: Language[], context: DetectionContext): Language {
-    
-    if (context.projectInfo) {
-      const projectLang = context.projectInfo.primaryLanguage;
-      const matching = candidates.find(c => c.id === projectLang || c.parent === projectLang);
-      if (matching) {
-        return matching;
-      }
-    }
-    
-    
+  private resolvePrimaryLanguage(candidates: Language[]): Language {
     const primary = candidates.find(c => !c.parent);
     if (primary) {
       return primary;
@@ -260,17 +193,6 @@ class LanguageDetector {
    
   public getColor(filePathOrName: string): string | undefined {
     return this.detectFile(filePathOrName).language.color;
-  }
-  
-   
-  public hasLspSupport(filePathOrName: string): boolean {
-    const lang = this.detectFile(filePathOrName).language;
-    return !!lang.lspId && !!LSP_CONFIG_MAP[lang.id];
-  }
-  
-   
-  public getLspConfig(languageId: string): LspConfig | undefined {
-    return LSP_CONFIG_MAP[languageId];
   }
   
    
@@ -348,9 +270,6 @@ class LanguageDetector {
     let key = path;
     if (context?.hints?.language) {
       key += `|hint:${context.hints.language}`;
-    }
-    if (context?.projectInfo?.type) {
-      key += `|project:${context.projectInfo.type}`;
     }
     return key;
   }

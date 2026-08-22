@@ -204,6 +204,11 @@ pub fn is_local_only_command(command: &str) -> bool {
     LOCAL_ONLY_COMMANDS.contains(&command)
 }
 
+/// Commands kept as protocol tombstones after their runtime owner was removed.
+pub fn is_retired_command(command: &str) -> bool {
+    command.starts_with("lsp_")
+}
+
 /// Register a controller device id to receive peer UI events.
 pub fn attach_controller(device_id: String) {
     if let Ok(mut state) = peer_control_state().lock() {
@@ -390,6 +395,15 @@ pub async fn dispatch(command: &str, args: Value) -> HostInvokeBridgeResult {
             error: Some("HostInvoke command is empty".to_string()),
         };
     }
+    if is_retired_command(command) {
+        return HostInvokeBridgeResult {
+            ok: false,
+            value: None,
+            error: Some(format!(
+                "command '{command}' is unsupported because the BitFun LSP runtime has been retired"
+            )),
+        };
+    }
     if is_local_only_command(command) {
         return HostInvokeBridgeResult {
             ok: false,
@@ -546,6 +560,19 @@ mod tests {
     fn granting_git_ownership_trust_is_refused_on_the_peer() {
         assert!(is_local_only_command("git_trust_repository"));
         assert!(!is_local_only_command("git_get_repository_trust"));
+    }
+
+    #[tokio::test]
+    async fn retired_lsp_commands_fail_before_the_webview_bridge() {
+        let result = dispatch("lsp_open_workspace", serde_json::json!({})).await;
+        assert!(!result.ok);
+        assert!(result.value.is_none());
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "command 'lsp_open_workspace' is unsupported because the BitFun LSP runtime has been retired"
+            )
+        );
     }
 
     #[test]

@@ -293,7 +293,6 @@ export function peerInvokePriorityFor(command: string): PeerInvokePriority {
   if (
     command.startsWith('git_') ||
     command.startsWith('ssh_') ||
-    command.startsWith('lsp_') ||
     command.startsWith('search_') ||
     command.startsWith('explorer_') ||
     command.startsWith('miniapp_') ||

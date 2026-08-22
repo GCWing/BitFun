@@ -398,7 +398,6 @@ test('Services Core feature-free dependencies stay behind exact text and async I
       'filesystem',
       'json-io',
       'local-storage',
-      'lsp',
       'permission',
       'process-runtime',
       'session-search',
@@ -699,7 +698,6 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
       name: 'core_type_contracts',
       path: 'tests/core_type_contracts.rs',
       leaves: [
-        'tests/core_type_contracts/lsp_contracts.rs',
         'tests/core_type_contracts/session_contracts.rs',
         'tests/core_type_contracts/session_usage_contracts.rs',
         'tests/core_type_contracts/surface_contracts.rs',
@@ -1463,7 +1461,6 @@ const SDK_HOST_REVIEWED_CORE_FEATURES = [
   'document-read',
   'subscription-auth',
   'deep-research',
-  'lsp',
   'external-sources',
   'tools-basic',
   'tools-git',
@@ -3297,16 +3294,6 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'tokio/io-util',
     'tokio/rt',
   ]);
-  assert.deepEqual(profiles.get('lsp'), [
-    'dep:anyhow',
-    'dep:bitfun-core-types',
-    'dep:notify',
-    'dep:zip',
-    'process-runtime',
-    'tokio/fs',
-    'tokio/io-util',
-    'tokio/sync',
-  ]);
   assert.deepEqual(profiles.get('workspace-runtime'), [
     'dep:anyhow',
     'dep:async-trait',
@@ -3391,7 +3378,6 @@ test('services-core Tokio capabilities stay owner-scoped', () => {
       'local-storage': [],
       'process-runtime': [],
       'workspace-instructions': [],
-      lsp: [],
       'workspace-runtime': [],
     },
   };
@@ -3406,10 +3392,6 @@ test('services-core Tokio capabilities stay owner-scoped', () => {
   assert.ok(
     messages.some((message) => message.includes('filesystem missing effective Tokio capabilities: fs')),
     'services-core must require filesystem to own tokio/fs',
-  );
-  assert.ok(
-    messages.some((message) => message.includes('lsp missing effective Tokio capabilities')),
-    'services-core must require lsp to declare its complete effective Tokio profile',
   );
 });
 
@@ -3447,7 +3429,6 @@ test('Services Core accepts only the reviewed feature-owned Tokio runtime graph'
       ],
       'workspace-instructions': ['dep:tokio', 'tokio/fs', 'tokio/io-util', 'tokio/rt'],
       'workspace-text-runtime': ['dep:tokio', 'tokio/rt'],
-      lsp: ['process-runtime', 'tokio/fs', 'tokio/io-util', 'tokio/sync'],
       'workspace-runtime': [
         'process-runtime',
         'tokio/fs',
@@ -3494,7 +3475,6 @@ test('Services Core Tokio owners cannot be hidden behind an unreviewed alias', (
       ],
       'workspace-instructions': ['dep:tokio', 'tokio/fs', 'tokio/io-util', 'tokio/rt'],
       'workspace-text-runtime': ['dep:tokio', 'tokio/rt'],
-      lsp: ['process-runtime', 'tokio/fs', 'tokio/io-util', 'tokio/sync'],
       'workspace-runtime': [
         'process-runtime',
         'tokio/fs',
@@ -3557,7 +3537,6 @@ test('Core Tokio capabilities cannot hide behind an unreviewed owner feature', (
       'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
       'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
       'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
-      lsp: ['tokio/macros'],
       sneaky: ['agent-runtime', 'browser-control'],
     },
   };
@@ -3579,7 +3558,6 @@ test('reviewed Tokio aggregates cannot declare runtime capabilities directly', (
       'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
       'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
       'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
-      lsp: ['tokio/macros'],
       'product-full': ['agent-runtime', 'tokio/net'],
     },
   };

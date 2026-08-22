@@ -471,13 +471,6 @@
     "minimap": "顯示縮略圖",
     "lineNumbers": "顯示行號"
   },
-  "lspConfig": {
-    "title": "語言服務",
-    "subtitle": "設定語言伺服器",
-    "installedServers": "已安裝的語言伺服器",
-    "noServers": "暫無語言伺服器",
-    "noServersHint": "語言伺服器提供代碼智能功能"
-  },
   "terminalConfig": {
     "title": "終端",
     "subtitle": "設定集成終端",

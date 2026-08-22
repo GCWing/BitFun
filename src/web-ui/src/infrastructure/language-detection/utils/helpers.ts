@@ -27,11 +27,6 @@ export function getFileColor(filePathOrName: string): string | undefined {
 }
 
  
-export function hasLspSupport(filePathOrName: string): boolean {
-  return languageDetector.hasLspSupport(filePathOrName);
-}
-
- 
 export function getLanguageById(languageId: string): Language | undefined {
   return languageDetector.getLanguage(languageId);
 }

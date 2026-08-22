@@ -32,7 +32,6 @@ export const cliIntegrationTestTargets = [
 export const servicesCoreIntegrationTestTargets = [
   { name: 'markdown_owner_contracts', path: 'tests/markdown_owner_contracts.rs' },
   { name: 'declarative_workspace_instruction_contracts', path: 'tests/declarative_workspace_instruction_contracts.rs' },
-  { name: 'lsp_plugin_registry_contracts', path: 'tests/lsp_plugin_registry_contracts.rs' },
   { name: 'runtime_ownership_contracts', path: 'tests/runtime_ownership_contracts.rs' },
   { name: 'local_runtime_ports', path: 'tests/local_runtime_ports.rs' },
   { name: 'permission_store_contracts', path: 'tests/permission_store_contracts.rs' },
@@ -126,7 +125,6 @@ export const coreTypesIntegrationTestTargets = [
     name: 'core_type_contracts',
     path: 'tests/core_type_contracts.rs',
     leaves: [
-      'tests/core_type_contracts/lsp_contracts.rs',
       'tests/core_type_contracts/session_contracts.rs',
       'tests/core_type_contracts/session_usage_contracts.rs',
       'tests/core_type_contracts/surface_contracts.rs',

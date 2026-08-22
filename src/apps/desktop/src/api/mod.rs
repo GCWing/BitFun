@@ -29,8 +29,6 @@ pub mod git_agent_api;
 pub mod git_api;
 pub mod i18n_api;
 pub mod insights_api;
-pub mod lsp_api;
-pub mod lsp_workspace_api;
 pub mod mcp_api;
 pub mod miniapp_agent_api;
 pub mod miniapp_api;

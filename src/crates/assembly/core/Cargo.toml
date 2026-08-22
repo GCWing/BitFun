@@ -176,7 +176,6 @@ product-full = [
     "dispatch-store",
     "filesystem",
     "git",
-    "lsp",
     "local-storage",
     "process-runtime",
     "remote-workspace",
@@ -404,7 +403,6 @@ dispatch-store = ["dep:base64", "local-storage", "bitfun-services-core/dispatch-
 filesystem = ["bitfun-services-core/filesystem"]
 local-storage = ["dep:bitfun-agent-tools", "bitfun-services-core/local-storage"]
 process-runtime = ["bitfun-services-core/process-runtime"]
-lsp = ["dep:notify", "bitfun-services-core/lsp", "tokio/macros"]
 terminal = ["dep:terminal-core"]
 workspace-runtime = [
     "dep:serde_yaml",

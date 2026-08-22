@@ -95,7 +95,7 @@
   },
   "advanced": {
     "semanticHighlighting": "語義高亮",
-    "semanticHighlightingDesc": "基於語義分析的代碼高亮（需要 LSP 支持）",
+    "semanticHighlightingDesc": "使用語義資訊改進程式碼高亮",
     "bracketPairColorization": "括號對著色",
     "bracketPairColorizationDesc": "用不同顏色區分嵌套的括號對",
     "formatOnSave": "儲存時格式化",

@@ -379,7 +379,6 @@ export function runManifestParserSelfTest({
     'filesystem',
     'git',
     'i18n-runtime',
-    'lsp',
     'local-storage',
     'process-runtime',
     'external-sources',
@@ -493,20 +492,6 @@ export function runManifestParserSelfTest({
     ],
     [
       servicesCoreManifest,
-      'lsp',
-      [
-        'dep:anyhow',
-        'dep:bitfun-core-types',
-        'dep:notify',
-        'dep:zip',
-        'process-runtime',
-        'tokio/fs',
-        'tokio/io-util',
-        'tokio/sync',
-      ],
-    ],
-    [
-      servicesCoreManifest,
       'workspace-runtime',
       [
         'dep:anyhow',
@@ -540,7 +525,6 @@ export function runManifestParserSelfTest({
       ['dep:bitfun-agent-tools', 'bitfun-services-core/local-storage'],
     ],
     [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
-    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp', 'tokio/macros']],
     [coreManifest, 'terminal', ['dep:terminal-core']],
     [
       coreManifest,
@@ -638,7 +622,6 @@ export function runManifestParserSelfTest({
         'bitfun-core/document-read',
         'bitfun-core/subscription-auth',
         'bitfun-core/deep-research',
-        'bitfun-core/lsp',
         'bitfun-core/external-sources',
         'bitfun-core/tools-basic',
         'bitfun-core/tools-git',
@@ -1158,7 +1141,7 @@ export function runManifestParserSelfTest({
   }
   const expectedServicesCoreOwners = new Map([
     ['base64', ['filesystem']],
-    ['bitfun-core-types', ['local-storage', 'lsp']],
+    ['bitfun-core-types', ['local-storage']],
     ['bitfun-events', ['local-storage']],
     ['chrono', ['filesystem', 'local-storage']],
     ['chrono-tz', ['token-usage-statistics']],
@@ -1167,7 +1150,6 @@ export function runManifestParserSelfTest({
     ['globset', ['workspace-instructions']],
     ['ignore', ['filesystem']],
     ['libc', ['local-storage', 'process-runtime']],
-    ['notify', ['lsp']],
     [
       'regex',
       ['diagnostics', 'filesystem', 'local-storage', 'markdown', 'workspace-instructions'],
@@ -1188,7 +1170,6 @@ export function runManifestParserSelfTest({
     ['which', ['process-runtime']],
     ['win32job', ['process-runtime']],
     ['windows', ['json-io', 'local-storage', 'process-runtime']],
-    ['zip', ['lsp']],
     [
       'tokio',
       [
@@ -1196,7 +1177,6 @@ export function runManifestParserSelfTest({
         'filesystem',
         'json-io',
         'local-storage',
-        'lsp',
         'permission',
         'process-runtime',
         'workspace-instructions',
@@ -4575,7 +4555,7 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/web-ui/src/tools/initializeTools.ts',
-      contracts: ['initializeAllTools', 'initializeLsp', 'initializeGit', 'does not import every tool'],
+      contracts: ['initializeAllTools', 'initializeGit', 'does not import every tool'],
     },
     {
       path: 'src/web-ui/src/tools/editor/services/MonacoStartupWarmup.ts',

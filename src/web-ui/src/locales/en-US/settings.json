@@ -471,13 +471,6 @@
     "minimap": "Show Minimap",
     "lineNumbers": "Show Line Numbers"
   },
-  "lspConfig": {
-    "title": "LSP",
-    "subtitle": "Configure language servers",
-    "installedServers": "Installed Language Servers",
-    "noServers": "No language servers",
-    "noServersHint": "Language servers provide code intelligence features"
-  },
   "terminalConfig": {
     "title": "Terminal",
     "subtitle": "Configure integrated terminal",

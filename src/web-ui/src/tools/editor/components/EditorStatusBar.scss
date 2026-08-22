@@ -89,43 +89,6 @@ $_section-gap: 12px;
     letter-spacing: 0.5px;
   }
 
-  // LSP Status
-  &__lsp {
-    padding: 2px 4px;
-    
-    &--connected {
-      color: var(--bf-appearance-token-color-success);
-    }
-    
-    &--connecting {
-      color: var(--bf-appearance-token-color-warning);
-    }
-    
-    &--disconnected {
-      color: var(--bf-appearance-token-color-text-muted);
-      opacity: 0.6;
-    }
-  }
-
-  &__lsp-spinner {
-    animation: status-spin 1s linear infinite;
-  }
-}
-
-// Animations
-@keyframes status-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .editor-status-bar__lsp-spinner {
-    animation: none;
-  }
 }
 
 // Responsive

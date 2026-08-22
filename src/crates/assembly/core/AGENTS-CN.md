@@ -15,7 +15,7 @@
 主要区域：
 
 - `src/agentic/`：agents、prompts、tools、sessions、execution、persistence
-- `src/service/`：config、filesystem、terminal、git、LSP、MCP、remote connect、AI memory
+- `src/service/`：config、filesystem、terminal、git、MCP、remote connect、AI memory
 - `src/infrastructure/`：AI clients、app paths、event system、storage、debug log server
 - `src/product_runtime/`：Core Agent Runtime 兼容 adapter 与 runtime service provider wiring
 
@@ -58,7 +58,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - CLI/ACP 的闭包检查遵循 Cargo resolver-v2，保持 normal 与 host（build/proc-macro）feature context 相互隔离；
   但同一 context 内的所有 target-specific 声明都属于同一个已评审架构边界。平台确实需要不同 owner 时，应拆分清晰的
   package/module 归属；不得用互斥 Cargo `cfg` 隐藏未评审的 Core 能力。
-- 保持轻量兼容 feature 可独立编译。本地服务 profile 为 `dispatch-store`、`lsp`、`terminal`、
+- 保持轻量兼容 feature 可独立编译。本地服务 profile 为 `dispatch-store`、`terminal`、
   `workspace-runtime` 和 `workspace-watch`；`remote-workspace` 只增加远程工作区 facade，
   `ssh-remote` 才增加具体 SSH transport。`announcement`、`file-watch`、`git`、
   `review-platform` 也保持独立，`service-integrations` 只是其兼容聚合。任何窄 feature 都不得直接或间接启用 `product-full`。

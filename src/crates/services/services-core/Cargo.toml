@@ -26,11 +26,9 @@ chrono = { workspace = true, optional = true }
 chrono-tz = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
-zip = { workspace = true, optional = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 fs2 = { workspace = true, optional = true }
-notify = { workspace = true, optional = true }
 ignore = { workspace = true, optional = true }
 globset = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
@@ -117,16 +115,6 @@ workspace-instructions = [
     "tokio/io-util",
     "tokio/rt",
 ]
-lsp = [
-    "dep:anyhow",
-    "dep:bitfun-core-types",
-    "dep:notify",
-    "dep:zip",
-    "process-runtime",
-    "tokio/fs",
-    "tokio/io-util",
-    "tokio/sync",
-]
 markdown = ["dep:regex", "dep:serde_yaml"]
 workspace-runtime = [
     "dep:anyhow",
@@ -174,11 +162,6 @@ required-features = ["markdown"]
 name = "declarative_workspace_instruction_contracts"
 path = "tests/declarative_workspace_instruction_contracts.rs"
 required-features = ["workspace-instructions"]
-
-[[test]]
-name = "lsp_plugin_registry_contracts"
-path = "tests/lsp_plugin_registry_contracts.rs"
-required-features = ["lsp"]
 
 [[test]]
 name = "runtime_ownership_contracts"

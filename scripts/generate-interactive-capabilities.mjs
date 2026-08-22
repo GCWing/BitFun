@@ -184,10 +184,15 @@ function buildInteractionInventory(roots) {
       const normalized = toPosix(file);
       return /\.(?:ts|tsx)$/u.test(file)
         && !/\.(?:test|spec|stories|example)\.(?:ts|tsx)$/u.test(file)
-        && !normalized.includes('/__tests__/');
-    }).sort();
-    for (const file of sourceFiles) {
-      const relativeFile = toPosix(path.relative(REPO_ROOT, file));
+        && !normalized.includes('/__tests__/')
+        && !normalized.includes('/generated/');
+    })
+      .map((file) => ({
+        file,
+        relativeFile: toPosix(path.relative(REPO_ROOT, file)),
+      }))
+      .sort((left, right) => left.relativeFile < right.relativeFile ? -1 : left.relativeFile > right.relativeFile ? 1 : 0);
+    for (const { file, relativeFile } of sourceFiles) {
       const matchedLines = readFileSync(file, 'utf8')
         .split(/\r?\n/u)
         .map((line) => line.trim().replace(/\s+/gu, ' '))

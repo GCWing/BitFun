@@ -164,7 +164,6 @@ const SERVICES_CORE_TOKIO_FEATURES = new Map([
   ['session-search', ['rt']],
   ['workspace-instructions', ['fs', 'io-util', 'rt']],
   ['workspace-text-runtime', ['rt']],
-  ['lsp', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
   ['workspace-runtime', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
 ]);
 const SERVICES_CORE_BASE_TOKIO_FEATURES = [];
@@ -174,7 +173,6 @@ const CORE_TOKIO_FEATURES = new Map([
   ['agent-runtime', ['io-util', 'macros', 'rt', 'time']],
   ['mcp-runtime', ['io-util', 'macros', 'rt', 'rt-multi-thread', 'time']],
   ['browser-control', ['net', 'rt', 'time']],
-  ['lsp', ['macros']],
 ]);
 const CORE_TOKIO_AGGREGATES = new Set([
   'external-sources',
@@ -896,7 +894,6 @@ export function findProductEntrypointCoreFeatureViolations(
     'document-read',
     'subscription-auth',
     'deep-research',
-    'lsp',
     'external-sources',
     'tools-basic',
     'tools-git',
@@ -938,7 +935,6 @@ export function findProductEntrypointCoreFeatureViolations(
     'file-watch',
     'filesystem',
     'git',
-    'lsp',
     'local-storage',
     'mcp-runtime',
     'model-catalog',

@@ -57,7 +57,7 @@ class EditorJumpService {
   }
 
    
-  private getEditor(filePath: string): any | null {
+  getEditor(filePath: string): any | null {
     const normalized = this.normalizePath(filePath);
     return this.editors.get(normalized)?.editor || null;
   }

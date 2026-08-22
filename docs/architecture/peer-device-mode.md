@@ -32,8 +32,8 @@ lists this machine plus every online peer.
 Two rules follow, and both are load-bearing:
 
 - **A surface switch never mutates the device being left.** Everything in
-  `resetProductSurface()` is frontend-only. Sending `terminal_shutdown_all` or
-  `lsp_close_workspace` during a switch lands on the *previous* transport and
+  `resetProductSurface()` is frontend-only. Sending `terminal_shutdown_all`
+  during a switch lands on the *previous* transport and
   kills work an agent there still depends on.
 - **Product events are routed by their source device.** The controller re-emits
   peer DeviceEvents under their original event name, so with peers attached in
@@ -184,7 +184,7 @@ FS) and must not be mixed with Peer Device Mode.
   `RemoteCommand::HostInvoke` over `account_device_rpc`.
 - HostInvoke on the controller is **priority-queued** with four requests in
   flight. Session restore / session-list / dialog / workspace-startup commands
-  outrank background `git_*` / `ssh_*` / `lsp_*` / `search_*` / FS / canvas /
+  outrank background `git_*` / `ssh_*` / `search_*` / FS / canvas /
   editor RPCs so hydrate is not starved into relay HTTP 504s. Terminal commands
   are always interactive priority, and one slot is kept free from normal and
   low-priority work so input cannot be trapped behind slow polling requests.

@@ -573,7 +573,6 @@ fn should_fanout_peer_ui_event(event: &str) -> bool {
         event,
         "terminal_event"
             | "file-system-changed"
-            | "lsp-event"
             | "backend-event-mcpinteractionrequest"
             | "backend-event-acppermissionrequest"
             | "backend-event-toolexecutionprogress"
