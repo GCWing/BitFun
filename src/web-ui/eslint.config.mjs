@@ -23,6 +23,41 @@ export default tseslint.config(
     ],
   },
   {
+    // Adapter-layer fence: business Tauri commands must reach the platform
+    // only through ApiClient (api.invoke). Direct `invoke` from
+    // '@tauri-apps/api/core' is reserved for the adapter implementations in
+    // adapters/** (and the peer-device host bridge, which intentionally runs
+    // outside the routed transport — see PeerHostInvokeBridge). This is the
+    // executable form of "front end calls go through the adapter layer";
+    // reintroducing a direct invoke elsewhere fails the build.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/infrastructure/api/adapters/**',
+      // PeerHostInvokeBridge runs on the HOST side of Peer-Device Mode: it
+      // executes *dynamic* command names forwarded from the peer device via a
+      // raw Tauri invoke. ApiClient is already routed to the peer adapter at
+      // this point, so routing through it would be wrong. This is the one
+      // intentional exception to the adapter-layer fence.
+      'src/infrastructure/peer-device/PeerHostInvokeBridge.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@tauri-apps/api/core'],
+              importNames: ['invoke'],
+              message:
+                '业务命令必须经 api.invoke(ApiClient) 统一适配层,不可直接 import invoke。' +
+                '如需直连平台 invoke,放到 adapters/ 内并经 api 暴露。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     linterOptions: {

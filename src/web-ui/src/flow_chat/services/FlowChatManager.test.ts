@@ -42,12 +42,6 @@ vi.mock('../store/FlowChatStore', () => ({
   },
 }));
 
-vi.mock('../../shared/services/agent-service', () => ({
-  AgentService: {
-    getInstance: vi.fn(() => ({})),
-  },
-}));
-
 vi.mock('@/infrastructure/api/service-api/ACPClientAPI', () => ({
   ACPClientAPI: {},
 }));
