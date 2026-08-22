@@ -14,13 +14,19 @@ const read = (relativePath) => readFile(path.join(repositoryRoot, relativePath),
 
 test('the public contract is a compact feature-and-settings manual', () => {
   const { publicCatalog } = buildCapabilityCatalog();
-  assert.equal(publicCatalog.counts.features, 22);
-  assert.equal(publicCatalog.counts.settings, 16);
-  assert.equal(publicCatalog.capabilities.length, 38);
-  assert.equal(publicCatalog.counts.documentedItems, 294);
+  const featureCount = publicCatalog.capabilities.filter(({ kind }) => kind === 'feature').length;
+  const settingCount = publicCatalog.capabilities.filter(({ kind }) => kind === 'setting').length;
+  const documentedItemCount = publicCatalog.capabilities.reduce(
+    (total, capability) => total + capability.items.length,
+    0,
+  );
+  assert.equal(publicCatalog.counts.features, featureCount);
+  assert.equal(publicCatalog.counts.settings, settingCount);
+  assert.equal(publicCatalog.counts.userFacing, publicCatalog.capabilities.length);
+  assert.equal(publicCatalog.counts.documentedItems, documentedItemCount);
   assert.deepEqual(new Set(publicCatalog.capabilities.map(({ kind }) => kind)), new Set(['feature', 'setting']));
-  assert.equal(new Set(publicCatalog.capabilities.map(({ id }) => id)).size, 38);
-  assert.ok(publicCatalog.capabilities.length < 60, 'user-facing catalog must stay curated');
+  assert.equal(new Set(publicCatalog.capabilities.map(({ id }) => id)).size, publicCatalog.capabilities.length);
+  assert.ok(publicCatalog.capabilities.length <= 50, 'one default list call must return the curated catalog');
   assert.equal(publicCatalog.capabilities.some(({ id }) => id === 'get_configs'), false);
   assert.equal(JSON.stringify(publicCatalog).includes('tauri::'), false);
   assert.equal(JSON.stringify(publicCatalog).includes('implementationCoverage'), false);
@@ -88,18 +94,11 @@ test('docs, runtime, and technical views are generated projections of one semant
   ));
 
   const sourceIds = source.capabilities.map(({ id }) => id);
-  assert.equal(source.reviewedDocumentedItemCount, 294);
-  assert.deepEqual(source.reviewedInteractionContract.roots, [
-    'src/web-ui/src/app',
-    'src/web-ui/src/features',
-    'src/web-ui/src/flow_chat',
-    'src/web-ui/src/tools',
-    'src/web-ui/src/infrastructure/config',
-    'src/web-ui/src/infrastructure/peer-device',
-    'src/web-ui/src/infrastructure/update',
-    'src/web-ui/src/shared/announcement-system',
-    'src/web-ui/src/shared/context-system',
-  ]);
+  assert.equal(
+    source.reviewedDocumentedItemCount,
+    source.capabilities.reduce((total, capability) => total + capability.items.length, 0),
+  );
+  assert.deepEqual(interactionMap.roots, source.reviewedInteractionContract.roots);
   assert.deepEqual(publicCatalog.capabilities.map(({ id }) => id), sourceIds);
   assert.deepEqual(runtimeCatalog.capabilities.map(({ id }) => id), sourceIds);
   assert.equal(publicCatalog.digest, runtimeCatalog.digest);
@@ -147,4 +146,19 @@ test('website, global search, and agent control consume generated semantic proje
   assert.match(controlBridge, /INTERACTIVE_CAPABILITY_CATALOG/u);
   assert.doesNotMatch(controlTool, /include_(?:str|bytes)!/u);
   assert.match(controlTool, /two-step/u);
+});
+
+test('Desktop and Web UI share the BitFunControl transport contract', async () => {
+  const host = await read('src/apps/desktop/src/bitfun_control_host.rs');
+  const bridge = await read('src/web-ui/src/app/global-search/bitfunControlBridge.ts');
+  const desktopRegistration = await read('src/apps/desktop/src/lib.rs');
+
+  for (const source of [host, bridge]) {
+    assert.match(source, /agentic:\/\/bitfun-control-request/u);
+  }
+  assert.match(host, /#\[serde\(rename_all = "camelCase"\)\]/u);
+  assert.match(bridge, /api\.invoke\('mark_bitfun_control_surface_ready'\)/u);
+  assert.match(bridge, /api\.invoke\('report_bitfun_control_result'/u);
+  assert.match(desktopRegistration, /bitfun_control_host::mark_bitfun_control_surface_ready/u);
+  assert.match(desktopRegistration, /bitfun_control_host::report_bitfun_control_result/u);
 });

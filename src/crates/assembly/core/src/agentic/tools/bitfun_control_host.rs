@@ -16,11 +16,11 @@ pub struct BitFunControlHostRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capability_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub option_id: Option<String>,
-    #[serde(default)]
-    pub arguments: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -49,4 +49,34 @@ pub async fn invoke_bitfun_control(request: BitFunControlHostRequest) -> Result<
         return Err("BitFunControl host is not available on this product surface".to_string());
     };
     handler(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn host_request_uses_the_frontend_camel_case_contract() {
+        let serialized = serde_json::to_value(BitFunControlHostRequest {
+            action: "open".to_string(),
+            query: None,
+            capability_id: Some("setting.application.input".to_string()),
+            item_id: Some("shortcut-browser".to_string()),
+            operation_id: None,
+            option_id: None,
+            value: None,
+            cursor: None,
+            limit: None,
+        })
+        .unwrap();
+
+        assert_eq!(
+            serialized["capabilityId"],
+            json!("setting.application.input")
+        );
+        assert_eq!(serialized["itemId"], json!("shortcut-browser"));
+        assert!(serialized.get("capability_id").is_none());
+        assert!(serialized.get("item_id").is_none());
+    }
 }

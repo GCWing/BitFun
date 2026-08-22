@@ -26,7 +26,9 @@ export type InteractiveCapabilityOperationHandler = {
 
 export type InteractiveCapabilityOptionHandler =
   | { kind: 'config'; path: string }
-  | { kind: 'mergeConfig'; path: string; fields: string[] };
+  | { kind: 'mergeConfig'; path: string; fields: string[] }
+  | { kind: 'appearanceSelection' }
+  | { kind: 'language' };
 
 export interface InteractiveCapabilityOperation {
   id: string;
@@ -53,6 +55,7 @@ export interface InteractiveCapabilityItem {
   id: string;
   titleZh: string;
   titleEn: string;
+  destination?: InteractiveCapabilityDestination;
 }
 
 export interface InteractiveCapability {

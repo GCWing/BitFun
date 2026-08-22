@@ -73,6 +73,12 @@ pub(crate) fn install() {
     }));
 }
 
+/// Advertise BitFunControl only after the Web UI listener is installed.
+#[tauri::command]
+pub(crate) fn mark_bitfun_control_surface_ready() {
+    install();
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReportBitFunControlResultRequest {

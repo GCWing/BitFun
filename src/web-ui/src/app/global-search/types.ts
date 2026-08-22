@@ -38,7 +38,7 @@ export type GlobalSearchTarget =
       lineNumber?: number;
     }
   | { kind: 'settings'; destination: SettingsDestination }
-  | { kind: 'capability'; capabilityId: string };
+  | { kind: 'capability'; capabilityId: string; itemId?: string };
 
 export interface GlobalSearchItem {
   id: string;

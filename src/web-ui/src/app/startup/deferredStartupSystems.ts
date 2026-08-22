@@ -22,7 +22,6 @@ export interface DeferredStartupSystemsDependencies {
   scheduler?: Pick<BackgroundTaskScheduler, 'schedule'>;
   log?: DeferredStartupLog;
   trace?: DeferredStartupTrace;
-  initializeBitFunControl?: () => Promise<void>;
   initializeIdeControl?: () => Promise<void>;
   initializeMcpServers?: () => Promise<void>;
   initializeAcpClients?: () => Promise<void>;
@@ -32,13 +31,6 @@ export interface DeferredStartupSystemsDependencies {
 async function initializeIdeControlDefault(): Promise<void> {
   const { initializeIdeControl } = await import('@/shared/services/ide-control');
   await initializeIdeControl();
-}
-
-async function initializeBitFunControlDefault(): Promise<void> {
-  const { initializeBitFunControlBridge } = await import(
-    '@/app/global-search/bitfunControlBridge'
-  );
-  await initializeBitFunControlBridge();
 }
 
 async function initializeMcpServersDefault(): Promise<void> {
@@ -72,8 +64,6 @@ export function scheduleDeferredStartupSystems(
   const scheduler = dependencies.scheduler ?? backgroundTaskScheduler;
   const logger = dependencies.log ?? log;
   const trace = dependencies.trace ?? startupTrace;
-  const initializeBitFunControl = dependencies.initializeBitFunControl
-    ?? initializeBitFunControlDefault;
   const initializeIdeControl = dependencies.initializeIdeControl ?? initializeIdeControlDefault;
   const initializeMcpServers = dependencies.initializeMcpServers ?? initializeMcpServersDefault;
   const initializeAcpClients = dependencies.initializeAcpClients ?? initializeAcpClientsDefault;
@@ -98,7 +88,6 @@ export function scheduleDeferredStartupSystems(
       }
     };
 
-    await runStep('bitfun_control', initializeBitFunControl);
     await runStep('ide_control', initializeIdeControl);
     await runStep('mcp_servers', initializeMcpServers);
     await runStep('acp_clients', initializeAcpClients);

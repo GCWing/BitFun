@@ -41,9 +41,11 @@ export function scoreTextMatch(query: string, fields: Array<string | null | unde
   if (!normalizedQuery) return 70;
 
   let best = 0;
+  const normalizedFields: string[] = [];
   for (const rawField of fields) {
     const field = rawField?.trim().toLocaleLowerCase();
     if (!field) continue;
+    normalizedFields.push(field);
     if (field === normalizedQuery) {
       best = Math.max(best, 100);
       continue;
@@ -72,6 +74,13 @@ export function scoreTextMatch(query: string, fields: Array<string | null | unde
     if (normalizedQuery.length > 1 && isSubsequence(normalizedQuery, acronym)) {
       best = Math.max(best, 66);
     }
+  }
+  const queryTokens = normalizedQuery.split(WORD_BOUNDARY).filter(Boolean);
+  if (
+    queryTokens.length > 1
+    && queryTokens.every((token) => normalizedFields.some((field) => field.includes(token)))
+  ) {
+    best = Math.max(best, 72);
   }
   return best;
 }

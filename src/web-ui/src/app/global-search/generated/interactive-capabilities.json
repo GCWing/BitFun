@@ -1,10 +1,10 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "product": "BitFun",
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "fe3d647ed174d0cd2dd69f0dc65cd294d3dc6fab02cb36874f4309ce1783c6a2",
+  "digest": "96ed05db5779762ef80bffd13f8c363f66846a055778b3f00f9c2ecc05a2bcb5",
   "counts": {
     "features": 22,
     "settings": 16,
@@ -3592,8 +3592,7 @@
             ]
           },
           "handler": {
-            "kind": "config",
-            "path": "appearance.selection"
+            "kind": "appearanceSelection"
           }
         },
         {
@@ -3611,8 +3610,7 @@
             ]
           },
           "handler": {
-            "kind": "config",
-            "path": "app.language"
+            "kind": "language"
           }
         }
       ],
@@ -3859,37 +3857,72 @@
         {
           "id": "voice-enabled",
           "titleZh": "在聊天输入框启用或停用语音输入",
-          "titleEn": "Enable or disable voice input in the chat composer"
+          "titleEn": "Enable or disable voice input in the chat composer",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.input",
+            "viewId": "voice"
+          }
         },
         {
           "id": "language",
           "titleZh": "选择自动检测或中文、粤语、英文、日文等识别语言",
-          "titleEn": "Choose automatic detection or Chinese, Cantonese, English, Japanese, and other recognition languages"
+          "titleEn": "Choose automatic detection or Chinese, Cantonese, English, Japanese, and other recognition languages",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.input",
+            "viewId": "voice"
+          }
         },
         {
           "id": "microphone-test",
           "titleZh": "选择麦克风并执行语音识别测试",
-          "titleEn": "Choose a microphone and run a speech-recognition test"
+          "titleEn": "Choose a microphone and run a speech-recognition test",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.input",
+            "viewId": "voice"
+          }
         },
         {
           "id": "local-models",
           "titleZh": "下载、选择、验证、修复或删除本地语音模型",
-          "titleEn": "Download, select, verify, repair, or delete local speech models"
+          "titleEn": "Download, select, verify, repair, or delete local speech models",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.input",
+            "viewId": "voice"
+          }
         },
         {
           "id": "recording-limit",
           "titleZh": "设置单次语音输入的最长录音时间",
-          "titleEn": "Set the maximum duration of one voice-input recording"
+          "titleEn": "Set the maximum duration of one voice-input recording",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.input",
+            "viewId": "voice"
+          }
         },
         {
           "id": "shortcut-browser",
           "titleZh": "搜索和查看全部应用、场景、编辑器与终端快捷键",
-          "titleEn": "Search and browse all app, scene, editor, and terminal shortcuts"
+          "titleEn": "Search and browse all app, scene, editor, and terminal shortcuts",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.input",
+            "viewId": "shortcuts"
+          }
         },
         {
           "id": "shortcut-remap",
           "titleZh": "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
-          "titleEn": "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings"
+          "titleEn": "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.input",
+            "viewId": "shortcuts"
+          }
         }
       ],
       "stepsZh": [
@@ -4058,32 +4091,62 @@
         {
           "id": "default-shell",
           "titleZh": "自动检测并选择默认终端 Shell",
-          "titleEn": "Automatically detect and choose the default terminal shell"
+          "titleEn": "Automatically detect and choose the default terminal shell",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.development",
+            "viewId": "terminal"
+          }
         },
         {
           "id": "terminal-position",
           "titleZh": "把终端面板放在右侧或底部",
-          "titleEn": "Place the terminal panel on the right or at the bottom"
+          "titleEn": "Place the terminal panel on the right or at the bottom",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.development",
+            "viewId": "terminal"
+          }
         },
         {
           "id": "editor-appearance",
           "titleZh": "设置编辑器字体、字重、字号、行高与光标样式",
-          "titleEn": "Configure editor font, weight, size, line height, and cursor style"
+          "titleEn": "Configure editor font, weight, size, line height, and cursor style",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.development",
+            "viewId": "editor"
+          }
         },
         {
           "id": "indent-wrap",
           "titleZh": "设置 Tab 宽度、空格缩进、自动换行、行号与平滑滚动",
-          "titleEn": "Configure tab size, space indentation, word wrapping, line numbers, and smooth scrolling"
+          "titleEn": "Configure tab size, space indentation, word wrapping, line numbers, and smooth scrolling",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.development",
+            "viewId": "editor"
+          }
         },
         {
           "id": "editor-display",
           "titleZh": "控制 Minimap、空白字符、当前行高亮和滚动边界",
-          "titleEn": "Control the minimap, whitespace rendering, current-line highlight, and scroll bounds"
+          "titleEn": "Control the minimap, whitespace rendering, current-line highlight, and scroll bounds",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.development",
+            "viewId": "editor"
+          }
         },
         {
           "id": "editor-advanced",
           "titleZh": "控制语义高亮、括号配色、保存/粘贴时格式化和空白清理",
-          "titleEn": "Control semantic highlighting, bracket colors, format-on-save/paste, and whitespace trimming"
+          "titleEn": "Control semantic highlighting, bracket colors, format-on-save/paste, and whitespace trimming",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.development",
+            "viewId": "editor"
+          }
         }
       ],
       "stepsZh": [
@@ -5172,42 +5235,82 @@
         {
           "id": "built-in-actions",
           "titleZh": "启用和调整内置的提交与创建 Pull Request 快捷操作",
-          "titleEn": "Enable and tune the built-in Commit and Create Pull Request quick actions"
+          "titleEn": "Enable and tune the built-in Commit and Create Pull Request quick actions",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "quick-actions"
+          }
         },
         {
           "id": "custom-actions",
           "titleZh": "添加、编辑和删除自定义编码后快捷操作及 Prompt",
-          "titleEn": "Add, edit, and delete custom post-coding quick actions and prompts"
+          "titleEn": "Add, edit, and delete custom post-coding quick actions and prompts",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "quick-actions"
+          }
         },
         {
           "id": "hooks-enabled",
           "titleZh": "整体启用或停用 Agent 生命周期 Hooks",
-          "titleEn": "Enable or disable agent lifecycle hooks globally"
+          "titleEn": "Enable or disable agent lifecycle hooks globally",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "hooks"
+          }
         },
         {
           "id": "project-hooks",
           "titleZh": "对可信仓库单独启用项目级 .bitfun/config/hooks.json",
-          "titleEn": "Enable project-level .bitfun/config/hooks.json separately for trusted repositories"
+          "titleEn": "Enable project-level .bitfun/config/hooks.json separately for trusted repositories",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "hooks"
+          }
         },
         {
           "id": "hook-files",
           "titleZh": "定位用户级和项目级 Hooks 配置文件并在修改后即时生效",
-          "titleEn": "Locate user and project hook configuration files and apply edits without restarting"
+          "titleEn": "Locate user and project hook configuration files and apply edits without restarting",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "hooks"
+          }
         },
         {
           "id": "hook-events",
           "titleZh": "在会话、Agent、工具、权限和用户输入等 Codex Hook 事件上运行处理器",
-          "titleEn": "Run handlers on Codex hook events for sessions, agents, tools, permissions, and user input"
+          "titleEn": "Run handlers on Codex hook events for sessions, agents, tools, permissions, and user input",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "hooks"
+          }
         },
         {
           "id": "external-hooks",
           "titleZh": "查看外部 AI 应用的只读 Hook 目录并选择导入项",
-          "titleEn": "Inspect read-only external-AI hook catalogs and choose entries to import"
+          "titleEn": "Inspect read-only external-AI hook catalogs and choose entries to import",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "hooks"
+          }
         },
         {
           "id": "hook-import",
           "titleZh": "预览、修改和应用 Hook 导入计划，并保留冲突诊断",
-          "titleEn": "Preview, edit, and apply hook import plans while retaining conflict diagnostics"
+          "titleEn": "Preview, edit, and apply hook import plans while retaining conflict diagnostics",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.automation",
+            "viewId": "hooks"
+          }
         }
       ],
       "stepsZh": [

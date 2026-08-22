@@ -83,7 +83,10 @@ export async function activateGlobalSearchTarget(
       useSceneStore.getState().openScene('settings');
       return;
     case 'capability':
-      await activateInteractiveCapability(target.capabilityId, { t: context.tCommon });
+      await activateInteractiveCapability(target.capabilityId, {
+        t: context.tCommon,
+        itemId: target.itemId,
+      });
       return;
   }
 }

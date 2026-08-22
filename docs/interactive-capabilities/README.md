@@ -13,18 +13,34 @@ BitFun Playbook currently contains **22 features**, **16 settings pages**, and *
 - 生成的底层审计表：`docs/interactive-capabilities/technical/tauri-command-map.json`
 - 生成的可见交互审计表：`docs/interactive-capabilities/technical/ui-interaction-inventory.json`
 
-说明书、网站、搜索和 Agent 只看“功能 + 设置 + 子能力”。每项子能力都必须引用已注册 Tauri Command 或可解析的源码标记；这些证据不会进入公开目录。当前 **690** 个 Tauri 命令，以及 **314** 个产品交互源码文件中的 **4093** 个交互候选，只用于实现覆盖审计。
+说明书、网站、搜索和 Agent 只看“功能 + 设置 + 子能力”。每项子能力都必须引用已注册 Tauri Command 或可解析的源码标记；这些证据不会进入公开目录。当前 **691** 个 Tauri 命令，以及 **370** 个产品交互源码文件中的 **4441** 个交互候选，只用于实现覆盖审计。
 
-Docs, website, search, and agents see only features, settings, and documented sub-capabilities. Every sub-capability must reference a registered Tauri command or a resolvable source marker; evidence is stripped from public projections. The **690** Tauri commands and **4093** interaction candidates across **314** product UI source files remain implementation-audit evidence only.
+Docs, website, search, and agents see only features, settings, and documented sub-capabilities. Every sub-capability must reference a registered Tauri command or a resolvable source marker; evidence is stripped from public projections. The **691** Tauri commands and **4441** interaction candidates across **370** product UI source files remain implementation-audit evidence only.
+
+## 控制边界 / Control boundary
+
+- 每个功能或设置都有可执行的产品入口；存在多视图的设置页还必须把每个视图映射到至少一个子能力，搜索和 Agent 可携带子能力 ID 精确跳转。
+- 简单、稳定且适合自动化的行为才声明为类型化 `operations` 或 `options`。复杂流程由 Agent 打开对应界面交给用户继续，不向 Agent 暴露原始 Tauri Command。
+- `BitFunControl list` 一次返回完整的精简目录（目录上限 50 项）；`search` 默认只返回前 20 项。完整目录和 294 项子能力都不会写入 system prompt。
+- Desktop 只有在前端控制监听器完成握手后才发布工具；CLI、Detached Dispatch 等没有交互界面的运行方式明确不提供该工具。只读 Agent 只能发现和读取目录。
+
+- Every feature or setting has an executable product destination. Multi-view settings pages must map every registered view to at least one documented item, so search and agents can carry an item ID for exact navigation.
+- Only simple, stable, automation-safe behavior becomes a typed `operation` or `option`. Complex flows open their owning UI instead of exposing raw Tauri commands to agents.
+- One default `BitFunControl list` call returns the complete curated catalog (hard limit: 50); `search` defaults to 20 results. Neither the full catalog nor its 294 documented items enters the system prompt.
+- Desktop advertises the tool only after the frontend control listener completes its readiness handshake. Headless surfaces such as CLI and Detached Dispatch explicitly omit it, and read-only agents may only discover and inspect entries.
 
 ## 防腐化门禁 / Anti-drift gates
 
 - 设置页、产品动作与场景注册表必须全部映射到一个语义条目。
+- 所有设置子视图必须有同源的子能力直达目标，失效的页签 ID 会阻断生成。
 - 每个功能至少 6 项、每个设置至少 4 项子能力，且中英文、稳定 ID 与证据缺一不可。
+- 当前操作处理器不接受参数；若目录误声明参数，生成会失败，避免 Agent 看到实际不会生效的参数。
 - Tauri 模块命令数和用户可见交互源码摘要均为 reviewed contract；变化会让 `capabilities:check` 失败并给出新的摘要值。
 - 维护者必须先核对功能清单与证据，再只在本语义源中更新 reviewed count/digest，随后运行 `pnpm run capabilities:generate`。
 
 - Every settings page, product action, and scene registration must map to one semantic entry.
+- Every settings subview needs a same-source item destination; stale view IDs fail generation.
 - Features need at least six documented items and settings need at least four, each with bilingual text, a stable ID, and source evidence.
+- Current operation handlers accept no arguments, and generation fails if the catalog advertises arguments that would be ignored.
 - Reviewed Tauri module counts and the user-visible interaction-source digest fail `capabilities:check` on drift.
 - Maintainers review the inventories and evidence first, update the reviewed count/digest only in this semantic source, then run `pnpm run capabilities:generate`.

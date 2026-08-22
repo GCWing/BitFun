@@ -1,5 +1,7 @@
-import { configAPI } from '@/infrastructure/api';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { appearanceService } from '@/infrastructure/appearance';
+import { configManager } from '@/infrastructure/config';
+import { i18nService, type LocaleId } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { activateInteractiveCapability } from './interactiveCapabilityActivator';
 import { activateProductAction } from './productActionActivator';
@@ -14,7 +16,7 @@ import { scoreTextMatch } from './searchMatching';
 
 const log = createLogger('BitFunControlBridge');
 const REQUEST_EVENT = 'agentic://bitfun-control-request';
-const DEFAULT_LIMIT = 20;
+const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_LIMIT = 50;
 
 type BitFunControlAction = 'list' | 'search' | 'get' | 'open' | 'execute' | 'configure';
@@ -24,9 +26,9 @@ export interface BitFunControlRequest {
   action: BitFunControlAction;
   query?: string;
   capabilityId?: string;
+  itemId?: string;
   operationId?: string;
   optionId?: string;
-  arguments?: Record<string, unknown>;
   value?: unknown;
   cursor?: number;
   limit?: number;
@@ -88,7 +90,8 @@ function pagination(request: BitFunControlRequest) {
   const cursor = Number.isInteger(request.cursor) && (request.cursor ?? 0) >= 0
     ? request.cursor ?? 0
     : 0;
-  const requestedLimit = Number.isInteger(request.limit) ? request.limit ?? DEFAULT_LIMIT : DEFAULT_LIMIT;
+  const defaultLimit = request.action === 'list' ? MAX_LIMIT : DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = Number.isInteger(request.limit) ? request.limit ?? defaultLimit : defaultLimit;
   return { cursor, limit: Math.min(MAX_LIMIT, Math.max(1, requestedLimit)) };
 }
 
@@ -185,7 +188,12 @@ function assertValueMatchesSchema(value: unknown, schema: InteractiveCapabilityV
 }
 
 async function currentOptionValue(option: InteractiveCapabilityOption): Promise<unknown> {
-  const current = await configAPI.getConfig(option.handler.path, { skipRetryOnNotFound: true });
+  if (option.handler.kind === 'appearanceSelection') {
+    await appearanceService.initialize();
+    return appearanceService.getSnapshot().selectedAppearanceId;
+  }
+  if (option.handler.kind === 'language') return i18nService.getCurrentLocale();
+  const current = await configManager.getOptionalConfig(option.handler.path);
   if (option.handler.kind === 'config') return current;
   const values = option.handler.fields.map((field) => readNestedValue(current, field));
   if (values.length === 1 || values.every((value) => valuesEqual(value, values[0]))) return values[0];
@@ -206,18 +214,23 @@ async function inspectCapability(capability: InteractiveCapability): Promise<unk
 
 async function configureOption(option: InteractiveCapabilityOption, value: unknown): Promise<void> {
   assertValueMatchesSchema(value, option.valueSchema);
-  if (option.handler.kind === 'config') {
-    await configAPI.setConfig(option.handler.path, value);
+  if (option.handler.kind === 'appearanceSelection') {
+    await appearanceService.select(value as string);
     return;
   }
-  const loaded = await configAPI.getConfig(
-    option.handler.path,
-    { skipRetryOnNotFound: true },
-  );
+  if (option.handler.kind === 'language') {
+    await i18nService.changeLanguage(value as LocaleId);
+    return;
+  }
+  if (option.handler.kind === 'config') {
+    await configManager.setConfig(option.handler.path, value);
+    return;
+  }
+  const loaded = await configManager.getOptionalConfig(option.handler.path);
   const current = loaded as Record<string, unknown> | null | undefined;
   let next = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
   for (const field of option.handler.fields) next = setNestedValue(next, field, value);
-  await configAPI.setConfig(option.handler.path, next);
+  await configManager.setConfig(option.handler.path, next);
 }
 
 export async function executeBitFunControlRequest(request: BitFunControlRequest): Promise<unknown> {
@@ -235,8 +248,13 @@ export async function executeBitFunControlRequest(request: BitFunControlRequest)
     }
     case 'open': {
       if (!request.capabilityId) throw new Error('capabilityId is required for open');
-      await activateInteractiveCapability(request.capabilityId);
-      return { capabilityId: request.capabilityId, opened: true };
+      await activateInteractiveCapability(request.capabilityId, { itemId: request.itemId });
+      return {
+        capabilityId: request.capabilityId,
+        itemId: request.itemId,
+        opened: true,
+        surface: 'desktop',
+      };
     }
     case 'execute': {
       const capability = request.capabilityId ? getInteractiveCapability(request.capabilityId) : undefined;
@@ -255,11 +273,12 @@ export async function executeBitFunControlRequest(request: BitFunControlRequest)
       if (!option) throw new Error(`Unknown option for ${capability.id}: ${request.optionId ?? ''}`);
       if (!Object.prototype.hasOwnProperty.call(request, 'value')) throw new Error('value is required for configure');
       await configureOption(option, request.value);
+      const effectiveValue = await currentOptionValue(option);
       return {
         capabilityId: capability.id,
         optionId: option.id,
         configured: true,
-        value: request.value,
+        effectiveValue,
       };
     }
     default:
@@ -296,4 +315,11 @@ export async function initializeBitFunControlBridge(): Promise<void> {
   unlisten = api.listen<BitFunControlRequest>(REQUEST_EVENT, (request) => {
     void handleRequest(request);
   });
+  try {
+    await api.invoke('mark_bitfun_control_surface_ready');
+  } catch (error) {
+    unlisten();
+    unlisten = null;
+    throw error;
+  }
 }

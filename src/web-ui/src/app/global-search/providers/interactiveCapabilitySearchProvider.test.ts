@@ -18,7 +18,9 @@ function request(query: string): GlobalSearchRequest {
 
 describe('interactiveCapabilitySearchProvider', () => {
   it('uses the curated feature-and-settings contract', () => {
-    expect(INTERACTIVE_CAPABILITY_CATALOG.capabilities).toHaveLength(38);
+    expect(INTERACTIVE_CAPABILITY_CATALOG.capabilities).toHaveLength(
+      INTERACTIVE_CAPABILITY_CATALOG.counts.userFacing,
+    );
     expect(new Set(INTERACTIVE_CAPABILITY_CATALOG.capabilities.map(({ id }) => id)).size)
       .toBe(INTERACTIVE_CAPABILITY_CATALOG.capabilities.length);
     expect(INTERACTIVE_CAPABILITY_CATALOG.capabilities.every(({ kind }) =>
@@ -52,6 +54,20 @@ describe('interactiveCapabilitySearchProvider', () => {
       && item.target.capabilityId === 'setting.tools.mcp');
     expect(mcp?.providerId).toBe('interactive-capabilities');
     expect(mcp?.group).toBe('settings');
+  });
+
+  it.each([
+    ['快捷键', 'setting.application.input', 'shortcut-browser'],
+    ['editor font', 'setting.application.development', 'editor-appearance'],
+    ['Hooks 设置', 'setting.tools.automation', 'hooks-enabled'],
+  ])('routes %s to the matching settings subview', async (query, capabilityId, itemId) => {
+    const result = await interactiveCapabilitySearchProvider.search(
+      request(query),
+      new AbortController().signal,
+    );
+    const match = result.items.find((item) => item.target.kind === 'capability'
+      && item.target.capabilityId === capabilityId);
+    expect(match?.target).toEqual({ kind: 'capability', capabilityId, itemId });
   });
 
   it('finds the browser element picker from Chinese and English sub-capability text', async () => {

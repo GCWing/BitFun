@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "fe3d647ed174d0cd2dd69f0dc65cd294d3dc6fab02cb36874f4309ce1783c6a2",
-  "commandCount": 690,
+  "catalogDigest": "96ed05db5779762ef80bffd13f8c363f66846a055778b3f00f9c2ecc05a2bcb5",
+  "commandCount": 691,
   "commands": [
     {
       "id": "accept_file",
@@ -3722,6 +3722,16 @@
       "rustPath": "api::announcement_api::mark_announcement_seen",
       "sourceFile": "src/apps/desktop/src/api/announcement_api.rs",
       "signature": "fn mark_announcement_seen( state: State<'_, AppState>, request: AnnouncementIdRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "mark_bitfun_control_surface_ready",
+      "moduleId": "bitfun_control_host",
+      "capabilityId": null,
+      "visibility": "internal",
+      "rustPath": "bitfun_control_host::mark_bitfun_control_surface_ready",
+      "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
+      "signature": "fn mark_bitfun_control_surface_ready()",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {

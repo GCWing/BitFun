@@ -80,6 +80,10 @@ impl Tool for BitFunControlTool {
                     "type": "string",
                     "description": "Stable capability ID returned by list/search/get."
                 },
+                "item_id": {
+                    "type": "string",
+                    "description": "Optional documented item ID returned by search/get; open uses it to navigate to an exact subview."
+                },
                 "operation_id": {
                     "type": "string",
                     "description": "User-level operation ID returned by get; required for execute."
@@ -87,11 +91,6 @@ impl Tool for BitFunControlTool {
                 "option_id": {
                     "type": "string",
                     "description": "User-level setting option ID returned by get; required for configure."
-                },
-                "arguments": {
-                    "type": "object",
-                    "description": "Arguments for the selected user-level operation, following the input schema returned by get.",
-                    "additionalProperties": true
                 },
                 "value": {
                     "description": "New option value for configure, following the value schema returned by get."
@@ -105,7 +104,7 @@ impl Tool for BitFunControlTool {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 50,
-                    "description": "Maximum discovery results, default 20 and maximum 50."
+                    "description": "Maximum discovery results. Defaults to all 50 slots for list and 20 for search; maximum 50."
                 }
             }
         })
@@ -150,6 +149,13 @@ impl Tool for BitFunControlTool {
                 .unwrap_or_else(|| capability_id.to_string()),
             "configure" => input
                 .get("option_id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| format!("{capability_id}:{value}"))
+                .unwrap_or_else(|| capability_id.to_string()),
+            "open" => input
+                .get("item_id")
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
@@ -201,6 +207,13 @@ impl Tool for BitFunControlTool {
         {
             return invalid("capability_id is required for get, open, execute, and configure.");
         }
+        if input.get("item_id").is_some_and(|value| {
+            !value
+                .as_str()
+                .is_some_and(|item_id| !item_id.trim().is_empty())
+        }) {
+            return invalid("item_id must be a non-empty string when provided.");
+        }
         if action == "execute"
             && !input
                 .get("operation_id")
@@ -219,12 +232,6 @@ impl Tool for BitFunControlTool {
         }
         if action == "configure" && input.get("value").is_none() {
             return invalid("value is required for configure.");
-        }
-        if input
-            .get("arguments")
-            .is_some_and(|value| !value.is_object())
-        {
-            return invalid("arguments must be an object when provided.");
         }
         if input
             .get("cursor")
@@ -275,6 +282,12 @@ impl Tool for BitFunControlTool {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
+            item_id: input
+                .get("item_id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string),
             operation_id: input
                 .get("operation_id")
                 .and_then(Value::as_str)
@@ -287,7 +300,6 @@ impl Tool for BitFunControlTool {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
-            arguments: input.get("arguments").cloned().unwrap_or_else(|| json!({})),
             value: input.get("value").cloned(),
             cursor: input
                 .get("cursor")
@@ -376,8 +388,7 @@ mod tests {
                 &json!({
                     "action": "execute",
                     "capability_id": "feature.ai-assistant",
-                    "operation_id": "new-session",
-                    "arguments": {}
+                    "operation_id": "new-session"
                 }),
                 None,
             )
@@ -421,6 +432,21 @@ mod tests {
         assert_eq!(
             intents[0].resources,
             vec!["configure:setting.application.general:auto-update"]
+        );
+
+        let open_intents = tool
+            .permission_intents(
+                &json!({
+                    "action": "open",
+                    "capability_id": "setting.application.input",
+                    "item_id": "shortcut-browser"
+                }),
+                &context(),
+            )
+            .unwrap();
+        assert_eq!(
+            open_intents[0].resources,
+            vec!["open:setting.application.input:shortcut-browser"]
         );
     }
 }

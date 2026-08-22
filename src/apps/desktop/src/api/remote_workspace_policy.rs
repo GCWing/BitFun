@@ -1560,6 +1560,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("remote_write_file", RemoteWorkspacePolicy::RemoteRouted),
     (
+        "mark_bitfun_control_surface_ready",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "remove_recent_workspace",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
