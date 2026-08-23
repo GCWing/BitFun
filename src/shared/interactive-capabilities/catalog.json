@@ -10,7 +10,9 @@
     {"id":"appearance-theme","query":"深色模式 dark theme appearance","expectedFirstCapabilityId":"setting.application.appearance","expectedCapabilityIds":["setting.application.appearance"],"expectedItem":{"capabilityId":"setting.application.appearance","itemId":"built-in-appearance"}},
     {"id":"git-cherry-pick","query":"Git cherry pick 挑选提交","expectedFirstCapabilityId":"feature.git","expectedCapabilityIds":["feature.git"],"expectedItem":{"capabilityId":"feature.git","itemId":"cherry-pick"}},
     {"id":"scheduled-cron","query":"Cron 时间表 schedule types 定时类型","expectedFirstCapabilityId":"feature.tasks-automation","expectedCapabilityIds":["feature.tasks-automation"],"expectedItem":{"capabilityId":"feature.tasks-automation","itemId":"schedule-types"}},
-    {"id":"pages-deploy","query":"发布网页 deploy page","expectedFirstCapabilityId":"feature.pages","expectedCapabilityIds":["feature.pages"],"expectedItem":{"capabilityId":"feature.pages","itemId":"publish"}}
+    {"id":"pages-deploy","query":"发布网页 deploy page","expectedFirstCapabilityId":"feature.pages","expectedCapabilityIds":["feature.pages"],"expectedItem":{"capabilityId":"feature.pages","itemId":"publish"}},
+    {"id":"deferred-tools-chinese","query":"延迟加载工具","expectedFirstCapabilityId":"setting.tools.execution","expectedCapabilityIds":["setting.tools.execution"],"expectedItem":{"capabilityId":"setting.tools.execution","itemId":"deferred-tools"}},
+    {"id":"deferred-tools-english","query":"deferred tool loading","expectedFirstCapabilityId":"setting.tools.execution","expectedCapabilityIds":["setting.tools.execution"],"expectedItem":{"capabilityId":"setting.tools.execution","itemId":"deferred-tools"}}
   ],
   "categories": {
     "assistant": {
@@ -1654,8 +1656,8 @@
       "titleEn": "Execution & permissions",
       "summaryZh": "管理 Agent 工具权限、并行度、超时、延迟加载、Computer Use 与浏览器控制。",
       "summaryEn": "Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer Use, and browser control.",
-      "keywordsZh": ["执行控制", "工具权限", "审批", "并行", "超时", "Computer Use", "浏览器控制", "JSON 修复"],
-      "keywordsEn": ["execution control", "tool permissions", "approval", "parallel", "timeout", "computer use", "browser control", "JSON repair"],
+      "keywordsZh": ["执行控制", "工具权限", "延迟加载工具", "审批", "并行", "超时", "Computer Use", "浏览器控制", "JSON 修复"],
+      "keywordsEn": ["execution control", "tool permissions", "deferred tool loading", "approval", "parallel", "timeout", "computer use", "browser control", "JSON repair"],
       "highlightsZh": ["询问、自动批准与完全访问策略", "子 Agent 并行度和工具超时", "Computer Use、浏览器连接与工具参数修复"],
       "highlightsEn": ["Ask, auto-approve, and full-access policies", "Subagent concurrency and tool timeouts", "Computer Use, browser connection, and tool-argument repair"],
       "items": [
@@ -1663,7 +1665,7 @@
         { "id": "permission-selector", "titleZh": "控制权限模式选择器是否显示在聊天输入框下方", "titleEn": "Choose whether the permission-mode selector appears below the chat composer", "control": {"kind":"direct","operations":[],"options":[{"id":"show-permission-mode-control"}]}, "evidence": ["source:src/web-ui/src/locales/zh-CN/settings/runtime.json#permissionPolicy.showInChatInput"] },
         { "id": "global-project-rules", "titleZh": "创建、排序和保存全局或项目级 Allow、Ask、Deny 规则", "titleEn": "Create, reorder, and save global or project-level Allow, Ask, and Deny rules", "control": {"kind":"open","reasonZh":"该流程依赖当前界面状态、用户选择或额外确认；Agent 可准确打开入口，但契约不把跳转冒充为直接执行。","reasonEn":"This workflow depends on live UI state, user choice, or additional confirmation; the Agent can open the exact entry, but the contract does not pretend navigation is direct execution."}, "evidence": ["command:get_project_permission_rules", "command:save_project_permission_rules", "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#permissionPolicy.globalRules"] },
         { "id": "remembered-grants", "titleZh": "查看、撤销或清空项目中记住的权限授权与审计记录", "titleEn": "Review, revoke, or clear remembered project permission grants and audit records", "control": {"kind":"open","reasonZh":"该流程依赖当前界面状态、用户选择或额外确认；Agent 可准确打开入口，但契约不把跳转冒充为直接执行。","reasonEn":"This workflow depends on live UI state, user choice, or additional confirmation; the Agent can open the exact entry, but the contract does not pretend navigation is direct execution."}, "evidence": ["command:list_project_permission_grants", "command:remove_project_permission_grant", "command:clear_project_permission_grants", "command:list_project_permission_audit"] },
-        { "id": "deferred-tools", "titleZh": "按需延迟加载大型工具定义以减少 Agent 初始上下文", "titleEn": "Load large tool definitions on demand to reduce initial agent context", "control": {"kind":"direct","operations":[],"options":[{"id":"deferred-tool-loading"}]}, "evidence": ["source:src/web-ui/src/locales/zh-CN/settings/runtime.json#deferredToolLoading.sectionTitle"] },
+        { "id": "deferred-tools", "titleZh": "按需延迟加载工具定义以减少 Agent 初始上下文", "titleEn": "Deferred tool loading on demand to reduce initial agent context", "control": {"kind":"direct","operations":[],"options":[{"id":"deferred-tool-loading"}]}, "evidence": ["source:src/web-ui/src/locales/zh-CN/settings/runtime.json#deferredToolLoading.sectionTitle"] },
         { "id": "parallelism", "titleZh": "设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略", "titleEn": "Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy", "control": {"kind":"direct","operations":[],"options":[{"id":"subagent-batch-policy"},{"id":"subagent-max-concurrency"},{"id":"swarm-max-concurrency"}]}, "evidence": ["source:src/web-ui/src/locales/zh-CN/settings/agentic-tools.json#config.subagentMaxConcurrency", "source:src/web-ui/src/locales/zh-CN/settings/agentic-tools.json#config.subagentBatchPolicy.label"] },
         { "id": "timeouts", "titleZh": "设置或取消单次工具执行超时", "titleEn": "Set or disable the per-tool execution timeout", "control": {"kind":"direct","operations":[],"options":[{"id":"tool-timeout-seconds"}]}, "evidence": ["source:src/web-ui/src/locales/zh-CN/settings/agentic-tools.json#config.executionTimeout"] },
         { "id": "review-capacity", "titleZh": "设置 Deep Review 最大并行评审者和队列等待时间", "titleEn": "Set the maximum parallel Deep Review workers and queue wait time", "control": {"kind":"open","reasonZh":"该流程依赖当前界面状态、用户选择或额外确认；Agent 可准确打开入口，但契约不把跳转冒充为直接执行。","reasonEn":"This workflow depends on live UI state, user choice, or additional confirmation; the Agent can open the exact entry, but the contract does not pretend navigation is direct execution."}, "evidence": ["source:src/web-ui/src/locales/zh-CN/settings/review-capacity.json#capacity.maxParallelReviewers.label", "source:src/web-ui/src/locales/zh-CN/settings/review-capacity.json#capacity.maxQueueWaitSeconds.label"] },
@@ -1687,7 +1689,7 @@
           "descriptionZh": "在聊天输入框下方显示或隐藏权限模式快捷选择器。",
           "descriptionEn": "Show or hide the permission-mode shortcut below the chat composer.",
           "valueSchema": { "type": "boolean" },
-          "handler": { "kind": "config", "path": "app.flow_chat.show_permission_mode_control" }
+          "handler": { "kind": "flowChatPermissionModeControl" }
         },
         {
           "id": "deferred-tool-loading",

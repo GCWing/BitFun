@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "c743edc2a5b5103230aba095264d371c81999653fad41f89f0e46878d5f9c91a",
+  "digest": "3c78642ff2ca49ce070288d4e9dc22c9615f731f46a56d8135fea25cf5c474bf",
   "searchAcceptance": [
     {
       "id": "companion-pet-mixed",
@@ -82,6 +82,30 @@
       "expectedItem": {
         "capabilityId": "feature.pages",
         "itemId": "publish"
+      }
+    },
+    {
+      "id": "deferred-tools-chinese",
+      "query": "延迟加载工具",
+      "expectedFirstCapabilityId": "setting.tools.execution",
+      "expectedCapabilityIds": [
+        "setting.tools.execution"
+      ],
+      "expectedItem": {
+        "capabilityId": "setting.tools.execution",
+        "itemId": "deferred-tools"
+      }
+    },
+    {
+      "id": "deferred-tools-english",
+      "query": "deferred tool loading",
+      "expectedFirstCapabilityId": "setting.tools.execution",
+      "expectedCapabilityIds": [
+        "setting.tools.execution"
+      ],
+      "expectedItem": {
+        "capabilityId": "setting.tools.execution",
+        "itemId": "deferred-tools"
       }
     }
   ],
@@ -8446,6 +8470,7 @@
       "keywordsZh": [
         "执行控制",
         "工具权限",
+        "延迟加载工具",
         "审批",
         "并行",
         "超时",
@@ -8456,6 +8481,7 @@
       "keywordsEn": [
         "execution control",
         "tool permissions",
+        "deferred tool loading",
         "approval",
         "parallel",
         "timeout",
@@ -8520,8 +8546,8 @@
         },
         {
           "id": "deferred-tools",
-          "titleZh": "按需延迟加载大型工具定义以减少 Agent 初始上下文",
-          "titleEn": "Load large tool definitions on demand to reduce initial agent context",
+          "titleZh": "按需延迟加载工具定义以减少 Agent 初始上下文",
+          "titleEn": "Deferred tool loading on demand to reduce initial agent context",
           "control": {
             "kind": "direct",
             "operations": [],
@@ -8675,8 +8701,7 @@
             "type": "boolean"
           },
           "handler": {
-            "kind": "config",
-            "path": "app.flow_chat.show_permission_mode_control"
+            "kind": "flowChatPermissionModeControl"
           }
         },
         {
@@ -8812,6 +8837,7 @@
         "AI & collaboration",
         "执行控制",
         "工具权限",
+        "延迟加载工具",
         "审批",
         "并行",
         "超时",
@@ -8820,6 +8846,7 @@
         "JSON 修复",
         "execution control",
         "tool permissions",
+        "deferred tool loading",
         "approval",
         "parallel",
         "timeout",
@@ -8840,8 +8867,8 @@
         "Create, reorder, and save global or project-level Allow, Ask, and Deny rules",
         "查看、撤销或清空项目中记住的权限授权与审计记录",
         "Review, revoke, or clear remembered project permission grants and audit records",
-        "按需延迟加载大型工具定义以减少 Agent 初始上下文",
-        "Load large tool definitions on demand to reduce initial agent context",
+        "按需延迟加载工具定义以减少 Agent 初始上下文",
+        "Deferred tool loading on demand to reduce initial agent context",
         "设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略",
         "Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy",
         "设置或取消单次工具执行超时",

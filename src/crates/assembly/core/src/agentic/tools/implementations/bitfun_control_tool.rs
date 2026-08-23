@@ -1,6 +1,9 @@
 //! BitFunControl — discover and control user-facing BitFun features and settings.
 
 use crate::agentic::agents::get_agent_registry;
+use crate::agentic::tools::bitfun_control_config::{
+    configure_config_backed_option, read_config_backed_option,
+};
 use crate::agentic::tools::bitfun_control_host::{
     bitfun_control_host_available, invoke_bitfun_control, BitFunControlHostRequest,
     ProductControlAction,
@@ -8,6 +11,7 @@ use crate::agentic::tools::bitfun_control_host::{
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::service::config::{get_global_config_service, ConfigService};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_product_domains::product_control::{
@@ -16,19 +20,244 @@ use bitfun_product_domains::product_control::{
     validate_operation_argument_scopes, validate_operation_arguments, validate_option_value,
     ProductControlRisk,
 };
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+use std::sync::Arc;
 
 const ACTIONS: &[&str] = &["list", "search", "get", "open", "execute", "configure"];
+const INPUT_ID_ALIASES: &[(&str, &str)] = &[
+    ("capability_id", "capabilityId"),
+    ("item_id", "itemId"),
+    ("operation_id", "operationId"),
+    ("option_id", "optionId"),
+];
 
-pub struct BitFunControlTool;
+pub struct BitFunControlTool {
+    config_service: Option<Arc<ConfigService>>,
+}
 
 impl BitFunControlTool {
     pub fn new() -> Self {
-        Self
+        Self {
+            config_service: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_config_service(config_service: Arc<ConfigService>) -> Self {
+        Self {
+            config_service: Some(config_service),
+        }
+    }
+
+    async fn config_service(&self) -> Result<Arc<ConfigService>, String> {
+        if let Some(config_service) = &self.config_service {
+            return Ok(config_service.clone());
+        }
+        get_global_config_service()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    fn assistant_payload(result: &Value) -> String {
+        // Keep on-demand control responses structured without paying the
+        // context cost of pretty-print whitespace on every discovery step.
+        serde_json::to_string(result).unwrap_or_else(|_| result.to_string())
+    }
+
+    async fn inspect_shared_capability(&self, capability_id: &str) -> BitFunResult<Value> {
+        let capability = product_capability(capability_id).map_err(BitFunError::tool)?;
+        let mut result =
+            inspect_product_control_contract(capability_id).map_err(BitFunError::tool)?;
+        let object = result.as_object_mut().ok_or_else(|| {
+            BitFunError::tool("Product-control inspection was not an object".to_string())
+        })?;
+
+        let config_service = match self.config_service().await {
+            Ok(config_service) => config_service,
+            Err(error) => {
+                object.insert(
+                    "controlAvailability".to_string(),
+                    json!({
+                        "status": "unavailable",
+                        "contractAvailable": true,
+                        "readBack": false,
+                        "reason": format!("Shared BitFun configuration is unavailable: {error}"),
+                    }),
+                );
+                return Ok(result);
+            }
+        };
+
+        let mut current_values = Map::new();
+        let mut shared_option_ids = Vec::new();
+        let mut host_option_ids = Vec::new();
+        for option in &capability.options {
+            match read_config_backed_option(&config_service, option).await {
+                Ok(Some(value)) => {
+                    shared_option_ids.push(option.id.clone());
+                    current_values.insert(option.id.clone(), value);
+                }
+                Ok(None) => {
+                    host_option_ids.push(option.id.clone());
+                    current_values.insert(
+                        option.id.clone(),
+                        json!({
+                            "availability": "unavailable",
+                            "reason": "This option requires a product-host provider on the active surface",
+                        }),
+                    );
+                }
+                Err(error) => {
+                    shared_option_ids.push(option.id.clone());
+                    current_values.insert(
+                        option.id.clone(),
+                        json!({ "availability": "degraded", "reason": error }),
+                    );
+                }
+            }
+        }
+        let operation_ids: Vec<&str> = capability
+            .operations
+            .iter()
+            .map(|operation| operation.id.as_str())
+            .collect();
+        let operation_availability: Map<String, Value> = operation_ids
+            .iter()
+            .map(|operation_id| {
+                (
+                    (*operation_id).to_string(),
+                    json!({
+                        "status": "unavailable",
+                        "reason": "This operation requires a product-host adapter on the active surface",
+                    }),
+                )
+            })
+            .collect();
+
+        object.insert(
+            "currentOptionValues".to_string(),
+            Value::Object(current_values),
+        );
+        object.insert(
+            "operationAvailability".to_string(),
+            Value::Object(operation_availability),
+        );
+        object.insert(
+            "controlAvailability".to_string(),
+            json!({
+                "status": if shared_option_ids.is_empty() { "unavailable" } else { "available" },
+                "adapter": "shared-config",
+                "contractAvailable": true,
+                "readBack": !shared_option_ids.is_empty(),
+                "actions": {
+                    "get": { "status": "available" },
+                    "configure": {
+                        "status": if shared_option_ids.is_empty() { "unavailable" } else { "available" },
+                        "optionIds": shared_option_ids,
+                        "requiresHostOptionIds": host_option_ids,
+                    },
+                    "open": {
+                        "status": "unavailable",
+                        "reason": "This product surface has no presentation adapter",
+                    },
+                    "execute": {
+                        "status": "unavailable",
+                        "operationIds": operation_ids,
+                        "reason": "This product surface has no product-operation adapter",
+                    },
+                },
+            }),
+        );
+        Ok(result)
+    }
+
+    async fn configure_shared_option(
+        &self,
+        request: &BitFunControlHostRequest,
+    ) -> BitFunResult<Value> {
+        let capability_id = request
+            .capability_id
+            .as_deref()
+            .ok_or_else(|| BitFunError::tool("capability_id is required".to_string()))?;
+        let option_id = request
+            .option_id
+            .as_deref()
+            .ok_or_else(|| BitFunError::tool("option_id is required".to_string()))?;
+        let value = request
+            .value
+            .as_ref()
+            .ok_or_else(|| BitFunError::tool("value is required".to_string()))?;
+        let capability = product_capability(capability_id).map_err(BitFunError::tool)?;
+        let option = capability
+            .options
+            .iter()
+            .find(|option| option.id == option_id)
+            .ok_or_else(|| {
+                BitFunError::tool(format!("Unknown option for {capability_id}: {option_id}"))
+            })?;
+        let config_service = self.config_service().await.map_err(BitFunError::tool)?;
+        let applied = configure_config_backed_option(&config_service, option, value)
+            .await
+            .map_err(BitFunError::tool)?
+            .ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "Option {capability_id}:{option_id} requires a product-host provider on the active surface"
+                ))
+            })?;
+        Ok(json!({
+            "capabilityId": capability_id,
+            "optionId": option_id,
+            "configured": true,
+            "effectiveValue": applied.effective_value,
+            "changedPath": applied.changed_path,
+            "adapter": "shared-config",
+            "readBack": true,
+        }))
     }
 
     fn action(input: &Value) -> Option<&str> {
         input.get("action").and_then(Value::as_str).map(str::trim)
+    }
+
+    fn aliased_field<'a>(input: &'a Value, canonical: &str, alias: &str) -> Option<&'a Value> {
+        input.get(canonical).or_else(|| input.get(alias))
+    }
+
+    fn aliased_string<'a>(input: &'a Value, canonical: &str, alias: &str) -> Option<&'a str> {
+        Self::aliased_field(input, canonical, alias)
+            .and_then(Value::as_str)
+            .map(str::trim)
+    }
+
+    fn validate_input_aliases(input: &Value) -> Result<(), String> {
+        for (canonical, alias) in INPUT_ID_ALIASES {
+            if let (Some(canonical_value), Some(alias_value)) =
+                (input.get(*canonical), input.get(*alias))
+            {
+                if canonical_value != alias_value {
+                    return Err(format!(
+                        "{canonical} and its compatibility alias {alias} must not disagree"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn capability_id(input: &Value) -> Option<&str> {
+        Self::aliased_string(input, "capability_id", "capabilityId")
+    }
+
+    fn item_id(input: &Value) -> Option<&str> {
+        Self::aliased_string(input, "item_id", "itemId")
+    }
+
+    fn operation_id(input: &Value) -> Option<&str> {
+        Self::aliased_string(input, "operation_id", "operationId")
+    }
+
+    fn option_id(input: &Value) -> Option<&str> {
+        Self::aliased_string(input, "option_id", "optionId")
     }
 
     fn requires_capability_id(action: &str) -> bool {
@@ -47,6 +276,59 @@ impl BitFunControlTool {
         }
     }
 
+    fn configure_value(input: &Value) -> Result<Option<Value>, String> {
+        let mut values = Vec::new();
+        let typed_fields = [
+            ("value_boolean", "boolean"),
+            ("value_string", "string"),
+            ("value_integer", "integer"),
+            ("value_number", "number"),
+            ("value_object", "object"),
+            ("value_array", "array"),
+        ];
+        for (field, expected_type) in typed_fields {
+            let Some(value) = input.get(field) else {
+                continue;
+            };
+            let valid = match expected_type {
+                "boolean" => value.is_boolean(),
+                "string" => value.is_string(),
+                "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+                "number" => value.is_number(),
+                "object" => value.is_object(),
+                "array" => value.is_array(),
+                _ => false,
+            };
+            if !valid {
+                return Err(format!("{field} must be a JSON {expected_type}"));
+            }
+            values.push((field, value.clone()));
+        }
+        if let Some(value) = input.get("value_null") {
+            if value != &Value::Bool(true) {
+                return Err("value_null must be true when used".to_string());
+            }
+            values.push(("value_null", Value::Null));
+        }
+        // Preserve compatibility with calls produced before typed value fields
+        // were added. It is intentionally absent from the prompt schema so new
+        // model calls cannot have an untyped value coerced by a provider.
+        if let Some(value) = input.get("value") {
+            values.push(("value", value.clone()));
+        }
+        if values.len() > 1 {
+            return Err(format!(
+                "configure accepts exactly one typed value field; received {}",
+                values
+                    .iter()
+                    .map(|(field, _)| *field)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        Ok(values.into_iter().next().map(|(_, value)| value))
+    }
+
     fn agent_is_readonly(context: &ToolUseContext) -> bool {
         let Some(agent_type) = context.agent_type.as_deref() else {
             return false;
@@ -57,10 +339,9 @@ impl BitFunControlTool {
     }
 
     fn operation_is_readonly(input: &Value) -> bool {
-        let (Some(capability_id), Some(operation_id)) = (
-            input.get("capability_id").and_then(Value::as_str),
-            input.get("operation_id").and_then(Value::as_str),
-        ) else {
+        let (Some(capability_id), Some(operation_id)) =
+            (Self::capability_id(input), Self::operation_id(input))
+        else {
             return false;
         };
         product_capability(capability_id)
@@ -78,14 +359,8 @@ impl BitFunControlTool {
         if Self::action(input) != Some("execute") {
             return Ok(());
         }
-        let capability_id = input
-            .get("capability_id")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let operation_id = input
-            .get("operation_id")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let capability_id = Self::capability_id(input).unwrap_or_default();
+        let operation_id = Self::operation_id(input).unwrap_or_default();
         let capability = product_capability(capability_id)?;
         let operation = capability
             .operations
@@ -110,7 +385,7 @@ impl Tool for BitFunControlTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            "Control BitFun features and settings through its internal API. Use a two-step flow: (1) call `list` or `search`, then `get` the relevant capability; (2) follow the returned item `control.kind`: `direct` uses `execute`/`configure`, `delegate` calls the named owning tool, and `open` opens the exact BitFun UI. The catalog is loaded only on demand and is not embedded here."
+            "Control BitFun features and settings through its internal API. Use a two-step flow: (1) call `list` or `search`, then copy `nextToolCall` to `get` the capability; (2) follow `control.kind`: `direct` uses `execute`/`configure`, `delegate` calls the named tool, and `open` opens the UI. For configure, map valueSchema.type to exactly one value_boolean/value_string/value_integer/value_number/value_object/value_array field, or value_null=true. The catalog loads only on demand."
                 .to_string(),
         )
     }
@@ -136,11 +411,11 @@ impl Tool for BitFunControlTool {
                 },
                 "capability_id": {
                     "type": "string",
-                    "description": "Stable capability ID returned by list/search/get."
+                    "description": "Canonical tool field: copy the returned capabilityId or nextToolCall.capability_id value here."
                 },
                 "item_id": {
                     "type": "string",
-                    "description": "Optional documented item ID returned by search/get; open uses it to navigate to an exact subview."
+                    "description": "Optional canonical tool field: copy a returned itemId here; open uses it to navigate to an exact subview."
                 },
                 "operation_id": {
                     "type": "string",
@@ -152,10 +427,36 @@ impl Tool for BitFunControlTool {
                 },
                 "option_id": {
                     "type": "string",
-                    "description": "User-level setting option ID returned by get; required for configure."
+                    "description": "Canonical tool field: copy a user-level options[].id returned by get; required for configure."
                 },
-                "value": {
-                    "description": "New option value for configure, following the value schema returned by get."
+                "value_boolean": {
+                    "type": "boolean",
+                    "description": "Configure value when get returns valueSchema.type=boolean."
+                },
+                "value_string": {
+                    "type": "string",
+                    "description": "Configure value when get returns valueSchema.type=string."
+                },
+                "value_integer": {
+                    "type": "integer",
+                    "description": "Configure value when get returns valueSchema.type=integer."
+                },
+                "value_number": {
+                    "type": "number",
+                    "description": "Configure value when get returns valueSchema.type=number."
+                },
+                "value_object": {
+                    "type": "object",
+                    "description": "Configure value when get returns valueSchema.type=object."
+                },
+                "value_array": {
+                    "type": "array",
+                    "description": "Configure value when get returns valueSchema.type=array."
+                },
+                "value_null": {
+                    "type": "boolean",
+                    "enum": [true],
+                    "description": "Set a nullable option to null; pass true."
                 },
                 "cursor": {
                     "type": "integer",
@@ -198,31 +499,19 @@ impl Tool for BitFunControlTool {
         if action == "execute" && Self::operation_is_readonly(input) {
             return Ok(Vec::new());
         }
-        let capability_id = input
-            .get("capability_id")
-            .and_then(Value::as_str)
-            .map(str::trim)
+        let capability_id = Self::capability_id(input)
             .filter(|value| !value.is_empty())
             .unwrap_or("<missing-capability-id>");
         let target = match action {
-            "execute" => input
-                .get("operation_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
+            "execute" => Self::operation_id(input)
                 .filter(|value| !value.is_empty())
                 .map(|value| format!("{capability_id}:{value}"))
                 .unwrap_or_else(|| capability_id.to_string()),
-            "configure" => input
-                .get("option_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
+            "configure" => Self::option_id(input)
                 .filter(|value| !value.is_empty())
                 .map(|value| format!("{capability_id}:{value}"))
                 .unwrap_or_else(|| capability_id.to_string()),
-            "open" => input
-                .get("item_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
+            "open" => Self::item_id(input)
                 .filter(|value| !value.is_empty())
                 .map(|value| format!("{capability_id}:{value}"))
                 .unwrap_or_else(|| capability_id.to_string()),
@@ -248,6 +537,9 @@ impl Tool for BitFunControlTool {
         if !input.is_object() {
             return invalid("Input must be an object.");
         }
+        if let Err(error) = Self::validate_input_aliases(input) {
+            return invalid(&error);
+        }
         let Some(action) = Self::action(input) else {
             return invalid("action is required.");
         };
@@ -265,26 +557,20 @@ impl Tool for BitFunControlTool {
             return invalid("query is required for search.");
         }
         if Self::requires_capability_id(action)
-            && !input
-                .get("capability_id")
-                .and_then(Value::as_str)
-                .is_some_and(|id| !id.trim().is_empty())
+            && !Self::capability_id(input).is_some_and(|id| !id.is_empty())
         {
-            return invalid("capability_id is required for get, open, execute, and configure.");
+            return invalid(
+                "capability_id is required for get, open, execute, and configure (capabilityId is accepted as a compatibility alias).",
+            );
         }
-        if input.get("item_id").is_some_and(|value| {
+        if Self::aliased_field(input, "item_id", "itemId").is_some_and(|value| {
             !value
                 .as_str()
                 .is_some_and(|item_id| !item_id.trim().is_empty())
         }) {
             return invalid("item_id must be a non-empty string when provided.");
         }
-        if action == "execute"
-            && !input
-                .get("operation_id")
-                .and_then(Value::as_str)
-                .is_some_and(|id| !id.trim().is_empty())
-        {
+        if action == "execute" && !Self::operation_id(input).is_some_and(|id| !id.is_empty()) {
             return invalid("operation_id is required for execute.");
         }
         if input
@@ -293,27 +579,31 @@ impl Tool for BitFunControlTool {
         {
             return invalid("arguments must be an object when provided.");
         }
-        if action == "configure"
-            && !input
-                .get("option_id")
-                .and_then(Value::as_str)
-                .is_some_and(|id| !id.trim().is_empty())
-        {
+        if action == "configure" && !Self::option_id(input).is_some_and(|id| !id.is_empty()) {
             return invalid("option_id is required for configure.");
         }
-        if action == "configure" && input.get("value").is_none() {
-            return invalid("value is required for configure.");
+        let configure_value = if action == "configure" {
+            match Self::configure_value(input) {
+                Ok(Some(value)) => Some(value),
+                Ok(None) => {
+                    return invalid("Exactly one typed value field is required for configure.")
+                }
+                Err(error) => return invalid(&error),
+            }
+        } else {
+            None
+        };
+        if action != "configure" {
+            match Self::configure_value(input) {
+                Ok(None) => {}
+                Ok(Some(_)) => return invalid("Typed value fields are only valid for configure."),
+                Err(error) => return invalid(&error),
+            }
         }
         if matches!(action, "get" | "open") {
-            let capability_id = input
-                .get("capability_id")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
+            let capability_id = Self::capability_id(input).unwrap_or_default();
             if action == "open" {
-                if let Err(error) = validate_open_target(
-                    capability_id,
-                    input.get("item_id").and_then(Value::as_str),
-                ) {
+                if let Err(error) = validate_open_target(capability_id, Self::item_id(input)) {
                     return invalid(&error);
                 }
             } else if product_capability(capability_id).is_err() {
@@ -321,14 +611,8 @@ impl Tool for BitFunControlTool {
             }
         }
         if action == "execute" {
-            let capability_id = input
-                .get("capability_id")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let operation_id = input
-                .get("operation_id")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
+            let capability_id = Self::capability_id(input).unwrap_or_default();
+            let operation_id = Self::operation_id(input).unwrap_or_default();
             let Ok(capability) = product_capability(capability_id) else {
                 return invalid("capability_id does not identify a known BitFun capability.");
             };
@@ -346,14 +630,8 @@ impl Tool for BitFunControlTool {
             }
         }
         if action == "configure" {
-            let capability_id = input
-                .get("capability_id")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let option_id = input
-                .get("option_id")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
+            let capability_id = Self::capability_id(input).unwrap_or_default();
+            let option_id = Self::option_id(input).unwrap_or_default();
             let Ok(capability) = product_capability(capability_id) else {
                 return invalid("capability_id does not identify a known BitFun capability.");
             };
@@ -364,7 +642,7 @@ impl Tool for BitFunControlTool {
             else {
                 return invalid("option_id is not exposed by this BitFun setting.");
             };
-            if let Some(value) = input.get("value") {
+            if let Some(value) = configure_value.as_ref() {
                 if let Err(error) = validate_option_value(&option.value_schema, value) {
                     return invalid(&error);
                 }
@@ -396,6 +674,7 @@ impl Tool for BitFunControlTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        Self::validate_input_aliases(input).map_err(BitFunError::tool)?;
         let action = Self::action(input)
             .ok_or_else(|| BitFunError::tool("action is required".to_string()))?;
         let typed_action = Self::typed_action(action).ok_or_else(|| {
@@ -419,32 +698,24 @@ impl Tool for BitFunControlTool {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
-            capability_id: input
-                .get("capability_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
+            capability_id: Self::capability_id(input)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
-            item_id: input
-                .get("item_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
+            item_id: Self::item_id(input)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
-            operation_id: input
-                .get("operation_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
+            operation_id: Self::operation_id(input)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
-            option_id: input
-                .get("option_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
+            option_id: Self::option_id(input)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
             arguments: input.get("arguments").cloned(),
-            value: input.get("value").cloned(),
+            value: if typed_action == ProductControlAction::Configure {
+                Self::configure_value(input).map_err(BitFunError::tool)?
+            } else {
+                None
+            },
             cursor: input
                 .get("cursor")
                 .and_then(Value::as_u64)
@@ -464,19 +735,16 @@ impl Tool for BitFunControlTool {
                     .capability_id
                     .as_deref()
                     .ok_or_else(|| BitFunError::tool("capability_id is required".to_string()))?;
-                if bitfun_control_host_available() {
+                let mut result = if bitfun_control_host_available() {
                     match invoke_bitfun_control(request.clone()).await {
                         Ok(result) => result,
                         Err(error) => {
-                            let mut result = inspect_product_control_contract(capability_id)
-                                .map_err(BitFunError::tool)?;
+                            let mut result = self.inspect_shared_capability(capability_id).await?;
                             if let Some(object) = result.as_object_mut() {
                                 object.insert(
-                                    "controlAvailability".to_string(),
+                                    "hostAdapterAvailability".to_string(),
                                     json!({
                                         "status": "degraded",
-                                        "contractAvailable": true,
-                                        "readBack": false,
                                         "reason": error,
                                     }),
                                 );
@@ -485,25 +753,26 @@ impl Tool for BitFunControlTool {
                         }
                     }
                 } else {
-                    let mut result = inspect_product_control_contract(capability_id)
-                        .map_err(BitFunError::tool)?;
-                    if let Some(object) = result.as_object_mut() {
-                        object.insert(
-                            "controlAvailability".to_string(),
-                            json!({
-                                "status": "unavailable",
-                                "contractAvailable": true,
-                                "readBack": false,
-                                "reason": "This product surface has no BitFun control adapter",
-                            }),
-                        );
-                    }
-                    result
+                    self.inspect_shared_capability(capability_id).await?
+                };
+                if let Some(object) = result.as_object_mut() {
+                    object.insert(
+                        "toolInput".to_string(),
+                        json!({ "capability_id": capability_id }),
+                    );
+                }
+                result
+            }
+            ProductControlAction::Configure => {
+                if bitfun_control_host_available() {
+                    invoke_bitfun_control(request)
+                        .await
+                        .map_err(BitFunError::tool)?
+                } else {
+                    self.configure_shared_option(&request).await?
                 }
             }
-            ProductControlAction::Open
-            | ProductControlAction::Execute
-            | ProductControlAction::Configure => {
+            ProductControlAction::Open | ProductControlAction::Execute => {
                 if !bitfun_control_host_available() {
                     return Err(BitFunError::tool(
                         "This BitFun product surface can discover the capability but does not provide its control adapter"
@@ -516,21 +785,10 @@ impl Tool for BitFunControlTool {
             }
         };
 
-        let assistant = match action {
-            "list" | "search" => {
-                let count = result
-                    .get("items")
-                    .and_then(Value::as_array)
-                    .map(Vec::len)
-                    .unwrap_or_default();
-                format!("BitFun feature and setting discovery returned {count} item(s). If nextCursor is present, continue the same discovery action with that cursor. Call get for the relevant capability, then follow the returned item control route.")
-            }
-            "get" => "Loaded the BitFun feature or setting manual. Follow each item's control.kind: direct uses BitFunControl, delegate names the owning tool, and open routes to the exact UI.".to_string(),
-            "open" => "Opened the BitFun feature or setting in the active product surface.".to_string(),
-            "execute" => "Executed the selected user-level BitFun operation.".to_string(),
-            "configure" => "Updated the selected BitFun setting option.".to_string(),
-            _ => "BitFunControl completed.".to_string(),
-        };
+        // The model needs the IDs, schemas, availability, and effective values
+        // to perform the second step. A prose success summary would hide the
+        // structured payload because result_for_assistant is authoritative.
+        let assistant = Self::assistant_payload(&result);
         Ok(vec![ToolResult::ok(result, Some(assistant))])
     }
 }
@@ -538,6 +796,8 @@ impl Tool for BitFunControlTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::PathManager;
+    use crate::service::config::ConfigManagerSettings;
     use std::collections::HashMap;
 
     fn context() -> ToolUseContext {
@@ -572,14 +832,35 @@ mod tests {
         context
     }
 
+    async fn tool_with_temp_config(name: &str) -> (BitFunControlTool, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(dir.path().join(name)));
+        let config_service = Arc::new(
+            ConfigService::with_settings(ConfigManagerSettings {
+                path_manager: Some(path_manager),
+                auto_save: true,
+                backup_count: 0,
+            })
+            .await
+            .expect("config service"),
+        );
+        (BitFunControlTool::with_config_service(config_service), dir)
+    }
+
     #[tokio::test]
     async fn description_keeps_the_catalog_out_of_the_prompt() {
         let description = BitFunControlTool::new().description().await.unwrap();
         assert!(description.contains("two-step"));
         assert!(description.contains("list"));
         assert!(description.contains("search"));
+        assert!(description.contains("value_boolean"));
         assert!(!description.contains("get_configs"));
         assert!(description.len() < 600);
+
+        let schema = BitFunControlTool::new().input_schema();
+        assert_eq!(schema["properties"]["value_boolean"]["type"], "boolean");
+        assert_eq!(schema["properties"]["value_integer"]["type"], "integer");
+        assert!(schema["properties"].get("value").is_none());
     }
 
     #[tokio::test]
@@ -613,6 +894,32 @@ mod tests {
             )
             .await
             .result
+        );
+        assert!(
+            tool.validate_input(
+                &json!({
+                    "action": "configure",
+                    "capabilityId": "setting.tools.execution",
+                    "optionId": "deferred-tool-loading",
+                    "value_boolean": false
+                }),
+                None,
+            )
+            .await
+            .result
+        );
+        assert!(
+            !tool
+                .validate_input(
+                    &json!({
+                        "action": "get",
+                        "capability_id": "setting.tools.execution",
+                        "capabilityId": "feature.ai-assistant"
+                    }),
+                    None,
+                )
+                .await
+                .result
         );
         assert!(
             tool.validate_input(
@@ -668,6 +975,123 @@ mod tests {
                 .await
                 .result
         );
+    }
+
+    #[tokio::test]
+    async fn discovery_payload_exposes_ids_to_the_model() {
+        let tool = BitFunControlTool::new();
+        let results = tool
+            .call_impl(
+                &json!({
+                    "action": "search",
+                    "query": "延迟加载工具 deferred tool loading",
+                    "limit": 20
+                }),
+                &context(),
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected a structured product-control result");
+        };
+        assert!(data["items"].as_array().is_some_and(|items| items
+            .iter()
+            .any(|item| item["id"] == "setting.tools.execution")));
+        let execution = data["items"]
+            .as_array()
+            .and_then(|items| {
+                items
+                    .iter()
+                    .find(|item| item["capabilityId"] == "setting.tools.execution")
+            })
+            .expect("execution capability result");
+        assert_eq!(execution["nextAction"]["action"], "get");
+        assert_eq!(
+            execution["nextAction"]["capabilityId"],
+            "setting.tools.execution"
+        );
+        assert_eq!(execution["nextToolCall"]["action"], "get");
+        assert_eq!(
+            execution["nextToolCall"]["capability_id"],
+            "setting.tools.execution"
+        );
+        let matched_item = execution["matchedItems"]
+            .as_array()
+            .and_then(|items| items.iter().find(|item| item["itemId"] == "deferred-tools"))
+            .expect("deferred-tools match");
+        assert_eq!(matched_item["capabilityId"], "setting.tools.execution");
+        let assistant = result_for_assistant.as_deref().unwrap();
+        assert!(assistant.contains("capabilityId"));
+        assert!(assistant.contains("capability_id"));
+        assert!(assistant.contains("itemId"));
+        assert!(assistant.contains("setting.tools.execution"));
+        assert!(assistant.contains("deferred-tools"));
+        assert!(!assistant.contains("returned 1 item(s)"));
+    }
+
+    #[tokio::test]
+    async fn headless_tool_configures_and_reads_back_shared_product_config() {
+        assert!(!bitfun_control_host_available());
+        let (tool, _dir) = tool_with_temp_config("bitfun-control-tool-round-trip").await;
+
+        let configured = tool
+            .call_impl(
+                &json!({
+                    "action": "configure",
+                    "capabilityId": "setting.tools.execution",
+                    "optionId": "deferred-tool-loading",
+                    "value_boolean": false
+                }),
+                &context(),
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &configured[0]
+        else {
+            panic!("expected a structured product-control result");
+        };
+        assert_eq!(data["effectiveValue"], false);
+        assert_eq!(data["adapter"], "shared-config");
+        assert!(result_for_assistant
+            .as_deref()
+            .is_some_and(|assistant| assistant.contains("effectiveValue")));
+
+        let inspected = tool
+            .call_impl(
+                &json!({
+                    "action": "get",
+                    "capability_id": "setting.tools.execution"
+                }),
+                &context(),
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &inspected[0]
+        else {
+            panic!("expected a structured product-control result");
+        };
+        assert_eq!(data["currentOptionValues"]["deferred-tool-loading"], false);
+        assert_eq!(data["controlAvailability"]["adapter"], "shared-config");
+        assert_eq!(
+            data["toolInput"]["capability_id"],
+            "setting.tools.execution"
+        );
+        let assistant = result_for_assistant.as_deref().unwrap();
+        assert!(assistant.contains("deferred-tool-loading"));
+        assert!(assistant.contains("currentOptionValues"));
     }
 
     #[test]

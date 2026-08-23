@@ -604,7 +604,14 @@ function validateSource(source) {
       )) {
         throw new Error(`${capability.id}.${option.id} has an invalid provider option handler`);
       }
-      if (!['config', 'mergeConfig', 'appearanceSelection', 'language', 'provider'].includes(option.handler.kind)) {
+      if (![
+        'config',
+        'mergeConfig',
+        'appearanceSelection',
+        'language',
+        'flowChatPermissionModeControl',
+        'provider',
+      ].includes(option.handler.kind)) {
         throw new Error(`${capability.id}.${option.id} has an unsupported option handler`);
       }
     }
@@ -1236,12 +1243,12 @@ Docs, website, search, and agents see only features, settings, and documented su
 - 每个子能力都明确标记为直接控制、委托给专用 Agent 工具、需交互打开或不支持；“打开页面”不会再被统计成“Agent 已控制”。当前覆盖：直接 **${catalog.counts.controlCoverage.direct}**、委托 **${catalog.counts.controlCoverage.delegated}**、需交互 **${catalog.counts.controlCoverage.interactive}**、不支持 **${catalog.counts.controlCoverage.unsupported}**。
 - 稳定行为声明为带 JSON 输入契约的 \`operations\` 或 \`options\`，并绑定原生产品控制 Provider；Agent 不接触原始 Tauri Command。
 - \`BitFunControl list\` 和 \`search\` 都返回带 \`nextCursor\` 的精简分页结果；目录可持续增长，不靠固定总量上限。完整目录和 ${catalog.counts.documentedItems} 项子能力都不会写入 system prompt。
-- 目录发现与契约读取不依赖 React 或可见窗口；Desktop 原生启动时注册状态读取与修改 Provider，只有导航类动作等待界面握手。CLI、Detached Dispatch 等表面仍可发现目录，但必须明确返回该表面缺少控制适配器，禁止静默回退本机。只读 Agent 只能发现和读取目录。
+- 目录发现与契约读取不依赖 React 或可见窗口。普通配置型 option 统一由 Product Assembly 的共享 ConfigService 执行器读、写并回读，因此 Desktop、CLI 与 Headless 表面走同一份实现；只有宿主原生 operation/provider option 和界面导航按表面注册适配器，缺失时必须明确返回不可用，禁止静默回退本机。只读 Agent 只能发现和读取目录。
 
 - Every documented item is classified as direct control, delegated Agent control, interactive opening, or unsupported; opening a page is never counted as direct control. Current coverage is **${catalog.counts.controlCoverage.direct} direct**, **${catalog.counts.controlCoverage.delegated} delegated**, **${catalog.counts.controlCoverage.interactive} interactive**, and **${catalog.counts.controlCoverage.unsupported} unsupported**.
 - Stable behavior becomes a typed \`operation\` or \`option\` with a JSON input contract and a native product-control provider. Agents never receive raw Tauri commands.
 - \`BitFunControl list\` and \`search\` return compact pages with a \`nextCursor\`; the catalog can grow without a fixed total-size ceiling. Neither the full catalog nor its ${catalog.counts.documentedItems} documented items enters the system prompt.
-- Discovery and contract lookup do not depend on React or a visible window. Desktop installs state providers during native startup and waits for the UI handshake only for presentation actions. Headless surfaces can still discover the catalog but must return explicit adapter unavailability without local fallback; read-only agents may only discover and inspect entries.
+- Discovery and contract lookup do not depend on React or a visible window. Ordinary config-backed options are read, written, and read back by one Product Assembly ConfigService executor shared by Desktop, CLI, and headless surfaces. Only host-native operations/provider options and presentation routes install surface adapters; missing adapters return explicit unavailability without local fallback. Read-only agents may only discover and inspect entries.
 
 ## 防腐化门禁 / Anti-drift gates
 
@@ -1249,6 +1256,7 @@ Docs, website, search, and agents see only features, settings, and documented su
 - 所有设置子视图必须有同源的子能力直达目标，失效的页签 ID 会阻断生成。
 - 每个功能和设置都必须完整列出其真实子能力，并具备中英文、稳定 ID 与源码证据；门禁不以凑数阈值代替完整性审查。
 - 每项子能力必须声明控制类型；所有 operation/option 必须被说明书条目引用，静态值必须符合 schema，任何未绑定 Provider 都会在 Rust 契约测试中失败。
+- 每个共享配置 option 必须从默认配置可读、绑定到类型化 GlobalConfig，并能通过真实 ConfigService 写入后回读；Desktop 原生 Provider 也必须逐项绑定，新增但漏接的 handler 会阻断 CI。
 - Operation 可声明结构化参数，但必须拒绝未知字段；无参数的 UI 动作若误声明参数，生成会失败。
 - Tauri 模块命令数和用户可见交互源码摘要均为 reviewed contract；变化会让 \`capabilities:check\` 失败并给出新的摘要值。
 - 维护者必须先核对功能清单与证据，再只在本语义源中更新 reviewed count/digest，随后运行 \`pnpm run capabilities:generate\`。
@@ -1257,6 +1265,7 @@ Docs, website, search, and agents see only features, settings, and documented su
 - Every settings subview needs a same-source item destination; stale view IDs fail generation.
 - Every feature and setting must enumerate its real sub-capabilities with bilingual text, stable IDs, and source evidence; the gate does not substitute padding quotas for completeness review.
 - Every item must declare its control class. Every operation/option must be referenced by a manual item, static values must satisfy their schema, and Rust contract tests reject provider bindings without an implementation.
+- Every shared config option must be readable from defaults, bind to typed GlobalConfig, and round-trip through the real ConfigService. Desktop native providers are exhaustively bound as well, so a new but unwired handler fails CI.
 - Operations may declare structured arguments but must reject unknown fields. Argument declarations on parameterless UI actions fail generation.
 - Reviewed Tauri module counts and the user-visible interaction-source digest fail \`capabilities:check\` on drift.
 - Maintainers review the inventories and evidence first, update the reviewed count/digest only in this semantic source, then run \`pnpm run capabilities:generate\`.
