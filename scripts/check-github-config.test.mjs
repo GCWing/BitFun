@@ -316,6 +316,50 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     installerCheck?.run,
     'cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml',
   );
+  const coreLibraryTests = rustJob.steps.find(
+    (step) => step.name === 'Run core library tests',
+  );
+  const desktopLibraryTests = rustJob.steps.find(
+    (step) => step.name === 'Run desktop library tests',
+  );
+  const windowsDesktopProbe = rustJob.steps.find(
+    (step) => step.name === 'Probe Windows desktop library tests',
+  );
+  const productControlContracts = rustJob.steps.find(
+    (step) => step.name === 'Run product-control domain and delivery-profile contracts',
+  );
+  assert.equal(
+    coreLibraryTests?.run,
+    'cargo test --locked -p bitfun-core --lib',
+  );
+  assert.equal(desktopLibraryTests?.if, "runner.os != 'Windows'");
+  assert.equal(
+    desktopLibraryTests?.run,
+    'cargo test --locked -p bitfun-desktop --lib',
+  );
+  assert.equal(windowsDesktopProbe?.if, "runner.os == 'Windows'");
+  assert.equal(windowsDesktopProbe?.shell, 'pwsh');
+  assert.match(
+    windowsDesktopProbe?.run ?? '',
+    /cargo test --locked -p bitfun-desktop --lib 2>&1/,
+  );
+  assert.match(windowsDesktopProbe?.run ?? '', /0xc0000139/);
+  assert.match(windowsDesktopProbe?.run ?? '', /STATUS_ENTRYPOINT_NOT_FOUND/);
+  assert.match(windowsDesktopProbe?.run ?? '', /test result: FAILED/);
+  assert.match(windowsDesktopProbe?.run ?? '', /exit \$testExitCode/);
+  assert.equal(
+    productControlContracts?.if,
+    undefined,
+    'product-control contracts must run on every supported CI OS',
+  );
+  assert.match(
+    productControlContracts?.run ?? '',
+    /bitfun-product-domains --no-default-features product_control/,
+  );
+  assert.match(
+    productControlContracts?.run ?? '',
+    /bitfun-product-capabilities every_agent_runtime_delivery_profile_includes_product_control_discovery/,
+  );
   assert.equal(
     commandByStep.get('Run file watch contract tests'),
     'cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',

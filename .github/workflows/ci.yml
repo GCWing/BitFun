@@ -242,11 +242,45 @@ jobs:
         if: runner.os == 'Windows'
         run: cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml
 
-      - name: Run core and desktop library tests
-        run: cargo test --locked -p bitfun-core -p bitfun-desktop --lib
+      - name: Run core library tests
+        run: cargo test --locked -p bitfun-core --lib
+
+      - name: Run desktop library tests
+        if: runner.os != 'Windows'
+        run: cargo test --locked -p bitfun-desktop --lib
+
+      # Tauri issue #13419 prevents some Windows MSVC lib-test harnesses from
+      # entering Rust's test runner at all. Keep probing on every run so the
+      # full suite resumes automatically when upstream fixes it. Only the exact
+      # pre-test loader signature is tolerated; assertions and every other
+      # process failure remain blocking.
+      # https://github.com/tauri-apps/tauri/issues/13419
+      - name: Probe Windows desktop library tests
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $testOutput = cargo test --locked -p bitfun-desktop --lib 2>&1
+          $testExitCode = $LASTEXITCODE
+          $testOutput | ForEach-Object { Write-Output $_ }
+          if ($testExitCode -eq 0) {
+            exit 0
+          }
+
+          $testLog = $testOutput | Out-String
+          $knownTauriLoaderFailure = (
+            $testLog -match 'process .*exit successfully:.*bitfun_desktop_lib-' -and
+            $testLog -match 'exit code: 0xc0000139' -and
+            $testLog -match 'STATUS_ENTRYPOINT_NOT_FOUND' -and
+            $testLog -notmatch 'test result: FAILED'
+          )
+          if ($knownTauriLoaderFailure) {
+            Write-Output '::warning title=Tauri Windows test-loader limitation::The desktop test harness hit upstream Tauri issue #13419 before any Rust test ran. Compilation and the cross-platform product-control contracts remain blocking.'
+            exit 0
+          }
+
+          exit $testExitCode
 
       - name: Run product-control domain and delivery-profile contracts
-        if: runner.os == 'Linux'
         run: |
           cargo test --locked -p bitfun-product-domains --no-default-features product_control
           cargo test --locked -p bitfun-product-capabilities every_agent_runtime_delivery_profile_includes_product_control_discovery
