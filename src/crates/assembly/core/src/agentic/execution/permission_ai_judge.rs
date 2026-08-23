@@ -323,10 +323,11 @@ pub fn resource_is_write_sensitive(resource: &str, custom_write_markers: &[Strin
 /// Deterministic verdict of the sensitivity matrix for one permission intent.
 ///
 /// The matrix runs after the static policy so protection classes never depend
-/// on the model: read-sensitive resources are a hard line (escalate in
-/// standard mode, deny in aggressive/passive and unattended runs), and
-/// write-sensitive resources keep write-class operations out of aggressive
-/// auto-approval.
+/// on the model: both classes share one hard gate. An interactive standard
+/// run escalates to the user without consulting the fast model, while
+/// aggressive/passive modes and unattended review agents deny
+/// deterministically (write-sensitive hits only apply to write-class actions;
+/// reading them keeps the normal fast path).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SensitivityVerdict {
     ReadSensitive,

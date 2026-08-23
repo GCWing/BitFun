@@ -820,13 +820,13 @@ impl ToolPipeline {
             None => Vec::new(),
         };
         // A tool call whose resources hit a read- or write-sensitive marker
-        // must not be auto-allowed by the static policy: read-sensitive
-        // resources are a hard line (standard mode asks the user directly,
-        // aggressive/passive and unattended runs deny), and write-sensitive
-        // resources keep write-class operations out of aggressive
-        // auto-approval. The policy layer cannot know about project markers,
-        // so when the policy would statically allow a sensitive call we force
-        // it through the permission pipeline instead.
+        // must not be auto-allowed by the static policy: both classes share a
+        // hard gate (an interactive standard run escalates to the user, every
+        // unattended profile denies). Write-sensitive hits only apply to
+        // write-class actions; reading them keeps the fast path. The policy
+        // layer cannot know about project markers, so when the policy would
+        // statically allow a sensitive call we force it through the
+        // permission pipeline instead.
         //
         // Review agents are not exempt: they run unattended, so a read
         // sensitive access is denied deterministically instead of silently
@@ -1234,34 +1234,41 @@ impl ToolPipeline {
             &judge_input.sensitive_markers,
         );
 
-        // Read-sensitive hard line: the fast model is never asked about these.
-        // Standard mode asks the user directly; aggressive/passive modes and
-        // unattended runs (review agents can never answer an interactive
-        // prompt) deny deterministically.
-        if sensitivity == SensitivityVerdict::ReadSensitive {
+        // Sensitive-resource hard gate: the fast model is never asked about
+        // these. An interactive standard run always escalates to the user —
+        // for read-sensitive content because it must not be touched at all,
+        // and for write-sensitive content so no file the user marked can be
+        // modified without an explicit human decision. Every other profile is
+        // unattended (aggressive/passive runs cannot wait for a human, review
+        // agents can never answer a prompt) and denies deterministically.
+        if sensitivity != SensitivityVerdict::None {
             let can_interact = !is_review_agent_type(&judge_input.agent_type);
             if can_interact && judge_input.auto_approve_mode == AiAutoApproveMode::Standard {
                 info!(
-                    "AI permission judge promoted read-sensitive request to interactive: request_id={}",
-                    request.request_id
+                    "AI permission judge promoted sensitive request to interactive: request_id={}, sensitivity={:?}",
+                    request.request_id, sensitivity
                 );
                 manager
                     .promote_to_interactive(&request.request_id)
                     .await
                     .map_err(|error| BitFunError::service(error.to_string()))?;
             } else {
+                let feedback = if sensitivity == SensitivityVerdict::ReadSensitive {
+                    "Read-sensitive resource: access is denied in the current permission mode."
+                        .to_string()
+                } else {
+                    "Write-sensitive resource: access is denied for write-class operations in this permission mode."
+                        .to_string()
+                };
                 info!(
-                    "AI permission judge denied read-sensitive request: request_id={}, mode={}, interactive={}",
-                    request.request_id, judge_input.auto_approve_mode, can_interact
+                    "AI permission judge denied sensitive request: request_id={}, mode={}, interactive={}, sensitivity={:?}",
+                    request.request_id, judge_input.auto_approve_mode, can_interact, sensitivity
                 );
                 manager
                     .reply(
                         &request.request_id,
                         PermissionReply::Reject {
-                            feedback: Some(
-                                "Read-sensitive resource: access is denied in the current permission mode."
-                                    .to_string(),
-                            ),
+                            feedback: Some(feedback),
                         },
                         bitfun_runtime_ports::PermissionReplySource::AiAutoApprove,
                     )
@@ -1271,18 +1278,7 @@ impl ToolPipeline {
             return Ok(());
         }
 
-        // Write-sensitive write-class operations lose aggressive auto-approval:
-        // a judge `allow` no longer auto-approves, and an escalated call is
-        // handled under the conservative rules. Their names stay visible to the
-        // judge; secret values are redacted by the prompt renderer.
         let original_mode = judge_input.auto_approve_mode;
-        let write_sensitive_write_class = sensitivity == SensitivityVerdict::WriteSensitive;
-        let escalation_mode =
-            if write_sensitive_write_class && original_mode == AiAutoApproveMode::Aggressive {
-                AiAutoApproveMode::Standard
-            } else {
-                original_mode
-            };
 
         if is_deterministically_read_only_with_markers(
             &request.action,
@@ -1318,78 +1314,20 @@ impl ToolPipeline {
         let source = bitfun_runtime_ports::PermissionReplySource::AiAutoApprove;
         match decision {
             AiPermissionDecision::Allow => {
-                // A write-sensitive write-class operation keeps the user in
-                // control: aggressive and passive runs treat the allow like an
-                // escalation (prompt when interactive, deny when not) instead
-                // of auto-approving content the user marked write-sensitive.
-                if write_sensitive_write_class && original_mode != AiAutoApproveMode::Standard {
-                    match (original_mode, unattended_review) {
-                        (AiAutoApproveMode::Passive, _) => {
-                            info!(
-                                "AI permission judge downgraded write-sensitive allow (passive): request_id={}",
-                                request.request_id
-                            );
-                            manager
-                                .reply(
-                                    &request.request_id,
-                                    PermissionReply::Reject {
-                                        feedback: Some(
-                                            "Write-sensitive resource: auto-approval is disabled for write-class operations in passive mode."
-                                                .to_string(),
-                                        ),
-                                    },
-                                    source,
-                                )
-                                .await
-                                .map_err(|error| BitFunError::service(error.to_string()))?;
-                        }
-                        (AiAutoApproveMode::Aggressive, true) => {
-                            info!(
-                                "AI permission judge downgraded write-sensitive allow for unattended agent: request_id={}",
-                                request.request_id
-                            );
-                            manager
-                                .reply(
-                                    &request.request_id,
-                                    PermissionReply::Reject {
-                                        feedback: Some(
-                                            "Write-sensitive resource: access is denied for an unattended run in the current permission mode."
-                                                .to_string(),
-                                        ),
-                                    },
-                                    source,
-                                )
-                                .await
-                                .map_err(|error| BitFunError::service(error.to_string()))?;
-                        }
-                        (AiAutoApproveMode::Aggressive, false) => {
-                            info!(
-                                "AI permission judge downgraded write-sensitive allow to interactive: request_id={}",
-                                request.request_id
-                            );
-                            manager
-                                .promote_to_interactive(&request.request_id)
-                                .await
-                                .map_err(|error| BitFunError::service(error.to_string()))?;
-                        }
-                        (AiAutoApproveMode::Standard, _) => {
-                            unreachable!("standard mode is handled by the else branch")
-                        }
-                    }
-                } else {
-                    info!(
-                        "AI permission judge allowed tool call: request_id={}",
-                        request.request_id
-                    );
-                    manager
-                        .reply(
-                            &request.request_id,
-                            PermissionReply::Once { feedback: None },
-                            source,
-                        )
-                        .await
-                        .map_err(|error| BitFunError::service(error.to_string()))?;
-                }
+                // Sensitive calls never reach the judge (hard gate above), so
+                // an allow here is a plain non-sensitive auto-approval.
+                info!(
+                    "AI permission judge allowed tool call: request_id={}",
+                    request.request_id
+                );
+                manager
+                    .reply(
+                        &request.request_id,
+                        PermissionReply::Once { feedback: None },
+                        source,
+                    )
+                    .await
+                    .map_err(|error| BitFunError::service(error.to_string()))?;
             }
             AiPermissionDecision::Reject { reason } => {
                 info!(
@@ -1411,15 +1349,15 @@ impl ToolPipeline {
                 if let Some(reason) = reason.as_deref() {
                     info!(
                         "AI permission judge escalated tool call: request_id={}, mode={}, reason={}",
-                        request.request_id, escalation_mode, reason
+                        request.request_id, original_mode, reason
                     );
                 } else {
                     info!(
                         "AI permission judge escalated tool call: request_id={}, mode={}",
-                        request.request_id, escalation_mode
+                        request.request_id, original_mode
                     );
                 }
-                match (escalation_mode, unattended_review) {
+                match (original_mode, unattended_review) {
                     (AiAutoApproveMode::Aggressive, _) => {
                         info!(
                             "AI permission judge aggressive mode auto-approved escalated call: request_id={}",
@@ -4931,7 +4869,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v2_write_sensitive_write_class_aggressive_allow_is_downgraded_to_prompt() {
+    async fn v2_write_sensitive_write_class_aggressive_is_denied_without_model_or_prompt() {
         let temp_dir = std::env::temp_dir().join("bitfun-write-marker-test");
         let config_path = temp_dir.join(".bitfun").join("config");
         std::fs::create_dir_all(&config_path).expect("create test config dir");
@@ -4985,45 +4923,26 @@ mod tests {
                 .await
         });
 
-        // Aggressive mode must not auto-approve a write-sensitive write-class
-        // call even when the judge allows it: the allow is downgraded to an
-        // interactive prompt.
-        let request = wait_for_interactive_permission_request(&manager).await;
-        assert_eq!(request.tool_call_id.as_deref(), Some("ai-write-prod"));
-        // The resource name stays visible on the request (no name masking).
-        assert!(request
-            .resources
-            .iter()
-            .any(|resource| resource == "scripts/prod-deploy.sh"));
-        // The judge prompt carries the resource name too.
-        let messages = captured.lock().unwrap().clone();
-        assert!(
-            messages
-                .iter()
-                .any(|message| message.contains("scripts/prod-deploy.sh")),
-            "write-sensitive resource name must stay visible to the judge"
-        );
-        manager
-            .reply(
-                &request.request_id,
-                PermissionReply::Once { feedback: None },
-                bitfun_runtime_ports::PermissionReplySource::User,
-            )
-            .await
-            .expect("user confirms downgraded request");
-
+        // Aggressive mode is fully unattended: a write-sensitive write-class
+        // call is denied deterministically — the judge is never consulted and
+        // no interactive prompt may appear.
         let results = execution
             .await
             .expect("write-sensitive task join")
-            .expect("tool should execute after user confirmation");
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
-        assert!(!results[0].result.is_error);
+            .expect("denial should be a resolved result");
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert!(manager.interactive_pending_requests().is_empty());
+        assert!(
+            captured.lock().unwrap().is_empty(),
+            "the judge model must not be called in aggressive mode"
+        );
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]
-    async fn v2_write_sensitive_write_class_passive_and_unattended_allow_is_denied() {
+    async fn v2_write_sensitive_write_class_passive_is_denied_without_model_or_prompt() {
         let temp_dir = std::env::temp_dir().join("bitfun-write-marker-passive-test");
         let config_path = temp_dir.join(".bitfun").join("config");
         std::fs::create_dir_all(&config_path).expect("create test config dir");
@@ -5035,10 +4954,160 @@ mod tests {
 
         let store = Arc::new(MemoryPermissionStore::default());
         let manager = permission_test_manager(Arc::clone(&store));
+        let captured: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let pipeline = test_tool_pipeline()
             .with_permission_request_manager(Arc::clone(&manager))
-            .with_ai_judge_model(fixed_judge_response(
+            .with_ai_judge_model(capturing_judge_response(
                 "```json\n{\"decision\":\"allow\",\"risk_level\":\"low\",\"reason\":\"routine\"}\n```",
+                Arc::clone(&captured),
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "bash",
+                vec!["scripts/prod-deploy.sh".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut context = permission_test_context();
+        context.workspace = Some(WorkspaceBinding::new(None, temp_dir.clone()));
+        let mut options = ToolExecutionOptions::default();
+        options.permission_policy = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new("bash", "*", PermissionEffect::Allow)],
+            Vec::new(),
+        );
+        options.ai_auto_approve_ask = true;
+        options.ai_auto_approve_mode =
+            bitfun_product_domains::tool_permissions::AiAutoApproveMode::Passive;
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("passive-write-prod", "Write")],
+                context,
+                options,
+            )
+            .await
+            .expect("passive write-sensitive write should be denied");
+
+        // Passive mode is unattended too: the call is denied before any model
+        // consultation and no interactive prompt may appear.
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert!(manager.interactive_pending_requests().is_empty());
+        assert!(
+            captured.lock().unwrap().is_empty(),
+            "the judge model must not be called in passive mode"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn v2_write_sensitive_write_class_standard_prompts_user_without_model() {
+        let temp_dir = std::env::temp_dir().join("bitfun-write-marker-standard-test");
+        let config_path = temp_dir.join(".bitfun").join("config");
+        std::fs::create_dir_all(&config_path).expect("create test config dir");
+        std::fs::write(
+            config_path.join("tool_permissions.json"),
+            r#"{"rules":[],"sensitive_resources":{"read":[],"write":["prod-deploy"]}}"#,
+        )
+        .expect("write write-sensitive project permission config");
+
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let captured: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(capturing_judge_response(
+                "```json\n{\"decision\":\"allow\",\"risk_level\":\"low\",\"reason\":\"routine\"}\n```",
+                Arc::clone(&captured),
+            ));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "bash",
+                vec!["scripts/prod-deploy.sh".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let context_dir = temp_dir.clone();
+        let execution = tokio::spawn(async move {
+            let mut options = ToolExecutionOptions::default();
+            options.permission_policy = ResolvedPermissionPolicy::new(
+                vec![PermissionRule::new("bash", "*", PermissionEffect::Allow)],
+                Vec::new(),
+            );
+            options.ai_auto_approve_ask = true;
+            options.ai_auto_approve_mode =
+                bitfun_product_domains::tool_permissions::AiAutoApproveMode::Standard;
+            let mut context = permission_test_context();
+            context.workspace = Some(WorkspaceBinding::new(None, context_dir));
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("standard-write-prod", "Write")],
+                    context,
+                    options,
+                )
+                .await
+        });
+
+        // Standard mode is interactive: the write-sensitive write-class call
+        // must be forced to a user prompt WITHOUT consulting the judge, and
+        // the resource name stays visible on the prompt.
+        let request = wait_for_interactive_permission_request(&manager).await;
+        assert_eq!(request.tool_call_id.as_deref(), Some("standard-write-prod"));
+        assert!(request
+            .resources
+            .iter()
+            .any(|resource| resource == "scripts/prod-deploy.sh"));
+        assert!(
+            captured.lock().unwrap().is_empty(),
+            "the judge must not decide a write-sensitive mutation"
+        );
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("user confirms write-sensitive request");
+
+        let results = execution
+            .await
+            .expect("write-sensitive task join")
+            .expect("tool should execute after user confirmation");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn v2_write_sensitive_write_class_unattended_standard_agent_is_denied() {
+        let temp_dir = std::env::temp_dir().join("bitfun-write-marker-unattended-test");
+        let config_path = temp_dir.join(".bitfun").join("config");
+        std::fs::create_dir_all(&config_path).expect("create test config dir");
+        std::fs::write(
+            config_path.join("tool_permissions.json"),
+            r#"{"rules":[],"sensitive_resources":{"read":[],"write":["prod-deploy"]}}"#,
+        )
+        .expect("write write-sensitive project permission config");
+
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let captured: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let pipeline = test_tool_pipeline()
+            .with_permission_request_manager(Arc::clone(&manager))
+            .with_ai_judge_model(capturing_judge_response(
+                "```json\n{\"decision\":\"allow\",\"risk_level\":\"low\",\"reason\":\"routine\"}\n```",
+                Arc::clone(&captured),
             ));
         let calls = Arc::new(AtomicUsize::new(0));
         register_v2_file_test_tool(
@@ -5061,7 +5130,7 @@ mod tests {
         );
         options.ai_auto_approve_ask = true;
         options.ai_auto_approve_mode =
-            bitfun_product_domains::tool_permissions::AiAutoApproveMode::Aggressive;
+            bitfun_product_domains::tool_permissions::AiAutoApproveMode::Standard;
 
         let results = pipeline
             .execute_tools(
@@ -5070,11 +5139,17 @@ mod tests {
                 options,
             )
             .await
-            .expect("unattended write-sensitive allow should be denied");
+            .expect("unattended write-sensitive call should be denied");
 
+        // A review agent can never answer the interactive prompt that the
+        // standard-mode gate would raise, so it is denied deterministically.
         assert_eq!(calls.load(Ordering::SeqCst), 0);
         assert_eq!(results[0].result.result["category"], "user_rejected");
         assert!(manager.interactive_pending_requests().is_empty());
+        assert!(
+            captured.lock().unwrap().is_empty(),
+            "the judge must not be consulted for an unattended sensitive call"
+        );
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
