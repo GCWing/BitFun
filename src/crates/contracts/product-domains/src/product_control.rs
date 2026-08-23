@@ -367,6 +367,7 @@ pub enum ProductCapabilityOptionHandler {
     },
     AppearanceSelection,
     Language,
+    FlowChatPermissionModeControl,
     Provider {
         provider_id: String,
         option_id: String,
@@ -539,10 +540,23 @@ fn compact_capability(capability: &ProductCapability, query: &str) -> Value {
             .collect()
     };
     matched_items.sort_by(|left, right| right.1.cmp(&left.1));
-    let matched_items: Vec<&ProductCapabilityItem> = matched_items
+    let matched_items: Vec<Value> = matched_items
         .into_iter()
         .take(5)
-        .map(|(item, _)| item)
+        .map(|(item, _)| {
+            json!({
+                // Keep `id` for compatibility with existing discovery consumers,
+                // while exposing the unambiguous control-route field names used
+                // by ProductControlRequest.
+                "id": item.id,
+                "capabilityId": capability.id,
+                "itemId": item.id,
+                "titleZh": item.title_zh,
+                "titleEn": item.title_en,
+                "destination": item.destination,
+                "control": item.control,
+            })
+        })
         .collect();
     let item_control_count = |kind: &str| {
         capability
@@ -552,7 +566,10 @@ fn compact_capability(capability: &ProductCapability, query: &str) -> Value {
             .count()
     };
     json!({
+        // `id` remains a compatibility alias. New Agent and API consumers use
+        // `capabilityId`, which cannot be confused with a matched item's id.
         "id": capability.id,
+        "capabilityId": capability.id,
         "kind": capability.kind,
         "titleZh": capability.title_zh,
         "titleEn": capability.title_en,
@@ -568,6 +585,14 @@ fn compact_capability(capability: &ProductCapability, query: &str) -> Value {
             "interactive": item_control_count("open"),
         },
         "matchedItems": matched_items,
+        "nextAction": {
+            "action": "get",
+            "capabilityId": capability.id,
+        },
+        "nextToolCall": {
+            "action": "get",
+            "capability_id": capability.id,
+        },
     })
 }
 
@@ -602,18 +627,24 @@ pub fn discover(request: &ProductControlRequest) -> Result<Value, String> {
         .capabilities
         .iter()
         .filter_map(|capability| {
-            let score = if request.action == ProductControlAction::Search {
+            let text_score = if request.action == ProductControlAction::Search {
                 let mut fields = vec![
                     capability.id.as_str(),
                     capability.title_zh.as_str(),
                     capability.title_en.as_str(),
                 ];
                 fields.extend(capability.search_terms.iter().map(String::as_str));
-                score_text_match(query, &fields).saturating_add(control_priority(capability))
+                score_text_match(query, &fields)
             } else {
                 1
             };
-            (score > 0).then_some((capability, score))
+            // Control coverage is a tie-breaker only after a textual match.
+            // Adding it first makes unrelated but highly controllable entries
+            // appear for every search query.
+            (text_score > 0).then_some((
+                capability,
+                text_score.saturating_add(control_priority(capability)),
+            ))
         })
         .collect();
     matches.sort_by(|left, right| {
@@ -979,13 +1010,60 @@ mod tests {
                     capability["matchedItems"]
                         .as_array()
                         .and_then(|items| items.first())
-                        .and_then(|item| item["id"].as_str()),
+                        .and_then(|item| item["itemId"].as_str()),
                     Some(expected_item.item_id.as_str()),
                     "acceptance={} item route",
                     acceptance.id
                 );
+                let matched_item = capability["matchedItems"]
+                    .as_array()
+                    .and_then(|items| items.first())
+                    .unwrap();
+                assert_eq!(
+                    matched_item["capabilityId"].as_str(),
+                    Some(expected_item.capability_id.as_str()),
+                    "acceptance={} matched item capability route",
+                    acceptance.id
+                );
             }
         }
+    }
+
+    #[test]
+    fn discovery_routes_use_unambiguous_product_control_field_names() {
+        let result = discover(&request(
+            ProductControlAction::Search,
+            Some("deferred tool loading"),
+        ))
+        .unwrap();
+        let capability = &result["items"][0];
+        assert_eq!(capability["capabilityId"], "setting.tools.execution");
+        assert_eq!(capability["id"], capability["capabilityId"]);
+        assert_eq!(capability["nextAction"]["action"], "get");
+        assert_eq!(
+            capability["nextAction"]["capabilityId"],
+            capability["capabilityId"]
+        );
+        assert_eq!(capability["nextToolCall"]["action"], "get");
+        assert_eq!(
+            capability["nextToolCall"]["capability_id"],
+            capability["capabilityId"]
+        );
+        let matched_item = &capability["matchedItems"][0];
+        assert_eq!(matched_item["capabilityId"], capability["capabilityId"]);
+        assert_eq!(matched_item["itemId"], "deferred-tools");
+        assert_eq!(matched_item["id"], matched_item["itemId"]);
+    }
+
+    #[test]
+    fn discovery_excludes_unrelated_capabilities_before_control_ranking() {
+        let result = discover(&request(
+            ProductControlAction::Search,
+            Some("火星量子烤面包机"),
+        ))
+        .unwrap();
+        assert_eq!(result["totalCount"], 0);
+        assert_eq!(result["items"], json!([]));
     }
 
     #[test]

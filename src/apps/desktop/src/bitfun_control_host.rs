@@ -9,13 +9,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+use bitfun_core::agentic::tools::bitfun_control_config::{
+    configure_config_backed_option, read_config_backed_option,
+};
 use bitfun_core::agentic::tools::bitfun_control_host::{
     set_bitfun_control_port, BitFunControlHostRequest, ProductControlAction, ProductControlPort,
 };
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
-use bitfun_core::service::config::types::{
-    AIExperienceConfig, AgentCompanionPetSelection, MemoriesConfig,
-};
+use bitfun_core::service::config::types::{AIExperienceConfig, AgentCompanionPetSelection};
 use bitfun_product_domains::product_control::{
     capability as product_capability, inspect_contract, validate_open_target,
     validate_operation_arguments, validate_option_value, ProductCapabilityOperationHandler,
@@ -97,97 +98,15 @@ async fn dispatch_surface_request(request: BitFunControlHostRequest) -> Result<V
     }
 }
 
-fn read_nested_value<'a>(value: &'a Value, field: &str) -> Option<&'a Value> {
-    let mut current = value;
-    for segment in field.split('.') {
-        current = current.as_object()?.get(segment)?;
-    }
-    Some(current)
-}
-
-fn set_nested_value(value: &mut Value, field: &str, next_value: Value) -> Result<(), String> {
-    let segments: Vec<&str> = field
-        .split('.')
-        .filter(|segment| !segment.is_empty())
-        .collect();
-    let Some((last, parents)) = segments.split_last() else {
-        return Err("A product-control config field cannot be empty".to_string());
-    };
-    let mut current = value;
-    for segment in parents {
-        if !current.is_object() {
-            *current = Value::Object(Map::new());
-        }
-        current = current
-            .as_object_mut()
-            .expect("object was initialized")
-            .entry((*segment).to_string())
-            .or_insert_with(|| Value::Object(Map::new()));
-    }
-    if !current.is_object() {
-        *current = Value::Object(Map::new());
-    }
-    current
-        .as_object_mut()
-        .expect("object was initialized")
-        .insert((*last).to_string(), next_value);
-    Ok(())
-}
-
-fn validate_config_semantics(path: &str, value: &Value) -> Result<(), String> {
-    if path == "memories" {
-        let memories: MemoriesConfig = serde_json::from_value(value.clone())
-            .map_err(|error| format!("Invalid memory settings: {error}"))?;
-        if memories.max_rollout_age_days > memories.max_unused_days {
-            return Err("Memory rollout age must not exceed unused-memory retention".to_string());
-        }
-    }
-    Ok(())
-}
-
 async fn current_option_value(
     app: &AppHandle,
     state: &AppState,
     option: &ProductCapabilityOption,
 ) -> Result<Value, String> {
+    if let Some(value) = read_config_backed_option(&state.config_service, option).await? {
+        return Ok(value);
+    }
     match &option.handler {
-        ProductCapabilityOptionHandler::Config { path } => state
-            .config_service
-            .get_config(Some(path))
-            .await
-            .map_err(|error| error.to_string()),
-        ProductCapabilityOptionHandler::MergeConfig { path, fields } => {
-            let current: Value = state
-                .config_service
-                .get_config(Some(path))
-                .await
-                .map_err(|error| error.to_string())?;
-            let values: Vec<Value> = fields
-                .iter()
-                .map(|field| {
-                    read_nested_value(&current, field)
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                })
-                .collect();
-            if values.len() == 1 || values.windows(2).all(|pair| pair[0] == pair[1]) {
-                Ok(values.into_iter().next().unwrap_or(Value::Null))
-            } else {
-                Ok(Value::Object(
-                    fields.iter().cloned().zip(values).collect::<Map<_, _>>(),
-                ))
-            }
-        }
-        ProductCapabilityOptionHandler::AppearanceSelection => state
-            .config_service
-            .get_config(Some("appearance.selection"))
-            .await
-            .map_err(|error| error.to_string()),
-        ProductCapabilityOptionHandler::Language => state
-            .config_service
-            .get_config(Some("app.language"))
-            .await
-            .map_err(|error| error.to_string()),
         ProductCapabilityOptionHandler::Provider {
             provider_id,
             option_id,
@@ -206,6 +125,7 @@ async fn current_option_value(
                 "Product-control provider option is not registered: {provider_id}:{option_id}"
             )),
         },
+        _ => Err("Shared product-control config handler did not return a value".to_string()),
     }
 }
 
@@ -353,65 +273,27 @@ async fn configure_desktop(
         .ok_or_else(|| format!("Unknown option for {capability_id}: {option_id}"))?;
     validate_option_value(&option.value_schema, value)?;
     let state = app.state::<AppState>();
-    let (changed_path, notify_settings) = match &option.handler {
-        ProductCapabilityOptionHandler::Config { path } => {
-            state
-                .config_service
-                .set_config(path, value)
-                .await
-                .map_err(|error| error.to_string())?;
-            (path.clone(), true)
-        }
-        ProductCapabilityOptionHandler::MergeConfig { path, fields } => {
-            let mut current: Value = state
-                .config_service
-                .get_config(Some(path))
-                .await
-                .map_err(|error| error.to_string())?;
-            for field in fields {
-                set_nested_value(&mut current, field, value.clone())?;
-            }
-            validate_config_semantics(path, &current)?;
-            state
-                .config_service
-                .set_config(path, current)
-                .await
-                .map_err(|error| error.to_string())?;
-            (path.clone(), true)
-        }
-        ProductCapabilityOptionHandler::AppearanceSelection => {
-            state
-                .config_service
-                .set_config("appearance.selection", value)
-                .await
-                .map_err(|error| error.to_string())?;
-            ("appearance.selection".to_string(), true)
-        }
-        ProductCapabilityOptionHandler::Language => {
-            state
-                .config_service
-                .set_config("app.language", value)
-                .await
-                .map_err(|error| error.to_string())?;
-            ("app.language".to_string(), true)
-        }
-        ProductCapabilityOptionHandler::Provider {
-            provider_id,
-            option_id,
-        } => {
-            let provider = desktop_provider_option(provider_id, option_id).ok_or_else(|| {
-                format!(
-                    "Product-control provider option is not registered: {provider_id}:{option_id}"
-                )
-            })?;
-            configure_desktop_provider_option(app, provider, value).await?;
-            (provider.changed_path().to_string(), false)
-        }
+    let (changed_path, effective_value, notify_settings) = if let Some(applied) =
+        configure_config_backed_option(&state.config_service, option, value).await?
+    {
+        (applied.changed_path, applied.effective_value, true)
+    } else if let ProductCapabilityOptionHandler::Provider {
+        provider_id,
+        option_id,
+    } = &option.handler
+    {
+        let provider = desktop_provider_option(provider_id, option_id).ok_or_else(|| {
+            format!("Product-control provider option is not registered: {provider_id}:{option_id}")
+        })?;
+        configure_desktop_provider_option(app, provider, value).await?;
+        let effective_value = current_option_value(app, &state, option).await?;
+        (provider.changed_path().to_string(), effective_value, false)
+    } else {
+        return Err("Product-control option has no executable handler".to_string());
     };
     if notify_settings {
         crate::api::remote_connect_api::notify_settings_changed();
     }
-    let effective_value = current_option_value(app, &state, option).await?;
     let presentation_sync = emit_applied(
         capability_id,
         None,
@@ -767,81 +649,6 @@ pub(crate) async fn report_bitfun_control_result(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_core::service::config::types::GlobalConfig;
-    use bitfun_product_domains::product_control::{
-        ProductControlValueSchema, ProductControlValueType,
-    };
-
-    fn writable_samples(schema: &ProductControlValueSchema, current: Option<&Value>) -> Vec<Value> {
-        let mut samples = Vec::new();
-        if let Some(values) = &schema.r#enum {
-            samples.extend(values.iter().cloned());
-        }
-        match schema.value_type {
-            ProductControlValueType::Boolean => {
-                samples.push(Value::Bool(true));
-                samples.push(Value::Bool(false));
-            }
-            ProductControlValueType::String => samples.push(Value::String(
-                "x".repeat(schema.min_length.unwrap_or(1).max(1)),
-            )),
-            ProductControlValueType::Integer => {
-                samples.push(Value::from(schema.minimum.unwrap_or(1.0).ceil() as i64));
-                if let Some(maximum) = schema.maximum {
-                    samples.push(Value::from(maximum.floor() as i64));
-                }
-            }
-            ProductControlValueType::Number => {
-                samples.push(Value::from(schema.minimum.unwrap_or(1.0)));
-                if let Some(maximum) = schema.maximum {
-                    samples.push(Value::from(maximum));
-                }
-            }
-            ProductControlValueType::Object => samples.push(json!({})),
-            ProductControlValueType::Array => samples.push(json!([])),
-        }
-        if schema.nullable {
-            samples.push(Value::Null);
-        }
-        if let Some(current) = current {
-            samples.push(current.clone());
-        }
-        samples.retain(|sample| validate_option_value(schema, sample).is_ok());
-        samples.dedup();
-        samples
-    }
-
-    fn assert_config_binding(root: &Value, path: &str, schema: &ProductControlValueSchema) {
-        let current = read_nested_value(root, path);
-        if let Some(current) = current {
-            assert!(
-                validate_option_value(schema, current).is_ok(),
-                "default value at {path} does not satisfy its product-control schema: {current}"
-            );
-        }
-
-        // GlobalConfig intentionally omits default-valued and None fields when
-        // serialized. Inject several valid non-default samples, deserialize to
-        // the typed config, and require one to survive serialization. Unknown
-        // serde fields are discarded, so this proves the catalog path is owned
-        // by the typed config without making production upgrades intolerant of
-        // newer fields.
-        let samples = writable_samples(schema, current);
-        for sample in &samples {
-            let mut candidate = root.clone();
-            set_nested_value(&mut candidate, path, sample.clone()).unwrap();
-            let Ok(typed) = serde_json::from_value::<GlobalConfig>(candidate) else {
-                continue;
-            };
-            let serialized = serde_json::to_value(typed).unwrap();
-            if read_nested_value(&serialized, path) == Some(sample) {
-                return;
-            }
-        }
-        panic!(
-            "product-control config path is not consumed by typed GlobalConfig: {path}; valid samples: {samples:?}"
-        );
-    }
 
     #[test]
     fn every_provider_operation_in_the_catalog_has_a_desktop_binding() {
@@ -881,42 +688,6 @@ mod tests {
                     desktop_provider_option(provider_id, option_id).is_some(),
                     "missing Desktop provider binding for {provider_id}:{option_id}"
                 );
-            }
-        }
-    }
-
-    #[test]
-    fn every_catalog_config_option_binds_to_the_typed_global_config() {
-        let catalog = bitfun_product_domains::product_control::catalog().unwrap();
-        let root = serde_json::to_value(GlobalConfig::default()).unwrap();
-        for option in catalog
-            .capabilities
-            .iter()
-            .flat_map(|capability| &capability.options)
-        {
-            match &option.handler {
-                ProductCapabilityOptionHandler::Config { path } => {
-                    assert_config_binding(&root, path, &option.value_schema);
-                }
-                ProductCapabilityOptionHandler::MergeConfig { path, fields } => {
-                    for field in fields {
-                        assert_config_binding(
-                            &root,
-                            &format!("{path}.{field}"),
-                            &option.value_schema,
-                        );
-                    }
-                    let current = read_nested_value(&root, path)
-                        .unwrap_or_else(|| panic!("product-control merge path is absent: {path}"));
-                    validate_config_semantics(path, current).unwrap();
-                }
-                ProductCapabilityOptionHandler::AppearanceSelection => {
-                    assert_config_binding(&root, "appearance.selection", &option.value_schema);
-                }
-                ProductCapabilityOptionHandler::Language => {
-                    assert_config_binding(&root, "app.language", &option.value_schema);
-                }
-                ProductCapabilityOptionHandler::Provider { .. } => {}
             }
         }
     }
