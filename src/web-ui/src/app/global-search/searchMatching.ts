@@ -84,7 +84,7 @@ export function scoreTextMatch(query: string, fields: Array<string | null | unde
   }
 
   // Natural-language discovery queries often contain bilingual alternatives or
-  // near-synonyms (for example "宠物 pet mascot"). Treat those tokens as
+  // near-synonyms (for example "pet companion mascot"). Treat those tokens as
   // evidence that accumulates instead of an all-or-nothing AND expression.
   // Exact/full-query matches above still outrank partial token coverage.
   if (tokens.length > 1) {
