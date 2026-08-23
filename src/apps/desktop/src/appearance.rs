@@ -646,7 +646,7 @@ pub fn create_main_window(
     let build_started_at = Instant::now();
     match builder.build() {
         Ok(window) => {
-            crate::restore_main_window_state(&window);
+            let reapply_maximized = crate::restore_main_window_state(&window);
             crate::webview_recovery::install(&window);
             startup_trace.record_elapsed_step("native_window", "webview_build", build_started_at);
             debug!(
@@ -665,7 +665,12 @@ pub fn create_main_window(
                 }
             }
 
-            show_main_window_for_startup(&window, total_started_at, startup_trace);
+            show_main_window_for_startup(
+                &window,
+                total_started_at,
+                startup_trace,
+                reapply_maximized,
+            );
         }
         Err(e) => {
             error!(
@@ -681,6 +686,7 @@ fn show_main_window_for_startup(
     window: &tauri::WebviewWindow,
     total_started_at: Instant,
     startup_trace: &DesktopStartupTrace,
+    reapply_maximized: bool,
 ) {
     let show_started_at = Instant::now();
     if let Err(error) = window.show() {
@@ -705,6 +711,29 @@ fn show_main_window_for_startup(
         focus_started_at.elapsed().as_millis(),
         total_started_at.elapsed().as_millis()
     );
+
+    // Maximize only after the window is visible: maximizing a hidden
+    // undecorated window on Windows is dropped on show and leaves a bogus
+    // normal-placement rect behind (see `main_window_restore_flags`).
+    if reapply_maximized {
+        match window.is_maximized() {
+            Ok(true) => {}
+            Ok(false) => {
+                if let Err(error) = window.maximize() {
+                    log::warn!(
+                        "Failed to re-apply persisted maximized state after main window show: {}",
+                        error
+                    );
+                }
+            }
+            Err(error) => {
+                log::warn!(
+                    "Failed to query main window maximized state after show: {}",
+                    error
+                )
+            }
+        }
+    }
 }
 
 fn app_url(path: &str) -> WebviewUrl {
