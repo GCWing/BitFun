@@ -1548,6 +1548,7 @@ mod task_context_tests {
                     true,
                 ),
                 context_vars,
+                current_user_message: None,
                 subagent_parent_info: Some(SubagentParentInfo {
                     tool_call_id: "parent_tool".to_string(),
                     session_id: "parent_session".to_string(),
