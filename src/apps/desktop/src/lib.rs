@@ -32,6 +32,7 @@ pub mod sleep_prevention;
 pub mod startup_trace;
 pub mod tray;
 mod webview_recovery;
+mod window_state_support;
 
 use bitfun_agent_runtime::sdk::{attach_session_event_cursor, SessionEventJournal};
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
@@ -328,19 +329,48 @@ fn main_window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
 }
 
-fn persist_main_window_state(app: &tauri::AppHandle) -> Result<(), String> {
-    app.save_window_state(main_window_state_flags())
-        .map_err(|error| error.to_string())
+/// Restore deliberately excludes `MAXIMIZED`: maximizing a hidden undecorated
+/// window on Windows does not survive `show()` and leaves Windows tracking a
+/// bogus normal-placement rect. The persisted maximized flag is re-asserted
+/// after the window becomes visible instead; see `restore_main_window_state`.
+fn main_window_restore_flags() -> StateFlags {
+    StateFlags::SIZE | StateFlags::POSITION | StateFlags::FULLSCREEN
 }
 
-pub(crate) fn save_main_window_state(app: &tauri::AppHandle) {
+fn persist_main_window_state(app: &tauri::AppHandle, reason: &str) -> Result<(), String> {
+    let result = app
+        .save_window_state(main_window_state_flags())
+        .map_err(|error| error.to_string());
+    if let Err(error) = &result {
+        log::warn!(
+            "Failed to save main window state: reason={}, error={}",
+            reason,
+            error
+        );
+        return result;
+    }
+
+    #[cfg(target_os = "windows")]
+    window_state_support::correct_saved_main_window_state(app);
+
+    Ok(())
+}
+
+pub(crate) fn save_main_window_state(app: &tauri::AppHandle, reason: &str) {
     if MAIN_WINDOW_USES_TRANSIENT_GEOMETRY.load(Ordering::SeqCst) {
-        log::debug!("Skipped saving transient main window geometry");
+        log::debug!(
+            "Skipped saving transient main window geometry: reason={}",
+            reason
+        );
         return;
     }
 
-    if let Err(error) = persist_main_window_state(app) {
-        log::warn!("Failed to save main window state: {}", error);
+    if let Err(error) = persist_main_window_state(app, reason) {
+        log::warn!(
+            "Failed to save main window state: reason={}, error={}",
+            reason,
+            error
+        );
     }
 }
 
@@ -355,7 +385,7 @@ pub(crate) fn set_main_window_transient_geometry(
 
         // Capture the latest normal bounds before toolbar mode starts resizing
         // the shared native window.
-        persist_main_window_state(app).map_err(|error| {
+        persist_main_window_state(app, "transient_geometry_enter_capture").map_err(|error| {
             format!(
                 "Failed to save main window state before transient geometry: {}",
                 error
@@ -366,7 +396,7 @@ pub(crate) fn set_main_window_transient_geometry(
     }
 
     MAIN_WINDOW_USES_TRANSIENT_GEOMETRY.store(false, Ordering::SeqCst);
-    persist_main_window_state(app).map_err(|error| {
+    persist_main_window_state(app, "transient_geometry_exit_persist").map_err(|error| {
         format!(
             "Failed to save restored main window state after transient geometry: {}",
             error
@@ -378,10 +408,16 @@ fn has_standard_main_window_size(width: f64, height: f64) -> bool {
     width >= MAIN_WINDOW_MIN_WIDTH && height >= MAIN_WINDOW_MIN_HEIGHT
 }
 
-pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) {
-    if let Err(error) = window.restore_state(main_window_state_flags()) {
+pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) -> bool {
+    if let Err(error) = window.restore_state(main_window_restore_flags()) {
         log::warn!("Failed to restore main window state: {}", error);
     }
+
+    // The persisted maximized flag is re-asserted once the window is visible;
+    // maximizing while hidden is unreliable on Windows (see
+    // `main_window_restore_flags`).
+    let reapply_maximized =
+        window_state_support::read_persisted_main_maximized(window.app_handle()).unwrap_or(false);
 
     let is_maximized = window.is_maximized().unwrap_or(false);
     let is_fullscreen = window.is_fullscreen().unwrap_or(false);
@@ -412,7 +448,10 @@ pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) {
                         log::warn!("Failed to center reset main window: {}", error);
                     }
                     if resize_succeeded {
-                        if let Err(error) = persist_main_window_state(window.app_handle()) {
+                        if let Err(error) = persist_main_window_state(
+                            window.app_handle(),
+                            "startup_geometry_repair",
+                        ) {
                             log::warn!("Failed to persist repaired main window state: {}", error);
                         }
                     }
@@ -433,6 +472,8 @@ pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) {
     ))) {
         log::warn!("Failed to set main window minimum size: {}", error);
     }
+
+    reapply_maximized
 }
 
 #[cfg(test)]
@@ -1191,7 +1232,7 @@ pub async fn run() {
                 if window.label() == "main"
                     && matches!(event, tauri::WindowEvent::CloseRequested { .. })
                 {
-                    save_main_window_state(window.app_handle());
+                    save_main_window_state(window.app_handle(), "close_requested");
                 }
 
                 if let tauri::WindowEvent::CloseRequested { api: _api, .. } = event {
@@ -2301,7 +2342,7 @@ pub(crate) fn request_desktop_exit(app: &tauri::AppHandle, exit_code: i32, reaso
     if DESKTOP_EXIT_REQUESTED.swap(true, Ordering::AcqRel) {
         return;
     }
-    save_main_window_state(app);
+    save_main_window_state(app, reason);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         perform_process_exit_cleanup().await;
