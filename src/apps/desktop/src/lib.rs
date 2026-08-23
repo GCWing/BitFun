@@ -1028,6 +1028,7 @@ pub async fn run() {
             let webdriver_started = Instant::now();
             bitfun_webdriver::maybe_start(app_handle.clone());
             builtin_browser_host::install(app_handle.clone());
+            bitfun_control_host::install(app_handle.clone());
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "maybe_start_webdriver",

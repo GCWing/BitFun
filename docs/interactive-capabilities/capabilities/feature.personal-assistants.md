@@ -17,25 +17,25 @@ Create and manage persistent AI assistants, define their identity and persona, c
 
 ## 完整功能清单 / Everything included
 
-- 浏览已有助理、创建新助理并查看每个助理的身份与能力概览
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 浏览已有助理、创建新助理并查看每个助理的身份与能力概览
   - Browse existing assistants, create a new one, and review each assistant's identity and capability summary
-- 设为主助理、删除非主助理，或将助理工作区重置为默认状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 设为主助理、删除非主助理，或将助理工作区重置为默认状态
   - Set the primary assistant, delete non-primary assistants, or reset an assistant workspace to defaults
-- 编辑助理名称、角色类型和气质，并选择官方头像、Emoji 或自定义头像字符
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 编辑助理名称、角色类型和气质，并选择官方头像、Emoji 或自定义头像字符
   - Edit an assistant's name, creature type, and vibe, then choose an official avatar, emoji, or custom avatar character
-- 读取和编辑 IDENTITY.md、SOUL.md 与 USER.md，并自动保存 Markdown 正文和 Frontmatter
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 读取和编辑 IDENTITY.md、SOUL.md 与 USER.md，并自动保存 Markdown 正文和 Frontmatter
   - Read and edit IDENTITY.md, SOUL.md, and USER.md with autosaved Markdown body and frontmatter
-- 为新助理选择默认 Skills，识别用户级与项目级来源、遮蔽关系和当前可用状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为新助理选择默认 Skills，识别用户级与项目级来源、遮蔽关系和当前可用状态
   - Choose default Skills for new assistants while seeing user/project sources, shadowing, and availability
-- 逐个或批量启用默认内置工具，并查看说明、只读或可执行属性及产品默认状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 逐个或批量启用默认内置工具，并查看说明、只读或可执行属性及产品默认状态
   - Enable default built-in tools individually or in groups and inspect descriptions, read-only or executable access, and product defaults
-- 按 MCP 服务器查看连接状态、工具详情与传输信息，并为新助理启用整个服务或单个工具
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按 MCP 服务器查看连接状态、工具详情与传输信息，并为新助理启用整个服务或单个工具
   - Inspect MCP server status, tool details, and transport, then enable a whole server or individual tools for new assistants
-- 按 Skills、内置工具或 MCP 分类搜索，筛选启用、停用、已更改或不可用项，查看详情并恢复产品默认值
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按 Skills、内置工具或 MCP 分类搜索，筛选启用、停用、已更改或不可用项，查看详情并恢复产品默认值
   - Search Skills, built-in tools, or MCP entries; filter enabled, disabled, changed, or unavailable items; inspect details; and restore product defaults
-- 从助理卡片新建会话，或在助理详情中选择模型、输入消息并查看该助理的历史会话
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 从助理卡片新建会话，或在助理详情中选择模型、输入消息并查看该助理的历史会话
   - Start a session from an assistant card, or choose a model, send a message, and browse that assistant's sessions from its detail page
-- 查看和管理仅属于当前助理工作区的定时会话与自动任务
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看和管理仅属于当前助理工作区的定时会话与自动任务
   - Review and manage scheduled sessions and automated jobs scoped to the current assistant workspace
 
 ## 怎么用 / How to use it

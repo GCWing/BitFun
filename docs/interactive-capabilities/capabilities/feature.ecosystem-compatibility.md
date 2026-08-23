@@ -17,23 +17,23 @@ Discover and migrate configuration, commands, hooks, and MCP resources from Open
 
 ## 完整功能清单 / Everything included
 
-- 发现 OpenCode、Claude Code、Codex 等外部 AI 来源与可用内容
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发现 OpenCode、Claude Code、Codex 等外部 AI 来源与可用内容
   - Discover OpenCode, Claude Code, Codex, and other external AI sources and content
-- 按来源启用或停用集成，并选择管理、预览或只读策略
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按来源启用或停用集成，并选择管理、预览或只读策略
   - Enable or disable each source and choose managed, preview, or read-only policy
-- 展开外部 Prompt/Command 内容并处理与原生命令的冲突
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 展开外部 Prompt/Command 内容并处理与原生命令的冲突
   - Expand external prompt/command content and resolve conflicts with native commands
-- 导入或启用外部 Agent，处理同名冲突并绑定模型
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 导入或启用外部 Agent，处理同名冲突并绑定模型
   - Import or enable external agents, resolve naming conflicts, and bind models
-- 预览 MCP 导入计划，逐个处理服务器冲突并应用
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 预览 MCP 导入计划，逐个处理服务器冲突并应用
   - Preview MCP import plans, resolve server conflicts individually, and apply them
-- 选择外部工具目标、解决冲突并控制是否启用
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择外部工具目标、解决冲突并控制是否启用
   - Choose external tool targets, resolve conflicts, and control activation
-- 查看外部 Hooks 目录、规划导入、修改选择并应用
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看外部 Hooks 目录、规划导入、修改选择并应用
   - Inspect external hook catalogs, plan imports, edit selections, and apply
-- 在迁移前查看冲突、安全影响和来源控制快照
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在迁移前查看冲突、安全影响和来源控制快照
   - Review conflicts, security impact, and source-control snapshots before migration
-- 在文件管理器或远程环境中定位外部配置来源
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在文件管理器或远程环境中定位外部配置来源
   - Reveal external configuration sources in the file manager or remote environment
 
 ## 怎么用 / How to use it

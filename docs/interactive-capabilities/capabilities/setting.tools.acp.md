@@ -17,21 +17,21 @@ Configure external agents connected through Agent Client Protocol and inspect ad
 
 ## 完整功能清单 / Everything included
 
-- 使用 OpenCode、dsh、OMP、Claude Code 和 Codex 等预设
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 使用 OpenCode、dsh、OMP、Claude Code 和 Codex 等预设
   - Use presets for OpenCode, dsh, OMP, Claude Code, Codex, and others
-- 通过 JSON 查看、添加和保存 ACP Agent 配置
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 通过 JSON 查看、添加和保存 ACP Agent 配置
   - View, add, and save ACP agent configuration through JSON
-- 探测 CLI、适配器、路径、版本、连接与权限要求
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 探测 CLI、适配器、路径、版本、连接与权限要求
   - Probe CLI, adapter, path, version, connection, and permission requirements
-- 安装外部 Agent CLI 并预下载 ACP 客户端适配器
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 安装外部 Agent CLI 并预下载 ACP 客户端适配器
   - Install external-agent CLIs and predownload ACP client adapters
-- 在 SSH 远程工作区探测可用外部 Agent 并显示不支持原因
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在 SSH 远程工作区探测可用外部 Agent 并显示不支持原因
   - Detect available external agents in SSH workspaces and show explicit unsupported reasons
-- 为 ACP 会话选择模型并修改客户端声明的配置选项
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为 ACP 会话选择模型并修改客户端声明的配置选项
   - Choose an ACP session model and edit client-declared configuration options
-- 查看并执行外部 Agent 暴露的会话命令
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并执行外部 Agent 暴露的会话命令
   - Browse and run session commands exposed by an external agent
-- 开始或取消 ACP 对话，并远程回答外部 Agent 权限请求
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 开始或取消 ACP 对话，并远程回答外部 Agent 权限请求
   - Start or cancel ACP turns and answer external-agent permission requests remotely
 
 ## 怎么用 / How to use it

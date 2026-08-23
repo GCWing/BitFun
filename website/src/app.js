@@ -1,3 +1,5 @@
+import { matchingItems, queryTokens, scoreCapability } from './search.js';
+
 const root = document.querySelector('#app');
 const pageData = JSON.parse(document.querySelector('#page-data')?.textContent ?? '{}');
 const THEME_STORAGE_KEY = 'bitfun-playbook-theme';
@@ -73,21 +75,7 @@ function alternate(value, field) {
 }
 
 function normalize(value) {
-  return String(value ?? '').toLocaleLowerCase().replaceAll(/[_-]/gu, ' ').trim();
-}
-
-function score(capability, query) {
-  if (!query) return 1;
-  const needle = normalize(query);
-  const id = normalize(capability.id);
-  const titles = normalize(`${capability.titleZh} ${capability.titleEn}`);
-  const terms = normalize(capability.searchTerms.join(' '));
-  if (id === needle) return 100;
-  if (titles.startsWith(needle)) return 80;
-  if (titles.includes(needle)) return 60;
-  if (terms.includes(needle)) return 40;
-  const tokens = needle.split(/\s+/u).filter(Boolean);
-  return tokens.length && tokens.every((token) => terms.includes(token)) ? 20 : 0;
+  return String(value ?? '').toLocaleLowerCase().trim();
 }
 
 function kindLabel(kind) {
@@ -268,19 +256,9 @@ function capabilityCard(capability) {
     </a>`;
 }
 
-function matchingItems(capability, query) {
-  const needle = normalize(query);
-  if (!needle) return [];
-  const tokens = needle.split(/\s+/u).filter(Boolean);
-  return capability.items.filter((item) => {
-    const haystack = normalize(`${item.titleZh} ${item.titleEn}`);
-    return tokens.every((token) => haystack.includes(token));
-  });
-}
-
 function filteredCapabilities() {
   return state.catalog.capabilities
-    .map((capability) => ({ capability, rank: score(capability, state.query) }))
+    .map((capability) => ({ capability, rank: scoreCapability(capability, state.query) }))
     .filter(({ capability, rank }) => rank > 0
       && (state.kind === 'all' || capability.kind === state.kind)
       && (state.category === 'all' || capability.categoryId === state.category))
@@ -462,6 +440,19 @@ function optionRows(capability) {
     </article>`).join('')}</div>`;
 }
 
+function itemControlLabel(item) {
+  if (item.control.kind === 'direct') return text('Agent 直接控制', 'Direct Agent control');
+  if (item.control.kind === 'delegate') return text('专用工具控制', 'Delegated tool');
+  if (item.control.kind === 'open') return text('需界面交互', 'Interaction required');
+  return text('不支持', 'Unsupported');
+}
+
+function itemControlTools(item, capability) {
+  if (item.control.kind !== 'delegate') return '';
+  const tools = item.control.tools ?? (capability.agentControl?.tool ? [capability.agentControl.tool] : []);
+  return tools.length ? ` · ${tools.join(' / ')}` : '';
+}
+
 function renderCapability(capability) {
   const category = state.catalog.categories[capability.categoryId];
   const steps = localized(capability, 'steps');
@@ -480,7 +471,7 @@ function renderCapability(capability) {
             <section class="content-section manual-section">
               <p class="section-label">EVERYTHING INCLUDED · ${capability.items.length}</p>
               <h2>${text('完整功能清单', 'Everything included')}</h2>
-              <ul class="highlight-list inventory-list">${capability.items.map((item) => `<li id="item-${escapeHtml(item.id)}" data-inventory-item="${escapeHtml(item.id)}"><span>✓</span><div>${escapeHtml(localized(item, 'title'))}<small>${escapeHtml(alternate(item, 'title'))}</small></div></li>`).join('')}</ul>
+              <ul class="highlight-list inventory-list">${capability.items.map((item) => `<li id="item-${escapeHtml(item.id)}" data-inventory-item="${escapeHtml(item.id)}" data-control-kind="${escapeHtml(item.control.kind)}"><span>✓</span><div><em class="control-badge control-${escapeHtml(item.control.kind)}">${itemControlLabel(item)}${escapeHtml(itemControlTools(item, capability))}</em>${escapeHtml(localized(item, 'title'))}<small>${escapeHtml(alternate(item, 'title'))}</small></div></li>`).join('')}</ul>
             </section>
 
             <section class="content-section manual-section">
@@ -489,17 +480,19 @@ function renderCapability(capability) {
               <ol class="step-list">${steps.map((step, index) => `<li><span>${index + 1}</span><p>${escapeHtml(step)}</p></li>`).join('')}</ol>
             </section>
 
-            ${capability.kind === 'feature' ? `
+            ${(capability.kind === 'feature' || capability.operations.length || capability.agentControl) ? `
               <section class="content-section manual-section">
                 <p class="section-label">DIRECT ACTIONS</p>
                 <h2>${text('Agent 可以直接执行', 'What an agent can execute')}</h2>
                 ${operationCards(capability)}
-              </section>` : `
+              </section>` : ''}
+
+            ${capability.kind === 'setting' ? `
               <section class="content-section manual-section">
                 <p class="section-label">OPTIONS</p>
                 <h2>${text('可配置选项', 'Configurable options')}</h2>
                 ${optionRows(capability)}
-              </section>`}
+              </section>` : ''}
 
             <section class="content-section manual-section">
               <p class="section-label">ASK AN AGENT</p>
@@ -513,8 +506,8 @@ function renderCapability(capability) {
             <p class="section-label">AGENT READY</p>
             <h2>${text('不必记住入口', 'No menus to memorize')}</h2>
             <p>${text(
-              '和 Agent 说出你想做的事。它会先搜索这份功能与设置目录，再打开功能、执行公开操作，或修改受控选项。',
-              'Tell an agent what you want. It searches this same feature-and-settings catalog, then opens the feature, runs a public operation, or changes an approved option.',
+              '和 Agent 说出你想做的事。目录会明确告诉它哪些可直接控制、哪些交给专用工具、哪些仍需你在界面确认。',
+              'Tell an agent what you want. The catalog explicitly says what it can control directly, delegate to a specialist tool, or only open for your confirmation.',
             )}</p>
             <ol>
               <li>${text('理解你的意图', 'Understand your intent')}</li>

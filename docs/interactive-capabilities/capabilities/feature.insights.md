@@ -17,17 +17,17 @@ Turn session and project activity into readable insights about working patterns,
 
 ## 完整功能清单 / Everything included
 
-- 检查当前账户与会话是否已有可分析的洞察数据
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 检查当前账户与会话是否已有可分析的洞察数据
   - Check whether the current account and sessions contain analyzable insight data
-- 按所选日期范围和模型生成工作洞察报告
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按所选日期范围和模型生成工作洞察报告
   - Generate a work-insights report for a selected date range and model
-- 取消正在运行的洞察生成任务
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 取消正在运行的洞察生成任务
   - Cancel an in-progress insights generation job
-- 查看最新报告或加载指定的历史报告
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看最新报告或加载指定的历史报告
   - Open the latest report or load a selected historical report
-- 把工作活动与模型、Token 和缓存用量统计关联起来
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 把工作活动与模型、Token 和缓存用量统计关联起来
   - Relate work activity to model, token, and cache-usage statistics
-- 回顾项目分布、工作时段、任务类型和协作习惯
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 回顾项目分布、工作时段、任务类型和协作习惯
   - Review project distribution, working hours, task types, and collaboration patterns
 
 ## 怎么用 / How to use it

@@ -48,6 +48,29 @@ fn agent_runtime_baseline_tool_plan_requests_only_baseline_feature_owners() {
     );
 }
 
+#[test]
+fn every_agent_runtime_delivery_profile_includes_product_control_discovery() {
+    for profile in [
+        DeliveryProfile::ProductFull,
+        DeliveryProfile::Desktop,
+        DeliveryProfile::Cli,
+        DeliveryProfile::Acp,
+        DeliveryProfile::Sdk,
+    ] {
+        let plan = product_assembly_plan_for_profile(profile);
+        let tool_plan = plan.tool_plan();
+        assert!(
+            tool_plan
+                .tool_provider_group_plan()
+                .iter()
+                .flat_map(|provider| provider.tool_names())
+                .any(|tool_name| *tool_name == "BitFunControl"),
+            "{} must expose BitFunControl to its agents",
+            profile.id()
+        );
+    }
+}
+
 #[async_trait::async_trait]
 impl PluginRuntimeClient for AvailablePluginRuntimeClient {
     fn availability(&self) -> PluginRuntimeAvailability {

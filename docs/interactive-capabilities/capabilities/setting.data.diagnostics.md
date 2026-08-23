@@ -17,19 +17,19 @@ Adjust logging level, inspect runtime log locations, and export diagnostic bundl
 
 ## 完整功能清单 / Everything included
 
-- 设置 Trace、Debug、Info、Warn、Error 或关闭后端日志
+- **Agent 可直接控制 / Direct Agent control** · 设置 Trace、Debug、Info、Warn、Error 或关闭后端日志
   - Set backend logging to Trace, Debug, Info, Warn, Error, or Off
-- 选择诊断中是否允许包含敏感上下文，并在导出前明确提示
+- **Agent 可直接控制 / Direct Agent control** · 选择诊断中是否允许包含敏感上下文，并在导出前明确提示
   - Choose whether diagnostics may include sensitive context, with an explicit warning before export
-- 查看日志路径并打开日志文件夹
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看日志路径并打开日志文件夹
   - Inspect the log path and open the log folder
-- 导出包含系统、配置健康和日志信息的诊断包
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 导出包含系统、配置健康和日志信息的诊断包
   - Export a diagnostics bundle containing system, configuration-health, and log information
-- 查看上次崩溃、非正常退出、启动恢复和配置恢复信息
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看上次崩溃、非正常退出、启动恢复和配置恢复信息
   - Inspect previous crashes, unclean shutdowns, startup recovery, and configuration recovery
-- 在开发构建中检查 DevTools 是否可用并打开或关闭
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在开发构建中检查 DevTools 是否可用并打开或关闭
   - In development builds, check DevTools availability and open or close them
-- 在开发构建中启用主窗口元素检查并回传选中的元素
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在开发构建中启用主窗口元素检查并回传选中的元素
   - In development builds, inspect main-window elements and report the selected element
 
 ## 怎么用 / How to use it

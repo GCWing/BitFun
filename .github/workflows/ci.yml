@@ -245,6 +245,12 @@ jobs:
       - name: Run core and desktop library tests
         run: cargo test --locked -p bitfun-core -p bitfun-desktop --lib
 
+      - name: Run product-control domain and delivery-profile contracts
+        if: runner.os == 'Linux'
+        run: |
+          cargo test --locked -p bitfun-product-domains --no-default-features product_control
+          cargo test --locked -p bitfun-product-capabilities every_agent_runtime_delivery_profile_includes_product_control_discovery
+
       # These crates own platform-sensitive behavior that is not exercised by
       # testing bitfun-core/bitfun-desktop alone. Keep their focused contract
       # suites in the OS matrix so Linux success cannot hide Windows/macOS

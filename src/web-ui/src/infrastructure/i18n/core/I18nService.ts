@@ -313,6 +313,15 @@ export class I18nService {
 
    
   async changeLanguage(locale: LocaleId): Promise<void> {
+    await this.applyLanguage(locale, true);
+  }
+
+  /** Apply a locale that another product-control port already persisted. */
+  async applyPersistedLanguage(locale: LocaleId): Promise<void> {
+    await this.applyLanguage(locale, false);
+  }
+
+  private async applyLanguage(locale: LocaleId, persist: boolean): Promise<void> {
     if (!isLocaleSupported(locale)) {
       log.error('Unsupported locale', { locale });
       throw new Error(`Unsupported locale: ${locale}`);
@@ -352,7 +361,7 @@ export class I18nService {
       store.setCurrentLanguage(locale);
 
       
-      await this.saveCurrentLocale(locale);
+      if (persist) await this.saveCurrentLocale(locale);
 
       
       if (this.hooks.afterChange) {
@@ -360,7 +369,7 @@ export class I18nService {
       }
       this.emitEvent('i18n:after-change', locale, oldLocale);
 
-      log.info('Language changed', { locale, previousLocale: oldLocale });
+      log.info('Language changed', { locale, previousLocale: oldLocale, persisted: persist });
     } catch (error) {
       log.error('Failed to change language', { locale, error });
       this.emitEvent('i18n:error', locale, oldLocale, undefined, error as Error);

@@ -16,6 +16,7 @@ import { scoreTextMatch } from './searchMatching';
 
 const log = createLogger('BitFunControlBridge');
 const REQUEST_EVENT = 'agentic://bitfun-control-request';
+const APPLIED_EVENT = 'agentic://bitfun-control-applied';
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_LIMIT = 50;
 
@@ -29,6 +30,7 @@ export interface BitFunControlRequest {
   itemId?: string;
   operationId?: string;
   optionId?: string;
+  arguments?: Record<string, unknown>;
   value?: unknown;
   cursor?: number;
   limit?: number;
@@ -41,7 +43,16 @@ interface BitFunControlResponse {
   error?: string;
 }
 
-let unlisten: (() => void) | null = null;
+let requestUnlisten: (() => void) | null = null;
+let appliedUnlisten: (() => void) | null = null;
+
+interface BitFunControlAppliedEvent {
+  capabilityId: string;
+  operationId?: string;
+  optionId?: string;
+  changedPaths: string[];
+  value?: unknown;
+}
 
 function compactCapability(capability: InteractiveCapability, query = '') {
   const matchingItems = query
@@ -63,6 +74,11 @@ function compactCapability(capability: InteractiveCapability, query = '') {
     operationCount: capability.operations.length,
     configurableOptionCount: capability.options.length,
     documentedItemCount: capability.items.length,
+    controlCoverage: {
+      direct: capability.items.filter(({ control }) => control.kind === 'direct').length,
+      delegated: capability.items.filter(({ control }) => control.kind === 'delegate').length,
+      interactive: capability.items.filter(({ control }) => control.kind === 'open').length,
+    },
     matchedItems: matchingItems,
   };
 }
@@ -117,6 +133,8 @@ export function discoverBitFunCapabilities(request: BitFunControlRequest): unkno
     }))
     .filter(({ score }) => score > 0)
     .sort((left, right) => right.score - left.score
+      || (right.capability.operations.length + right.capability.options.length)
+        - (left.capability.operations.length + left.capability.options.length)
       || left.capability.kind.localeCompare(right.capability.kind)
       || left.capability.id.localeCompare(right.capability.id));
   const items = matches.slice(cursor, cursor + limit)
@@ -170,6 +188,7 @@ function setNestedValue(
 }
 
 function assertValueMatchesSchema(value: unknown, schema: InteractiveCapabilityValueSchema): void {
+  if (value === null && schema.nullable) return;
   const typeMatches = (() => {
     switch (schema.type) {
       case 'boolean': return typeof value === 'boolean';
@@ -190,6 +209,12 @@ function assertValueMatchesSchema(value: unknown, schema: InteractiveCapabilityV
   if (typeof value === 'number' && schema.maximum !== undefined && value > schema.maximum) {
     throw new Error(`value must be at most ${schema.maximum}`);
   }
+  if (typeof value === 'string' && schema.minLength !== undefined && [...value].length < schema.minLength) {
+    throw new Error(`value must contain at least ${schema.minLength} characters`);
+  }
+  if (typeof value === 'string' && schema.maxLength !== undefined && [...value].length > schema.maxLength) {
+    throw new Error(`value must contain at most ${schema.maxLength} characters`);
+  }
 }
 
 async function currentOptionValue(option: InteractiveCapabilityOption): Promise<unknown> {
@@ -198,6 +223,11 @@ async function currentOptionValue(option: InteractiveCapabilityOption): Promise<
     return appearanceService.getSnapshot().selectedAppearanceId;
   }
   if (option.handler.kind === 'language') return i18nService.getCurrentLocale();
+  if (option.handler.kind === 'provider') {
+    throw new Error(
+      `Option ${option.id} must be read through native provider ${option.handler.providerId}`,
+    );
+  }
   const current = await configManager.getOptionalConfig(option.handler.path);
   if (option.handler.kind === 'config') return current;
   const values = option.handler.fields.map((field) => readNestedValue(current, field));
@@ -226,6 +256,11 @@ async function configureOption(option: InteractiveCapabilityOption, value: unkno
   if (option.handler.kind === 'language') {
     await i18nService.changeLanguage(value as LocaleId);
     return;
+  }
+  if (option.handler.kind === 'provider') {
+    throw new Error(
+      `Option ${option.id} must be configured through native provider ${option.handler.providerId}`,
+    );
   }
   if (option.handler.kind === 'config') {
     await configManager.setConfig(option.handler.path, value);
@@ -268,6 +303,10 @@ export async function executeBitFunControlRequest(request: BitFunControlRequest)
       if (!operation) throw new Error(`Unknown operation for ${capability.id}: ${request.operationId ?? ''}`);
       if (operation.handler.kind === 'productAction') {
         await activateProductAction(operation.handler.actionId);
+      } else {
+        throw new Error(
+          `Operation ${capability.id}:${operation.id} must run through native provider ${operation.handler.providerId}`,
+        );
       }
       return { capabilityId: capability.id, operationId: operation.id, executed: true };
     }
@@ -315,16 +354,40 @@ async function handleRequest(request: BitFunControlRequest): Promise<void> {
   }
 }
 
+async function handleAppliedEvent(event: BitFunControlAppliedEvent): Promise<void> {
+  try {
+    await configManager.applyExternalReload();
+    if (event.changedPaths.includes('appearance.selection')) {
+      await appearanceService.reconcilePersistedState();
+    }
+    if (event.changedPaths.includes('app.language') && typeof event.value === 'string') {
+      await i18nService.applyPersistedLanguage(event.value as LocaleId);
+    }
+  } catch (error) {
+    log.warn('Failed to synchronize a native BitFunControl mutation into the Web UI', {
+      capabilityId: event.capabilityId,
+      operationId: event.operationId,
+      optionId: event.optionId,
+      error,
+    });
+  }
+}
+
 export async function initializeBitFunControlBridge(): Promise<void> {
-  if (unlisten) return;
-  unlisten = api.listen<BitFunControlRequest>(REQUEST_EVENT, (request) => {
+  if (requestUnlisten) return;
+  requestUnlisten = api.listen<BitFunControlRequest>(REQUEST_EVENT, (request) => {
     void handleRequest(request);
+  });
+  appliedUnlisten = api.listen<BitFunControlAppliedEvent>(APPLIED_EVENT, (event) => {
+    void handleAppliedEvent(event);
   });
   try {
     await api.invoke('mark_bitfun_control_surface_ready');
   } catch (error) {
-    unlisten();
-    unlisten = null;
+    requestUnlisten();
+    requestUnlisten = null;
+    appliedUnlisten?.();
+    appliedUnlisten = null;
     throw error;
   }
 }

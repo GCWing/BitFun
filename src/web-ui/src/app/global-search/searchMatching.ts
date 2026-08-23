@@ -1,6 +1,7 @@
 import type { GlobalSearchScope } from './types';
 
 const WORD_BOUNDARY = /[\s._/\\:-]+/u;
+const CJK = /[\u3400-\u9fff]/u;
 
 export interface ParsedGlobalSearchQuery {
   query: string;
@@ -32,6 +33,26 @@ function isSubsequence(query: string, candidate: string): boolean {
   return queryIndex === query.length;
 }
 
+function queryTokens(query: string): string[] {
+  return query
+    .split(WORD_BOUNDARY)
+    .map(token => token.trim())
+    .filter(token => token.length >= 2 || CJK.test(token));
+}
+
+function scoreSingleTerm(query: string, field: string): number {
+  if (field === query) return 100;
+  if (field.startsWith(query)) return 94;
+
+  const words = field.split(WORD_BOUNDARY).filter(Boolean);
+  if (words.some(word => word.startsWith(query))) return 88;
+  if (field.includes(query)) return 80;
+
+  const acronym = words.map(word => word[0]).join('');
+  if (query.length > 1 && isSubsequence(query, acronym)) return 66;
+  return 0;
+}
+
 /**
  * Small deterministic matcher shared by in-memory providers.
  * Backend content providers keep ownership of their own relevance scores.
@@ -46,41 +67,37 @@ export function scoreTextMatch(query: string, fields: Array<string | null | unde
     const field = rawField?.trim().toLocaleLowerCase();
     if (!field) continue;
     normalizedFields.push(field);
-    if (field === normalizedQuery) {
-      best = Math.max(best, 100);
-      continue;
-    }
-    if (field.startsWith(normalizedQuery)) {
-      best = Math.max(best, 94);
-      continue;
-    }
-    const words = field.split(WORD_BOUNDARY).filter(Boolean);
-    if (words.some((word) => word.startsWith(normalizedQuery))) {
-      best = Math.max(best, 88);
-      continue;
-    }
-    if (field.includes(normalizedQuery)) {
-      best = Math.max(best, 80);
-      continue;
-    }
+    best = Math.max(best, scoreSingleTerm(normalizedQuery, field));
 
-    const queryTokens = normalizedQuery.split(WORD_BOUNDARY).filter(Boolean);
-    if (queryTokens.length > 1 && queryTokens.every((token) => field.includes(token))) {
+    const tokens = queryTokens(normalizedQuery);
+    if (tokens.length > 1 && tokens.every(token => field.includes(token))) {
       best = Math.max(best, 74);
-      continue;
-    }
-
-    const acronym = words.map((word) => word[0]).join('');
-    if (normalizedQuery.length > 1 && isSubsequence(normalizedQuery, acronym)) {
-      best = Math.max(best, 66);
     }
   }
-  const queryTokens = normalizedQuery.split(WORD_BOUNDARY).filter(Boolean);
+
+  const tokens = queryTokens(normalizedQuery);
   if (
-    queryTokens.length > 1
-    && queryTokens.every((token) => normalizedFields.some((field) => field.includes(token)))
+    tokens.length > 1
+    && tokens.every(token => normalizedFields.some(field => field.includes(token)))
   ) {
     best = Math.max(best, 72);
+  }
+
+  // Natural-language discovery queries often contain bilingual alternatives or
+  // near-synonyms (for example "宠物 pet mascot"). Treat those tokens as
+  // evidence that accumulates instead of an all-or-nothing AND expression.
+  // Exact/full-query matches above still outrank partial token coverage.
+  if (tokens.length > 1) {
+    const tokenScores = tokens.map(token => Math.max(
+      0,
+      ...normalizedFields.map(field => scoreSingleTerm(token, field)),
+    ));
+    const matchedScores = tokenScores.filter(score => score > 0);
+    if (matchedScores.length > 0) {
+      const coverage = matchedScores.length / tokens.length;
+      const strongest = Math.max(...matchedScores);
+      best = Math.max(best, Math.round(38 + coverage * 28 + strongest * 0.08));
+    }
   }
   return best;
 }

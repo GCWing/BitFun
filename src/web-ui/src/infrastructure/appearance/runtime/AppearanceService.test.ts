@@ -143,6 +143,20 @@ describe('AppearanceService', () => {
     });
   });
 
+  it('reconciles externally persisted selections without writing them again', async () => {
+    configMocks.getConfig.mockResolvedValueOnce('system').mockResolvedValueOnce('bitfun-dark');
+    const { service } = createService();
+    await service.initialize();
+
+    await service.reconcilePersistedState();
+
+    expect(configMocks.setConfig).not.toHaveBeenCalled();
+    expect(service.getSnapshot()).toMatchObject({
+      selectedAppearanceId: 'bitfun-dark',
+      resolvedAppearanceId: 'bitfun-dark',
+    });
+  });
+
   it('falls back locally without overwriting an unavailable configured package', async () => {
     configMocks.getConfig.mockResolvedValue('missing-appearance');
     const { runtime, service } = createService();

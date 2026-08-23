@@ -49,6 +49,18 @@ export const interactiveCapabilitySearchProvider: GlobalSearchProvider = {
     const items = INTERACTIVE_CAPABILITY_CATALOG.capabilities
       .map((capability) => {
         const item = matchingItem(capability, request.query);
+        const textScore = scoreTextMatch(request.query, [
+          capability.id,
+          capability.titleZh,
+          capability.titleEn,
+          ...capability.searchTerms,
+        ]);
+        const directControlBonus = Math.min(
+          8,
+          capability.operations.length + capability.options.length,
+        );
+        const delegatedControlBonus = capability.items.some(({ control }) =>
+          control.kind === 'delegate') ? 4 : 0;
         return {
           id: `capability:${capability.id}`,
           providerId: 'interactive-capabilities',
@@ -57,12 +69,7 @@ export const interactiveCapabilitySearchProvider: GlobalSearchProvider = {
           subtitle: resultSubtitle(capability, request.query, item),
           context: item ? `${capability.id}:${item.id}` : capability.id,
           badge: capability.kind,
-          score: scoreTextMatch(request.query, [
-            capability.id,
-            capability.titleZh,
-            capability.titleEn,
-            ...capability.searchTerms,
-          ]),
+          score: textScore > 0 ? textScore + directControlBonus + delegatedControlBonus : 0,
           target: {
             kind: 'capability' as const,
             capabilityId: capability.id,

@@ -17,25 +17,33 @@ Work with AI in project context, create sessions, continue tasks, answer permiss
 
 ## 完整功能清单 / Everything included
 
-- 新建、重命名、归档、恢复、删除、分叉与导出会话
-  - Create, rename, archive, restore, delete, fork, and export sessions
-- 为会话选择模型、工作模式、记忆模式与权限模式
+- **Agent 可直接控制 / Direct Agent control** · 打开并新建一个 AI 会话
+  - Open and create a new AI session
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 重命名、归档、恢复、删除、分叉与导出会话
+  - Rename, archive, restore, delete, fork, and export sessions
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为会话选择模型、工作模式、记忆模式与权限模式
   - Choose the model, work mode, memory mode, and permission mode per session
-- 开始、引导、打断、取消或恢复一次 Agent 运行
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 开始、引导、打断、取消或恢复一次 Agent 运行
   - Start, steer, interrupt, cancel, or recover an agent turn
-- 查看并逐个或批量回答等待中的权限请求
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并逐个或批量回答等待中的权限请求
   - Review and answer pending permission requests individually or in a batch
-- 分页加载、搜索和回填历史消息与会话内容
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `SessionControl` / `SessionHistory` / `Read` / `Grep` · 分页加载、搜索和回填历史消息与会话内容
   - Page through, search, and backfill historical turns and session content
-- 查看工具调用与后台命令，读取输出并继续输入或停止
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `SessionControl` / `SessionMessage` · 让 Agent 创建、列出、取消、删除会话或向另一会话发送消息
+  - Let an agent create, list, cancel, or delete sessions and send messages to another session
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看工具调用与后台命令，读取输出并继续输入或停止
   - Inspect tool calls and background commands, read output, send input, or stop them
-- 创建会话目标、更新目标内容与状态并清除目标
-  - Create session goals, update their objective and status, and clear them
-- 查看单个会话的请求、Token 与成本用量报告
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `get_goal` / `create_goal` / `update_goal` · 查看、创建并完成或阻塞当前会话目标
+  - Inspect, create, complete, or block the current session goal
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 编辑目标说明或清除当前会话目标
+  - Edit the goal objective or clear the current session goal
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `TodoWrite` / `CreatePlan` / `AskUserQuestion` · 让 Agent 维护任务清单、生成实施计划并按需向用户提问
+  - Let an agent maintain a task list, produce an implementation plan, and ask the user when needed
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看单个会话的请求、Token 与成本用量报告
   - View request, token, and cost usage for an individual session
-- 重新加载会话上下文、运行 AGENTS.md 初始化并管理长期记忆
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 重新加载会话上下文、运行 AGENTS.md 初始化并管理长期记忆
   - Reload session context, initialize AGENTS.md, and manage long-term memory
-- 使用 BTW 轻量问答与编辑器内联 AI，并可随时取消
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 使用 BTW 轻量问答与编辑器内联 AI，并可随时取消
   - Use lightweight BTW questions and inline editor AI, with cancellation
 
 ## 怎么用 / How to use it

@@ -325,8 +325,9 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [verifyMainWindowVisible]);
 
-  // Register the control listener as soon as the product surface is usable.
-  // The backend does not expose BitFunControl until this readiness handshake succeeds.
+  // Register presentation routing as soon as the product surface is usable.
+  // Native discovery, readback, and settings mutations are installed during
+  // Desktop setup; only UI navigation/product actions require this handshake.
   useEffect(() => {
     if (
       !isTauriRuntime()

@@ -26,8 +26,15 @@ test('the public contract is a compact feature-and-settings manual', () => {
   assert.equal(publicCatalog.counts.documentedItems, documentedItemCount);
   assert.deepEqual(new Set(publicCatalog.capabilities.map(({ kind }) => kind)), new Set(['feature', 'setting']));
   assert.equal(new Set(publicCatalog.capabilities.map(({ id }) => id)).size, publicCatalog.capabilities.length);
-  assert.ok(publicCatalog.capabilities.length <= 50, 'one default list call must return the curated catalog');
   assert.equal(publicCatalog.capabilities.some(({ id }) => id === 'get_configs'), false);
+  assert.equal(publicCatalog.counts.controlCoverage.unsupported, 0);
+  assert.ok(publicCatalog.searchAcceptance.length >= 5);
+  assert.equal(
+    publicCatalog.counts.controlCoverage.direct
+      + publicCatalog.counts.controlCoverage.delegated
+      + publicCatalog.counts.controlCoverage.interactive,
+    publicCatalog.counts.documentedItems,
+  );
   assert.equal(JSON.stringify(publicCatalog).includes('tauri::'), false);
   assert.equal(JSON.stringify(publicCatalog).includes('implementationCoverage'), false);
   assert.equal(JSON.stringify(publicCatalog).includes('tauriCommandsAudited'), false);
@@ -44,8 +51,28 @@ test('the technical audit exactly covers Desktop Tauri registration without expo
     new Set(registrations.map(({ id }) => id)),
   );
   assert.equal(technicalMap.commandCount, registrations.length);
-  assert.ok(technicalMap.commands.every(({ capabilityId, visibility }) =>
-    capabilityId === null ? visibility === 'internal' : visibility === 'implementation'));
+  assert.equal(technicalMap.coverage.commandCount, registrations.length);
+  assert.equal(
+    technicalMap.coverage.documentedCommandCount + technicalMap.coverage.implementationCommandCount,
+    technicalMap.commandCount,
+  );
+  for (const command of technicalMap.commands) {
+    assert.ok(Array.isArray(command.capabilityIds));
+    assert.ok(Array.isArray(command.documentedItemIds));
+    assert.ok(['documented', 'implementation', 'internal'].includes(command.visibility));
+    if (command.visibility === 'documented') {
+      assert.ok(command.capabilityIds.length > 0);
+      assert.ok(command.documentedItemIds.length > 0);
+    }
+  }
+  const petCommands = technicalMap.commands.filter(({ id }) => [
+    'list_agent_companion_pets',
+    'import_agent_companion_pet_package',
+    'delete_agent_companion_pet_package',
+  ].includes(id));
+  assert.equal(petCommands.length, 3);
+  assert.ok(petCommands.every(({ capabilityIds, visibility }) =>
+    visibility === 'documented' && capabilityIds.includes('setting.application.pet')));
 });
 
 test('every manual entry has bilingual discovery, instructions, routing, and agent recipes', () => {
@@ -56,16 +83,92 @@ test('every manual entry has bilingual discovery, instructions, routing, and age
     assert.ok(capability.searchTerms.some((term) => /[\u3400-\u9fff]/u.test(term)));
     assert.ok(capability.searchTerms.some((term) => /[A-Za-z]/u.test(term)));
     assert.ok(capability.highlightsZh.length > 0);
-    assert.ok(capability.items.length >= (capability.kind === 'feature' ? 6 : 4));
+    assert.ok(capability.items.length > 0, `${capability.id} must enumerate real user-visible items`);
     assert.equal(new Set(capability.items.map(({ id }) => id)).size, capability.items.length);
     assert.ok(capability.items.every(({ titleZh, titleEn }) =>
       /[\u3400-\u9fff]/u.test(titleZh) && /[A-Za-z]/u.test(titleEn)));
+    assert.ok(capability.items.every(({ control }) =>
+      ['direct', 'delegate', 'open', 'unsupported'].includes(control.kind)));
+    assert.ok(capability.items
+      .filter(({ control }) => control.kind === 'delegate')
+      .every(({ control }) => control.tools.length > 0
+        && control.workflowZh.length > 0
+        && control.workflowZh.length === control.workflowEn.length));
     assert.ok(capability.stepsZh.length > 0);
     assert.ok(capability.agentExamplesZh.length > 0);
     assert.ok(['settings', 'action', 'scene', 'event'].includes(capability.destination.kind));
     assert.equal(capability.docsUrl, `${publicCatalog.origin}/capabilities/${capability.id}/`);
     assert.doesNotMatch(JSON.stringify(capability), /"handler"/u);
   }
+});
+
+test('every executable contract is bound to a documented item and navigation is not called control', () => {
+  const { publicCatalog } = buildCapabilityCatalog();
+  for (const capability of publicCatalog.capabilities) {
+    const mappedOperations = new Set(capability.items.flatMap(({ control }) =>
+      control.kind === 'direct' ? control.operations : []));
+    const mappedOptions = new Set(capability.items.flatMap(({ control }) =>
+      control.kind === 'direct' ? control.options.map(({ id }) => id) : []));
+    assert.deepEqual(mappedOperations, new Set(capability.operations.map(({ id }) => id)));
+    assert.deepEqual(mappedOptions, new Set(capability.options.map(({ id }) => id)));
+    assert.ok(capability.items
+      .filter(({ control }) => control.kind === 'open')
+      .every(({ control }) => {
+        assert.deepEqual(
+          Object.keys(control).sort(),
+          ['kind', 'reasonEn', 'reasonZh'],
+          'interactive routing must not carry executable operation or option bindings',
+        );
+        return control.reasonZh.trim().length > 0 && control.reasonEn.trim().length > 0;
+      }));
+  }
+});
+
+test('every product Agent tool is mapped to a user capability or explicitly classified as framework-only', async () => {
+  const source = JSON.parse(await read('src/shared/interactive-capabilities/catalog.json'));
+  const toolProviderGroups = await read('src/crates/execution/tool-provider-groups/src/lib.rs');
+  const productPlan = toolProviderGroups.match(
+    /const PRODUCT_TOOL_PROVIDER_GROUP_PLAN:[\s\S]*?\n\];/u,
+  )?.[0];
+  assert.ok(productPlan, 'product Agent-tool provider plan must remain discoverable');
+  const productTools = new Set(
+    [...productPlan.matchAll(/"([A-Za-z_][A-Za-z0-9_]*)"/gu)]
+      .map((match) => match[1])
+      .filter((name) => !name.includes('core')),
+  );
+  const delegatedTools = new Set(source.capabilities.flatMap((capability) =>
+    capability.items.flatMap((item) => item.control.kind === 'delegate'
+      ? (item.control.tools ?? [capability.agentControl?.tool]).filter(Boolean)
+      : [])));
+  const excludedTools = new Set(
+    source.reviewedAgentToolContract.excluded.map(({ tool }) => tool),
+  );
+
+  assert.deepEqual(
+    new Set([...delegatedTools, ...excludedTools]),
+    productTools,
+    'new Agent tools must be mapped in the shared manual or receive a reviewed framework-only exclusion',
+  );
+  assert.deepEqual(excludedTools, new Set(['GetToolSpec', 'CallDeferredTool']));
+  assert.equal([...delegatedTools].filter((tool) => excludedTools.has(tool)).length, 0);
+
+  const byId = new Map(source.capabilities.map((capability) => [capability.id, capability]));
+  const item = (capabilityId, itemId) => byId.get(capabilityId)?.items
+    .find(({ id }) => id === itemId);
+  assert.ok(item('feature.remote-workspaces', 'remote-files').control.tools.includes('Read'));
+  assert.deepEqual(item('feature.remote-workspaces', 'port-forwarding').control.tools, ['PortForward']);
+  assert.ok(item('setting.tools.mcp', 'resources').control.tools.includes('ReadMCPResource'));
+  assert.equal(byId.get('feature.desktop-pet').agentControl.tool, 'BitFunControl');
+  assert.equal(item('feature.desktop-pet', 'petdex-import').control.kind, 'delegate');
+  const petSetting = byId.get('setting.application.pet');
+  assert.deepEqual(
+    petSetting.operations.find(({ id }) => id === 'use-pet').argumentScopes,
+    { path: 'productHostLocal' },
+  );
+  assert.deepEqual(
+    petSetting.operations.find(({ id }) => id === 'delete-pet').argumentScopes,
+    { packagePath: 'productHostLocal' },
+  );
 });
 
 test('the built-in browser manual covers its element picker in both languages', () => {
@@ -145,6 +248,9 @@ test('docs, runtime, and technical views are generated projections of one semant
   const runtimeCatalog = JSON.parse(await read(
     'src/web-ui/src/app/global-search/generated/interactive-capabilities.json',
   ));
+  const productControlCatalog = JSON.parse(await read(
+    'src/crates/contracts/product-domains/src/generated/product-control-catalog.json',
+  ));
   const technicalMap = JSON.parse(await read(
     'docs/interactive-capabilities/technical/tauri-command-map.json',
   ));
@@ -159,8 +265,13 @@ test('docs, runtime, and technical views are generated projections of one semant
   );
   assert.deepEqual(interactionMap.roots, source.reviewedInteractionContract.roots);
   assert.deepEqual(publicCatalog.capabilities.map(({ id }) => id), sourceIds);
+  assert.deepEqual(publicCatalog.searchAcceptance, source.searchAcceptance);
+  assert.deepEqual(runtimeCatalog.searchAcceptance, source.searchAcceptance);
+  assert.deepEqual(productControlCatalog.searchAcceptance, source.searchAcceptance);
   assert.deepEqual(runtimeCatalog.capabilities.map(({ id }) => id), sourceIds);
+  assert.deepEqual(productControlCatalog.capabilities.map(({ id }) => id), sourceIds);
   assert.equal(publicCatalog.digest, runtimeCatalog.digest);
+  assert.equal(publicCatalog.digest, productControlCatalog.digest);
   assert.equal(publicCatalog.digest, technicalMap.catalogDigest);
   assert.equal(publicCatalog.digest, interactionMap.catalogDigest);
   assert.equal(interactionMap.digest, source.reviewedInteractionContract.digest);

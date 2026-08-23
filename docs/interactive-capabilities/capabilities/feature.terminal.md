@@ -17,19 +17,21 @@ Run a shell in the current project, inspect output, keep command history, and sh
 
 ## 完整功能清单 / Everything included
 
-- 创建、列出、切换和关闭多个终端会话
-  - Create, list, switch, and close multiple terminal sessions
-- 检测可用 Shell，并为终端选择默认或指定 Shell
+- **Agent 可直接控制 / Direct Agent control** · 打开终端面板并新建一个终端会话
+  - Open the terminal panel and create a terminal session
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 列出、切换和关闭多个终端会话
+  - List, switch, and close multiple terminal sessions
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 检测可用 Shell，并为终端选择默认或指定 Shell
   - Detect available shells and choose a default or explicit shell
-- 在当前项目目录或指定起始目录创建终端
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ExecCommand` · 在当前项目目录或指定起始目录创建终端
   - Create terminals in the current project or a chosen starting directory
-- 执行命令、写入输入并发送中断或其他信号
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ExecCommand` / `WriteStdin` / `ExecControl` · 执行命令、写入输入并发送中断或其他信号
   - Execute commands, write input, and send interrupt or other signals
-- 随终端面板大小变化同步行列尺寸
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 随终端面板大小变化同步行列尺寸
   - Synchronize terminal rows and columns as the panel resizes
-- 查看命令历史并检测 Shell Integration 支持
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看命令历史并检测 Shell Integration 支持
   - Review command history and detect shell-integration support
-- 确认输出接收并安全关闭单个或全部终端
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 确认输出接收并安全关闭单个或全部终端
   - Acknowledge output and safely shut down one or all terminals
 
 ## 怎么用 / How to use it

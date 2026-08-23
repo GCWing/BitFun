@@ -17,21 +17,23 @@ Switch themes and languages, tune typography and motion, and install or import a
 
 ## 完整功能清单 / Everything included
 
-- 选择跟随系统、浅色、深色、单色、Midnight、中国风、Cyber、Slate 或 Tokyo Night 等内置外观
+- **Agent 可直接控制 / Direct Agent control** · 选择跟随系统、浅色、深色、单色、Midnight、中国风、Cyber、Slate 或 Tokyo Night 等内置外观
   - Choose system, light, dark, monochrome, Midnight, China, Cyber, Slate, Tokyo Night, and other built-in appearances
-- 切换简体中文、繁体中文、英文等受支持界面语言
+- **Agent 可直接控制 / Direct Agent control** · 切换简体中文、繁体中文、英文等受支持界面语言
   - Switch among Simplified Chinese, Traditional Chinese, English, and other supported UI languages
-- 分别调整整个界面与聊天区字号，并支持自定义像素值
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 分别调整整个界面与聊天区字号，并支持自定义像素值
   - Adjust global UI and chat font sizes independently, including custom pixel values
-- 控制鼠标光效，并让动态背景尊重系统的减少动效偏好
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 控制鼠标光效，并让动态背景尊重系统的减少动效偏好
   - Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference
-- 导入、预览、应用、导出和删除本地外观包
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 导入、预览、应用、导出和删除本地外观包
   - Import, preview, apply, export, and delete local appearance packages
-- 浏览、搜索、筛选并安装或更新 Skin 市场外观
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 浏览、搜索、筛选并安装或更新 Skin 市场外观
   - Browse, search, filter, install, and update appearances from the Skin market
-- 提交、查看和撤回自己的外观市场投稿
-  - Submit, review, and withdraw your appearance-market submissions
-- 在具备权限时查看并批准或拒绝外观投稿
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `PublishAppearance` · 在用户明确要求时由 Agent 提交本地外观包到 Skin 市场审核
+  - Let an agent submit a local Appearance package for Skin-market review when explicitly requested
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看和撤回自己的外观市场投稿
+  - Review and withdraw your appearance-market submissions
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在具备权限时查看并批准或拒绝外观投稿
   - When authorized, inspect and approve or reject appearance submissions
 
 ## 怎么用 / How to use it

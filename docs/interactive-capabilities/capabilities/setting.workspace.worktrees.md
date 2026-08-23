@@ -17,19 +17,19 @@ Configure the root, branch prefix, and cleanup rules for Git worktrees, and insp
 
 ## 完整功能清单 / Everything included
 
-- 控制新会话是否默认使用独立 Git Worktree
-  - Choose whether new sessions use isolated Git worktrees by default
-- 设置受管 Worktree 的统一根目录
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 了解隔离 Worktree，并配置其创建与清理默认值
+  - Understand isolated worktrees and configure their creation and cleanup defaults
+- **Agent 可直接控制 / Direct Agent control** · 设置受管 Worktree 的统一根目录
   - Set the common root directory for managed worktrees
-- 设置自动创建分支使用的名称前缀
+- **Agent 可直接控制 / Direct Agent control** · 设置自动创建分支使用的名称前缀
   - Set the branch-name prefix used for automatically created branches
-- 创建隔离工作区时选择是否复制当前未提交改动
+- **Agent 可直接控制 / Direct Agent control** · 创建隔离工作区时选择是否复制当前未提交改动
   - Choose whether current uncommitted changes are copied into a new isolated workspace
-- 启用自动清理并设置最多保留的受管 Worktree 数量
+- **Agent 可直接控制 / Direct Agent control** · 启用自动清理并设置最多保留的受管 Worktree 数量
   - Enable automatic cleanup and set the maximum number of managed worktrees to retain
-- 查看 Worktree 生命周期、脏状态、未发布提交与关联会话
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Worktree` · 查看 Worktree 生命周期、脏状态、未发布提交与关联会话
   - Inspect worktree lifecycle, dirty state, unpublished commits, and linked sessions
-- 打开或恢复关联会话，并在保护检查后删除或强制删除 Worktree
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 打开或恢复关联会话，并在保护检查后删除或强制删除 Worktree
   - Open or restore linked sessions and delete or force-delete a worktree after protection checks
 
 ## 怎么用 / How to use it
@@ -53,7 +53,11 @@ Configure the root, branch prefix, and cleanup rules for Git worktrees, and insp
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
-| 在界面中配置 / Configure in the UI | — | 此页面的设置在对应界面中完成。 | Configure this page in its matching UI. |
+| 受管 Worktree 根目录 / Managed-worktree root | `string` | 设置 BitFun 创建受管 Worktree 的统一根目录。 | Set the common root where BitFun creates managed worktrees. |
+| Worktree 分支前缀 / Worktree branch prefix | `string` | 设置自动创建分支使用的前缀。 | Set the prefix used for automatically created branches. |
+| 复制本地改动 / Copy local changes | `boolean` | 创建隔离 Worktree 时复制未提交改动。 | Copy uncommitted changes when creating an isolated worktree. |
+| 自动清理 Worktree / Automatic worktree cleanup | `boolean` | 允许 BitFun 自动清理超过保留上限的受管 Worktree。 | Allow BitFun to prune managed worktrees beyond the retention limit. |
+| Worktree 保留上限 / Worktree retention limit | `integer` (1–100) | 设置自动清理前最多保留的受管 Worktree 数量。 | Set the maximum managed worktrees retained before cleanup. |
 
 ## 可以直接对 Agent 说 / Try saying
 

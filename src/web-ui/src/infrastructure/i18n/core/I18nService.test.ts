@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { I18nService } from './I18nService';
 import { DEFAULT_LOCALE, WEB_UI_BOOTSTRAP_NAMESPACES } from '../presets';
@@ -48,5 +48,22 @@ describe('I18nService shared namespace contract', () => {
     await service.loadNamespace('settings/application');
 
     expect(i18n.hasResourceBundle(DEFAULT_LOCALE, 'settings/application')).toBe(true);
+  });
+
+  it('applies an externally persisted locale without persisting it again', async () => {
+    vi.stubGlobal('document', {
+      documentElement: { setAttribute: vi.fn() },
+    });
+    const service = new I18nService();
+    const saveCurrentLocale = vi.spyOn(
+      service as unknown as { saveCurrentLocale(locale: string): Promise<void> },
+      'saveCurrentLocale',
+    ).mockResolvedValue(undefined);
+
+    await service.applyPersistedLanguage('zh-TW');
+
+    expect(service.getCurrentLocale()).toBe('zh-TW');
+    expect(saveCurrentLocale).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

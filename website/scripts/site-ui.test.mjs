@@ -8,6 +8,8 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { matchingItems, searchCapabilities } from '../src/search.js';
+
 const execFileAsync = promisify(execFile);
 const websiteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = path.resolve(websiteRoot, '..');
@@ -17,13 +19,17 @@ await execFileAsync(process.execPath, [path.join(websiteRoot, 'scripts/build.mjs
   cwd: repositoryRoot,
 });
 
-const [appSource, stylesSource, templateSource, builtIndex, releaseSource] = await Promise.all([
+const [appSource, searchSource, stylesSource, templateSource, builtIndex, builtApp, releaseSource, catalogSource] = await Promise.all([
   readFile(path.join(sourceRoot, 'app.js'), 'utf8'),
+  readFile(path.join(sourceRoot, 'search.js'), 'utf8'),
   readFile(path.join(sourceRoot, 'styles.css'), 'utf8'),
   readFile(path.join(sourceRoot, 'index.html'), 'utf8'),
   readFile(path.join(websiteRoot, 'dist/index.html'), 'utf8'),
+  readFile(path.join(websiteRoot, 'dist/assets/app.js'), 'utf8'),
   readFile(path.join(websiteRoot, 'dist/release.json'), 'utf8'),
+  readFile(path.join(websiteRoot, 'dist/data/capabilities.json'), 'utf8'),
 ]);
+const catalog = JSON.parse(catalogSource);
 
 function cssBlock(selector) {
   const escaped = selector.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&');
@@ -83,6 +89,39 @@ test('live search preserves the input node and supports IME composition', () => 
   assert.doesNotMatch(inputBinding[1], /renderIndex\(\)/u);
 });
 
+test('catalog search accepts bilingual synonym bundles and exposes honest control classes', () => {
+  assert.match(searchSource, /function scoreTextMatch\(query, fields\)/u);
+  assert.doesNotMatch(appSource, /tokens\.every\(\(token\) => terms\.includes\(token\)\)/u);
+  assert.match(appSource, /data-control-kind="\$\{escapeHtml\(item\.control\.kind\)\}"/u);
+  assert.match(appSource, /Direct Agent control/u);
+  assert.match(appSource, /capability\.operations\.length \|\| capability\.agentControl/u);
+  assert.match(stylesSource, /\.control-direct/u);
+});
+
+test('Playbook search satisfies the shared cross-surface acceptance corpus', () => {
+  for (const acceptance of catalog.searchAcceptance) {
+    const results = searchCapabilities(catalog, acceptance.query);
+    assert.equal(
+      results[0]?.capability.id,
+      acceptance.expectedFirstCapabilityId,
+      acceptance.id,
+    );
+    const resultIds = new Set(results.map(({ capability }) => capability.id));
+    for (const capabilityId of acceptance.expectedCapabilityIds) {
+      assert.ok(resultIds.has(capabilityId), `${acceptance.id} missed ${capabilityId}`);
+    }
+    if (acceptance.expectedItem) {
+      const capability = catalog.capabilities.find(({ id }) =>
+        id === acceptance.expectedItem.capabilityId);
+      assert.equal(
+        matchingItems(capability, acceptance.query)[0]?.id,
+        acceptance.expectedItem.itemId,
+        `${acceptance.id} item route`,
+      );
+    }
+  }
+});
+
 test('sidebar navigation preserves its scroll position across page loads', () => {
   assert.match(appSource, /SIDEBAR_SCROLL_STORAGE_KEY/u);
   assert.match(appSource, /sessionStorage\.setItem/u);
@@ -100,6 +139,9 @@ test('dark mode gives the agent callout its own subdued surface tokens', () => {
   assert.equal(dark['--agent-panel'], '#20271a');
   assert.match(cssBlock('.detail-aside'), /background:\s*var\(--agent-panel\)/u);
   assert.match(cssBlock('.detail-aside'), /color:\s*var\(--agent-panel-ink\)/u);
+  assert.notEqual(dark['--danger'], light['--danger']);
+  assert.match(cssBlock('.control-unsupported'), /color:\s*var\(--danger\)/u);
+  assert.doesNotMatch(cssBlock('.control-unsupported'), /#[0-9a-f]{3,8}/iu);
   assert.doesNotMatch(stylesSource, /var\(--lime(?:-ink)?\)/u);
 });
 
@@ -110,4 +152,5 @@ test('build emits a source-sensitive immutable release id', () => {
   assert.match(release.catalogDigest, /^[0-9a-f]{64}$/u);
   assert.match(builtIndex, new RegExp(`/assets/styles\\.css\\?v=${release.releaseId}`, 'u'));
   assert.match(builtIndex, new RegExp(`/assets/app\\.js\\?v=${release.releaseId}`, 'u'));
+  assert.match(builtApp, new RegExp(`\\./search\\.js\\?v=${release.releaseId}`, 'u'));
 });

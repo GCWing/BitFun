@@ -1,24 +1,46 @@
-//! Desktop adapter for the platform-neutral BitFunControl tool host port.
+//! Desktop adapter for the platform-agnostic BitFun product-control port.
+//!
+//! Discovery and contract lookup run in the product-domain owner. This adapter
+//! owns concrete Desktop state reads/mutations and delegates only presentation
+//! actions (navigation/product actions) to the Web UI surface.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use bitfun_core::agentic::tools::bitfun_control_host::{
-    set_bitfun_control_handler, BitFunControlHostRequest,
+    set_bitfun_control_port, BitFunControlHostRequest, ProductControlAction, ProductControlPort,
 };
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
+use bitfun_core::service::config::types::{
+    AIExperienceConfig, AgentCompanionPetSelection, MemoriesConfig,
+};
+use bitfun_product_domains::product_control::{
+    capability as product_capability, inspect_contract, validate_open_target,
+    validate_operation_arguments, validate_option_value, ProductCapabilityOperationHandler,
+    ProductCapabilityOption, ProductCapabilityOptionHandler,
+};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Map, Value};
+use tauri::{AppHandle, Manager};
+use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tokio::sync::oneshot;
 
+use crate::api::app_state::AppState;
+use crate::api::commands::{
+    delete_agent_companion_pet_package_impl, import_agent_companion_pet_package_impl,
+    list_agent_companion_pets_impl, AgentCompanionPetPackageDto,
+};
+
 const BITFUN_CONTROL_REQUEST_EVENT: &str = "agentic://bitfun-control-request";
+const BITFUN_CONTROL_APPLIED_EVENT: &str = "agentic://bitfun-control-applied";
 const BITFUN_CONTROL_RESPONSE_TIMEOUT: Duration = Duration::from_secs(120);
 
 type PendingResponse = oneshot::Sender<Result<Value, String>>;
 
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+static SURFACE_READY: AtomicBool = AtomicBool::new(false);
 static PENDING_RESPONSES: OnceLock<Mutex<HashMap<String, PendingResponse>>> = OnceLock::new();
 
 fn pending_responses() -> &'static Mutex<HashMap<String, PendingResponse>> {
@@ -31,7 +53,13 @@ fn lock_pending_responses() -> std::sync::MutexGuard<'static, HashMap<String, Pe
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-async fn dispatch_request(request: BitFunControlHostRequest) -> Result<Value, String> {
+async fn dispatch_surface_request(request: BitFunControlHostRequest) -> Result<Value, String> {
+    if !SURFACE_READY.load(Ordering::Acquire) {
+        return Err(
+            "The Desktop product-control adapter is ready, but its Web UI navigation surface is not"
+                .to_string(),
+        );
+    }
     let request_id = format!(
         "bitfun-control-{}-{}",
         std::process::id(),
@@ -54,7 +82,9 @@ async fn dispatch_request(request: BitFunControlHostRequest) -> Result<Value, St
     .await
     {
         lock_pending_responses().remove(&request_id);
-        return Err(format!("Failed to send BitFunControl request: {error}"));
+        return Err(format!(
+            "Failed to send BitFunControl surface request: {error}"
+        ));
     }
 
     match tokio::time::timeout(BITFUN_CONTROL_RESPONSE_TIMEOUT, receiver).await {
@@ -67,16 +97,639 @@ async fn dispatch_request(request: BitFunControlHostRequest) -> Result<Value, St
     }
 }
 
-pub(crate) fn install() {
-    set_bitfun_control_handler(Arc::new(|request| {
-        Box::pin(async move { dispatch_request(request).await })
-    }));
+fn read_nested_value<'a>(value: &'a Value, field: &str) -> Option<&'a Value> {
+    let mut current = value;
+    for segment in field.split('.') {
+        current = current.as_object()?.get(segment)?;
+    }
+    Some(current)
 }
 
-/// Advertise BitFunControl only after the Web UI listener is installed.
+fn set_nested_value(value: &mut Value, field: &str, next_value: Value) -> Result<(), String> {
+    let segments: Vec<&str> = field
+        .split('.')
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    let Some((last, parents)) = segments.split_last() else {
+        return Err("A product-control config field cannot be empty".to_string());
+    };
+    let mut current = value;
+    for segment in parents {
+        if !current.is_object() {
+            *current = Value::Object(Map::new());
+        }
+        current = current
+            .as_object_mut()
+            .expect("object was initialized")
+            .entry((*segment).to_string())
+            .or_insert_with(|| Value::Object(Map::new()));
+    }
+    if !current.is_object() {
+        *current = Value::Object(Map::new());
+    }
+    current
+        .as_object_mut()
+        .expect("object was initialized")
+        .insert((*last).to_string(), next_value);
+    Ok(())
+}
+
+fn validate_config_semantics(path: &str, value: &Value) -> Result<(), String> {
+    if path == "memories" {
+        let memories: MemoriesConfig = serde_json::from_value(value.clone())
+            .map_err(|error| format!("Invalid memory settings: {error}"))?;
+        if memories.max_rollout_age_days > memories.max_unused_days {
+            return Err("Memory rollout age must not exceed unused-memory retention".to_string());
+        }
+    }
+    Ok(())
+}
+
+async fn current_option_value(
+    app: &AppHandle,
+    state: &AppState,
+    option: &ProductCapabilityOption,
+) -> Result<Value, String> {
+    match &option.handler {
+        ProductCapabilityOptionHandler::Config { path } => state
+            .config_service
+            .get_config(Some(path))
+            .await
+            .map_err(|error| error.to_string()),
+        ProductCapabilityOptionHandler::MergeConfig { path, fields } => {
+            let current: Value = state
+                .config_service
+                .get_config(Some(path))
+                .await
+                .map_err(|error| error.to_string())?;
+            let values: Vec<Value> = fields
+                .iter()
+                .map(|field| {
+                    read_nested_value(&current, field)
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                })
+                .collect();
+            if values.len() == 1 || values.windows(2).all(|pair| pair[0] == pair[1]) {
+                Ok(values.into_iter().next().unwrap_or(Value::Null))
+            } else {
+                Ok(Value::Object(
+                    fields.iter().cloned().zip(values).collect::<Map<_, _>>(),
+                ))
+            }
+        }
+        ProductCapabilityOptionHandler::AppearanceSelection => state
+            .config_service
+            .get_config(Some("appearance.selection"))
+            .await
+            .map_err(|error| error.to_string()),
+        ProductCapabilityOptionHandler::Language => state
+            .config_service
+            .get_config(Some("app.language"))
+            .await
+            .map_err(|error| error.to_string()),
+        ProductCapabilityOptionHandler::Provider {
+            provider_id,
+            option_id,
+        } => match desktop_provider_option(provider_id, option_id) {
+            Some(DesktopProviderOption::LaunchAtLogin) => app
+                .autolaunch()
+                .is_enabled()
+                .map(Value::Bool)
+                .map_err(|error| error.to_string()),
+            Some(DesktopProviderOption::PreventSleep) => state
+                .config_service
+                .get_config(Some("app.prevent_sleep"))
+                .await
+                .map_err(|error| error.to_string()),
+            None => Err(format!(
+                "Product-control provider option is not registered: {provider_id}:{option_id}"
+            )),
+        },
+    }
+}
+
+fn dto_to_selection(pet: &AgentCompanionPetPackageDto) -> AgentCompanionPetSelection {
+    AgentCompanionPetSelection {
+        id: pet.id.clone(),
+        display_name: pet.display_name.clone(),
+        description: pet.description.clone(),
+        source: pet.source.clone(),
+        package_path: pet.package_path.clone(),
+        spritesheet_path: pet.spritesheet_path.clone(),
+        spritesheet_mime_type: pet.spritesheet_mime_type.clone(),
+    }
+}
+
+async fn companion_state(state: &AppState) -> Result<Value, String> {
+    let imported = list_agent_companion_pets_impl(state).await?;
+    let experience: AIExperienceConfig = state
+        .config_service
+        .get_config(Some("app.ai_experience"))
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(json!({
+        "activePet": experience.agent_companion_pet,
+        "enabled": experience.enable_agent_companion,
+        "displayMode": experience.agent_companion_display_mode,
+        "importedPets": imported.pets,
+    }))
+}
+
+async fn emit_applied(
+    capability_id: &str,
+    operation_id: Option<&str>,
+    option_id: Option<&str>,
+    changed_paths: &[&str],
+    value: Option<&Value>,
+) -> Value {
+    if !SURFACE_READY.load(Ordering::Acquire) {
+        return json!({
+            "status": "notAttached",
+            "reason": "The persistent product state changed before a presentation surface attached",
+        });
+    }
+    match emit_global_event(BackendEvent::Custom {
+        event_name: BITFUN_CONTROL_APPLIED_EVENT.to_string(),
+        payload: json!({
+            "capabilityId": capability_id,
+            "operationId": operation_id,
+            "optionId": option_id,
+            "changedPaths": changed_paths,
+            "value": value,
+        }),
+    })
+    .await
+    {
+        Ok(()) => json!({ "status": "notified" }),
+        Err(error) => {
+            log::warn!(
+                "Product control persisted successfully but presentation synchronization failed: {}",
+                error
+            );
+            json!({
+                "status": "degraded",
+                "reason": error.to_string(),
+            })
+        }
+    }
+}
+
+async fn inspect_desktop(
+    app: &AppHandle,
+    request: &BitFunControlHostRequest,
+) -> Result<Value, String> {
+    let capability_id = request
+        .capability_id
+        .as_deref()
+        .ok_or_else(|| "capabilityId is required for get".to_string())?;
+    let capability = product_capability(capability_id)?;
+    let state = app.state::<AppState>();
+    let mut result = inspect_contract(capability_id)?;
+    let option_values = result
+        .as_object_mut()
+        .ok_or_else(|| "Product-control inspection was not an object".to_string())?;
+    let mut current_values = Map::new();
+    for option in &capability.options {
+        match current_option_value(app, &state, option).await {
+            Ok(value) => {
+                current_values.insert(option.id.clone(), value);
+            }
+            Err(error) => {
+                current_values.insert(
+                    option.id.clone(),
+                    json!({ "availability": "degraded", "reason": error }),
+                );
+            }
+        }
+    }
+    option_values.insert(
+        "currentOptionValues".to_string(),
+        Value::Object(current_values),
+    );
+    option_values.insert(
+        "controlAvailability".to_string(),
+        json!({
+            "status": "available",
+            "adapter": "desktop-native",
+            "readBack": true,
+            "presentationReady": SURFACE_READY.load(Ordering::Acquire),
+        }),
+    );
+    if capability_id == "setting.application.pet" {
+        let provider_state = match companion_state(&state).await {
+            Ok(value) => value,
+            Err(error) => json!({ "availability": "degraded", "reason": error }),
+        };
+        option_values.insert(
+            "providerState".to_string(),
+            json!({ "agent-companion-pet": provider_state }),
+        );
+    }
+    Ok(result)
+}
+
+async fn configure_desktop(
+    app: &AppHandle,
+    request: &BitFunControlHostRequest,
+) -> Result<Value, String> {
+    let capability_id = request
+        .capability_id
+        .as_deref()
+        .ok_or_else(|| "capabilityId is required for configure".to_string())?;
+    let option_id = request
+        .option_id
+        .as_deref()
+        .ok_or_else(|| "optionId is required for configure".to_string())?;
+    let value = request
+        .value
+        .as_ref()
+        .ok_or_else(|| "value is required for configure".to_string())?;
+    let capability = product_capability(capability_id)?;
+    let option = capability
+        .options
+        .iter()
+        .find(|option| option.id == option_id)
+        .ok_or_else(|| format!("Unknown option for {capability_id}: {option_id}"))?;
+    validate_option_value(&option.value_schema, value)?;
+    let state = app.state::<AppState>();
+    let (changed_path, notify_settings) = match &option.handler {
+        ProductCapabilityOptionHandler::Config { path } => {
+            state
+                .config_service
+                .set_config(path, value)
+                .await
+                .map_err(|error| error.to_string())?;
+            (path.clone(), true)
+        }
+        ProductCapabilityOptionHandler::MergeConfig { path, fields } => {
+            let mut current: Value = state
+                .config_service
+                .get_config(Some(path))
+                .await
+                .map_err(|error| error.to_string())?;
+            for field in fields {
+                set_nested_value(&mut current, field, value.clone())?;
+            }
+            validate_config_semantics(path, &current)?;
+            state
+                .config_service
+                .set_config(path, current)
+                .await
+                .map_err(|error| error.to_string())?;
+            (path.clone(), true)
+        }
+        ProductCapabilityOptionHandler::AppearanceSelection => {
+            state
+                .config_service
+                .set_config("appearance.selection", value)
+                .await
+                .map_err(|error| error.to_string())?;
+            ("appearance.selection".to_string(), true)
+        }
+        ProductCapabilityOptionHandler::Language => {
+            state
+                .config_service
+                .set_config("app.language", value)
+                .await
+                .map_err(|error| error.to_string())?;
+            ("app.language".to_string(), true)
+        }
+        ProductCapabilityOptionHandler::Provider {
+            provider_id,
+            option_id,
+        } => {
+            let provider = desktop_provider_option(provider_id, option_id).ok_or_else(|| {
+                format!(
+                    "Product-control provider option is not registered: {provider_id}:{option_id}"
+                )
+            })?;
+            configure_desktop_provider_option(app, provider, value).await?;
+            (provider.changed_path().to_string(), false)
+        }
+    };
+    if notify_settings {
+        crate::api::remote_connect_api::notify_settings_changed();
+    }
+    let effective_value = current_option_value(app, &state, option).await?;
+    let presentation_sync = emit_applied(
+        capability_id,
+        None,
+        Some(option_id),
+        &[changed_path.as_str()],
+        Some(&effective_value),
+    )
+    .await;
+    Ok(json!({
+        "capabilityId": capability_id,
+        "optionId": option_id,
+        "configured": true,
+        "effectiveValue": effective_value,
+        "readBack": true,
+        "presentationSync": presentation_sync,
+    }))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DesktopProviderOption {
+    LaunchAtLogin,
+    PreventSleep,
+}
+
+impl DesktopProviderOption {
+    fn changed_path(self) -> &'static str {
+        match self {
+            Self::LaunchAtLogin => "system.launch_at_login",
+            Self::PreventSleep => "app.prevent_sleep",
+        }
+    }
+}
+
+fn desktop_provider_option(provider_id: &str, option_id: &str) -> Option<DesktopProviderOption> {
+    match (provider_id, option_id) {
+        ("desktop-lifecycle", "launch-at-login") => Some(DesktopProviderOption::LaunchAtLogin),
+        ("desktop-lifecycle", "prevent-sleep") => Some(DesktopProviderOption::PreventSleep),
+        _ => None,
+    }
+}
+
+async fn configure_desktop_provider_option(
+    app: &AppHandle,
+    option: DesktopProviderOption,
+    value: &Value,
+) -> Result<(), String> {
+    let enabled = value
+        .as_bool()
+        .ok_or_else(|| "Desktop lifecycle options require a boolean value".to_string())?;
+    match option {
+        DesktopProviderOption::LaunchAtLogin => {
+            if enabled {
+                app.autolaunch().enable().map_err(|error| error.to_string())
+            } else {
+                app.autolaunch()
+                    .disable()
+                    .map_err(|error| error.to_string())
+            }
+        }
+        DesktopProviderOption::PreventSleep => {
+            crate::sleep_prevention::set_prevent_sleep_enabled_from_host(app, enabled).await
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DesktopProviderOperation {
+    ListCompanionPets,
+    UseCompanionPet,
+    DeleteCompanionPet,
+}
+
+fn desktop_provider_operation(
+    provider_id: &str,
+    operation_id: &str,
+) -> Option<DesktopProviderOperation> {
+    match (provider_id, operation_id) {
+        ("agent-companion-pet", "list") => Some(DesktopProviderOperation::ListCompanionPets),
+        ("agent-companion-pet", "use") => Some(DesktopProviderOperation::UseCompanionPet),
+        ("agent-companion-pet", "delete") => Some(DesktopProviderOperation::DeleteCompanionPet),
+        _ => None,
+    }
+}
+
+async fn select_companion(
+    state: &AppState,
+    selection: AgentCompanionPetSelection,
+) -> Result<Value, String> {
+    let mut experience: AIExperienceConfig = state
+        .config_service
+        .get_config(Some("app.ai_experience"))
+        .await
+        .map_err(|error| error.to_string())?;
+    experience.enable_agent_companion = true;
+    experience.agent_companion_pet = Some(selection);
+    state
+        .config_service
+        .set_config("app.ai_experience", &experience)
+        .await
+        .map_err(|error| error.to_string())?;
+    crate::api::remote_connect_api::notify_settings_changed();
+    companion_state(state).await
+}
+
+async fn execute_companion_operation(
+    app: &AppHandle,
+    operation: DesktopProviderOperation,
+    arguments: Option<&Value>,
+) -> Result<Value, String> {
+    let state = app.state::<AppState>();
+    match operation {
+        DesktopProviderOperation::ListCompanionPets => companion_state(&state).await,
+        DesktopProviderOperation::UseCompanionPet => {
+            let arguments = arguments.and_then(Value::as_object).ok_or_else(|| {
+                "use-pet requires an arguments object with path or id".to_string()
+            })?;
+            let selection = if let Some(path) = arguments
+                .get("path")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+            {
+                let installed = list_agent_companion_pets_impl(&state).await?;
+                let existing = installed.pets.iter().find(|pet| pet.package_path == path);
+                match existing {
+                    Some(pet) => dto_to_selection(pet),
+                    None => dto_to_selection(
+                        &import_agent_companion_pet_package_impl(&state, path).await?,
+                    ),
+                }
+            } else if let Some(id) = arguments
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            {
+                if id == "bitfun" {
+                    AIExperienceConfig::default()
+                        .agent_companion_pet
+                        .ok_or_else(|| "The default BitFun companion is unavailable".to_string())?
+                } else {
+                    let installed = list_agent_companion_pets_impl(&state).await?;
+                    let pet = installed
+                        .pets
+                        .iter()
+                        .find(|pet| pet.id == id)
+                        .ok_or_else(|| format!("No imported Agent companion pet has ID {id}"))?;
+                    dto_to_selection(pet)
+                }
+            } else {
+                return Err("use-pet requires a non-empty path or id".to_string());
+            };
+            let state_value = select_companion(&state, selection).await?;
+            let presentation_sync = emit_applied(
+                "setting.application.pet",
+                Some("use-pet"),
+                None,
+                &["app.ai_experience"],
+                None,
+            )
+            .await;
+            Ok(json!({
+                "capabilityId": "setting.application.pet",
+                "operationId": "use-pet",
+                "executed": true,
+                "effectiveState": state_value,
+                "readBack": true,
+                "presentationSync": presentation_sync,
+            }))
+        }
+        DesktopProviderOperation::DeleteCompanionPet => {
+            let arguments = arguments
+                .and_then(Value::as_object)
+                .ok_or_else(|| "delete-pet requires an arguments object".to_string())?;
+            let installed = list_agent_companion_pets_impl(&state).await?;
+            let package_path = if let Some(path) = arguments
+                .get("packagePath")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+            {
+                path.to_string()
+            } else if let Some(id) = arguments
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            {
+                installed
+                    .pets
+                    .iter()
+                    .find(|pet| pet.id == id)
+                    .map(|pet| pet.package_path.clone())
+                    .ok_or_else(|| format!("No imported Agent companion pet has ID {id}"))?
+            } else {
+                return Err("delete-pet requires a non-empty packagePath or id".to_string());
+            };
+            let mut experience: AIExperienceConfig = state
+                .config_service
+                .get_config(Some("app.ai_experience"))
+                .await
+                .map_err(|error| error.to_string())?;
+            let deleting_active = experience
+                .agent_companion_pet
+                .as_ref()
+                .is_some_and(|pet| pet.package_path == package_path);
+            delete_agent_companion_pet_package_impl(&state, &package_path).await?;
+            if deleting_active {
+                experience.agent_companion_pet = AIExperienceConfig::default().agent_companion_pet;
+                state
+                    .config_service
+                    .set_config("app.ai_experience", &experience)
+                    .await
+                    .map_err(|error| error.to_string())?;
+            }
+            crate::api::remote_connect_api::notify_settings_changed();
+            let state_value = companion_state(&state).await?;
+            let presentation_sync = emit_applied(
+                "setting.application.pet",
+                Some("delete-pet"),
+                None,
+                &["app.ai_experience"],
+                None,
+            )
+            .await;
+            Ok(json!({
+                "capabilityId": "setting.application.pet",
+                "operationId": "delete-pet",
+                "executed": true,
+                "effectiveState": state_value,
+                "readBack": true,
+                "presentationSync": presentation_sync,
+            }))
+        }
+    }
+}
+
+async fn execute_desktop(
+    app: &AppHandle,
+    request: &BitFunControlHostRequest,
+) -> Result<Value, String> {
+    let capability_id = request
+        .capability_id
+        .as_deref()
+        .ok_or_else(|| "capabilityId is required for execute".to_string())?;
+    let operation_id = request
+        .operation_id
+        .as_deref()
+        .ok_or_else(|| "operationId is required for execute".to_string())?;
+    let capability = product_capability(capability_id)?;
+    let operation = capability
+        .operations
+        .iter()
+        .find(|operation| operation.id == operation_id)
+        .ok_or_else(|| format!("Unknown operation for {capability_id}: {operation_id}"))?;
+    validate_operation_arguments(&operation.input_schema, request.arguments.as_ref())?;
+    match &operation.handler {
+        ProductCapabilityOperationHandler::ProductAction { .. } => {
+            dispatch_surface_request(request.clone()).await
+        }
+        ProductCapabilityOperationHandler::Provider {
+            provider_id,
+            operation_id: provider_operation_id,
+        } => match desktop_provider_operation(provider_id, provider_operation_id) {
+            Some(operation) => {
+                execute_companion_operation(app, operation, request.arguments.as_ref()).await
+            }
+            None => Err(format!(
+                "Product-control operation provider is not registered: {provider_id}:{provider_operation_id}"
+            )),
+        },
+    }
+}
+
+async fn dispatch_request(
+    app: &AppHandle,
+    request: BitFunControlHostRequest,
+) -> Result<Value, String> {
+    match request.action {
+        ProductControlAction::Get => inspect_desktop(app, &request).await,
+        ProductControlAction::Open => {
+            let capability_id = request
+                .capability_id
+                .as_deref()
+                .ok_or_else(|| "capabilityId is required for open".to_string())?;
+            validate_open_target(capability_id, request.item_id.as_deref())?;
+            dispatch_surface_request(request).await
+        }
+        ProductControlAction::Execute => execute_desktop(app, &request).await,
+        ProductControlAction::Configure => configure_desktop(app, &request).await,
+        ProductControlAction::List | ProductControlAction::Search => {
+            Err("Discovery is owned by the platform-agnostic product-control catalog".to_string())
+        }
+    }
+}
+
+struct DesktopProductControlPort {
+    app: AppHandle,
+}
+
+impl ProductControlPort for DesktopProductControlPort {
+    fn invoke<'a>(
+        &'a self,
+        request: BitFunControlHostRequest,
+    ) -> bitfun_product_domains::product_control::ProductControlFuture<'a> {
+        Box::pin(async move { dispatch_request(&self.app, request).await })
+    }
+}
+
+pub(crate) fn install(app: AppHandle) {
+    set_bitfun_control_port(Arc::new(DesktopProductControlPort { app }));
+}
+
+/// Mark only the presentation adapter ready; direct product controls are
+/// installed during native setup and do not depend on the React listener.
 #[tauri::command]
 pub(crate) fn mark_bitfun_control_surface_ready() {
-    install();
+    SURFACE_READY.store(true, Ordering::Release);
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,7 +743,7 @@ pub(crate) struct ReportBitFunControlResultRequest {
     error: Option<String>,
 }
 
-/// Return a product-surface result to the waiting BitFunControl tool call.
+/// Return a presentation-surface result to the waiting product-control call.
 #[tauri::command]
 pub(crate) async fn report_bitfun_control_result(
     request: ReportBitFunControlResultRequest,
@@ -104,9 +757,167 @@ pub(crate) async fn report_bitfun_control_result(
         Err(request
             .error
             .filter(|message| !message.trim().is_empty())
-            .unwrap_or_else(|| "BitFunControl request failed".to_string()))
+            .unwrap_or_else(|| "BitFunControl presentation request failed".to_string()))
     };
     sender
         .send(result)
         .map_err(|_| "BitFunControl request receiver is no longer available".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_core::service::config::types::GlobalConfig;
+    use bitfun_product_domains::product_control::{
+        ProductControlValueSchema, ProductControlValueType,
+    };
+
+    fn writable_samples(schema: &ProductControlValueSchema, current: Option<&Value>) -> Vec<Value> {
+        let mut samples = Vec::new();
+        if let Some(values) = &schema.r#enum {
+            samples.extend(values.iter().cloned());
+        }
+        match schema.value_type {
+            ProductControlValueType::Boolean => {
+                samples.push(Value::Bool(true));
+                samples.push(Value::Bool(false));
+            }
+            ProductControlValueType::String => samples.push(Value::String(
+                "x".repeat(schema.min_length.unwrap_or(1).max(1)),
+            )),
+            ProductControlValueType::Integer => {
+                samples.push(Value::from(schema.minimum.unwrap_or(1.0).ceil() as i64));
+                if let Some(maximum) = schema.maximum {
+                    samples.push(Value::from(maximum.floor() as i64));
+                }
+            }
+            ProductControlValueType::Number => {
+                samples.push(Value::from(schema.minimum.unwrap_or(1.0)));
+                if let Some(maximum) = schema.maximum {
+                    samples.push(Value::from(maximum));
+                }
+            }
+            ProductControlValueType::Object => samples.push(json!({})),
+            ProductControlValueType::Array => samples.push(json!([])),
+        }
+        if schema.nullable {
+            samples.push(Value::Null);
+        }
+        if let Some(current) = current {
+            samples.push(current.clone());
+        }
+        samples.retain(|sample| validate_option_value(schema, sample).is_ok());
+        samples.dedup();
+        samples
+    }
+
+    fn assert_config_binding(root: &Value, path: &str, schema: &ProductControlValueSchema) {
+        let current = read_nested_value(root, path);
+        if let Some(current) = current {
+            assert!(
+                validate_option_value(schema, current).is_ok(),
+                "default value at {path} does not satisfy its product-control schema: {current}"
+            );
+        }
+
+        // GlobalConfig intentionally omits default-valued and None fields when
+        // serialized. Inject several valid non-default samples, deserialize to
+        // the typed config, and require one to survive serialization. Unknown
+        // serde fields are discarded, so this proves the catalog path is owned
+        // by the typed config without making production upgrades intolerant of
+        // newer fields.
+        let samples = writable_samples(schema, current);
+        for sample in &samples {
+            let mut candidate = root.clone();
+            set_nested_value(&mut candidate, path, sample.clone()).unwrap();
+            let Ok(typed) = serde_json::from_value::<GlobalConfig>(candidate) else {
+                continue;
+            };
+            let serialized = serde_json::to_value(typed).unwrap();
+            if read_nested_value(&serialized, path) == Some(sample) {
+                return;
+            }
+        }
+        panic!(
+            "product-control config path is not consumed by typed GlobalConfig: {path}; valid samples: {samples:?}"
+        );
+    }
+
+    #[test]
+    fn every_provider_operation_in_the_catalog_has_a_desktop_binding() {
+        let catalog = bitfun_product_domains::product_control::catalog().unwrap();
+        for operation in catalog
+            .capabilities
+            .iter()
+            .flat_map(|capability| &capability.operations)
+        {
+            if let ProductCapabilityOperationHandler::Provider {
+                provider_id,
+                operation_id,
+            } = &operation.handler
+            {
+                assert!(
+                    desktop_provider_operation(provider_id, operation_id).is_some(),
+                    "missing Desktop provider binding for {provider_id}:{operation_id}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_provider_option_in_the_catalog_has_a_desktop_binding() {
+        let catalog = bitfun_product_domains::product_control::catalog().unwrap();
+        for option in catalog
+            .capabilities
+            .iter()
+            .flat_map(|capability| &capability.options)
+        {
+            if let ProductCapabilityOptionHandler::Provider {
+                provider_id,
+                option_id,
+            } = &option.handler
+            {
+                assert!(
+                    desktop_provider_option(provider_id, option_id).is_some(),
+                    "missing Desktop provider binding for {provider_id}:{option_id}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_catalog_config_option_binds_to_the_typed_global_config() {
+        let catalog = bitfun_product_domains::product_control::catalog().unwrap();
+        let root = serde_json::to_value(GlobalConfig::default()).unwrap();
+        for option in catalog
+            .capabilities
+            .iter()
+            .flat_map(|capability| &capability.options)
+        {
+            match &option.handler {
+                ProductCapabilityOptionHandler::Config { path } => {
+                    assert_config_binding(&root, path, &option.value_schema);
+                }
+                ProductCapabilityOptionHandler::MergeConfig { path, fields } => {
+                    for field in fields {
+                        assert_config_binding(
+                            &root,
+                            &format!("{path}.{field}"),
+                            &option.value_schema,
+                        );
+                    }
+                    let current = read_nested_value(&root, path)
+                        .unwrap_or_else(|| panic!("product-control merge path is absent: {path}"));
+                    validate_config_semantics(path, current).unwrap();
+                }
+                ProductCapabilityOptionHandler::AppearanceSelection => {
+                    assert_config_binding(&root, "appearance.selection", &option.value_schema);
+                }
+                ProductCapabilityOptionHandler::Language => {
+                    assert_config_binding(&root, "app.language", &option.value_schema);
+                }
+                ProductCapabilityOptionHandler::Provider { .. } => {}
+            }
+        }
+    }
 }

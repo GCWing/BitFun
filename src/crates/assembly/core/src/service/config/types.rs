@@ -476,10 +476,17 @@ impl Default for AppearanceConfig {
 pub struct EditorConfig {
     pub font_size: u32,
     pub font_family: String,
+    pub font_weight: String,
     pub line_height: f64,
+    pub cursor_style: String,
+    pub cursor_blinking: String,
+    pub render_whitespace: String,
+    pub render_line_highlight: String,
     pub tab_size: u32,
     pub insert_spaces: bool,
     pub word_wrap: String,
+    pub scroll_beyond_last_line: bool,
+    pub smooth_scrolling: bool,
     pub line_numbers: String,
     pub minimap: MinimapConfig,
     pub auto_save: String,
@@ -487,6 +494,8 @@ pub struct EditorConfig {
     pub format_on_save: bool,
     pub format_on_paste: bool,
     pub trim_auto_whitespace: bool,
+    pub semantic_highlighting: bool,
+    pub bracket_pair_colorization: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1611,10 +1620,17 @@ impl Default for EditorConfig {
         Self {
             font_size: 14,
             font_family: "Consolas, \"Courier New\", monospace".to_string(),
+            font_weight: "normal".to_string(),
             line_height: 1.5,
+            cursor_style: "line".to_string(),
+            cursor_blinking: "smooth".to_string(),
+            render_whitespace: "selection".to_string(),
+            render_line_highlight: "line".to_string(),
             tab_size: 2,
             insert_spaces: true,
             word_wrap: "off".to_string(),
+            scroll_beyond_last_line: false,
+            smooth_scrolling: true,
             line_numbers: "on".to_string(),
             minimap: MinimapConfig {
                 enabled: true,
@@ -1626,6 +1642,8 @@ impl Default for EditorConfig {
             format_on_save: true,
             format_on_paste: true,
             trim_auto_whitespace: true,
+            semantic_highlighting: true,
+            bracket_pair_colorization: true,
         }
     }
 }
@@ -2561,6 +2579,59 @@ mod tests {
             defaults.builtin_subagent_selection("GeneralPurpose"),
             SubagentModelSelection::fixed("fast")
         );
+    }
+
+    #[test]
+    fn legacy_editor_config_defaults_new_persisted_visual_fields() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "editor": {
+                "font_size": 16,
+                "font_family": "Legacy Mono",
+                "line_height": 1.4
+            }
+        }))
+        .expect("legacy editor config should remain readable");
+
+        assert_eq!(config.editor.font_size, 16);
+        assert_eq!(config.editor.font_family, "Legacy Mono");
+        assert_eq!(config.editor.font_weight, "normal");
+        assert_eq!(config.editor.cursor_style, "line");
+        assert_eq!(config.editor.cursor_blinking, "smooth");
+        assert_eq!(config.editor.render_whitespace, "selection");
+        assert_eq!(config.editor.render_line_highlight, "line");
+        assert!(!config.editor.scroll_beyond_last_line);
+        assert!(config.editor.smooth_scrolling);
+        assert!(config.editor.semantic_highlighting);
+        assert!(config.editor.bracket_pair_colorization);
+    }
+
+    #[test]
+    fn editor_visual_fields_survive_a_persisted_round_trip() {
+        let mut config = GlobalConfig::default();
+        config.editor.font_weight = "bold".to_string();
+        config.editor.cursor_style = "block-outline".to_string();
+        config.editor.cursor_blinking = "solid".to_string();
+        config.editor.render_whitespace = "all".to_string();
+        config.editor.render_line_highlight = "gutter".to_string();
+        config.editor.scroll_beyond_last_line = true;
+        config.editor.smooth_scrolling = false;
+        config.editor.semantic_highlighting = false;
+        config.editor.bracket_pair_colorization = false;
+
+        let restored: GlobalConfig = serde_json::from_value(
+            serde_json::to_value(config).expect("editor config should serialize"),
+        )
+        .expect("editor config should deserialize");
+
+        assert_eq!(restored.editor.font_weight, "bold");
+        assert_eq!(restored.editor.cursor_style, "block-outline");
+        assert_eq!(restored.editor.cursor_blinking, "solid");
+        assert_eq!(restored.editor.render_whitespace, "all");
+        assert_eq!(restored.editor.render_line_highlight, "gutter");
+        assert!(restored.editor.scroll_beyond_last_line);
+        assert!(!restored.editor.smooth_scrolling);
+        assert!(!restored.editor.semantic_highlighting);
+        assert!(!restored.editor.bracket_pair_colorization);
     }
 
     #[test]

@@ -17,23 +17,23 @@ Open projects over SSH or in containers so files, search, terminal, and agents a
 
 ## 完整功能清单 / Everything included
 
-- 保存、列出、测试和删除 SSH 连接配置
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 保存、列出、测试和删除 SSH 连接配置
   - Save, list, test, and delete SSH connection profiles
-- 使用密码、私钥、证书、SSH Config Host 与跳板机连接
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 使用密码、私钥、证书、SSH Config Host 与跳板机连接
   - Connect with passwords, private keys, certificates, SSH config hosts, and jump hosts
-- 发现远程 Docker 容器并把容器作为工作环境
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发现远程 Docker 容器并把容器作为工作环境
   - Discover remote Docker containers and use a container as the work environment
-- 打开、关闭和移除远程工作区，并读取服务器信息
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 打开、关闭和移除远程工作区，并读取服务器信息
   - Open, close, and remove remote workspaces, and inspect server information
-- 浏览、读取、写入、创建、重命名和删除远程文件与目录
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `LS` / `Read` / `Write` / `Edit` / `Delete` / `Glob` / `Grep` / `ExecCommand` · 浏览、读取、写入、创建、重命名和删除远程文件与目录
   - Browse, read, write, create, rename, and remove remote files and directories
-- 上传本地文件、下载远程文件并取消进行中的传输
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 上传本地文件、下载远程文件并取消进行中的传输
   - Upload local files, download remote files, and cancel active transfers
-- 在目标主机执行命令，让终端、搜索和 Agent 使用远程数据面
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ExecCommand` / `WriteStdin` / `ExecControl` · 在目标主机执行命令，让终端、搜索和 Agent 使用远程数据面
   - Execute commands on the target so terminals, search, and agents use the remote data plane
-- 发现远程监听端口并启动、查看或停止端口转发
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `PortForward` · 发现远程监听端口并启动、查看或停止端口转发
   - Discover remote listening ports and start, inspect, or stop port forwarding
-- 查看连接状态并断开单个或全部 SSH 会话
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看连接状态并断开单个或全部 SSH 会话
   - Inspect connection status and disconnect one or all SSH sessions
 
 ## 怎么用 / How to use it

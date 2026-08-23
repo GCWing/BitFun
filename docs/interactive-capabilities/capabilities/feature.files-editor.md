@@ -17,22 +17,28 @@ Browse, search, and edit project files while inspecting diffs, language-aware ed
 
 ## 完整功能清单 / Everything included
 
-- 浏览文件树并创建、重命名、删除或在系统中显示文件和目录
-  - Browse the file tree and create, rename, delete, or reveal files and directories
-- 建立或重建索引，按文件名和全文内容流式搜索
-  - Build or rebuild an index and stream filename and full-text search results
-- 读取、编辑、保存文件并同步编辑器状态
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `LS` / `Read` / `Write` / `Edit` / `Delete` / `ExecCommand` · 浏览、创建、读取、编辑、重命名和删除文件与目录
+  - Browse, create, read, edit, rename, and delete files and directories
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在系统文件管理器中显示文件或目录
+  - Reveal a file or directory in the operating-system file manager
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Glob` / `Grep` · 按文件名模式和全文内容搜索当前工作区
+  - Search the active workspace by filename pattern and full-text content
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 建立或重建界面搜索索引
+  - Build or rebuild the UI search index
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Read` / `Write` / `Edit` · 读取、编辑、保存文件并同步编辑器状态
   - Read, edit, and save files while synchronizing editor state
-- 查看修改文件、会话、轮次和单次操作的差异与统计
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `GetFileDiff` · 查看修改文件、会话、轮次和单次操作的差异与统计
   - Inspect diffs and statistics by file, session, turn, or operation
-- 按文件、操作或整个会话接受或拒绝 Agent 改动
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按文件、操作或整个会话接受或拒绝 Agent 改动
   - Accept or reject agent changes by file, operation, or whole session
-- 查看文件变更历史和快照，并回滚整个会话或指定轮次
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看文件变更历史和快照，并回滚整个会话或指定轮次
   - Review file history and snapshots, then roll back a session or selected turn
-- 仅在当前语言提供器实际支持时显示格式化、定义与类型跳转、引用、重命名、快速修复和符号导航
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 仅在当前语言提供器实际支持时显示格式化、定义与类型跳转、引用、重命名、快速修复和符号导航
   - Show formatting, definition and type navigation, references, rename, quick fixes, and symbol navigation only when supported by the active language provider
-- 粘贴、拖放或上传文件与图片作为会话上下文
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 粘贴、拖放或上传文件与图片作为会话上下文
   - Paste, drop, or upload files and images as session context
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `view_image` / `analyze_image` · 查看并分析工作区或会话中的图片
+  - View and analyze images from the workspace or session context
 
 ## 怎么用 / How to use it
 

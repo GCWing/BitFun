@@ -17,27 +17,31 @@ Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer
 
 ## 完整功能清单 / Everything included
 
-- 选择询问、自动批准或完全访问权限模式，并确认高风险警告
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择询问、自动批准或完全访问权限模式，并确认高风险警告
   - Choose Ask, Auto-approve, or Full Access permission mode and acknowledge high-risk warnings
-- 控制权限模式选择器是否显示在聊天输入框下方
+- **Agent 可直接控制 / Direct Agent control** · 控制权限模式选择器是否显示在聊天输入框下方
   - Choose whether the permission-mode selector appears below the chat composer
-- 创建、排序和保存全局或项目级 Allow、Ask、Deny 规则
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 创建、排序和保存全局或项目级 Allow、Ask、Deny 规则
   - Create, reorder, and save global or project-level Allow, Ask, and Deny rules
-- 查看、撤销或清空项目中记住的权限授权与审计记录
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看、撤销或清空项目中记住的权限授权与审计记录
   - Review, revoke, or clear remembered project permission grants and audit records
-- 按需延迟加载大型工具定义以减少 Agent 初始上下文
+- **Agent 可直接控制 / Direct Agent control** · 按需延迟加载大型工具定义以减少 Agent 初始上下文
   - Load large tool definitions on demand to reduce initial agent context
-- 设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略
+- **Agent 可直接控制 / Direct Agent control** · 设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略
   - Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy
-- 设置权限确认等待和单次工具执行超时
-  - Set permission-confirmation and per-tool execution timeouts
-- 设置 Deep Review 最大并行评审者和队列等待时间
+- **Agent 可直接控制 / Direct Agent control** · 设置或取消单次工具执行超时
+  - Set or disable the per-tool execution timeout
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 设置 Deep Review 最大并行评审者和队列等待时间
   - Set the maximum parallel Deep Review workers and queue wait time
-- 启用 Computer Use 并查看辅助功能与屏幕录制权限
-  - Enable Computer Use and inspect accessibility and screen-recording permissions
-- 选择浏览器、配置默认 CDP 并控制启动时自动连接
-  - Choose a browser, configure default CDP, and control automatic connection at startup
-- 控制是否在安全边界内修复模型生成的非法工具参数 JSON
+- **Agent 可直接控制 / Direct Agent control** · 启用或停用已获系统授权的 Computer Use
+  - Enable or disable Computer Use after operating-system authorization
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并请求辅助功能与屏幕录制权限
+  - Inspect and request accessibility and screen-recording permissions
+- **Agent 可直接控制 / Direct Agent control** · 控制 BitFun 启动时是否自动连接浏览器
+  - Choose whether BitFun reconnects browser control at startup
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发现并选择浏览器、配置默认 CDP 或按需重启
+  - Discover and choose a browser, configure default CDP, or restart it when needed
+- **Agent 可直接控制 / Direct Agent control** · 控制是否在安全边界内修复模型生成的非法工具参数 JSON
   - Choose whether malformed model-generated tool-argument JSON may be repaired within safety boundaries
 
 ## 怎么用 / How to use it
@@ -61,11 +65,12 @@ Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
+| 显示权限模式选择器 / Show permission-mode selector | `boolean` | 在聊天输入框下方显示或隐藏权限模式快捷选择器。 | Show or hide the permission-mode shortcut below the chat composer. |
 | 延迟加载工具 / Deferred tool loading | `boolean` | 按需加载大型工具定义，减少 Agent 初始上下文。 | Load large tool definitions on demand to reduce initial agent context. |
 | 子 Agent 批量执行策略 / Subagent batch policy | `safe_only` / `force_parallel` / `serial` | 选择仅安全任务并行、强制并行或串行执行。 | Choose safe-only parallelism, forced parallelism, or serial execution. |
 | 子 Agent 最大并发 / Maximum subagent concurrency | `integer` (1–32) | 限制同时运行的子 Agent 数量。 | Limit the number of subagents that may run at once. |
 | Swarm 最大并发 / Maximum swarm concurrency | `integer` (1–64) | 限制 Swarm 中同时执行的工作单元。 | Limit concurrent work units inside a swarm. |
-| 工具执行超时 / Tool execution timeout | `integer` (1–86400) | 单次工具调用的超时秒数。 | Timeout in seconds for one tool call. |
+| 工具执行超时 / Tool execution timeout | `integer` (1–86400) / `null` | 单次工具调用的超时秒数。 | Timeout in seconds for one tool call. |
 | Computer Use 桌面控制 / Computer Use | `boolean` | 允许 Agent 使用已授权的桌面控制能力。 | Allow agents to use authorized desktop-control capabilities. |
 | 启动时连接浏览器 / Connect browser on startup | `boolean` | BitFun 启动后自动尝试连接浏览器控制。 | Automatically try to connect browser control after BitFun starts. |
 | 工具参数 JSON 修复 / Tool-argument JSON repair | `boolean` | 允许在安全边界内修复模型生成的轻微 JSON 格式错误。 | Allow minor model-generated JSON formatting errors to be repaired within the safety boundary. |

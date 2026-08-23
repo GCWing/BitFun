@@ -17,21 +17,21 @@ Dispatch durable work to another BitFun host; the controller may disconnect whil
 
 ## 完整功能清单 / Everything included
 
-- 列出可派发目标并探测版本、连接和运行能力
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 列出可派发目标并探测版本、连接和运行能力
   - List dispatch targets and probe their version, connectivity, and runtime capabilities
-- 为目标主机配置运行环境并安装或更新 BitFun CLI
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为目标主机配置运行环境并安装或更新 BitFun CLI
   - Provision the target runtime and install or update the BitFun CLI
-- 在提交任务前同步目标所需的模型配置
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在提交任务前同步目标所需的模型配置
   - Synchronize required model configuration before submitting a job
-- 把包含工作区、会话、模型和权限策略的持久任务提交到目标
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 把包含工作区、会话、模型和权限策略的持久任务提交到目标
   - Submit a durable job with workspace, session, model, and permission policy to the target
-- 列出派发任务并查询运行状态、结果和错误
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 列出派发任务并查询运行状态、结果和错误
   - List dispatched jobs and query their status, result, and errors
-- 保存、追加和重新加载可断线恢复的执行记录
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 保存、追加和重新加载可断线恢复的执行记录
   - Save, append, and reload reconnectable execution transcripts
-- 远程回答权限请求，并继续或取消目标端任务
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 远程回答权限请求，并继续或取消目标端任务
   - Answer permission requests remotely and continue or cancel target-side work
-- 将目标端结果同步回控制端，而不把控制端当作远程文件系统代理
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 将目标端结果同步回控制端，而不把控制端当作远程文件系统代理
   - Synchronize target-side results back without treating the controller as a remote-filesystem proxy
 
 ## 怎么用 / How to use it

@@ -17,20 +17,20 @@ Review changes and pull-request context, inspect CI logs, generate commit messag
 
 ## 完整功能清单 / Everything included
 
-- 读取仓库、分支、工作区快照和评审目标
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ReviewPlatform` · 读取仓库、分支、工作区快照和评审目标
   - Load repository, branch, workspace snapshot, and review-target context
-- 查看 Pull Request 详情、分页内容与关联改动
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ReviewPlatform` · 查看 Pull Request 详情、分页内容与关联改动
   - Inspect pull-request details, paged content, and related changes
-- 读取 Pull Request 的 CI 运行日志
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ReviewPlatform` · 读取 Pull Request 的 CI 运行日志
   - Read CI run logs for a pull request
-- 读取关联 Issue 的标题、描述与上下文
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 读取关联 Issue 的标题、描述与上下文
   - Read the title, body, and context of linked issues
-- 保存或清除评审平台访问令牌
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ReviewPlatform` · 保存或清除评审平台访问令牌
   - Store or clear review-platform access tokens
-- 预览、生成或快速采用提交信息
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 预览、生成或快速采用提交信息
   - Preview, generate, or quickly apply a commit message
-- 针对工作区、提交或 PR 发起 Deep Review 并控制评审队列
-  - Run Deep Review against a workspace, commit, or pull request and control its queue
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `LaunchReviewAgent` / `submit_code_review` · 针对工作区、提交或 PR 发起 Deep Review 并汇总结构化评审
+  - Run Deep Review against a workspace, commit, or pull request and consolidate a structured review
 
 ## 怎么用 / How to use it
 

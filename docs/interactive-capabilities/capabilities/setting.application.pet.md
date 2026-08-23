@@ -17,17 +17,17 @@ Enable the agent companion, choose where it appears, and manage the active chara
 
 ## 完整功能清单 / Everything included
 
-- 整体启用或停用 Agent 伙伴
+- **Agent 可直接控制 / Direct Agent control** · 整体启用或停用 Agent 伙伴
   - Enable or disable the agent companion
-- 控制伙伴是否显示在聊天输入框旁
+- **Agent 可直接控制 / Direct Agent control** · 控制伙伴是否显示在聊天输入框旁
   - Choose whether the companion appears beside the chat composer
-- 控制伙伴是否显示为独立桌面窗口
+- **Agent 可直接控制 / Direct Agent control** · 控制伙伴是否显示为独立桌面窗口
   - Choose whether the companion appears as a standalone desktop window
-- 从内置与已导入角色中选择当前伙伴
+- **Agent 可直接控制 / Direct Agent control** · 从内置与已导入角色中选择当前伙伴
   - Choose the active companion from built-in and imported characters
-- 导入本地 Petdex 角色包
+- **Agent 可直接控制 / Direct Agent control** · 导入本地 Petdex 角色包
   - Import a local Petdex character package
-- 刷新角色列表并删除不再需要的导入包
+- **Agent 可直接控制 / Direct Agent control** · 刷新角色列表并删除不再需要的导入包
   - Refresh the character list and delete imported packages you no longer need
 
 ## 怎么用 / How to use it
@@ -45,7 +45,9 @@ Enable the agent companion, choose where it appears, and manage the active chara
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 列出可用萌宠 / List available pets | 读取当前角色以及 BitFun 已导入的 Petdex 角色。 | Read the active character and Petdex characters imported into BitFun. |
+| 使用指定萌宠 / Use a pet | 按本地 Petdex 目录或压缩包路径导入并选中角色，或按已导入角色 ID 直接选中。 | Import and select a local Petdex directory/archive, or select an already imported character by ID. |
+| 删除已导入萌宠 / Delete an imported pet | 按角色 ID 或 BitFun 包目录删除已导入角色；若正在使用则安全回退到默认角色。 | Delete an imported character by ID or BitFun package path, safely falling back when it is active. |
 
 ## 可配置选项 / Configurable options
 
@@ -58,8 +60,8 @@ Enable the agent companion, choose where it appears, and manage the active chara
 
 - “关闭桌面伙伴”
   - “Turn off the desktop companion”
-- “把 Agent 伙伴放到输入框里”
-  - “Put the agent companion in the composer”
+- “让 BitFun 使用 /path/to/pet 里的萌宠”
+  - “Make BitFun use the pet at /path/to/pet”
 
 Agent 会先查找相关功能或设置，确认目标后再替你打开、执行或修改。完整能力目录不会预先塞进对话上下文。
 

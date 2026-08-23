@@ -17,21 +17,21 @@ Customize post-coding quick actions and configure hooks that run on agent lifecy
 
 ## 完整功能清单 / Everything included
 
-- 启用和调整内置的提交与创建 Pull Request 快捷操作
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启用和调整内置的提交与创建 Pull Request 快捷操作
   - Enable and tune the built-in Commit and Create Pull Request quick actions
-- 添加、编辑和删除自定义编码后快捷操作及 Prompt
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 添加、编辑和删除自定义编码后快捷操作及 Prompt
   - Add, edit, and delete custom post-coding quick actions and prompts
-- 整体启用或停用 Agent 生命周期 Hooks
+- **Agent 可直接控制 / Direct Agent control** · 整体启用或停用 Agent 生命周期 Hooks
   - Enable or disable agent lifecycle hooks globally
-- 对可信仓库单独启用项目级 .bitfun/config/hooks.json
+- **Agent 可直接控制 / Direct Agent control** · 对可信仓库单独启用项目级 .bitfun/config/hooks.json
   - Enable project-level .bitfun/config/hooks.json separately for trusted repositories
-- 定位用户级和项目级 Hooks 配置文件并在修改后即时生效
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Glob` / `Read` / `Edit` · 定位用户级和项目级 Hooks 配置文件并在修改后即时生效
   - Locate user and project hook configuration files and apply edits without restarting
-- 在会话、Agent、工具、权限和用户输入等 Codex Hook 事件上运行处理器
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在会话、Agent、工具、权限和用户输入等 Codex Hook 事件上运行处理器
   - Run handlers on Codex hook events for sessions, agents, tools, permissions, and user input
-- 查看外部 AI 应用的只读 Hook 目录并选择导入项
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看外部 AI 应用的只读 Hook 目录并选择导入项
   - Inspect read-only external-AI hook catalogs and choose entries to import
-- 预览、修改和应用 Hook 导入计划，并保留冲突诊断
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 预览、修改和应用 Hook 导入计划，并保留冲突诊断
   - Preview, edit, and apply hook import plans while retaining conflict diagnostics
 
 ## 怎么用 / How to use it

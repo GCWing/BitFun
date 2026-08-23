@@ -17,19 +17,19 @@ Record speech in the chat composer and transcribe it to text, with control over 
 
 ## 完整功能清单 / Everything included
 
-- 从聊天输入框开始、结束或取消一次录音
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 从聊天输入框开始、结束或取消一次录音
   - Start, finish, or cancel a recording from the chat composer
-- 录音过程中分块传输音频并显示识别进度
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 录音过程中分块传输音频并显示识别进度
   - Stream audio chunks during recording and show recognition progress
-- 查看本地语音模型及安装、下载、验证、修复和删除状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看本地语音模型及安装、下载、验证、修复和删除状态
   - Browse local speech models and their install, download, verify, repair, and delete states
-- 取消正在进行的语音模型下载
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 取消正在进行的语音模型下载
   - Cancel an in-progress speech-model download
-- 选择自动检测或指定识别语言，并选择系统麦克风
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择自动检测或指定识别语言，并选择系统麦克风
   - Use automatic language detection or choose a language and system microphone
-- 在设置页进行麦克风与语音识别测试并查看耗时和错误
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在设置页进行麦克风与语音识别测试并查看耗时和错误
   - Test the microphone and speech recognition in Settings, including timing and errors
-- 把转写结果放回输入框，在发送前继续编辑
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 把转写结果放回输入框，在发送前继续编辑
   - Return the transcript to the composer for editing before sending
 
 ## 怎么用 / How to use it

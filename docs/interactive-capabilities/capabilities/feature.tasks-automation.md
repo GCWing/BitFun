@@ -17,19 +17,19 @@ Track work in one task board and let scheduled jobs run at a chosen time or host
 
 ## 完整功能清单 / Everything included
 
-- 按待处理、日历和已停用视图浏览任务
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按待处理、日历和已停用视图浏览任务
   - Browse tasks in Pending, Calendar, and Inactive views
-- 创建、编辑、启用、停用和删除定时任务
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Cron` · 创建、编辑、启用、停用和删除定时任务
   - Create, edit, enable, disable, and delete scheduled jobs
-- 设置一次性、每日、每周或自定义 Cron 时间表
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `GetTime` / `Cron` · 设置一次性、每日、每周或自定义 Cron 时间表
   - Choose one-time, daily, weekly, or custom cron schedules
-- 在日历中预览任务的下一次与后续运行时间
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在日历中预览任务的下一次与后续运行时间
   - Preview the next and future job occurrences on a calendar
-- 为任务选择 Agent、模型、工作模式和工作区
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为任务选择 Agent、模型、工作模式和工作区
   - Choose the agent, model, work mode, and workspace for a job
-- 把任务安排在当前主机或已连接的远程目标上运行
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 把任务安排在当前主机或已连接的远程目标上运行
   - Schedule jobs to run on the current host or a connected remote target
-- 查看任务列表并等待桌面 Host 就绪后可靠执行
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看任务列表并等待桌面 Host 就绪后可靠执行
   - List jobs and wait for desktop-host readiness before reliable execution
 
 ## 怎么用 / How to use it

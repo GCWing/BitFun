@@ -17,19 +17,21 @@ Display and save visualizations, interactive pages, and structured artifacts gen
 
 ## 完整功能清单 / Everything included
 
-- 从会话工具结果加载并打开持久化 Canvas 产物
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 从会话工具结果加载并打开持久化 Canvas 产物
   - Load and open persistent Canvas artifacts from session tool results
-- 渲染 HTML 或 React 交互界面、图表和可视化
-  - Render HTML or React interfaces, charts, and interactive visualizations
-- 在重新打开或刷新 Canvas 时加载和保存交互状态
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `CreateCanvas` / `ReadCanvas` / `PatchCanvas` / `UpdateCanvas` · 渲染并持续编辑 HTML 或 React 交互界面、图表和可视化
+  - Render and iteratively edit HTML or React interfaces, charts, and interactive visualizations
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `GenerativeUI` · 在会话中生成紧凑的 HTML/SVG 图表、说明器或交互组件
+  - Generate compact HTML/SVG charts, explainers, or interactive widgets inline in a session
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在重新打开或刷新 Canvas 时加载和保存交互状态
   - Load and save interactive state when a Canvas is reopened or refreshed
-- 查看 Canvas 源码、编译版本和最后可用版本
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ReadCanvas` · 查看 Canvas 源码、编译版本和最后可用版本
   - Inspect Canvas source, compiled revisions, and the last known good revision
-- 选择 Canvas 内的元素并把元素引用加入会话上下文
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择 Canvas 内的元素并把元素引用加入会话上下文
   - Select an element inside Canvas and add its reference to session context
-- 捕获运行错误、上报诊断并请求 Agent 自动修复
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 捕获运行错误、上报诊断并请求 Agent 自动修复
   - Capture runtime errors, report diagnostics, and ask the agent to repair them
-- 把当前 Canvas 导出为可独立打开的 HTML 文件
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 把当前 Canvas 导出为可独立打开的 HTML 文件
   - Export the current Canvas as a standalone HTML file
 
 ## 怎么用 / How to use it

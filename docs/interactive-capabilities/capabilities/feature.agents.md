@@ -17,20 +17,20 @@ Manage built-in, custom, and subagents so specialized roles can handle research,
 
 ## 完整功能清单 / Everything included
 
-- 查看内置、用户、项目与当前环境可见的 Agent
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看内置、用户、项目与当前环境可见的 Agent
   - Browse built-in, user, project, and currently visible agents
-- 创建自定义 Agent 并设置名称、说明和角色
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 创建自定义 Agent 并设置名称、说明和角色
   - Create custom agents with a name, description, and role
-- 读取、编辑、重新加载或删除自定义 Agent
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 读取、编辑、重新加载或删除自定义 Agent
   - Inspect, edit, reload, or delete custom agents
-- 创建、配置、查看和删除可委派的子 Agent
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 创建、配置、查看和删除可委派的子 Agent
   - Create, configure, inspect, and delete delegatable subagents
-- 查看每个 Agent 的工具、Skills、只读状态和能力摘要
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看每个 Agent 的工具、Skills、只读状态和能力摘要
   - Inspect each agent's tools, Skills, read-only state, and capability summary
-- 按 Agent 选择工具组、单个工具、Skill 组与 Skills
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按 Agent 选择工具组、单个工具、Skill 组与 Skills
   - Choose tool groups, individual tools, skill groups, and Skills per agent
-- 让主 Agent 委派并行研究、编码和评审任务并设置超时
-  - Let the primary agent delegate parallel research, coding, and review work with timeouts
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Task` / `AgentSpawn` / `AgentWait` / `AgentSendInput` / `AgentInterrupt` / `AgentList` / `AgentDelete` · 让主 Agent 委派并行研究、编码和评审任务并协调生命周期
+  - Let the primary agent delegate parallel research, coding, and review work and coordinate their lifecycle
 
 ## 怎么用 / How to use it
 

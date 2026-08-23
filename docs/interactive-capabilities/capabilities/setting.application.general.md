@@ -17,19 +17,19 @@ Manage app-level preferences for startup, updates, close behavior, notifications
 
 ## 完整功能清单 / Everything included
 
-- 启用或停用自动检查更新
+- **Agent 可直接控制 / Direct Agent control** · 启用或停用自动检查更新
   - Enable or disable automatic update checks
-- 手动检查、下载并安装可用更新，然后按需重启
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 手动检查、下载并安装可用更新，然后按需重启
   - Check for, download, and install an available update manually, then restart when needed
-- 控制 BitFun 是否在登录系统后自动启动
+- **Agent 可直接控制 / Direct Agent control** · 控制 BitFun 是否在登录系统后自动启动
   - Choose whether BitFun launches automatically after system sign-in
-- 在长任务运行时阻止电脑自动睡眠
-  - Prevent the computer from sleeping while long-running work is active
-- 选择关闭主窗口时退出、最小化到托盘或每次询问
+- **Agent 可直接控制 / Direct Agent control** · 控制 BitFun 运行期间是否阻止电脑自动睡眠
+  - Choose whether BitFun prevents the computer from sleeping while it runs
+- **Agent 可直接控制 / Direct Agent control** · 选择关闭主窗口时退出、最小化到托盘或每次询问
   - Choose whether closing the main window quits, minimizes to tray, or asks each time
-- 分别控制任务完成、权限请求和启动提示通知
+- **Agent 可直接控制 / Direct Agent control** · 分别控制任务完成、权限请求和启动提示通知
   - Control completion, permission-request, and startup-tip notifications independently
-- 查看、标记已读、忽略或永久隐藏产品公告与提示
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看、标记已读、忽略或永久隐藏产品公告与提示
   - Review, mark seen, dismiss, or permanently hide product announcements and tips
 
 ## 怎么用 / How to use it
@@ -53,6 +53,8 @@ Manage app-level preferences for startup, updates, close behavior, notifications
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
+| 登录后自动启动 / Launch at login | `boolean` | 在当前桌面系统登录后自动启动 BitFun。 | Launch BitFun automatically after signing in to this desktop system. |
+| 阻止系统睡眠 / Prevent system sleep | `boolean` | 在 BitFun 运行期间持有本机睡眠抑制器。 | Hold a local sleep inhibitor while BitFun is running. |
 | 自动检查更新 / Automatic updates | `boolean` | 启动后自动检查可用更新。 | Check for available updates automatically after startup. |
 | 关闭按钮行为 / Close button behavior | `ask` / `minimize_to_tray` / `quit` | 选择退出应用或最小化到托盘。 | Choose whether closing quits the app or minimizes it to the tray. |
 | 任务完成通知 / Completion notifications | `boolean` | 会话任务完成时发送系统通知。 | Send an OS notification when session work completes. |

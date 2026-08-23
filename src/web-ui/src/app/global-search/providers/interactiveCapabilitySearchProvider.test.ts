@@ -99,4 +99,32 @@ describe('interactiveCapabilitySearchProvider', () => {
         .not.toBe('feature.agents');
     }
   });
+
+  it('satisfies the shared cross-surface search acceptance corpus', async () => {
+    for (const acceptance of INTERACTIVE_CAPABILITY_CATALOG.searchAcceptance) {
+      const result = await interactiveCapabilitySearchProvider.search(
+        request(acceptance.query),
+        new AbortController().signal,
+      );
+      const ranked = [...result.items].sort((left, right) => right.score - left.score);
+      expect(
+        ranked[0]?.target.kind === 'capability' ? ranked[0].target.capabilityId : undefined,
+        acceptance.id,
+      ).toBe(acceptance.expectedFirstCapabilityId);
+      const capabilityIds = new Set(result.items.flatMap((item) =>
+        item.target.kind === 'capability' ? [item.target.capabilityId] : []));
+      for (const capabilityId of acceptance.expectedCapabilityIds) {
+        expect(capabilityIds.has(capabilityId), `${acceptance.id} missed ${capabilityId}`).toBe(true);
+      }
+      if (acceptance.expectedItem) {
+        const match = result.items.find((item) => item.target.kind === 'capability'
+          && item.target.capabilityId === acceptance.expectedItem?.capabilityId);
+        expect(match?.target, `${acceptance.id} item route`).toEqual({
+          kind: 'capability',
+          capabilityId: acceptance.expectedItem.capabilityId,
+          itemId: acceptance.expectedItem.itemId,
+        });
+      }
+    }
+  });
 });

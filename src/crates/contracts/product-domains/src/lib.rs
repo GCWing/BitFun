@@ -1,4 +1,4 @@
-﻿//! Product domain owner crate.
+//! Product domain owner crate.
 //!
 //! Product subdomains live here when they can be compiled without depending on
 //! the full BitFun core runtime assembly.
@@ -8,6 +8,7 @@ pub mod agent_catalog;
 pub mod canvas;
 pub mod mcp;
 pub mod native_hooks;
+pub mod product_control;
 pub mod product_search;
 pub mod tool_permissions;
 

@@ -17,21 +17,23 @@ Control whether BitFun extracts and uses long-term memory from sessions, includi
 
 ## 完整功能清单 / Everything included
 
-- 分别控制长期记忆生成与会话召回，也可一键同时启用
-  - Control long-term memory generation and recall independently or enable both together
-- 决定 BTW 轻量会话是否参与记忆生成
+- **Agent 可直接控制 / Direct Agent control** · 一键同时启用或停用长期记忆生成与会话召回
+  - Enable or disable long-term memory generation and session recall together
+- **Agent 可直接控制 / Direct Agent control** · 决定 BTW 轻量会话是否参与记忆生成
   - Choose whether lightweight BTW sessions contribute memories
-- 存在外部工具上下文时选择清除工具结果、允许或跳过会话
+- **Agent 可直接控制 / Direct Agent control** · 存在外部工具上下文时选择清除工具结果、允许或跳过会话
   - When external tool context exists, clear tool results, allow it, or skip the session
-- 设置空闲时长、最大年龄、启动处理上限和扫描上限
+- **Agent 可直接控制 / Direct Agent control** · 设置空闲时长、最大年龄、启动处理上限和扫描上限
   - Set idle time, maximum age, startup rollout limit, and scan limit
-- 选择记忆提取模型、并发数和单次原始候选上限
-  - Choose the extraction model, concurrency, and raw-candidate limit
-- 设置未使用记忆的最长保留天数
+- **Agent 可直接控制 / Direct Agent control** · 设置记忆提取并发数和单次原始候选上限
+  - Set memory-extraction concurrency and the raw-candidate limit
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 从当前可用模型中选择记忆提取模型或跟随主模型
+  - Choose the memory-extraction model from currently available models or follow the primary model
+- **Agent 可直接控制 / Direct Agent control** · 设置未使用记忆的最长保留天数
   - Set how long unused memories are retained
-- 选择记忆整理模型并让它跟随主模型或提取模型
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择记忆整理模型并让它跟随主模型或提取模型
   - Choose the consolidation model or make it follow the primary or extraction model
-- 打开记忆目录、恢复默认设置或显式清空全部记忆
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 打开记忆目录、恢复默认设置或显式清空全部记忆
   - Open the memory directory, restore defaults, or explicitly erase all memories
 
 ## 怎么用 / How to use it
@@ -58,7 +60,13 @@ Control whether BitFun extracts and uses long-term memory from sessions, includi
 | 启用记忆 / Enable memory | `boolean` | 同时启用记忆生成和召回。 | Enable both memory generation and recall. |
 | BTW 会话生成记忆 / Generate memory from BTW sessions | `boolean` | 允许轻量 BTW 会话参与记忆提取。 | Allow lightweight BTW sessions to contribute memories. |
 | 外部上下文策略 / External context policy | `clear_tool_results` / `allow` / `skip_session` | 决定存在外部工具上下文时如何生成记忆。 | Choose how memory generation handles external tool context. |
-| 每次启动整理上限 / Startup rollout limit | `integer` (0–100) | 每次启动最多处理的待整理记忆批次。 | Maximum pending memory rollouts processed after startup. |
+| 提取前最短空闲时长 / Minimum rollout idle time | `integer` (1–48) | 会话空闲达到该小时数后才进入记忆提取候选。 | Require a session to remain idle for this many hours before extraction. |
+| 会话最大候选年龄 / Maximum rollout age | `integer` (0–90) | 只从该天数以内的会话提取记忆。 | Extract memory only from sessions no older than this many days. |
+| 每次启动整理上限 / Startup rollout limit | `integer` (1–128) | 每次启动最多处理的待整理记忆批次。 | Maximum pending memory rollouts processed after startup. |
+| 每次启动扫描上限 / Startup rollout scan limit | `integer` (1–50000) | 每次启动寻找记忆候选时最多扫描的会话数。 | Maximum sessions scanned for memory candidates after startup. |
+| 记忆提取并发数 / Memory extraction concurrency | `integer` (1–16) | 限制同时运行的第一阶段记忆提取任务。 | Limit concurrent phase-one memory extraction jobs. |
+| 原始记忆候选上限 / Raw memory candidate limit | `integer` (1–4096) | 限制进入整理阶段的第一阶段候选数量。 | Limit phase-one candidates passed to consolidation. |
+| 未使用记忆保留天数 / Unused-memory retention | `integer` (0–365) | 设置未被使用的原始记忆最多保留多少天。 | Set how many days unused raw memories are retained. |
 
 ## 可以直接对 Agent 说 / Try saying
 

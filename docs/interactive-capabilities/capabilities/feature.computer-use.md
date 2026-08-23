@@ -17,19 +17,19 @@ Allow agents to operate a browser or local UI while explicitly managing accessib
 
 ## 完整功能清单 / Everything included
 
-- 检查 Computer Use 可用性、辅助功能和屏幕录制授权状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 检查 Computer Use 可用性、辅助功能和屏幕录制授权状态
   - Check Computer Use availability plus accessibility and screen-recording permission status
-- 请求桌面控制所需的系统权限
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 请求桌面控制所需的系统权限
   - Request the operating-system permissions required for desktop control
-- 直接打开对应的系统隐私与安全设置
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 直接打开对应的系统隐私与安全设置
   - Open the matching operating-system privacy and security settings
-- 发现受支持的浏览器并查看当前 CDP 连接状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发现受支持的浏览器并查看当前 CDP 连接状态
   - Discover supported browsers and inspect the current CDP connection state
-- 启动浏览器控制或连接已经开放 CDP 的浏览器
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启动浏览器控制或连接已经开放 CDP 的浏览器
   - Launch browser control or connect to a browser that already exposes CDP
-- 启用默认 CDP 配置并按需要重启浏览器
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启用默认 CDP 配置并按需要重启浏览器
   - Enable the default CDP setup and restart the browser when required
-- 授权后让 Agent 截图、点击、输入、滚动并读取可见界面
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ComputerUse` · 授权后让 Agent 截图、点击、输入、滚动并读取可见界面
   - After authorization, let agents capture, click, type, scroll, and inspect the visible interface
 
 ## 怎么用 / How to use it

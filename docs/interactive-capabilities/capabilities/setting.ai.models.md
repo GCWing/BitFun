@@ -17,25 +17,27 @@ Add AI providers and models, choose defaults, and configure proxy, subscription,
 
 ## 完整功能清单 / Everything included
 
-- 添加、编辑和删除内置或自定义 AI 供应商
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 添加、编辑和删除内置或自定义 AI 供应商
   - Add, edit, and remove built-in or custom AI providers
-- 配置 API Key、Base URL、请求格式和模型列表
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 配置 API Key、Base URL、请求格式和模型列表
   - Configure API keys, base URLs, request formats, and model lists
-- 登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户
   - Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, and other subscription accounts
-- 选择主模型、快速模型以及图像理解、图像生成和语音识别模型
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择主模型、快速模型以及图像理解、图像生成和语音识别模型
   - Choose primary, fast, image-understanding, image-generation, and speech-recognition models
-- 为模型选择推理预设或自定义推理强度
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为模型选择推理预设或自定义推理强度
   - Choose reasoning presets or a custom reasoning effort per model
-- 配置 AI 请求使用的网络代理与绕过规则
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 配置 AI 请求使用的网络代理与绕过规则
   - Configure network proxies and bypass rules for AI requests
-- 设置首 Token 等待和流式空闲超时
-  - Set time-to-first-token and streaming idle timeouts
-- 查看 models.dev 目录状态、手动刷新并定位本地缓存
+- **Agent 可直接控制 / Direct Agent control** · 设置或取消首 Token 等待和流式空闲超时
+  - Set or disable time-to-first-token and streaming idle timeouts
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ListModels` · 让 Agent 查看当前配置下可用的模型
+  - Let an agent inspect models available under the current configuration
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看 models.dev 目录状态、手动刷新并定位本地缓存
   - Inspect models.dev catalog status, refresh it manually, and reveal its local cache
-- 为供应商添加自定义 Header、请求体字段与 SSL 行为
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为供应商添加自定义 Header、请求体字段与 SSL 行为
   - Add custom headers, request-body fields, and SSL behavior per provider
-- 保存前测试供应商或模型连接并刷新运行时客户端
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 保存前测试供应商或模型连接并刷新运行时客户端
   - Test provider or model connectivity before saving and refresh the runtime client
 
 ## 怎么用 / How to use it
@@ -59,7 +61,8 @@ Add AI providers and models, choose defaults, and configure proxy, subscription,
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
-| 在界面中配置 / Configure in the UI | — | 此页面的设置在对应界面中完成。 | Configure this page in its matching UI. |
+| 首 Token 超时 / Time-to-first-token timeout | `integer` (1–86400) / `null` | 设置建立流式响应时等待首个有效 Token 的秒数；null 表示不限制。 | Set seconds to wait for the first effective streamed token; null disables the limit. |
+| 流式空闲超时 / Stream idle timeout | `integer` (1–86400) / `null` | 设置两个流式响应块之间允许空闲的秒数；null 表示不限制。 | Set seconds allowed between streamed response chunks; null disables the limit. |
 
 ## 可以直接对 Agent 说 / Try saying
 

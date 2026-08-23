@@ -17,19 +17,21 @@ Open a local directory or create a project so files, sessions, terminals, and ag
 
 ## 完整功能清单 / Everything included
 
-- 打开、关闭、切换并重新排序多个工作区
-  - Open, close, switch, and reorder multiple workspaces
-- 查看、清理和重新打开最近使用的项目
+- **Agent 可直接控制 / Direct Agent control** · 打开现有项目或进入新建项目流程
+  - Open an existing project or enter the new-project flow
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 关闭、切换并重新排序多个已打开工作区
+  - Close, switch, and reorder multiple open workspaces
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看、清理和重新打开最近使用的项目
   - Review, clean up, and reopen recently used projects
-- 扫描并维护工作区名称、信息、关联目录和 Persona 文件
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 扫描并维护工作区名称、信息、关联目录和 Persona 文件
   - Scan and maintain workspace names, metadata, related directories, and persona files
-- 监听项目文件变化并查看当前监听路径
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 监听项目文件变化并查看当前监听路径
   - Watch project file changes and inspect active watched paths
-- 按文件名、路径或文件内容搜索本地工作区
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按文件名、路径或文件内容搜索本地工作区
   - Search local workspaces by filename, path, or file content
-- 从项目流程打开 SSH 或其他远程工作区
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 从项目流程打开 SSH 或其他远程工作区
   - Open SSH and other remote workspaces from the project flow
-- 查看当前工作区、应用状态、健康状态与统计信息
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看当前工作区、应用状态、健康状态与统计信息
   - Inspect the current workspace, app state, health, and statistics
 
 ## 怎么用 / How to use it

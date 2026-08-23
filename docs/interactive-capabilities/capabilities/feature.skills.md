@@ -17,22 +17,24 @@ Install and manage reusable expert workflows for agents, and control which modes
 
 ## 完整功能清单 / Everything included
 
-- 统一查看用户级、项目级、本地和远程来源的已安装 Skills
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 统一查看用户级、项目级、本地和远程来源的已安装 Skills
   - Browse installed Skills from user, project, local, and remote sources in one catalog
-- 浏览、搜索和刷新 Skill 市场
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 浏览、搜索和刷新 Skill 市场
   - Browse, search, and refresh the Skill market
-- 把市场 Skill 下载到用户级或当前项目
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 把市场 Skill 下载到用户级或当前项目
   - Download a market Skill for the user or current project
-- 校验本地 Skill 路径并添加到用户级或项目级
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 校验本地 Skill 路径并添加到用户级或项目级
   - Validate a local Skill path and add it at user or project scope
-- 删除已安装的用户级或项目级 Skill
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 删除已安装的用户级或项目级 Skill
   - Remove an installed user-level or project-level Skill
-- 在全局范围启用或停用单个 Skill
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在全局范围启用或停用单个 Skill
   - Enable or disable an individual Skill globally
-- 按 Agent 模式选择 Skill 与 Skill 组，并可恢复默认选择
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按 Agent 模式选择 Skill 与 Skill 组，并可恢复默认选择
   - Choose Skills and skill groups per agent mode and restore defaults
-- 识别同名 Skill 的用户级与项目级遮蔽优先级
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 识别同名 Skill 的用户级与项目级遮蔽优先级
   - Understand user-versus-project shadowing precedence for same-named Skills
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Skill` · 按需加载并执行当前 Agent 可见的 Skill
+  - Load and execute a Skill visible to the current agent on demand
 
 ## 怎么用 / How to use it
 

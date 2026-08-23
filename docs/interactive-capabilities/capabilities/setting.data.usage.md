@@ -17,17 +17,17 @@ Inspect request counts, input and output tokens, cache hits, and estimated cost 
 
 ## 完整功能清单 / Everything included
 
-- 按最近 24 小时、今天、本周、本月或全部时间查看用量
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按最近 24 小时、今天、本周、本月或全部时间查看用量
   - Review usage for the last 24 hours, today, this week, this month, or all time
-- 按小时或天切换趋势粒度
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按小时或天切换趋势粒度
   - Switch trend granularity between hourly and daily views
-- 按供应商、模型或搜索关键词筛选用量
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按供应商、模型或搜索关键词筛选用量
   - Filter usage by provider, model, or search text
-- 查看请求数、总 Token、缓存 Token 与缓存命中率
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看请求数、总 Token、缓存 Token 与缓存命中率
   - View request count, total tokens, cached tokens, and cache-hit rate
-- 按模型、供应商组和请求端点比较分布
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按模型、供应商组和请求端点比较分布
   - Compare distributions by model, provider group, and request endpoint
-- 分别查看输入、输出、缓存创建、缓存读取和命中率趋势
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 分别查看输入、输出、缓存创建、缓存读取和命中率趋势
   - Track input, output, cache creation, cache read, and hit-rate trends separately
 
 ## 怎么用 / How to use it

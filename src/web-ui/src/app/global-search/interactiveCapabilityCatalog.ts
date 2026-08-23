@@ -14,21 +14,24 @@ export type InteractiveCapabilityDestination =
 
 export interface InteractiveCapabilityValueSchema {
   type: 'boolean' | 'string' | 'integer' | 'number' | 'object' | 'array';
+  nullable?: boolean;
   enum?: unknown[];
   minimum?: number;
   maximum?: number;
+  minLength?: number;
+  maxLength?: number;
 }
 
-export type InteractiveCapabilityOperationHandler = {
-  kind: 'productAction';
-  actionId: ProductActionId;
-};
+export type InteractiveCapabilityOperationHandler =
+  | { kind: 'productAction'; actionId: ProductActionId }
+  | { kind: 'provider'; providerId: string; operationId: string };
 
 export type InteractiveCapabilityOptionHandler =
   | { kind: 'config'; path: string }
   | { kind: 'mergeConfig'; path: string; fields: string[] }
   | { kind: 'appearanceSelection' }
-  | { kind: 'language' };
+  | { kind: 'language' }
+  | { kind: 'provider'; providerId: string; optionId: string };
 
 export interface InteractiveCapabilityOperation {
   id: string;
@@ -38,6 +41,7 @@ export interface InteractiveCapabilityOperation {
   descriptionEn: string;
   risk: InteractiveCapabilityRisk;
   inputSchema: Record<string, unknown>;
+  argumentScopes?: Record<string, 'productHostLocal'>;
   handler: InteractiveCapabilityOperationHandler;
 }
 
@@ -56,6 +60,19 @@ export interface InteractiveCapabilityItem {
   titleZh: string;
   titleEn: string;
   destination?: InteractiveCapabilityDestination;
+  control:
+    | {
+      kind: 'direct';
+      operations: string[];
+      options: Array<{ id: string; value?: unknown }>;
+    }
+    | {
+      kind: 'delegate';
+      tools: string[];
+      workflowZh: string[];
+      workflowEn: string[];
+    }
+    | { kind: 'open' | 'unsupported'; reasonZh: string; reasonEn: string };
 }
 
 export interface InteractiveCapabilityAgentControl {
@@ -96,11 +113,24 @@ export interface InteractiveCapabilityCatalog {
   origin: string;
   source: string;
   digest: string;
+  searchAcceptance: Array<{
+    id: string;
+    query: string;
+    expectedFirstCapabilityId: string;
+    expectedCapabilityIds: string[];
+    expectedItem?: { capabilityId: string; itemId: string };
+  }>;
   counts: {
     features: number;
     settings: number;
     userFacing: number;
     documentedItems: number;
+    controlCoverage: {
+      direct: number;
+      delegated: number;
+      interactive: number;
+      unsupported: number;
+    };
   };
   categories: Record<string, {
     titleZh: string;

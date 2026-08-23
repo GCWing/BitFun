@@ -17,19 +17,19 @@ Configure voice input, microphone, recognition language, and keyboard shortcuts.
 
 ## 完整功能清单 / Everything included
 
-- 在聊天输入框启用或停用语音输入
+- **Agent 可直接控制 / Direct Agent control** · 在聊天输入框启用或停用语音输入
   - Enable or disable voice input in the chat composer
-- 选择自动检测或中文、粤语、英文、日文等识别语言
+- **Agent 可直接控制 / Direct Agent control** · 选择自动检测或中文、粤语、英文、日文等识别语言
   - Choose automatic detection or Chinese, Cantonese, English, Japanese, and other recognition languages
-- 选择麦克风并执行语音识别测试
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择麦克风并执行语音识别测试
   - Choose a microphone and run a speech-recognition test
-- 下载、选择、验证、修复或删除本地语音模型
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 下载、选择、验证、修复或删除本地语音模型
   - Download, select, verify, repair, or delete local speech models
-- 设置单次语音输入的最长录音时间
+- **Agent 可直接控制 / Direct Agent control** · 设置单次语音输入的最长录音时间
   - Set the maximum duration of one voice-input recording
-- 搜索和查看全部应用、场景、编辑器与终端快捷键
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 搜索和查看全部应用、场景、编辑器与终端快捷键
   - Search and browse all app, scene, editor, and terminal shortcuts
-- 录制新快捷键、检测冲突、恢复单项或重置全部自定义键位
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 录制新快捷键、检测冲突、恢复单项或重置全部自定义键位
   - Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings
 
 ## 怎么用 / How to use it

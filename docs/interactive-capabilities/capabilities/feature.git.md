@@ -17,23 +17,23 @@ Inspect changes, branches, and commits; stage, commit, merge, cherry-pick, and w
 
 ## 完整功能清单 / Everything included
 
-- 查看仓库状态、修改文件和逐文件 Diff
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 查看仓库状态、修改文件和逐文件 Diff
   - Inspect repository status, changed files, and per-file diffs
-- 暂存文件、取消暂存并重置到指定提交
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 暂存文件、取消暂存并重置到指定提交
   - Stage files, unstage changes, and reset to a selected commit
-- 预览或生成提交信息并创建提交
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 预览或生成提交信息并创建提交
   - Preview or generate a commit message and create the commit
-- 从远端 Pull 并向远端 Push
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 从远端 Pull 并向远端 Push
   - Pull from and push to remotes
-- 查看、创建、切换和删除本地分支
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 查看、创建、切换和删除本地分支
   - Browse, create, check out, and delete local branches
-- 浏览提交图谱与仓库历史并保存最近访问记录
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 浏览提交图谱与仓库历史并保存最近访问记录
   - Browse the commit graph and repository history, including recent-history persistence
-- 解析 Revision 并查看任意提交中的文件内容
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 解析 Revision 并查看任意提交中的文件内容
   - Resolve revisions and inspect file content from any commit
-- 执行、继续或中止 Cherry-pick
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `Git` · 执行、继续或中止 Cherry-pick
   - Start, continue, or abort a cherry-pick
-- 管理仓库信任与 Worktree 的创建、绑定、提升、重建和删除
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 管理仓库信任与 Worktree 的创建、绑定、提升、重建和删除
   - Manage repository trust and create, bind, promote, recreate, or remove worktrees
 
 ## 怎么用 / How to use it

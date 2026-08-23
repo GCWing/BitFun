@@ -913,12 +913,19 @@ mod tests {
             .allowed_tool_names
             .contains(&"ReviewPlatform".to_string()));
         assert!(manifest
+            .allowed_tool_names
+            .contains(&"BitFunControl".to_string()));
+        assert!(manifest
             .deferred_tool_names
             .contains(&"ReviewPlatform".to_string()));
         assert!(manifest
             .tool_definitions
             .iter()
             .any(|tool| tool.name == "CreateCanvas"));
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == "BitFunControl"));
     }
 
     #[tokio::test]

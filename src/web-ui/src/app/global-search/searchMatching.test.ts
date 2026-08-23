@@ -29,4 +29,15 @@ describe('scoreTextMatch', () => {
   it('matches natural multi-term queries across bilingual catalog fields', () => {
     expect(scoreTextMatch('Hooks 设置', ['Hooks', '自动化设置'])).toBeGreaterThan(0);
   });
+
+  it('treats bilingual alternatives as accumulated evidence instead of a strict AND query', () => {
+    expect(scoreTextMatch(
+      '宠物 pet mascot 桌面宠物',
+      ['桌面宠物', 'desktop pet', 'Agent companion'],
+    )).toBeGreaterThan(0);
+    expect(scoreTextMatch(
+      'pet mascot appearance',
+      ['Companion settings', 'desktop pet'],
+    )).toBeGreaterThan(0);
+  });
 });

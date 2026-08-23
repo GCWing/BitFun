@@ -38,6 +38,7 @@ async function main() {
   const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
   const template = await readFile(path.join(sourceRoot, 'index.html'), 'utf8');
   const appSource = await readFile(path.join(sourceRoot, 'app.js'), 'utf8');
+  const searchSource = await readFile(path.join(sourceRoot, 'search.js'), 'utf8');
   const stylesSource = await readFile(path.join(sourceRoot, 'styles.css'), 'utf8');
   const buildSource = await readFile(buildScriptPath);
   const logoPath = path.join(repositoryRoot, 'src/apps/desktop/icons/Logo-ICON.png');
@@ -53,6 +54,7 @@ async function main() {
     .update(catalog.digest)
     .update(template)
     .update(appSource)
+    .update(searchSource)
     .update(stylesSource)
     .update(buildSource)
     .update(logoSource)
@@ -62,7 +64,11 @@ async function main() {
 
   await rm(outputRoot, { recursive: true, force: true });
   await mkdir(path.join(outputRoot, 'assets'), { recursive: true });
-  await cp(path.join(sourceRoot, 'app.js'), path.join(outputRoot, 'assets/app.js'));
+  await writeFile(
+    path.join(outputRoot, 'assets/app.js'),
+    appSource.replace("'./search.js'", `'./search.js?v=${assetVersion}'`),
+  );
+  await writeFile(path.join(outputRoot, 'assets/search.js'), searchSource);
   await cp(path.join(sourceRoot, 'styles.css'), path.join(outputRoot, 'assets/styles.css'));
   await cp(logoPath, path.join(outputRoot, 'assets/bitfun.png'));
 

@@ -17,19 +17,19 @@ Save page versions and publish them to public or private URLs while managing tit
 
 ## 完整功能清单 / Everything included
 
-- 查看账户下的 Pages 与每个页面的当前发布状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看账户下的 Pages 与每个页面的当前发布状态
   - List account Pages and inspect each page's current publishing state
-- 保存不可变页面版本并浏览版本历史
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 保存不可变页面版本并浏览版本历史
   - Save immutable page versions and browse version history
-- 发布或重新部署选中的页面版本
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `PagePublish` / `PageDeploy` · 发布或重新部署选中的页面版本
   - Publish or redeploy a selected page version
-- 更新标题、公开/私有可见性和访问设置
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 更新标题、公开/私有可见性和访问设置
   - Update titles, public/private visibility, and access settings
-- 创建可打开和分享的页面链接
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 创建可打开和分享的页面链接
   - Create an openable, shareable link for a page
-- 取消发布页面，同时保留可再次发布的版本
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 取消发布页面，同时保留可再次发布的版本
   - Unpublish a page while retaining versions for later publication
-- 删除单个版本或整个 Page
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 删除单个版本或整个 Page
   - Delete an individual version or an entire Page
 
 ## 怎么用 / How to use it

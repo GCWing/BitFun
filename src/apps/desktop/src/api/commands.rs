@@ -2602,6 +2602,12 @@ fn scan_pet_package_dirs(root: &Path, source: &str) -> Vec<AgentCompanionPetPack
 pub async fn list_agent_companion_pets(
     state: State<'_, AppState>,
 ) -> Result<ListAgentCompanionPetsResponse, String> {
+    list_agent_companion_pets_impl(&state).await
+}
+
+pub(crate) async fn list_agent_companion_pets_impl(
+    state: &AppState,
+) -> Result<ListAgentCompanionPetsResponse, String> {
     let pets = scan_pet_package_dirs(&companion_user_packages_dir(&state), "user");
     Ok(ListAgentCompanionPetsResponse { pets })
 }
@@ -2611,7 +2617,14 @@ pub async fn import_agent_companion_pet_package(
     state: State<'_, AppState>,
     request: ImportAgentCompanionPetPackageRequest,
 ) -> Result<AgentCompanionPetPackageDto, String> {
-    let source_path = PathBuf::from(request.path);
+    import_agent_companion_pet_package_impl(&state, &request.path).await
+}
+
+pub(crate) async fn import_agent_companion_pet_package_impl(
+    state: &AppState,
+    source_path: &str,
+) -> Result<AgentCompanionPetPackageDto, String> {
+    let source_path = PathBuf::from(source_path);
     let source = load_pet_package_source(&source_path)?;
     let (pet_json, _) = load_pet_manifest_from_bytes(&source.pet_json)?;
 
@@ -2688,6 +2701,13 @@ pub async fn delete_agent_companion_pet_package(
     state: State<'_, AppState>,
     request: DeleteAgentCompanionPetPackageRequest,
 ) -> Result<(), String> {
+    delete_agent_companion_pet_package_impl(&state, &request.package_path).await
+}
+
+pub(crate) async fn delete_agent_companion_pet_package_impl(
+    state: &AppState,
+    package_path: &str,
+) -> Result<(), String> {
     let root = companion_user_packages_dir(&state);
     if !root.exists() {
         return Err("Agent companion packages directory does not exist".to_string());
@@ -2696,7 +2716,7 @@ pub async fn delete_agent_companion_pet_package(
         .canonicalize()
         .map_err(|e| format!("Failed to resolve Agent companion packages root: {}", e))?;
 
-    let candidate = PathBuf::from(&request.package_path);
+    let candidate = PathBuf::from(package_path);
     let resolved = candidate
         .canonicalize()
         .map_err(|e| format!("Pet package path not found: {}", e))?;

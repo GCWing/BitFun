@@ -204,6 +204,12 @@ export class AppearanceService {
     }));
   }
 
+  /** Apply state that was already persisted by another product-control port. */
+  async reconcilePersistedState(): Promise<void> {
+    await this.initialize();
+    await this.enqueueMutation(() => this.reconcileExternalState());
+  }
+
   async importPackage(
     source: ArrayBuffer,
     options: AppearanceImportOptions = {},

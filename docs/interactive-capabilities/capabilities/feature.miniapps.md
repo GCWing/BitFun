@@ -17,26 +17,30 @@ Install, create, and run lightweight apps inside BitFun, combining UI, data, and
 
 ## 完整功能清单 / Everything included
 
-- 查看、搜索、创建、导入、编辑和删除 Mini App
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看、搜索、创建、导入、编辑和删除 Mini App
   - Browse, search, create, import, edit, and delete Mini Apps
-- 浏览市场、查看详情并安装或更新发布版本
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 浏览市场、查看详情并安装或更新发布版本
   - Browse the market, inspect listings, and install or update releases
-- 登录市场账户并收藏、评分和查看已安装来源
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 登录市场账户并收藏、评分和查看已安装来源
   - Sign in to the market, favorite and rate apps, and inspect installed origins
-- 按路径或工作区授予权限，并在定制前审查权限差异
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按路径或工作区授予权限，并在定制前审查权限差异
   - Grant path or workspace access and review permission changes before customization
-- 运行 Mini App Host 与 Worker，查看状态并停止后台 Worker
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 运行 Mini App Host 与 Worker，查看状态并停止后台 Worker
   - Run Mini App host and worker calls, inspect status, and stop background workers
-- 为正式应用和定制草稿分别读取与保存持久状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为正式应用和定制草稿分别读取与保存持久状态
   - Read and save persistent state separately for installed apps and customization drafts
-- 在 Mini App 中调用模型补全、聊天和专属 Agent 会话
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在 Mini App 中调用模型补全、聊天和专属 Agent 会话
   - Use model completion, chat, and dedicated agent sessions inside Mini Apps
-- 创建定制草稿、实时预览，并应用、同步或丢弃修改
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 创建定制草稿、实时预览，并应用、同步或丢弃修改
   - Create customization drafts, preview them live, and apply, sync, or discard changes
-- 查看版本历史并回滚到旧版本
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看版本历史并回滚到旧版本
   - Inspect version history and roll back to an earlier release
-- 提交、撤回和审查市场发布，并可渲染幻灯片页面
-  - Submit, withdraw, and review market releases, and render slide pages
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `InitMiniApp` / `Read` / `Write` / `Edit` / `FinalizeMiniApp` · 让 Agent 初始化、编写并校验一个 Mini App
+  - Let an agent initialize, author, and validate a Mini App
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `PublishMiniApp` · 在用户明确要求时由 Agent 提交已完成的 Mini App 到市场审核
+  - Let an agent submit a completed Mini App for market review when explicitly requested
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 撤回和审查市场发布，并可渲染幻灯片页面
+  - Withdraw and review market releases, and render slide pages
 
 ## 怎么用 / How to use it
 

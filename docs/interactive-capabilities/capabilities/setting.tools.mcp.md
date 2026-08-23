@@ -17,23 +17,25 @@ Add and manage Model Context Protocol servers, including tools, resources, promp
 
 ## 完整功能清单 / Everything included
 
-- 用表单或 JSON 查看和保存全部 MCP 服务器配置
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 用表单或 JSON 查看和保存全部 MCP 服务器配置
   - View and save all MCP server configuration through forms or JSON
-- 添加本地进程、远程 HTTP/SSE 或容器 MCP 服务器
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 添加本地进程、远程 HTTP/SSE 或容器 MCP 服务器
   - Add local-process, remote HTTP/SSE, or container MCP servers
-- 启动、停止、重启和删除单个 MCP 服务器
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启动、停止、重启和删除单个 MCP 服务器
   - Start, stop, restart, and delete individual MCP servers
-- 查看初始化、连接、健康、重连、鉴权和失败状态
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看初始化、连接、健康、重连、鉴权和失败状态
   - Inspect initialization, connection, health, reconnecting, authentication, and failure states
-- 配置远程 Header/环境变量认证或清除已有凭据
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 配置远程 Header/环境变量认证或清除已有凭据
   - Configure remote header/environment authentication or clear stored credentials
-- 发起、轮询、取消或重新连接远程 MCP OAuth
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发起、轮询、取消或重新连接远程 MCP OAuth
   - Start, poll, cancel, or reconnect remote MCP OAuth
-- 查看 MCP 工具、Prompt 列表并读取指定 Prompt
-  - Browse MCP tools and prompts and load a selected prompt
-- 列出、读取和打开 MCP Resources
-  - List, read, and open MCP resources
-- 打开 MCP App/UI、双向发送消息并回答交互请求
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ListMCPPrompts` / `GetMCPPrompt` · 列出 MCP Prompt 并读取带参数的指定 Prompt
+  - List MCP prompts and load a selected prompt with arguments
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看 MCP 工具清单并打开工具提供的 App/UI
+  - Inspect MCP tool catalogs and open tool-provided App/UI surfaces
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ListMCPResources` / `ReadMCPResource` · 列出并读取 MCP Resources
+  - List and read MCP resources
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 打开 MCP App/UI、双向发送消息并回答交互请求
   - Open MCP App/UI surfaces, exchange messages, and answer interaction requests
 
 ## 怎么用 / How to use it

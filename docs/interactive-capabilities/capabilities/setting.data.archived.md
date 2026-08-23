@@ -17,15 +17,15 @@ Find, restore, or permanently delete archived sessions and manage long-term conv
 
 ## 完整功能清单 / Everything included
 
-- 按工作区浏览分页归档会话及其元数据
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按工作区浏览分页归档会话及其元数据
   - Browse paged archived sessions and metadata by workspace
-- 按标题、内容和工作区搜索已归档会话
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 按标题、内容和工作区搜索已归档会话
   - Search archived sessions by title, content, and workspace
-- 恢复会话、轮次和原工作区视图并取消归档
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 恢复会话、轮次和原工作区视图并取消归档
   - Restore a session, its turns, and original workspace view, then unarchive it
-- 明确确认后永久删除选中的归档会话
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 明确确认后永久删除选中的归档会话
   - Permanently delete a selected archived session after explicit confirmation
-- 明确确认后永久删除全部归档会话
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 明确确认后永久删除全部归档会话
   - Permanently delete all archived sessions after explicit confirmation
 
 ## 怎么用 / How to use it

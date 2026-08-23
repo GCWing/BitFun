@@ -17,15 +17,15 @@ Control session-title generation, accelerated workspace search, and project-cont
 
 ## 完整功能清单 / Everything included
 
-- 启用或停用根据会话内容自动生成标题
+- **Agent 可直接控制 / Direct Agent control** · 启用或停用根据会话内容自动生成标题
   - Enable or disable automatic titles generated from session content
-- 让标题模型继承主模型、快速模型或使用指定模型
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 让标题模型继承主模型、快速模型或使用指定模型
   - Make title generation inherit the primary or fast model, or use a selected model
-- 为本地工作区启用 Flashgrep 加速搜索
+- **Agent 可直接控制 / Direct Agent control** · 为本地工作区启用 Flashgrep 加速搜索
   - Enable Flashgrep-backed accelerated search for local workspaces
-- 查看索引状态并在需要时重建工作区索引
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看索引状态并在需要时重建工作区索引
   - Inspect index status and rebuild the workspace index when needed
-- 远程工作区明确降级搜索实现，不把远程路径回退到本机
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 远程工作区明确降级搜索实现，不把远程路径回退到本机
   - Use an explicit remote-workspace search path without silently falling back to local files
 
 ## 怎么用 / How to use it

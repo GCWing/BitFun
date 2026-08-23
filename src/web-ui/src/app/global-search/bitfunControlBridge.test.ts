@@ -47,6 +47,17 @@ describe('BitFunControl discovery', () => {
     expect(chinese.items.some(({ id }) => id === 'feature.terminal')).toBe(true);
   });
 
+  it('recovers the companion setting from bilingual synonym bundles used in conversation', () => {
+    for (const query of ['宠物 pet mascot 桌面宠物', 'pet mascot appearance']) {
+      const result = discoverBitFunCapabilities({
+        requestId: `pet-${query}`,
+        action: 'search',
+        query,
+      }) as { items: Array<{ id: string }> };
+      expect(result.items.some(({ id }) => id === 'setting.application.pet')).toBe(true);
+    }
+  });
+
   it('returns matching documented sub-capabilities without loading the full catalog into the tool prompt', () => {
     const result = discoverBitFunCapabilities({
       requestId: 'browser-picker',

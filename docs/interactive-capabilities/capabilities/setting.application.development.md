@@ -17,18 +17,18 @@ Choose the default shell and tune editor font, indentation, wrapping, formatting
 
 ## 完整功能清单 / Everything included
 
-- 自动检测并选择默认终端 Shell
-  - Automatically detect and choose the default terminal shell
-- 把终端面板放在右侧或底部
+- **Agent 可直接控制 / Direct Agent control** · 自动检测或指定默认终端 Shell
+  - Auto-detect or choose the default terminal shell
+- **Agent 可直接控制 / Direct Agent control** · 把终端面板放在右侧或底部
   - Place the terminal panel on the right or at the bottom
-- 设置编辑器字体、字重、字号、行高与光标样式
-  - Configure editor font, weight, size, line height, and cursor style
-- 设置 Tab 宽度、空格缩进、自动换行、行号与平滑滚动
+- **Agent 可直接控制 / Direct Agent control** · 设置编辑器字体、字重、字号、行高与光标样式
+  - Configure editor font, weight, size, line height, and cursor behavior
+- **Agent 可直接控制 / Direct Agent control** · 设置 Tab 宽度、空格缩进、自动换行、行号与平滑滚动
   - Configure tab size, space indentation, word wrapping, line numbers, and smooth scrolling
-- 控制 Minimap、空白字符、当前行高亮和滚动边界
+- **Agent 可直接控制 / Direct Agent control** · 控制 Minimap、空白字符、当前行高亮和滚动边界
   - Control the minimap, whitespace rendering, current-line highlight, and scroll bounds
-- 控制语义高亮、括号配色、保存/粘贴时格式化和空白清理
-  - Control semantic highlighting, bracket colors, format-on-save/paste, and whitespace trimming
+- **Agent 可直接控制 / Direct Agent control** · 控制自动保存、语义高亮、括号配色、格式化和空白清理
+  - Control autosave, semantic highlighting, bracket colors, formatting, and whitespace trimming
 
 ## 怎么用 / How to use it
 
@@ -51,7 +51,32 @@ Choose the default shell and tune editor font, indentation, wrapping, formatting
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
+| 默认终端 Shell / Default terminal shell | `string` | 设置 Shell 路径；空字符串表示自动检测。 | Set the shell path; an empty string enables automatic detection. |
+| 终端面板位置 / Terminal panel position | `right` / `bottom` | 把终端面板放在右侧或底部。 | Place the terminal panel on the right or at the bottom. |
+| 编辑器字体 / Editor font family | `string` | 设置代码编辑器字体族与回退字体。 | Set the code editor font family and fallbacks. |
+| 编辑器字重 / Editor font weight | `normal` / `bold` | 选择普通或粗体字重。 | Choose normal or bold text weight. |
 | 编辑器字号 / Editor font size | `integer` (10–32) | 设置代码编辑器的字体大小。 | Set the code editor font size. |
+| 编辑器行高 / Editor line height | `number` (1–3) | 设置代码编辑器的行高倍数。 | Set the code editor line-height multiplier. |
+| 编辑器光标样式 / Editor cursor style | `line` / `line-thin` / `block` / `block-outline` / `underline` / `underline-thin` | 选择线、块或下划线等光标样式。 | Choose a line, block, underline, or thin cursor style. |
+| 编辑器光标闪烁 / Editor cursor blinking | `blink` / `smooth` / `phase` / `expand` / `solid` | 设置光标的闪烁动画。 | Set the cursor blinking animation. |
+| Tab 宽度 / Tab size | `integer` (1–8) | 设置一个 Tab 对应的空格数。 | Set the number of spaces represented by one tab. |
+| 使用空格缩进 / Insert spaces | `boolean` | 按 Tab 时插入空格而不是制表符。 | Insert spaces instead of a tab character. |
+| 自动换行 / Word wrapping | `off` / `on` / `wordWrapColumn` / `bounded` | 设置代码行的自动换行策略。 | Choose the code-line wrapping policy. |
+| 行号显示 / Line numbers | `on` / `off` / `relative` / `interval` | 设置行号显示方式。 | Choose how line numbers are displayed. |
+| 平滑滚动 / Smooth scrolling | `boolean` | 启用编辑器平滑滚动。 | Enable smooth editor scrolling. |
+| 显示 Minimap / Show minimap | `boolean` | 显示或隐藏代码缩略图。 | Show or hide the code minimap. |
+| Minimap 位置 / Minimap side | `left` / `right` | 把 Minimap 放在编辑器左侧或右侧。 | Place the minimap on the left or right. |
+| Minimap 大小 / Minimap size | `proportional` / `fill` / `fit` | 设置 Minimap 的缩放方式。 | Choose the minimap sizing mode. |
+| 显示空白字符 / Render whitespace | `none` / `boundary` / `selection` / `trailing` / `all` | 选择何时显示空格和制表符标记。 | Choose when spaces and tab markers are rendered. |
+| 当前行高亮 / Current-line highlight | `none` / `gutter` / `line` / `all` | 选择当前行的高亮范围。 | Choose how the current line is highlighted. |
+| 滚过最后一行 / Scroll beyond last line | `boolean` | 允许最后一行滚动到视口中部。 | Allow the final line to scroll above the bottom edge. |
+| 自动保存策略 / Autosave policy | `off` / `afterDelay` / `onFocusChange` / `onWindowChange` | 选择关闭、延迟保存、失焦保存或窗口失焦保存。 | Choose off, delayed, focus-change, or window-change autosave. |
+| 自动保存延迟 / Autosave delay | `integer` (100–60000) | 设置延迟自动保存的毫秒数。 | Set the delayed-autosave interval in milliseconds. |
+| 语义高亮 / Semantic highlighting | `boolean` | 启用语言感知的语义高亮。 | Enable language-aware semantic highlighting. |
+| 括号配色 / Bracket-pair colorization | `boolean` | 用颜色区分嵌套括号。 | Colorize nested bracket pairs. |
+| 保存时格式化 / Format on save | `boolean` | 保存文件时执行可用的格式化。 | Run available formatting when a file is saved. |
+| 粘贴时格式化 / Format on paste | `boolean` | 粘贴代码时执行可用的格式化。 | Run available formatting when code is pasted. |
+| 清理自动空白 / Trim automatic whitespace | `boolean` | 保存时清理自动产生的尾随空白。 | Trim automatically inserted trailing whitespace on save. |
 
 ## 可以直接对 Agent 说 / Try saying
 

@@ -17,27 +17,29 @@ Open webpages and local services inside BitFun, where an agent can inspect the p
 
 ## 完整功能清单 / Everything included
 
-- 输入完整网址、本地域名或开发服务端口并在 BitFun 内打开
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 输入完整网址、本地域名或开发服务端口并在 BitFun 内打开
   - Open full URLs, local hostnames, or development-service ports inside BitFun
-- 使用后退、前进和地址栏浏览页面历史
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `WebSearch` / `WebFetch` · 让 Agent 搜索网页并按需读取指定页面正文
+  - Let an agent search the web and fetch selected page content on demand
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 使用后退、前进和地址栏浏览页面历史
   - Navigate page history with Back, Forward, and the address bar
-- 刷新页面，并同步当前 URL、加载状态与错误提示
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 刷新页面，并同步当前 URL、加载状态与错误提示
   - Reload pages and synchronize the current URL, loading state, and errors
-- 既可作为独立浏览器场景，也可在会话旁的辅助面板中打开
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 既可作为独立浏览器场景，也可在会话旁的辅助面板中打开
   - Use the browser as a standalone scene or an auxiliary panel beside a session
-- 启动元素选择器，悬停时高亮页面元素并显示标签、ID 和 Class
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 启动元素选择器，悬停时高亮页面元素并显示标签、ID 和 Class
   - Start the element picker to highlight hovered elements and show tag, ID, and class details
-- 点击元素后捕获 CSS 路径、属性、文本和 HTML，并加入当前会话上下文
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 点击元素后捕获 CSS 路径、属性、文本和 HTML，并加入当前会话上下文
   - Click an element to capture its CSS path, attributes, text, and HTML into the current session context
-- 再次点击选择按钮或按 Esc 取消元素选择并清理高亮
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 再次点击选择按钮或按 Esc 取消元素选择并清理高亮
   - Click the picker again or press Escape to cancel selection and remove overlays
-- 让 Agent 对内置网页执行快照、读取、点击、悬停、填写、按键、滚动、等待、脚本求值和截图
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` / `Playbook` · 让 Agent 对内置网页执行快照、读取、点击、悬停、填写、按键、滚动、等待、脚本求值和截图
   - Let an agent snapshot, read, click, hover, fill, press keys, scroll, wait, evaluate scripts, and capture the built-in page
-- 内置 WebView 与外部 CDP 浏览器共用同一套 BrowserActions 参数、元素引用、结果与错误契约
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 内置 WebView 与外部 CDP 浏览器共用同一套 BrowserActions 参数、元素引用、结果与错误契约
   - Use one BrowserActions parameter, element-ref, result, and error contract across the built-in WebView and external CDP browsers
-- 通过 target 选择内置或外部浏览器，并用 session_id、URL 或标题精确定位页面
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 通过 target 选择内置或外部浏览器，并用 session_id、URL 或标题精确定位页面
   - Choose the built-in or external browser with target and locate a page by session_id, URL, or title
-- 桌面端使用原生 WebView，Web 端回退到受限 iframe，并在当前页打开新窗口链接
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 桌面端使用原生 WebView，Web 端回退到受限 iframe，并在当前页打开新窗口链接
   - Use a native WebView on desktop, a sandboxed iframe on web, and open new-window links in place
 
 ## 怎么用 / How to use it
