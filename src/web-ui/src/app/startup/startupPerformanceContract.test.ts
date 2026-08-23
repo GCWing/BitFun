@@ -198,7 +198,9 @@ describe('startup performance contract', () => {
     expect(windowEventStart).toBeGreaterThan(-1);
     expect(invokeHandlerStart).toBeGreaterThan(windowEventStart);
     expect(windowEventSource).toContain('matches!(event, tauri::WindowEvent::CloseRequested { .. })');
-    expect(windowEventSource).toContain('save_main_window_state(window.app_handle())');
+    expect(windowEventSource).toContain(
+      'save_main_window_state(window.app_handle(), "close_requested")'
+    );
     expect(toolbarModeProviderSource).toContain(
       'setMainWindowTransientGeometry(true)'
     );
