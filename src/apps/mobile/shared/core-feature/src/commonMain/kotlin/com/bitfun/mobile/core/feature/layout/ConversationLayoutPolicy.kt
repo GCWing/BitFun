@@ -1,5 +1,7 @@
 package com.bitfun.mobile.core.feature.layout
 
+import com.bitfun.mobile.core.feature.layout.generated.MobileDesignBreakpoints
+
 /**
  * A hinge crossing the window, in the same density-independent units as the
  * viewport width it is measured against.
@@ -50,9 +52,9 @@ private data class LayoutSegment(val left: Int, val width: Int)
  */
 public object ConversationLayoutPolicy {
     /** Official GridRow sm|md|lg|xl boundaries used by the HarmonyOS surface. */
-    public const val MD_MIN_WIDTH: Int = 600
-    public const val LG_MIN_WIDTH: Int = 840
-    public const val XL_MIN_WIDTH: Int = 1440
+    public const val MD_MIN_WIDTH: Int = MobileDesignBreakpoints.Wide
+    public const val LG_MIN_WIDTH: Int = MobileDesignBreakpoints.ExtraWide
+    public const val XL_MIN_WIDTH: Int = MobileDesignBreakpoints.Xl
     public const val WIDE_LAYOUT_MIN_WIDTH: Int = MD_MIN_WIDTH
     public const val EXTRA_WIDE_MIN_WIDTH: Int = LG_MIN_WIDTH
 

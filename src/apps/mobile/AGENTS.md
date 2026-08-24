@@ -25,6 +25,28 @@ Native mobile applications are product entrypoints under `src/apps/mobile`.
 | `ios/` | iOS app, resources, lifecycle, and adapters |
 | `harmonyos/` | HarmonyOS app, resources, lifecycle, and adapters |
 | `shared/` | Kotlin Multiplatform core: protocol, crypto, transport, persistence, domain, feature stores |
+| `design-system/` | HarmonyOS-derived mobile tokens, component contracts, deterministic preview scenarios, and the desktop comparison surface |
+
+## Native UI Contract
+
+HarmonyOS is the visual reference implementation. Stable colors, typography,
+geometry, breakpoints, motion durations, component anatomy, and comparison
+scenarios are recorded under `design-system/`; Android and iOS consume generated
+native constants but continue to render with Compose and SwiftUI respectively.
+Do not introduce a shared cross-platform renderer or make generated files the
+source of truth.
+
+- Change the HarmonyOS implementation and the source contract together when a
+  stable visual fact changes.
+- Run `pnpm run mobile:ui:generate` after contract changes and commit the
+  generated native files.
+- Run `pnpm run mobile:ui:check` before pushing to reject generated drift.
+- Use `pnpm run mobile:ui:preview` for the local three-column HarmonyOS / Android
+  / iOS comparison surface. Native captures belong under the documented
+  `design-system/preview/snapshots/` convention and are local evidence unless a
+  fixture is intentionally reviewed into the repository.
+- Keep safe areas, keyboard behavior, accessibility, navigation gestures, and
+  platform presentation primitives in each native app.
 
 ## Shared Core
 

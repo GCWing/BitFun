@@ -1,5 +1,6 @@
 {
   "src": [
-    "pages/AppRoot"
+    "pages/AppRoot",
+    "pages/preview/MobileDesignGallery"
   ]
 }

@@ -8,9 +8,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignColors
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignTypography
 
 /**
  * The palette, ported from the HarmonyOS client's `Theme.ets` plus its
@@ -27,92 +26,94 @@ import androidx.compose.ui.unit.sp
  * behind because it decorates a viewfinder HarmonyOS draws itself and Play
  * Services draws for us. A colour nothing reads is a colour nobody maintains.
  */
-private val InkLight = Color(0xFF171717)
-private val InkDark = Color(0xFFF4F3EF)
-private val White = Color(0xFFFFFFFF)
+private val LightTokens = MobileDesignColors.Light
+private val DarkTokens = MobileDesignColors.Dark
+private val InkLight = LightTokens.Ink
+private val InkDark = DarkTokens.Ink
+private val White = LightTokens.PrimaryActionText
 
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFF111111), // primary_action
+    primary = LightTokens.PrimaryAction,
     onPrimary = White, // primary_action_text
-    primaryContainer = Color(0xFFF4F3F0), // soft
+    primaryContainer = LightTokens.Soft,
     onPrimaryContainer = InkLight,
-    secondary = Color(0xFF111111), // accent
+    secondary = LightTokens.Accent,
     onSecondary = White,
-    secondaryContainer = Color(0xFFF4F3F0),
+    secondaryContainer = LightTokens.Soft,
     onSecondaryContainer = InkLight,
     // file_link: the one saturated hue in the palette. Material has no link
     // role, so it lands on tertiary — which is also the "busy" connection dot.
-    tertiary = Color(0xFF2563EB),
+    tertiary = LightTokens.FileLink,
     onTertiary = White,
-    background = Color(0xFFFDFDFB), // page_bg
+    background = LightTokens.PageBg,
     onBackground = InkLight,
-    surface = White, // card
+    surface = LightTokens.Card,
     onSurface = InkLight,
-    surfaceVariant = Color(0xFFF4F3F0), // soft
-    onSurfaceVariant = Color(0xFF706F6A), // muted
+    surfaceVariant = LightTokens.Soft,
+    onSurfaceVariant = LightTokens.Muted,
     // The whole container family, not only the two a card reads. Material fills
     // any role left unset from its own purple baseline, and the roles nothing in
     // this app names by hand are exactly the ones its components reach for on
     // their own — `ModalBottomSheet` takes surfaceContainerLow, elevation takes
     // surfaceTint, a snackbar takes inverseSurface. Leaving them out painted a
     // lilac sheet under a paper-coloured page.
-    surfaceContainerLowest = White,
-    surfaceContainerLow = Color(0xFFF7F7F5), // floating_panel_bg
-    surfaceContainer = Color(0xFFF7F7F5), // floating_panel_bg
-    surfaceContainerHigh = Color(0xFFF4F3F0), // soft
-    surfaceContainerHighest = Color(0xFFEFEEE9),
-    surfaceBright = Color(0xFFFDFDFB),
-    surfaceDim = Color(0xFFEFEEE9),
+    surfaceContainerLowest = LightTokens.Card,
+    surfaceContainerLow = LightTokens.FloatingPanelBg,
+    surfaceContainer = LightTokens.FloatingPanelBg,
+    surfaceContainerHigh = LightTokens.Soft,
+    surfaceContainerHighest = LightTokens.Line,
+    surfaceBright = LightTokens.PageBg,
+    surfaceDim = LightTokens.Line,
     // No tint: the source's cards are flat fills, and a tinted overlay would put
     // the ink colour back over every raised surface.
-    surfaceTint = White,
-    inverseSurface = Color(0xFF2D2C28),
+    surfaceTint = LightTokens.Card,
+    inverseSurface = DarkTokens.Soft,
     inverseOnSurface = InkDark,
-    inversePrimary = Color(0xFFE9E7E2),
-    outline = Color(0xFFA5A39B), // subtle
-    outlineVariant = Color(0xFFE9E7E2), // line
-    error = Color(0xFFE04F4F), // red
+    inversePrimary = LightTokens.Line,
+    outline = LightTokens.Subtle,
+    outlineVariant = LightTokens.Line,
+    error = LightTokens.Red,
     onError = White,
     // The HarmonyOS palette has no error container; rather than invent a hue,
     // a failure card is the same soft surface with the error colour on it.
-    errorContainer = Color(0xFFF4F3F0),
-    onErrorContainer = Color(0xFFE04F4F),
+    errorContainer = LightTokens.Soft,
+    onErrorContainer = LightTokens.Red,
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = Color(0xFF454540), // primary_action
+    primary = DarkTokens.PrimaryAction,
     onPrimary = White,
-    primaryContainer = Color(0xFF2D2C28), // soft
+    primaryContainer = DarkTokens.Soft,
     onPrimaryContainer = InkDark,
-    secondary = Color(0xFF5B5954), // accent
+    secondary = DarkTokens.Accent,
     onSecondary = White,
-    secondaryContainer = Color(0xFF2D2C28),
+    secondaryContainer = DarkTokens.Soft,
     onSecondaryContainer = InkDark,
-    tertiary = Color(0xFF60A5FA), // file_link
-    onTertiary = Color(0xFF151514),
-    background = Color(0xFF151514), // page_bg
+    tertiary = DarkTokens.FileLink,
+    onTertiary = DarkTokens.PageBg,
+    background = DarkTokens.PageBg,
     onBackground = InkDark,
-    surface = Color(0xFF252522), // card
+    surface = DarkTokens.Card,
     onSurface = InkDark,
-    surfaceVariant = Color(0xFF2D2C28), // soft
-    onSurfaceVariant = Color(0xFFAAA8A0), // muted
-    surfaceContainerLowest = Color(0xFF101010),
-    surfaceContainerLow = Color(0xFF1E1E1C), // floating_panel_bg
-    surfaceContainer = Color(0xFF1E1E1C), // floating_panel_bg
-    surfaceContainerHigh = Color(0xFF2D2C28), // soft
-    surfaceContainerHighest = Color(0xFF35342F),
-    surfaceBright = Color(0xFF3A3936),
-    surfaceDim = Color(0xFF151514),
-    surfaceTint = Color(0xFF252522),
+    surfaceVariant = DarkTokens.Soft,
+    onSurfaceVariant = DarkTokens.Muted,
+    surfaceContainerLowest = DarkTokens.StartWindowBackground,
+    surfaceContainerLow = DarkTokens.FloatingPanelBg,
+    surfaceContainer = DarkTokens.FloatingPanelBg,
+    surfaceContainerHigh = DarkTokens.Soft,
+    surfaceContainerHighest = DarkTokens.Line,
+    surfaceBright = DarkTokens.Accent,
+    surfaceDim = DarkTokens.PageBg,
+    surfaceTint = DarkTokens.Card,
     inverseSurface = InkDark,
-    inverseOnSurface = Color(0xFF252522),
-    inversePrimary = Color(0xFF363531),
-    outline = Color(0xFF77756E), // subtle
-    outlineVariant = Color(0xFF363531), // line
-    error = Color(0xFFFF6B6B), // red
+    inverseOnSurface = DarkTokens.Card,
+    inversePrimary = DarkTokens.Line,
+    outline = DarkTokens.Subtle,
+    outlineVariant = DarkTokens.Line,
+    error = DarkTokens.Red,
     onError = White,
-    errorContainer = Color(0xFF2D2C28),
-    onErrorContainer = Color(0xFFFF6B6B),
+    errorContainer = DarkTokens.Soft,
+    onErrorContainer = DarkTokens.Red,
 )
 
 /**
@@ -152,42 +153,42 @@ internal data class CodeSyntaxColors(
 )
 
 private val LightExtras = BitFunColors(
-    success = Color(0xFF27C46A),
-    heroBackground = Color(0xFFE6EDFF),
-    heroSurface = Color(0xFFF8FAFF),
-    heroAccent = Color(0xFF9DB4FF),
-    heroSecondary = Color(0xFFC9C5FF),
+    success = LightTokens.Green,
+    heroBackground = LightTokens.ConnectHeroBg,
+    heroSurface = LightTokens.ConnectHeroSurface,
+    heroAccent = LightTokens.ConnectHeroAccent,
+    heroSecondary = LightTokens.ConnectHeroSecondary,
     code = CodeSyntaxColors(
-        lineNumber = Color(0xFFAAA69D),
-        keyword = Color(0xFF8F3F71),
-        string = Color(0xFF477A4A),
-        number = Color(0xFF9A5B13),
-        comment = Color(0xFF7A8078),
-        function = Color(0xFF2C6693),
-        type = Color(0xFF865A20),
-        constant = Color(0xFFA04444),
-        property = Color(0xFF466D78),
-        targetBackground = Color(0xFFFFF1BE),
+        lineNumber = LightTokens.CodeLineNumber,
+        keyword = LightTokens.CodeKeyword,
+        string = LightTokens.CodeString,
+        number = LightTokens.CodeNumber,
+        comment = LightTokens.CodeComment,
+        function = LightTokens.CodeFunction,
+        type = LightTokens.CodeType,
+        constant = LightTokens.CodeConstant,
+        property = LightTokens.CodeProperty,
+        targetBackground = LightTokens.CodeTargetBg,
     ),
 )
 
 private val DarkExtras = BitFunColors(
-    success = Color(0xFF3BD47B),
-    heroBackground = Color(0xFF2B2B29),
-    heroSurface = Color(0xFF252522),
-    heroAccent = Color(0xFF4A4944),
-    heroSecondary = Color(0xFF3C3B38),
+    success = DarkTokens.Green,
+    heroBackground = DarkTokens.ConnectHeroBg,
+    heroSurface = DarkTokens.ConnectHeroSurface,
+    heroAccent = DarkTokens.ConnectHeroAccent,
+    heroSecondary = DarkTokens.ConnectHeroSecondary,
     code = CodeSyntaxColors(
-        lineNumber = Color(0xFF77756E),
-        keyword = Color(0xFFD99AC4),
-        string = Color(0xFF9BCB9D),
-        number = Color(0xFFE3B36D),
-        comment = Color(0xFF96958D),
-        function = Color(0xFF8CBCE0),
-        type = Color(0xFFD5B27F),
-        constant = Color(0xFFE79A9A),
-        property = Color(0xFF9CC8D0),
-        targetBackground = Color(0xFF5A4E24),
+        lineNumber = DarkTokens.CodeLineNumber,
+        keyword = DarkTokens.CodeKeyword,
+        string = DarkTokens.CodeString,
+        number = DarkTokens.CodeNumber,
+        comment = DarkTokens.CodeComment,
+        function = DarkTokens.CodeFunction,
+        type = DarkTokens.CodeType,
+        constant = DarkTokens.CodeConstant,
+        property = DarkTokens.CodeProperty,
+        targetBackground = DarkTokens.CodeTargetBg,
     ),
 )
 
@@ -199,21 +200,21 @@ private val LocalBitFunColors = staticCompositionLocalOf { LightExtras }
  * Material control start from the same geometry as the ArkUI counterpart.
  */
 private val BitFunTypography = androidx.compose.material3.Typography(
-    displayLarge = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold),
-    displayMedium = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold),
-    displaySmall = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
-    headlineLarge = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold),
-    headlineMedium = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
-    headlineSmall = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold),
-    titleLarge = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold),
-    titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
-    titleSmall = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
-    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
-    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
-    labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
-    labelMedium = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium),
-    labelSmall = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
+    displayLarge = MobileDesignTypography.DisplayLarge,
+    displayMedium = MobileDesignTypography.DisplayMedium,
+    displaySmall = MobileDesignTypography.DisplaySmall,
+    headlineLarge = MobileDesignTypography.HeadlineLarge,
+    headlineMedium = MobileDesignTypography.HeadlineMedium,
+    headlineSmall = MobileDesignTypography.HeadlineSmall,
+    titleLarge = MobileDesignTypography.TitleLarge,
+    titleMedium = MobileDesignTypography.TitleMedium,
+    titleSmall = MobileDesignTypography.TitleSmall,
+    bodyLarge = MobileDesignTypography.BodyLarge,
+    bodyMedium = MobileDesignTypography.BodyMedium,
+    bodySmall = MobileDesignTypography.BodySmall,
+    labelLarge = MobileDesignTypography.LabelLarge,
+    labelMedium = MobileDesignTypography.LabelMedium,
+    labelSmall = MobileDesignTypography.LabelSmall,
 )
 
 /** The extra palette for the theme in scope. Reads like `MaterialTheme.colorScheme`. */

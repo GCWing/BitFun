@@ -1,4 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, SOFT } from './Theme';
 import { CompactMenuButton } from './CompactMenuButton';
 import { TemplateIcon } from './TemplateIcon';
@@ -44,9 +45,15 @@ export struct ConversationHeader {
       this.TrailingControl()
     }
     .width('100%')
-    .height(this.hasSubtitle() ? 76 : 64)
+    .height(this.hasSubtitle() ? MobileDesignGeometry.conversationHeaderHeight :
+      MobileDesignGeometry.conversationHeaderCompactHeight)
     .alignItems(VerticalAlign.Center)
-    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    .padding({
+      left: MobileDesignGeometry.contentGutter,
+      right: MobileDesignGeometry.contentGutter,
+      top: 8,
+      bottom: 8
+    })
     .backgroundColor(PAGE_BG)
   }
 
@@ -54,7 +61,10 @@ export struct ConversationHeader {
   private TitleBlock() {
     Column({ space: 3 }) {
       Text(this.resolvedTitle())
-        .fontSize(this.hasSubtitle() ? 18 : 17)
+        .fontSize(this.hasSubtitle() ? MobileDesignTypography.conversationHeaderTitle.size :
+          MobileDesignTypography.titleMedium.size)
+        .lineHeight(this.hasSubtitle() ? MobileDesignTypography.conversationHeaderTitle.lineHeight :
+          MobileDesignTypography.titleMedium.lineHeight)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
         .maxLines(1)
@@ -69,7 +79,8 @@ export struct ConversationHeader {
         })
       if (this.hasSubtitle()) {
         Text(this.subtitle)
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.labelMedium.size)
+          .lineHeight(MobileDesignTypography.labelMedium.lineHeight)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -85,7 +96,7 @@ export struct ConversationHeader {
     if (this.showSidebarRestoreButton) {
       SidebarToggleButton({
         restore: true,
-        controlSize: 44,
+        controlSize: MobileDesignGeometry.controlTouchSize,
         onToggle: this.onRestoreSidebar
       })
     } else if (this.showBackButton) {
@@ -96,11 +107,11 @@ export struct ConversationHeader {
           iconHeight: 23
         })
       }
-      .width(44)
-      .height(44)
+      .width(MobileDesignGeometry.controlTouchSize)
+      .height(MobileDesignGeometry.controlTouchSize)
       .backgroundColor(CARD)
       .border({ width: 1, color: LINE })
-      .borderRadius(22)
+      .borderRadius(MobileDesignGeometry.controlTouchSize / 2)
       .shadow({ radius: 10, color: LINE, offsetY: 3 })
       .accessibilityText(RemoteI18n.t('common.back'))
       .onClick(() => {
@@ -108,13 +119,15 @@ export struct ConversationHeader {
       })
     } else if (this.showSidebarButton) {
       CompactMenuButton({
-        controlSize: 44,
+        controlSize: MobileDesignGeometry.controlTouchSize,
         onOpen: () => {
           this.onOpenSidebar();
         }
       })
     } else {
-      Blank().width(44).height(44)
+      Blank()
+        .width(MobileDesignGeometry.controlTouchSize)
+        .height(MobileDesignGeometry.controlTouchSize)
     }
   }
 
@@ -128,11 +141,11 @@ export struct ConversationHeader {
           iconHeight: 7
         })
       }
-      .width(44)
-      .height(44)
+      .width(MobileDesignGeometry.controlTouchSize)
+      .height(MobileDesignGeometry.controlTouchSize)
       .backgroundColor(CARD)
       .border({ width: 1, color: LINE })
-      .borderRadius(22)
+      .borderRadius(MobileDesignGeometry.controlTouchSize / 2)
       .shadow({ radius: 10, color: LINE, offsetY: 3 })
       .accessibilityText(RemoteI18n.t('sidebar.more'))
       .bindPopup(this.showActionsMenu, {
@@ -154,7 +167,9 @@ export struct ConversationHeader {
         this.onOpenActions();
       })
     } else {
-      Blank().width(44).height(44)
+      Blank()
+        .width(MobileDesignGeometry.controlTouchSize)
+        .height(MobileDesignGeometry.controlTouchSize)
     }
   }
 
@@ -200,7 +215,12 @@ export struct ConversationHeader {
         })
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 10, bottom: 8 })
+    .padding({
+      left: MobileDesignGeometry.contentGutter,
+      right: MobileDesignGeometry.contentGutter,
+      top: 10,
+      bottom: 8
+    })
     .backgroundColor(PAGE_BG)
   }
 

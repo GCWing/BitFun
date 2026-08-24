@@ -18,6 +18,9 @@
     A10000000000000000000010 /* MobileCoreAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* MobileCoreAdapter.swift */; };
     A10000000000000000000011 /* BitFunMobileCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* BitFunMobileCore.xcframework */; };
     A10000000000000000000012 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* libsqlite3.tbd */; };
+    A10000000000000000000013 /* GeneratedMobileDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* GeneratedMobileDesignTokens.swift */; };
+    A10000000000000000000014 /* GeneratedMobilePreviewScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* GeneratedMobilePreviewScenarios.swift */; };
+    A10000000000000000000015 /* MobileDesignGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* MobileDesignGallery.swift */; };
     A10000000000000000000009 /* Resources.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* Resources.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -34,6 +37,9 @@
     B10000000000000000000010 /* MobileCoreAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCoreAdapter.swift; sourceTree = "<group>"; };
     B10000000000000000000011 /* BitFunMobileCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "../../shared/core-feature/build/XCFrameworks/debug/BitFunMobileCore.xcframework"; sourceTree = "<group>"; };
     B10000000000000000000012 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.text-based-dylib-definition; name = libsqlite3.tbd; path = "$(SDKROOT)/usr/lib/libsqlite3.tbd"; sourceTree = SDKROOT; };
+    B10000000000000000000013 /* GeneratedMobileDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratedMobileDesignTokens.swift; sourceTree = "<group>"; };
+    B10000000000000000000014 /* GeneratedMobilePreviewScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratedMobilePreviewScenarios.swift; sourceTree = "<group>"; };
+    B10000000000000000000015 /* MobileDesignGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDesignGallery.swift; sourceTree = "<group>"; };
     B10000000000000000000009 /* Resources.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -45,11 +51,12 @@
     D10000000000000000000000 = {isa = PBXGroup; children = (D10000000000000000000001 /* BitFun */, D10000000000000000000009 /* Products */); sourceTree = "<group>"; };
     D10000000000000000000001 /* BitFun */ = {isa = PBXGroup; children = (D10000000000000000000002 /* App */, D10000000000000000000003 /* Features */, D10000000000000000000008 /* Infrastructure */, B10000000000000000000009 /* Resources.xcassets */, B10000000000000000000011 /* BitFunMobileCore.xcframework */, B10000000000000000000012 /* libsqlite3.tbd */); path = BitFun; sourceTree = "<group>"; };
     D10000000000000000000002 /* App */ = {isa = PBXGroup; children = (B10000000000000000000001 /* BitFunApp.swift */); path = App; sourceTree = "<group>"; };
-    D10000000000000000000003 /* Features */ = {isa = PBXGroup; children = (D10000000000000000000004 /* Chat */, D10000000000000000000005 /* Shell */); path = Features; sourceTree = "<group>"; };
+    D10000000000000000000003 /* Features */ = {isa = PBXGroup; children = (D10000000000000000000004 /* Chat */, D10000000000000000000005 /* Shell */, D10000000000000000000010 /* DesignSystem */); path = Features; sourceTree = "<group>"; };
     D10000000000000000000004 /* Chat */ = {isa = PBXGroup; children = (B10000000000000000000005 /* ConversationHeader.swift */, B10000000000000000000006 /* ChatTimelineView.swift */, B10000000000000000000007 /* ComposerBar.swift */); path = Chat; sourceTree = "<group>"; };
     D10000000000000000000005 /* Shell */ = {isa = PBXGroup; children = (B10000000000000000000003 /* BitFunTheme.swift */, B10000000000000000000004 /* SidebarView.swift */, B10000000000000000000008 /* MobileShellView.swift */); path = Shell; sourceTree = "<group>"; };
     D10000000000000000000008 /* Infrastructure */ = {isa = PBXGroup; children = (B10000000000000000000002 /* MobileAppModel.swift */, B10000000000000000000010 /* MobileCoreAdapter.swift */); path = Infrastructure; sourceTree = "<group>"; };
     D10000000000000000000009 /* Products */ = {isa = PBXGroup; children = (B10000000000000000000000 /* BitFun.app */); name = Products; sourceTree = "<group>"; };
+    D10000000000000000000010 /* DesignSystem */ = {isa = PBXGroup; children = (B10000000000000000000013 /* GeneratedMobileDesignTokens.swift */, B10000000000000000000014 /* GeneratedMobilePreviewScenarios.swift */, B10000000000000000000015 /* MobileDesignGallery.swift */); path = DesignSystem; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -61,7 +68,7 @@
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-    C10000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000010); runOnlyForDeploymentPostprocessing = 0; };
+    C10000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000010, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */

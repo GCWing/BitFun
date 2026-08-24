@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.common.CircleControl
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignTypography
 
 internal const val CONVERSATION_TITLE_TEST_TAG: String = "conversation-title"
 internal const val CONVERSATION_MENU_TEST_TAG: String = "conversation-menu"
@@ -78,8 +80,11 @@ internal fun ConversationHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (hasSubtitle) 76.dp else 64.dp)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .height(
+                    if (hasSubtitle) MobileDesignGeometry.ConversationHeaderHeight
+                    else MobileDesignGeometry.ConversationHeaderCompactHeight,
+                )
+                .padding(horizontal = MobileDesignGeometry.ContentGutter, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -110,9 +115,8 @@ internal fun ConversationHeader(
             ) {
                 Text(
                     title.ifBlank { stringResource(R.string.conversation_title_default) },
-                    fontSize = if (hasSubtitle) 18.sp else 17.sp,
-                    lineHeight = 22.sp,
-                    fontWeight = FontWeight.Medium,
+                    style = if (hasSubtitle) MobileDesignTypography.ConversationHeaderTitle
+                    else MobileDesignTypography.TitleMedium,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -205,7 +209,12 @@ private fun TitleEditor(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
+            .padding(
+                start = MobileDesignGeometry.ContentGutter,
+                end = MobileDesignGeometry.ContentGutter,
+                top = 10.dp,
+                bottom = 8.dp,
+            ),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

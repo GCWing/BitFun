@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 
 /**
  * The floating round control the source draws on a page rather than on a bar.
@@ -49,7 +50,7 @@ internal fun CircleControl(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 3.dp,
-        modifier = modifier.size(44.dp),
+        modifier = modifier.size(MobileDesignGeometry.ControlTouchSize),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(

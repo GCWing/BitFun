@@ -1,21 +1,21 @@
 import SwiftUI
 
 enum BitFunTheme {
-    // These values mirror harmonyos/entry/src/main/resources/base/element/color.json.
-    static let page = Color(red: 253 / 255, green: 253 / 255, blue: 251 / 255)
-    static let card = Color.white
-    static let soft = Color(red: 244 / 255, green: 243 / 255, blue: 240 / 255)
-    static let ink = Color(red: 23 / 255, green: 23 / 255, blue: 23 / 255)
-    static let muted = Color(red: 112 / 255, green: 111 / 255, blue: 106 / 255)
-    static let line = Color(red: 233 / 255, green: 231 / 255, blue: 226 / 255)
-    static let accent = Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
-    static let green = Color(red: 39 / 255, green: 196 / 255, blue: 106 / 255)
-    static let red = Color(red: 224 / 255, green: 79 / 255, blue: 79 / 255)
+    // Generated from the HarmonyOS baseline through the mobile design contract.
+    static let page = MobileDesignColors.pageBg
+    static let card = MobileDesignColors.card
+    static let soft = MobileDesignColors.soft
+    static let ink = MobileDesignColors.ink
+    static let muted = MobileDesignColors.muted
+    static let line = MobileDesignColors.line
+    static let accent = MobileDesignColors.accent
+    static let green = MobileDesignColors.green
+    static let red = MobileDesignColors.red
 }
 
 struct CircleControl: View {
     let systemName: String
-    var size: CGFloat = 44
+    var size: CGFloat = MobileDesignGeometry.controlTouchSize
     var glyphSize: CGFloat = 18
     var action: () -> Void
 

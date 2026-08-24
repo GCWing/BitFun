@@ -66,6 +66,7 @@ import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.theme.BitFunEaseOut
 import com.bitfun.mobile.app.ui.theme.MotionQuickMillis
 import com.bitfun.mobile.app.ui.theme.MotionStructureMillis
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
 import com.bitfun.mobile.core.feature.session.ChatComposerPolicy
@@ -85,12 +86,12 @@ internal const val MAX_COMPOSER_IMAGES: Int = 4
 
 // The measurements come straight from `ComposerBar.ets`, which sizes the bar in
 // vp — the same unit as dp. Naming them keeps the two files diffable.
-private val ActionSize = 40.dp
-private val InputHeight = 42.dp
-private val ExpandedInputHeight = 74.dp
-private val CollapsedBarHeight = 52.dp
-private val ExpandedInputRowHeight = 76.dp
-private val ExpandedActionRowHeight = 44.dp
+private val ActionSize = MobileDesignGeometry.ComposerActionSize
+private val InputHeight = MobileDesignGeometry.ComposerInputHeight
+private val ExpandedInputHeight = MobileDesignGeometry.ComposerExpandedInputHeight
+private val CollapsedBarHeight = MobileDesignGeometry.ComposerCollapsedHeight
+private val ExpandedInputRowHeight = MobileDesignGeometry.ComposerExpandedInputRowHeight
+private val ExpandedActionRowHeight = MobileDesignGeometry.ComposerExpandedActionRowHeight
 
 /**
  * The input bar, ported from `pages/components/ComposerBar.ets`.
@@ -160,7 +161,11 @@ internal fun ComposerBar(
         easing = BitFunEaseOut,
     )
     val radius by animateDpAsState(
-        if (expanded || images.isNotEmpty()) 18.dp else 26.dp,
+        if (expanded || images.isNotEmpty()) {
+            MobileDesignGeometry.ComposerExpandedRadius
+        } else {
+            MobileDesignGeometry.ComposerCollapsedRadius
+        },
         structureSpec,
         label = "composer-radius",
     )
@@ -197,7 +202,12 @@ internal fun ComposerBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp)
+            .padding(
+                start = MobileDesignGeometry.ContentGutter,
+                end = MobileDesignGeometry.ContentGutter,
+                top = 8.dp,
+                bottom = 14.dp,
+            )
             .testTag(COMPOSER_TEST_TAG),
     ) {
         Surface(
