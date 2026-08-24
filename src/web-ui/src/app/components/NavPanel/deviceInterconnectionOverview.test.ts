@@ -82,6 +82,38 @@ describe('projectDeviceInterconnectionOverview', () => {
     expect(overview.connectionService?.kind).toBe('official');
   });
 
+  it('names a paired bot once, as a controller rather than a second connection service', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      remoteStatus: { ...disconnectedStatus, bot_connected: 'Weixin(wxid_9f3a)' },
+    }));
+
+    expect(overview.mode).toBe('connected');
+    expect(overview.connectedDevices).toEqual([
+      expect.objectContaining({
+        name: 'Weixin',
+        kind: 'message-app',
+        activities: ['controlling'],
+      }),
+    ]);
+    expect(overview.connectionService).toBeNull();
+  });
+
+  it('reports the relay that carries dispatch work even while a bot is paired', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      accountService: connectionServiceFromRelayUrl('https://relay.example.com'),
+      remoteStatus: { ...disconnectedStatus, bot_connected: 'Telegram(7096812005)' },
+      dispatchJobs: [
+        {
+          id: 'job-device',
+          state: 'running',
+          target: { kind: 'device', id: 'linux-2', name: 'Build Server' },
+        },
+      ],
+    }));
+
+    expect(overview.connectionService?.kind).toBe('self-hosted');
+  });
+
   it('makes the peer the current device and the local desktop its controller', () => {
     const overview = projectDeviceInterconnectionOverview(baseInput({
       peer: { deviceId: 'linux-1', deviceName: 'Linux Workstation' },

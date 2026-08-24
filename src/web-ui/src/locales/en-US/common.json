@@ -725,8 +725,6 @@
     "deviceService": "Device connection service",
     "connectControlDevices": "Connects control devices",
     "connectedTo": "Connected to {{target}}",
-    "messageAppControl": "Messaging app",
-    "messageAppDetail": "Control through a messaging app",
     "mobileDevice": "Mobile device",
     "backupSyncing": "Encrypted backup · Syncing",
     "backupSynced": "Encrypted backup · Synced",

@@ -204,8 +204,6 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
         return { label: t('deviceOverview.sameNetwork'), detail: null };
       case 'public-tunnel':
         return { label: t('deviceOverview.publicConnection'), detail: null };
-      case 'message-app':
-        return { label: t('deviceOverview.messageAppControl'), detail: service.host };
       default:
         return { label: t('deviceOverview.deviceService'), detail: service.host };
     }
