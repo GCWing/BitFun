@@ -1,4 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { MobileDesignGeometry, MobileDesignMotion } from '../../generated/MobileDesignTokens';
 import { ChatComposerPolicy, ComposerPrimaryAction } from '../../services/ChatComposerPolicy';
 import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
 import {
@@ -15,11 +16,11 @@ export enum ComposerPresentation {
   Create = 'create'
 }
 
-const COMPOSER_ACTION_SIZE: number = 40;
-const COMPOSER_INPUT_HEIGHT: number = 42;
-const COMPOSER_EXPANDED_INPUT_HEIGHT: number = 74;
-const COMPOSER_COLLAPSED_HEIGHT: number = 52;
-const COMPOSER_EXPANDED_HEIGHT: number = 126;
+const COMPOSER_ACTION_SIZE: number = MobileDesignGeometry.composerActionSize;
+const COMPOSER_INPUT_HEIGHT: number = MobileDesignGeometry.composerInputHeight;
+const COMPOSER_EXPANDED_INPUT_HEIGHT: number = MobileDesignGeometry.composerExpandedInputHeight;
+const COMPOSER_COLLAPSED_HEIGHT: number = MobileDesignGeometry.composerCollapsedHeight;
+const COMPOSER_EXPANDED_HEIGHT: number = MobileDesignGeometry.composerExpandedHeight;
 const COMPOSER_IMAGE_CARD_SIZE: number = 64;
 const COMPOSER_IMAGE_STRIP_TOP_GAP: number = 6;
 /** Strip height plus its top gap and the parent Column's 2vp row spacing. */
@@ -79,8 +80,8 @@ export struct ComposerBar {
     .constraintSize({ maxWidth: this.presentation === ComposerPresentation.Floating ? 760 : 10000 })
     .alignSelf(ItemAlign.Center)
     .padding({
-      left: this.presentation === ComposerPresentation.Floating ? 24 : 16,
-      right: this.presentation === ComposerPresentation.Floating ? 24 : 16,
+      left: this.presentation === ComposerPresentation.Floating ? 24 : MobileDesignGeometry.contentGutter,
+      right: this.presentation === ComposerPresentation.Floating ? 24 : MobileDesignGeometry.contentGutter,
       top: 8,
       bottom: this.presentation === ComposerPresentation.Floating ? 18 : 14
     })
@@ -116,7 +117,8 @@ export struct ComposerBar {
         .clip(true)
       }
       .width('100%')
-      .height(this.isComposerExpanded() ? 76 : 52)
+      .height(this.isComposerExpanded() ? MobileDesignGeometry.composerExpandedInputRowHeight :
+        MobileDesignGeometry.composerCollapsedHeight)
 
       if (this.isComposerExpanded()) {
         Row({ space: 6 }) {
@@ -130,12 +132,12 @@ export struct ComposerBar {
           this.PrimaryActionButton()
         }
         .width('100%')
-        .height(44)
+        .height(MobileDesignGeometry.composerExpandedActionRowHeight)
         .padding({ left: 2, right: 0 })
         .alignItems(VerticalAlign.Center)
         .transition(TransitionEffect.translate({ x: 0, y: 8 })
           .combine(TransitionEffect.opacity(0))
-          .animation({ duration: 180, curve: Curve.EaseOut }))
+          .animation({ duration: MobileDesignMotion.quick, curve: Curve.EaseOut }))
       }
     }
     .width('100%')
@@ -153,7 +155,7 @@ export struct ComposerBar {
       color: this.presentation === ComposerPresentation.Floating ? '#18000000' : '#0D000000',
       offsetY: this.presentation === ComposerPresentation.Floating ? 6 : 2
     })
-    .animation({ duration: 220, curve: Curve.EaseOut })
+    .animation({ duration: MobileDesignMotion.structure, curve: Curve.EaseOut })
   }
 
   @Builder
@@ -541,9 +543,10 @@ export struct ComposerBar {
   // The pill radius only reads as a pill while the card is one row tall.
   private composerRadius(): number {
     if (this.isComposerExpanded() || this.selectedImages.length > 0) {
-      return 18;
+      return MobileDesignGeometry.composerExpandedRadius;
     }
-    return this.presentation === ComposerPresentation.Floating ? 18 : 26;
+    return this.presentation === ComposerPresentation.Floating ?
+      MobileDesignGeometry.composerExpandedRadius : MobileDesignGeometry.composerCollapsedRadius;
   }
 
   private isComposerExpanded(): boolean {

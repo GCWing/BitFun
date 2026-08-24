@@ -7,8 +7,12 @@ const TAG = 'BitFunRemote';
 
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
+  private initialPage: string = 'pages/AppRoot';
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    if (want.parameters?.['bitfunDesignPreview'] === 'connected-conversation') {
+      this.initialPage = 'pages/preview/MobileDesignGallery';
+    }
     try {
       this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
     } catch (err) {
@@ -33,7 +37,7 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, TAG, 'Failed to configure window bars. Cause: %{public}s', JSON.stringify(err));
     }
 
-    windowStage.loadContent('pages/AppRoot', (err) => {
+    windowStage.loadContent(this.initialPage, (err) => {
       if (err.code) {
         hilog.error(DOMAIN, TAG, 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
         return;

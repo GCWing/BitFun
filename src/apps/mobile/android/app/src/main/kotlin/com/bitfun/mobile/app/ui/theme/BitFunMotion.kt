@@ -1,10 +1,11 @@
 package com.bitfun.mobile.app.ui.theme
 
 import androidx.compose.animation.core.CubicBezierEasing
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignMotion
 
 /** Motion values shared with the HarmonyOS presentation components. */
-internal const val MotionQuickMillis: Int = 180
-internal const val MotionStructureMillis: Int = 220
+internal const val MotionQuickMillis: Int = MobileDesignMotion.Quick
+internal const val MotionStructureMillis: Int = MobileDesignMotion.Structure
 internal const val MotionDrawerScrimMillis: Int = 210
 internal const val MotionDrawerOpenMillis: Int = 320
 internal const val MotionDrawerCloseMillis: Int = 250

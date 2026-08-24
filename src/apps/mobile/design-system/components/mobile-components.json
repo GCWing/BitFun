@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "components": {
+    "circle_control": {
+      "purpose": "A floating primary navigation or overflow control.",
+      "anatomy": ["touch_target", "centered_glyph", "hairline_border", "soft_shadow"],
+      "states": ["enabled", "pressed", "disabled", "focused"],
+      "tokens": ["control_touch_size", "card", "line", "ink"],
+      "platformNotes": "Keep the glyph's optical box separate from the touch target."
+    },
+    "conversation_header": {
+      "purpose": "Identifies the active conversation and the device or workspace answering it.",
+      "anatomy": ["leading_control", "title", "context_subtitle", "trailing_control"],
+      "states": ["single_line", "with_context", "renaming", "actions_open"],
+      "tokens": ["conversation_header_height", "conversation_header_compact_height", "conversation_header_title", "content_gutter", "control_touch_size"],
+      "platformNotes": "Compact and wide layouts preserve the same control geometry and action meaning."
+    },
+    "message_bubble": {
+      "purpose": "Presents one user or assistant message in the conversation timeline.",
+      "anatomy": ["message_text", "role_surface", "hairline_border"],
+      "states": ["user", "assistant"],
+      "tokens": ["body_medium", "message_bubble_max_width", "message_bubble_horizontal_padding", "message_bubble_vertical_padding", "message_bubble_radius", "message_spacing", "timeline_top_padding"],
+      "platformNotes": "The maximum width is the 276-unit compact HarmonyOS baseline; wide layouts may use a separate responsive policy."
+    },
+    "composer_bar": {
+      "purpose": "Collects the next instruction and exposes one unambiguous primary action.",
+      "anatomy": ["attachment_action", "text_input", "model_control", "primary_action"],
+      "states": ["empty", "draft", "focused", "streaming", "disconnected", "with_attachments"],
+      "tokens": ["composer_action_size", "composer_collapsed_height", "composer_expanded_height", "composer_collapsed_radius", "composer_expanded_radius"],
+      "platformNotes": "Keyboard, dictation, and attachment pickers remain native adapters."
+    }
+  }
+}

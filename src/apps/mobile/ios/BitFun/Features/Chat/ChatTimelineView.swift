@@ -22,8 +22,8 @@ struct ChatTimelineView: View {
                         .padding(.vertical, 15)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.horizontal, MobileDesignGeometry.contentGutter)
+                .padding(.top, MobileDesignGeometry.timelineTopPadding)
                 .padding(.bottom, 14)
             }
             .onChange(of: model.messages.count) { _ in
@@ -42,18 +42,23 @@ private struct ChatMessageBubble: View {
     var body: some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 0) {
             Text(message.text)
-                .font(.system(size: 15, weight: .regular))
+                .font(MobileDesignTypography.bodyMedium.font)
                 .foregroundStyle(BitFunTheme.ink)
-                .lineSpacing(4)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
+                .padding(.horizontal, MobileDesignGeometry.messageBubbleHorizontalPadding)
+                .padding(.vertical, MobileDesignGeometry.messageBubbleVerticalPadding)
                 .background(message.role == .user ? BitFunTheme.soft : BitFunTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 17))
-                .overlay(RoundedRectangle(cornerRadius: 17).stroke(BitFunTheme.line, lineWidth: 1))
-                .frame(maxWidth: 320, alignment: message.role == .user ? .trailing : .leading)
+                .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.messageBubbleRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: MobileDesignGeometry.messageBubbleRadius)
+                        .stroke(BitFunTheme.line, lineWidth: 1)
+                )
+                .frame(
+                    maxWidth: MobileDesignGeometry.messageBubbleMaxWidth,
+                    alignment: message.role == .user ? .trailing : .leading
+                )
         }
         .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
-        .padding(.top, message.role == .user ? 8 : 2)
-        .padding(.bottom, message.role == .user ? 12 : 10)
+        .padding(.bottom, MobileDesignGeometry.messageSpacing)
     }
 }

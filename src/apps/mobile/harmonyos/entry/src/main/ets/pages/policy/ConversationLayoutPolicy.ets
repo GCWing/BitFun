@@ -1,3 +1,5 @@
+import { MobileDesignBreakpoints } from '../../generated/MobileDesignTokens';
+
 export class ConversationLayoutCrease {
   readonly left: number;
   readonly width: number;
@@ -75,9 +77,9 @@ export class ConversationLayoutGeometry {
 
 export class ConversationLayoutPolicy {
   /** Official GridRow sm|md boundary: 320 / 600 / 840 / 1440 vp. */
-  static readonly MD_MIN_WIDTH: number = 600;
-  static readonly LG_MIN_WIDTH: number = 840;
-  static readonly XL_MIN_WIDTH: number = 1440;
+  static readonly MD_MIN_WIDTH: number = MobileDesignBreakpoints.wide;
+  static readonly LG_MIN_WIDTH: number = MobileDesignBreakpoints.extraWide;
+  static readonly XL_MIN_WIDTH: number = MobileDesignBreakpoints.xl;
   static readonly WIDE_LAYOUT_MIN_WIDTH: number = 600;
   static readonly EXTRA_WIDE_MIN_WIDTH: number = 840;
   static readonly FALLBACK_MASTER_PANE_WIDTH: number = 344;
