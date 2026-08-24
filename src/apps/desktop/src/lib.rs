@@ -316,20 +316,42 @@ fn handle_secondary_launch(app: &tauri::AppHandle) {
 }
 
 fn main_window_state_flags() -> StateFlags {
-    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
+    main_window_geometry_state_flags() | StateFlags::MAXIMIZED
 }
 
-/// Restore deliberately excludes `MAXIMIZED`: maximizing a hidden undecorated
-/// window on Windows does not survive `show()` and leaves Windows tracking a
-/// bogus normal-placement rect. The persisted maximized flag is re-asserted
-/// after the window becomes visible instead; see `restore_main_window_state`.
-fn main_window_restore_flags() -> StateFlags {
+fn main_window_geometry_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::FULLSCREEN
 }
 
+/// Restore deliberately excludes `MAXIMIZED` on Windows: maximizing a hidden
+/// undecorated window does not survive `show()` and leaves Windows tracking a
+/// bogus normal-placement rect. Other platforms use the plugin's complete
+/// restore behavior.
+#[cfg(target_os = "windows")]
+fn main_window_restore_flags() -> StateFlags {
+    main_window_geometry_state_flags()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn main_window_restore_flags() -> StateFlags {
+    main_window_state_flags()
+}
+
 fn persist_main_window_state(app: &tauri::AppHandle, reason: &str) -> Result<(), String> {
+    persist_main_window_state_with_flags(app, reason, main_window_state_flags())
+}
+
+fn persist_main_window_geometry_state(app: &tauri::AppHandle, reason: &str) -> Result<(), String> {
+    persist_main_window_state_with_flags(app, reason, main_window_geometry_state_flags())
+}
+
+fn persist_main_window_state_with_flags(
+    app: &tauri::AppHandle,
+    reason: &str,
+    flags: StateFlags,
+) -> Result<(), String> {
     let result = app
-        .save_window_state(main_window_state_flags())
+        .save_window_state(flags)
         .map_err(|error| error.to_string());
     if let Err(error) = &result {
         log::warn!(
@@ -341,7 +363,9 @@ fn persist_main_window_state(app: &tauri::AppHandle, reason: &str) -> Result<(),
     }
 
     #[cfg(target_os = "windows")]
-    window_state_support::correct_saved_main_window_state(app);
+    if flags.contains(StateFlags::MAXIMIZED) {
+        window_state_support::correct_saved_main_window_state(app);
+    }
 
     Ok(())
 }
@@ -403,11 +427,12 @@ pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) -> bool {
         log::warn!("Failed to restore main window state: {}", error);
     }
 
-    // The persisted maximized flag is re-asserted once the window is visible;
-    // maximizing while hidden is unreliable on Windows (see
-    // `main_window_restore_flags`).
+    #[cfg(target_os = "windows")]
     let reapply_maximized =
         window_state_support::read_persisted_main_maximized(window.app_handle()).unwrap_or(false);
+
+    #[cfg(not(target_os = "windows"))]
+    let reapply_maximized = false;
 
     let is_maximized = window.is_maximized().unwrap_or(false);
     let is_fullscreen = window.is_fullscreen().unwrap_or(false);
@@ -438,7 +463,7 @@ pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) -> bool {
                         log::warn!("Failed to center reset main window: {}", error);
                     }
                     if resize_succeeded {
-                        if let Err(error) = persist_main_window_state(
+                        if let Err(error) = persist_main_window_geometry_state(
                             window.app_handle(),
                             "startup_geometry_repair",
                         ) {
@@ -468,7 +493,11 @@ pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) -> bool {
 
 #[cfg(test)]
 mod main_window_geometry_tests {
-    use super::has_standard_main_window_size;
+    use super::{
+        has_standard_main_window_size, main_window_geometry_state_flags, main_window_restore_flags,
+        main_window_state_flags,
+    };
+    use tauri_plugin_window_state::StateFlags;
 
     #[test]
     fn floating_toolbar_sizes_are_not_valid_main_window_sizes() {
@@ -479,6 +508,24 @@ mod main_window_geometry_tests {
     #[test]
     fn default_client_size_is_a_valid_main_window_size() {
         assert!(has_standard_main_window_size(1200.0, 800.0));
+    }
+
+    #[test]
+    fn geometry_saves_do_not_overwrite_maximized_state() {
+        assert!(!main_window_geometry_state_flags().contains(StateFlags::MAXIMIZED));
+        assert!(main_window_state_flags().contains(StateFlags::MAXIMIZED));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_restore_defers_maximized_state_until_after_show() {
+        assert!(!main_window_restore_flags().contains(StateFlags::MAXIMIZED));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn non_windows_restore_keeps_plugin_maximized_behavior() {
+        assert!(main_window_restore_flags().contains(StateFlags::MAXIMIZED));
     }
 }
 
