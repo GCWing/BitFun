@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 pub const METHOD_INITIALIZE: &str = "initialize";
 pub const METHOD_SESSION_CREATE: &str = "session/create";
@@ -33,7 +33,7 @@ impl RequestId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
@@ -48,6 +48,18 @@ pub struct JsonRpcRequest {
     pub method: String,
     #[serde(default = "empty_object")]
     pub params: serde_json::Value,
+}
+
+impl std::fmt::Debug for JsonRpcRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("JsonRpcRequest")
+            .field("jsonrpc", &self.jsonrpc)
+            .field("id", &self.id)
+            .field("method", &self.method)
+            .field("params", &"<redacted>")
+            .finish()
+    }
 }
 
 impl JsonRpcRequest {
@@ -164,13 +176,36 @@ impl<T> JsonRpcNotification<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InitializeParams {
     pub protocol_version: u32,
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
+    pub model: TemporaryModelConfig,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum TemporaryModelProvider {
+    Openai,
+    Responses,
+    Anthropic,
+    Gemini,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TemporaryModelConfig {
+    pub provider: TemporaryModelProvider,
+    pub model: String,
+    pub api_key: String,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    #[serde(default)]
+    pub base_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -196,15 +231,17 @@ pub struct InitializeResult {
     pub runtime_version: String,
     pub stability: Stability,
     pub capabilities: HostCapabilities,
+    pub model_id: String,
 }
 
 impl InitializeResult {
-    pub fn current(runtime_version: impl Into<String>) -> Self {
+    pub fn current(runtime_version: impl Into<String>, model_id: impl Into<String>) -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION,
             runtime_version: runtime_version.into(),
             stability: Stability::NotDelivered,
             capabilities: HostCapabilities::current(),
+            model_id: model_id.into(),
         }
     }
 }

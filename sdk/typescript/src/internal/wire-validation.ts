@@ -93,8 +93,11 @@ function validateInitializeResult(value: unknown): InitializeResult {
     value,
     "initialize result",
   );
-  if (!Number.isSafeInteger(result.protocolVersion)) {
-    throw new Error("SDK Host initialize protocol version is invalid");
+  if (
+    !Number.isSafeInteger(result.protocolVersion) ||
+    !isNonEmptyString(result.modelId)
+  ) {
+    throw new Error("SDK Host initialize protocol version or model id is invalid");
   }
   return result;
 }

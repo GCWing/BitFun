@@ -661,7 +661,13 @@ impl SessionManager {
         }
 
         let config_service = get_global_config_service().await.ok()?;
-        config_service.get_config(Some("ai")).await.ok()
+        Self::load_effective_ai_config_from_service(config_service.as_ref()).await
+    }
+
+    async fn load_effective_ai_config_from_service(
+        config_service: &crate::service::config::ConfigService,
+    ) -> Option<AIConfig> {
+        config_service.get_effective_ai_config().await.ok()
     }
 
     pub(crate) async fn resolve_effective_reasoning_preset_for_turn(
@@ -9575,6 +9581,7 @@ mod tests {
         model_runtime_binding_fingerprint as service_model_runtime_binding_fingerprint,
         AIConfig as ServiceAIConfig, AIModelConfig as ServiceAIModelConfig,
     };
+    use crate::service::config::{ConfigManagerSettings, ConfigService};
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, DialogTurnRecoveryStatus, ModelRoundData,
         SessionContextUsage, SessionContextUsageSource, SessionKind, SessionMetadata,
@@ -9595,6 +9602,41 @@ mod tests {
     use std::sync::Arc;
     use std::time::{Duration, SystemTime};
     use uuid::Uuid;
+
+    #[tokio::test]
+    async fn runtime_model_is_visible_to_turn_admission_config() {
+        let dir = tempfile::tempdir().expect("temporary config directory");
+        let config = ConfigService::with_settings(ConfigManagerSettings {
+            path_manager: Some(Arc::new(PathManager::with_user_root_for_tests(
+                dir.path().join("runtime-turn-admission"),
+            ))),
+            auto_save: true,
+            backup_count: 0,
+        })
+        .await
+        .expect("test ConfigService");
+        config
+            .install_runtime_ai_model(ServiceAIModelConfig {
+                id: "sdk:openai:fixture".to_string(),
+                name: "SDK fixture".to_string(),
+                provider: "openai".to_string(),
+                model_name: "fixture-model".to_string(),
+                base_url: "http://127.0.0.1:43123/v1".to_string(),
+                api_key: "fixture-secret".to_string(),
+                enabled: true,
+                ..ServiceAIModelConfig::default()
+            })
+            .await
+            .unwrap();
+
+        let ai_config = SessionManager::load_effective_ai_config_from_service(&config)
+            .await
+            .expect("turn admission should see the runtime model");
+        assert_eq!(
+            ai_config.resolve_model_reference("sdk:openai:fixture"),
+            Some("sdk:openai:fixture".to_string())
+        );
+    }
 
     struct TestWorkspace {
         path: PathBuf,

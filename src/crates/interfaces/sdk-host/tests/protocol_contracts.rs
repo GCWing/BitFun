@@ -2,29 +2,65 @@ use bitfun_sdk_host::protocol::{
     ErrorCode, ErrorData, ErrorStage, HostCapabilities, InitializeParams, InitializeResult,
     JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty, QueryEvent,
     QueryOutput, QueryResultError, QueryResultParams, QueryTerminalStatus, RecoveryAction,
-    RequestId, SessionLifetime, Stability, PROTOCOL_VERSION,
+    RequestId, SessionLifetime, Stability, TemporaryModelConfig, TemporaryModelProvider,
+    PROTOCOL_VERSION,
 };
 
 #[test]
-fn initialize_contract_is_versioned_and_uses_familiar_capability_names() {
+fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
     let request: JsonRpcRequest = serde_json::from_value(serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": 1,
+            "protocolVersion": 2,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true }
+            "capabilities": { "serverNotifications": true },
+            "model": {
+                "provider": "openai",
+                "model": "fixture-model",
+                "apiKey": "fixture-secret",
+                "baseUrl": "http://127.0.0.1:43123/v1"
+            }
         }
     }))
     .unwrap();
     let params: InitializeParams = request.params_as().unwrap();
 
     assert_eq!(request.id, Some(RequestId::Number(1)));
+    assert_eq!(PROTOCOL_VERSION, 2);
     assert_eq!(params.protocol_version, PROTOCOL_VERSION);
     assert!(params.capabilities.server_notifications);
+    assert_eq!(params.model.provider, TemporaryModelProvider::Openai);
+    assert_eq!(params.model.model, "fixture-model");
+    assert_eq!(params.model.api_key, "fixture-secret");
+    assert_eq!(
+        params.model.base_url.as_deref(),
+        Some("http://127.0.0.1:43123/v1")
+    );
 
-    let result = InitializeResult::current("0.2.13");
+    for provider in ["openai", "responses", "anthropic", "gemini"] {
+        let model: TemporaryModelConfig = serde_json::from_value(serde_json::json!({
+            "provider": provider,
+            "model": "fixture-model",
+            "apiKey": "fixture-secret"
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(model.provider).unwrap(),
+            serde_json::json!(provider)
+        );
+    }
+    assert!(
+        serde_json::from_value::<TemporaryModelConfig>(serde_json::json!({
+            "provider": "unknown",
+            "model": "fixture-model",
+            "apiKey": "fixture-secret"
+        }))
+        .is_err()
+    );
+
+    let result = InitializeResult::current("0.2.13", "sdk:openai:fixture");
     assert_eq!(result.protocol_version, PROTOCOL_VERSION);
     assert_eq!(result.stability, Stability::NotDelivered);
     assert_eq!(
@@ -45,6 +81,9 @@ fn initialize_contract_is_versioned_and_uses_familiar_capability_names() {
             prestarted_transport: false,
         }
     );
+    let result_json = serde_json::to_string(&result).unwrap();
+    assert!(result_json.contains("\"modelId\":\"sdk:openai:fixture\""));
+    assert!(!result_json.contains("fixture-secret"));
 }
 
 #[test]
@@ -191,4 +230,28 @@ fn request_correlation_ids_preserve_json_rpc_id_type() {
         RequestId::String("1".to_string()).correlation_id(),
         "request:string:1"
     );
+}
+
+#[test]
+fn json_rpc_request_debug_redacts_temporary_model_secret() {
+    let request: JsonRpcRequest = serde_json::from_value(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": 2,
+            "clientInfo": { "name": "fixture", "version": "0.1.0" },
+            "capabilities": { "serverNotifications": true },
+            "model": {
+                "provider": "openai",
+                "model": "fixture-model",
+                "apiKey": "bitfun-sdk-debug-secret-31d4"
+            }
+        }
+    }))
+    .unwrap();
+
+    let debug = format!("{request:?}");
+    assert!(debug.contains("initialize"));
+    assert!(!debug.contains("bitfun-sdk-debug-secret-31d4"));
 }

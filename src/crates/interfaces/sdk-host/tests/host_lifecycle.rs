@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -20,8 +21,11 @@ use bitfun_runtime_ports::{
     ClockPort, PermissionAuditRecord, PermissionAuditStorePort, PermissionGrant,
     PermissionReplyStorePort, RuntimeServiceCapability, RuntimeServicePort,
 };
-use bitfun_sdk_host::host::{ConnectionControl, HostOutput, SdkHostConfig, SdkHostConnection};
-use bitfun_sdk_host::protocol::{JsonRpcRequest, PROTOCOL_VERSION};
+use bitfun_sdk_host::host::{
+    ConnectionControl, HostOutput, SdkHostConfig, SdkHostConnection, TemporaryModelInstallError,
+    TemporaryModelInstaller,
+};
+use bitfun_sdk_host::protocol::{JsonRpcRequest, TemporaryModelConfig, PROTOCOL_VERSION};
 use tokio::sync::{mpsc, Notify};
 use tokio::time::timeout;
 
@@ -29,6 +33,7 @@ use tokio::time::timeout;
 struct FakeOwner {
     queue: Mutex<Option<Arc<EventQueue>>>,
     created_session_ids: Mutex<Vec<String>>,
+    created_model_ids: Mutex<Vec<Option<String>>>,
     cancel_requests: Mutex<Vec<AgentTurnCancellationRequest>>,
     discard_requests: Mutex<Vec<AgentTransientSessionDiscardRequest>>,
     settlement_requests: Mutex<Vec<AgentTurnSettlementRequest>>,
@@ -199,6 +204,58 @@ impl FakeOwner {
     }
 }
 
+#[derive(Default)]
+struct FakeTemporaryModelInstaller {
+    installed: Mutex<Vec<TemporaryModelConfig>>,
+    removed: Mutex<Vec<String>>,
+    block_first_install: AtomicBool,
+    fail_first_install: AtomicBool,
+    install_started: Notify,
+    release_install: Notify,
+}
+
+impl FakeTemporaryModelInstaller {
+    fn blocking_first_install() -> Self {
+        Self {
+            block_first_install: AtomicBool::new(true),
+            ..Self::default()
+        }
+    }
+
+    fn failing_first_install() -> Self {
+        Self {
+            fail_first_install: AtomicBool::new(true),
+            ..Self::default()
+        }
+    }
+}
+
+#[async_trait]
+impl TemporaryModelInstaller for FakeTemporaryModelInstaller {
+    async fn install(
+        &self,
+        model: TemporaryModelConfig,
+    ) -> Result<String, TemporaryModelInstallError> {
+        self.installed.lock().unwrap().push(model);
+        if self.fail_first_install.swap(false, Ordering::AcqRel) {
+            return Err(TemporaryModelInstallError::InvalidModel);
+        }
+        if self.block_first_install.swap(false, Ordering::AcqRel) {
+            self.install_started.notify_one();
+            self.release_install.notified().await;
+        }
+        Ok("sdk:openai:resolved".to_string())
+    }
+
+    async fn remove(&self, model_id: &str) {
+        self.removed.lock().unwrap().push(model_id.to_string());
+    }
+}
+
+fn fake_installer() -> Arc<dyn TemporaryModelInstaller> {
+    Arc::new(FakeTemporaryModelInstaller::default())
+}
+
 #[async_trait]
 impl AgentSubmissionPort for FakeOwner {
     async fn create_session(
@@ -210,6 +267,10 @@ impl AgentSubmissionPort for FakeOwner {
             self.release_session_create.notified().await;
         }
         let session_id = "session-fixture".to_string();
+        self.created_model_ids
+            .lock()
+            .unwrap()
+            .push(request.model_id.clone());
         self.created_session_ids
             .lock()
             .unwrap()
@@ -234,6 +295,10 @@ impl AgentSubmissionPort for FakeOwner {
             .lock()
             .unwrap()
             .push(session_id.clone());
+        self.created_model_ids
+            .lock()
+            .unwrap()
+            .push(request.model_id.clone());
         if self.panic_after_session_create {
             panic!("fixture panics after creating the transient Session");
         }
@@ -561,6 +626,7 @@ async fn host_with_query_limit(
                 max_active_queries,
                 ..SdkHostConfig::default()
             },
+            fake_installer(),
         ),
         owner,
         receiver,
@@ -664,6 +730,16 @@ async fn host() -> (
     Arc<FakeOwner>,
     mpsc::Receiver<serde_json::Value>,
 ) {
+    host_with_temporary_model_installer(fake_installer()).await
+}
+
+async fn host_with_temporary_model_installer(
+    installer: Arc<dyn TemporaryModelInstaller>,
+) -> (
+    SdkHostConnection,
+    Arc<FakeOwner>,
+    mpsc::Receiver<serde_json::Value>,
+) {
     let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     let owner = Arc::new(FakeOwner::with_queue(queue.clone()));
     let runtime = AgentRuntimeBuilder::new()
@@ -684,6 +760,7 @@ async fn host() -> (
             "D:/workspace/project",
             output,
             SdkHostConfig::default(),
+            installer,
         ),
         owner,
         receiver,
@@ -698,11 +775,191 @@ async fn initialize(host: &SdkHostConnection, output: &mut mpsc::Receiver<serde_
         "params": {
             "protocolVersion": PROTOCOL_VERSION,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true }
+            "capabilities": { "serverNotifications": true },
+            "model": {
+                "provider": "openai",
+                "model": "fixture-model",
+                "apiKey": "fixture-secret"
+            }
         }
     })))
     .await;
     assert_eq!(output.recv().await.unwrap()["id"], 1);
+}
+
+fn temporary_model_initialize_request(id: &str) -> JsonRpcRequest {
+    request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": PROTOCOL_VERSION,
+            "clientInfo": { "name": "fixture", "version": "0.1.0" },
+            "capabilities": { "serverNotifications": true },
+            "model": {
+                "provider": "openai",
+                "model": "fixture-model",
+                "apiKey": "fixture-secret"
+            }
+        }
+    }))
+}
+
+#[tokio::test]
+async fn temporary_model_is_connection_scoped_and_cannot_be_overridden() {
+    let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    let owner = Arc::new(FakeOwner::with_queue(queue.clone()));
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(owner.clone())
+        .with_dialog_turn_port(owner.clone())
+        .with_cancellation_port(owner.clone())
+        .with_turn_settlement_port(owner.clone())
+        .with_session_management_port(owner.clone())
+        .with_session_close_port(owner.clone())
+        .with_permission_request_manager(permission_manager())
+        .with_event_source(AgentEventSource::new(queue))
+        .build()
+        .unwrap();
+    let installer = Arc::new(FakeTemporaryModelInstaller::default());
+    let (sender, mut output) = mpsc::channel(16);
+    let host = SdkHostConnection::new(
+        runtime,
+        "D:/workspace/project",
+        sender,
+        SdkHostConfig::default(),
+        installer.clone(),
+    );
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "initialize-model",
+        "method": "initialize",
+        "params": {
+            "protocolVersion": PROTOCOL_VERSION,
+            "clientInfo": { "name": "fixture", "version": "0.1.0" },
+            "capabilities": { "serverNotifications": true },
+            "model": {
+                "provider": "openai",
+                "model": "fixture-model",
+                "apiKey": "fixture-secret"
+            }
+        }
+    })))
+    .await;
+    let initialized = output.recv().await.unwrap();
+    assert_eq!(initialized["result"]["modelId"], "sdk:openai:resolved");
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "create-with-override",
+        "method": "session/create",
+        "params": { "model": "attempted-override" }
+    })))
+    .await;
+    assert_eq!(output.recv().await.unwrap()["id"], "create-with-override");
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-with-override",
+        "method": "query/start",
+        "params": {
+            "prompt": "hello",
+            "model": "attempted-query-override"
+        }
+    })))
+    .await;
+    assert_eq!(output.recv().await.unwrap()["id"], "query-with-override");
+    assert_eq!(installer.installed.lock().unwrap().len(), 1);
+    assert_eq!(
+        owner.created_model_ids.lock().unwrap().as_slice(),
+        &[
+            Some("sdk:openai:resolved".to_string()),
+            Some("sdk:openai:resolved".to_string()),
+        ]
+    );
+
+    host.shutdown_connection().await;
+    host.shutdown_connection().await;
+    assert_eq!(
+        installer.removed.lock().unwrap().as_slice(),
+        &["sdk:openai:resolved".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn concurrent_initialize_installs_temporary_model_once() {
+    let installer = Arc::new(FakeTemporaryModelInstaller::blocking_first_install());
+    let (host, _owner, mut output) = host_with_temporary_model_installer(installer.clone()).await;
+    let first_host = host.clone();
+    let first = tokio::spawn(async move {
+        first_host
+            .handle_request(temporary_model_initialize_request("initialize-first"))
+            .await
+    });
+    installer.install_started.notified().await;
+
+    host.handle_request(temporary_model_initialize_request("initialize-second"))
+        .await;
+    let second_response = output.recv().await.unwrap();
+    installer.release_install.notify_waiters();
+    first.await.unwrap();
+    let first_response = output.recv().await.unwrap();
+
+    assert_eq!(second_response["id"], "initialize-second");
+    assert_eq!(
+        second_response["error"]["data"]["code"],
+        "already_initialized"
+    );
+    assert_eq!(first_response["id"], "initialize-first");
+    assert_eq!(first_response["result"]["modelId"], "sdk:openai:resolved");
+    assert_eq!(installer.installed.lock().unwrap().len(), 1);
+    host.shutdown_connection().await;
+}
+
+#[tokio::test]
+async fn initialize_finishing_after_shutdown_removes_the_installed_model() {
+    let installer = Arc::new(FakeTemporaryModelInstaller::blocking_first_install());
+    let (host, _owner, mut output) = host_with_temporary_model_installer(installer.clone()).await;
+    let initialize_host = host.clone();
+    let initialize = tokio::spawn(async move {
+        initialize_host
+            .handle_request(temporary_model_initialize_request(
+                "initialize-during-shutdown",
+            ))
+            .await
+    });
+    installer.install_started.notified().await;
+
+    host.shutdown_connection().await;
+    installer.release_install.notify_waiters();
+    initialize.await.unwrap();
+    let response = output.recv().await.unwrap();
+
+    assert_eq!(response["id"], "initialize-during-shutdown");
+    assert_eq!(response["error"]["data"]["code"], "cancelled");
+    assert!(!host.is_initialized().await);
+    assert_eq!(
+        installer.removed.lock().unwrap().as_slice(),
+        &["sdk:openai:resolved".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn failed_temporary_model_install_rolls_back_for_retry() {
+    let installer = Arc::new(FakeTemporaryModelInstaller::failing_first_install());
+    let (host, _owner, mut output) = host_with_temporary_model_installer(installer.clone()).await;
+
+    host.handle_request(temporary_model_initialize_request("initialize-invalid"))
+        .await;
+    let rejected = output.recv().await.unwrap();
+    assert_eq!(rejected["error"]["data"]["code"], "invalid_request");
+
+    host.handle_request(temporary_model_initialize_request("initialize-retry"))
+        .await;
+    let initialized = output.recv().await.unwrap();
+    assert_eq!(initialized["result"]["modelId"], "sdk:openai:resolved");
+    assert_eq!(installer.installed.lock().unwrap().len(), 2);
+    host.shutdown_connection().await;
 }
 
 #[tokio::test]
@@ -756,7 +1013,12 @@ async fn initialize_is_required_and_version_mismatch_fails_closed() {
         "params": {
             "protocolVersion": 99,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true }
+            "capabilities": { "serverNotifications": true },
+            "model": {
+                "provider": "openai",
+                "model": "fixture-model",
+                "apiKey": "fixture-secret"
+            }
         }
     })))
     .await;
@@ -829,6 +1091,7 @@ async fn escaped_query_output_fails_before_exceeding_the_wire_budget() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -912,6 +1175,7 @@ async fn cancellation_timeout_reports_unknown_outcome_for_the_exact_operation() 
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1024,6 +1288,7 @@ async fn dialog_session_identity_mismatch_releases_the_requested_session_reserva
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1143,6 +1408,7 @@ async fn uncertain_session_close_cleanup_requires_host_restart() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
@@ -1237,6 +1503,7 @@ async fn cancellation_remains_available_when_data_request_capacity_is_exhausted(
             max_in_flight_control_requests: 1,
             ..SdkHostConfig::default()
         },
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1350,6 +1617,7 @@ async fn visible_session_create_response_is_exposed_before_shutdown_cleanup() {
             release_response: release_response.clone(),
         }),
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1403,6 +1671,7 @@ async fn shutdown_waits_for_in_flight_session_creation_then_cleans_it() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1457,6 +1726,7 @@ async fn shutdown_compensates_a_session_creation_task_that_panics_after_creation
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1499,6 +1769,7 @@ async fn shutdown_reports_failure_when_post_panic_session_compensation_fails() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1540,6 +1811,7 @@ async fn a_later_request_registers_panicked_session_cleanup_for_shutdown() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1597,6 +1869,7 @@ async fn shutdown_does_not_forget_cleanup_registered_by_a_later_request() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1699,6 +1972,7 @@ async fn failed_implicit_query_submission_deletes_the_unexposed_session() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1738,6 +2012,7 @@ async fn shutdown_takes_over_failed_query_start_cleanup_within_its_total_budget(
         "D:/workspace/project",
         Arc::new(FailQueryStartOutput { output: sender }),
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1790,6 +2065,7 @@ async fn failed_unexposed_session_cleanup_poison_connection_and_allows_shutdown(
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -1900,6 +2176,7 @@ async fn uncertain_turn_settlement_fails_the_connection_without_a_result() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     let connection_failed = host.connection_failed_token();
     initialize(&host, &mut output).await;
@@ -2024,6 +2301,7 @@ async fn queued_query_is_accepted_and_tracked_by_its_exact_turn() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
 
@@ -2123,6 +2401,7 @@ async fn session_close_rejects_while_query_start_is_in_flight() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
@@ -2192,6 +2471,7 @@ async fn query_start_rejects_if_session_close_finishes_before_reservation() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
@@ -2262,6 +2542,7 @@ async fn permission_without_callback_is_rejected_and_finishes_action_required() 
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
@@ -2370,6 +2651,7 @@ async fn stalled_permission_rejection_is_bounded_and_cancels_the_exact_turn() {
         "D:/workspace/project",
         sender,
         SdkHostConfig::default(),
+        fake_installer(),
     );
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
