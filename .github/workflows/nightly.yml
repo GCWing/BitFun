@@ -16,37 +16,11 @@ on:
         required: false
         default: 7
         type: number
-  workflow_call:
-    inputs:
-      force_build:
-        description: "Run the build contract even when the latest commit is older than 25 hours."
-        required: false
-        default: true
-        type: boolean
-      build_only:
-        description: "Build and package every artifact without publishing it."
-        required: false
-        default: true
-        type: boolean
-      artifact_retention_days:
-        description: "Retention for build artifacts."
-        required: false
-        default: 1
-        type: number
-    secrets:
-      TAURI_SIGNING_PRIVATE_KEY:
-        required: false
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
-        required: false
-      TAURI_UPDATER_PUBKEY:
-        required: false
-
 permissions:
   contents: read
 
 concurrency:
-  # Reusable CI calls must not cancel a scheduled Nightly or another PR.
-  group: nightly-${{ github.workflow }}-${{ github.ref }}
+  group: nightly-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -68,8 +42,6 @@ jobs:
       - name: Check for recent changes
         id: check
         shell: bash
-        env:
-          FORCE_BUILD: ${{ inputs.force_build || false }}
         run: |
           set -euo pipefail
 
@@ -80,7 +52,7 @@ jobs:
 
           echo "nightly_version=$NIGHTLY_VERSION" >> "$GITHUB_OUTPUT"
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "$FORCE_BUILD" == "true" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -97,210 +69,18 @@ jobs:
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── Patch version for nightly ──────────────────────────────────────
-  package:
-    name: Package (${{ matrix.platform.name }})
-    runs-on: ${{ matrix.platform.os }}
+  # ── Build every Nightly artifact through the reusable CI contract ──
+  build-artifacts:
+    name: Build Nightly Artifacts
     needs: check-changes
     if: needs.check-changes.outputs.should_build == 'true'
-    env:
-      NODE_OPTIONS: --max-old-space-size=6144
-      BITFUN_RELEASE_CHANNEL: nightly
-      # Nightly does not publish a Tauri latest.json feed yet. Preserve its
-      # existing stable updater endpoints until that publishing path exists.
-      TAURI_UPDATER_ENDPOINT: https://github.com/GCWing/BitFun/releases/latest/download/latest.json
-      TAURI_UPDATER_FALLBACK_ENDPOINT: https://openbitfun.com/release/latest.json
-      # Nightly relay archives are signed too (linux-binaries.yml receives the
-      # key), so nightly Desktop needs the same trust root to verify them.
-      BITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - os: ubuntu-latest
-            name: linux-x64
-            target: x86_64-unknown-linux-gnu
-            build_command: pnpm run desktop:build:linux -- --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage
-          - os: ubuntu-24.04-arm
-            name: linux-arm64
-            target: aarch64-unknown-linux-gnu
-            # Fat LTO exhausts the hosted ARM runner while linking bitfun-desktop.
-            build_command: CARGO_PROFILE_RELEASE_LTO=thin pnpm run desktop:build:linux -- --target aarch64-unknown-linux-gnu --bundles deb,rpm,appimage
-          - os: macos-15
-            name: macos-arm64
-            target: aarch64-apple-darwin
-            build_command: pnpm run desktop:build:arm64
-          - os: macos-15-intel
-            name: macos-x64
-            target: x86_64-apple-darwin
-            build_command: pnpm run desktop:build:x86_64
-          - os: windows-latest
-            name: windows-x64
-            target: x86_64-pc-windows-msvc
-            build_command: pnpm run installer:build
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install Linux system dependencies (Tauri bundler)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update
-
-          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
-            WEBKIT_PKG=libwebkit2gtk-4.1-dev
-          else
-            WEBKIT_PKG=libwebkit2gtk-4.0-dev
-          fi
-
-          if apt-cache show libappindicator3-dev >/dev/null 2>&1; then
-            APPINDICATOR_PKG=libappindicator3-dev
-          else
-            APPINDICATOR_PKG=libayatana-appindicator3-dev
-          fi
-
-          # Tauri pins AppImage GTK input methods to its bundled cache, so the
-          # fcitx5 GTK3 bridge must be present before linuxdeploy builds it.
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            xdg-utils \
-            libglib2.0-dev \
-            libgtk-3-dev \
-            fcitx5-frontend-gtk3 \
-            libxdo-dev \
-            "$WEBKIT_PKG" \
-            "$APPINDICATOR_PKG" \
-            librsvg2-dev \
-            patchelf \
-            fakeroot \
-            rpm \
-            libleptonica-dev \
-            libtesseract-dev \
-            tesseract-ocr \
-            tesseract-ocr-eng
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform.target }}
-
-      - name: Cache Rust build
-        uses: swatinem/rust-cache@v2
-        with:
-          shared-key: "nightly-v2-${{ matrix.platform.name }}"
-          cache-bin: false
-
-      - name: Verify committed Cargo metadata
-        run: |
-          cargo metadata --locked --no-deps
-          cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate web API bindings
-        run: pnpm --dir src/web-ui run gen:types
-
-      - name: Type-check web UI
-        run: pnpm run type-check:web
-
-      - name: Patch nightly version
-        shell: bash
-        env:
-          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
-        run: |
-          set -euo pipefail
-
-          echo "Patching version to $NIGHTLY_VERSION"
-          ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
-          node scripts/set-build-version.mjs --version "$ASSET_VERSION"
-
-          echo "package.json version: $(jq -r '.version' package.json)"
-          echo "Cargo.toml version:   $(grep 'x-release-please-version' Cargo.toml)"
-
-      - name: Verify projected Cargo metadata
-        run: |
-          cargo metadata --locked --no-deps
-          cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml
-
-      - name: Run Windows CLI terminal contracts
-        if: runner.os == 'Windows'
-        env:
-          CARGO_INCREMENTAL: "0"
-          CARGO_PROFILE_DEV_DEBUG: "0"
-          CARGO_PROFILE_TEST_DEBUG: "0"
-        run: cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1
-
-      - name: Build desktop app
-        run: ${{ matrix.platform.build_command }}
-
-      - name: Package macOS CLI for SSH dispatch
-        if: runner.os == 'macOS'
-        id: macos-cli
-        shell: bash
-        env:
-          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
-          TARGET: ${{ matrix.platform.target }}
-        run: |
-          set -euo pipefail
-          ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
-          cargo build --release --target "$TARGET" -p bitfun-cli
-          bash scripts/cli/package-unix.sh "$ASSET_VERSION" "$TARGET"
-
-      - name: Sign macOS CLI archive and checksum
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-        run: |
-          set -euo pipefail
-          bash scripts/sign-release-assets.sh \
-            "${{ steps.macos-cli.outputs.archive }}" \
-            "${{ steps.macos-cli.outputs.checksum }}"
-
-      - name: Verify AppImage fcitx5 GTK module
-        if: runner.os == 'Linux'
-        shell: bash
-        run: bash scripts/ci/verify-appimage-fcitx.sh "${{ matrix.platform.target }}"
-
-      - name: Upload bundles
-        uses: actions/upload-artifact@v6
-        with:
-          name: bitfun-nightly-${{ matrix.platform.name }}-bundle
-          if-no-files-found: error
-          retention-days: ${{ inputs.artifact_retention_days || 7 }}
-          path: |
-            target/*/release/bundle
-            target/release/bundle
-            src/apps/desktop/target/release/bundle
-            BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
-            bitfun-cli-*-apple-darwin.tar.gz
-            bitfun-cli-*-apple-darwin.tar.gz.sha256
-            bitfun-cli-*-apple-darwin.tar.gz.sig
-            bitfun-cli-*-apple-darwin.tar.gz.sha256.sig
-
-  linux-binaries:
-    name: Linux CLI and Relay Server
-    needs: check-changes
-    if: needs.check-changes.outputs.should_build == 'true'
-    uses: ./.github/workflows/linux-binaries.yml
+    uses: ./.github/workflows/nightly-artifacts.yml
+    permissions:
+      contents: read
     secrets:
-      release_signing_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      release_signing_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      release_pubkey: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
     with:
       checkout_ref: ${{ github.sha }}
       version: ${{ needs.check-changes.outputs.nightly_version }}
@@ -310,7 +90,7 @@ jobs:
   # ── Publish nightly pre-release ────────────────────────────────────
   publish-nightly:
     name: Publish Nightly
-    needs: [check-changes, package, linux-binaries]
+    needs: [check-changes, build-artifacts]
     if: >-
       needs.check-changes.outputs.should_build == 'true' &&
       inputs.build_only != true

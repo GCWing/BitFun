@@ -437,18 +437,22 @@ test('ordinary CI requires the exact Nightly artifact producers', () => {
 
   assert.equal(buildJob.name, 'Nightly Build Contract');
   assert.equal(buildJob.needs, undefined);
-  assert.equal(buildJob.uses, './.github/workflows/nightly.yml');
+  assert.equal(buildJob.uses, './.github/workflows/nightly-artifacts.yml');
   assert.deepEqual(buildJob.permissions, { contents: 'read' });
   assert.deepEqual(buildJob.with, {
-    force_build: true,
-    build_only: true,
+    checkout_ref: '${{ github.sha }}',
+    version: '0.0.0-nightly.ci.${{ github.run_id }}',
+    artifact_prefix: 'ci-${{ github.run_id }}',
     artifact_retention_days: 1,
   });
 });
 
 test('nightly validates generated inputs and projected lockfiles before packaging', () => {
   const workflow = yaml.parse(
-    readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
+    readFileSync(
+      path.join(repoRoot, '.github/workflows/nightly-artifacts.yml'),
+      'utf8',
+    ),
   );
   const callInputs = workflow.on.workflow_call.inputs;
   const packageJob = workflow.jobs.package;
@@ -472,18 +476,11 @@ test('nightly validates generated inputs and projected lockfiles before packagin
     (step) => step.name === 'Build desktop app',
   );
 
-  assert.equal(callInputs.force_build.default, true);
-  assert.equal(callInputs.build_only.default, true);
+  assert.equal(callInputs.checkout_ref.required, true);
+  assert.equal(callInputs.version.required, true);
+  assert.equal(callInputs.artifact_prefix.required, true);
   assert.equal(callInputs.artifact_retention_days.default, 1);
   assert.equal(workflow.permissions.contents, 'read');
-  assert.match(
-    workflow.jobs['publish-nightly'].if,
-    /inputs\.build_only != true/,
-  );
-  assert.deepEqual(workflow.jobs['publish-nightly'].permissions, {
-    contents: 'write',
-    packages: 'write',
-  });
 
   assert.notEqual(committedMetadataIndex, -1);
   assert.notEqual(generationIndex, -1);
@@ -517,6 +514,30 @@ test('nightly validates generated inputs and projected lockfiles before packagin
     steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
     'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
   );
+});
+
+test('nightly orchestrates the shared build before the separately privileged publish', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
+  );
+  const build = workflow.jobs['build-artifacts'];
+  const publish = workflow.jobs['publish-nightly'];
+
+  assert.equal(workflow.on.workflow_call, undefined);
+  assert.equal(build.uses, './.github/workflows/nightly-artifacts.yml');
+  assert.deepEqual(build.permissions, { contents: 'read' });
+  assert.deepEqual(build.with, {
+    checkout_ref: '${{ github.sha }}',
+    version: '${{ needs.check-changes.outputs.nightly_version }}',
+    artifact_prefix: 'nightly',
+    artifact_retention_days: '${{ inputs.artifact_retention_days || 7 }}',
+  });
+  assert.deepEqual(publish.needs, ['check-changes', 'build-artifacts']);
+  assert.match(publish.if, /inputs\.build_only != true/);
+  assert.deepEqual(publish.permissions, {
+    contents: 'write',
+    packages: 'write',
+  });
 });
 
 test('Linux binary packaging uses the shared locked version projection contract', () => {
@@ -796,23 +817,29 @@ test('beta publishing cannot advance the Relay latest image tag', () => {
 });
 
 test('nightly and beta use the shared build-version projection', () => {
+  const artifacts = yaml.parse(
+    readFileSync(
+      path.join(repoRoot, '.github/workflows/nightly-artifacts.yml'),
+      'utf8',
+    ),
+  );
   const nightly = yaml.parse(
     readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
   );
-  const patch = nightly.jobs.package.steps.find(
+  const patch = artifacts.jobs.package.steps.find(
     (step) => step.name === 'Patch nightly version',
   );
   assert.match(patch.run, /node scripts\/set-build-version\.mjs/);
-  assert.equal(nightly.jobs.package.env.BITFUN_RELEASE_CHANNEL, 'nightly');
+  assert.equal(artifacts.jobs.package.env.BITFUN_RELEASE_CHANNEL, 'nightly');
   assert.equal(
-    nightly.jobs.package.env.TAURI_UPDATER_ENDPOINT,
+    artifacts.jobs.package.env.TAURI_UPDATER_ENDPOINT,
     'https://github.com/GCWing/BitFun/releases/latest/download/latest.json',
   );
   assert.equal(
-    nightly.jobs.package.env.TAURI_UPDATER_FALLBACK_ENDPOINT,
+    artifacts.jobs.package.env.TAURI_UPDATER_FALLBACK_ENDPOINT,
     'https://openbitfun.com/release/latest.json',
   );
-  assert.equal(nightly.jobs.package.env.BITFUN_ENABLE_UPDATER_ARTIFACTS, undefined);
+  assert.equal(artifacts.jobs.package.env.BITFUN_ENABLE_UPDATER_ARTIFACTS, undefined);
   const signingStep = nightly.jobs['publish-nightly'].steps.find(
     (step) => step.name === 'Sign installer packages',
   );

@@ -338,12 +338,13 @@ jobs:
   # Linux CLI/Relay paths used by Nightly all succeed.
   nightly-build-contract:
     name: Nightly Build Contract
-    uses: ./.github/workflows/nightly.yml
+    uses: ./.github/workflows/nightly-artifacts.yml
     permissions:
       contents: read
     with:
-      force_build: true
-      build_only: true
+      checkout_ref: ${{ github.sha }}
+      version: 0.0.0-nightly.ci.${{ github.run_id }}
+      artifact_prefix: ci-${{ github.run_id }}
       artifact_retention_days: 1
 
   # ── DeepSeek Harness bridge: profile packaging on Windows ──────────
