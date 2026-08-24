@@ -1,8 +1,8 @@
-//! Grok Build (SuperGrok) account login and credential resolution.
+//! xAI (SuperGrok) account login and credential resolution.
 //!
 //! Authentication uses xAI's public Grok CLI OAuth client with the RFC 8628
-//! device flow. Subscription inference is pinned to the official Grok Build
-//! proxy so the session token cannot be redirected by model configuration.
+//! device flow. Subscription inference uses xAI's normal Responses endpoint,
+//! matching OpenCode's built-in xAI auth plugin.
 
 use super::jwt;
 use super::store::{self, StoredCredential};
@@ -18,9 +18,10 @@ const DEVICE_AUTHORIZATION_URL: &str = "https://auth.x.ai/oauth2/device/code";
 const TOKEN_URL: &str = "https://auth.x.ai/oauth2/token";
 const DEVICE_CODE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const SCOPE: &str = "openid profile email offline_access grok-cli:access api:access";
-const GROK_BUILD_BASE_URL: &str = "https://cli-chat-proxy.grok.com/v1";
-const GROK_BUILD_REQUEST_URL: &str = "https://cli-chat-proxy.grok.com/v1/chat/completions";
-const DEFAULT_MODEL: &str = "grok-build";
+const XAI_BASE_URL: &str = "https://api.x.ai/v1";
+const XAI_REQUEST_URL: &str = "https://api.x.ai/v1/responses";
+const DEFAULT_MODEL: &str = "grok-4.5";
+const OPENCODE_VERSION: &str = "1.18.21";
 const STORE_KEY: &str = "grok";
 const DEFAULT_TOKEN_LIFETIME_SECS: i64 = 60 * 60;
 const DEFAULT_DEVICE_LIFETIME_SECS: i64 = 5 * 60;
@@ -73,7 +74,7 @@ where
 }
 
 fn http_client(options: &SubscriptionHttpOptions) -> Result<reqwest::Client> {
-    super::build_http_client(options, "Grok Build")
+    super::build_http_client(options, "xAI (SuperGrok)")
 }
 
 fn now_ms() -> i64 {
@@ -90,15 +91,14 @@ fn expires_at_ms(expires_in: Option<i64>) -> i64 {
     )
 }
 
+fn opencode_user_agent() -> String {
+    format!("opencode/{OPENCODE_VERSION}")
+}
+
 fn oauth_request(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     builder
         .header(reqwest::header::ACCEPT, "application/json")
-        .header(
-            reqwest::header::USER_AGENT,
-            format!("BitFun/{}", env!("CARGO_PKG_VERSION")),
-        )
-        .header("x-grok-client-version", env!("CARGO_PKG_VERSION"))
-        .header("x-grok-client-surface", "ui")
+        .header(reqwest::header::USER_AGENT, opencode_user_agent())
 }
 
 fn validate_user_code(code: &str) -> Result<()> {
@@ -107,24 +107,20 @@ fn validate_user_code(code: &str) -> Result<()> {
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || character == '-')
     {
-        return Err(anyhow!(
-            "Grok Build returned an invalid device authorization code"
-        ));
+        return Err(anyhow!("xAI returned an invalid device authorization code"));
     }
     Ok(())
 }
 
 fn validate_verification_url(url: &str) -> Result<()> {
     if url.chars().any(|character| character.is_ascii_control()) {
-        return Err(anyhow!(
-            "Grok Build returned an invalid device verification URL"
-        ));
+        return Err(anyhow!("xAI returned an invalid device verification URL"));
     }
     let parsed = reqwest::Url::parse(url)
-        .map_err(|_| anyhow!("Grok Build returned an invalid device verification URL"))?;
+        .map_err(|_| anyhow!("xAI returned an invalid device verification URL"))?;
     if parsed.scheme() != "https" || parsed.host_str().is_none() {
         return Err(anyhow!(
-            "Grok Build returned an unsupported device verification URL"
+            "xAI returned an unsupported device verification URL"
         ));
     }
     Ok(())
@@ -136,26 +132,26 @@ async fn request_device_code(options: &SubscriptionHttpOptions) -> Result<Device
         .form(&[
             ("client_id", CLIENT_ID),
             ("scope", SCOPE),
-            ("referrer", "bitfun"),
+            ("referrer", "opencode"),
         ])
         .send()
         .await
-        .context("call Grok Build device code endpoint")?;
+        .context("call xAI device code endpoint")?;
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         return Err(anyhow!(
-            "Grok Build device authorization failed: HTTP {status}: {body}"
+            "xAI device authorization failed: HTTP {status}: {body}"
         ));
     }
 
     let device = response
         .json::<DeviceCodeResponse>()
         .await
-        .context("parse Grok Build device authorization response")?;
+        .context("parse xAI device authorization response")?;
     if device.device_code.trim().is_empty() {
         return Err(anyhow!(
-            "Grok Build device authorization response missing device_code"
+            "xAI device authorization response missing device_code"
         ));
     }
     validate_user_code(&device.user_code)?;
@@ -180,9 +176,9 @@ fn classify_device_poll_error(
         "authorization_pending" => Ok(DevicePoll::Pending),
         "slow_down" => Ok(DevicePoll::SlowDown),
         "access_denied" | "authorization_denied" => {
-            Err(anyhow!("Grok Build device authorization was denied"))
+            Err(anyhow!("xAI device authorization was denied"))
         }
-        "expired_token" => Err(anyhow!("Grok Build device authorization code expired")),
+        "expired_token" => Err(anyhow!("xAI device authorization code expired")),
         _ => {
             let detail = error
                 .error_description
@@ -196,7 +192,7 @@ fn classify_device_poll_error(
                     }
                 });
             Err(anyhow!(
-                "Grok Build device token exchange failed: HTTP {status}: {detail}"
+                "xAI device token exchange failed: HTTP {status}: {detail}"
             ))
         }
     }
@@ -212,13 +208,13 @@ async fn poll_once(device_code: &str, options: &SubscriptionHttpOptions) -> Resu
         ])
         .send()
         .await
-        .context("call Grok Build device token endpoint")?;
+        .context("call xAI device token endpoint")?;
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
 
     if status.is_success() {
-        let tokens = serde_json::from_str::<TokenResponse>(&body)
-            .context("parse Grok Build token response")?;
+        let tokens =
+            serde_json::from_str::<TokenResponse>(&body).context("parse xAI token response")?;
         return Ok(DevicePoll::Authorized(tokens));
     }
 
@@ -258,13 +254,13 @@ fn metadata_from(
 
 async fn persist_tokens(tokens: TokenResponse, expected_revision: u64) -> Result<()> {
     if tokens.access_token.trim().is_empty() {
-        return Err(anyhow!("Grok Build token response missing access_token"));
+        return Err(anyhow!("xAI token response missing access_token"));
     }
     let refresh = tokens
         .refresh_token
         .clone()
         .filter(|token| !token.trim().is_empty())
-        .ok_or_else(|| anyhow!("Grok Build token response missing refresh_token"))?;
+        .ok_or_else(|| anyhow!("xAI token response missing refresh_token"))?;
     let expires = expires_at_ms(tokens.expires_in);
     let account_id = account_id_from(&tokens);
     let metadata = metadata_from(&tokens, None);
@@ -281,7 +277,7 @@ async fn persist_tokens(tokens: TokenResponse, expected_revision: u64) -> Result
     )
     .await?;
     super::require_current_store_revision(super::SubscriptionProvider::Grok, outcome)?;
-    log::info!("Grok Build subscription tokens saved");
+    log::info!("xAI subscription tokens saved");
     Ok(())
 }
 
@@ -295,18 +291,16 @@ async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Resu
         ])
         .send()
         .await
-        .context("call Grok Build token refresh endpoint")?;
+        .context("call xAI token refresh endpoint")?;
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "Grok Build token refresh failed: HTTP {status}: {body}"
-        ));
+        return Err(anyhow!("xAI token refresh failed: HTTP {status}: {body}"));
     }
     response
         .json::<TokenResponse>()
         .await
-        .context("parse Grok Build token refresh response")
+        .context("parse xAI token refresh response")
 }
 
 /// Starts the device-code login flow. The verification URL and user code are
@@ -335,11 +329,6 @@ pub(crate) async fn begin_login(
                 let deadline = tokio::time::Instant::now() + Duration::from_secs(expires_in as u64);
                 let mut wait = interval;
                 loop {
-                    let sleep = Duration::from_secs(wait as u64);
-                    if tokio::time::Instant::now() + sleep > deadline {
-                        return Err(anyhow!("Grok Build device authorization code expired"));
-                    }
-                    tokio::time::sleep(sleep).await;
                     match poll_once(&device_code, &options).await? {
                         DevicePoll::Authorized(tokens) => return Ok(tokens),
                         DevicePoll::Pending => wait = interval,
@@ -347,6 +336,14 @@ pub(crate) async fn begin_login(
                             wait = wait.saturating_add(SLOW_DOWN_INCREMENT_SECS)
                         }
                     }
+                    // OpenCode adds a small safety margin after the provider's
+                    // advertised interval and increases it by five seconds on
+                    // RFC 8628 `slow_down` responses.
+                    let sleep = Duration::from_secs(wait.saturating_add(3) as u64);
+                    if tokio::time::Instant::now() + sleep > deadline {
+                        return Err(anyhow!("xAI device authorization code expired"));
+                    }
+                    tokio::time::sleep(sleep).await;
                 }
             },
             move |tokens| persist_tokens(tokens, expected_revision),
@@ -355,6 +352,7 @@ pub(crate) async fn begin_login(
     };
 
     Ok(StartedLogin {
+        method: super::SubscriptionLoginMethod::Device,
         authorization_url,
         user_code: Some(user_code),
         instructions: "Open the verification link, confirm the code, then return to BitFun."
@@ -367,7 +365,7 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
-        .ok_or_else(|| anyhow!("Grok Build is not connected; sign in first"))?;
+        .ok_or_else(|| anyhow!("xAI is not connected; sign in first"))?;
     let StoredCredential::Oauth {
         refresh: refresh_token,
         access,
@@ -376,7 +374,7 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
         metadata,
     } = entry
     else {
-        return Err(anyhow!("Grok Build credential is not an OAuth login"));
+        return Err(anyhow!("xAI credential is not an OAuth login"));
     };
 
     if expires > now_ms() + REFRESH_LEEWAY_MS {
@@ -385,9 +383,7 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
 
     let refreshed = refresh(&refresh_token, options).await?;
     if refreshed.access_token.trim().is_empty() {
-        return Err(anyhow!(
-            "Grok Build token refresh response missing access_token"
-        ));
+        return Err(anyhow!("xAI token refresh response missing access_token"));
     }
     let new_refresh = refreshed
         .refresh_token
@@ -412,7 +408,7 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
     .await?;
     match outcome {
         store::ConditionalCommitOutcome::Committed { .. } => {
-            log::info!("Grok Build subscription tokens refreshed");
+            log::info!("xAI subscription tokens refreshed");
             Ok((new_access, new_expires))
         }
         store::ConditionalCommitOutcome::Conflict { current_revision } => {
@@ -425,9 +421,7 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
                 Some(StoredCredential::Oauth {
                     access, expires, ..
                 }) if expires > now_ms() => {
-                    log::info!(
-                        "Grok Build refresh reused tokens committed by a concurrent refresh"
-                    );
+                    log::info!("xAI refresh reused tokens committed by a concurrent refresh");
                     Ok((access, expires))
                 }
                 _ => Err(super::store_revision_conflict(
@@ -439,40 +433,26 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
     }
 }
 
-fn selected_model(model: &str) -> Result<String> {
-    let model = model.trim();
-    let model = if model.is_empty() {
-        DEFAULT_MODEL
-    } else {
-        model
-    };
-    reqwest::header::HeaderValue::from_str(model).with_context(|| {
-        format!("Grok Build model id cannot be used as a request header: {model}")
-    })?;
-    Ok(model.to_string())
-}
-
-fn inference_headers(model: &str) -> Result<HashMap<String, String>> {
+fn inference_headers() -> HashMap<String, String> {
     let mut headers = HashMap::new();
-    headers.insert("X-XAI-Token-Auth".to_string(), "xai-grok-cli".to_string());
-    headers.insert("x-grok-model-override".to_string(), selected_model(model)?);
-    Ok(headers)
+    headers.insert("User-Agent".to_string(), opencode_user_agent());
+    headers
 }
 
-/// Resolves the runtime credential and pins it to the trusted Grok Build
-/// subscription endpoint. The proxy routes by header rather than JSON model.
+/// Resolves the runtime credential and pins it to xAI's trusted Responses
+/// endpoint. The selected model remains in the normal request body.
 pub(crate) async fn resolve_for(
-    model: &str,
+    _model: &str,
     options: &SubscriptionHttpOptions,
 ) -> Result<ResolvedCredential> {
-    let headers = inference_headers(model)?;
+    let headers = inference_headers();
     let (access, expires) = ensure_fresh(options).await?;
 
     Ok(ResolvedCredential {
         api_key: access,
-        base_url: Some(GROK_BUILD_BASE_URL.to_string()),
-        request_url: Some(GROK_BUILD_REQUEST_URL.to_string()),
-        format: Some("openai".to_string()),
+        base_url: Some(XAI_BASE_URL.to_string()),
+        request_url: Some(XAI_REQUEST_URL.to_string()),
+        format: Some("responses".to_string()),
         extra_headers: headers,
         expires_at: Some(expires / 1000),
     })
@@ -484,15 +464,15 @@ pub(crate) async fn resolve(options: &SubscriptionHttpOptions) -> Result<Resolve
 
 /// Provider metadata used to seed a new model entry.
 pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
-    ("openai", GROK_BUILD_BASE_URL, DEFAULT_MODEL)
+    ("responses", XAI_BASE_URL, DEFAULT_MODEL)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_device_poll_error, inference_headers, selected_model, suggested,
-        validate_user_code, validate_verification_url, DeviceCodeResponse, DevicePoll,
-        TokenErrorResponse, TokenResponse, DEFAULT_MODEL, GROK_BUILD_BASE_URL,
+        classify_device_poll_error, inference_headers, suggested, validate_user_code,
+        validate_verification_url, DeviceCodeResponse, DevicePoll, TokenErrorResponse,
+        TokenResponse, DEFAULT_MODEL, OPENCODE_VERSION, XAI_BASE_URL, XAI_REQUEST_URL,
     };
 
     #[test]
@@ -534,27 +514,17 @@ mod tests {
     }
 
     #[test]
-    fn defaults_blank_model_and_rejects_header_injection() {
-        assert_eq!(selected_model("  ").unwrap(), DEFAULT_MODEL);
+    fn uses_standard_xai_responses_route_and_opencode_user_agent() {
+        assert_eq!(suggested(), ("responses", XAI_BASE_URL, DEFAULT_MODEL));
+        assert_eq!(XAI_REQUEST_URL, "https://api.x.ai/v1/responses");
+        let headers = inference_headers();
         assert_eq!(
-            selected_model("grok-build-fast").unwrap(),
-            "grok-build-fast"
+            headers.get("User-Agent").map(String::as_str),
+            Some(concat!("opencode/", "1.18.21"))
         );
-        assert!(selected_model("grok-build\r\nx-evil: value").is_err());
-    }
-
-    #[test]
-    fn uses_official_subscription_route_and_required_headers() {
-        assert_eq!(suggested(), ("openai", GROK_BUILD_BASE_URL, DEFAULT_MODEL));
-        let headers = inference_headers("grok-build-fast").unwrap();
-        assert_eq!(
-            headers.get("X-XAI-Token-Auth").map(String::as_str),
-            Some("xai-grok-cli")
-        );
-        assert_eq!(
-            headers.get("x-grok-model-override").map(String::as_str),
-            Some("grok-build-fast")
-        );
+        assert_eq!(OPENCODE_VERSION, "1.18.21");
+        assert!(!headers.contains_key("X-XAI-Token-Auth"));
+        assert!(!headers.contains_key("x-grok-model-override"));
     }
 
     #[test]

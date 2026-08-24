@@ -514,6 +514,12 @@ pub async fn apply_subscription_auth_with_options(
     let resolved = match auth {
         AuthConfig::ApiKey => return Ok(None),
         AuthConfig::Subscription { provider, plan } => {
+            let adapter_provider = to_adapter_provider(*provider);
+            if let Some(model) =
+                subscription_auth::runtime_model_override(adapter_provider, &ai_config.model)
+            {
+                ai_config.model = model.to_string();
+            }
             let resolved = match (*provider, *plan) {
                 (SubscriptionProvider::Opencode, Some(plan)) => {
                     subscription_auth::resolve_opencode_with_options(
@@ -527,8 +533,7 @@ pub async fn apply_subscription_auth_with_options(
                     subscription_auth::resolve_grok_with_options(&ai_config.model, options).await
                 }
                 (_, None) => {
-                    subscription_auth::resolve_with_options(to_adapter_provider(*provider), options)
-                        .await
+                    subscription_auth::resolve_with_options(adapter_provider, options).await
                 }
                 (_, Some(plan)) => Err(anyhow!(
                     "OpenCode plan {plan:?} cannot be used with provider {provider:?}"
@@ -574,7 +579,7 @@ pub async fn apply_subscription_auth_with_options(
     Ok(resolved.expires_at)
 }
 
-/// List subscription accounts (Codex / Antigravity / OpenCode / Grok Build).
+/// List subscription accounts (Codex / Antigravity / OpenCode / xAI).
 #[cfg(feature = "subscription-auth")]
 pub async fn list_subscription_accounts() -> Vec<subscription_auth::SubscriptionAccount> {
     subscription_auth::list_accounts().await

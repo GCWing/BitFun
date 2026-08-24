@@ -13,6 +13,7 @@ use crate::stream::handle_gemini_stream;
 use crate::trace::ModelExchangeTraceConfig;
 use crate::types::{Message, RemoteModelInfo, ToolDefinition};
 use anyhow::{anyhow, Result};
+use bitfun_core_types::errors::AiProviderError;
 use log::{debug, warn};
 use reqwest::RequestBuilder;
 use serde::Deserialize;
@@ -21,12 +22,15 @@ use std::sync::OnceLock;
 use tokio::sync::Mutex;
 
 const CODE_ASSIST_BASE: &str = "https://cloudcode-pa.googleapis.com";
+const ANTIGRAVITY_DAILY_BASE: &str = "https://daily-cloudcode-pa.sandbox.googleapis.com";
+const ANTIGRAVITY_AUTOPUSH_BASE: &str = "https://autopush-cloudcode-pa.sandbox.googleapis.com";
+const ANTIGRAVITY_DEFAULT_PROJECT: &str = "rising-fact-p41fc";
 const STREAM_ENDPOINT: &str = "/v1internal:streamGenerateContent?alt=sse";
 const LOAD_CODE_ASSIST_ENDPOINT: &str = "/v1internal:loadCodeAssist";
 const ONBOARD_USER_ENDPOINT: &str = "/v1internal:onboardUser";
 
-fn cached_project() -> &'static Mutex<Option<String>> {
-    static CACHE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+fn cached_project() -> &'static Mutex<Option<(String, String)>> {
+    static CACHE: OnceLock<Mutex<Option<(String, String)>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
@@ -55,7 +59,17 @@ pub(crate) fn apply_headers(client: &AIClient, builder: RequestBuilder) -> Reque
 #[derive(Debug, Deserialize)]
 struct LoadCodeAssistResponse {
     #[serde(default, rename = "cloudaicompanionProject")]
-    cloudaicompanion_project: Option<String>,
+    cloudaicompanion_project: Option<serde_json::Value>,
+    #[serde(default, rename = "allowedTiers")]
+    allowed_tiers: Vec<CodeAssistTier>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodeAssistTier {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default, rename = "isDefault")]
+    is_default: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,40 +92,98 @@ struct OnboardProject {
     id: Option<String>,
 }
 
+fn is_antigravity(client: &AIClient) -> bool {
+    client
+        .config
+        .custom_headers
+        .as_ref()
+        .and_then(|headers| headers.get("Client-Metadata"))
+        .is_some_and(|value| value.contains("ANTIGRAVITY"))
+}
+
+fn antigravity_platform(client: &AIClient) -> &'static str {
+    let metadata = client
+        .config
+        .custom_headers
+        .as_ref()
+        .and_then(|headers| headers.get("Client-Metadata"))
+        .map(String::as_str)
+        .unwrap_or_default();
+    if metadata.contains("WINDOWS") {
+        "WINDOWS"
+    } else {
+        // The Antigravity desktop client exposes only Windows/macOS
+        // fingerprints; its OpenCode plugin maps Linux/headless hosts to one
+        // of those supported platforms too.
+        "MACOS"
+    }
+}
+
+fn antigravity_metadata(platform: &str, duet_project: Option<&str>) -> serde_json::Value {
+    let mut metadata = serde_json::json!({
+        "ideType": "ANTIGRAVITY",
+        "platform": platform,
+        "pluginType": "GEMINI",
+    });
+    if let Some(project) = duet_project {
+        metadata
+            .as_object_mut()
+            .expect("Antigravity metadata must be an object")
+            .insert(
+                "duetProject".to_string(),
+                serde_json::Value::String(project.to_string()),
+            );
+    }
+    metadata
+}
+
+fn extract_project(value: Option<&serde_json::Value>) -> Option<String> {
+    value
+        .and_then(|value| {
+            value.as_str().map(str::to_string).or_else(|| {
+                value
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            })
+        })
+        .filter(|project| !project.trim().is_empty())
+}
+
+fn default_tier(load: &LoadCodeAssistResponse, antigravity: bool) -> String {
+    load.allowed_tiers
+        .iter()
+        .find(|tier| tier.is_default.unwrap_or(false))
+        .or_else(|| load.allowed_tiers.first())
+        .and_then(|tier| tier.id.clone())
+        .filter(|tier| !tier.trim().is_empty())
+        .unwrap_or_else(|| if antigravity { "FREE" } else { "free-tier" }.to_string())
+}
+
+async fn remember_project(client: &AIClient, project: String) -> String {
+    *cached_project().lock().await = Some((client.config.api_key.clone(), project.clone()));
+    project
+}
+
 async fn discover_project(client: &AIClient) -> Result<String> {
     {
         let guard = cached_project().lock().await;
-        if let Some(p) = guard.clone() {
-            return Ok(p);
+        if let Some((credential, project)) = guard.as_ref() {
+            if credential == &client.config.api_key {
+                return Ok(project.clone());
+            }
         }
     }
 
     if let Ok(env_project) = std::env::var("GOOGLE_CLOUD_PROJECT") {
         if !env_project.is_empty() {
-            *cached_project().lock().await = Some(env_project.clone());
-            return Ok(env_project);
+            return Ok(remember_project(client, env_project).await);
         }
     }
 
-    let antigravity = client
-        .config
-        .custom_headers
-        .as_ref()
-        .and_then(|headers| headers.get("Client-Metadata"))
-        .is_some_and(|value| value.contains("ANTIGRAVITY"));
+    let antigravity = is_antigravity(client);
     let metadata = if antigravity {
-        let platform = if cfg!(target_os = "windows") {
-            "WINDOWS"
-        } else if cfg!(target_os = "macos") {
-            "MACOS"
-        } else {
-            "LINUX"
-        };
-        serde_json::json!({
-            "ideType": "ANTIGRAVITY",
-            "platform": platform,
-            "pluginType": "GEMINI",
-        })
+        antigravity_metadata(antigravity_platform(client), None)
     } else {
         serde_json::json!({
             "ideType": "IDE_UNSPECIFIED",
@@ -120,52 +192,118 @@ async fn discover_project(client: &AIClient) -> Result<String> {
         })
     };
 
-    let load_url = format!("{}{}", CODE_ASSIST_BASE, LOAD_CODE_ASSIST_ENDPOINT);
-    let load_body = serde_json::json!({ "metadata": metadata });
-    let load_resp = apply_headers(client, client.client.post(&load_url))
-        .json(&load_body)
-        .send()
-        .await?;
-    let load_status = load_resp.status();
-    if !load_status.is_success() {
-        let body = load_resp.text().await.unwrap_or_default();
-        return Err(anyhow!("loadCodeAssist failed: HTTP {load_status}: {body}"));
+    // OpenCode's Antigravity adapter uses the compatibility project only for
+    // discovery. Onboarding omits it unless OAuth supplied an actual project,
+    // allowing Code Assist to provision the account's managed project.
+    let load_metadata = if antigravity {
+        antigravity_metadata(
+            antigravity_platform(client),
+            Some(ANTIGRAVITY_DEFAULT_PROJECT),
+        )
+    } else {
+        metadata.clone()
+    };
+    let load_body = serde_json::json!({ "metadata": load_metadata });
+    let load_endpoints: &[&str] = if antigravity {
+        &[
+            CODE_ASSIST_BASE,
+            ANTIGRAVITY_DAILY_BASE,
+            ANTIGRAVITY_AUTOPUSH_BASE,
+        ]
+    } else {
+        &[CODE_ASSIST_BASE]
+    };
+    let mut loaded = None;
+    let mut last_load_error = None;
+    for endpoint in load_endpoints {
+        let load_url = format!("{endpoint}{LOAD_CODE_ASSIST_ENDPOINT}");
+        let mut request = apply_headers(client, client.client.post(&load_url));
+        if antigravity {
+            request = request.header("User-Agent", "google-api-nodejs-client/9.15.1");
+        }
+        match request.json(&load_body).send().await {
+            Ok(response) if response.status().is_success() => {
+                loaded = Some(response.json::<LoadCodeAssistResponse>().await?);
+                break;
+            }
+            Ok(response) => {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                last_load_error = Some(format!("HTTP {status}: {body}"));
+            }
+            Err(error) => last_load_error = Some(error.to_string()),
+        }
     }
-    let load_parsed: LoadCodeAssistResponse = load_resp.json().await?;
-    if let Some(project) = load_parsed
-        .cloudaicompanion_project
-        .filter(|s| !s.is_empty())
-    {
-        *cached_project().lock().await = Some(project.clone());
-        return Ok(project);
+    let Some(load_parsed) = loaded else {
+        if antigravity {
+            warn!(
+                "Antigravity project discovery failed across all endpoints; using the compatibility project: {}",
+                last_load_error.unwrap_or_else(|| "unknown error".to_string())
+            );
+            return Ok(remember_project(client, ANTIGRAVITY_DEFAULT_PROJECT.to_string()).await);
+        }
+        return Err(anyhow!(
+            "loadCodeAssist failed: {}",
+            last_load_error.unwrap_or_else(|| "unknown error".to_string())
+        ));
+    };
+    if let Some(project) = extract_project(load_parsed.cloudaicompanion_project.as_ref()) {
+        return Ok(remember_project(client, project).await);
     }
 
-    // Need to onboard – create a free-tier Code Assist project.
-    let onboard_url = format!("{}{}", CODE_ASSIST_BASE, ONBOARD_USER_ENDPOINT);
+    // Need to onboard a managed Code Assist project. Antigravity can return an
+    // asynchronous operation, so match its OpenCode plugin's bounded polling
+    // instead of assuming the first response is complete.
+    let tier_id = default_tier(&load_parsed, antigravity);
     let onboard_body = serde_json::json!({
-        "tierId": "free-tier",
+        "tierId": tier_id,
         "metadata": metadata,
     });
-    let onboard_resp = apply_headers(client, client.client.post(&onboard_url))
-        .json(&onboard_body)
-        .send()
-        .await?;
-    let onboard_status = onboard_resp.status();
-    if !onboard_status.is_success() {
-        let body = onboard_resp.text().await.unwrap_or_default();
-        return Err(anyhow!("onboardUser failed: HTTP {onboard_status}: {body}"));
+    let onboard_endpoints: &[&str] = if antigravity {
+        &[
+            ANTIGRAVITY_DAILY_BASE,
+            ANTIGRAVITY_AUTOPUSH_BASE,
+            CODE_ASSIST_BASE,
+        ]
+    } else {
+        &[CODE_ASSIST_BASE]
+    };
+    for endpoint in onboard_endpoints {
+        for _ in 0..10 {
+            let onboard_url = format!("{endpoint}{ONBOARD_USER_ENDPOINT}");
+            let response = match apply_headers(client, client.client.post(&onboard_url))
+                .json(&onboard_body)
+                .send()
+                .await
+            {
+                Ok(response) if response.status().is_success() => response,
+                _ => break,
+            };
+            let parsed: OnboardOperation = response.json().await?;
+            if parsed.done.unwrap_or(false) {
+                if let Some(project) = parsed
+                    .response
+                    .and_then(|response| response.cloudaicompanion_project)
+                    .and_then(|project| project.id)
+                    .filter(|project| !project.trim().is_empty())
+                {
+                    return Ok(remember_project(client, project).await);
+                }
+                if antigravity {
+                    return Ok(
+                        remember_project(client, ANTIGRAVITY_DEFAULT_PROJECT.to_string()).await,
+                    );
+                }
+                return Err(anyhow!("onboardUser response missing project id"));
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
     }
-    let parsed: OnboardOperation = onboard_resp.json().await?;
-    if !parsed.done.unwrap_or(false) {
-        return Err(anyhow!("onboardUser did not complete in a single call"));
+    if antigravity {
+        warn!("Antigravity managed-project onboarding did not complete; using the compatibility project");
+        return Ok(remember_project(client, ANTIGRAVITY_DEFAULT_PROJECT.to_string()).await);
     }
-    let project = parsed
-        .response
-        .and_then(|r| r.cloudaicompanion_project)
-        .and_then(|p| p.id)
-        .ok_or_else(|| anyhow!("onboardUser response missing project id"))?;
-    *cached_project().lock().await = Some(project.clone());
-    Ok(project)
+    Err(anyhow!("onboardUser did not complete"))
 }
 
 pub(crate) async fn send_stream(
@@ -189,12 +327,7 @@ pub(crate) async fn send_stream(
         extra_body,
     )?;
 
-    let antigravity = client
-        .config
-        .custom_headers
-        .as_ref()
-        .and_then(|headers| headers.get("Client-Metadata"))
-        .is_some_and(|value| value.contains("ANTIGRAVITY"));
+    let antigravity = is_antigravity(client);
     let mut request_body = serde_json::json!({
         "model": client.config.model,
         "project": project,
@@ -209,32 +342,71 @@ pub(crate) async fn send_stream(
         }
     }
 
-    let url = if client.config.request_url.is_empty() {
+    let configured_url = if client.config.request_url.is_empty() {
         format!("{}{}", CODE_ASSIST_BASE, STREAM_ENDPOINT)
     } else {
         client.config.request_url.clone()
     };
+    let urls = if antigravity {
+        vec![
+            format!("{ANTIGRAVITY_DAILY_BASE}{STREAM_ENDPOINT}"),
+            format!("{ANTIGRAVITY_AUTOPUSH_BASE}{STREAM_ENDPOINT}"),
+            format!("{CODE_ASSIST_BASE}{STREAM_ENDPOINT}"),
+        ]
+    } else {
+        vec![configured_url]
+    };
 
     debug!(
         "Gemini Code Assist config: model={}, request_url={}, project={}, max_tries={}",
-        client.config.model, url, project, max_tries
+        client.config.model, urls[0], project, max_tries
     );
 
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;
-    execute_sse_request(
-        "Gemini Code Assist Streaming API",
-        &url,
-        &request_body,
-        max_tries,
-        ttft_timeout,
-        trace,
-        || apply_headers(client, client.client.post(&url)),
-        move |response, tx, tx_raw, remaining_ttft_timeout| {
-            handle_gemini_stream(response, tx, tx_raw, remaining_ttft_timeout, idle_timeout)
-        },
-    )
-    .await
+    let mut last_error = None;
+    for (index, url) in urls.iter().enumerate() {
+        match execute_sse_request(
+            "Gemini Code Assist Streaming API",
+            url,
+            &request_body,
+            max_tries,
+            ttft_timeout,
+            trace.clone(),
+            || apply_headers(client, client.client.post(url)),
+            move |response, tx, tx_raw, remaining_ttft_timeout| {
+                handle_gemini_stream(response, tx, tx_raw, remaining_ttft_timeout, idle_timeout)
+            },
+        )
+        .await
+        {
+            Ok(response) => return Ok(response),
+            Err(error)
+                if index + 1 < urls.len() && should_try_next_antigravity_endpoint(&error) =>
+            {
+                warn!(
+                    "Antigravity request failed at {}; trying the next OpenCode-compatible endpoint: {error:#}",
+                    url
+                );
+                last_error = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow!("no Gemini Code Assist endpoint was available")))
+}
+
+fn should_try_next_antigravity_endpoint(error: &anyhow::Error) -> bool {
+    match error
+        .downcast_ref::<AiProviderError>()
+        .and_then(|error| error.http_status)
+    {
+        Some(403 | 404) => true,
+        Some(status) if status >= 500 => true,
+        Some(_) => false,
+        // Transport and timeout errors do not have structured HTTP status.
+        None => true,
+    }
 }
 
 const DEFAULT_CODE_ASSIST_MODELS: &[(&str, &str)] = &[
@@ -340,4 +512,74 @@ pub(crate) async fn list_models(_client: &AIClient) -> Result<Vec<RemoteModelInf
     }
 
     Ok(crate::client::utils::dedupe_remote_models(models))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        antigravity_metadata, default_tier, extract_project, should_try_next_antigravity_endpoint,
+        AiProviderError, CodeAssistTier, LoadCodeAssistResponse, ANTIGRAVITY_DEFAULT_PROJECT,
+    };
+
+    #[test]
+    fn accepts_string_and_object_project_shapes() {
+        assert_eq!(
+            extract_project(Some(&serde_json::json!("project-string"))).as_deref(),
+            Some("project-string")
+        );
+        assert_eq!(
+            extract_project(Some(&serde_json::json!({ "id": "project-object" }))).as_deref(),
+            Some("project-object")
+        );
+    }
+
+    #[test]
+    fn selects_the_provider_default_tier() {
+        let load = LoadCodeAssistResponse {
+            cloudaicompanion_project: None,
+            allowed_tiers: vec![
+                CodeAssistTier {
+                    id: Some("FIRST".to_string()),
+                    is_default: Some(false),
+                },
+                CodeAssistTier {
+                    id: Some("DEFAULT".to_string()),
+                    is_default: Some(true),
+                },
+            ],
+        };
+        assert_eq!(default_tier(&load, true), "DEFAULT");
+    }
+
+    #[test]
+    fn scopes_the_compatibility_project_to_antigravity_discovery() {
+        let load = antigravity_metadata("MACOS", Some(ANTIGRAVITY_DEFAULT_PROJECT));
+        let onboard = antigravity_metadata("MACOS", None);
+
+        assert_eq!(load["duetProject"], ANTIGRAVITY_DEFAULT_PROJECT);
+        assert!(onboard.get("duetProject").is_none());
+        assert_eq!(onboard["ideType"], "ANTIGRAVITY");
+    }
+
+    #[test]
+    fn antigravity_endpoint_fallback_only_handles_compatible_failures() {
+        let error = |status| {
+            anyhow::Error::new(AiProviderError::from_parts(
+                format!("HTTP {status}"),
+                Some("Antigravity".to_string()),
+                None,
+                Some(status),
+            ))
+            .context("request failed")
+        };
+
+        assert!(!should_try_next_antigravity_endpoint(&error(400)));
+        assert!(!should_try_next_antigravity_endpoint(&error(429)));
+        assert!(should_try_next_antigravity_endpoint(&error(403)));
+        assert!(should_try_next_antigravity_endpoint(&error(404)));
+        assert!(should_try_next_antigravity_endpoint(&error(503)));
+        assert!(should_try_next_antigravity_endpoint(&anyhow::anyhow!(
+            "transport error"
+        )));
+    }
 }

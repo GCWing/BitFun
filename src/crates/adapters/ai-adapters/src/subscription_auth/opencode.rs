@@ -1,7 +1,7 @@
 //! OpenCode account login, catalog discovery, and credential resolution.
 //!
 //! Uses the OAuth 2.0 Device Authorization Grant against
-//! `console.opencode.ai`, aligned with OpenCode's `provider/opencode.ts`.
+//! `opencode.ai/console`, aligned with OpenCode's `provider/opencode.ts`.
 //! One OAuth identity can authenticate both the Zen and Go API products.
 
 use super::store::{self, StoredCredential};
@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-const SERVER: &str = "https://console.opencode.ai";
+const SERVER: &str = "https://opencode.ai/console";
 const CLIENT_ID: &str = "opencode-cli";
 const DEVICE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const ZEN_BASE_URL: &str = "https://opencode.ai/zen/v1";
@@ -37,6 +37,8 @@ struct DeviceCodeResponse {
     device_code: String,
     user_code: String,
     verification_uri_complete: String,
+    #[serde(default)]
+    expires_in: Option<u64>,
     #[serde(default)]
     interval: Option<u64>,
 }
@@ -555,16 +557,29 @@ async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Resu
 /// Resolves OpenCode's device verification URI to an absolute URL.
 ///
 /// The console API returns a path such as `/device?user_code=...` (same as
-/// OpenCode's own client, which prefixes `https://console.opencode.ai`).
-fn absolute_verification_url(uri: &str) -> String {
+/// OpenCode's own client, which resolves relative paths against its console base URL).
+fn absolute_verification_url(uri: &str) -> Result<String> {
     let trimmed = uri.trim();
-    if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
-        return trimmed.to_string();
+    if trimmed.is_empty()
+        || trimmed
+            .chars()
+            .any(|character| character.is_ascii_control())
+    {
+        return Err(anyhow!(
+            "OpenCode returned an invalid device verification URL"
+        ));
     }
-    if trimmed.starts_with('/') {
-        return format!("{SERVER}{trimmed}");
+    let base =
+        reqwest::Url::parse(&format!("{SERVER}/")).context("parse OpenCode Console base URL")?;
+    let resolved = base
+        .join(trimmed)
+        .context("resolve OpenCode device verification URL")?;
+    if !matches!(resolved.scheme(), "http" | "https") || resolved.host_str().is_none() {
+        return Err(anyhow!(
+            "OpenCode returned an unsupported device verification URL"
+        ));
     }
-    format!("{SERVER}/{trimmed}")
+    Ok(resolved.to_string())
 }
 
 /// Starts the device-code login flow. The verification URL and user code are
@@ -576,9 +591,14 @@ pub(crate) async fn begin_login(
 ) -> Result<StartedLogin> {
     let device = request_device_code(&options).await?;
     let interval = device.interval.unwrap_or(5).max(1);
+    let expires_in = device
+        .expires_in
+        .unwrap_or(super::LOGIN_TIMEOUT.as_secs())
+        .max(1)
+        .min(super::LOGIN_TIMEOUT.as_secs());
     let device_code = device.device_code.clone();
     let user_code = device.user_code.clone();
-    let authorization_url = absolute_verification_url(&device.verification_uri_complete);
+    let authorization_url = absolute_verification_url(&device.verification_uri_complete)?;
 
     let runner = async move {
         super::authorize_then_persist(
@@ -586,8 +606,13 @@ pub(crate) async fn begin_login(
             cancel,
             async {
                 let mut wait = interval;
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(expires_in);
                 loop {
-                    tokio::time::sleep(Duration::from_secs(wait)).await;
+                    let sleep = Duration::from_secs(wait);
+                    if tokio::time::Instant::now() + sleep > deadline {
+                        return Err(anyhow!("OpenCode device authorization code expired"));
+                    }
+                    tokio::time::sleep(sleep).await;
                     match poll_once(&device_code, &options).await? {
                         DevicePoll::Authorized(tokens) => {
                             // Optional profile/org network calls belong to the
@@ -605,7 +630,7 @@ pub(crate) async fn begin_login(
                         // RFC 8628: on slow_down, increase the poll interval
                         // by 5 seconds.
                         DevicePoll::SlowDown => {
-                            wait += 5;
+                            wait = wait.saturating_add(5);
                         }
                     }
                 }
@@ -616,6 +641,7 @@ pub(crate) async fn begin_login(
     };
 
     Ok(StartedLogin {
+        method: super::SubscriptionLoginMethod::Device,
         authorization_url,
         user_code: Some(user_code),
         instructions: "Open the verification link and enter the code, then return to BitFun."
@@ -782,8 +808,13 @@ mod tests {
     #[test]
     fn prefixes_relative_device_verification_path() {
         assert_eq!(
-            absolute_verification_url("/device?user_code=FBPH-VLFC&client_id=opencode-cli"),
-            "https://console.opencode.ai/device?user_code=FBPH-VLFC&client_id=opencode-cli"
+            absolute_verification_url("/device?user_code=FBPH-VLFC&client_id=opencode-cli")
+                .unwrap(),
+            "https://opencode.ai/device?user_code=FBPH-VLFC&client_id=opencode-cli"
+        );
+        assert_eq!(
+            absolute_verification_url("device?user_code=FBPH-VLFC").unwrap(),
+            "https://opencode.ai/console/device?user_code=FBPH-VLFC"
         );
     }
 
@@ -791,10 +822,12 @@ mod tests {
     fn keeps_absolute_verification_url() {
         assert_eq!(
             absolute_verification_url(
-                "https://console.opencode.ai/device?user_code=ABCD-1234&client_id=opencode-cli"
-            ),
-            "https://console.opencode.ai/device?user_code=ABCD-1234&client_id=opencode-cli"
+                "https://opencode.ai/console/device?user_code=ABCD-1234&client_id=opencode-cli"
+            )
+            .unwrap(),
+            "https://opencode.ai/console/device?user_code=ABCD-1234&client_id=opencode-cli"
         );
+        assert!(absolute_verification_url("javascript:alert(1)").is_err());
     }
 
     #[test]
