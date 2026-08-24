@@ -16,7 +16,7 @@ use bitfun_agent_runtime::sdk::{
     PermissionRequestSourceKind, PortError, PortErrorKind, PortResult,
 };
 use bitfun_core_types::ErrorCategory;
-use bitfun_events::AgenticEvent;
+use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
 use bitfun_runtime_ports::{
     ClockPort, PermissionAuditRecord, PermissionAuditStorePort, PermissionGrant,
     PermissionReplyStorePort, RuntimeServiceCapability, RuntimeServicePort,
@@ -45,6 +45,7 @@ struct FakeOwner {
     queue_dialog: bool,
     dialog_session_override: Option<String>,
     output_text: Option<String>,
+    emit_tool_events: bool,
     block_dialog_submit: bool,
     block_agent_resolution: bool,
     block_first_cancel: bool,
@@ -105,6 +106,15 @@ impl FakeOwner {
             queue: Mutex::new(Some(queue)),
             emit_terminal: true,
             output_text: Some(output_text),
+            ..Self::default()
+        }
+    }
+
+    fn with_tool_events(queue: Arc<EventQueue>) -> Self {
+        Self {
+            queue: Mutex::new(Some(queue)),
+            emit_terminal: true,
+            emit_tool_events: true,
             ..Self::default()
         }
     }
@@ -377,6 +387,44 @@ impl AgentDialogTurnPort for FakeOwner {
             });
         }
         let queue = self.queue.lock().unwrap().clone().unwrap();
+        if self.emit_tool_events {
+            queue
+                .enqueue(
+                    AgenticEvent::ToolEvent {
+                        session_id: request.session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        round_id: "round-fixture".to_string(),
+                        attempt_id: Some("attempt-fixture".to_string()),
+                        attempt_index: Some(0),
+                        tool_event: ToolEventData::Started {
+                            identity: ToolEventIdentity::direct("tool-fixture", "Read"),
+                            params: serde_json::json!({ "path": "must-not-leak.txt" }),
+                            timeout_seconds: None,
+                        },
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
+            queue
+                .enqueue(
+                    AgenticEvent::ToolEvent {
+                        session_id: request.session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        round_id: "round-fixture".to_string(),
+                        attempt_id: Some("attempt-fixture".to_string()),
+                        attempt_index: Some(0),
+                        tool_event: ToolEventData::Progress {
+                            identity: ToolEventIdentity::direct("tool-fixture", "Read"),
+                            message: "must-not-leak-progress".to_string(),
+                            percentage: 50.0,
+                        },
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
+        }
         queue
             .enqueue(
                 AgenticEvent::TextChunk {
@@ -394,6 +442,32 @@ impl AgentDialogTurnPort for FakeOwner {
             )
             .await
             .unwrap();
+        if self.emit_tool_events {
+            queue
+                .enqueue(
+                    AgenticEvent::ToolEvent {
+                        session_id: request.session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        round_id: "round-fixture".to_string(),
+                        attempt_id: Some("attempt-fixture".to_string()),
+                        attempt_index: Some(0),
+                        tool_event: ToolEventData::Completed {
+                            identity: ToolEventIdentity::direct("tool-fixture", "Read"),
+                            result: serde_json::json!({ "content": "must-not-leak" }),
+                            result_for_assistant: None,
+                            image_attachments: None,
+                            duration_ms: 12,
+                            queue_wait_ms: None,
+                            preflight_ms: None,
+                            confirmation_wait_ms: None,
+                            execution_ms: Some(12),
+                        },
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
+        }
         if self.emit_terminal {
             queue
                 .enqueue(
@@ -596,6 +670,28 @@ fn blocking_permission_manager() -> Arc<PermissionRequestManager> {
     ))
 }
 
+fn permission_request_fixture(request_id: &str, order: u32, session_id: &str) -> PermissionRequest {
+    PermissionRequest {
+        request_id: request_id.to_string(),
+        round_id: "round-fixture".to_string(),
+        order,
+        tool_call_id: Some("tool-fixture".to_string()),
+        project_path: Some("D:/workspace/project".to_string()),
+        project_id: "project-fixture".to_string(),
+        session_id: session_id.to_string(),
+        agent_id: "agentic".to_string(),
+        action: "edit".to_string(),
+        resources: vec!["src/lib.rs".to_string()],
+        save_resources: Vec::new(),
+        source: PermissionRequestSource {
+            kind: PermissionRequestSourceKind::ToolCall,
+            identity: "edit".to_string(),
+        },
+        delegation: None,
+        display_metadata: serde_json::Map::new(),
+    }
+}
+
 async fn host_with_query_limit(
     max_active_queries: usize,
 ) -> (
@@ -767,6 +863,38 @@ async fn host_with_temporary_model_installer(
     )
 }
 
+async fn host_with_tool_events() -> (
+    SdkHostConnection,
+    Arc<FakeOwner>,
+    mpsc::Receiver<serde_json::Value>,
+) {
+    let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    let owner = Arc::new(FakeOwner::with_tool_events(queue.clone()));
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(owner.clone())
+        .with_dialog_turn_port(owner.clone())
+        .with_cancellation_port(owner.clone())
+        .with_turn_settlement_port(owner.clone())
+        .with_session_management_port(owner.clone())
+        .with_session_close_port(owner.clone())
+        .with_permission_request_manager(permission_manager())
+        .with_event_source(AgentEventSource::new(queue))
+        .build()
+        .unwrap();
+    let (output, receiver) = mpsc::channel(32);
+    (
+        SdkHostConnection::new(
+            runtime,
+            "D:/workspace/project",
+            output,
+            SdkHostConfig::default(),
+            fake_installer(),
+        ),
+        owner,
+        receiver,
+    )
+}
+
 async fn initialize(host: &SdkHostConnection, output: &mut mpsc::Receiver<serde_json::Value>) {
     host.handle_request(request(serde_json::json!({
         "jsonrpc": "2.0",
@@ -775,7 +903,10 @@ async fn initialize(host: &SdkHostConnection, output: &mut mpsc::Receiver<serde_
         "params": {
             "protocolVersion": PROTOCOL_VERSION,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true },
+            "capabilities": {
+                "serverNotifications": true,
+                "permissionResponses": true
+            },
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",
@@ -795,7 +926,10 @@ fn temporary_model_initialize_request(id: &str) -> JsonRpcRequest {
         "params": {
             "protocolVersion": PROTOCOL_VERSION,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true },
+            "capabilities": {
+                "serverNotifications": true,
+                "permissionResponses": true
+            },
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",
@@ -837,7 +971,10 @@ async fn temporary_model_is_connection_scoped_and_cannot_be_overridden() {
         "params": {
             "protocolVersion": PROTOCOL_VERSION,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true },
+            "capabilities": {
+                "serverNotifications": true,
+                "permissionResponses": true
+            },
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",
@@ -1013,7 +1150,10 @@ async fn initialize_is_required_and_version_mismatch_fails_closed() {
         "params": {
             "protocolVersion": 99,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true },
+            "capabilities": {
+                "serverNotifications": true,
+                "permissionResponses": true
+            },
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",
@@ -1065,6 +1205,51 @@ async fn query_streams_existing_events_and_one_terminal_result() {
     assert_eq!(result["params"]["status"], "completed");
     assert_eq!(result["params"]["output"]["text"], "fixture result");
     assert!(output.try_recv().is_err(), "terminal result must be unique");
+}
+
+#[tokio::test]
+async fn query_projects_safe_tool_activity_without_raw_inputs_or_results() {
+    let (host, _, mut output) = host_with_tool_events().await;
+    initialize(&host, &mut output).await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-tools",
+        "method": "query/start",
+        "params": { "prompt": "read a file" }
+    })))
+    .await;
+
+    let accepted = output.recv().await.unwrap();
+    let started = output.recv().await.unwrap();
+    let progress = output.recv().await.unwrap();
+    let text = output.recv().await.unwrap();
+    let completed = output.recv().await.unwrap();
+    let result = output.recv().await.unwrap();
+
+    assert_eq!(started["params"]["sequence"], 1);
+    assert_eq!(started["params"]["event"]["type"], "tool_event");
+    assert_eq!(started["params"]["event"]["toolCallId"], "tool-fixture");
+    assert_eq!(started["params"]["event"]["toolName"], "Read");
+    assert_eq!(started["params"]["event"]["status"], "started");
+    assert!(started["params"]["event"].get("params").is_none());
+
+    assert_eq!(progress["params"]["sequence"], 2);
+    assert_eq!(progress["params"]["event"]["status"], "progress");
+    assert_eq!(progress["params"]["event"]["progress"], 50.0);
+    assert!(!serde_json::to_string(&progress)
+        .unwrap()
+        .contains("must-not-leak-progress"));
+    assert_eq!(text["params"]["sequence"], 3);
+    assert_eq!(text["params"]["event"]["type"], "assistant_text_delta");
+    assert_eq!(completed["params"]["sequence"], 4);
+    assert_eq!(completed["params"]["event"]["status"], "completed");
+    assert_eq!(completed["params"]["event"]["durationMs"], 12);
+    assert!(completed["params"]["event"].get("result").is_none());
+
+    assert_eq!(result["params"]["status"], "completed");
+    assert_eq!(result["params"]["queryId"], accepted["result"]["queryId"]);
+    assert_eq!(result["params"]["output"]["text"], "fixture result");
 }
 
 #[tokio::test]
@@ -2521,7 +2706,7 @@ async fn query_start_rejects_if_session_close_finishes_before_reservation() {
 }
 
 #[tokio::test]
-async fn permission_without_callback_is_rejected_and_finishes_action_required() {
+async fn permission_request_is_streamed_and_can_be_allowed_once() {
     let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     let owner = Arc::new(FakeOwner::without_terminal(queue.clone()));
     let permissions = permission_manager();
@@ -2541,7 +2726,10 @@ async fn permission_without_callback_is_rejected_and_finishes_action_required() 
         runtime,
         "D:/workspace/project",
         sender,
-        SdkHostConfig::default(),
+        SdkHostConfig {
+            permission_response_timeout: Duration::from_millis(250),
+            ..SdkHostConfig::default()
+        },
         fake_installer(),
     );
     initialize(&host, &mut output).await;
@@ -2560,25 +2748,7 @@ async fn permission_without_callback_is_rejected_and_finishes_action_required() 
         .to_string();
     assert_eq!(output.recv().await.unwrap()["method"], "query/event");
 
-    let permission_request = PermissionRequest {
-        request_id: "permission-fixture".to_string(),
-        round_id: "round-fixture".to_string(),
-        order: 0,
-        tool_call_id: Some("tool-fixture".to_string()),
-        project_path: Some("D:/workspace/project".to_string()),
-        project_id: "project-fixture".to_string(),
-        session_id,
-        agent_id: "agentic".to_string(),
-        action: "edit".to_string(),
-        resources: vec!["src/lib.rs".to_string()],
-        save_resources: Vec::new(),
-        source: PermissionRequestSource {
-            kind: PermissionRequestSourceKind::ToolCall,
-            identity: "edit".to_string(),
-        },
-        delegation: None,
-        display_metadata: serde_json::Map::new(),
-    };
+    let permission_request = permission_request_fixture("permission-fixture", 0, &session_id);
     let unrelated = permissions
         .register_batch_for_turn(
             vec![PermissionRequest {
@@ -2606,31 +2776,174 @@ async fn permission_without_callback_is_rejected_and_finishes_action_required() 
     ));
 
     let pending = permissions
-        .register_batch_for_turn(vec![permission_request], "turn-fixture")
+        .register_batch_for_turn(vec![permission_request.clone()], "turn-fixture")
         .await
         .unwrap()
         .pop()
         .unwrap();
 
-    let result = loop {
-        let value = output.recv().await.unwrap();
-        if value["method"] == "query/result" {
-            break value;
+    let permission = output.recv().await.unwrap();
+    assert_eq!(permission["method"], "query/event");
+    assert_eq!(permission["params"]["event"]["type"], "permission_request");
+    assert_eq!(
+        permission["params"]["event"]["requestId"],
+        "permission-fixture"
+    );
+    assert_eq!(permission["params"]["event"]["action"], "edit");
+    assert_eq!(
+        permission["params"]["event"]["resources"],
+        serde_json::json!(["src/lib.rs"])
+    );
+    assert_eq!(permission["params"]["event"]["source"]["kind"], "tool_call");
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "permission-response",
+        "method": "permission/respond",
+        "params": {
+            "queryId": accepted["result"]["queryId"],
+            "sessionId": accepted["result"]["sessionId"],
+            "turnId": accepted["result"]["turnId"],
+            "operationId": accepted["result"]["operationId"],
+            "requestId": "permission-fixture",
+            "decision": "allow_once"
         }
-    };
-    assert_eq!(result["params"]["status"], "failed");
-    assert_eq!(result["params"]["error"]["data"]["code"], "action_required");
+    })))
+    .await;
+    let response = output.recv().await.unwrap();
+    assert_eq!(response["result"]["accepted"], true);
+    assert_eq!(response["result"]["requestId"], "permission-fixture");
+
     let resolution = pending.wait().await;
     assert!(matches!(
         resolution,
         bitfun_agent_runtime::permission::PermissionWaitOutcome::Replied(
-            bitfun_agent_runtime::sdk::PermissionReply::Reject { .. }
+            bitfun_agent_runtime::sdk::PermissionReply::Once
         )
     ));
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "duplicate-permission-response",
+        "method": "permission/respond",
+        "params": {
+            "queryId": accepted["result"]["queryId"],
+            "sessionId": accepted["result"]["sessionId"],
+            "turnId": accepted["result"]["turnId"],
+            "operationId": accepted["result"]["operationId"],
+            "requestId": "permission-fixture",
+            "decision": "allow_once"
+        }
+    })))
+    .await;
+    assert_eq!(
+        output.recv().await.unwrap()["error"]["data"]["code"],
+        "not_found"
+    );
+
+    let rejected = permissions
+        .register_batch_for_turn(
+            vec![permission_request_fixture(
+                "permission-rejected",
+                1,
+                accepted["result"]["sessionId"].as_str().unwrap(),
+            )],
+            "turn-fixture",
+        )
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(
+        output.recv().await.unwrap()["params"]["event"]["requestId"],
+        "permission-rejected"
+    );
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "wrong-query-identity",
+        "method": "permission/respond",
+        "params": {
+            "queryId": accepted["result"]["queryId"],
+            "sessionId": accepted["result"]["sessionId"],
+            "turnId": accepted["result"]["turnId"],
+            "operationId": "another-operation",
+            "requestId": "permission-rejected",
+            "decision": "reject",
+            "feedback": "not needed"
+        }
+    })))
+    .await;
+    assert_eq!(
+        output.recv().await.unwrap()["error"]["data"]["code"],
+        "invalid_request"
+    );
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "reject-permission",
+        "method": "permission/respond",
+        "params": {
+            "queryId": accepted["result"]["queryId"],
+            "sessionId": accepted["result"]["sessionId"],
+            "turnId": accepted["result"]["turnId"],
+            "operationId": accepted["result"]["operationId"],
+            "requestId": "permission-rejected",
+            "decision": "reject",
+            "feedback": "not needed"
+        }
+    })))
+    .await;
+    assert_eq!(output.recv().await.unwrap()["result"]["accepted"], true);
+    assert!(matches!(
+        rejected.wait().await,
+        bitfun_agent_runtime::permission::PermissionWaitOutcome::Replied(
+            bitfun_agent_runtime::sdk::PermissionReply::Reject { feedback }
+        ) if feedback.as_deref() == Some("not needed")
+    ));
+
+    let expired = permissions
+        .register_batch_for_turn(
+            vec![permission_request_fixture(
+                "permission-expired",
+                2,
+                accepted["result"]["sessionId"].as_str().unwrap(),
+            )],
+            "turn-fixture",
+        )
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(
+        output.recv().await.unwrap()["params"]["event"]["requestId"],
+        "permission-expired"
+    );
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), expired.wait())
+            .await
+            .expect("permission timeout must settle through the Runtime owner"),
+        bitfun_agent_runtime::permission::PermissionWaitOutcome::Replied(
+            bitfun_agent_runtime::sdk::PermissionReply::Reject { feedback }
+        ) if feedback.as_deref() == Some("SDK permission response timed out")
+    ));
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "cancel-after-permission",
+        "method": "query/cancel",
+        "params": {
+            "queryId": accepted["result"]["queryId"],
+            "sessionId": accepted["result"]["sessionId"],
+            "turnId": accepted["result"]["turnId"],
+            "operationId": accepted["result"]["operationId"]
+        }
+    })))
+    .await;
 }
 
 #[tokio::test]
-async fn stalled_permission_rejection_is_bounded_and_cancels_the_exact_turn() {
+async fn stalled_user_permission_response_is_bounded_and_cancels_the_exact_turn() {
     let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     let owner = Arc::new(FakeOwner::without_terminal(queue.clone()));
     let permissions = blocking_permission_manager();
@@ -2667,28 +2980,15 @@ async fn stalled_permission_rejection_is_bounded_and_cancels_the_exact_turn() {
         .as_str()
         .unwrap()
         .to_string();
+    assert_eq!(output.recv().await.unwrap()["method"], "query/event");
 
     let _pending = permissions
         .register_batch_for_turn(
-            vec![PermissionRequest {
-                request_id: "permission-stalled".to_string(),
-                round_id: "round-fixture".to_string(),
-                order: 0,
-                tool_call_id: Some("tool-fixture".to_string()),
-                project_path: Some("D:/workspace/project".to_string()),
-                project_id: "project-fixture".to_string(),
-                session_id,
-                agent_id: "agentic".to_string(),
-                action: "edit".to_string(),
-                resources: vec!["src/lib.rs".to_string()],
-                save_resources: Vec::new(),
-                source: PermissionRequestSource {
-                    kind: PermissionRequestSourceKind::ToolCall,
-                    identity: "edit".to_string(),
-                },
-                delegation: None,
-                display_metadata: serde_json::Map::new(),
-            }],
+            vec![permission_request_fixture(
+                "permission-stalled",
+                0,
+                &session_id,
+            )],
             "turn-fixture",
         )
         .await
@@ -2696,17 +2996,46 @@ async fn stalled_permission_rejection_is_bounded_and_cancels_the_exact_turn() {
         .pop()
         .unwrap();
 
-    let result = tokio::time::timeout(Duration::from_secs(5), async {
+    let permission = output.recv().await.unwrap();
+    assert_eq!(
+        permission["params"]["event"]["requestId"],
+        "permission-stalled"
+    );
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "stalled-permission-response",
+        "method": "permission/respond",
+        "params": {
+            "queryId": accepted["result"]["queryId"],
+            "sessionId": accepted["result"]["sessionId"],
+            "turnId": accepted["result"]["turnId"],
+            "operationId": accepted["result"]["operationId"],
+            "requestId": "permission-stalled",
+            "decision": "allow_once"
+        }
+    })))
+    .await;
+
+    let (result, response) = tokio::time::timeout(Duration::from_secs(5), async {
+        let mut result = None;
+        let mut response = None;
         loop {
             let value = output.recv().await.unwrap();
             if value["method"] == "query/result" {
-                break value;
+                result = Some(value);
+            } else if value["id"] == "stalled-permission-response" {
+                response = Some(value);
+            }
+            if result.is_some() && response.is_some() {
+                break (result.unwrap(), response.unwrap());
             }
         }
     })
     .await
     .expect("permission rejection must remain bounded");
     assert_eq!(result["params"]["error"]["data"]["code"], "timeout");
+    assert_eq!(response["error"]["data"]["code"], "timeout");
+    assert_eq!(response["error"]["data"]["retryable"], false);
     assert_eq!(
         owner.cancel_requests.lock().unwrap()[0].turn_id.as_deref(),
         Some("turn-fixture")

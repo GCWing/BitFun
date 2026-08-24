@@ -1,6 +1,8 @@
 import type { JsonRpcConnection } from "./internal/json-rpc.js";
 import { withTimeout } from "./internal/deadline.js";
 import type {
+  PermissionRespondParams,
+  PermissionRespondResult,
   QueryCancelParams,
   QueryCancelResult,
   QueryEventParams,
@@ -9,7 +11,13 @@ import type {
   SessionCloseParams,
   SessionCloseResult,
 } from "./internal/wire/index.js";
-import type { QueryStreamItem, Result, ResultError, Turn } from "./types.js";
+import type {
+  PermissionResponse,
+  QueryStreamItem,
+  Result,
+  ResultError,
+  Turn,
+} from "./types.js";
 import { isConnectionUnusableError, SdkError } from "./errors.js";
 
 interface QueueWaiter {
@@ -33,6 +41,7 @@ export class Query implements AsyncIterable<QueryStreamItem> {
   readonly #ownsSession: boolean;
   readonly #closeTimeoutMs: number;
   readonly #closedHandlers = new Set<() => void>();
+  readonly #pendingPermissionIds = new Set<string>();
   #lastSequence = 0;
   #terminal = false;
   #unsubscribe: () => void = () => {};
@@ -101,6 +110,34 @@ export class Query implements AsyncIterable<QueryStreamItem> {
     return this.#cancelPromise;
   }
 
+  async respondPermission(
+    requestId: string,
+    response: PermissionResponse,
+  ): Promise<void> {
+    if (!this.#pendingPermissionIds.delete(requestId)) {
+      throw new Error("Permission request is unknown, expired, or already answered");
+    }
+    if (response.decision !== "reject" && response.feedback !== undefined) {
+      throw new Error("Permission feedback is only valid when rejecting a request");
+    }
+    const params: PermissionRespondParams = {
+      queryId: this.id,
+      sessionId: this.turn.sessionId,
+      turnId: this.turn.id,
+      operationId: this.operationId,
+      requestId,
+      decision: response.decision,
+      feedback: response.feedback,
+    };
+    const result = await this.#connection.request<PermissionRespondResult>(
+      "permission/respond",
+      params,
+    );
+    if (result.requestId !== requestId || !result.accepted) {
+      throw new Error("SDK Host answered a different permission request");
+    }
+  }
+
   close(): Promise<void> {
     this.#closePromise ??= this.#closeQuery();
     return this.#closePromise;
@@ -150,6 +187,43 @@ export class Query implements AsyncIterable<QueryStreamItem> {
         operationId: params.operationId,
         sequence: params.sequence,
         text: params.event.text,
+      });
+    } else if (params.event.type === "tool_event") {
+      this.#push({
+        type: "tool_event",
+        queryId: params.queryId,
+        sessionId: params.sessionId,
+        turnId: params.turnId,
+        operationId: params.operationId,
+        sequence: params.sequence,
+        toolCallId: params.event.toolCallId,
+        toolName: params.event.toolName,
+        status: params.event.status,
+        ...(params.event.progress === undefined
+          ? {}
+          : { progress: params.event.progress }),
+        ...(params.event.durationMs === undefined
+          ? {}
+          : { durationMs: params.event.durationMs }),
+      });
+    } else {
+      if (this.#pendingPermissionIds.has(params.event.requestId)) {
+        throw new Error("SDK Host repeated a pending permission request");
+      }
+      this.#pendingPermissionIds.add(params.event.requestId);
+      this.#push({
+        type: "permission_request",
+        queryId: params.queryId,
+        sessionId: params.sessionId,
+        turnId: params.turnId,
+        operationId: params.operationId,
+        sequence: params.sequence,
+        requestId: params.event.requestId,
+        action: params.event.action,
+        resources: params.event.resources,
+        source: params.event.source,
+        toolCallId: params.event.toolCallId ?? undefined,
+        responseTimeoutMs: params.event.responseTimeoutMs,
       });
     }
   }
@@ -244,6 +318,7 @@ export class Query implements AsyncIterable<QueryStreamItem> {
       return;
     }
     this.#terminal = true;
+    this.#pendingPermissionIds.clear();
     this.#resolveResult(result);
     this.#unsubscribe();
     while (this.#waiters.length > 0) {
@@ -317,6 +392,7 @@ export class Query implements AsyncIterable<QueryStreamItem> {
       return;
     }
     this.#terminal = true;
+    this.#pendingPermissionIds.clear();
     this.#failure = error;
     this.#rejectResult(error);
     this.#unsubscribe();
@@ -341,9 +417,9 @@ function bufferedItemBytes(item: QueryStreamItem): number {
   // Result frames have their own connection-level frame bound. Counting their
   // aggregate output again against the event backlog would reject a valid
   // Query that has not consumed the same text deltas yet.
-  return item.type === "assistant_text_delta"
-    ? Buffer.byteLength(item.text, "utf8") + 256
-    : 0;
+  return item.type === "result"
+    ? 0
+    : Buffer.byteLength(JSON.stringify(item), "utf8") + 128;
 }
 
 function mapResultError(error: QueryResultParams["error"]): ResultError {
