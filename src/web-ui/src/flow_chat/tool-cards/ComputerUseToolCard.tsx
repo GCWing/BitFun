@@ -20,6 +20,7 @@ import {
 
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
@@ -91,8 +92,7 @@ function isPermissionDeniedError(message: string | null): boolean {
 }
 
 async function openComputerUseSettings(pane: 'accessibility' | 'screen_capture'): Promise<void> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('computer_use_open_system_settings', { request: { pane } });
+  await api.invoke('computer_use_open_system_settings', { request: { pane } });
 }
 
 /** Groups the ~40 ComputerUse actions into a handful of recognizable icons instead of one icon per action. */

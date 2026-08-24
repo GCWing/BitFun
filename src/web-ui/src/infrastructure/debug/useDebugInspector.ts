@@ -10,6 +10,7 @@
  */
 
 import { useEffect } from 'react';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import {
@@ -30,8 +31,7 @@ async function loadDevToolsAvailable(): Promise<boolean> {
   if (!isTauriRuntime()) return false;
 
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return await invoke<boolean>('debug_devtools_available');
+    return await api.invoke<boolean>('debug_devtools_available');
   } catch (error) {
     log.error('Failed to detect DevTools availability', error);
     return false;
@@ -70,8 +70,7 @@ async function evalInPage<T>(script: string): Promise<T> {
 /** Open the native webview DevTools window. */
 async function openNativeDevTools(): Promise<void> {
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('debug_open_devtools');
+    await api.invoke('debug_open_devtools');
     log.info('Native DevTools opened');
   } catch (error) {
     log.error('Failed to open native DevTools', error);

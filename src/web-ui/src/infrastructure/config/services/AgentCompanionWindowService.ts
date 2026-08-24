@@ -1,5 +1,6 @@
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { createLogger } from '@/shared/utils/logger';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { AIExperienceSettings } from './AIExperienceConfigService';
 
 const log = createLogger('AgentCompanionWindowService');
@@ -36,8 +37,7 @@ export async function syncAgentCompanionDesktopWindow(
         command,
         displayMode: settings.agent_companion_display_mode,
       });
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke(command);
+      await api.invoke(command);
       if (requestId !== companionDesktopWindowSyncRequestId) {
         return;
       }

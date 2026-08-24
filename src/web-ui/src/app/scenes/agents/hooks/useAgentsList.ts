@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { AgentSource } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
@@ -183,8 +184,7 @@ export function useAgentsList({
 
     const fetchTools = async (): Promise<ToolInfo[]> => {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        return await invoke<ToolInfo[]>('get_all_tools_info');
+        return await api.invoke<ToolInfo[]>('get_all_tools_info');
       } catch {
         return [];
       }

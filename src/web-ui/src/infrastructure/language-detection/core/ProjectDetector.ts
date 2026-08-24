@@ -8,6 +8,7 @@ import type {
   ProjectDetectionPlugin 
 } from '../types';
 import { createLogger } from '@/shared/utils/logger';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 
 const log = createLogger('ProjectDetector');
 
@@ -230,9 +231,7 @@ class ProjectDetector {
   
    
   private async detectWithBackend(workspacePath: string): Promise<ProjectInfo> {
-    const { invoke } = await import('@tauri-apps/api/core');
-    
-    const backendResult = await invoke<{
+    const backendResult = await api.invoke<{
       languages: string[];
       primaryLanguage?: string;
       fileCount: Record<string, number>;

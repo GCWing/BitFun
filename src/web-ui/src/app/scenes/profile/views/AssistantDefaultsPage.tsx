@@ -14,6 +14,7 @@ import { GalleryZone } from '@/app/components';
 import '@/app/components/GalleryLayout/GalleryLayout.scss';
 import { Switch } from '@/component-library';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import {
   buildSkillCoverageSourceMap,
@@ -183,10 +184,9 @@ const AssistantDefaultsPage: React.FC = () => {
     (async () => {
       setLoading(true);
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         const [modeConf, tools, skillList, servers] = await Promise.all([
           configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
-          invoke<ToolInfo[]>('get_all_tools_info').catch(() => [] as ToolInfo[]),
+          api.invoke<ToolInfo[]>('get_all_tools_info').catch(() => [] as ToolInfo[]),
           configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
           MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
         ]);

@@ -14,6 +14,7 @@ import { SessionUsageModal } from '../flow_chat/components/usage/SessionUsageMod
 import { createLogger } from '@/shared/utils/logger';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { isTauriRuntime } from '@/infrastructure/runtime';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
 import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
@@ -225,8 +226,7 @@ function App() {
     mainWindowShownRef.current = true;
 
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('show_main_window');
+      await api.invoke('show_main_window');
       log.debug('Main window shown', { reason });
       startupTrace.markPhase('main_window_shown', { reason });
       window.dispatchEvent(new CustomEvent('bitfun:main-window-shown', { detail: { reason } }));
@@ -663,8 +663,7 @@ function App() {
           await openAgentCompanionSession(sessionId);
 
           try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('show_main_window');
+            await api.invoke('show_main_window');
           } catch (error) {
             log.warn('Failed to show main window from Agent companion bubble', {
               sessionId,

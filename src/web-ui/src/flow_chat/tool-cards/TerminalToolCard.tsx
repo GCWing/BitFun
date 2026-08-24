@@ -29,6 +29,7 @@ import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
 import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import './TerminalToolCard.scss';
 
 const log = createLogger('TerminalToolCard');
@@ -420,8 +421,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     setInterruptRequested(true);
 
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('cancel_tool', {
+      await api.invoke('cancel_tool', {
         request: {
           toolUseId,
           reason: 'User cancelled',

@@ -18,6 +18,10 @@ export default tseslint.config(
       'src/**/*.example.tsx',
       'src/component-library/components/registry.tsx',
       'src/component-library/preview/**',
+      // Pre-existing legacy: context-system type impls use class components
+      // with hooks and other legacy patterns. Kept out of lint to avoid
+      // unrelated churn; the dynamic-import fence still covers the rest of
+      // src/**. FileContextImpl.tsx here is migrated to api.invoke.
       'src/shared/context-system/core/types/**',
     ],
   },
@@ -52,6 +56,21 @@ export default tseslint.config(
                 '如需直连平台 invoke,放到 adapters/ 内并经 api 暴露。',
             },
           ],
+        },
+      ],
+      // no-restricted-imports only covers static ImportDeclaration in ESLint 9;
+      // dynamic `import('@tauri-apps/api/core')` to grab `invoke` bypasses it.
+      // Block the same surface with an ImportExpression selector so a future
+      // dynamic-import bypass fails the build too. Same ignores (adapters/** +
+      // PeerHostInvokeBridge) apply via this block's ignores; exceptions must be
+      // added with an owner comment, like the static rule.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "ImportExpression[source.value='@tauri-apps/api/core']",
+          message:
+            '业务命令必须经 api.invoke(ApiClient) 统一适配层,不可动态 import invoke。' +
+            '如需直连平台 invoke,放到 adapters/ 内并经 api 暴露。',
         },
       ],
     },

@@ -1,6 +1,7 @@
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('AgentCompanionPetCommands');
@@ -46,12 +47,9 @@ async function closeAgentCompanionDesktopPet(): Promise<void> {
 }
 
 async function openAgentCompanionPetSettings(): Promise<void> {
-  const [{ quickActions }, { invoke }] = await Promise.all([
-    import('@/shared/services/ide-control'),
-    import('@tauri-apps/api/core'),
-  ]);
+  const { quickActions } = await import('@/shared/services/ide-control');
   quickActions.openSettings('session-personalization');
-  await invoke('show_main_window');
+  await api.invoke('show_main_window');
   log.info('Agent companion settings opened from pet context menu');
 }
 
