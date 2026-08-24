@@ -88,7 +88,7 @@ jobs:
           exit "$rc"
 
       - name: Verify release and version-generation contracts
-        run: node --test scripts/tauri-release-manifest.test.mjs scripts/linux-binaries-manifest.test.mjs scripts/version-generation.test.mjs
+        run: node --test scripts/release-channel.test.mjs scripts/tauri-release-manifest.test.mjs scripts/linux-binaries-manifest.test.mjs scripts/version-generation.test.mjs
 
       - name: Verify minisign download fallback
         run: |
@@ -121,6 +121,8 @@ jobs:
             cache_key: ubuntu
           - os: macos-15
             cache_key: macos
+          - os: windows-latest
+            cache_key: windows
     steps:
       - uses: actions/checkout@v5
 
@@ -155,6 +157,13 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime
 
+      # ConPTY is a Windows-only execution path. Keep its interactive contracts
+      # serialized: concurrent native PTYs contend on hosted runners and used to
+      # race action delivery, TUI restoration, and output observation in Nightly.
+      - name: Run Windows CLI terminal contracts
+        if: runner.os == 'Windows'
+        run: cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1
+
       - name: Run SDK Host tests
         if: runner.os == 'Linux'
         run: cargo test --locked -p bitfun-sdk-host -p bitfun-sdk-host-app
@@ -186,6 +195,12 @@ jobs:
           - windows-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
 
       # Tauri code generation only requires its configured resource roots to
       # exist during check/test; distributable assets remain frontend-build's owner.
@@ -234,6 +249,16 @@ jobs:
           # refreshes and retain completed dependency builds after late test failures.
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           cache-on-failure: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+      # Nightly and beta project a prerelease version before their nested
+      # `cargo --locked` build hooks run. Exercise that state transition in the
+      # ordinary CI OS matrix so a green commit cannot carry a stale lockfile
+      # contract into packaging.
+      - name: Project CI build version
+        run: node scripts/set-build-version.mjs --version 0.0.0-nightly.ci
+
+      - name: Verify projected Cargo metadata
+        run: cargo metadata --locked --no-deps
 
       # rust-cache prunes the workspace target directory before saving it, so
       # native libraries stored under target need an independent cache lifecycle.
@@ -290,16 +315,10 @@ jobs:
         run: cargo test --locked -p bitfun-ai-adapters --features subscription-auth --lib subscription_auth
 
       # File watching is backed by a different OS API on every platform
-      # (ReadDirectoryChangesW / FSEvents / inotify), so watch registration
-      # regressions surface per-OS. The suite is behind a non-default feature
-      # and would otherwise never run anywhere.
-      #
-      # macOS is excluded: this suite already fails there before any of this
-      # branch's changes (the debounce/atomic-rename contracts time out under
-      # FSEvents coalescing), which is worth fixing separately rather than
-      # blocking unrelated work.
+      # (ReadDirectoryChangesW / FSEvents / inotify), so watch registration,
+      # debounce, and atomic-rename regressions must stay in the full OS matrix.
+      # The suite is behind a non-default feature and would otherwise never run.
       - name: Run file watch contract tests
-        if: runner.os != 'macOS'
         run: cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
 
       # Search tools resolve paths and symlinks directly, which also differs

@@ -251,6 +251,16 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     assert.equal(cache?.with?.['cache-on-failure'], trustedMain);
   }
 
+  const cliJob = workflow.jobs['cli-test'];
+  assert.ok(
+    cliJob.strategy.matrix.include.some((entry) => entry.os === 'windows-latest'),
+    'Windows ConPTY contracts must run before Nightly',
+  );
+  assert.equal(
+    cliJob.steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
+    'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
+  );
+
   const rustCache = rustJob.steps.find((step) =>
     step.uses?.startsWith('swatinem/rust-cache@'),
   );
@@ -304,6 +314,25 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   const commandByStep = new Map(
     rustJob.steps.map((step) => [step.name, step.run]),
   );
+  const projectVersion = rustJob.steps.find(
+    (step) => step.name === 'Project CI build version',
+  );
+  const verifyMetadata = rustJob.steps.find(
+    (step) => step.name === 'Verify projected Cargo metadata',
+  );
+  assert.equal(
+    projectVersion?.run,
+    'node scripts/set-build-version.mjs --version 0.0.0-nightly.ci',
+  );
+  assert.equal(verifyMetadata?.run, 'cargo metadata --locked --no-deps');
+  assert.ok(
+    rustJob.steps.indexOf(projectVersion) < rustJob.steps.indexOf(checkCompilation),
+    'CI must project the build version before the locked workspace check',
+  );
+  assert.ok(
+    rustJob.steps.indexOf(projectVersion) < rustJob.steps.indexOf(verifyMetadata),
+    'CI must validate Cargo.lock after projecting the build version',
+  );
   assert.equal(
     commandByStep.get('Run subscription authentication tests'),
     'cargo test --locked -p bitfun-ai-adapters --features subscription-auth --lib subscription_auth',
@@ -316,9 +345,17 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     installerCheck?.run,
     'cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml',
   );
+  const fileWatchContracts = rustJob.steps.find(
+    (step) => step.name === 'Run file watch contract tests',
+  );
   assert.equal(
-    commandByStep.get('Run file watch contract tests'),
+    fileWatchContracts?.run,
     'cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',
+  );
+  assert.equal(
+    fileWatchContracts?.if,
+    undefined,
+    'file-watch contracts must exercise FSEvents on macOS',
   );
   assert.equal(
     commandByStep.get('Run search tool tests'),
@@ -464,7 +501,7 @@ foreach ($case in $cases) {
   assert.equal(truthTable.status, 0, `${truthTable.stdout}${truthTable.stderr}`);
 });
 
-test('generates web API bindings before nightly web type-check', () => {
+test('nightly validates generated inputs and projected lockfiles before packaging', () => {
   const workflow = yaml.parse(
     readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
   );
@@ -476,6 +513,15 @@ test('generates web API bindings before nightly web type-check', () => {
   const typeCheckIndex = steps.findIndex(
     (step) => step.name === 'Type-check web UI',
   );
+  const patchIndex = steps.findIndex(
+    (step) => step.name === 'Patch nightly version',
+  );
+  const metadataIndex = steps.findIndex(
+    (step) => step.name === 'Verify projected Cargo metadata',
+  );
+  const buildIndex = steps.findIndex(
+    (step) => step.name === 'Build desktop app',
+  );
 
   assert.notEqual(generationIndex, -1);
   assert.notEqual(typeCheckIndex, -1);
@@ -486,6 +532,34 @@ test('generates web API bindings before nightly web type-check', () => {
   assert.ok(
     generationIndex < typeCheckIndex,
     'nightly must generate web API bindings before type-checking the web UI',
+  );
+  assert.ok(
+    typeCheckIndex < patchIndex && patchIndex < metadataIndex && metadataIndex < buildIndex,
+    'nightly must verify the projected lockfile before nested locked build hooks run',
+  );
+  assert.equal(steps[metadataIndex].run, 'cargo metadata --locked --no-deps');
+  assert.equal(
+    steps.some((step) => step.run?.includes('cargo generate-lockfile')),
+    false,
+    'nightly must not hide stale committed lockfiles by regenerating them ad hoc',
+  );
+  assert.equal(
+    steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
+    'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
+  );
+});
+
+test('nightly Relay smoke test passes an exact image reference', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
+  );
+  const smoke = workflow.jobs['publish-nightly'].steps.find(
+    (step) => step.name === 'Smoke-test published Relay image on both platforms',
+  );
+
+  assert.equal(
+    smoke?.run,
+    'bash scripts/relay/smoke-image.sh \\\n  "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}"\n',
   );
 });
 
