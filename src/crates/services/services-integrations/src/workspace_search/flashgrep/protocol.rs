@@ -43,7 +43,14 @@ pub(crate) enum Request {
     GetRepoStatus {
         params: RepoRef,
     },
+    RefreshRepo {
+        params: RefreshRepoParams,
+    },
     Search {
+        params: SearchParams,
+    },
+    #[serde(rename = "search/grouped_line_matches")]
+    SearchGroupedLineMatches {
         params: SearchParams,
     },
     Glob {
@@ -91,6 +98,15 @@ pub(crate) struct TaskRef {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct RefreshRepoParams {
+    pub repo_id: String,
+    /// `false` lets the daemon skip the walk when it already considers its view current; `true`
+    /// forces a reconcile regardless.
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct OpenRepoParams {
     pub repo_path: PathBuf,
     #[serde(default)]
@@ -107,8 +123,6 @@ pub(crate) struct SearchParams {
     pub query: QuerySpec,
     #[serde(default)]
     pub scope: PathScope,
-    #[serde(default)]
-    pub allow_scan_fallback: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,10 +149,6 @@ pub(crate) struct QuerySpec {
     pub word_regexp: bool,
     #[serde(default)]
     pub line_regexp: bool,
-    #[serde(default)]
-    pub before_context: usize,
-    #[serde(default)]
-    pub after_context: usize,
     #[serde(default = "default_top_k_tokens")]
     pub top_k_tokens: usize,
     #[serde(default)]
@@ -198,8 +208,14 @@ impl Default for RepoConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RefreshPolicyConfig {
-    #[serde(default = "default_rebuild_dirty_threshold")]
-    pub rebuild_dirty_threshold: usize,
+    #[serde(default = "default_base_delta_max_segments")]
+    pub base_delta_max_segments: usize,
+    #[serde(default = "default_base_delta_max_delete_segments")]
+    pub base_delta_max_delete_segments: usize,
+    #[serde(default = "default_base_delta_max_bytes_ratio")]
+    pub base_delta_max_bytes_ratio: f64,
+    #[serde(default = "default_base_head_cache_entries")]
+    pub base_head_cache_entries: usize,
     #[serde(default = "default_overlay_auto_checkpoint_max_uncommitted_ops")]
     pub overlay_auto_checkpoint_max_uncommitted_ops: u64,
     #[serde(default = "default_overlay_merge_min_delay_ms")]
@@ -211,7 +227,10 @@ pub(crate) struct RefreshPolicyConfig {
 impl Default for RefreshPolicyConfig {
     fn default() -> Self {
         Self {
-            rebuild_dirty_threshold: default_rebuild_dirty_threshold(),
+            base_delta_max_segments: default_base_delta_max_segments(),
+            base_delta_max_delete_segments: default_base_delta_max_delete_segments(),
+            base_delta_max_bytes_ratio: default_base_delta_max_bytes_ratio(),
+            base_head_cache_entries: default_base_head_cache_entries(),
             overlay_auto_checkpoint_max_uncommitted_ops:
                 default_overlay_auto_checkpoint_max_uncommitted_ops(),
             overlay_merge_min_delay_ms: default_overlay_merge_min_delay_ms(),
@@ -315,6 +334,12 @@ pub(crate) enum Response {
         status: RepoStatus,
         results: SearchResults,
     },
+    SearchGroupedLineMatchesCompleted {
+        repo_id: String,
+        backend: SearchBackend,
+        status: RepoStatus,
+        results: GroupedLineMatchResults,
+    },
     GlobCompleted {
         repo_id: String,
         status: RepoStatus,
@@ -362,13 +387,52 @@ pub struct RepoStatus {
     pub workspace_overlay_root: String,
     pub phase: RepoPhase,
     pub snapshot_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_head_commit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_head_commit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overlay_head_commit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overlay_base_manifest_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_manifest_id: Option<String>,
+    #[serde(default)]
+    pub base_delta_depth: u32,
+    #[serde(default)]
+    pub base_delta_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_advance_target_head: Option<String>,
+    #[serde(default)]
+    pub cached_head_count: usize,
+    #[serde(default)]
+    pub base_compaction_recommended: bool,
     pub last_probe_unix_secs: Option<u64>,
     pub last_rebuild_unix_secs: Option<u64>,
     pub dirty_files: DirtyFileStats,
-    pub rebuild_recommended: bool,
     pub active_task_id: Option<String>,
     pub probe_healthy: bool,
+    /// `true` means the daemon still owes a worktree reconcile, so `dirty_files`, `phase` and the
+    /// published overlay describe the *last observed* worktree instead of the current one. Callers
+    /// that need authoritative state ask for it with `refresh_repo`.
+    ///
+    /// Defaulted so that any daemon older than v0.2.14 — which predates the field and never sends
+    /// it — still decodes: those builds reconcile synchronously inside `open_repo`, so `false` is
+    /// the correct reading for them.
+    #[serde(default)]
+    pub workspace_probe_pending: bool,
     pub last_error: Option<String>,
+    /// Failure of the daemon's last background base-maintenance task (advance or compaction).
+    ///
+    /// Kept apart from `last_error` because that slot is shared with the worktree probe, and every
+    /// successful probe clears it — measured at ~3.5 s on v0.2.14, well inside our own 5 s idle
+    /// status poll, so a maintenance failure reported only there was gone before we could ever
+    /// render it. This slot is cleared only when the same kind of maintenance work succeeds.
+    ///
+    /// Defaulted so daemons older than v0.2.15, which never send the field, still decode as
+    /// "nothing failed" — for those builds the failure genuinely is unobservable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_maintenance_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overlay: Option<WorkspaceOverlayStatus>,
 }
@@ -394,6 +458,8 @@ pub struct DirtyFileStats {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceOverlayStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_manifest_id: Option<String>,
     pub committed_seq_no: u64,
     pub last_seq_no: u64,
     pub uncommitted_ops: u64,
@@ -431,6 +497,8 @@ pub struct TaskStatus {
 pub enum TaskKind {
     BuildBaseSnapshot,
     RebuildBaseSnapshot,
+    AdvanceBaseSnapshot,
+    CompactBaseDeltas,
     RefreshWorkspace,
 }
 
@@ -494,12 +562,48 @@ pub(crate) struct FileMatchCount {
     pub matched_occurrences: usize,
 }
 
+/// A single matched line.
+///
+/// The daemon reports positions only — there is no line text on the wire in any
+/// search mode, so content previews have to be hydrated from disk by whoever can
+/// read the files (see `workspace_search::line_hydration`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct LineMatch {
     pub path: String,
     pub line_number: usize,
+}
+
+/// `search/grouped_line_matches` payload: one entry per file instead of one per
+/// line, which is what makes single-open hydration possible.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct GroupedLineMatchResults {
+    pub candidate_docs: usize,
     #[serde(default)]
-    pub line_text: Option<String>,
+    pub searches_with_match: usize,
+    #[serde(default)]
+    pub bytes_searched: u64,
+    pub matched_lines: usize,
+    pub matched_occurrences: usize,
+    #[serde(default)]
+    pub limit_reached: bool,
+    #[serde(default)]
+    pub summary: LineMatchSummary,
+    #[serde(default)]
+    pub files: Vec<(String, Vec<usize>)>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(crate) struct LineMatchSummary {
+    #[serde(default)]
+    pub files_with_matches: usize,
+    #[serde(default)]
+    pub top_files: Vec<LineMatchFileSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct LineMatchFileSummary {
+    pub path: String,
+    pub matched_lines: usize,
 }
 
 fn default_top_k_tokens() -> usize {
@@ -518,12 +622,24 @@ fn default_max_sparse_len() -> usize {
     8
 }
 
-fn default_rebuild_dirty_threshold() -> usize {
-    256
+fn default_base_delta_max_segments() -> usize {
+    8
+}
+
+fn default_base_delta_max_delete_segments() -> usize {
+    8
+}
+
+fn default_base_delta_max_bytes_ratio() -> f64 {
+    0.10
+}
+
+fn default_base_head_cache_entries() -> usize {
+    4
 }
 
 fn default_overlay_auto_checkpoint_max_uncommitted_ops() -> u64 {
-    1_024
+    256
 }
 
 fn default_overlay_merge_min_delay_ms() -> u64 {

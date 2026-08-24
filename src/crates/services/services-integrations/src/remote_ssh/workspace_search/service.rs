@@ -1,3 +1,7 @@
+use super::remote_line_hydration::{
+    absorb_read_output, build_read_command, build_remote_results, chunk_manifest,
+    plan_remote_hydration, RemoteFileLines,
+};
 use super::{
     build_remote_scope, join_remote_path, local_flashgrep_bundle_for_arch,
     looks_like_linux_workspace_root, parse_remote_architecture_output, parse_remote_os_output,
@@ -9,18 +13,20 @@ use crate::remote_ssh::{normalize_remote_workspace_path, RemoteWorkspaceEntry};
 use crate::workspace_search::flashgrep::error::AppError;
 use crate::workspace_search::flashgrep::{
     drain_content_length_messages, log_flashgrep_stderr_line_with_context, ClientCapabilities,
-    ClientInfo, FlashgrepRepoSession, GlobOutcome, GlobParams, GlobRequest, InitializeParams,
-    OpenRepoParams, ProtocolClient, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoRef,
-    RepoStatus, Request, Response, SearchBackend, SearchModeConfig, SearchOutcome, SearchParams,
-    SearchRequest, SearchResults, TaskRef, TaskStatus, FLASHGREP_LOG_TARGET,
+    ClientInfo, FlashgrepRepoSession, GlobOutcome, GlobParams, GlobRequest,
+    GroupedLineMatchResults, InitializeParams, OpenRepoParams, ProtocolClient, QuerySpec,
+    RefreshPolicyConfig, RepoConfig, RepoRef, RepoStatus, Request, Response, SearchBackend,
+    SearchModeConfig, SearchOutcome, SearchParams, SearchRequest, SearchResults, TaskRef,
+    TaskStatus, FLASHGREP_LOG_TARGET,
 };
 use crate::workspace_search::result_mapping::convert_search_results;
 use crate::workspace_search::{
-    ContentSearchRequest, ContentSearchResult, GlobSearchRequest, GlobSearchResult,
-    IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount, WorkspaceSearchRepoStatus,
+    ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
+    GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount,
+    WorkspaceSearchRepoStatus,
 };
 use async_trait::async_trait;
-use bitfun_services_core::filesystem::FileSearchOutcome;
+use bitfun_services_core::filesystem::{ContentMatchPreviewBuilder, FileSearchOutcome};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
@@ -135,6 +141,9 @@ struct RemoteStdioRepoSession {
 
 struct RemoteStdioDaemonClient {
     protocol: ProtocolClient,
+    /// Kept so a session can run plain remote commands — line hydration reads the
+    /// matched files over the same connection the daemon is speaking on.
+    connection_id: String,
 }
 
 struct RemoteStdioOperationLease {
@@ -185,7 +194,10 @@ impl RemoteStdioDaemonClient {
             .spawn_stdio_daemon(&connection_id, &command, write_rx, stdio_protocol)
             .await?;
 
-        let client = Arc::new(Self { protocol });
+        let client = Arc::new(Self {
+            protocol,
+            connection_id,
+        });
         client.initialize().await?;
         Ok(client)
     }
@@ -354,7 +366,6 @@ impl RemoteStdioRepoSession {
                     repo_id: self.repo_id.clone(),
                     query,
                     scope,
-                    allow_scan_fallback: true,
                 },
             })
             .await?
@@ -367,6 +378,40 @@ impl RemoteStdioRepoSession {
             } => Ok((backend, status, results)),
             other => Err(format!(
                 "Unexpected remote flashgrep search response: {other:?}"
+            )),
+        }
+    }
+
+    /// Runs the per-file grouped variant of search.
+    ///
+    /// Content output needs line text, which no daemon search mode returns, and
+    /// the grouping is what lets the remote reader ask for every file exactly
+    /// once instead of once per matched line.
+    async fn search_grouped_line_matches(
+        &self,
+        query: QuerySpec,
+        scope: crate::workspace_search::flashgrep::PathScope,
+    ) -> Result<(SearchBackend, RepoStatus, GroupedLineMatchResults), String> {
+        let _lease = self.acquire_operation();
+        match self
+            .client
+            .send_request(Request::SearchGroupedLineMatches {
+                params: SearchParams {
+                    repo_id: self.repo_id.clone(),
+                    query,
+                    scope,
+                },
+            })
+            .await?
+        {
+            Response::SearchGroupedLineMatchesCompleted {
+                backend,
+                status,
+                results,
+                ..
+            } => Ok((backend, status, results)),
+            other => Err(format!(
+                "Unexpected remote flashgrep search/grouped_line_matches response: {other:?}"
             )),
         }
     }
@@ -475,6 +520,15 @@ pub struct RemoteWorkspaceSearchService {
     preferred_connection_id: Option<String>,
 }
 
+/// The parts of a content request the preview highlighter needs, captured before
+/// the request is consumed building the daemon scope.
+struct RemoteContentPreviewSpec {
+    pattern: String,
+    case_sensitive: bool,
+    use_regex: bool,
+    whole_word: bool,
+}
+
 #[derive(Debug, Clone)]
 struct RemoteSearchContext {
     connection: RemoteWorkspaceEntry,
@@ -518,6 +572,9 @@ impl RemoteWorkspaceSearchService {
         Ok(WorkspaceIndexStatus {
             active_task,
             repo_status,
+            // Remote workspaces are indexed by the remote daemon directly; BitFun's local
+            // auto-index policy never evaluates them, so there is no decision to report.
+            auto_index: None,
         })
     }
 
@@ -556,6 +613,12 @@ impl RemoteWorkspaceSearchService {
         )?;
         let max_results = request.max_results.filter(|limit| *limit > 0);
         let primary_search_mode = remote_stdio_search_mode(request.output_mode);
+        let preview_spec = RemoteContentPreviewSpec {
+            pattern: request.pattern.clone(),
+            case_sensitive: request.case_sensitive,
+            use_regex: request.use_regex,
+            whole_word: request.whole_word,
+        };
         let query = QuerySpec {
             pattern: request.pattern.clone(),
             patterns: Vec::new(),
@@ -565,8 +628,6 @@ impl RemoteWorkspaceSearchService {
             fixed_strings: !request.use_regex,
             word_regexp: request.whole_word,
             line_regexp: false,
-            before_context: request.before_context,
-            after_context: request.after_context,
             top_k_tokens: 6,
             max_count: None,
             global_max_results: max_results,
@@ -574,6 +635,38 @@ impl RemoteWorkspaceSearchService {
         };
 
         let output_mode = request.output_mode;
+
+        if matches!(output_mode, ContentSearchOutputMode::Content) {
+            match self
+                .search_content_hydrated(
+                    &session,
+                    preview_spec,
+                    query.clone(),
+                    scope.clone(),
+                    max_results,
+                )
+                .await
+            {
+                Ok(Some(result)) => return Ok(result),
+                Ok(None) => {
+                    // The daemon answered without a per-file grouping — the scan
+                    // fallback does that when it can only report totals. Fall
+                    // through to the plain search below, which already knows how
+                    // to recover a file list from that case.
+                    log::info!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "Remote workspace content search falling back to positions-only search: repo_root={repo_root}"
+                    );
+                }
+                Err(error) => {
+                    log::warn!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "Remote workspace content search grouped query failed, falling back to positions-only search: repo_root={repo_root}, error={error}"
+                    );
+                }
+            }
+        }
+
         let (backend, repo_status, mut raw_results) = session.search(query, scope.clone()).await?;
         if should_retry_remote_scan_fallback_as_files_with_matches(
             backend,
@@ -596,8 +689,6 @@ impl RemoteWorkspaceSearchService {
                 fixed_strings: !request.use_regex,
                 word_regexp: request.whole_word,
                 line_regexp: false,
-                before_context: request.before_context,
-                after_context: request.after_context,
                 top_k_tokens: 6,
                 max_count: None,
                 global_max_results: max_results,
@@ -664,6 +755,140 @@ impl RemoteWorkspaceSearchService {
             matched_lines: raw_results.matched_lines,
             matched_occurrences: raw_results.matched_occurrences,
         })
+    }
+
+    /// Content output for a remote repo: grouped match positions from the daemon,
+    /// line text batched back over SSH.
+    ///
+    /// Returns `Ok(None)` when the daemon reported matches but no per-file
+    /// grouping — the scan fallback does that when it can only produce totals —
+    /// so the caller can fall back to the positions-only path that already knows
+    /// how to recover a file list from that answer.
+    async fn search_content_hydrated(
+        &self,
+        session: &RemoteStdioSessionLease,
+        preview_spec: RemoteContentPreviewSpec,
+        query: QuerySpec,
+        scope: crate::workspace_search::flashgrep::PathScope,
+        max_results: Option<usize>,
+    ) -> Result<Option<ContentSearchResult>, String> {
+        let (backend, repo_status, grouped) = session
+            .search_grouped_line_matches(query, scope)
+            .await
+            .map_err(|error| format!("Remote content search failed: {error}"))?;
+
+        if grouped.files.is_empty() && grouped.matched_lines > 0 {
+            return Ok(None);
+        }
+
+        let (planned, dropped_lines) = plan_remote_hydration(&grouped.files, max_results);
+        let reads = self
+            .read_remote_lines(&session.client.connection_id, &planned)
+            .await;
+
+        let hydrated = tokio::task::spawn_blocking(move || {
+            // A pattern the daemon accepts can still fail to compile here
+            // (different regex dialect, or a multiline query no single line
+            // matches), in which case results keep their line text and lose only
+            // the highlight.
+            let preview = match ContentMatchPreviewBuilder::new(
+                &preview_spec.pattern,
+                preview_spec.case_sensitive,
+                preview_spec.use_regex,
+                preview_spec.whole_word,
+            ) {
+                Ok(preview) => Some(preview),
+                Err(error) => {
+                    log::debug!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "Remote workspace content search preview highlighting disabled: {error}"
+                    );
+                    None
+                }
+            };
+            build_remote_results(&planned, reads, dropped_lines, preview.as_ref())
+        })
+        .await
+        .map_err(|error| format!("Remote content search line hydration failed: {error}"))?;
+
+        if hydrated.unreadable_files > 0 {
+            log::debug!(
+                target: FLASHGREP_LOG_TARGET,
+                "Remote workspace content search could not read {} matched file(s); reporting their matches without line text",
+                hydrated.unreadable_files
+            );
+        }
+
+        Ok(Some(ContentSearchResult {
+            outcome: FileSearchOutcome {
+                results: hydrated.results,
+                truncated: grouped.limit_reached || hydrated.dropped_lines > 0,
+            },
+            // `search/grouped_line_matches` reports per-file counts only for its
+            // top-10 summary, which is not the full list the count output mode
+            // promises, so it is left to that mode.
+            file_counts: Vec::new(),
+            hits: Vec::new(),
+            backend: backend.into(),
+            repo_status: repo_status.into(),
+            candidate_docs: grouped.candidate_docs,
+            matched_lines: grouped.matched_lines,
+            matched_occurrences: grouped.matched_occurrences,
+        }))
+    }
+
+    /// Reads every wanted line of every planned file in a handful of commands.
+    ///
+    /// Failure is per-chunk and never fatal: a chunk that errors leaves its files
+    /// without text, which renders as a bare `path:line` locator — the same thing
+    /// the whole remote path did before hydration existed. Losing highlighting on
+    /// part of a result set beats failing a search that already found its matches.
+    async fn read_remote_lines(
+        &self,
+        connection_id: &str,
+        planned: &[(String, Vec<usize>)],
+    ) -> Vec<RemoteFileLines> {
+        let mut reads = vec![RemoteFileLines::default(); planned.len()];
+        let chunks = chunk_manifest(planned);
+        if chunks.is_empty() {
+            return reads;
+        }
+
+        log::debug!(
+            target: FLASHGREP_LOG_TARGET,
+            "Remote workspace content search hydrating {} file(s) in {} command(s)",
+            planned.len(),
+            chunks.len()
+        );
+
+        for chunk in chunks {
+            let command = build_read_command(planned, &chunk);
+            match self.provider.execute_command(connection_id, &command).await {
+                Ok(output) => {
+                    if output.exit_code != 0 {
+                        log::warn!(
+                            target: FLASHGREP_LOG_TARGET,
+                            "Remote workspace content search line read exited {}: files={}, stderr={}",
+                            output.exit_code,
+                            chunk.len(),
+                            output.stderr.trim()
+                        );
+                    }
+                    // Absorbed either way: awk writes as it goes, so a command
+                    // that died partway through still produced usable records.
+                    absorb_read_output(&output.stdout, planned, &mut reads);
+                }
+                Err(error) => {
+                    log::warn!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "Remote workspace content search line read failed: files={}, error={error}",
+                        chunk.len()
+                    );
+                }
+            }
+        }
+
+        reads
     }
 
     pub async fn glob(&self, request: GlobSearchRequest) -> Result<GlobSearchResult, String> {

@@ -33,42 +33,32 @@ pub(crate) fn convert_search_results(
     }
 }
 
+/// Maps `search` line matches to results carrying positions only.
+///
+/// The daemon never sends line text on the wire, so callers that cannot read the
+/// matched files themselves (the remote SSH transport) surface path + line number
+/// without content. Local searches use `search/grouped_line_matches` plus
+/// `line_hydration` instead, which fills in the text and the previews.
 fn convert_hits_to_file_search_results(search_results: &SearchResults) -> Vec<FileSearchResult> {
     search_results
         .line_matches
         .iter()
-        .map(|matched| {
-            let matched_content = matched
-                .line_text
-                .clone()
-                .unwrap_or_else(|| format!("line {}", matched.line_number));
-            let (preview_before, preview_inside, preview_after) = matched
-                .line_text
-                .as_deref()
-                .map(split_preview)
-                .unwrap_or((None, None, None));
-
-            FileSearchResult {
-                path: matched.path.clone(),
-                name: Path::new(&matched.path)
-                    .file_name()
-                    .and_then(|file_name| file_name.to_str())
-                    .unwrap_or(&matched.path)
-                    .to_string(),
-                is_directory: false,
-                match_type: SearchMatchType::Content,
-                line_number: Some(matched.line_number),
-                matched_content: Some(matched_content),
-                preview_before,
-                preview_inside,
-                preview_after,
-            }
+        .map(|matched| FileSearchResult {
+            path: matched.path.clone(),
+            name: Path::new(&matched.path)
+                .file_name()
+                .and_then(|file_name| file_name.to_str())
+                .unwrap_or(&matched.path)
+                .to_string(),
+            is_directory: false,
+            match_type: SearchMatchType::Content,
+            line_number: Some(matched.line_number),
+            matched_content: None,
+            preview_before: None,
+            preview_inside: None,
+            preview_after: None,
         })
         .collect()
-}
-
-fn split_preview(line_text: &str) -> (Option<String>, Option<String>, Option<String>) {
-    (None, Some(line_text.to_string()), None)
 }
 
 fn convert_file_counts_to_search_results(search_results: &SearchResults) -> Vec<FileSearchResult> {

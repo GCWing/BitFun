@@ -5,6 +5,7 @@
 //! `bitfun-core` may still layer remote-workspace routing or legacy error
 //! mapping on top of these primitives.
 
+mod content_preview;
 mod error;
 mod factory;
 mod listing;
@@ -13,6 +14,9 @@ mod service;
 mod tree;
 mod types;
 
+pub use content_preview::{
+    build_content_match_preview, compile_content_search_regex, ContentMatchPreviewBuilder,
+};
 pub use error::{FileSystemError, FileSystemResult};
 pub use factory::FileSystemServiceFactory;
 pub use listing::{
