@@ -2,7 +2,7 @@ use crate::checkpoint::LightCheckpoint;
 use bitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -262,6 +262,22 @@ impl PersistedEvidenceLedgerFile {
         Ok(true)
     }
 
+    /// Keep only events whose turn is still part of the session history.
+    pub fn retain_turn_ids(
+        &mut self,
+        expected_session_id: &str,
+        surviving_turn_ids: &HashSet<String>,
+    ) -> Result<Vec<EvidenceLedgerEvent>, EvidenceLedgerPersistenceError> {
+        self.validate_header(expected_session_id)?;
+        let retained = self
+            .validate_events()?
+            .into_iter()
+            .filter(|event| surviving_turn_ids.contains(&event.turn_id))
+            .collect::<Vec<_>>();
+        self.events = retained.clone();
+        Ok(retained)
+    }
+
     pub fn validated_events(
         self,
         expected_session_id: &str,
@@ -354,6 +370,25 @@ impl SessionEvidenceLedger {
         }
         events.push(event.clone());
         event
+    }
+
+    pub fn retain_turn_ids(
+        &self,
+        session_id: &str,
+        surviving_turn_ids: &HashSet<String>,
+    ) -> Vec<EvidenceLedgerEvent> {
+        let retained = self
+            .events_for_session(session_id)
+            .into_iter()
+            .filter(|event| surviving_turn_ids.contains(&event.turn_id))
+            .collect::<Vec<_>>();
+        if retained.is_empty() {
+            self.events_by_session.remove(session_id);
+        } else {
+            self.events_by_session
+                .insert(session_id.to_string(), retained.clone());
+        }
+        retained
     }
 
     pub fn replace_session(
@@ -558,6 +593,7 @@ mod tests {
         PersistedEvidenceLedgerFile, SessionEvidenceLedger, EVIDENCE_LEDGER_SCHEMA_VERSION,
     };
     use crate::checkpoint::LightCheckpoint;
+    use std::collections::HashSet;
 
     #[test]
     fn ledger_reads_events_scoped_by_session_and_turn() {
@@ -608,6 +644,74 @@ mod tests {
             Err(EvidenceLedgerPersistenceError::ConflictingEvent { .. })
         ));
         assert_eq!(file.events, vec![event]);
+    }
+
+    #[test]
+    fn persisted_ledger_retain_turn_ids_keeps_only_surviving_turn_evidence() {
+        let mut file = PersistedEvidenceLedgerFile::new("session-a");
+        let turn_a = EvidenceLedgerEvent::new(
+            "session-a",
+            "turn-a",
+            "Bash",
+            EvidenceLedgerTargetKind::Command,
+            "cargo test",
+            EvidenceLedgerEventStatus::Succeeded,
+            "Tests passed.",
+        );
+        let turn_b = EvidenceLedgerEvent::new(
+            "session-a",
+            "turn-b",
+            "Bash",
+            EvidenceLedgerTargetKind::Command,
+            "cargo check",
+            EvidenceLedgerEventStatus::Failed,
+            "Check failed.",
+        );
+        file.append(turn_a.clone()).expect("turn-a append");
+        file.append(turn_b.clone()).expect("turn-b append");
+
+        let retained = file
+            .retain_turn_ids("session-a", &HashSet::from(["turn-a".to_string()]))
+            .expect("retain should succeed");
+        assert_eq!(retained, vec![turn_a.clone()]);
+        assert_eq!(file.events, vec![turn_a.clone()]);
+
+        let retained = file
+            .retain_turn_ids("session-a", &HashSet::new())
+            .expect("retain should clear");
+        assert!(retained.is_empty());
+        assert!(file.events.is_empty());
+    }
+
+    #[test]
+    fn in_memory_ledger_retain_turn_ids_removes_empty_sessions() {
+        let ledger = SessionEvidenceLedger::new();
+        ledger.append(EvidenceLedgerEvent::new(
+            "session-a",
+            "turn-a",
+            "Task",
+            EvidenceLedgerTargetKind::Subagent,
+            "Review",
+            EvidenceLedgerEventStatus::Created,
+            "Started",
+        ));
+        ledger.append(EvidenceLedgerEvent::new(
+            "session-a",
+            "turn-b",
+            "Task",
+            EvidenceLedgerTargetKind::Subagent,
+            "Edit",
+            EvidenceLedgerEventStatus::Created,
+            "Started",
+        ));
+
+        let retained = ledger.retain_turn_ids("session-a", &HashSet::from(["turn-a".to_string()]));
+        assert_eq!(retained.len(), 1);
+        assert_eq!(retained[0].turn_id, "turn-a");
+
+        let retained = ledger.retain_turn_ids("session-a", &HashSet::new());
+        assert!(retained.is_empty());
+        assert!(ledger.events_for_session("session-a").is_empty());
     }
 
     #[test]
