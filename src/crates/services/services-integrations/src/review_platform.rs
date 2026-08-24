@@ -41,6 +41,9 @@ const MAX_REVIEW_FILE_DIFF_CHARS: usize = 80_000;
 // GitCode truncates `GET /pulls/{number}/files` at 3,000 entries without a
 // total-count header. The line-count headers are truncated with the body.
 const GITCODE_PULL_REQUEST_FILES_RESPONSE_LIMIT: usize = 3_000;
+// The whole file list, diffs included, arrives in that one response, so it needs
+// a larger budget than a single pull request detail payload.
+const GITCODE_PULL_REQUEST_FILES_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const DEFAULT_ISSUE_PAGE: u32 = 1;
 const DEFAULT_ISSUE_PAGE_SIZE: u32 = 100;
 const MAX_ISSUE_PAGE_SIZE: u32 = 100;
@@ -1868,10 +1871,12 @@ async fn gitcode_review_target_parts(
     let initial_pull_request = gitcode_pull_request_from_value(&initial_detail);
     let mut confirmed_pull_request = gitcode_pull_request_from_value(&confirmed_detail);
     ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
-    apply_gitcode_review_target_file_stats(&mut confirmed_pull_request, &files);
+    apply_gitcode_pull_request_change_stats(&mut confirmed_pull_request, &files_response);
     Ok((confirmed_pull_request, files))
 }
 
+// The page hint is unusable here: GitCode answers `/files` with the whole list
+// regardless of the page parameters, so the file is searched in that response.
 async fn gitcode_review_file_parts(
     ctx: &ProviderContext,
     pull_request_id: &str,
@@ -3281,7 +3286,7 @@ async fn send_bounded_json_response(
 async fn send_bounded_gitcode_files_response(
     request: ReviewHttpRequest,
 ) -> Result<JsonResponse, ReviewPlatformError> {
-    send_review_json_response_bounded(request, MAX_REVIEW_TARGET_RESPONSE_BYTES)
+    send_review_json_response_bounded(request, GITCODE_PULL_REQUEST_FILES_RESPONSE_BYTES)
         .await
         .map_err(gitcode_files_http_error)
 }
@@ -7168,15 +7173,6 @@ fn apply_files_stats(pull_request: &mut ReviewPlatformPullRequest, files: &[Revi
     pull_request.deletions = deletions;
 }
 
-fn apply_gitcode_review_target_file_stats(
-    pull_request: &mut ReviewPlatformPullRequest,
-    files: &[ReviewPlatformFile],
-) {
-    apply_files_stats(pull_request, files);
-    pull_request.changed_files = i32::try_from(files.len()).unwrap_or(i32::MAX);
-    pull_request.changed_file_count_known = files.len() < MAX_REVIEW_TARGET_LIST_ITEMS;
-}
-
 async fn fetch_bounded_paginated_array<F>(
     mut build_request: F,
     next_page: fn(&ReviewHttpHeaders, u32) -> Option<u32>,
@@ -8339,7 +8335,7 @@ mod tests {
     }
 
     #[test]
-    fn gitcode_review_target_stats_use_the_same_thousand_file_budget() {
+    fn gitcode_review_target_reports_the_files_the_budget_left_out() {
         let mut pull_request = gitcode_pull_request_from_value(&json!({
             "number": 5,
             "title": "large change",
@@ -8348,35 +8344,49 @@ mod tests {
             "removed_lines": 8_888,
             "changes_count": "2500"
         }));
-        let files = vec![
-            ReviewPlatformFile {
-                path: "src/file.rs".to_string(),
-                old_path: None,
-                status: ReviewFileStatus::Modified,
-                additions: 1,
-                deletions: 2,
-                patch: Some("@@ -1 +1 @@\n-old\n+new".to_string()),
-            };
-            MAX_REVIEW_TARGET_LIST_ITEMS
-        ];
+        let response = JsonResponse {
+            value: Value::Array(
+                (0..2_500)
+                    .map(|index| {
+                        json!({
+                            "filename": format!("src/file-{index}.rs"),
+                            "additions": "1",
+                            "deletions": "2"
+                        })
+                    })
+                    .collect(),
+            ),
+            headers: ReviewHttpHeaders::default(),
+        };
+        let files = array_items(&response.value)
+            .iter()
+            .take(MAX_REVIEW_TARGET_LIST_ITEMS)
+            .map(gitcode_file_from_value)
+            .collect::<Vec<_>>();
 
-        apply_gitcode_review_target_file_stats(&mut pull_request, &files);
+        apply_gitcode_pull_request_change_stats(&mut pull_request, &response);
+        let target = review_target_from_parts(pull_request, files);
 
-        assert_eq!(pull_request.changed_files, 1_000);
-        assert!(!pull_request.changed_file_count_known);
-        assert_eq!(pull_request.additions, 1_000);
-        assert_eq!(pull_request.deletions, 2_000);
+        assert_eq!(target.pull_request.changed_files, 2_500);
+        assert!(target.pull_request.changed_file_count_known);
+        assert_eq!(target.pull_request.additions, 2_500);
+        assert_eq!(target.pull_request.deletions, 5_000);
+        assert_eq!(target.files.len(), MAX_REVIEW_TARGET_LIST_ITEMS);
+        assert_eq!(target.omitted_file_count, 1_500);
+        assert!(target
+            .limitations
+            .contains(&"provider_file_list_incomplete".to_string()));
     }
 
     #[test]
     fn gitcode_files_response_too_large_reports_explicit_reason() {
         let error = gitcode_files_http_error(ReviewHttpError::ResponseTooLarge {
-            limit_bytes: MAX_REVIEW_TARGET_RESPONSE_BYTES,
+            limit_bytes: GITCODE_PULL_REQUEST_FILES_RESPONSE_BYTES,
         });
 
         assert_eq!(
             error.to_string(),
-            "Provider API failed: GitCode pull request files response exceeded the 4194304-byte limit"
+            "Provider API failed: GitCode pull request files response exceeded the 16777216-byte limit"
         );
     }
 
