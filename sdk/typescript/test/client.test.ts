@@ -22,11 +22,10 @@ const clientOptions = {
   },
 } satisfies AgentClientOptions;
 
-// @ts-expect-error An explicit native Host path is required until platform packages exist.
-const missingHostPathOptions: AgentClientOptions = {
+const packageHostOptions = {
   cwd: "D:/workspace/project",
   model: clientOptions.model,
-};
+} satisfies AgentClientOptions;
 
 // @ts-expect-error Query model selection is bound at AgentClient.start.
 const queryModelOverride: QueryInput = { prompt: "hello", model: "attempted-override" };
@@ -34,7 +33,7 @@ const queryModelOverride: QueryInput = { prompt: "hello", model: "attempted-over
 const sessionModelOverride: SessionCreateInput = { model: "attempted-override" };
 void queryModelOverride;
 void sessionModelOverride;
-void missingHostPathOptions;
+void packageHostOptions;
 
 test("a Query streams ordered events and returns the Host terminal Result", async () => {
   const clientToHost = new PassThrough();
