@@ -5,7 +5,7 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "b18358b1b797cb4bd5896b3a1c06f0b35f6a0fc4a31dd0508b557afbe669b8ba",
+  "digest": "8980f64657dbf746a0fedc1b4c06603a693c8e6ba0755a28438a9986bba9dabb",
   "fileCount": 367,
   "interactionCount": 4423,
   "files": [
@@ -1392,7 +1392,7 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx",
       "interactionCount": 148,
-      "digest": "19e5543a9d29e85888dd15ed1ef89972d7c6f5870c0df02618525044e0e89f18"
+      "digest": "36a620becf185087ba0758004c7e9b4a0bc26a64a4fe744b6e08fac7b8f6c524"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/QuickActionsConfig.tsx",
