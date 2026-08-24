@@ -11,6 +11,10 @@ import { startupTrace } from '@/shared/utils/startupTrace';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { resetLiveSessionInteractionStoreForTest } from '../services/liveSessionInteractionStore';
+import {
+  askUserQuestionDraftKey,
+  askUserQuestionDraftStore,
+} from './askUserQuestionDraftStore';
 
 const apiMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
@@ -164,6 +168,7 @@ const resetStore = () => {
     activeSessionId: null,
   }));
   dispatchJobStore.getState().clear();
+  askUserQuestionDraftStore.setState({ drafts: {} });
   resetLiveSessionInteractionStoreForTest();
   flowChatStore.registerPersistUnreadCompletionCallback(() => {});
 };
@@ -1967,6 +1972,56 @@ describe('FlowChatStore historical session hydration state', () => {
       flowChatStore.getState().sessions.get('history-1')
         ?.dialogTurns[0].modelRounds[0].items,
     ).toEqual([]);
+  });
+
+  it('clears an unsubmitted question draft when an authoritative mailbox removes the tool', () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          dialogTurns: [{
+            id: 'turn-live',
+            sessionId: 'history-1',
+            userMessage: { id: 'user-live', content: 'ask me', timestamp: 1 },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1,
+          }],
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+
+    const pendingQuestion = {
+      toolId: 'ask-tool-1',
+      sessionId: 'history-1',
+      dialogTurnId: 'turn-live',
+      modelRoundId: 'round-question',
+      questions: {
+        questions: [{
+          question: 'Which verification should run?',
+          header: 'Verification',
+          options: [{ label: 'Focused', description: 'Run focused checks.' }],
+        }],
+      },
+      registeredAtMs: 3,
+    };
+
+    expect(flowChatStore.reconcilePendingUserQuestions('history-1', {
+      revision: 1,
+      questions: [pendingQuestion],
+    })).toBe(true);
+
+    const draftKey = askUserQuestionDraftKey('history-1', 'ask-tool-1');
+    askUserQuestionDraftStore.getState().setSingleAnswer(draftKey, 0, 'Focused');
+    expect(askUserQuestionDraftStore.getState().drafts[draftKey]).toBeDefined();
+
+    expect(flowChatStore.reconcilePendingUserQuestions('history-1', {
+      revision: 2,
+      questions: [],
+    })).toBe(true);
+    expect(askUserQuestionDraftStore.getState().drafts[draftKey]).toBeUndefined();
   });
 
   it('acquires an empty current-Turn base for Runtime event replay before applying interactions', async () => {

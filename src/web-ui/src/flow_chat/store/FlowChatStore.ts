@@ -96,6 +96,7 @@ import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { resolveThreadGoalUserMessageDisplay } from '../utils/threadGoalDisplay';
 import { cleanRemoteUserInput } from '../utils/userInputText';
 import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
+import { askUserQuestionDraftStore } from './askUserQuestionDraftStore';
 import { sessionComposerStore } from './sessionComposerStore';
 import { completeSessionMutationReconciliation } from './sessionMutationStore';
 import { recordHistorySessionDiagnosticEvent } from '../services/historySessionDiagnostics';
@@ -5085,6 +5086,7 @@ export class FlowChatStore {
 
     const removedSessionIds = this.removeSession(sessionId, options);
     sessionComposerStore.getState().removeDrafts(removedSessionIds);
+    askUserQuestionDraftStore.getState().removeSessionDrafts(removedSessionIds);
     this.pendingRemoveSessionOptions.delete(sessionId);
   }
 
@@ -5316,6 +5318,7 @@ export class FlowChatStore {
       : [];
     this.surfaceContainers.delete(surfaceId);
     sessionComposerStore.getState().removeSurfaceDrafts(surfaceId);
+    askUserQuestionDraftStore.getState().removeSurfaceDrafts(surfaceId);
     this.forgetSurfaceMetadataRequests(surfaceId);
 
     for (const [requestKey, request] of this.fullHistoryHydrationRequests) {
@@ -7534,6 +7537,7 @@ export class FlowChatStore {
         ? restored.interactionSnapshot.userQuestions
         : undefined;
     let applied = false;
+    let pendingQuestionSnapshotApplied = false;
 
     this.setState(prev => {
       if (
@@ -7627,6 +7631,7 @@ export class FlowChatStore {
           turnsChanged = true;
         }
         if (questionReconciliation.revisionApplied && pendingUserQuestions) {
+          pendingQuestionSnapshotApplied = true;
           this.userQuestionSnapshotRevisions.set(
             sessionId,
             pendingUserQuestions.revision,
@@ -7695,6 +7700,14 @@ export class FlowChatStore {
         sessions: newSessions,
       };
     });
+
+    if (pendingQuestionSnapshotApplied && pendingUserQuestions) {
+      askUserQuestionDraftStore.getState().reconcilePendingTools(
+        scope.surfaceId,
+        sessionId,
+        pendingUserQuestions.questions.map(question => question.toolId),
+      );
+    }
 
     if (applied) {
       this.seedSessionHistoryLoadedRanges(sessionId, 'initial-tail');
@@ -7851,7 +7864,9 @@ export class FlowChatStore {
     sessionId: string,
     pendingUserQuestions: PendingUserQuestionSnapshot | undefined,
   ): boolean {
+    const surfaceId = getActiveSurfaceId();
     let applied = false;
+    let pendingQuestionSnapshotApplied = false;
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) {
@@ -7864,6 +7879,7 @@ export class FlowChatStore {
         previousRevision,
       );
       if (reconciliation.revisionApplied && pendingUserQuestions) {
+        pendingQuestionSnapshotApplied = true;
         this.userQuestionSnapshotRevisions.set(sessionId, pendingUserQuestions.revision);
       }
       if (!reconciliation.changed) {
@@ -7878,6 +7894,13 @@ export class FlowChatStore {
       applied = true;
       return { ...prev, sessions };
     });
+    if (pendingQuestionSnapshotApplied && pendingUserQuestions) {
+      askUserQuestionDraftStore.getState().reconcilePendingTools(
+        surfaceId,
+        sessionId,
+        pendingUserQuestions.questions.map(question => question.toolId),
+      );
+    }
     return applied;
   }
 
