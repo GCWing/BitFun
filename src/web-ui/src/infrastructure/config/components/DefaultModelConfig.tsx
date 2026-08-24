@@ -125,11 +125,19 @@ export const DefaultModelConfig: React.FC = () => {
       }));
 
       const modelName = getModelName(modelIdStr);
-      notificationService.success(
-        t('messages.modelUpdated', {
+      let successMessage: string;
+      if (modelIdStr) {
+        successMessage = t('messages.modelUpdated', {
           slot: slotLabel(slot),
           name: modelName || modelIdStr,
-        }),
+        });
+      } else if (slot === 'fast') {
+        successMessage = t('messages.fastModelCleared');
+      } else {
+        successMessage = t('messages.modelCleared', { slot: slotLabel(slot) });
+      }
+      notificationService.success(
+        successMessage,
         { duration: 2000 }
       );
     } catch (error) {

@@ -841,10 +841,7 @@ mod tests {
             before.ai.default_models.primary.as_deref(),
             Some("reused-model")
         );
-        assert_eq!(
-            before.ai.default_models.fast.as_deref(),
-            Some("reused-model")
-        );
+        assert_eq!(before.ai.default_models.fast, None);
 
         let result = service
             .save_cloud_speech_config(SaveCloudSpeechConfigRequest {
@@ -875,6 +872,49 @@ mod tests {
             after.ai.task_models.git_commit.fixed_model_id(),
             Some("reused-model")
         );
+    }
+
+    #[tokio::test]
+    async fn clearing_fast_model_persists_unset_and_resolves_to_primary() {
+        let test_name = "clear-fast-model";
+        let (service, dir) = test_service(test_name).await;
+        service
+            .set_config(
+                "ai.models",
+                vec![
+                    model("first-text", true, ModelCategory::GeneralChat),
+                    model("primary-text", true, ModelCategory::GeneralChat),
+                ],
+            )
+            .await
+            .expect("models should save");
+        service
+            .set_config(
+                "ai.default_models",
+                &DefaultModelsConfig {
+                    primary: Some("primary-text".to_string()),
+                    fast: None,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("defaults should save");
+
+        let current: GlobalConfig = service.get_config(None).await.expect("current config");
+        assert_eq!(current.ai.default_models.fast, None);
+        assert_eq!(
+            current.ai.resolve_model_selection("fast").as_deref(),
+            Some("primary-text")
+        );
+
+        let path_manager = PathManager::with_user_root_for_tests(dir.path().join(test_name));
+        let persisted: GlobalConfig = serde_json::from_slice(
+            &tokio::fs::read(path_manager.app_config_file())
+                .await
+                .expect("persisted config"),
+        )
+        .expect("valid persisted config");
+        assert_eq!(persisted.ai.default_models.fast, None);
     }
 
     #[tokio::test]
