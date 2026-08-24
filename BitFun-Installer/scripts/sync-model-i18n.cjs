@@ -8,6 +8,30 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function resolveModelSettingsPath(localeDir) {
+  const settingsDir = path.join(
+    PROJECT_ROOT,
+    'src',
+    'web-ui',
+    'src',
+    'locales',
+    localeDir,
+    'settings'
+  );
+  const candidates = ['ai-model.json', 'models.json'];
+  const sourcePath = candidates
+    .map((fileName) => path.join(settingsDir, fileName))
+    .find((candidate) => fs.existsSync(candidate));
+
+  if (!sourcePath) {
+    throw new Error(
+      `Missing model settings locale for ${localeDir}; expected one of: ${candidates.join(', ')}`
+    );
+  }
+
+  return sourcePath;
+}
+
 function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
 }
@@ -201,16 +225,7 @@ const LOCALE_MAP = {
 function syncOne(languageTag) {
   const { localeDir, installerLocale } = LOCALE_MAP[languageTag];
 
-  const sourceAiModelPath = path.join(
-    PROJECT_ROOT,
-    'src',
-    'web-ui',
-    'src',
-    'locales',
-    localeDir,
-    'settings',
-    'ai-model.json'
-  );
+  const sourceAiModelPath = resolveModelSettingsPath(localeDir);
   const sourceComponentsPath = path.join(
     PROJECT_ROOT,
     'src',

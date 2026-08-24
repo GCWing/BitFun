@@ -24,8 +24,32 @@ function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
+function resolveApplicationSettingsPath(localeDir) {
+  const settingsDir = path.join(
+    PROJECT_ROOT,
+    "src",
+    "web-ui",
+    "src",
+    "locales",
+    localeDir,
+    "settings"
+  );
+  const candidates = ["basics.json", "application.json"];
+  const sourcePath = candidates
+    .map((fileName) => path.join(settingsDir, fileName))
+    .find((candidate) => fs.existsSync(candidate));
+
+  if (!sourcePath) {
+    throw new Error(
+      `Missing application settings locale for ${localeDir}; expected one of: ${candidates.join(", ")}`
+    );
+  }
+
+  return sourcePath;
+}
+
 function extractThemeNames(source, sourceLabel) {
-  // Theme preset names live under settings/basics.json → appearance.presets (formerly theme.json → theme.presets).
+  // Theme preset names live under appearance.presets in the application settings locale.
   const presets = source?.appearance?.presets;
   if (!presets || typeof presets !== "object") {
     throw new Error(`Invalid appearance.presets in ${sourceLabel}`);
@@ -55,26 +79,8 @@ function injectThemeNames(target, themeNames) {
 }
 
 function main() {
-  const sourceEnPath = path.join(
-    PROJECT_ROOT,
-    "src",
-    "web-ui",
-    "src",
-    "locales",
-    "en-US",
-    "settings",
-    "basics.json"
-  );
-  const sourceZhPath = path.join(
-    PROJECT_ROOT,
-    "src",
-    "web-ui",
-    "src",
-    "locales",
-    "zh-CN",
-    "settings",
-    "basics.json"
-  );
+  const sourceEnPath = resolveApplicationSettingsPath("en-US");
+  const sourceZhPath = resolveApplicationSettingsPath("zh-CN");
 
   const targetEnPath = path.join(
     INSTALLER_ROOT,
