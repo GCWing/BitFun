@@ -76,6 +76,11 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'computer_use_open_system_settings',
   // Native child-WebView lifecycle belongs to this controller window.
   'browser_webview_set_agent_target_state',
+  // ProductControl presentation callbacks acknowledge this window's runtime.
+  // The command itself follows the peer product data plane.
+  'mark_bitfun_control_surface_ready',
+  'mark_bitfun_control_surface_unready',
+  'report_bitfun_control_result',
   // Detached dispatch uses this controller's SSH credentials and observer index.
   'dispatch_list_targets',
   'dispatch_probe_target',
@@ -354,6 +359,8 @@ export interface PeerDeviceTransportHooks {
   supportsTargetedSessionRollback?: boolean;
   /** Enables host-local usage statistics only when the target implements it. */
   supportsTokenUsageStatistics?: boolean;
+  /** Enables the versioned typed ProductControl HostInvoke contract. */
+  supportsProductControlV1?: boolean;
 }
 
 interface HostInvokeResultEnvelope {
@@ -485,6 +492,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       | 'supportsIdempotentDialogSubmit'
       | 'supportsTargetedSessionRollback'
       | 'supportsTokenUsageStatistics'
+      | 'supportsProductControlV1'
     >,
   ): void {
     this.hooks = { ...this.hooks, ...capabilities };
@@ -562,6 +570,15 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     ) {
       throw new PeerProductCommandError(
         'token_usage_statistics_unsupported: The connected Peer host does not support usage statistics',
+      );
+    }
+
+    if (
+      action === 'product_control_invoke' &&
+      this.hooks.supportsProductControlV1 !== true
+    ) {
+      throw new PeerProductCommandError(
+        'product_control_v1_unsupported: The connected Peer host does not support the unified ProductControl contract',
       );
     }
 

@@ -102,6 +102,44 @@ fn exec_accepts_hidden_confirm_compatibility_flag() {
 }
 
 #[test]
+fn cli_agent_controls_its_own_isolated_config_through_bitfun_control() {
+    let server = MockOpenAiServer::product_control_loop();
+    let environment = CliTestEnvironment::new();
+    environment.configure_product_control_mock_model(server.base_url());
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "用 BitFunControl 搜索工具调用超时，读取、配置为 74，再回读",
+        "--auto",
+        "--no-verify-final-changes",
+        "--output-format",
+        "json",
+    ]);
+
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(60));
+    let stdout = stdout(&output);
+    assert!(output.status.success(), "{}\n{stdout}", stderr(&output));
+    assert!(stdout.contains("PRODUCT_CONTROL_SELF_TEST_OK"), "{stdout}");
+    server.assert_chat_completion_requests(5);
+
+    let requests = server.chat_completion_request_bodies();
+    let bitfun_control = requests[0]["tools"]
+        .as_array()
+        .expect("model tools")
+        .iter()
+        .find(|tool| tool["function"]["name"] == "BitFunControl")
+        .expect("BitFunControl is loaded for the CLI Agent");
+    let description = bitfun_control["function"]["description"]
+        .as_str()
+        .expect("BitFunControl description");
+    assert!(description.contains("two-step"), "{description}");
+    assert!(description.len() < 600, "catalog leaked into tool prompt");
+
+    let config = environment.app_config();
+    assert_eq!(config["ai"]["tool_execution_timeout_secs"], 74);
+}
+
+#[test]
 fn exec_rejects_auto_with_legacy_confirm() {
     let output = run_cli(&["exec", "task", "--auto", "--confirm"]);
     let stderr = stderr(&output);

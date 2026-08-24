@@ -157,6 +157,28 @@ impl CliTestEnvironment {
         );
     }
 
+    pub(crate) fn configure_product_control_mock_model(&self, server_base_url: &str) {
+        self.configure_mock_model(server_base_url);
+        let config_path = self.user_root.join("config/app.json");
+        let mut config: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(&config_path).expect("read product-control model config"),
+        )
+        .expect("parse product-control model config");
+        config["ai"]["max_rounds"] = json!(8);
+        std::fs::write(
+            config_path,
+            serde_json::to_vec_pretty(&config).expect("serialize product-control model config"),
+        )
+        .expect("write product-control model config");
+    }
+
+    pub(crate) fn app_config(&self) -> serde_json::Value {
+        serde_json::from_slice(
+            &std::fs::read(self.user_root.join("config/app.json")).expect("read CLI app config"),
+        )
+        .expect("parse CLI app config")
+    }
+
     pub(crate) fn configure_mock_image_model(&self, server_base_url: &str) {
         self.configure_mock_model_with_capabilities(
             server_base_url,
@@ -301,6 +323,7 @@ pub(crate) struct MockOpenAiServer {
 enum MockModelResponse {
     Immediate,
     Gated,
+    ProductControlLoop,
     Http403 { reason: String },
     DisconnectThenHttp403,
     MalformedSseThenImmediate,
@@ -313,6 +336,10 @@ impl MockOpenAiServer {
 
     pub(crate) fn immediate() -> Self {
         Self::spawn(MockModelResponse::Immediate)
+    }
+
+    pub(crate) fn product_control_loop() -> Self {
+        Self::spawn(MockModelResponse::ProductControlLoop)
     }
 
     pub(crate) fn http_403(reason: impl Into<String>) -> Self {
@@ -416,7 +443,9 @@ impl MockOpenAiServer {
                                 MockModelResponse::Http403 { .. }
                                     | MockModelResponse::DisconnectThenHttp403
                             ) || (matches!(response, MockModelResponse::MalformedSseThenImmediate)
-                                && attempt < 2);
+                                && attempt < 2)
+                                || (matches!(response, MockModelResponse::ProductControlLoop)
+                                    && attempt < 5);
                         if accepts_more_requests {
                             continue;
                         }
@@ -480,6 +509,11 @@ fn serve_model_response(
             b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
         )
         .expect("write mock response headers");
+
+    if matches!(response, MockModelResponse::ProductControlLoop) {
+        serve_product_control_response(stream, attempt);
+        return;
+    }
 
     if matches!(response, MockModelResponse::MalformedSseThenImmediate) && attempt == 0 {
         write_chunk(stream, b"data: not-json\n\n").expect("write malformed SSE frame");
@@ -580,6 +614,102 @@ fn serve_model_response(
     }
     let _ = stream.write_all(b"0\r\n\r\n");
     let _ = stream.flush();
+}
+
+fn serve_product_control_response(stream: &mut TcpStream, attempt: usize) {
+    write_sse_chunk(
+        stream,
+        &json!({
+            "id": format!("chatcmpl_product_control_{attempt}"),
+            "object": "chat.completion.chunk",
+            "created": attempt,
+            "model": "cli-e2e-model",
+            "choices": [{
+                "index": 0,
+                "delta": {"role": "assistant", "content": null},
+                "finish_reason": null
+            }]
+        })
+        .to_string(),
+    )
+    .expect("write product-control role chunk");
+
+    if attempt < 4 {
+        let (call_id, arguments) = match attempt {
+            0 => (
+                "call_product_control_search",
+                json!({"action": "search", "query": "工具调用超时"}),
+            ),
+            1 => (
+                "call_product_control_get_before",
+                json!({"action": "get", "capability_id": "setting.tools.execution"}),
+            ),
+            2 => (
+                "call_product_control_configure",
+                json!({
+                    "action": "configure",
+                    "capability_id": "setting.tools.execution",
+                    "option_id": "tool-timeout-seconds",
+                    "value_integer": 74
+                }),
+            ),
+            3 => (
+                "call_product_control_get_after",
+                json!({"action": "get", "capability_id": "setting.tools.execution"}),
+            ),
+            _ => unreachable!(),
+        };
+        write_sse_chunk(
+            stream,
+            &json!({
+                "id": format!("chatcmpl_product_control_{attempt}"),
+                "object": "chat.completion.chunk",
+                "created": attempt,
+                "model": "cli-e2e-model",
+                "choices": [{
+                    "index": 0,
+                    "delta": {
+                        "tool_calls": [{
+                            "index": 0,
+                            "id": call_id,
+                            "type": "function",
+                            "function": {
+                                "name": "BitFunControl",
+                                "arguments": arguments.to_string()
+                            }
+                        }]
+                    },
+                    "finish_reason": "tool_calls"
+                }]
+            })
+            .to_string(),
+        )
+        .expect("write product-control tool-call chunk");
+    } else {
+        write_sse_chunk(
+            stream,
+            &json!({
+                "id": "chatcmpl_product_control_complete",
+                "object": "chat.completion.chunk",
+                "created": attempt,
+                "model": "cli-e2e-model",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": "PRODUCT_CONTROL_SELF_TEST_OK"},
+                    "finish_reason": "stop"
+                }],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
+            })
+            .to_string(),
+        )
+        .expect("write product-control completion chunk");
+    }
+
+    write_chunk(stream, b"data: [DONE]\n\n").expect("finish product-control SSE");
+    stream
+        .write_all(b"0\r\n\r\n")
+        .expect("finish product-control chunked response");
+    stream.flush().expect("flush product-control response");
 }
 
 fn write_http_403(stream: &mut TcpStream, reason: &str) -> std::io::Result<()> {

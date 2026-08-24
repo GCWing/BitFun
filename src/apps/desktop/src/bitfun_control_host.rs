@@ -10,17 +10,19 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use bitfun_core::agentic::tools::bitfun_control_config::{
-    configure_config_backed_option, read_config_backed_option,
+    apply_legacy_config_mutation, config_handler_path, configure_config_backed_option,
+    exact_config_binding, read_config_backed_option, ProductConfigBinding,
 };
 use bitfun_core::agentic::tools::bitfun_control_host::{
     set_bitfun_control_port, BitFunControlHostRequest, ProductControlAction, ProductControlPort,
+    ProductControlSource,
 };
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use bitfun_core::service::config::types::{AIExperienceConfig, AgentCompanionPetSelection};
 use bitfun_product_domains::product_control::{
     capability as product_capability, inspect_contract, validate_open_target,
     validate_operation_arguments, validate_option_value, ProductCapabilityOperationHandler,
-    ProductCapabilityOption, ProductCapabilityOptionHandler,
+    ProductCapabilityOption, ProductCapabilityOptionHandler, ProductControlRisk,
 };
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -36,13 +38,31 @@ use crate::api::commands::{
 
 const BITFUN_CONTROL_REQUEST_EVENT: &str = "agentic://bitfun-control-request";
 const BITFUN_CONTROL_APPLIED_EVENT: &str = "agentic://bitfun-control-applied";
+const BITFUN_CONTROL_EFFECT_EVENT: &str = "agentic://bitfun-control-effect";
 const BITFUN_CONTROL_RESPONSE_TIMEOUT: Duration = Duration::from_secs(120);
+const BITFUN_CONTROL_EFFECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 type PendingResponse = oneshot::Sender<Result<Value, String>>;
 
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_STATE_REVISION: AtomicU64 = AtomicU64::new(1);
 static SURFACE_READY: AtomicBool = AtomicBool::new(false);
 static PENDING_RESPONSES: OnceLock<Mutex<HashMap<String, PendingResponse>>> = OnceLock::new();
+static PRODUCT_CONTROL_TRANSACTION: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+fn product_control_transaction() -> &'static tokio::sync::Mutex<()> {
+    PRODUCT_CONTROL_TRANSACTION.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+fn current_revision() -> u64 {
+    NEXT_STATE_REVISION
+        .load(Ordering::Acquire)
+        .saturating_sub(1)
+}
+
+fn commit_revision() -> u64 {
+    NEXT_STATE_REVISION.fetch_add(1, Ordering::AcqRel)
+}
 
 fn pending_responses() -> &'static Mutex<HashMap<String, PendingResponse>> {
     PENDING_RESPONSES.get_or_init(|| Mutex::new(HashMap::new()))
@@ -54,7 +74,12 @@ fn lock_pending_responses() -> std::sync::MutexGuard<'static, HashMap<String, Pe
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-async fn dispatch_surface_request(request: BitFunControlHostRequest) -> Result<Value, String> {
+async fn dispatch_surface_event(
+    event_name: &str,
+    mut payload: Value,
+    timeout: Duration,
+    purpose: &str,
+) -> Result<Value, String> {
     if !SURFACE_READY.load(Ordering::Acquire) {
         return Err(
             "The Desktop product-control adapter is ready, but its Web UI navigation surface is not"
@@ -69,7 +94,6 @@ async fn dispatch_surface_request(request: BitFunControlHostRequest) -> Result<V
     let (sender, receiver) = oneshot::channel();
     lock_pending_responses().insert(request_id.clone(), sender);
 
-    let mut payload = serde_json::to_value(request).map_err(|error| error.to_string())?;
     let Some(payload) = payload.as_object_mut() else {
         lock_pending_responses().remove(&request_id);
         return Err("BitFunControl request serialization produced an invalid payload".to_string());
@@ -77,7 +101,7 @@ async fn dispatch_surface_request(request: BitFunControlHostRequest) -> Result<V
     payload.insert("requestId".to_string(), Value::String(request_id.clone()));
 
     if let Err(error) = emit_global_event(BackendEvent::Custom {
-        event_name: BITFUN_CONTROL_REQUEST_EVENT.to_string(),
+        event_name: event_name.to_string(),
         payload: Value::Object(payload.clone()),
     })
     .await
@@ -88,14 +112,27 @@ async fn dispatch_surface_request(request: BitFunControlHostRequest) -> Result<V
         ));
     }
 
-    match tokio::time::timeout(BITFUN_CONTROL_RESPONSE_TIMEOUT, receiver).await {
+    match tokio::time::timeout(timeout, receiver).await {
         Ok(Ok(result)) => result,
         Ok(Err(_)) => Err("BitFunControl response channel closed".to_string()),
         Err(_) => {
             lock_pending_responses().remove(&request_id);
-            Err("BitFunControl timed out waiting for the active product surface".to_string())
+            SURFACE_READY.store(false, Ordering::Release);
+            Err(format!(
+                "BitFunControl timed out waiting for the active product surface to {purpose}"
+            ))
         }
     }
+}
+
+async fn dispatch_surface_request(request: BitFunControlHostRequest) -> Result<Value, String> {
+    dispatch_surface_event(
+        BITFUN_CONTROL_REQUEST_EVENT,
+        serde_json::to_value(request).map_err(|error| error.to_string())?,
+        BITFUN_CONTROL_RESPONSE_TIMEOUT,
+        "complete the presentation request",
+    )
+    .await
 }
 
 async fn current_option_value(
@@ -195,6 +232,260 @@ async fn emit_applied(
     }
 }
 
+fn option_requires_presentation_commit(option: &ProductCapabilityOption) -> bool {
+    matches!(
+        option.handler,
+        ProductCapabilityOptionHandler::AppearanceSelection
+            | ProductCapabilityOptionHandler::Language
+    )
+}
+
+fn config_path_invalidates_ai_client(path: &str) -> bool {
+    [
+        "ai.models",
+        "ai.default_models",
+        "ai.agent_model_defaults",
+        "ai.stream_idle_timeout_secs",
+        "ai.stream_ttft_timeout_secs",
+        "ai.proxy",
+    ]
+    .iter()
+    .any(|owned| {
+        path == *owned
+            || path.starts_with(&format!("{owned}."))
+            || owned.starts_with(&format!("{path}."))
+    })
+}
+
+async fn apply_backend_config_effects(
+    app: &AppHandle,
+    state: &AppState,
+    path: &str,
+    value: &Value,
+) -> Result<(), String> {
+    if config_path_invalidates_ai_client(path) {
+        state.ai_client_factory.invalidate_cache();
+        log::info!("AI config changed, cache invalidated: path={path}");
+    }
+    if path == "app.language" {
+        let language = value
+            .as_str()
+            .ok_or_else(|| "The interface language must be a string".to_string())?;
+        crate::api::i18n_api::apply_language_runtime_effects(app, state, language).await?;
+    }
+    Ok(())
+}
+
+async fn synchronize_required_effect(
+    capability_id: &str,
+    option_id: &str,
+    changed_path: &str,
+    value: &Value,
+    phase: &str,
+) -> Result<Value, String> {
+    if !SURFACE_READY.load(Ordering::Acquire) {
+        return Ok(json!({
+            "status": "notAttached",
+            "reason": "The product state was committed without an active presentation surface",
+        }));
+    }
+    dispatch_surface_event(
+        BITFUN_CONTROL_EFFECT_EVENT,
+        json!({
+            "capabilityId": capability_id,
+            "optionId": option_id,
+            "changedPaths": [changed_path],
+            "value": value,
+            "phase": phase,
+        }),
+        BITFUN_CONTROL_EFFECT_TIMEOUT,
+        "apply the required runtime effect",
+    )
+    .await
+}
+
+async fn rollback_config_option(
+    app: &AppHandle,
+    state: &AppState,
+    capability_id: &str,
+    option: &ProductCapabilityOption,
+    previous_value: &Value,
+) -> Result<(), String> {
+    if let Some(applied) =
+        configure_config_backed_option(&state.config_service, option, previous_value).await?
+    {
+        apply_backend_config_effects(app, state, &applied.changed_path, &applied.effective_value)
+            .await?;
+        crate::api::remote_connect_api::notify_settings_changed();
+        if option_requires_presentation_commit(option) {
+            synchronize_required_effect(
+                capability_id,
+                &option.id,
+                &applied.changed_path,
+                &applied.effective_value,
+                "rollback",
+            )
+            .await?;
+        }
+        return Ok(());
+    }
+
+    let ProductCapabilityOptionHandler::Provider {
+        provider_id,
+        option_id,
+    } = &option.handler
+    else {
+        return Err("Product-control option has no rollback handler".to_string());
+    };
+    let provider = desktop_provider_option(provider_id, option_id).ok_or_else(|| {
+        format!("Product-control provider option is not registered: {provider_id}:{option_id}")
+    })?;
+    configure_desktop_provider_option(app, provider, previous_value).await
+}
+
+async fn failed_option_transaction(
+    app: &AppHandle,
+    state: &AppState,
+    capability_id: &str,
+    option: &ProductCapabilityOption,
+    previous_value: &Value,
+    failure: String,
+) -> String {
+    match rollback_config_option(app, state, capability_id, option, previous_value).await {
+        Ok(()) => format!("Product-control transaction failed and was rolled back: {failure}"),
+        Err(rollback_error) => format!(
+            "Product-control transaction failed: {failure}; rollback degraded: {rollback_error}"
+        ),
+    }
+}
+
+async fn configure_option_transaction(
+    app: &AppHandle,
+    capability_id: &str,
+    option_id: &str,
+    value: &Value,
+) -> Result<Value, String> {
+    let _transaction = product_control_transaction().lock().await;
+    let capability = product_capability(capability_id)?;
+    let option = capability
+        .options
+        .iter()
+        .find(|option| option.id == option_id)
+        .ok_or_else(|| format!("Unknown option for {capability_id}: {option_id}"))?;
+    validate_option_value(&option.value_schema, value)?;
+    let state = app.state::<AppState>();
+    let previous_value = current_option_value(app, &state, option).await?;
+
+    let (changed_path, effective_value, notify_settings) = if let Some(applied) =
+        configure_config_backed_option(&state.config_service, option, value).await?
+    {
+        if let Err(error) = apply_backend_config_effects(
+            app,
+            &state,
+            &applied.changed_path,
+            &applied.effective_value,
+        )
+        .await
+        {
+            return Err(failed_option_transaction(
+                app,
+                &state,
+                capability_id,
+                option,
+                &previous_value,
+                error,
+            )
+            .await);
+        }
+        (applied.changed_path, applied.effective_value, true)
+    } else if let ProductCapabilityOptionHandler::Provider {
+        provider_id,
+        option_id,
+    } = &option.handler
+    {
+        let provider = desktop_provider_option(provider_id, option_id).ok_or_else(|| {
+            format!("Product-control provider option is not registered: {provider_id}:{option_id}")
+        })?;
+        if let Err(error) = configure_desktop_provider_option(app, provider, value).await {
+            return Err(failed_option_transaction(
+                app,
+                &state,
+                capability_id,
+                option,
+                &previous_value,
+                error,
+            )
+            .await);
+        }
+        let effective_value = match current_option_value(app, &state, option).await {
+            Ok(value) => value,
+            Err(error) => {
+                return Err(failed_option_transaction(
+                    app,
+                    &state,
+                    capability_id,
+                    option,
+                    &previous_value,
+                    error,
+                )
+                .await);
+            }
+        };
+        (provider.changed_path().to_string(), effective_value, false)
+    } else {
+        return Err("Product-control option has no executable handler".to_string());
+    };
+    if notify_settings {
+        crate::api::remote_connect_api::notify_settings_changed();
+    }
+
+    let presentation_sync = if option_requires_presentation_commit(option) {
+        match synchronize_required_effect(
+            capability_id,
+            option_id,
+            &changed_path,
+            &effective_value,
+            "commit",
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(effect_error) => {
+                return Err(failed_option_transaction(
+                    app,
+                    &state,
+                    capability_id,
+                    option,
+                    &previous_value,
+                    format!("Required presentation effect failed: {effect_error}"),
+                )
+                .await);
+            }
+        }
+    } else {
+        emit_applied(
+            capability_id,
+            None,
+            Some(option_id),
+            &[changed_path.as_str()],
+            Some(&effective_value),
+        )
+        .await
+    };
+    let revision = commit_revision();
+    Ok(json!({
+        "catalogDigest": bitfun_product_domains::product_control::catalog()?.digest.clone(),
+        "capabilityId": capability_id,
+        "optionId": option_id,
+        "configured": true,
+        "effectiveValue": effective_value,
+        "changedPaths": [changed_path],
+        "revision": revision,
+        "readBack": true,
+        "presentationSync": presentation_sync,
+    }))
+}
+
 async fn inspect_desktop(
     app: &AppHandle,
     request: &BitFunControlHostRequest,
@@ -236,6 +527,15 @@ async fn inspect_desktop(
             "presentationReady": SURFACE_READY.load(Ordering::Acquire),
         }),
     );
+    option_values.insert(
+        "catalogDigest".to_string(),
+        Value::String(
+            bitfun_product_domains::product_control::catalog()?
+                .digest
+                .clone(),
+        ),
+    );
+    option_values.insert("revision".to_string(), Value::from(current_revision()));
     if capability_id == "setting.application.pet" {
         let provider_state = match companion_state(&state).await {
             Ok(value) => value,
@@ -265,51 +565,181 @@ async fn configure_desktop(
         .value
         .as_ref()
         .ok_or_else(|| "value is required for configure".to_string())?;
-    let capability = product_capability(capability_id)?;
+    configure_option_transaction(app, capability_id, option_id, value).await
+}
+
+fn binding_contract(
+    binding: &ProductConfigBinding,
+) -> Result<(&'static str, &'static ProductCapabilityOption), String> {
+    let capability = product_capability(&binding.capability_id)?;
     let option = capability
         .options
         .iter()
-        .find(|option| option.id == option_id)
-        .ok_or_else(|| format!("Unknown option for {capability_id}: {option_id}"))?;
-    validate_option_value(&option.value_schema, value)?;
-    let state = app.state::<AppState>();
-    let (changed_path, effective_value, notify_settings) = if let Some(applied) =
-        configure_config_backed_option(&state.config_service, option, value).await?
-    {
-        (applied.changed_path, applied.effective_value, true)
-    } else if let ProductCapabilityOptionHandler::Provider {
-        provider_id,
-        option_id,
-    } = &option.handler
-    {
-        let provider = desktop_provider_option(provider_id, option_id).ok_or_else(|| {
-            format!("Product-control provider option is not registered: {provider_id}:{option_id}")
+        .find(|option| option.id == binding.option_id)
+        .ok_or_else(|| {
+            format!(
+                "Resolved config binding points to a missing option: {}:{}",
+                binding.capability_id, binding.option_id
+            )
         })?;
-        configure_desktop_provider_option(app, provider, value).await?;
-        let effective_value = current_option_value(app, &state, option).await?;
-        (provider.changed_path().to_string(), effective_value, false)
-    } else {
-        return Err("Product-control option has no executable handler".to_string());
-    };
-    if notify_settings {
-        crate::api::remote_connect_api::notify_settings_changed();
+    Ok((capability.id.as_str(), option))
+}
+
+async fn apply_binding_backend_effects(
+    app: &AppHandle,
+    state: &AppState,
+    bindings: &[ProductConfigBinding],
+) -> Result<(), String> {
+    for binding in bindings {
+        let (_, option) = binding_contract(binding)?;
+        let Some(path) = config_handler_path(option) else {
+            continue;
+        };
+        let effective = current_option_value(app, state, option).await?;
+        apply_backend_config_effects(app, state, path, &effective).await?;
     }
-    let presentation_sync = emit_applied(
-        capability_id,
-        None,
-        Some(option_id),
-        &[changed_path.as_str()],
-        Some(&effective_value),
+    Ok(())
+}
+
+async fn synchronize_legacy_bindings(
+    app: &AppHandle,
+    state: &AppState,
+    bindings: &[ProductConfigBinding],
+    phase: &str,
+) -> Result<Vec<Value>, String> {
+    let mut results = Vec::new();
+    for binding in bindings {
+        let (capability_id, option) = binding_contract(binding)?;
+        let Some(path) = config_handler_path(option) else {
+            continue;
+        };
+        let effective = current_option_value(app, state, option).await?;
+        if option_requires_presentation_commit(option) {
+            results.push(
+                synchronize_required_effect(capability_id, &option.id, path, &effective, phase)
+                    .await?,
+            );
+        } else {
+            results.push(
+                emit_applied(
+                    capability_id,
+                    None,
+                    Some(&option.id),
+                    &[path],
+                    Some(&effective),
+                )
+                .await,
+            );
+        }
+    }
+    Ok(results)
+}
+
+async fn rollback_legacy_config_transaction(
+    app: &AppHandle,
+    state: &AppState,
+    path: &str,
+    previous_value: Value,
+) -> Result<(), String> {
+    let rolled_back =
+        apply_legacy_config_mutation(&state.config_service, path, previous_value).await?;
+    apply_backend_config_effects(app, state, path, &rolled_back.effective_value).await?;
+    apply_binding_backend_effects(app, state, &rolled_back.controlled_bindings).await?;
+    crate::api::remote_connect_api::notify_settings_changed();
+    synchronize_legacy_bindings(app, state, &rolled_back.controlled_bindings, "rollback")
+        .await
+        .map(|_| ())
+}
+
+async fn failed_legacy_transaction(
+    app: &AppHandle,
+    state: &AppState,
+    path: &str,
+    previous_value: Option<Value>,
+    failure: String,
+) -> String {
+    let rollback = match previous_value {
+        Some(previous_value) => {
+            rollback_legacy_config_transaction(app, state, path, previous_value).await
+        }
+        None => Err("The legacy path had no previous value to restore".to_string()),
+    };
+    match rollback {
+        Ok(()) => format!("GUI config transaction failed and was rolled back: {failure}"),
+        Err(rollback_error) => {
+            format!("GUI config transaction failed: {failure}; rollback degraded: {rollback_error}")
+        }
+    }
+}
+
+/// Compatibility adapter for existing GUI settings. Exact controlled paths
+/// become the same typed option command used by BitFunControl. Parent-object
+/// writes are schema-checked against every affected option, committed once,
+/// and produce the same backend and presentation effects.
+pub(crate) async fn set_config_from_gui(
+    app: &AppHandle,
+    path: &str,
+    value: Value,
+) -> Result<Value, String> {
+    if let Some((capability, option)) = exact_config_binding(path)? {
+        return configure_option_transaction(app, &capability.id, &option.id, &value).await;
+    }
+
+    let _transaction = product_control_transaction().lock().await;
+    let state = app.state::<AppState>();
+    let previous_value = state.config_service.get_config(Some(path)).await.ok();
+    let applied = apply_legacy_config_mutation(&state.config_service, path, value).await?;
+    let backend_effect_result =
+        match apply_backend_config_effects(app, &state, path, &applied.effective_value).await {
+            Ok(()) => {
+                apply_binding_backend_effects(app, &state, &applied.controlled_bindings).await
+            }
+            Err(error) => Err(error),
+        };
+    if let Err(error) = backend_effect_result {
+        return Err(failed_legacy_transaction(app, &state, path, previous_value, error).await);
+    }
+    crate::api::remote_connect_api::notify_settings_changed();
+
+    let presentation_sync = match synchronize_legacy_bindings(
+        app,
+        &state,
+        &applied.controlled_bindings,
+        "commit",
     )
-    .await;
+    .await
+    {
+        Ok(results) => results,
+        Err(effect_error) => {
+            return Err(failed_legacy_transaction(
+                app,
+                &state,
+                path,
+                previous_value,
+                format!("Required presentation effect failed: {effect_error}"),
+            )
+            .await);
+        }
+    };
+    let revision = commit_revision();
     Ok(json!({
-        "capabilityId": capability_id,
-        "optionId": option_id,
+        "catalogDigest": bitfun_product_domains::product_control::catalog()?.digest.clone(),
         "configured": true,
-        "effectiveValue": effective_value,
-        "readBack": true,
+        "changedPaths": [applied.changed_path],
+        "controlledBindings": applied.controlled_bindings,
+        "effectiveValue": applied.effective_value,
+        "revision": revision,
         "presentationSync": presentation_sync,
     }))
+}
+
+pub(crate) async fn configure_option_from_gui(
+    app: &AppHandle,
+    capability_id: &str,
+    option_id: &str,
+    value: Value,
+) -> Result<Value, String> {
+    configure_option_transaction(app, capability_id, option_id, &value).await
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -550,7 +980,15 @@ async fn execute_desktop(
         .find(|operation| operation.id == operation_id)
         .ok_or_else(|| format!("Unknown operation for {capability_id}: {operation_id}"))?;
     validate_operation_arguments(&operation.input_schema, request.arguments.as_ref())?;
-    match &operation.handler {
+    // Reads stay concurrent. Every mutating product operation shares the same
+    // transaction coordinator as GUI and Agent setting mutations, so revision
+    // order matches the order in which product state/effects are committed.
+    let _transaction = if operation.risk == ProductControlRisk::Read {
+        None
+    } else {
+        Some(product_control_transaction().lock().await)
+    };
+    let mut result = match &operation.handler {
         ProductCapabilityOperationHandler::ProductAction { .. } => {
             dispatch_surface_request(request.clone()).await
         }
@@ -565,7 +1003,26 @@ async fn execute_desktop(
                 "Product-control operation provider is not registered: {provider_id}:{provider_operation_id}"
             )),
         },
+    }?;
+    if let Some(object) = result.as_object_mut() {
+        object.insert(
+            "catalogDigest".to_string(),
+            Value::String(
+                bitfun_product_domains::product_control::catalog()?
+                    .digest
+                    .clone(),
+            ),
+        );
+        object.insert(
+            "revision".to_string(),
+            Value::from(if operation.risk == ProductControlRisk::Read {
+                current_revision()
+            } else {
+                commit_revision()
+            }),
+        );
     }
+    Ok(result)
 }
 
 async fn dispatch_request(
@@ -612,6 +1069,28 @@ pub(crate) fn install(app: AppHandle) {
 #[tauri::command]
 pub(crate) fn mark_bitfun_control_surface_ready() {
     SURFACE_READY.store(true, Ordering::Release);
+}
+
+#[tauri::command]
+pub(crate) fn mark_bitfun_control_surface_unready() {
+    SURFACE_READY.store(false, Ordering::Release);
+    let pending = std::mem::take(&mut *lock_pending_responses());
+    for (_, sender) in pending {
+        let _ = sender.send(Err(
+            "The active BitFun presentation surface detached".to_string()
+        ));
+    }
+}
+
+/// Typed GUI adapter into the same Desktop executor used by BitFunControl.
+/// Caller-provided source metadata is overwritten at the trusted boundary.
+#[tauri::command]
+pub(crate) async fn product_control_invoke(
+    app: AppHandle,
+    mut request: BitFunControlHostRequest,
+) -> Result<Value, String> {
+    request.source = ProductControlSource::Gui;
+    dispatch_request(&app, request).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -690,5 +1169,48 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn backend_effect_routing_is_owned_by_the_control_transaction() {
+        for path in [
+            "ai.models",
+            "ai.models.providers.openai",
+            "ai.default_models.primary",
+            "ai.agent_model_defaults",
+            "ai.stream_idle_timeout_secs",
+            "ai.stream_ttft_timeout_secs",
+            "ai.proxy",
+        ] {
+            assert!(
+                config_path_invalidates_ai_client(path),
+                "AI client-affecting path is missing its runtime effect: {path}"
+            );
+        }
+        assert!(!config_path_invalidates_ai_client(
+            "ai.tool_execution_timeout_secs"
+        ));
+
+        let appearance = product_capability("setting.application.appearance")
+            .unwrap()
+            .options
+            .iter()
+            .find(|option| option.id == "theme")
+            .unwrap();
+        let language = product_capability("setting.application.appearance")
+            .unwrap()
+            .options
+            .iter()
+            .find(|option| option.id == "language")
+            .unwrap();
+        let auto_update = product_capability("setting.application.general")
+            .unwrap()
+            .options
+            .iter()
+            .find(|option| option.id == "auto-update")
+            .unwrap();
+        assert!(option_requires_presentation_commit(appearance));
+        assert!(option_requires_presentation_commit(language));
+        assert!(!option_requires_presentation_commit(auto_update));
     }
 }

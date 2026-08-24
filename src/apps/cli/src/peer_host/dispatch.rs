@@ -164,6 +164,10 @@ mod tests {
                     value.pointer("/capabilities/token_usage_statistics"),
                     Some(&json!(true))
                 );
+                assert_eq!(
+                    value.pointer("/capabilities/product_control_v1"),
+                    Some(&json!(true))
+                );
             }
             other => panic!("unexpected response: {other:?}"),
         }

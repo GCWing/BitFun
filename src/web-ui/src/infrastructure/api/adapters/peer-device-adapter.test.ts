@@ -42,6 +42,13 @@ describe('isPeerLocalOnlyCommand', () => {
   it('keeps native main-window geometry control on the controller computer', () => {
     expect(isPeerLocalOnlyCommand('set_main_window_transient_geometry')).toBe(true);
   });
+
+  it('keeps ProductControl presentation callbacks local while routing commands to the peer', () => {
+    expect(isPeerLocalOnlyCommand('mark_bitfun_control_surface_ready')).toBe(true);
+    expect(isPeerLocalOnlyCommand('mark_bitfun_control_surface_unready')).toBe(true);
+    expect(isPeerLocalOnlyCommand('report_bitfun_control_result')).toBe(true);
+    expect(isPeerLocalOnlyCommand('product_control_invoke')).toBe(false);
+  });
 });
 
 describe('peerInvokePriorityFor', () => {
@@ -362,6 +369,36 @@ describe('PeerDeviceTransportAdapter queue', () => {
     await expect(adapter.request('get_token_usage_statistics', {
       request: { timeRange: 'today', granularity: 'hour' },
     })).resolves.toEqual(statistics);
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects ProductControl before RPC when the Peer host lacks the versioned contract', async () => {
+    const deviceRpc = vi.fn();
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('product_control_invoke', {
+      request: { action: 'get', capabilityId: 'setting.tools.execution' },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: expect.stringContaining('product_control_v1_unsupported'),
+    }));
+    expect(deviceRpc).not.toHaveBeenCalled();
+  });
+
+  it('forwards ProductControl after version negotiation', async () => {
+    const outcome = { capabilityId: 'setting.tools.execution', revision: 2 };
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: true,
+      value: outcome,
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {
+      supportsProductControlV1: true,
+    });
+
+    await expect(adapter.request('product_control_invoke', {
+      request: { action: 'get', capabilityId: 'setting.tools.execution' },
+    })).resolves.toEqual(outcome);
     expect(deviceRpc).toHaveBeenCalledTimes(1);
   });
 

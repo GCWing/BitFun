@@ -13,6 +13,7 @@ export * from './service-api/PermissionAPI';
 export * from './service-api/PageAPI';
 export * from './service-api/SpeechAPI';
 export * from './service-api/WorktreeAPI';
+export * from './service-api/ProductControlAPI';
 
 // Import API modules
 import { workspaceAPI } from './service-api/WorkspaceAPI';
@@ -41,9 +42,10 @@ import { insightsApi } from './insightsApi';
 import { tokenUsageStatisticsApi } from './tokenUsageStatisticsApi';
 import { speechAPI } from './service-api/SpeechAPI';
 import { worktreeAPI } from './service-api/WorktreeAPI';
+import { productControlAPI } from './service-api/ProductControlAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, tokenUsageStatisticsApi, speechAPI, worktreeAPI };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, tokenUsageStatisticsApi, speechAPI, worktreeAPI, productControlAPI };
 export { TokenUsageStatisticsUnavailableError } from './tokenUsageStatisticsApi';
 export * from './service-api/ReviewPlatformAPI';
 export type {
@@ -69,6 +71,7 @@ export const bitfunAPI = {
   tool: toolAPI,
   agent: agentAPI,
   system: systemAPI,
+  productControl: productControlAPI,
   project: projectAPI,
   diff: diffAPI,
   snapshot: snapshotAPI,

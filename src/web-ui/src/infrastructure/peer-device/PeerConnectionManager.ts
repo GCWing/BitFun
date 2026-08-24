@@ -43,6 +43,10 @@ export interface PeerHostCapabilities {
   readonly idempotentDialogSubmit: boolean;
   readonly targetedSessionRollback: boolean;
   readonly tokenUsageStatistics: boolean;
+  /** Typed ProductControl HostInvoke, including shared config read-back. */
+  readonly productControlV1?: boolean;
+  readonly productControlNativeV1?: boolean;
+  readonly productControlPresentationV1?: boolean;
 }
 
 /** Immutable view of one connection; safe to hold in component state. */
@@ -104,6 +108,9 @@ interface PeerModePingResult {
     idempotent_dialog_submit?: boolean;
     targeted_session_rollback?: boolean;
     token_usage_statistics?: boolean;
+    product_control_v1?: boolean;
+    product_control_native_v1?: boolean;
+    product_control_presentation_v1?: boolean;
   };
 }
 
@@ -111,6 +118,9 @@ const NO_CAPABILITIES: PeerHostCapabilities = {
   idempotentDialogSubmit: false,
   targetedSessionRollback: false,
   tokenUsageStatistics: false,
+  productControlV1: false,
+  productControlNativeV1: false,
+  productControlPresentationV1: false,
 };
 
 interface ConnectionEntry {
@@ -345,6 +355,7 @@ export class PeerConnectionManager {
       supportsIdempotentDialogSubmit: entry.capabilities.idempotentDialogSubmit,
       supportsTargetedSessionRollback: entry.capabilities.targetedSessionRollback,
       supportsTokenUsageStatistics: entry.capabilities.tokenUsageStatistics,
+      supportsProductControlV1: entry.capabilities.productControlV1,
     });
     entry.health = 'ready';
     this.scheduleKeepalive(entry);
@@ -359,6 +370,10 @@ export class PeerConnectionManager {
       idempotentDialogSubmit: result?.capabilities?.idempotent_dialog_submit === true,
       targetedSessionRollback: result?.capabilities?.targeted_session_rollback === true,
       tokenUsageStatistics: result?.capabilities?.token_usage_statistics === true,
+      productControlV1: result?.capabilities?.product_control_v1 === true,
+      productControlNativeV1: result?.capabilities?.product_control_native_v1 === true,
+      productControlPresentationV1:
+        result?.capabilities?.product_control_presentation_v1 === true,
     };
   }
 
@@ -416,6 +431,7 @@ export class PeerConnectionManager {
         supportsIdempotentDialogSubmit: capabilities.idempotentDialogSubmit,
         supportsTargetedSessionRollback: capabilities.targetedSessionRollback,
         supportsTokenUsageStatistics: capabilities.tokenUsageStatistics,
+        supportsProductControlV1: capabilities.productControlV1,
       });
       entry.consecutiveFailures = 0;
       const recovered = entry.health !== 'ready';

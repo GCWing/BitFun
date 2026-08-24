@@ -105,6 +105,12 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "computer_use_open_system_settings",
     // Native child-WebView lifecycle belongs to the controller window.
     "browser_webview_set_agent_target_state",
+    // ProductControl presentation readiness and transaction acknowledgements
+    // belong to this window. The product command itself is intentionally not
+    // local-only: `product_control_invoke` follows the selected peer data plane.
+    "mark_bitfun_control_surface_ready",
+    "mark_bitfun_control_surface_unready",
+    "report_bitfun_control_result",
     // Detached dispatch uses controller-owned SSH credentials and observers.
     "dispatch_list_targets",
     "dispatch_probe_target",
@@ -375,6 +381,9 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
             "token_usage_statistics": true,
+            "product_control_v1": true,
+            "product_control_native_v1": true,
+            "product_control_presentation_v1": true,
         },
     }))
 }
@@ -493,6 +502,18 @@ mod tests {
         );
         assert_eq!(
             value
+                .pointer("/capabilities/product_control_native_v1")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/product_control_presentation_v1")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
                 .pointer("/capabilities/targeted_session_rollback")
                 .and_then(Value::as_bool),
             Some(true)
@@ -500,6 +521,12 @@ mod tests {
         assert_eq!(
             value
                 .pointer("/capabilities/token_usage_statistics")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/product_control_v1")
                 .and_then(Value::as_bool),
             Some(true)
         );
@@ -551,6 +578,18 @@ mod tests {
         assert!(is_local_only_command(
             "browser_webview_set_agent_target_state"
         ));
+    }
+
+    #[test]
+    fn product_control_presentation_callbacks_stay_with_the_controller_window() {
+        for command in [
+            "mark_bitfun_control_surface_ready",
+            "mark_bitfun_control_surface_unready",
+            "report_bitfun_control_result",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
+        assert!(!is_local_only_command("product_control_invoke"));
     }
 
     /// Reading why Git refuses a repository is safe to answer for a

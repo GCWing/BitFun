@@ -282,16 +282,17 @@ pub struct SetPreventSleepEnabledRequest {
 
 #[tauri::command]
 pub async fn set_prevent_sleep_enabled(
-    app_state: State<'_, AppState>,
-    sleep_prevention: State<'_, SleepPreventionState>,
+    app: AppHandle,
     request: SetPreventSleepEnabledRequest,
 ) -> Result<(), String> {
-    set_prevent_sleep_enabled_impl(
-        &app_state.config_service,
-        sleep_prevention.inner(),
-        request.enabled,
+    crate::bitfun_control_host::configure_option_from_gui(
+        &app,
+        "setting.application.general",
+        "prevent-sleep",
+        serde_json::Value::Bool(request.enabled),
     )
     .await
+    .map(|_| ())
 }
 
 pub(crate) async fn set_prevent_sleep_enabled_from_host(

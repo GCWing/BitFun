@@ -1337,6 +1337,8 @@ pub async fn run() {
             get_available_tools,
             report_ide_control_result,
             bitfun_control_host::mark_bitfun_control_surface_ready,
+            bitfun_control_host::mark_bitfun_control_surface_unready,
+            bitfun_control_host::product_control_invoke,
             bitfun_control_host::report_bitfun_control_result,
             get_health_status,
             get_statistics,

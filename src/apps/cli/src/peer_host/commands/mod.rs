@@ -6,6 +6,7 @@ mod external_sources;
 mod filesystem;
 mod git;
 mod permission;
+mod product_control;
 mod session;
 mod snapshot;
 mod soft;
@@ -37,6 +38,7 @@ pub(crate) async fn dispatch(
         "get_config" => config::get_config(args).await,
         "get_configs" => config::get_configs(args).await,
         "set_config" => config::set_config(state, args).await,
+        "product_control_invoke" => product_control::invoke(state, args).await,
         "get_agent_profile_config" => config::get_agent_profile_config(args).await,
         "get_agent_profile_configs" => config::get_agent_profile_configs().await,
         "get_external_source_snapshot"

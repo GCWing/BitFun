@@ -66,4 +66,42 @@ describe('I18nService shared namespace contract', () => {
     expect(saveCurrentLocale).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  it('commits a user language change before applying the local presentation fallback', async () => {
+    vi.stubGlobal('document', {
+      documentElement: { setAttribute: vi.fn() },
+    });
+    const service = new I18nService();
+    const initialLocale = service.getCurrentLocale();
+    const saveCurrentLocale = vi.spyOn(
+      service as unknown as { saveCurrentLocale(locale: string): Promise<void> },
+      'saveCurrentLocale',
+    ).mockImplementation(async () => {
+      expect(service.getCurrentLocale()).toBe(initialLocale);
+    });
+
+    await service.changeLanguage('zh-TW');
+
+    expect(saveCurrentLocale).toHaveBeenCalledWith('zh-TW');
+    expect(service.getCurrentLocale()).toBe('zh-TW');
+    vi.unstubAllGlobals();
+  });
+
+  it('does not change the visible language when ProductControl persistence fails', async () => {
+    vi.stubGlobal('document', {
+      documentElement: { setAttribute: vi.fn() },
+    });
+    const service = new I18nService();
+    const initialLocale = service.getCurrentLocale();
+    vi.spyOn(
+      service as unknown as { saveCurrentLocale(locale: string): Promise<void> },
+      'saveCurrentLocale',
+    ).mockRejectedValue(new Error('ProductControl transaction rejected'));
+
+    await expect(service.changeLanguage('zh-TW')).rejects.toThrow(
+      'ProductControl transaction rejected',
+    );
+    expect(service.getCurrentLocale()).toBe(initialLocale);
+    vi.unstubAllGlobals();
+  });
 });
