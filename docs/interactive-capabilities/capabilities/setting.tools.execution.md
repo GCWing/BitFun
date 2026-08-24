@@ -29,7 +29,7 @@ Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer
   - Deferred tool loading on demand to reduce initial agent context
 - **Agent 可直接控制 / Direct Agent control** · 设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略
   - Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy
-- **Agent 可直接控制 / Direct Agent control** · 设置或取消单次工具执行超时
+- **Agent 可直接控制 / Direct Agent control** · 设置或取消单次工具调用超时
   - Set or disable the per-tool execution timeout
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 设置 Deep Review 最大并行评审者和队列等待时间
   - Set the maximum parallel Deep Review workers and queue wait time

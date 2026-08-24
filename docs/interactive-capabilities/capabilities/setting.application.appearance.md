@@ -57,8 +57,8 @@ Switch themes and languages, tune typography and motion, and install or import a
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
-| 主题 / Theme | `system` / `bitfun-dark` / `bitfun-light` | 使用系统、BitFun 深色或 BitFun 浅色外观。 | Use the system, BitFun dark, or BitFun light appearance. |
-| 界面语言 / Interface language | `en-US` / `zh-CN` / `zh-TW` | 设置 BitFun 的界面语言。 | Set the BitFun interface language. |
+| 主题 / Theme | `system` / `bitfun-light` / `bitfun-monochrome` / `bitfun-slate` / `bitfun-dark` / `bitfun-midnight` / `bitfun-china-style` / `bitfun-china-night` / `bitfun-cyber` / `bitfun-tokyo-night` | 使用系统、BitFun 深色或 BitFun 浅色外观。 | Use the system, BitFun dark, or BitFun light appearance. |
+| 界面语言 / Interface language | `zh-CN` / `en-US` / `zh-TW` | 设置 BitFun 的界面语言。 | Set the BitFun interface language. |
 
 ## 可以直接对 Agent 说 / Try saying
 

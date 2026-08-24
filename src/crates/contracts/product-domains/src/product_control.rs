@@ -1,8 +1,10 @@
 //! Platform-agnostic contracts and discovery policy for controlling BitFun itself.
 //!
-//! The catalog is generated from the same semantic source used by the Playbook
-//! and global search. Concrete providers live in product hosts; this module owns
-//! only stable DTOs, lookup/search behavior, and input-shape validation.
+//! The resolved graph is generated from owner facts plus the same explanatory
+//! overlay used by the Playbook and global search. Concrete providers live in
+//! product hosts; this module owns stable DTOs, lookup/search behavior, and
+//! input-shape validation. It deliberately does not expose an arbitrary config
+//! path or Tauri-command gateway.
 
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -14,6 +16,40 @@ use serde_json::{json, Map, Value};
 
 const GENERATED_CATALOG: &str = include_str!("generated/product-control-catalog.json");
 pub const MAX_DISCOVERY_LIMIT: usize = 50;
+
+/// The caller is audit metadata. Owner behavior must never branch on this
+/// value; all surfaces reach the same query/command handler after their own
+/// permission and presentation adaptation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ProductControlSource {
+    Gui,
+    Agent,
+    Cli,
+    Peer,
+    RemoteControl,
+    DetachedDispatch,
+    #[default]
+    Compatibility,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProductControlDeliveryProfile {
+    Desktop,
+    Cli,
+    Peer,
+    RemoteControl,
+    DetachedDispatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProductControlExecutionHost {
+    ProductHost,
+    WorkspaceHost,
+    PresentationSurface,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -61,6 +97,8 @@ pub struct ProductControlRequest {
     pub cursor: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+    #[serde(default)]
+    pub source: ProductControlSource,
 }
 
 pub type ProductControlFuture<'a> =
@@ -80,10 +118,138 @@ pub struct ProductControlCatalog {
     pub origin: String,
     pub source: String,
     pub digest: String,
+    pub owner_digest: String,
     pub search_acceptance: Vec<ProductControlSearchAcceptance>,
     pub counts: ProductControlCounts,
     pub categories: BTreeMap<String, ProductControlCategory>,
     pub capabilities: Vec<ProductCapability>,
+    #[serde(default)]
+    pub definitions: Vec<ProductControlDefinition>,
+}
+
+/// The build-resolved graph consumed by Rust, TypeScript, search and docs.
+/// `ProductControlCatalog` remains as a compatibility name for existing
+/// consumers while new code uses the architecture term.
+pub type ResolvedProductCapabilityGraph = ProductControlCatalog;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProductControlDefinitionKind {
+    Query,
+    Option,
+    Operation,
+    Delegate,
+    Open,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductControlDefinition {
+    pub id: String,
+    pub capability_id: String,
+    pub item_ids: Vec<String>,
+    pub kind: ProductControlDefinitionKind,
+    pub risk: ProductControlRisk,
+    pub execution_host: ProductControlExecutionHost,
+    pub availability: BTreeMap<ProductControlDeliveryProfile, ProductControlAvailability>,
+    pub input_schema: Value,
+    pub output_schema: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_source: Option<ProductControlValueSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_reason: Option<ProductControlOpenReason>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delegate_tools: Vec<String>,
+    pub presentation_target: ProductCapabilityDestination,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ProductControlValueSource {
+    Static,
+    AppearanceCatalog,
+    LocaleCatalog,
+    Provider { provider_id: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductControlAvailability {
+    pub available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Runtime capabilities that must be negotiated with the executing host.
+    /// Static graph availability never overrides cross-version negotiation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductControlQueryRequest {
+    pub capability_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub option_id: Option<String>,
+    #[serde(default)]
+    pub source: ProductControlSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductControlQueryResult {
+    pub catalog_digest: String,
+    pub capability_id: String,
+    pub revision: u64,
+    pub current_option_values: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub dynamic_values: BTreeMap<String, Vec<Value>>,
+    pub availability: ProductControlAvailability,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ProductControlCommand {
+    Configure {
+        option_id: String,
+        value: Value,
+    },
+    Execute {
+        operation_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arguments: Option<Value>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductControlExecuteRequest {
+    pub capability_id: String,
+    pub command: ProductControlCommand,
+    #[serde(default)]
+    pub source: ProductControlSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductControlOutcome {
+    pub catalog_digest: String,
+    pub capability_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub option_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+    pub revision: u64,
+    pub effective_state: Value,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,6 +364,8 @@ pub enum ProductCapabilityItemControl {
         workflow_en: Vec<String>,
     },
     Open {
+        #[serde(default)]
+        reason_code: ProductControlOpenReason,
         reason_zh: String,
         reason_en: String,
     },
@@ -205,6 +373,21 @@ pub enum ProductCapabilityItemControl {
         reason_zh: String,
         reason_en: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProductControlOpenReason {
+    ExternalAuth,
+    SecretEntry,
+    VisualSelection,
+    UnstructuredInteraction,
+}
+
+impl Default for ProductControlOpenReason {
+    fn default() -> Self {
+        Self::UnstructuredInteraction
+    }
 }
 
 impl ProductCapabilityItemControl {
@@ -375,23 +558,82 @@ pub enum ProductCapabilityOptionHandler {
 }
 
 static CATALOG: OnceLock<Result<ProductControlCatalog, String>> = OnceLock::new();
+static REGISTRY: ProductControlRegistry = ProductControlRegistry;
+
+/// Read-only router over the build-resolved product capability graph.
+///
+/// The registry owns no product state and executes no IO. Business hosts bind
+/// the typed handlers embedded in the internal graph to their concrete ports;
+/// discovery, GUI, Agent, CLI, search, and Playbook all resolve stable IDs here.
+#[derive(Debug)]
+pub struct ProductControlRegistry;
+
+impl ProductControlRegistry {
+    pub fn global() -> &'static Self {
+        &REGISTRY
+    }
+
+    pub fn graph(&self) -> Result<&'static ResolvedProductCapabilityGraph, String> {
+        CATALOG
+            .get_or_init(|| {
+                serde_json::from_str(GENERATED_CATALOG).map_err(|error| {
+                    format!("Generated product-control catalog is invalid: {error}")
+                })
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
+    pub fn capability(&self, capability_id: &str) -> Result<&'static ProductCapability, String> {
+        self.graph()?
+            .capabilities
+            .iter()
+            .find(|capability| capability.id == capability_id)
+            .ok_or_else(|| format!("Unknown BitFun capability: {capability_id}"))
+    }
+
+    pub fn definition(
+        &self,
+        definition_id: &str,
+    ) -> Result<&'static ProductControlDefinition, String> {
+        self.graph()?
+            .definitions
+            .iter()
+            .find(|definition| definition.id == definition_id)
+            .ok_or_else(|| format!("Unknown BitFun product-control definition: {definition_id}"))
+    }
+
+    pub fn option(
+        &self,
+        capability_id: &str,
+        option_id: &str,
+    ) -> Result<&'static ProductCapabilityOption, String> {
+        self.capability(capability_id)?
+            .options
+            .iter()
+            .find(|option| option.id == option_id)
+            .ok_or_else(|| format!("Unknown option for {capability_id}: {option_id}"))
+    }
+
+    pub fn operation(
+        &self,
+        capability_id: &str,
+        operation_id: &str,
+    ) -> Result<&'static ProductCapabilityOperation, String> {
+        self.capability(capability_id)?
+            .operations
+            .iter()
+            .find(|operation| operation.id == operation_id)
+            .ok_or_else(|| format!("Unknown operation for {capability_id}: {operation_id}"))
+    }
+}
 
 pub fn catalog() -> Result<&'static ProductControlCatalog, String> {
-    CATALOG
-        .get_or_init(|| {
-            serde_json::from_str(GENERATED_CATALOG)
-                .map_err(|error| format!("Generated product-control catalog is invalid: {error}"))
-        })
-        .as_ref()
-        .map_err(Clone::clone)
+    ProductControlRegistry::global().graph()
 }
 
 pub fn capability(capability_id: &str) -> Result<&'static ProductCapability, String> {
-    catalog()?
-        .capabilities
-        .iter()
-        .find(|capability| capability.id == capability_id)
-        .ok_or_else(|| format!("Unknown BitFun capability: {capability_id}"))
+    ProductControlRegistry::global().capability(capability_id)
 }
 
 /// Validate a presentation target against the same semantic catalog used for
@@ -920,6 +1162,7 @@ pub fn validate_operation_argument_scopes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::product_control_owner_registry::{owner_definitions, ProductControlOwnerDefinition};
 
     fn request(action: ProductControlAction, query: Option<&str>) -> ProductControlRequest {
         ProductControlRequest {
@@ -933,6 +1176,7 @@ mod tests {
             value: None,
             cursor: None,
             limit: None,
+            source: ProductControlSource::Compatibility,
         }
     }
 
@@ -952,6 +1196,47 @@ mod tests {
             .iter()
             .all(|capability| capability.id.starts_with("feature.")
                 || capability.id.starts_with("setting.")));
+        assert_eq!(catalog.digest.len(), 64);
+        assert_eq!(catalog.owner_digest.len(), 64);
+    }
+
+    #[test]
+    fn compiled_owner_registry_exactly_resolves_the_executable_graph() {
+        let registry = ProductControlRegistry::global();
+        let owner_definitions = owner_definitions();
+        let executable_count: usize = registry
+            .graph()
+            .unwrap()
+            .capabilities
+            .iter()
+            .map(|capability| capability.options.len() + capability.operations.len())
+            .sum();
+        assert_eq!(owner_definitions.len(), executable_count);
+
+        for owner in owner_definitions {
+            let definition_id = match owner {
+                ProductControlOwnerDefinition::Option {
+                    capability_id,
+                    option_id,
+                    ..
+                } => {
+                    registry.option(&capability_id, &option_id).unwrap();
+                    format!("{capability_id}:option:{option_id}")
+                }
+                ProductControlOwnerDefinition::Operation {
+                    capability_id,
+                    operation_id,
+                    ..
+                } => {
+                    registry.operation(&capability_id, &operation_id).unwrap();
+                    format!("{capability_id}:operation:{operation_id}")
+                }
+            };
+            assert_eq!(
+                registry.definition(&definition_id).unwrap().id,
+                definition_id
+            );
+        }
     }
 
     #[test]
@@ -970,6 +1255,63 @@ mod tests {
         second_request.cursor = Some(1);
         let second = discover(&second_request).unwrap();
         assert_ne!(first["items"][0]["id"], second["items"][0]["id"]);
+    }
+
+    #[test]
+    fn caller_source_is_audit_metadata_not_behavior_selection() {
+        let mut gui = request(ProductControlAction::Search, Some("工具调用超时"));
+        gui.source = ProductControlSource::Gui;
+        let mut agent = gui.clone();
+        agent.source = ProductControlSource::Agent;
+        let mut peer = gui.clone();
+        peer.source = ProductControlSource::Peer;
+
+        assert_eq!(discover(&gui).unwrap(), discover(&agent).unwrap());
+        assert_eq!(discover(&gui).unwrap(), discover(&peer).unwrap());
+    }
+
+    #[test]
+    fn delivery_profiles_degrade_explicitly_without_local_fallback() {
+        let registry = ProductControlRegistry::global();
+        for definition in &registry.graph().unwrap().definitions {
+            for profile in [
+                ProductControlDeliveryProfile::Desktop,
+                ProductControlDeliveryProfile::Cli,
+                ProductControlDeliveryProfile::Peer,
+                ProductControlDeliveryProfile::RemoteControl,
+                ProductControlDeliveryProfile::DetachedDispatch,
+            ] {
+                let availability = definition.availability.get(&profile).unwrap_or_else(|| {
+                    panic!("{} is missing availability for {profile:?}", definition.id)
+                });
+                if !availability.available {
+                    assert!(
+                        availability
+                            .reason
+                            .as_deref()
+                            .is_some_and(|reason| !reason.trim().is_empty()),
+                        "{} silently degrades for {profile:?}",
+                        definition.id
+                    );
+                }
+            }
+        }
+
+        let shared_config = registry
+            .definition("setting.tools.execution:option:tool-timeout-seconds")
+            .unwrap();
+        assert!(shared_config.availability[&ProductControlDeliveryProfile::Cli].available);
+
+        let native_provider = registry
+            .definition("setting.application.general:option:prevent-sleep")
+            .unwrap();
+        assert!(!native_provider.availability[&ProductControlDeliveryProfile::Cli].available);
+
+        let presentation = registry
+            .definition("feature.ai-assistant:operation:new-session")
+            .unwrap();
+        assert!(!presentation.availability[&ProductControlDeliveryProfile::Cli].available);
+        assert!(presentation.availability[&ProductControlDeliveryProfile::Peer].available);
     }
 
     #[test]

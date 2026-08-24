@@ -13,7 +13,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const read = (relativePath) => readFile(path.join(repositoryRoot, relativePath), 'utf8');
 
 test('the public contract is a compact feature-and-settings manual', () => {
-  const { publicCatalog } = buildCapabilityCatalog();
+  const { publicCatalog, runtimeCatalog } = buildCapabilityCatalog();
   const featureCount = publicCatalog.capabilities.filter(({ kind }) => kind === 'feature').length;
   const settingCount = publicCatalog.capabilities.filter(({ kind }) => kind === 'setting').length;
   const documentedItemCount = publicCatalog.capabilities.reduce(
@@ -40,6 +40,27 @@ test('the public contract is a compact feature-and-settings manual', () => {
   assert.equal(JSON.stringify(publicCatalog).includes('tauriCommandsAudited'), false);
   assert.equal(JSON.stringify(publicCatalog).includes('evidence'), false);
   assert.equal(JSON.stringify(publicCatalog).includes('reviewedInteractionContract'), false);
+  assert.match(publicCatalog.digest, /^[a-f0-9]{64}$/u);
+  assert.match(publicCatalog.ownerDigest, /^[a-f0-9]{64}$/u);
+  assert.equal(publicCatalog.digest, runtimeCatalog.digest);
+  assert.equal(publicCatalog.ownerDigest, runtimeCatalog.ownerDigest);
+  assert.equal(JSON.stringify(publicCatalog).includes('"handler"'), false);
+  assert.equal(JSON.stringify(runtimeCatalog).includes('"handler"'), true);
+});
+
+test('the manual overlay cannot own executable product-control facts', async () => {
+  const source = JSON.parse(await read('src/shared/interactive-capabilities/catalog.json'));
+  for (const capability of source.capabilities) {
+    for (const option of capability.options ?? []) {
+      assert.equal(Object.hasOwn(option, 'handler'), false, `${capability.id}:${option.id}`);
+      assert.equal(Object.hasOwn(option, 'valueSchema'), false, `${capability.id}:${option.id}`);
+    }
+    for (const operation of capability.operations ?? []) {
+      for (const field of ['handler', 'risk', 'inputSchema', 'argumentScopes']) {
+        assert.equal(Object.hasOwn(operation, field), false, `${capability.id}:${operation.id}`);
+      }
+    }
+  }
 });
 
 test('the technical audit exactly covers Desktop Tauri registration without exposing it as UX', async () => {
@@ -116,11 +137,41 @@ test('every executable contract is bound to a documented item and navigation is 
       .every(({ control }) => {
         assert.deepEqual(
           Object.keys(control).sort(),
-          ['kind', 'reasonEn', 'reasonZh'],
+          ['kind', 'reasonCode', 'reasonEn', 'reasonZh'],
           'interactive routing must not carry executable operation or option bindings',
         );
+        assert.ok([
+          'externalAuth',
+          'secretEntry',
+          'visualSelection',
+          'unstructuredInteraction',
+        ].includes(control.reasonCode));
         return control.reasonZh.trim().length > 0 && control.reasonEn.trim().length > 0;
       }));
+  }
+});
+
+test('every interaction-only control has an individually reviewable reason and evidence', () => {
+  const { publicCatalog, openAudit } = buildCapabilityCatalog();
+  assert.equal(openAudit.catalogDigest, publicCatalog.digest);
+  assert.equal(openAudit.count, publicCatalog.counts.controlCoverage.interactive);
+  assert.equal(openAudit.entries.length, openAudit.count);
+  assert.equal(
+    Object.values(openAudit.reasonCounts).reduce((total, count) => total + count, 0),
+    openAudit.count,
+  );
+  for (const entry of openAudit.entries) {
+    if (entry.reasonCode === 'unstructuredInteraction') {
+      assert.ok(entry.reasonZh.includes(entry.titleZh), `${entry.capabilityId}:${entry.itemId}`);
+      assert.ok(entry.reasonEn.includes(entry.titleEn), `${entry.capabilityId}:${entry.itemId}`);
+    }
+    assert.ok(entry.reasonZh.length >= 24, `${entry.capabilityId}:${entry.itemId}`);
+    assert.ok(entry.reasonEn.length >= 48, `${entry.capabilityId}:${entry.itemId}`);
+    assert.ok(entry.evidence.length > 0, `${entry.capabilityId}:${entry.itemId}`);
+    assert.notEqual(
+      entry.reasonZh,
+      '该流程依赖当前界面状态、用户选择或额外确认；Agent 可准确打开入口，但契约不把跳转冒充为直接执行。',
+    );
   }
 });
 
@@ -141,7 +192,7 @@ test('every product Agent tool is mapped to a user capability or explicitly clas
       ? (item.control.tools ?? [capability.agentControl?.tool]).filter(Boolean)
       : [])));
   const excludedTools = new Set(
-    source.reviewedAgentToolContract.excluded.map(({ tool }) => tool),
+    source.agentToolExclusions.map(({ tool }) => tool),
   );
 
   assert.deepEqual(
@@ -160,7 +211,9 @@ test('every product Agent tool is mapped to a user capability or explicitly clas
   assert.ok(item('setting.tools.mcp', 'resources').control.tools.includes('ReadMCPResource'));
   assert.equal(byId.get('feature.desktop-pet').agentControl.tool, 'BitFunControl');
   assert.equal(item('feature.desktop-pet', 'petdex-import').control.kind, 'delegate');
-  const petSetting = byId.get('setting.application.pet');
+  const { publicCatalog } = buildCapabilityCatalog();
+  const petSetting = publicCatalog.capabilities
+    .find(({ id }) => id === 'setting.application.pet');
   assert.deepEqual(
     petSetting.operations.find(({ id }) => id === 'use-pet').argumentScopes,
     { path: 'productHostLocal' },
@@ -259,11 +312,7 @@ test('docs, runtime, and technical views are generated projections of one semant
   ));
 
   const sourceIds = source.capabilities.map(({ id }) => id);
-  assert.equal(
-    source.reviewedDocumentedItemCount,
-    source.capabilities.reduce((total, capability) => total + capability.items.length, 0),
-  );
-  assert.deepEqual(interactionMap.roots, source.reviewedInteractionContract.roots);
+  assert.deepEqual(interactionMap.roots, ['src/web-ui/src']);
   assert.deepEqual(publicCatalog.capabilities.map(({ id }) => id), sourceIds);
   assert.deepEqual(publicCatalog.searchAcceptance, source.searchAcceptance);
   assert.deepEqual(runtimeCatalog.searchAcceptance, source.searchAcceptance);
@@ -274,9 +323,25 @@ test('docs, runtime, and technical views are generated projections of one semant
   assert.equal(publicCatalog.digest, productControlCatalog.digest);
   assert.equal(publicCatalog.digest, technicalMap.catalogDigest);
   assert.equal(publicCatalog.digest, interactionMap.catalogDigest);
-  assert.equal(interactionMap.digest, source.reviewedInteractionContract.digest);
-  assert.ok(interactionMap.fileCount >= 300);
-  assert.ok(interactionMap.interactionCount >= 4_000);
+  assert.deepEqual(publicCatalog.definitions, runtimeCatalog.definitions);
+  assert.deepEqual(publicCatalog.definitions, productControlCatalog.definitions);
+  assert.ok(publicCatalog.definitions.length > publicCatalog.capabilities.length);
+  for (const definition of publicCatalog.definitions) {
+    const peer = definition.availability.peer;
+    if (peer.available) {
+      assert.ok(
+        peer.requiredCapabilities?.includes('product_control_v1'),
+        `${definition.id} must negotiate the Peer ProductControl contract`,
+      );
+    }
+  }
+  assert.equal(interactionMap.fileCount, interactionMap.files.length);
+  assert.equal(
+    interactionMap.interactionCount,
+    interactionMap.files.reduce((total, file) => total + file.interactionCount, 0),
+  );
+  assert.ok(interactionMap.files.every(({ interactionCount, digest }) =>
+    interactionCount > 0 && /^[a-f0-9]{64}$/u.test(digest)));
   const interactionSourceFiles = interactionMap.files.map(({ sourceFile }) => sourceFile);
   assert.deepEqual(interactionSourceFiles, [...interactionSourceFiles].sort());
   assert.ok(interactionSourceFiles.every((sourceFile) => !sourceFile.includes('/generated/')));
@@ -287,6 +352,21 @@ test('docs, runtime, and technical views are generated projections of one semant
   assert.ok(interactionMap.files.some(({ sourceFile }) =>
     sourceFile.endsWith('/AppearanceSettingsPage.tsx')));
   assert.equal(publicCatalog.source, 'src/shared/interactive-capabilities/catalog.json');
+
+  const appearance = runtimeCatalog.capabilities
+    .find(({ id }) => id === 'setting.application.appearance');
+  const appearanceContract = JSON.parse(await read(
+    'src/apps/desktop/src/generated/startup_appearance_bootstrap.json',
+  ));
+  const localeContract = JSON.parse(await read('src/shared/i18n/contract/locales.json'));
+  assert.deepEqual(
+    appearance.options.find(({ id }) => id === 'theme').valueSchema.enum,
+    ['system', ...appearanceContract.appearances.map(({ id }) => id)],
+  );
+  assert.deepEqual(
+    appearance.options.find(({ id }) => id === 'language').valueSchema.enum,
+    localeContract.locales.map(({ id }) => id),
+  );
 
   const publicById = new Map(publicCatalog.capabilities.map((capability) => [capability.id, capability]));
   for (const runtime of runtimeCatalog.capabilities) {
@@ -316,7 +396,9 @@ test('website, global search, and agent control consume generated semantic proje
   assert.match(frontendCatalog, /generated\/interactive-capabilities\.json/u);
   assert.match(searchProvider, /INTERACTIVE_CAPABILITY_CATALOG/u);
   assert.doesNotMatch(searchProviders, /settingsSearchProvider/u);
-  assert.match(controlBridge, /INTERACTIVE_CAPABILITY_CATALOG/u);
+  assert.match(controlBridge, /getInteractiveCapability/u);
+  assert.match(controlBridge, /native ProductControl executor/u);
+  assert.doesNotMatch(controlBridge, /discoverBitFunCapabilities|configureOption|currentOptionValue/u);
   assert.doesNotMatch(controlTool, /include_(?:str|bytes)!/u);
   assert.match(controlTool, /two-step/u);
 });
@@ -334,4 +416,51 @@ test('Desktop and Web UI share the BitFunControl transport contract', async () =
   assert.match(bridge, /api\.invoke\('report_bitfun_control_result'/u);
   assert.match(desktopRegistration, /bitfun_control_host::mark_bitfun_control_surface_ready/u);
   assert.match(desktopRegistration, /bitfun_control_host::report_bitfun_control_result/u);
+});
+
+test('GUI, Agent, CLI, and Peer config writes converge on the ProductControl executors', async () => {
+  const { publicCatalog } = buildCapabilityCatalog();
+  const productControlApi = await read(
+    'src/web-ui/src/infrastructure/api/service-api/ProductControlAPI.ts',
+  );
+  const systemApi = await read('src/web-ui/src/infrastructure/api/service-api/SystemAPI.ts');
+  const generatedBindings = await read(
+    'src/web-ui/src/infrastructure/api/generated/productControl.ts',
+  );
+  const sleepHost = await read('src/apps/desktop/src/sleep_prevention.rs');
+  const desktopConfigApi = await read('src/apps/desktop/src/api/config_api.rs');
+  const desktopHost = await read('src/apps/desktop/src/bitfun_control_host.rs');
+  const sharedExecutor = await read(
+    'src/crates/assembly/core/src/agentic/tools/bitfun_control_config.rs',
+  );
+  const controlTool = await read(
+    'src/crates/assembly/core/src/agentic/tools/implementations/bitfun_control_tool.rs',
+  );
+  const cliConfigHost = await read('src/apps/cli/src/peer_host/commands/config.rs');
+  const cliProductControlHost = await read(
+    'src/apps/cli/src/peer_host/commands/product_control.rs',
+  );
+
+  assert.match(productControlApi, /product_control_invoke/u);
+  assert.match(productControlApi, /capabilityId/u);
+  assert.match(productControlApi, /optionId/u);
+  assert.match(productControlApi, /generated\/productControl/u);
+  assert.doesNotMatch(productControlApi, /setConfig|configPath|commandName/u);
+  assert.match(systemApi, /productControlAPI\.configure/u);
+  assert.doesNotMatch(systemApi, /plugin-autostart/u);
+  assert.match(sleepHost, /configure_option_from_gui/u);
+  assert.match(desktopConfigApi, /set_config_from_gui/u);
+  assert.doesNotMatch(desktopConfigApi, /config_service\.set_config/u);
+  assert.match(desktopHost, /exact_config_binding/u);
+  assert.match(desktopHost, /configure_option_transaction/u);
+  assert.match(desktopHost, /apply_legacy_config_mutation/u);
+  assert.match(sharedExecutor, /struct SharedProductControlExecutor/u);
+  assert.match(sharedExecutor, /configure_legacy_path/u);
+  assert.match(controlTool, /global_shared_product_control_executor/u);
+  assert.match(cliConfigHost, /configure_legacy_path/u);
+  assert.doesNotMatch(cliConfigHost, /config_service\.set_config/u);
+  assert.match(cliProductControlHost, /global_shared_product_control_executor/u);
+  assert.match(cliProductControlHost, /ProductControlSource::Peer/u);
+  assert.match(generatedBindings, new RegExp(publicCatalog.digest, 'u'));
+  assert.match(generatedBindings, /ProductControlOptionIdsByCapability/u);
 });
