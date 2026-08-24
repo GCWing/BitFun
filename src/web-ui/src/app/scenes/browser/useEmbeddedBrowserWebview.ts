@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BLANK_TARGET_INTERCEPT_SCRIPT } from './browserInspectorScript';
 import { STREAM_RENDER_OPTIMIZATION_SCRIPT } from './browserStreamPerformanceScript';
 import { validateUrl } from './browserUrlCheck';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 
 const WEBVIEW_RESIZE_DEBOUNCE_MS = 160;
 const WEBVIEW_BOUNDS_EPSILON = 1;
@@ -110,8 +111,7 @@ function normalizeUrl(raw: string, defaultUrl: string): string {
 }
 
 async function evalWebview(label: string, script: string): Promise<void> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('browser_webview_eval', { request: { label, script } });
+  await api.invoke('browser_webview_eval', { request: { label, script } });
 }
 
 async function injectBrowserPageScripts(label: string): Promise<void> {
@@ -119,20 +119,17 @@ async function injectBrowserPageScripts(label: string): Promise<void> {
 }
 
 async function navigateWebview(label: string, url: string, openRequestId?: string): Promise<void> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('browser_webview_navigate', {
+  await api.invoke('browser_webview_navigate', {
     request: { label, url, openRequestId },
   });
 }
 
 async function reloadWebview(label: string): Promise<void> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('browser_webview_reload', { request: { label } });
+  await api.invoke('browser_webview_reload', { request: { label } });
 }
 
 async function setWebviewBounds(label: string, bounds: WebviewBounds): Promise<void> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('browser_webview_set_bounds', {
+  await api.invoke('browser_webview_set_bounds', {
     request: {
       label,
       x: bounds.left,
@@ -148,8 +145,7 @@ async function setAgentTargetState(
   active: boolean,
   openRequestId?: string,
 ): Promise<void> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('browser_webview_set_agent_target_state', {
+  await api.invoke('browser_webview_set_agent_target_state', {
     request: { label, active, openRequestId },
   });
 }
@@ -160,11 +156,8 @@ async function createBrowserWebview(
   bounds: WebviewBounds,
   openRequestId?: string,
 ): Promise<BrowserWebviewHandle> {
-  const [{ invoke }, { Webview }] = await Promise.all([
-    import('@tauri-apps/api/core'),
-    import('@tauri-apps/api/webview'),
-  ]);
-  await invoke('browser_webview_create', {
+  const { Webview } = await import('@tauri-apps/api/webview');
+  await api.invoke('browser_webview_create', {
     request: {
       label,
       url,

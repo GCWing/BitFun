@@ -23,6 +23,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { isSamePath } from '@/shared/utils/pathUtils';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import {
   isPeerDeviceModeActive,
   PEER_MODE_FILE_SYNC_POLL_MS,
@@ -1736,7 +1737,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         return;
       }
 
-      const { invoke } = await import('@tauri-apps/api/core');
       const fileInfo = await fetchFileMetadata();
       if (isFileMissingFromMetadata(fileInfo)) {
         outcome = 'missing-on-disk';
@@ -1764,7 +1764,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
       const bufferBeforeRead = modelRef.current?.getValue();
       try {
-        const hashRes: any = await invoke('get_file_editor_sync_hash', {
+        const hashRes: any = await api.invoke('get_file_editor_sync_hash', {
           request: { path: filePath },
         });
         const diskHash =
@@ -2022,10 +2022,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
       try {
         const { workspaceAPI } = await import('@/infrastructure/api');
-        const { invoke } = await import('@tauri-apps/api/core');
         const bufferBeforeRead = modelRef.current?.getValue();
         try {
-          const hashRes: any = await invoke('get_file_editor_sync_hash', {
+          const hashRes: any = await api.invoke('get_file_editor_sync_hash', {
             request: { path: filePath },
           });
           const diskHash =

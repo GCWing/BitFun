@@ -49,6 +49,70 @@ describe('isPeerLocalOnlyCommand', () => {
     expect(isPeerLocalOnlyCommand('report_bitfun_control_result')).toBe(true);
     expect(isPeerLocalOnlyCommand('product_control_invoke')).toBe(false);
   });
+
+  it('keeps controller app-shell locale on the controller device', () => {
+    expect(isPeerLocalOnlyCommand('i18n_get_current_language')).toBe(true);
+    expect(isPeerLocalOnlyCommand('i18n_set_language')).toBe(true);
+    expect(isPeerLocalOnlyCommand('i18n_get_supported_languages')).toBe(true);
+    expect(isPeerLocalOnlyCommand('i18n_get_config')).toBe(true);
+    expect(isPeerLocalOnlyCommand('i18n_set_config')).toBe(true);
+  });
+
+  it('keeps announcement scheduler and state on the controller device', () => {
+    expect(isPeerLocalOnlyCommand('get_pending_announcements')).toBe(true);
+    expect(isPeerLocalOnlyCommand('get_announcement_tips')).toBe(true);
+    expect(isPeerLocalOnlyCommand('mark_announcement_seen')).toBe(true);
+    expect(isPeerLocalOnlyCommand('dismiss_announcement')).toBe(true);
+    expect(isPeerLocalOnlyCommand('never_show_announcement')).toBe(true);
+    expect(isPeerLocalOnlyCommand('trigger_announcement')).toBe(true);
+  });
+
+  it('keeps companion-pet import and preview on the controller device', () => {
+    expect(isPeerLocalOnlyCommand('list_agent_companion_pets')).toBe(true);
+    expect(isPeerLocalOnlyCommand('import_agent_companion_pet_package')).toBe(true);
+    expect(isPeerLocalOnlyCommand('delete_agent_companion_pet_package')).toBe(true);
+  });
+
+  it('keeps insights generation, progress and report on the controller device', () => {
+    expect(isPeerLocalOnlyCommand('generate_insights')).toBe(true);
+    expect(isPeerLocalOnlyCommand('get_latest_insights')).toBe(true);
+    expect(isPeerLocalOnlyCommand('load_insights_report')).toBe(true);
+    expect(isPeerLocalOnlyCommand('has_insights_data')).toBe(true);
+    expect(isPeerLocalOnlyCommand('cancel_insights_generation')).toBe(true);
+  });
+
+  it('keeps IDE control result reporting on the controller device', () => {
+    expect(isPeerLocalOnlyCommand('report_ide_control_result')).toBe(true);
+  });
+
+  it('keeps controller browser/webview/devtools/desktop-pet/diagnostics on the controller device', () => {
+    // These previously hit the local Tauri host via dynamic invoke(); routing
+    // them to a peer would regress (peer host does not implement them).
+    expect(isPeerLocalOnlyCommand('browser_control_launch')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_control_list_browsers')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_control_get_status')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_control_restart_with_cdp')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_control_enable_default_cdp')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_webview_create')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_webview_eval')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_webview_navigate')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_webview_reload')).toBe(true);
+    expect(isPeerLocalOnlyCommand('browser_webview_set_bounds')).toBe(true);
+    expect(isPeerLocalOnlyCommand('computer_use_get_status')).toBe(true);
+    expect(isPeerLocalOnlyCommand('debug_devtools_available')).toBe(true);
+    expect(isPeerLocalOnlyCommand('debug_open_devtools')).toBe(true);
+    expect(isPeerLocalOnlyCommand('resize_agent_companion_desktop_pet')).toBe(true);
+    expect(isPeerLocalOnlyCommand('show_agent_companion_desktop_pet')).toBe(true);
+    expect(isPeerLocalOnlyCommand('hide_agent_companion_desktop_pet')).toBe(true);
+    expect(isPeerLocalOnlyCommand('append_flow_chat_diagnostics')).toBe(true);
+  });
+
+  it('keeps file-tree path checks routed to the peer surface', () => {
+    // check_path_exists is the one CLI-Peer-supported routed command: the path
+    // comes from the rendered surface's file tree, so it must stay peer-routed.
+    expect(isPeerLocalOnlyCommand('check_path_exists')).toBe(false);
+    expect(peerInvokePriorityFor('check_path_exists')).toBe('high');
+  });
 });
 
 describe('peerInvokePriorityFor', () => {
@@ -114,6 +178,14 @@ describe('peerInvokePriorityFor', () => {
     expect(isPeerRetryableReadCommand('start_dialog_turn')).toBe(false);
     expect(isPeerRetryableReadCommand('delete_session')).toBe(false);
     expect(isPeerRetryableReadCommand('respond_permission')).toBe(false);
+  });
+
+  it('does not retry side-effecting announcement get_* commands', () => {
+    // These run the scheduler (mutate app_open_count + persist) and must never
+    // be auto-retried by the peer read path, where retries would multiply the
+    // side effect.
+    expect(isPeerRetryableReadCommand('get_pending_announcements')).toBe(false);
+    expect(isPeerRetryableReadCommand('get_announcement_tips')).toBe(false);
   });
 
   it('retries only mutations with an explicit host idempotency identity', () => {

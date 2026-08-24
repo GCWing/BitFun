@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { emit, listen } from '@tauri-apps/api/event';
 import { cursorPosition, getCurrentWindow } from '@tauri-apps/api/window';
 import { aiExperienceConfigService, type AgentCompanionPetSelection, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { ChatInputPixelPet, type ChatInputPixelPetMood } from '@/flow_chat/components/ChatInputPixelPet';
 import type { ChatInputPetMood } from '@/flow_chat/utils/chatInputPetMood';
 import type {
@@ -412,11 +413,10 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       return;
     }
 
-    void import('@tauri-apps/api/core')
-      .then(({ invoke }) => invoke('resize_agent_companion_desktop_pet', {
+    void api.invoke('resize_agent_companion_desktop_pet', {
         width: nextWidth,
         height: nextHeight,
-      }))
+      })
       .catch(error => {
         log.warn('Failed to resize Agent companion window', error);
       });
@@ -568,8 +568,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
   const showMainWindowFromPet = useCallback(async () => {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('show_main_window');
+      await api.invoke('show_main_window');
     } catch (error) {
       log.warn('Failed to show main window from Agent companion pet', error);
     }
@@ -824,12 +823,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
   const openTaskSession = async (task: AgentCompanionTaskStatus) => {
     try {
-      const [{ invoke }, { emit }] = await Promise.all([
-        import('@tauri-apps/api/core'),
-        import('@tauri-apps/api/event'),
-      ]);
       await emit('agent-companion://open-session', { sessionId: task.sessionId });
-      await invoke('show_main_window');
+      await api.invoke('show_main_window');
     } catch (error) {
       log.warn('Failed to open Agent companion task session', {
         sessionId: task.sessionId,

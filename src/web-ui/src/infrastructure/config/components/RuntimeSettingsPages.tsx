@@ -29,6 +29,7 @@ import {
   permissionConfigService,
 } from '../services/PermissionConfigService';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import type {
   PermissionRule,
@@ -155,8 +156,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     if (!IS_TAURI_DESKTOP) return false;
     setComputerUseStatusLoading(true);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const s = await invoke<ComputerUseStatusPayload>('computer_use_get_status');
+      const s = await api.invoke<ComputerUseStatusPayload>('computer_use_get_status');
       setComputerUseEnabled(s.computerUseEnabled);
       setComputerUseAccess(s.accessibilityGranted);
       setComputerUseScreen(s.screenCaptureGranted);
@@ -174,9 +174,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     if (!IS_TAURI_DESKTOP) return;
     setBrowserStatusLoading(true);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const [s, browsers] = await Promise.all([
-        invoke<{
+        api.invoke<{
           cdpAvailable: boolean;
           defaultCdpSupported: boolean;
           defaultCdpEnabled: boolean;
@@ -186,7 +185,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
           port: number;
           pageCount: number;
         }>('browser_control_get_status', { request: { port: 9222 } }),
-        invoke<{ options: BrowserControlBrowserOption[] }>('browser_control_list_browsers'),
+        api.invoke<{ options: BrowserControlBrowserOption[] }>('browser_control_list_browsers'),
       ]);
       setBrowserCdpAvailable(s.cdpAvailable);
       setBrowserDefaultCdpSupported(s.defaultCdpSupported);
@@ -598,8 +597,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         // Screen Recording) the moment the user opts in, instead of waiting
         // for the first agent tool call to fail with a permission error.
         try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('computer_use_request_permissions');
+          await api.invoke('computer_use_request_permissions');
         } catch (permError) {
           log.warn('computer_use_request_permissions failed', permError);
         }
@@ -616,8 +614,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
 
   const handleComputerUseOpenSettings = async (pane: 'accessibility' | 'screen_capture') => {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('computer_use_open_system_settings', { request: { pane } });
+      await api.invoke('computer_use_open_system_settings', { request: { pane } });
     } catch (error) {
       log.error('computer_use_open_system_settings failed', error);
       notificationService.error(t('messages.saveFailed'));
@@ -696,8 +693,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   const handleBrowserControlLaunch = async () => {
     setBrowserControlBusy(true);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<BrowserControlLaunchResponse>('browser_control_launch', { request: { port: 9222 } });
+      const result = await api.invoke<BrowserControlLaunchResponse>('browser_control_launch', { request: { port: 9222 } });
       presentBrowserControlLaunchResult(result);
       await refreshBrowserControlStatus();
     } catch (error) {
@@ -720,8 +716,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         ),
         { duration: 12000 },
       );
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<BrowserControlLaunchResponse>(
+      const result = await api.invoke<BrowserControlLaunchResponse>(
         'browser_control_enable_default_cdp',
         { request: { port: 9222 } },
       );
@@ -739,8 +734,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     if (!browserRestartPrompt) return;
     setBrowserControlBusy(true);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<BrowserControlLaunchResponse>('browser_control_restart_with_cdp', {
+      const result = await api.invoke<BrowserControlLaunchResponse>('browser_control_restart_with_cdp', {
         request: { port: 9222 },
       });
       if (result.success) {
