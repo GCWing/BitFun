@@ -70,9 +70,13 @@ test('hero title, search, and statistics remain in layout flow', () => {
   assert.match(title, /display:\s*grid/u);
   assert.match(title, /gap:/u);
   assert.match(actions, /display:\s*grid/u);
-  assert.match(actions, /grid-template-columns:\s*minmax\(420px, 1fr\) auto/u);
+  assert.match(actions, /grid-template-columns:\s*minmax\(0, 1fr\) auto/u);
   assert.doesNotMatch(actions, /position:\s*absolute/u);
   assert.doesNotMatch(statistics, /position:\s*absolute/u);
+  assert.match(
+    stylesSource,
+    /@media \(max-width: 1360px\)[\s\S]*?\.hero-actions\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/u,
+  );
 });
 
 test('live search preserves the input node and supports IME composition', () => {
