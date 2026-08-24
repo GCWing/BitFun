@@ -42,7 +42,9 @@ export class FileContextValidator implements ContextValidator<'file'> {
   async validate(context: FileContext): Promise<ValidationResult> {
     try {
       
-      const exists = await api.invoke<boolean>('fs_exists', { path: context.filePath });
+      const exists = await api.invoke<boolean>('check_path_exists', {
+        request: { path: context.filePath },
+      });
       
       if (!exists) {
         return {

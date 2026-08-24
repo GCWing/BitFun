@@ -4,6 +4,7 @@
  * Implements a subset of IDE control operations focused on opening/closing panels.
  */
 import { i18nService } from '@/infrastructure/i18n';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import {
   IdeController,
   IdeControlEvent,
@@ -237,17 +238,17 @@ export class PanelController implements IdeController {
 
    
   private sendExecutionResult(requestId: string, success: boolean, message: string): void {
-    
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke('report_ide_control_result', {
-        request_id: requestId,
-        success,
-        message: success ? message : undefined,
-        error: success ? undefined : message,
-        timestamp: Date.now(),
-      }).catch((error) => {
-        log.error('Failed to send execution result', error);
-      });
+    // Route through the shared adapter so the success branch uses the same
+    // transport as the error branch in IdeControlEventBus. report_ide_control_result
+    // is LOCAL_ONLY, so both branches settle on the controller's local host.
+    api.invoke('report_ide_control_result', {
+      request_id: requestId,
+      success,
+      message: success ? message : undefined,
+      error: success ? undefined : message,
+      timestamp: Date.now(),
+    }).catch((error) => {
+      log.error('Failed to send execution result', error);
     });
   }
 }

@@ -1,4 +1,5 @@
 import { isTauriRuntime } from '@/infrastructure/runtime';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 
 export interface FlowChatDiagnosticTransportEntry {
   sequence: number;
@@ -17,8 +18,7 @@ export async function appendFlowChatDiagnosticEntries(
     return;
   }
 
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke<number>('append_flow_chat_diagnostics', {
+  await api.invoke<number>('append_flow_chat_diagnostics', {
     request: { entries },
   });
 }
