@@ -1690,6 +1690,42 @@ impl PersistenceManager {
         Ok(Some(retained))
     }
 
+    /// Write a complete evidence ledger sidecar for a session. Used by session
+    /// branching to copy inherited evidence into the fork target. The caller
+    /// must already hold the session write lock for `session_id`.
+    pub(crate) async fn save_evidence_ledger_events(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        events: Vec<EvidenceLedgerEvent>,
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
+        self.ensure_session_dir(workspace_path, session_id).await?;
+        let path = self.evidence_ledger_path(workspace_path, session_id);
+        let _file_lock = JsonFileStore
+            .acquire_cross_process_lock(&path)
+            .await
+            .map_err(Self::json_store_error)?;
+        let file = PersistedEvidenceLedgerFile {
+            schema_version: EVIDENCE_LEDGER_SCHEMA_VERSION,
+            session_id: session_id.to_string(),
+            events,
+        };
+        // Validate before writing so a bad session_id on an event is caught.
+        file.clone()
+            .validated_events(session_id)
+            .map_err(|error| BitFunError::parse(error.to_string()))?;
+        JsonFileStore
+            .write_atomic_strict(&path, &file)
+            .await
+            .map_err(Self::json_store_error)?;
+        Ok(())
+    }
+
     pub async fn load_prompt_cache(
         &self,
         workspace_path: &Path,
