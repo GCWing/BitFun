@@ -85,7 +85,7 @@ jobs:
       checkout_ref: ${{ github.sha }}
       version: ${{ needs.check-changes.outputs.nightly_version }}
       artifact_prefix: nightly
-      artifact_retention_days: ${{ inputs.artifact_retention_days || 7 }}
+      artifact_retention_days: ${{ fromJSON(inputs.artifact_retention_days || '7') }}
 
   # ── Publish nightly pre-release ────────────────────────────────────
   publish-nightly:

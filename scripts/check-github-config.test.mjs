@@ -612,7 +612,8 @@ test('nightly orchestrates the shared build before the separately privileged pub
     checkout_ref: '${{ github.sha }}',
     version: '${{ needs.check-changes.outputs.nightly_version }}',
     artifact_prefix: 'nightly',
-    artifact_retention_days: '${{ inputs.artifact_retention_days || 7 }}',
+    artifact_retention_days:
+      "${{ fromJSON(inputs.artifact_retention_days || '7') }}",
   });
   assert.deepEqual(publish.needs, ['check-changes', 'build-artifacts']);
   assert.match(publish.if, /inputs\.build_only != true/);
