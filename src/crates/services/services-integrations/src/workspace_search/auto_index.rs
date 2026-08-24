@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
+use bitfun_services_core::process_manager;
 use tokio::task::spawn_blocking;
 
 pub(crate) const DEFAULT_AUTO_INDEX_MIN_FILES: usize = 2_000;
@@ -99,7 +99,7 @@ fn git_ls_files_indexable_count(
     policy: AutoIndexPolicy,
     carried: usize,
 ) -> Result<usize, String> {
-    let output = Command::new("git")
+    let output = process_manager::create_command("git")
         .arg("ls-files")
         .args(selectors)
         .arg("-z")
@@ -128,7 +128,7 @@ fn git_ls_files_indexable_count(
 }
 
 fn git_worktree_root(repo_root: &Path) -> Result<PathBuf, String> {
-    let output = Command::new("git")
+    let output = process_manager::create_command("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(repo_root)
         .output()
@@ -146,7 +146,7 @@ fn git_worktree_root(repo_root: &Path) -> Result<PathBuf, String> {
     }
     let worktree_root = dunce::canonicalize(root)
         .map_err(|error| format!("cannot canonicalize Git worktree root: {error}"))?;
-    let head = Command::new("git")
+    let head = process_manager::create_command("git")
         .args(["rev-parse", "--verify", "HEAD^{commit}"])
         .current_dir(&worktree_root)
         .output()
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn git_count_uses_visible_tracked_and_untracked_files_and_size_limit() {
         let repo = TempDir::new().expect("temp repo");
-        Command::new("git")
+        process_manager::create_command("git")
             .args(["init", "--quiet"])
             .current_dir(repo.path())
             .status()
@@ -187,12 +187,12 @@ mod tests {
         write(repo.path().join("tracked.txt"), "tracked").expect("write tracked");
         write(repo.path().join("untracked.txt"), "untracked").expect("write untracked");
         write(repo.path().join("large.bin"), vec![0_u8; 160]).expect("write large file");
-        Command::new("git")
+        process_manager::create_command("git")
             .args(["add", "tracked.txt"])
             .current_dir(repo.path())
             .status()
             .expect("git add should work");
-        Command::new("git")
+        process_manager::create_command("git")
             .args([
                 "-c",
                 "user.name=BitFun Test",
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn git_workspaces_without_a_head_are_unsupported() {
         let repo = TempDir::new().expect("temp repo");
-        Command::new("git")
+        process_manager::create_command("git")
             .args(["init", "--quiet"])
             .current_dir(repo.path())
             .status()
