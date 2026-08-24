@@ -4,9 +4,6 @@
   "private": true,
   "description": "Internal TypeScript vertical slice for the BitFun Agent SDK",
   "type": "module",
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "exports": {
     ".": {
       "types": "./dist/sdk/typescript/src/index.d.ts",
@@ -23,6 +20,8 @@
   "scripts": {
     "build": "pnpm run generate:wire && tsc -p tsconfig.json",
     "generate:wire": "node scripts/generate-wire.mjs",
+    "smoke:bun": "bun test/real-host-smoke.mjs",
+    "smoke:node": "node test/real-host-smoke.mjs",
     "test": "pnpm run build && node --test scripts/*.test.mjs dist/src/crates/adapters/transport/typescript/test/**/*.test.js dist/sdk/typescript/test/**/*.test.js",
     "type-check": "pnpm run generate:wire && tsc -p tsconfig.json --noEmit"
   },

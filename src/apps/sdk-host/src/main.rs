@@ -1,6 +1,8 @@
+mod model_source;
 mod runtime;
 
 use anyhow::{Context, Result};
+use std::sync::Arc;
 
 async fn run_host() -> Result<()> {
     tracing_subscriber::fmt()
@@ -20,6 +22,10 @@ async fn run_host() -> Result<()> {
     bitfun_core::infrastructure::ai::AIClientFactory::initialize_global()
         .await
         .context("Failed to initialize global AI client factory")?;
+    let config_service = bitfun_core::service::config::get_global_config_service().await?;
+    let installer = Arc::new(model_source::ConfigTemporaryModelInstaller::new(
+        config_service,
+    ));
 
     let host = runtime::SdkHostRuntime::build(&workspace_root)
         .await
@@ -27,6 +33,7 @@ async fn run_host() -> Result<()> {
     bitfun_sdk_host_app::transport::serve_stdio(
         host.agent_runtime().clone(),
         host.workspace_root().to_string_lossy().into_owned(),
+        installer,
     )
     .await
     .context("Agent SDK Host transport failed")

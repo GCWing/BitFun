@@ -13,6 +13,13 @@ import type {
 import { Query } from "../src/query.js";
 import { Session } from "../src/session.js";
 
+const model = {
+  provider: "openai" as const,
+  model: "fixture-model",
+  apiKey: "fixture-secret",
+  baseUrl: "http://127.0.0.1:43123/v1",
+};
+
 test("client initialization aborts the Host connection after its startup deadline", async () => {
   const clientToHost = new PassThrough();
   const hostToClient = new PassThrough();
@@ -27,7 +34,7 @@ test("client initialization aborts the Host connection after its startup deadlin
         hostToClient.end();
       },
     },
-    { cwd: "D:/workspace/project", initializeTimeoutMs: 20 },
+    { cwd: "D:/workspace/project", initializeTimeoutMs: 20, model },
   );
 
   await assert.rejects(withTestDeadline(starting), (error: unknown) => {
