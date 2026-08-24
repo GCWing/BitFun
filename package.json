@@ -134,7 +134,7 @@
   },
   "devDependencies": {
     "@noble/hashes": "^2.0.1",
-    "@tauri-apps/cli": "^2.10.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@vitejs/plugin-react": "^4.6.0",
     "copyfiles": "^2.4.1",
     "cross-env": "^10.1.0",

@@ -149,6 +149,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify Installer Tauri package alignment
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          info="$(pnpm --dir BitFun-Installer exec tauri info 2>&1)"
+          printf '%s\n' "$info"
+          if grep -Fq 'Error: Found version mismatched Tauri packages.' <<<"$info"; then
+            exit 1
+          fi
+
       - name: Build plugin Host resources
         run: |
           bun install --cwd src/apps/extension-host --frozen-lockfile
