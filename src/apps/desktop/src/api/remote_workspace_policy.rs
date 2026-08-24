@@ -895,6 +895,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("install_update", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
+        "list_acp_pending_permissions",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "list_agent_companion_pets",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

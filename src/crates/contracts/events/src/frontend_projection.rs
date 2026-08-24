@@ -4,8 +4,8 @@
 //! transports. Concrete delivery adapters should only emit the projected
 //! envelope.
 
-use crate::AgenticEvent;
-use serde_json::{json, Value};
+use crate::{AgenticEvent, ModelRoundIdentity};
+use serde_json::{json, Map, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgenticFrontendEvent {
@@ -124,20 +124,50 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             round_id,
             round_group_id,
             round_index,
-            model_config_id,
-            effective_model_name,
-        } => Some(AgenticFrontendEvent::new(
-            "agentic://model-round-started",
-            json!({
+            identity,
+            render_hints,
+        } => {
+            let mut payload = json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
                 "roundId": round_id,
                 "roundGroupId": round_group_id,
                 "roundIndex": round_index,
-                "modelConfigId": model_config_id,
-                "effectiveModelName": effective_model_name,
-            }),
-        )),
+            });
+            if let Some(render_hints) = render_hints {
+                payload["renderHints"] = json!(render_hints);
+            }
+            match identity {
+                ModelRoundIdentity::Native {
+                    model_config_id,
+                    effective_model_name,
+                } => {
+                    payload["modelConfigId"] = json!(model_config_id);
+                    payload["effectiveModelName"] = json!(effective_model_name);
+                }
+                ModelRoundIdentity::External {
+                    provider,
+                    client_id,
+                    model_id,
+                    display_name,
+                } => {
+                    let mut external = Map::new();
+                    external.insert("provider".to_string(), json!(provider));
+                    external.insert("clientId".to_string(), json!(client_id));
+                    if let Some(model_id) = model_id {
+                        external.insert("modelId".to_string(), json!(model_id));
+                    }
+                    if let Some(display_name) = display_name {
+                        external.insert("displayName".to_string(), json!(display_name));
+                    }
+                    payload["externalModel"] = Value::Object(external);
+                }
+            }
+            Some(AgenticFrontendEvent::new(
+                "agentic://model-round-started",
+                payload,
+            ))
+        }
         AgenticEvent::TextChunk {
             session_id,
             turn_id,
@@ -497,6 +527,60 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "diagnostic": diagnostic,
             }),
         )),
+        AgenticEvent::AcpContextUsageUpdated {
+            session_id,
+            turn_id,
+            client_id,
+            used,
+            size,
+            cost,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://acp-context-usage-updated",
+            json!({
+                "sessionId": session_id,
+                "turnId": turn_id,
+                "clientId": client_id,
+                "used": used,
+                "size": size,
+                "cost": cost,
+            }),
+        )),
+        AgenticEvent::AcpAvailableCommandsUpdated {
+            session_id,
+            client_id,
+            commands,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://acp-available-commands-updated",
+            json!({
+                "sessionId": session_id,
+                "clientId": client_id,
+                "commands": commands,
+            }),
+        )),
+        AgenticEvent::AcpPlanUpdated {
+            session_id,
+            turn_id,
+            client_id,
+            entries,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://acp-plan-updated",
+            json!({
+                "sessionId": session_id,
+                "turnId": turn_id,
+                "clientId": client_id,
+                "entries": entries,
+            }),
+        )),
+        AgenticEvent::AcpSessionOptionsChanged {
+            session_id,
+            client_id,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://acp-session-options-changed",
+            json!({
+                "sessionId": session_id,
+                "clientId": client_id,
+            }),
+        )),
         AgenticEvent::UserSteeringInjected {
             session_id,
             turn_id,
@@ -672,13 +756,52 @@ mod tests {
             round_id: "round-1".to_string(),
             round_group_id: None,
             round_index: 0,
-            model_config_id: "model-config".to_string(),
-            effective_model_name: "provider-model".to_string(),
+            identity: ModelRoundIdentity::Native {
+                model_config_id: "model-config".to_string(),
+                effective_model_name: "provider-model".to_string(),
+            },
+            render_hints: None,
         })
         .expect("projected");
 
         assert_eq!(projected.payload["modelConfigId"], "model-config");
         assert_eq!(projected.payload["effectiveModelName"], "provider-model");
+        assert!(projected.payload.get("externalModel").is_none());
+        assert!(projected.payload.get("renderHints").is_none());
+    }
+
+    #[test]
+    fn model_round_started_projects_external_identity_without_native_keys() {
+        let projected = project_agentic_frontend_event(AgenticEvent::ModelRoundStarted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            round_group_id: None,
+            round_index: 0,
+            identity: ModelRoundIdentity::External {
+                provider: "acp".to_string(),
+                client_id: "gemini".to_string(),
+                model_id: Some("gemini-2.5".to_string()),
+                display_name: None,
+            },
+            render_hints: Some(crate::ModelRoundRenderHints {
+                disable_explore_grouping: true,
+            }),
+        })
+        .expect("projected");
+
+        assert!(projected.payload.get("modelConfigId").is_none());
+        assert!(projected.payload.get("effectiveModelName").is_none());
+        assert_eq!(projected.payload["externalModel"]["provider"], "acp");
+        assert_eq!(projected.payload["externalModel"]["clientId"], "gemini");
+        assert_eq!(projected.payload["externalModel"]["modelId"], "gemini-2.5");
+        assert!(projected.payload["externalModel"]
+            .get("displayName")
+            .is_none());
+        assert_eq!(
+            projected.payload["renderHints"]["disableExploreGrouping"],
+            true
+        );
     }
 
     #[test]

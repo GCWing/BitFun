@@ -3,7 +3,8 @@
 use crate::event_bus::EventBusResult;
 use bitfun_agent_stream::StreamEventSink;
 use bitfun_events::{
-    AgenticEvent, AgenticEventEnvelope as EventEnvelope, AgenticEventPriority as EventPriority,
+    AgenticEvent, AgenticEventEnvelope as EventEnvelope, AgenticEventOrigin,
+    AgenticEventPriority as EventPriority,
 };
 use log::{debug, trace, warn};
 use std::collections::{BinaryHeap, HashMap};
@@ -107,6 +108,14 @@ pub struct QueueStats {
     pub total_processed: u64,
 }
 
+/// How long a producer may wait for the legacy dequeue consumer to take a
+/// fenced event. Without this, an unbounded publisher plus a stalled dequeue
+/// loop turns a lost event into unbounded memory growth.
+#[cfg(not(test))]
+const LEGACY_DEQUEUE_ACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+#[cfg(test)]
+const LEGACY_DEQUEUE_ACK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(50);
+
 /// Completion handle for an event that must enter the legacy dequeue stream
 /// before a producer may publish dependent events.
 pub struct LegacyDequeueAck {
@@ -115,9 +124,15 @@ pub struct LegacyDequeueAck {
 
 impl LegacyDequeueAck {
     pub async fn wait(self) -> EventBusResult<()> {
-        self.receiver
-            .await
-            .map_err(|_| crate::event_bus::EventBusError::subscriber("legacy dequeue fence closed"))
+        match tokio::time::timeout(LEGACY_DEQUEUE_ACK_TIMEOUT, self.receiver).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(_)) => Err(crate::event_bus::EventBusError::subscriber(
+                "legacy dequeue fence closed",
+            )),
+            Err(_) => Err(crate::event_bus::EventBusError::subscriber(
+                "legacy dequeue fence timed out before the event was dequeued",
+            )),
+        }
     }
 }
 
@@ -261,7 +276,19 @@ impl EventQueue {
         event: AgenticEvent,
         priority: Option<EventPriority>,
     ) -> EventBusResult<String> {
-        self.enqueue_internal(event, priority, LegacyQueuePolicy::BestEffort)
+        self.enqueue_with_origin(event, priority, AgenticEventOrigin::NativeRuntime)
+            .await
+    }
+
+    /// Enqueue event with an explicit origin. Existing call sites keep
+    /// [`enqueue`], which defaults to [`AgenticEventOrigin::NativeRuntime`].
+    pub async fn enqueue_with_origin(
+        &self,
+        event: AgenticEvent,
+        priority: Option<EventPriority>,
+        origin: AgenticEventOrigin,
+    ) -> EventBusResult<String> {
+        self.enqueue_internal(event, priority, LegacyQueuePolicy::BestEffort, origin)
             .await
             .map(|(event_id, _)| event_id)
     }
@@ -277,8 +304,27 @@ impl EventQueue {
         event: AgenticEvent,
         priority: Option<EventPriority>,
     ) -> EventBusResult<(String, LegacyDequeueAck)> {
+        self.enqueue_with_legacy_dequeue_ack_with_origin(
+            event,
+            priority,
+            AgenticEventOrigin::NativeRuntime,
+        )
+        .await
+    }
+
+    pub async fn enqueue_with_legacy_dequeue_ack_with_origin(
+        &self,
+        event: AgenticEvent,
+        priority: Option<EventPriority>,
+        origin: AgenticEventOrigin,
+    ) -> EventBusResult<(String, LegacyDequeueAck)> {
         let (event_id, ack) = self
-            .enqueue_internal(event, priority, LegacyQueuePolicy::RequireImmediateAck)
+            .enqueue_internal(
+                event,
+                priority,
+                LegacyQueuePolicy::RequireImmediateAck,
+                origin,
+            )
             .await?;
         Ok((
             event_id,
@@ -298,9 +344,28 @@ impl EventQueue {
         event: AgenticEvent,
         priority: Option<EventPriority>,
     ) -> EventBusResult<String> {
-        self.enqueue_internal(event, priority, LegacyQueuePolicy::AuthoritativeControl)
-            .await
-            .map(|(event_id, _)| event_id)
+        self.enqueue_with_guaranteed_legacy_storage_with_origin(
+            event,
+            priority,
+            AgenticEventOrigin::NativeRuntime,
+        )
+        .await
+    }
+
+    pub async fn enqueue_with_guaranteed_legacy_storage_with_origin(
+        &self,
+        event: AgenticEvent,
+        priority: Option<EventPriority>,
+        origin: AgenticEventOrigin,
+    ) -> EventBusResult<String> {
+        self.enqueue_internal(
+            event,
+            priority,
+            LegacyQueuePolicy::AuthoritativeControl,
+            origin,
+        )
+        .await
+        .map(|(event_id, _)| event_id)
     }
 
     async fn enqueue_internal(
@@ -308,9 +373,10 @@ impl EventQueue {
         event: AgenticEvent,
         priority: Option<EventPriority>,
         legacy_policy: LegacyQueuePolicy,
+        origin: AgenticEventOrigin,
     ) -> EventBusResult<(String, Option<LegacyDequeueAck>)> {
         let priority = priority.unwrap_or_else(|| event.default_priority());
-        let envelope = EventEnvelope::new(event, priority);
+        let envelope = EventEnvelope::new_with_origin(event, priority, origin);
         let event_id = envelope.id.clone();
         let require_legacy_ack = matches!(legacy_policy, LegacyQueuePolicy::RequireImmediateAck);
         let (mut ack_sender, ack) = if require_legacy_ack {
@@ -1158,5 +1224,53 @@ mod tests {
         drop(receiver);
 
         assert!(queue.session_broadcasts.read().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn legacy_dequeue_ack_times_out_if_never_dequeued() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 8,
+            batch_size: 8,
+        });
+        let (_, ack) = queue
+            .enqueue_with_legacy_dequeue_ack(
+                AgenticEvent::DialogTurnCancelled {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                },
+                Some(AgenticEventPriority::Normal),
+            )
+            .await
+            .expect("fence should enqueue");
+        let error = ack.wait().await.expect_err("must not hang forever");
+        assert!(
+            error.to_string().contains("timed out"),
+            "timeout must fail loud, got {error}"
+        );
+        assert_eq!(queue.len().await, 1);
+    }
+
+    #[tokio::test]
+    async fn enqueue_with_origin_preserves_external_acp() {
+        use bitfun_events::AgenticEventOrigin;
+
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 8,
+            batch_size: 8,
+        });
+        queue
+            .enqueue_with_origin(
+                AgenticEvent::SessionStateChanged {
+                    session_id: "session".to_string(),
+                    new_state: "idle".to_string(),
+                },
+                None,
+                AgenticEventOrigin::ExternalAcp,
+            )
+            .await
+            .expect("enqueue");
+        let batch = queue.dequeue_configured_batch().await;
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].origin, AgenticEventOrigin::ExternalAcp);
     }
 }

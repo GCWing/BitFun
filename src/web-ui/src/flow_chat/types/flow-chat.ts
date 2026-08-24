@@ -189,6 +189,13 @@ export interface ModelRoundAttempt {
   diagnostic?: ModelRoundAttemptDiagnostic;
 }
 
+export interface ExternalModelIdentity {
+  provider: string;
+  clientId: string;
+  modelId?: string;
+  displayName?: string;
+}
+
 // Model round: output from a single model call.
 export interface ModelRound {
   id: string;
@@ -206,6 +213,7 @@ export interface ModelRound {
   providerId?: string;
   modelConfigId?: string;
   effectiveModelName?: string;
+  externalModel?: ExternalModelIdentity;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;

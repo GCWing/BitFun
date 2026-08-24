@@ -5,7 +5,7 @@ use bitfun_core_types::{
     ModelsDevReasoningProvider, ReasoningCapabilityStatus, ReasoningCatalogProjection,
     ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
 };
-use bitfun_events::{AgenticEvent, ToolEventData};
+use bitfun_events::{AcpAvailableCommandFact, AcpPlanEntryFact, AgenticEvent, ToolEventData};
 use bitfun_runtime_ports::{
     AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
 };
@@ -15,8 +15,9 @@ use bitfun_services_integrations::remote_connect::{
     build_remote_image_submission_request, build_remote_model_catalog,
     build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
     handle_remote_command, handle_remote_workspace_file_command, make_slim_tool_params,
-    normalize_remote_model_selection, normalize_remote_session_model_id, project_remote_chat_user,
-    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    normalize_remote_model_selection, normalize_remote_session_model_id, parse_remote_command,
+    project_remote_chat_user, read_remote_workspace_file, read_remote_workspace_file_chunk,
+    read_remote_workspace_file_info, reject_native_dialog_for_session,
     remote_answer_question_response, remote_assistant_list_response,
     remote_assistant_updated_response, remote_dialog_submit_outcome_from_scheduler,
     remote_dialog_submit_response, remote_file_chunk_response, remote_file_content_response,
@@ -31,24 +32,29 @@ use bitfun_services_integrations::remote_connect::{
     remote_workspace_updated_response, resolve_remote_agent_type, resolve_remote_cancel_decision,
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
     resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
-    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, DeviceIdentity,
-    ImageAttachment, KeyPair, PairingChallenge, PairingProtocol, PairingResponse, PairingState,
-    QrGenerator, QrPayload, RelayMessage, RemoteAssistantWorkspaceFacts, RemoteCancelDecision,
-    RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
-    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
-    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost,
-    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
-    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
-    RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
-    RemoteDialogWorkspaceBinding, RemoteImageContext, RemoteImageContextAdapter,
-    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelConfig,
-    RemoteModelFacts, RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata,
-    RemoteSessionModelSelection, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity, RemoteTerminalPrewarmRequest,
-    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
-    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
-    RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
+    AcpPermissionMailbox, AcpPermissionMailboxEntry, ActiveTurnSnapshot, ChatImageAttachment,
+    ChatMessage, ChatMessageItem, DeviceIdentity, ImageAttachment, KeyPair, PairingChallenge,
+    PairingProtocol, PairingResponse, PairingState, QrGenerator, QrPayload, RelayMessage,
+    RemoteAssistantWorkspaceFacts, RemoteCancelDecision, RemoteCancelRuntimeHost,
+    RemoteCancelTaskRequest, RemoteChatHistoryRound, RemoteChatHistoryTextItem,
+    RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall, RemoteChatHistoryToolItem,
+    RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost, RemoteConnectSubmissionSource,
+    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
+    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemoteRecentWorkspaceFacts,
+    RemoteResponse, RemoteRetryClassification, RemoteSessionControlFacts, RemoteSessionKind,
+    RemoteSessionMetadata, RemoteSessionModelSelection, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity,
+    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
+    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspaceUpdate, SessionInfo, TrackerEvent,
+    ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE, INVALID_ACP_COMMAND_PARAMS,
+    REMOTE_CAPABILITY_ACP_REMOTE_CONTROL, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
+    UNSUPPORTED_REMOTE_CAPABILITY,
 };
+use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -564,6 +570,7 @@ struct RecordingDialogHost {
     generated_turn_id: String,
     restore_error: bool,
     submit_outcome: RemoteDialogSubmitOutcome,
+    session_control: RemoteSessionControlFacts,
     events: Mutex<Vec<String>>,
     submitted: Mutex<Option<RemoteDialogResolvedSubmission<String>>>,
 }
@@ -579,9 +586,15 @@ impl RecordingDialogHost {
                 session_id: "session-1".to_string(),
                 turn_id: "turn-generated".to_string(),
             },
+            session_control: RemoteSessionControlFacts::native(),
             events: Mutex::new(Vec::new()),
             submitted: Mutex::new(None),
         }
+    }
+
+    fn with_session_control(mut self, session_control: RemoteSessionControlFacts) -> Self {
+        self.session_control = session_control;
+        self
     }
 
     fn with_restore_error(mut self) -> Self {
@@ -687,6 +700,14 @@ impl RemoteDialogRuntimeHost for RecordingDialogHost {
             .unwrap()
             .push("generate_turn".to_string());
         self.generated_turn_id.clone()
+    }
+
+    async fn remote_session_control(&self, session_id: &str) -> RemoteSessionControlFacts {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("session_control:{session_id}"));
+        self.session_control.clone()
     }
 
     async fn submit_dialog(
@@ -818,9 +839,16 @@ struct RecordingCommandHost {
     cancel_request: Mutex<Option<RemoteCancelTaskRequest>>,
     explicit_context_ids: Mutex<Vec<String>>,
     legacy_image_names: Mutex<Vec<String>>,
+    acp_control_enabled: bool,
+    acp_send_by_request: Mutex<std::collections::HashMap<String, String>>,
 }
 
 impl RecordingCommandHost {
+    fn with_acp_control(mut self) -> Self {
+        self.acp_control_enabled = true;
+        self
+    }
+
     fn events(&self) -> Vec<String> {
         self.events.lock().unwrap().clone()
     }
@@ -879,6 +907,7 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
             message_snapshot: None,
             active_turn: None,
             model_catalog: Box::new(None),
+            acp_projection: None,
         }
     }
 
@@ -940,6 +969,230 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
             .collect::<Vec<_>>();
         *self.explicit_context_ids.lock().unwrap() = ids.clone();
         ids.into_iter().map(|id| format!("explicit:{id}")).collect()
+    }
+
+    async fn handle_acp_control_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        if !self.acp_control_enabled {
+            return match command {
+                RemoteCommand::AcpPermissionRespond {
+                    session_id,
+                    request_id,
+                    ..
+                } => bitfun_services_integrations::remote_connect::acp_permission_respond_unsupported(
+                    session_id,
+                    request_id.clone(),
+                ),
+                RemoteCommand::AcpSendMessage {
+                    session_id,
+                    request_id,
+                    ..
+                }
+                | RemoteCommand::AcpCancelTurn {
+                    session_id,
+                    request_id,
+                    ..
+                }
+                | RemoteCommand::AcpGetOptions {
+                    session_id,
+                    request_id,
+                    ..
+                }
+                | RemoteCommand::AcpSetOption {
+                    session_id,
+                    request_id,
+                    ..
+                }
+                | RemoteCommand::AcpGetCommands {
+                    session_id,
+                    request_id,
+                    ..
+                }
+                | RemoteCommand::AcpGetPlan {
+                    session_id,
+                    request_id,
+                    ..
+                } => bitfun_services_integrations::remote_connect::RemoteAcpControlError::unsupported(
+                    session_id.clone(),
+                    request_id.clone(),
+                )
+                .into_response(),
+                _ => RemoteResponse::Error {
+                    message: "Not an ACP control command".to_string(),
+                    code: None,
+                },
+            };
+        }
+        match command {
+            RemoteCommand::AcpPermissionRespond {
+                session_id,
+                permission_id,
+                request_id,
+                ..
+            } => {
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push("acp_permission_respond".to_string());
+                bitfun_services_integrations::remote_connect::acp_permission_respond_response(Ok(
+                    bitfun_services_integrations::remote_connect::RemoteAcpPermissionRespondOutcome {
+                        session_id: session_id.clone(),
+                        permission_id: permission_id.clone(),
+                        request_id: request_id.clone(),
+                        resolved: true,
+                    },
+                ))
+            }
+            RemoteCommand::AcpSendMessage {
+                session_id,
+                request_id,
+                ..
+            } => {
+                if let Some(request_id) = request_id.as_deref() {
+                    let key = format!("{session_id}\0{request_id}");
+                    if let Some(turn_id) =
+                        self.acp_send_by_request.lock().unwrap().get(&key).cloned()
+                    {
+                        return bitfun_services_integrations::remote_connect::acp_send_response(
+                            Ok(
+                                bitfun_services_integrations::remote_connect::RemoteAcpSendOutcome {
+                                    session_id: session_id.clone(),
+                                    turn_id,
+                                    request_id: Some(request_id.to_string()),
+                                },
+                            ),
+                        );
+                    }
+                    self.acp_send_by_request
+                        .lock()
+                        .unwrap()
+                        .insert(key, "turn-acp".to_string());
+                }
+                self.events.lock().unwrap().push("acp_send".to_string());
+                bitfun_services_integrations::remote_connect::acp_send_response(Ok(
+                    bitfun_services_integrations::remote_connect::RemoteAcpSendOutcome {
+                        session_id: session_id.clone(),
+                        turn_id: "turn-acp".to_string(),
+                        request_id: request_id.clone(),
+                    },
+                ))
+            }
+            RemoteCommand::AcpCancelTurn {
+                session_id,
+                turn_id,
+                request_id,
+            } => {
+                self.events.lock().unwrap().push("acp_cancel".to_string());
+                bitfun_services_integrations::remote_connect::acp_cancel_response(Ok(
+                    bitfun_services_integrations::remote_connect::RemoteAcpCancelOutcome {
+                        session_id: session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        request_id: request_id.clone(),
+                    },
+                ))
+            }
+            RemoteCommand::AcpGetOptions {
+                session_id,
+                request_id,
+            } => {
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push("acp_get_options".to_string());
+                bitfun_services_integrations::remote_connect::acp_options_response(Ok(
+                    bitfun_services_integrations::remote_connect::RemoteAcpOptionsOutcome {
+                        session_id: session_id.clone(),
+                        request_id: request_id.clone(),
+                        options: serde_json::json!({"currentModelId": "m1"}),
+                    },
+                ))
+            }
+            RemoteCommand::AcpSetOption {
+                session_id,
+                request_id,
+                ..
+            } => {
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push("acp_set_option".to_string());
+                bitfun_services_integrations::remote_connect::acp_options_response(Ok(
+                    bitfun_services_integrations::remote_connect::RemoteAcpOptionsOutcome {
+                        session_id: session_id.clone(),
+                        request_id: request_id.clone(),
+                        options: serde_json::json!({"currentModelId": "m2"}),
+                    },
+                ))
+            }
+            RemoteCommand::AcpGetCommands {
+                session_id,
+                request_id,
+            } => {
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push("acp_get_commands".to_string());
+                bitfun_services_integrations::remote_connect::acp_commands_response(Ok(
+                    bitfun_services_integrations::remote_connect::RemoteAcpCommandsOutcome {
+                        session_id: session_id.clone(),
+                        request_id: request_id.clone(),
+                        commands: serde_json::json!([{"name": "compact"}]),
+                        version: 1,
+                    },
+                ))
+            }
+            RemoteCommand::AcpGetPlan {
+                session_id,
+                request_id,
+            } => {
+                self.events.lock().unwrap().push("acp_get_plan".to_string());
+                bitfun_services_integrations::remote_connect::acp_plan_response(Ok(
+                    bitfun_services_integrations::remote_connect::RemoteAcpPlanOutcome {
+                        session_id: session_id.clone(),
+                        request_id: request_id.clone(),
+                        entries: serde_json::json!([{"content": "step"}]),
+                        version: 2,
+                    },
+                ))
+            }
+            _ => RemoteResponse::Error {
+                message: "Not an ACP control command".to_string(),
+                code: None,
+            },
+        }
+    }
+
+    async fn reject_native_session_control_for_acp(
+        &self,
+        session_id: &str,
+        command_name: &str,
+    ) -> Option<RemoteResponse> {
+        if !self.acp_control_enabled || session_id != "acp-1" {
+            return None;
+        }
+        Some(
+            bitfun_services_integrations::remote_connect::acp_native_session_control_unsupported(
+                session_id,
+                command_name,
+            ),
+        )
+    }
+
+    async fn reject_native_tool_interaction_for_acp(
+        &self,
+        session_id: Option<&str>,
+        tool_id: &str,
+    ) -> Option<RemoteResponse> {
+        if !self.acp_control_enabled {
+            return None;
+        }
+        if session_id == Some("acp-1") || tool_id.starts_with("acp_permission_") {
+            return Some(
+                bitfun_services_integrations::remote_connect::acp_native_tool_interaction_unsupported(
+                    session_id, tool_id,
+                ),
+            );
+        }
+        None
     }
 }
 
@@ -1100,6 +1353,7 @@ async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
             "session_exists:session-1",
             "restore:session-1:D:/workspace/project:<none>:<none>",
             "prewarm:session-1:D:/workspace/project",
+            "session_control:session-1",
             "generate_turn",
             "submit:session-1",
         ]
@@ -1158,6 +1412,7 @@ async fn remote_connect_dialog_runtime_preserves_remote_workspace_identity() {
             "session_exists:session-1",
             "restore:session-1:/home/wsp/project:ssh-1:dev-host",
             "prewarm:session-1:/home/wsp/project",
+            "session_control:session-1",
             "submit:session-1",
         ]
     );
@@ -1209,6 +1464,7 @@ async fn remote_connect_dialog_runtime_preserves_explicit_turn_without_restore()
             "resolve_workspace:session-1",
             "session_exists:session-1",
             "prewarm:session-1:D:/workspace/project",
+            "session_control:session-1",
             "submit:session-1",
         ]
     );
@@ -1269,6 +1525,7 @@ async fn remote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance() 
             "session_exists:session-1",
             "restore:session-1:D:/workspace/project:<none>:<none>",
             "prewarm:session-1:D:/workspace/project",
+            "session_control:session-1",
             "submit:session-1",
         ]
     );
@@ -1603,7 +1860,8 @@ async fn remote_connect_file_command_handler_owns_owner_flow_and_uses_host_root(
     assert_eq!(
         error,
         RemoteResponse::Error {
-            message: "Unsupported remote workspace file command".to_string()
+            message: "Unsupported remote workspace file command".to_string(),
+            code: None,
         }
     );
 
@@ -1657,6 +1915,7 @@ fn remote_connect_execution_response_helpers_preserve_wire_shape() {
         remote_answer_question_response(Err("question closed".to_string())),
         RemoteResponse::Error {
             message: "question closed".to_string(),
+            code: None,
         }
     );
 }
@@ -1765,6 +2024,8 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             created_at_ms: 1_700_000_000_000,
             last_active_at_ms: 1_700_000_001_000,
             turn_count: 3,
+            session_kind: RemoteSessionKind::Native,
+            capabilities: Vec::new(),
         },
         RemoteSessionMetadata {
             session_id: "session-2".to_string(),
@@ -1773,6 +2034,8 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             created_at_ms: 1_700_000_002_000,
             last_active_at_ms: 1_700_000_003_000,
             turn_count: 5,
+            session_kind: RemoteSessionKind::Native,
+            capabilities: Vec::new(),
         },
         RemoteSessionMetadata {
             session_id: "session-3".to_string(),
@@ -1781,6 +2044,8 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             created_at_ms: 1_700_000_004_000,
             last_active_at_ms: 1_700_000_005_000,
             turn_count: 8,
+            session_kind: RemoteSessionKind::Native,
+            capabilities: Vec::new(),
         },
     ];
 
@@ -1905,6 +2170,574 @@ fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
     assert_eq!(resolve_remote_agent_type(Some("Plan")), "Plan");
     assert_eq!(resolve_remote_agent_type(Some("unknown")), "agentic");
     assert_eq!(resolve_remote_agent_type(None), "agentic");
+}
+
+#[test]
+fn remote_session_info_preserves_kind_and_does_not_treat_legacy_payloads_as_native() {
+    let acp = RemoteSessionMetadata {
+        session_id: "acp-1".to_string(),
+        name: "ACP".to_string(),
+        agent_type: "gemini".to_string(),
+        created_at_ms: 1_000,
+        last_active_at_ms: 2_000,
+        turn_count: 1,
+        session_kind: RemoteSessionKind::Acp,
+        capabilities: Vec::new(),
+    };
+    let info = remote_session_info(&acp, None, None);
+    assert_eq!(info.session_kind, RemoteSessionKind::Acp);
+    let json = serde_json::to_value(&info).expect("serialize session info");
+    assert_eq!(json["session_kind"], "acp");
+    assert!(json.get("capabilities").is_none());
+
+    let legacy: SessionInfo = serde_json::from_value(serde_json::json!({
+        "session_id": "old",
+        "name": "legacy",
+        "agent_type": "agentic",
+        "created_at": "1",
+        "updated_at": "2",
+        "message_count": 0
+    }))
+    .expect("legacy SessionInfo");
+    assert_eq!(legacy.session_kind, RemoteSessionKind::Unknown);
+    assert!(legacy.capabilities.is_empty());
+}
+
+#[test]
+fn native_send_message_to_acp_session_is_always_unsupported() {
+    let rejected = reject_native_dialog_for_session(&RemoteSessionControlFacts::acp(Vec::new()))
+        .expect("ACP session must fail loud for native send");
+    assert_eq!(rejected.code, UNSUPPORTED_REMOTE_CAPABILITY);
+    assert_eq!(rejected.message, ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE);
+    assert!(reject_native_dialog_for_session(&RemoteSessionControlFacts::native()).is_none());
+    assert!(reject_native_dialog_for_session(&RemoteSessionControlFacts::unknown()).is_none());
+    // Advertising acp_remote_control must not reopen the native dialog path.
+    assert!(
+        reject_native_dialog_for_session(&RemoteSessionControlFacts::acp(vec![
+            REMOTE_CAPABILITY_ACP_REMOTE_CONTROL.to_string()
+        ]))
+        .is_some()
+    );
+}
+
+#[tokio::test]
+async fn submit_remote_dialog_fails_loud_for_acp_session_without_capability() {
+    let host = RecordingDialogHost::new(true, Some("D:/workspace/project"))
+        .with_session_control(RemoteSessionControlFacts::acp(Vec::new()));
+
+    let error = submit_remote_dialog(
+        &host,
+        RemoteDialogSubmissionRequest {
+            session_id: "session-1".to_string(),
+            content: "hello".to_string(),
+            agent_type: Some("code".to_string()),
+            image_contexts: Vec::<String>::new(),
+            policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Relay),
+            turn_id: Some("turn-1".to_string()),
+        },
+    )
+    .await
+    .expect_err("ACP native send must fail");
+
+    assert!(error.contains(UNSUPPORTED_REMOTE_CAPABILITY));
+    assert!(error.contains(ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE));
+    assert!(host
+        .events()
+        .iter()
+        .all(|event| !event.starts_with("submit:")));
+}
+
+#[tokio::test]
+async fn new_host_returns_unsupported_for_acp_commands_until_capability_exists() {
+    let host = RecordingCommandHost::default();
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpSendMessage {
+            session_id: "acp-1".to_string(),
+            content: "hello".to_string(),
+            images: None,
+            image_contexts: None,
+            request_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+
+    assert_eq!(
+        response,
+        RemoteResponse::AcpCommandError {
+            session_id: "acp-1".to_string(),
+            capability: REMOTE_CAPABILITY_ACP_REMOTE_CONTROL.to_string(),
+            request_id: None,
+            retry: RemoteRetryClassification::Terminal,
+            code: UNSUPPORTED_REMOTE_CAPABILITY.to_string(),
+            message: format!("{ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE} (session=acp-1)"),
+        }
+    );
+    assert!(host.events().is_empty());
+}
+
+#[test]
+fn unknown_acp_command_is_structured_unsupported_not_native_send() {
+    let parsed = parse_remote_command(serde_json::json!({
+        "cmd": "acp_future_widget",
+        "session_id": "acp-1"
+    }));
+    let error = parsed.expect_err("future ACP commands must not parse as native");
+    let response = error.into_remote_response();
+    match response {
+        RemoteResponse::Error { message, code } => {
+            assert_eq!(code.as_deref(), Some(UNSUPPORTED_REMOTE_CAPABILITY));
+            assert!(message.contains("acp_future_widget"));
+        }
+        other => panic!("expected error response, got {other:?}"),
+    }
+}
+
+#[test]
+fn known_acp_command_with_bad_payload_is_invalid_params_not_unsupported() {
+    let parsed = parse_remote_command(serde_json::json!({
+        "cmd": "acp_set_option",
+        "session_id": "acp-1"
+        // missing required config_id / value
+    }));
+    let error = parsed.expect_err("known ACP command with bad payload must not look unsupported");
+    let response = error.into_remote_response();
+    match response {
+        RemoteResponse::Error { message, code } => {
+            assert_eq!(code.as_deref(), Some(INVALID_ACP_COMMAND_PARAMS));
+            assert!(message.contains("acp_set_option"));
+            assert!(
+                !message.to_lowercase().contains("host does not support"),
+                "bad payload must not reuse old-host unsupported copy: {message}"
+            );
+        }
+        other => panic!("expected error response, got {other:?}"),
+    }
+}
+
+#[test]
+fn every_acp_command_variant_is_classified_as_known() {
+    // `parse_remote_command` keeps a hand-written list of known ACP command
+    // names. A new `Acp*` variant that nobody adds to that list would report a
+    // bad payload as "host does not support this command", sending the phone to
+    // the wrong remediation. Recover the real variant names from serde's own
+    // unknown-variant error so the list cannot drift away from the enum.
+    let error = serde_json::from_value::<RemoteCommand>(serde_json::json!({
+        "cmd": "acp_zzz_not_a_command"
+    }))
+    .expect_err("sentinel must not parse");
+    let text = error.to_string();
+    let (_, expected) = text
+        .split_once("expected one of ")
+        .unwrap_or_else(|| panic!("serde no longer lists variants: {text}"));
+    let acp_variants: Vec<String> = expected
+        .split('`')
+        .filter(|item| item.starts_with("acp_"))
+        .map(|item| item.to_string())
+        .collect();
+    assert!(
+        acp_variants.len() >= 7,
+        "expected the ACP command family, found {acp_variants:?}"
+    );
+
+    for variant in acp_variants {
+        // Every ACP variant requires `session_id`, so a bare `cmd` is always a
+        // parameter error — never an unknown command.
+        let error = match parse_remote_command(serde_json::json!({ "cmd": variant.clone() })) {
+            Ok(_) => panic!("{variant} with no params must not parse"),
+            Err(error) => error,
+        };
+        match error.into_remote_response() {
+            RemoteResponse::Error { code, .. } => assert_eq!(
+                code.as_deref(),
+                Some(INVALID_ACP_COMMAND_PARAMS),
+                "{variant} is missing from the known ACP command list"
+            ),
+            other => panic!("expected error response for {variant}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn old_host_command_enum_rejects_acp_send_as_unknown_not_send_message() {
+    #[derive(Debug, Deserialize)]
+    #[serde(tag = "cmd", rename_all = "snake_case")]
+    enum LegacyRemoteCommand {
+        SendMessage { session_id: String, content: String },
+    }
+
+    let value = serde_json::json!({
+        "cmd": "acp_send_message",
+        "session_id": "acp-1",
+        "content": "hello"
+    });
+    assert!(serde_json::from_value::<LegacyRemoteCommand>(value.clone()).is_err());
+    let parsed = parse_remote_command(value).expect("current host recognizes acp_send_message");
+    assert!(matches!(parsed, RemoteCommand::AcpSendMessage { .. }));
+}
+
+#[test]
+fn new_host_parses_full_acp_command_family_with_request_ids() {
+    let commands = [
+        serde_json::json!({
+            "cmd": "acp_get_options",
+            "session_id": "acp-1",
+            "request_id": "req-1"
+        }),
+        serde_json::json!({
+            "cmd": "acp_set_option",
+            "session_id": "acp-1",
+            "config_id": "model",
+            "value": {"type": "select", "value": "fast"},
+            "request_id": "req-2"
+        }),
+        serde_json::json!({
+            "cmd": "acp_get_commands",
+            "session_id": "acp-1",
+            "request_id": "req-3"
+        }),
+        serde_json::json!({
+            "cmd": "acp_get_plan",
+            "session_id": "acp-1",
+            "request_id": "req-4"
+        }),
+        serde_json::json!({
+            "cmd": "acp_permission_respond",
+            "session_id": "acp-1",
+            "permission_id": "acp_permission_1",
+            "option_id": "allow-once",
+            "request_id": "req-5"
+        }),
+    ];
+    for value in commands {
+        parse_remote_command(value).expect("new ACP command must parse on current host");
+    }
+}
+
+#[test]
+fn old_host_rejects_new_acp_commands_as_unknown() {
+    #[derive(Debug, Deserialize)]
+    #[serde(tag = "cmd", rename_all = "snake_case")]
+    enum LegacyRemoteCommand {
+        AcpSendMessage {
+            session_id: String,
+            content: String,
+        },
+        AcpCancelTurn {
+            session_id: String,
+            turn_id: Option<String>,
+        },
+    }
+
+    for cmd in [
+        "acp_get_options",
+        "acp_set_option",
+        "acp_get_commands",
+        "acp_get_plan",
+        "acp_permission_respond",
+    ] {
+        let value = serde_json::json!({
+            "cmd": cmd,
+            "session_id": "acp-1",
+            "permission_id": "acp_permission_1",
+            "option_id": "allow-once",
+            "config_id": "model",
+            "value": "fast"
+        });
+        assert!(
+            serde_json::from_value::<LegacyRemoteCommand>(value.clone()).is_err(),
+            "{cmd} must stay unknown to old hosts"
+        );
+        parse_remote_command(value).expect("new host still parses {cmd}");
+    }
+}
+
+#[test]
+fn acp_permission_respond_signature_rejects_native_tool_id_fields() {
+    let parsed = parse_remote_command(serde_json::json!({
+        "cmd": "acp_permission_respond",
+        "session_id": "acp-1",
+        "permission_id": "acp_permission_1",
+        "option_id": "allow-once",
+        "tool_id": "native-tool-1"
+    }))
+    .expect("extra tool_id must be ignored by serde, not accepted as identity");
+    match parsed {
+        RemoteCommand::AcpPermissionRespond {
+            permission_id,
+            option_id,
+            ..
+        } => {
+            assert_eq!(permission_id, "acp_permission_1");
+            assert_eq!(option_id, "allow-once");
+        }
+        other => panic!("expected AcpPermissionRespond, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn acp_permission_respond_unsupported_without_control_host() {
+    let host = RecordingCommandHost::default();
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpPermissionRespond {
+            session_id: "acp-1".to_string(),
+            permission_id: "acp_permission_1".to_string(),
+            option_id: "allow-once".to_string(),
+            request_id: Some("req-perm".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    match response {
+        RemoteResponse::AcpCommandError {
+            session_id,
+            code,
+            message,
+            ..
+        } => {
+            assert_eq!(session_id, "acp-1");
+            assert_eq!(code, UNSUPPORTED_REMOTE_CAPABILITY);
+            assert!(message.contains("mailbox") || message.contains("ACP"));
+        }
+        other => panic!("expected AcpCommandError, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn acp_permission_respond_routes_when_mailbox_host_enabled() {
+    let host = RecordingCommandHost::default().with_acp_control();
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpPermissionRespond {
+            session_id: "acp-1".to_string(),
+            permission_id: "acp_permission_1".to_string(),
+            option_id: "allow-once".to_string(),
+            request_id: Some("req-perm".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    match response {
+        RemoteResponse::AcpPermissionResolved {
+            session_id,
+            permission_id,
+            resolved,
+            request_id,
+            ..
+        } => {
+            assert_eq!(session_id, "acp-1");
+            assert_eq!(permission_id, "acp_permission_1");
+            assert!(resolved);
+            assert_eq!(request_id.as_deref(), Some("req-perm"));
+        }
+        other => panic!("expected AcpPermissionResolved, got {other:?}"),
+    }
+}
+
+#[test]
+fn acp_permission_mailbox_survives_without_clear_on_list() {
+    let mailbox = AcpPermissionMailbox::default();
+    mailbox.insert(AcpPermissionMailboxEntry {
+        permission_id: "acp_permission_1".to_string(),
+        session_id: "acp-1".to_string(),
+        tool_call: serde_json::json!({"toolCallId": "tool-1"}),
+        options: serde_json::json!([]),
+        created_at_ms: 1,
+        expires_at_ms: 2,
+    });
+    // Disconnect must not clear pending: listing does not remove.
+    assert_eq!(mailbox.list_for_session("acp-1").len(), 1);
+    assert!(mailbox.contains("acp_permission_1"));
+}
+
+#[tokio::test]
+async fn recording_host_routes_acp_send_cancel_options_commands_plan() {
+    let host = RecordingCommandHost::default().with_acp_control();
+    let send = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpSendMessage {
+            session_id: "acp-1".to_string(),
+            content: "hello".to_string(),
+            images: None,
+            image_contexts: None,
+            request_id: Some("req-send".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(
+        send,
+        RemoteResponse::AcpMessageSent {
+            session_id,
+            turn_id,
+            request_id: Some(ref id),
+            ..
+        } if session_id == "acp-1" && turn_id == "turn-acp" && id == "req-send"
+    ));
+
+    let cancel = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpCancelTurn {
+            session_id: "acp-1".to_string(),
+            turn_id: Some("turn-acp".to_string()),
+            request_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(cancel, RemoteResponse::AcpTurnCancelled { .. }));
+
+    let options = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpGetOptions {
+            session_id: "acp-1".to_string(),
+            request_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(options, RemoteResponse::AcpOptions { .. }));
+
+    let set = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpSetOption {
+            session_id: "acp-1".to_string(),
+            config_id: "mode".to_string(),
+            value: serde_json::json!({"type": "select", "value": "default"}),
+            request_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(set, RemoteResponse::AcpOptions { .. }));
+
+    let commands = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpGetCommands {
+            session_id: "acp-1".to_string(),
+            request_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(
+        commands,
+        RemoteResponse::AcpCommands { version: 1, .. }
+    ));
+
+    let plan = handle_remote_command(
+        &host,
+        &RemoteCommand::AcpGetPlan {
+            session_id: "acp-1".to_string(),
+            request_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(plan, RemoteResponse::AcpPlan { version: 2, .. }));
+
+    let events = host.events();
+    assert!(events.iter().any(|event| event == "acp_send"));
+    assert!(events.iter().any(|event| event == "acp_cancel"));
+    assert!(events.iter().any(|event| event == "acp_get_options"));
+    assert!(events.iter().any(|event| event == "acp_set_option"));
+    assert!(events.iter().any(|event| event == "acp_get_commands"));
+    assert!(events.iter().any(|event| event == "acp_get_plan"));
+}
+
+#[tokio::test]
+async fn acp_send_message_request_id_is_idempotent() {
+    // Wire-path coverage through RecordingCommandHost only. Concurrent claim
+    // semantics for DesktopRemoteAcpControlHost live in
+    // `acp_request_idempotency` (desktop lib tests).
+    let host = RecordingCommandHost::default().with_acp_control();
+    let command = RemoteCommand::AcpSendMessage {
+        session_id: "acp-1".to_string(),
+        content: "hello".to_string(),
+        images: None,
+        image_contexts: None,
+        request_id: Some("req-dup".to_string()),
+    };
+    let first = handle_remote_command(&host, &command, RemoteConnectSubmissionSource::Relay).await;
+    let second = handle_remote_command(&host, &command, RemoteConnectSubmissionSource::Relay).await;
+    assert_eq!(first, second);
+    assert_eq!(
+        host.events()
+            .iter()
+            .filter(|event| event.as_str() == "acp_send")
+            .count(),
+        1,
+        "duplicate request_id must not open a second turn"
+    );
+}
+
+#[tokio::test]
+async fn native_confirm_tool_on_acp_session_is_unsupported() {
+    let host = RecordingCommandHost::default().with_acp_control();
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::ConfirmTool {
+            tool_id: "tool-1".to_string(),
+            session_id: Some("acp-1".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    match response {
+        RemoteResponse::Error { message, code } => {
+            assert_eq!(code.as_deref(), Some(UNSUPPORTED_REMOTE_CAPABILITY));
+            assert!(message.contains("ACP"));
+            assert!(message.contains("tool-1"));
+        }
+        other => panic!("expected unsupported error, got {other:?}"),
+    }
+    assert!(host.events().iter().all(|event| event != "interaction"));
+}
+
+#[tokio::test]
+async fn native_confirm_tool_rejects_acp_permission_id_without_session() {
+    let host = RecordingCommandHost::default().with_acp_control();
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::ConfirmTool {
+            tool_id: "acp_permission_abc".to_string(),
+            session_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    match response {
+        RemoteResponse::Error { message, code } => {
+            assert_eq!(code.as_deref(), Some(UNSUPPORTED_REMOTE_CAPABILITY));
+            assert!(message.contains("acp_permission_abc"));
+        }
+        other => panic!("expected unsupported error, got {other:?}"),
+    }
+}
+
+#[test]
+fn remote_session_info_can_advertise_acp_remote_control() {
+    let info = remote_session_info(
+        &RemoteSessionMetadata {
+            session_id: "acp-1".to_string(),
+            name: "ACP".to_string(),
+            agent_type: "acp:gemini".to_string(),
+            created_at_ms: 1,
+            last_active_at_ms: 2,
+            turn_count: 0,
+            session_kind: RemoteSessionKind::Acp,
+            capabilities: vec![REMOTE_CAPABILITY_ACP_REMOTE_CONTROL.to_string()],
+        },
+        None,
+        None,
+    );
+    assert_eq!(info.session_kind, RemoteSessionKind::Acp);
+    assert_eq!(
+        info.capabilities,
+        vec![REMOTE_CAPABILITY_ACP_REMOTE_CONTROL.to_string()]
+    );
 }
 
 #[test]
@@ -2124,6 +2957,7 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
         message_snapshot: None,
         active_turn: Some(active_turn),
         model_catalog: Box::new(Some(sample_remote_model_catalog(11))),
+        acp_projection: None,
     })
     .expect("serialize poll response");
 
@@ -2156,6 +2990,31 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
     .expect("serialize title response");
     assert_eq!(title_updated["resp"], "session_title_updated");
     assert_eq!(title_updated["title"], "Renamed session");
+}
+
+#[test]
+fn legacy_session_poll_without_acp_projection_remains_readable() {
+    let response: RemoteResponse = serde_json::from_value(serde_json::json!({
+        "resp": "session_poll",
+        "version": 3,
+        "changed": false,
+        "model_catalog": null
+    }))
+    .expect("legacy SessionPoll should deserialize");
+
+    match response {
+        RemoteResponse::SessionPoll {
+            version,
+            changed,
+            acp_projection,
+            ..
+        } => {
+            assert_eq!(version, 3);
+            assert!(!changed);
+            assert!(acp_projection.is_none());
+        }
+        other => panic!("expected SessionPoll, got {other:?}"),
+    }
 }
 
 fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
@@ -2417,8 +3276,11 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         round_id: "round-1".to_string(),
         round_group_id: None,
         round_index: 3,
-        model_config_id: "model-config".to_string(),
-        effective_model_name: "provider-model".to_string(),
+        identity: bitfun_events::ModelRoundIdentity::Native {
+            model_config_id: "model-config".to_string(),
+            effective_model_name: "provider-model".to_string(),
+        },
+        render_hints: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::ThinkingChunk {
         session_id: "session-1".to_string(),
@@ -2455,6 +3317,72 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
     assert_eq!(items[0].content.as_deref(), Some("plan"));
     assert_eq!(items[1].item_type, "text");
     assert_eq!(items[1].content.as_deref(), Some("answer"));
+}
+
+#[test]
+fn remote_connect_tracker_projects_acp_metadata_with_independent_versions() {
+    let tracker = RemoteSessionStateTracker::new("session-acp".to_string());
+
+    tracker.handle_agentic_event(&AgenticEvent::AcpContextUsageUpdated {
+        session_id: "session-acp".to_string(),
+        turn_id: "turn-1".to_string(),
+        client_id: "claude-code".to_string(),
+        used: 512,
+        size: 4096,
+        cost: Some(serde_json::json!({ "amount": 1.25, "currency": "USD" })),
+    });
+    tracker.handle_agentic_event(&AgenticEvent::AcpAvailableCommandsUpdated {
+        session_id: "session-acp".to_string(),
+        client_id: "claude-code".to_string(),
+        commands: vec![AcpAvailableCommandFact {
+            name: "review".to_string(),
+            description: "Review changes".to_string(),
+            input_hint: Some("[path]".to_string()),
+        }],
+    });
+    tracker.handle_agentic_event(&AgenticEvent::AcpPlanUpdated {
+        session_id: "session-acp".to_string(),
+        turn_id: "turn-1".to_string(),
+        client_id: "claude-code".to_string(),
+        entries: vec![AcpPlanEntryFact {
+            content: "Inspect files".to_string(),
+            priority: "high".to_string(),
+            status: "in_progress".to_string(),
+        }],
+    });
+    tracker.handle_agentic_event(&AgenticEvent::AcpSessionOptionsChanged {
+        session_id: "session-acp".to_string(),
+        client_id: "claude-code".to_string(),
+    });
+    tracker.handle_agentic_event(&AgenticEvent::AcpAvailableCommandsUpdated {
+        session_id: "session-acp".to_string(),
+        client_id: "claude-code".to_string(),
+        commands: Vec::new(),
+    });
+
+    assert_eq!(tracker.version(), 5);
+    let projection = tracker
+        .snapshot_acp_projection()
+        .expect("ACP projection snapshot");
+    assert_eq!(projection.context_usage.as_ref().unwrap().version, 1);
+    assert_eq!(projection.available_commands.as_ref().unwrap().version, 2);
+    assert_eq!(projection.plan.as_ref().unwrap().version, 1);
+    assert_eq!(projection.session_options.as_ref().unwrap().version, 1);
+
+    let poll = serde_json::to_value(remote_snapshot_poll_response(&tracker, 77, None))
+        .expect("serialize ACP poll projection");
+    assert_eq!(poll["version"], 77);
+    assert_eq!(poll["acp_projection"]["context_usage"]["version"], 1);
+    assert_eq!(poll["acp_projection"]["available_commands"]["version"], 2);
+    assert_eq!(
+        poll["acp_projection"]["plan"]["entries"][0]["content"],
+        "Inspect files"
+    );
+    assert_eq!(poll["acp_projection"]["session_options"]["version"], 1);
+
+    let no_change =
+        serde_json::to_value(remote_no_change_poll_response(77)).expect("serialize no-change poll");
+    assert!(no_change.get("acp_projection").is_none());
 }
 
 #[test]
@@ -2820,4 +3748,150 @@ fn remote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strin
     assert_eq!(text_preview.len(), 200);
 
     assert!(make_slim_tool_params(&serde_json::json!(42)).is_none());
+}
+
+/// §9.2 negative requirement: an ACP session must not be reachable through the
+/// *native* control surface. Native `cancel_task` talks to the native
+/// scheduler and native `set_session_model` writes native session metadata —
+/// admitting an externally projected ACP session into either is the "误做了 C"
+/// failure §13 asks us to detect. The read-only half (`get_model_catalog`,
+/// `get_session_messages`) must stay open so the phone can still render the
+/// session as observable.
+#[tokio::test]
+async fn acp_sessions_reject_native_cancel_and_model_selection() {
+    let host = RecordingCommandHost::default().with_acp_control();
+
+    for (command, expected_name) in [
+        (
+            RemoteCommand::CancelTask {
+                session_id: "acp-1".to_string(),
+                turn_id: Some("turn-1".to_string()),
+            },
+            "cancel_task",
+        ),
+        (
+            RemoteCommand::SetSessionModel {
+                session_id: "acp-1".to_string(),
+                model_id: "sonnet".to_string(),
+                reasoning_preset: None,
+            },
+            "set_session_model",
+        ),
+    ] {
+        let response =
+            handle_remote_command(&host, &command, RemoteConnectSubmissionSource::Relay).await;
+        match response {
+            RemoteResponse::Error { code, message } => {
+                assert_eq!(code.as_deref(), Some(UNSUPPORTED_REMOTE_CAPABILITY));
+                assert!(
+                    message.contains(expected_name) && message.contains("acp-1"),
+                    "{expected_name} rejection must name the command and session: {message}"
+                );
+            }
+            other => panic!("expected a fail-loud rejection for {expected_name}, got {other:?}"),
+        }
+    }
+
+    // Nothing reached the native runtime.
+    assert!(
+        host.events().is_empty(),
+        "no native handler may run for an ACP session: {:?}",
+        host.events()
+    );
+
+    // Reading the catalog is still allowed — "observable, not selectable".
+    let catalog = handle_remote_command(
+        &host,
+        &RemoteCommand::GetModelCatalog {
+            session_id: Some("acp-1".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(catalog, RemoteResponse::SessionCreated { .. }));
+    assert_eq!(host.events(), vec!["session"]);
+}
+
+/// Native sessions must not pay for the ACP guard: the same two commands keep
+/// reaching the native runtime unchanged.
+#[tokio::test]
+async fn native_sessions_keep_cancel_and_model_selection() {
+    let host = RecordingCommandHost::default().with_acp_control();
+
+    let cancelled = handle_remote_command(
+        &host,
+        &RemoteCommand::CancelTask {
+            session_id: "native-1".to_string(),
+            turn_id: Some("turn-9".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(cancelled, RemoteResponse::TaskCancelled { .. }));
+    assert_eq!(host.cancel_request().session_id, "native-1");
+
+    let model = handle_remote_command(
+        &host,
+        &RemoteCommand::SetSessionModel {
+            session_id: "native-1".to_string(),
+            model_id: "sonnet".to_string(),
+            reasoning_preset: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(model, RemoteResponse::SessionCreated { .. }));
+    assert_eq!(host.events(), vec!["cancel", "session"]);
+}
+
+/// `cancel_tool` and `answer_question` carry no `session_id` on the wire, so
+/// the only guard that can fire is the ACP permission-id one — and it must.
+/// They used to fall into the dispatch's `_ => (None, "")` bucket, which
+/// skipped the check entirely and let a native interaction address an ACP
+/// permission id.
+#[tokio::test]
+async fn acp_permission_ids_reject_native_cancel_tool_and_answer_question() {
+    let host = RecordingCommandHost::default().with_acp_control();
+
+    for command in [
+        RemoteCommand::CancelTool {
+            tool_id: "acp_permission_7".to_string(),
+            reason: None,
+        },
+        RemoteCommand::AnswerQuestion {
+            tool_id: "acp_permission_7".to_string(),
+            answers: serde_json::json!({"choice": "allow"}),
+        },
+    ] {
+        let response =
+            handle_remote_command(&host, &command, RemoteConnectSubmissionSource::Relay).await;
+        match response {
+            RemoteResponse::Error { code, message } => {
+                assert_eq!(code.as_deref(), Some(UNSUPPORTED_REMOTE_CAPABILITY));
+                assert!(message.contains("acp_permission_7"), "{message}");
+            }
+            other => panic!("expected a fail-loud rejection, got {other:?}"),
+        }
+    }
+    assert!(
+        host.events().is_empty(),
+        "native interaction handler must not run: {:?}",
+        host.events()
+    );
+
+    // A plain native tool id is untouched.
+    let accepted = handle_remote_command(
+        &host,
+        &RemoteCommand::CancelTool {
+            tool_id: "tool-1".to_string(),
+            reason: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(
+        accepted,
+        RemoteResponse::InteractionAccepted { .. }
+    ));
+    assert_eq!(host.events(), vec!["interaction"]);
 }

@@ -9,7 +9,9 @@ import {
   globalEventBus,
   PERMISSION_REQUEST_NOTIFICATION_EVENT,
 } from '@/infrastructure/event-bus';
+import { createLogger } from '@/shared/utils/logger';
 
+const log = createLogger('AcpPermissionToolCard');
 const pendingAcpPermissionRequests = new Map<string, AcpPermissionRequestEvent>();
 
 function acpPermissionToolId(event: AcpPermissionRequestEvent): string | null {
@@ -94,6 +96,23 @@ export function handleAcpPermissionRequestForToolCard(event: AcpPermissionReques
 
   pendingAcpPermissionRequests.delete(toolId);
   return true;
+}
+
+/** Re-read shared mailbox after page refresh / session hydrate. */
+export async function rehydrateAcpPermissionsFromMailbox(sessionId: string): Promise<void> {
+  if (!sessionId) {
+    return;
+  }
+  try {
+    const { ACPClientAPI } = await import('@/infrastructure/api/service-api/ACPClientAPI');
+    const pending = await ACPClientAPI.listPendingPermissions(sessionId);
+    for (const event of pending) {
+      handleAcpPermissionRequestForToolCard(event);
+    }
+  } catch (error) {
+    // Mailbox may be unavailable on older hosts; surface is forward-compatible.
+    log.warn('Failed to rehydrate ACP permissions from mailbox', { sessionId, error });
+  }
 }
 
 export function applyPendingAcpPermissionForTool(

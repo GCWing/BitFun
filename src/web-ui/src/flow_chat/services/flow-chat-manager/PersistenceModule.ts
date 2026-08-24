@@ -14,6 +14,7 @@ import {
 import { requireSessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
 import { resolveSessionDriverId } from '../../session-drivers/resolve';
 import { resolveStorageTurnIndex } from '../../utils/flowChatTurnIdentity';
+import { isAcpFlowSession } from '../../utils/acpSession';
 
 const log = createLogger('PersistenceModule');
 const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
@@ -298,7 +299,15 @@ async function performSaveDialogTurnToDisk(
       log.debug('Session not found, skipping save', { sessionId, turnId });
       return;
     }
-    if (isTransientSession(session) || isObserverOnlyDispatchSession(sessionId, session)) {
+    if (
+      isTransientSession(session) ||
+      isObserverOnlyDispatchSession(sessionId, session) ||
+      isAcpFlowSession(session)
+    ) {
+      // ACP turns are externally projected. The Desktop
+      // AcpDurableProjectionWriter is their single transcript writer; saving
+      // the same canonical events again from the Web UI creates duplicate
+      // turns with identical ids.
       return;
     }
 

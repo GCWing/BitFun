@@ -1182,6 +1182,48 @@ describe('handleModelRoundStart', () => {
     expect(turn?.modelRounds[0]?.effectiveModelName).toBeUndefined();
   });
 
+  it('stores external ACP model identity without synthesizing native keys', async () => {
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 900,
+    });
+    await startStreamingMachine();
+    const context = createFlowChatContext();
+
+    __test_only__.handleModelRoundStart(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      roundId: 'round-1',
+      roundIndex: 0,
+      externalModel: {
+        provider: 'acp',
+        clientId: 'gemini',
+        modelId: 'gemini-2.5',
+      },
+    } as any);
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1');
+
+    expect(turn?.modelRounds[0]?.externalModel).toEqual({
+      provider: 'acp',
+      clientId: 'gemini',
+      modelId: 'gemini-2.5',
+    });
+    expect(turn?.modelRounds[0]?.modelConfigId).toBeUndefined();
+    expect(turn?.modelRounds[0]?.effectiveModelName).toBeUndefined();
+  });
+
   it('trims and stores model identity fields when present', async () => {
     createSessionWithTurn({
       id: 'turn-1',

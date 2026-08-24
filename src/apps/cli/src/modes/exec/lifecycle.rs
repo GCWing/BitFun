@@ -1289,10 +1289,16 @@ impl ExecMode {
         match event {
             AgenticEvent::ModelRoundStarted {
                 turn_id: event_turn_id,
-                model_config_id,
+                identity:
+                    bitfun_events::ModelRoundIdentity::Native {
+                        model_config_id, ..
+                    },
                 ..
+            } if event_turn_id == turn_id => {
+                self.record_resolved_model_config_id(session_id, model_config_id)
+                    .await;
             }
-            | AgenticEvent::ModelRoundCompleted {
+            AgenticEvent::ModelRoundCompleted {
                 turn_id: event_turn_id,
                 model_config_id,
                 ..

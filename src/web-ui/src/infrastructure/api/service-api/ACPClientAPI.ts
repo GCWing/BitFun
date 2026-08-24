@@ -373,6 +373,29 @@ export class ACPClientAPI {
     return api.invoke('submit_acp_permission_response', { request });
   }
 
+  static async listPendingPermissions(
+    sessionId: string
+  ): Promise<AcpPermissionRequestEvent[]> {
+    const entries = await api.invoke<Array<{
+      permissionId: string;
+      sessionId: string;
+      toolCall?: AcpPermissionRequestEvent['toolCall'];
+      options?: AcpPermissionOption[] | unknown;
+      createdAtMs?: number;
+      expiresAtMs?: number;
+    }>>('list_acp_pending_permissions', {
+      request: { sessionId },
+    });
+    return (entries ?? []).map((entry) => ({
+      permissionId: entry.permissionId,
+      sessionId: entry.sessionId,
+      toolCall: entry.toolCall,
+      options: Array.isArray(entry.options)
+        ? (entry.options as AcpPermissionOption[])
+        : undefined,
+    }));
+  }
+
   static async createFlowSession(
     request: CreateAcpFlowSessionRequest
   ): Promise<CreateAcpFlowSessionResponse> {

@@ -503,6 +503,7 @@ impl CliAccountRoutingHost {
                 let response_json = serde_json::to_string(&response).unwrap_or_else(|error| {
                     serde_json::to_string(&RemoteResponse::Error {
                         message: format!("failed to serialize RPC response: {error}"),
+                        code: None,
                     })
                     .unwrap_or_else(|_| {
                         r#"{"resp":"error","message":"serialize failed"}"#.to_string()

@@ -44,6 +44,7 @@ use super::config::{
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
 };
 use super::dsh_profile::{ensure_bundled_profile, ensure_bundled_profile_remote};
+use super::permission_ids::new_acp_permission_id;
 use super::remote_capability_store::RemoteAcpCapabilityStore;
 use super::remote_session::{preferred_resume_strategies, AcpRemoteSessionStrategy};
 use super::remote_shell::{remote_user_shell_command, render_remote_env_assignments, shell_escape};
@@ -53,8 +54,8 @@ use super::requirements::{
     probe_remote_executable, probe_remote_npx_adapter, resolve_configured_command,
 };
 use super::session_options::{
-    model_config_id, session_options_from_state, AcpAvailableCommand, AcpSessionContextUsage,
-    AcpSessionOptions,
+    model_config_id, session_options_from_state, AcpAvailableCommand, AcpPlanEntry,
+    AcpSessionContextUsage, AcpSessionOptions,
 };
 use super::session_persistence::AcpSessionPersistence;
 pub use super::session_persistence::CreateAcpFlowSessionRecordResponse;
@@ -151,6 +152,22 @@ pub struct AcpClientService {
     clients: DashMap<String, Arc<AcpClientConnection>>,
     pending_permissions: DashMap<String, PendingPermission>,
     session_permission_modes: DashMap<String, AcpClientPermissionMode>,
+    /// Optional Desktop-owned observation sink. When set, permission requests
+    /// go through this port instead of a hand-written Custom event emit.
+    permission_observer: std::sync::RwLock<Option<Arc<dyn AcpPermissionObserver>>>,
+}
+
+/// Desktop (or other host) observation surface for ACP permission requests.
+pub trait AcpPermissionObserver: Send + Sync {
+    fn on_permission_requested(
+        &self,
+        permission_id: &str,
+        session_id: &str,
+        tool_call: &serde_json::Value,
+        options: &serde_json::Value,
+        timeout: Duration,
+    );
+    fn on_permission_resolved(&self, permission_id: &str);
 }
 
 struct PendingPermission {
@@ -177,6 +194,9 @@ struct AcpRemoteSession {
     config_options: Vec<SessionConfigOption>,
     context_usage: Option<AcpSessionContextUsage>,
     available_commands: Vec<AcpAvailableCommand>,
+    available_commands_version: u64,
+    plan_entries: Vec<AcpPlanEntry>,
+    plan_version: u64,
     discard_pending_updates_before_next_prompt: bool,
 }
 
@@ -206,6 +226,9 @@ impl AcpRemoteSession {
             config_options: Vec::new(),
             context_usage: None,
             available_commands: Vec::new(),
+            available_commands_version: 0,
+            plan_entries: Vec::new(),
+            plan_version: 0,
             discard_pending_updates_before_next_prompt: false,
         }
     }
@@ -227,7 +250,15 @@ impl AcpClientService {
             clients: DashMap::new(),
             pending_permissions: DashMap::new(),
             session_permission_modes: DashMap::new(),
+            permission_observer: std::sync::RwLock::new(None),
         }))
+    }
+
+    pub fn set_permission_observer(&self, observer: Arc<dyn AcpPermissionObserver>) {
+        *self
+            .permission_observer
+            .write()
+            .expect("ACP permission observer") = Some(observer);
     }
 
     pub async fn create_flow_session_record(
@@ -900,6 +931,21 @@ impl AcpClientService {
         &self,
         request: SubmitAcpPermissionResponseRequest,
     ) -> BitFunResult<AcpClientPermissionResponse> {
+        let option_id = {
+            let Some(pending) = self.pending_permissions.get(&request.permission_id) else {
+                return Err(BitFunError::NotFound(format!(
+                    "ACP permission request not found: {}",
+                    request.permission_id
+                )));
+            };
+            resolve_submitted_permission_option_id(
+                &pending.options,
+                request.option_id.as_deref(),
+                request.approve,
+            )
+            .map_err(BitFunError::validation)?
+        };
+
         let Some((_, pending)) = self.pending_permissions.remove(&request.permission_id) else {
             return Err(BitFunError::NotFound(format!(
                 "ACP permission request not found: {}",
@@ -907,9 +953,15 @@ impl AcpClientService {
             )));
         };
 
-        let option_id = request
-            .option_id
-            .unwrap_or_else(|| select_permission_option_id(&pending.options, request.approve));
+        if let Some(observer) = self
+            .permission_observer
+            .read()
+            .expect("ACP permission observer")
+            .as_ref()
+        {
+            observer.on_permission_resolved(&request.permission_id);
+        }
+
         let response = RequestPermissionResponse::new(RequestPermissionOutcome::Selected(
             SelectedPermissionOutcome::new(option_id),
         ));
@@ -962,7 +1014,7 @@ impl AcpClientService {
         remote_connection_id: Option<String>,
         session_storage_path: Option<PathBuf>,
         bitfun_session_id: String,
-    ) -> BitFunResult<Vec<AcpAvailableCommand>> {
+    ) -> BitFunResult<(Vec<AcpAvailableCommand>, u64)> {
         let resolved = self
             .resolve_or_create_client_session(
                 client_id,
@@ -983,7 +1035,45 @@ impl AcpClientService {
         )
         .await?;
         drain_pending_session_metadata_updates(&mut session).await?;
-        Ok(session.available_commands.clone())
+        Ok((
+            session.available_commands.clone(),
+            session.available_commands_version,
+        ))
+    }
+
+    pub async fn get_session_plan(
+        self: &Arc<Self>,
+        client_id: &str,
+        workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        session_storage_path: Option<PathBuf>,
+        bitfun_session_id: String,
+    ) -> BitFunResult<(Vec<AcpPlanEntry>, u64)> {
+        let resolved = self
+            .resolve_or_create_client_session(
+                client_id,
+                workspace_path,
+                remote_connection_id.as_deref(),
+                &bitfun_session_id,
+            )
+            .await?;
+
+        let mut session = resolved.session.lock().await;
+        self.ensure_remote_session(
+            &resolved.client,
+            &resolved.session_key,
+            &resolved.cwd,
+            &bitfun_session_id,
+            session_storage_path.as_deref(),
+            &mut session,
+        )
+        .await?;
+        drain_pending_session_metadata_updates(&mut session).await?;
+        Ok((session.plan_entries.clone(), session.plan_version))
+    }
+
+    pub fn has_pending_permission(&self, permission_id: &str) -> bool {
+        self.pending_permissions.contains_key(permission_id)
     }
 
     pub async fn set_session_model(
@@ -1670,7 +1760,7 @@ impl AcpClientService {
             AcpClientPermissionMode::Ask => {}
         }
 
-        let permission_id = format!("acp_permission_{}", uuid::Uuid::new_v4());
+        let permission_id = new_acp_permission_id();
         let (tx, rx) = oneshot::channel();
         self.pending_permissions.insert(
             permission_id.clone(),
@@ -1680,19 +1770,35 @@ impl AcpClientService {
             },
         );
 
+        let tool_call = serde_json::to_value(&request.tool_call).unwrap_or(json!({}));
+        let options = serde_json::to_value(&request.options).unwrap_or(json!([]));
         let payload = json!({
             "permissionId": permission_id,
             "sessionId": session_id,
-            "toolCall": request.tool_call,
-            "options": request.options,
+            "toolCall": tool_call,
+            "options": options,
         });
 
-        if let Err(error) = emit_global_event(BackendEvent::Custom {
+        let observer = self
+            .permission_observer
+            .read()
+            .expect("ACP permission observer")
+            .clone();
+        if let Some(observer) = observer {
+            observer.on_permission_requested(
+                &permission_id,
+                &session_id,
+                &tool_call,
+                &options,
+                PERMISSION_TIMEOUT,
+            );
+        } else if let Err(error) = emit_global_event(BackendEvent::Custom {
             event_name: "backend-event-acppermissionrequest".to_string(),
             payload,
         })
         .await
         {
+            // CLI / hosts without a Desktop mailbox keep the legacy emit path.
             warn!("Failed to emit ACP permission request: {}", error);
         }
 
@@ -1703,6 +1809,14 @@ impl AcpClientService {
             )),
             Err(_) => {
                 self.pending_permissions.remove(&permission_id);
+                if let Some(observer) = self
+                    .permission_observer
+                    .read()
+                    .expect("ACP permission observer")
+                    .as_ref()
+                {
+                    observer.on_permission_resolved(&permission_id);
+                }
                 Ok(RequestPermissionResponse::new(
                     RequestPermissionOutcome::Cancelled,
                 ))
@@ -2520,6 +2634,18 @@ fn update_session_from_events(session: &mut AcpRemoteSession, events: &[AcpClien
     update_session_context_usage(session, events);
     update_session_available_commands(session, events);
     update_session_config_options(session, events);
+    update_session_plan(session, events);
+}
+
+fn update_session_plan(session: &mut AcpRemoteSession, events: &[AcpClientStreamEvent]) {
+    let Some(entries) = events.iter().rev().find_map(|event| match event {
+        AcpClientStreamEvent::PlanUpdated(entries) => Some(entries.clone()),
+        _ => None,
+    }) else {
+        return;
+    };
+    session.plan_entries = entries;
+    session.plan_version = session.plan_version.saturating_add(1);
 }
 
 fn update_session_context_usage(session: &mut AcpRemoteSession, events: &[AcpClientStreamEvent]) {
@@ -2545,6 +2671,7 @@ fn update_session_available_commands(
     };
 
     session.available_commands = commands;
+    session.available_commands_version = session.available_commands_version.saturating_add(1);
 }
 
 fn update_session_config_options(session: &mut AcpRemoteSession, events: &[AcpClientStreamEvent]) {
@@ -2717,6 +2844,27 @@ fn select_permission_by_kind(
     ))
 }
 
+fn resolve_submitted_permission_option_id(
+    options: &[PermissionOption],
+    option_id: Option<&str>,
+    approve: bool,
+) -> Result<String, String> {
+    match option_id {
+        Some(option_id) => {
+            let allowed = options
+                .iter()
+                .any(|option| option.option_id.to_string() == option_id);
+            if !allowed {
+                return Err(format!(
+                    "ACP permission option_id is not in the pending options: option_id={option_id}"
+                ));
+            }
+            Ok(option_id.to_string())
+        }
+        None => Ok(select_permission_option_id(options, approve)),
+    }
+}
+
 fn select_permission_option_id(options: &[PermissionOption], approve: bool) -> String {
     let preferred_kinds = if approve {
         [
@@ -2795,6 +2943,22 @@ mod tests {
         ];
 
         assert_eq!(select_permission_option_id(&options, true), "yes-once");
+    }
+
+    #[test]
+    fn rejects_option_id_missing_from_pending_options() {
+        let options = vec![
+            PermissionOption::new("deny", "Deny", PermissionOptionKind::RejectOnce),
+            PermissionOption::new("yes-once", "Allow", PermissionOptionKind::AllowOnce),
+        ];
+        let error = resolve_submitted_permission_option_id(&options, Some("allow_always"), true)
+            .expect_err("unknown option must fail");
+        assert!(error.contains("allow_always"));
+        assert_eq!(
+            resolve_submitted_permission_option_id(&options, Some("yes-once"), true)
+                .expect("known option"),
+            "yes-once"
+        );
     }
 
     #[test]

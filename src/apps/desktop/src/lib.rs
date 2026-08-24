@@ -724,13 +724,24 @@ pub async fn run() {
     );
 
     let step_started = Instant::now();
-    let app_state = match AppState::new_async(token_usage_service).await {
+    let acp_event_publisher = crate::runtime::AcpEventPublisher::start(event_queue.clone());
+    let app_state = match AppState::new_async(token_usage_service, acp_event_publisher).await {
         Ok(state) => state,
         Err(e) => {
             log::error!("Failed to initialize AppState: {}", e);
             return;
         }
     };
+    if let Some(service) = app_state.acp_client_service.clone() {
+        let mailbox = bitfun_services_integrations::remote_connect::install_acp_permission_mailbox(
+            std::sync::Arc::new(
+                bitfun_services_integrations::remote_connect::AcpPermissionMailbox::default(),
+            ),
+        );
+        service.set_permission_observer(std::sync::Arc::new(
+            runtime::DesktopAcpPermissionObserver::new(mailbox),
+        ));
+    }
     startup_timings.record_elapsed("initialize_app_state", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
@@ -769,6 +780,24 @@ pub async fn run() {
         "initialize_desktop_agent_runtime",
         step_started,
     );
+    let acp_projection_writer =
+        runtime::install_desktop_acp_writer(runtime::AcpDurableProjectionWriter::new(
+            event_queue.clone(),
+            desktop_runtime.session_application().clone(),
+        ));
+    event_router.subscribe_internal(
+        "acp_durable_projection".to_string(),
+        acp_projection_writer.clone(),
+    );
+    if let Some(service) = app_state.acp_client_service.clone() {
+        bitfun_core::service::remote_connect::set_remote_acp_control_host(std::sync::Arc::new(
+            runtime::DesktopRemoteAcpControlHost::new(
+                service,
+                app_state.acp_event_publisher.clone(),
+                acp_projection_writer,
+            ),
+        ));
+    }
 
     let coordinator_state = CoordinatorState {
         coordinator: coordinator.clone(),
@@ -1682,6 +1711,7 @@ pub async fn run() {
             load_acp_json_config,
             save_acp_json_config,
             submit_acp_permission_response,
+            list_acp_pending_permissions,
             create_acp_flow_session,
             start_acp_dialog_turn,
             cancel_acp_dialog_turn,
@@ -2307,6 +2337,7 @@ pub(crate) fn perform_process_exit_cleanup() -> bool {
     if let Some(search_service) = get_global_workspace_search_service() {
         search_service.shutdown_blocking();
     }
+    runtime::flush_desktop_acp_writer_blocking();
     bitfun_core::util::process_manager::cleanup_all_processes();
     api::remote_connect_api::cleanup_on_exit();
     true
@@ -2547,6 +2578,8 @@ fn start_event_loop_with_transport(
     session_event_journal: Arc<SessionEventJournal>,
 ) {
     tokio::spawn(async move {
+        // Live WebView delivery stays origin-unaware. Origin is a subscriber
+        // routing fact on the envelope; journal/backfill do not persist it yet.
         event_loop_driver(event_queue, event_router, |event| {
             let transport = transport.clone();
             let session_event_journal = session_event_journal.clone();

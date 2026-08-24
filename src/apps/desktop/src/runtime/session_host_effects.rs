@@ -28,5 +28,11 @@ impl DesktopSessionHostEffects for ProductionDesktopSessionHostEffects {
 
     fn notify_session_deleted(&self, session_id: &str) {
         crate::api::remote_connect_api::notify_session_deleted(session_id);
+        bitfun_core::service::remote_connect::clear_remote_acp_control_session(session_id);
+        if let Some(mailbox) =
+            bitfun_services_integrations::remote_connect::acp_permission_mailbox()
+        {
+            mailbox.clear_session(session_id);
+        }
     }
 }

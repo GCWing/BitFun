@@ -3,6 +3,7 @@
 use super::service::CronService;
 use crate::agentic::events::{AgenticEvent, EventSubscriber};
 use bitfun_agent_runtime::event_bus::{EventBusError, EventSubscriberResult};
+use bitfun_events::{AgenticEventEnvelope, AgenticEventOrigin};
 use log::error;
 use std::sync::Arc;
 
@@ -18,6 +19,13 @@ impl CronEventSubscriber {
 
 #[async_trait::async_trait]
 impl EventSubscriber for CronEventSubscriber {
+    async fn on_envelope(&self, envelope: &AgenticEventEnvelope) -> EventSubscriberResult {
+        if envelope.origin != AgenticEventOrigin::NativeRuntime {
+            return Ok(());
+        }
+        self.on_event(&envelope.event).await
+    }
+
     async fn on_event(&self, event: &AgenticEvent) -> EventSubscriberResult {
         let result = match event {
             AgenticEvent::DialogTurnStarted { turn_id, .. } => {

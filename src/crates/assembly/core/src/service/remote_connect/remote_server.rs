@@ -15,13 +15,20 @@ use std::sync::{Arc, OnceLock};
 
 use super::encryption;
 use bitfun_services_integrations::remote_connect::{
+    acp_cancel_response, acp_commands_response, acp_native_session_control_unsupported,
+    acp_native_tool_interaction_unsupported, acp_options_response, acp_permission_respond_response,
+    acp_permission_respond_unsupported, acp_plan_response, acp_send_response,
     build_remote_image_contexts, cancel_remote_task, generate_remote_initial_sync,
     handle_remote_command, handle_remote_interaction_command, handle_remote_poll_command,
     handle_remote_session_command, handle_remote_workspace_command,
-    handle_remote_workspace_file_command, submit_remote_dialog, RemoteCancelTaskRequest,
-    RemoteCommandRuntimeHost, RemoteConnectSubmissionSource, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteSessionTrackerRegistry,
+    handle_remote_workspace_file_command, parse_remote_command, submit_remote_dialog,
+    RemoteAcpCancelRequest, RemoteAcpControlError, RemoteAcpControlRuntimeHost,
+    RemoteAcpGetCommandsRequest, RemoteAcpGetOptionsRequest, RemoteAcpGetPlanRequest,
+    RemoteAcpPermissionRespondRequest, RemoteAcpSendRequest, RemoteAcpSetOptionRequest,
+    RemoteCancelTaskRequest, RemoteCommandParseError, RemoteCommandRuntimeHost,
+    RemoteConnectSubmissionSource, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
+    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteSessionTrackerRegistry,
+    ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE, UNSUPPORTED_REMOTE_CAPABILITY,
 };
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
@@ -31,6 +38,40 @@ pub use bitfun_services_integrations::remote_connect::{
 };
 
 pub type EncryptedPayload = (String, String);
+
+static ACP_CONTROL_HOST: OnceLock<Arc<dyn RemoteAcpControlRuntimeHost>> = OnceLock::new();
+
+/// Inject the Desktop-owned ACP remote-control adapter. Safe to call once at
+/// startup; later calls are ignored so tests/restarts do not panic.
+pub fn set_remote_acp_control_host(host: Arc<dyn RemoteAcpControlRuntimeHost>) {
+    let _ = ACP_CONTROL_HOST.set(host);
+}
+
+pub fn remote_acp_control_host_installed() -> bool {
+    ACP_CONTROL_HOST.get().is_some()
+}
+
+pub fn clear_remote_acp_control_session(session_id: &str) {
+    if let Some(host) = ACP_CONTROL_HOST.get() {
+        host.clear_session_idempotency(session_id);
+    }
+}
+
+fn remote_acp_control_host() -> Option<Arc<dyn RemoteAcpControlRuntimeHost>> {
+    ACP_CONTROL_HOST.get().cloned()
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DecryptedRemoteEnvelope {
+    Command {
+        command: RemoteCommand,
+        request_id: Option<String>,
+    },
+    Rejected {
+        response: RemoteResponse,
+        request_id: Option<String>,
+    },
+}
 
 /// Convert legacy `ImageAttachment` to unified `ImageContextData`.
 pub fn images_to_contexts(
@@ -178,7 +219,12 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
     async fn handle_session_command(&self, command: &RemoteCommand) -> RemoteResponse {
         let host = match CoreServiceAgentRuntime::remote_session_host() {
             Ok(host) => host,
-            Err(message) => return RemoteResponse::Error { message },
+            Err(message) => {
+                return RemoteResponse::Error {
+                    message,
+                    code: None,
+                }
+            }
         };
         handle_remote_session_command(&host, command).await
     }
@@ -248,6 +294,7 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
                 if let Err(e) = std::fs::create_dir_all(&path) {
                     return RemoteResponse::Error {
                         message: format!("Failed to create workspace directory: {e}"),
+                        code: None,
                     };
                 }
                 // Now delegate to the workspace host to actually open/track it.
@@ -264,6 +311,7 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
             }
             _ => RemoteResponse::Error {
                 message: "Unsupported device command".to_string(),
+                code: None,
             },
         }
     }
@@ -282,6 +330,197 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
     ) -> std::result::Result<(), String> {
         let host = CoreServiceAgentRuntime::remote_cancel_host()?;
         cancel_remote_task(&host, request).await
+    }
+
+    async fn handle_acp_control_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        match command {
+            RemoteCommand::AcpPermissionRespond {
+                session_id,
+                permission_id,
+                option_id,
+                request_id,
+            } => {
+                let Some(host) = remote_acp_control_host() else {
+                    return acp_permission_respond_unsupported(session_id, request_id.clone());
+                };
+                acp_permission_respond_response(
+                    host.permission_respond(RemoteAcpPermissionRespondRequest {
+                        session_id: session_id.clone(),
+                        permission_id: permission_id.clone(),
+                        option_id: option_id.clone(),
+                        request_id: request_id.clone(),
+                    })
+                    .await,
+                )
+            }
+            RemoteCommand::AcpSendMessage {
+                session_id,
+                content,
+                images,
+                image_contexts,
+                request_id,
+            } => {
+                let Some(host) = remote_acp_control_host() else {
+                    return RemoteAcpControlError::unsupported(
+                        session_id.clone(),
+                        request_id.clone(),
+                    )
+                    .into_response();
+                };
+                acp_send_response(
+                    host.send_message(RemoteAcpSendRequest {
+                        session_id: session_id.clone(),
+                        content: content.clone(),
+                        images: images.clone(),
+                        image_contexts: image_contexts.clone(),
+                        request_id: request_id.clone(),
+                    })
+                    .await,
+                )
+            }
+            RemoteCommand::AcpCancelTurn {
+                session_id,
+                turn_id,
+                request_id,
+            } => {
+                let Some(host) = remote_acp_control_host() else {
+                    return RemoteAcpControlError::unsupported(
+                        session_id.clone(),
+                        request_id.clone(),
+                    )
+                    .into_response();
+                };
+                acp_cancel_response(
+                    host.cancel_turn(RemoteAcpCancelRequest {
+                        session_id: session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        request_id: request_id.clone(),
+                    })
+                    .await,
+                )
+            }
+            RemoteCommand::AcpGetOptions {
+                session_id,
+                request_id,
+            } => {
+                let Some(host) = remote_acp_control_host() else {
+                    return RemoteAcpControlError::unsupported(
+                        session_id.clone(),
+                        request_id.clone(),
+                    )
+                    .into_response();
+                };
+                acp_options_response(
+                    host.get_options(RemoteAcpGetOptionsRequest {
+                        session_id: session_id.clone(),
+                        request_id: request_id.clone(),
+                    })
+                    .await,
+                )
+            }
+            RemoteCommand::AcpSetOption {
+                session_id,
+                config_id,
+                value,
+                request_id,
+            } => {
+                let Some(host) = remote_acp_control_host() else {
+                    return RemoteAcpControlError::unsupported(
+                        session_id.clone(),
+                        request_id.clone(),
+                    )
+                    .into_response();
+                };
+                acp_options_response(
+                    host.set_option(RemoteAcpSetOptionRequest {
+                        session_id: session_id.clone(),
+                        config_id: config_id.clone(),
+                        value: value.clone(),
+                        request_id: request_id.clone(),
+                    })
+                    .await,
+                )
+            }
+            RemoteCommand::AcpGetCommands {
+                session_id,
+                request_id,
+            } => {
+                let Some(host) = remote_acp_control_host() else {
+                    return RemoteAcpControlError::unsupported(
+                        session_id.clone(),
+                        request_id.clone(),
+                    )
+                    .into_response();
+                };
+                acp_commands_response(
+                    host.get_commands(RemoteAcpGetCommandsRequest {
+                        session_id: session_id.clone(),
+                        request_id: request_id.clone(),
+                    })
+                    .await,
+                )
+            }
+            RemoteCommand::AcpGetPlan {
+                session_id,
+                request_id,
+            } => {
+                let Some(host) = remote_acp_control_host() else {
+                    return RemoteAcpControlError::unsupported(
+                        session_id.clone(),
+                        request_id.clone(),
+                    )
+                    .into_response();
+                };
+                acp_plan_response(
+                    host.get_plan(RemoteAcpGetPlanRequest {
+                        session_id: session_id.clone(),
+                        request_id: request_id.clone(),
+                    })
+                    .await,
+                )
+            }
+            _ => RemoteResponse::Error {
+                message: format!(
+                    "{UNSUPPORTED_REMOTE_CAPABILITY}: {ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE}"
+                ),
+                code: Some(UNSUPPORTED_REMOTE_CAPABILITY.to_string()),
+            },
+        }
+    }
+
+    async fn reject_native_session_control_for_acp(
+        &self,
+        session_id: &str,
+        command_name: &str,
+    ) -> Option<RemoteResponse> {
+        let host = remote_acp_control_host()?;
+        if !host.is_acp_session(session_id).await {
+            return None;
+        }
+        Some(acp_native_session_control_unsupported(
+            session_id,
+            command_name,
+        ))
+    }
+
+    async fn reject_native_tool_interaction_for_acp(
+        &self,
+        session_id: Option<&str>,
+        tool_id: &str,
+    ) -> Option<RemoteResponse> {
+        let host = remote_acp_control_host()?;
+        if let Some(session_id) = session_id {
+            if host.is_acp_session(session_id).await {
+                return Some(acp_native_tool_interaction_unsupported(
+                    Some(session_id),
+                    tool_id,
+                ));
+            }
+        }
+        if host.is_acp_permission_id(tool_id).await {
+            return Some(acp_native_tool_interaction_unsupported(session_id, tool_id));
+        }
+        None
     }
 
     fn legacy_image_contexts(&self, images: Option<&[ImageAttachment]>) -> Vec<Self::ImageContext> {
@@ -320,16 +559,33 @@ impl RemoteServer {
         &self,
         encrypted_data: &str,
         nonce: &str,
-    ) -> Result<(RemoteCommand, Option<String>)> {
+    ) -> Result<DecryptedRemoteEnvelope> {
         let json = encryption::decrypt_from_base64(&self.shared_secret, encrypted_data, nonce)?;
         let value: Value = serde_json::from_str(&json).map_err(|e| anyhow!("parse json: {e}"))?;
         let request_id = value
             .get("_request_id")
             .and_then(|v| v.as_str())
             .map(String::from);
-        let cmd: RemoteCommand =
-            serde_json::from_value(value).map_err(|e| anyhow!("parse command: {e}"))?;
-        Ok((cmd, request_id))
+        match parse_remote_command(value) {
+            Ok(command) => Ok(DecryptedRemoteEnvelope::Command {
+                command,
+                request_id,
+            }),
+            // Both structured rejections must reach the client as a *response*.
+            // Dropping `InvalidAcpParams` into the `Err` branch below would make
+            // the host answer nothing at all, and the phone's silence probe
+            // would then misreport a bad payload as "host too old".
+            Err(
+                error @ (RemoteCommandParseError::Unsupported { .. }
+                | RemoteCommandParseError::InvalidAcpParams { .. }),
+            ) => Ok(DecryptedRemoteEnvelope::Rejected {
+                response: error.into_remote_response(),
+                request_id,
+            }),
+            Err(RemoteCommandParseError::Invalid { message }) => {
+                Err(anyhow!("parse command: {message}"))
+            }
+        }
     }
 
     pub fn encrypt_response(
@@ -387,7 +643,13 @@ mod tests {
         });
         let json = cmd_json.to_string();
         let (enc, nonce) = encryption::encrypt_to_base64(&shared, &json).unwrap();
-        let (decoded, req_id) = bridge.decrypt_command(&enc, &nonce).unwrap();
+        let DecryptedRemoteEnvelope::Command {
+            command: decoded,
+            request_id: req_id,
+        } = bridge.decrypt_command(&enc, &nonce).unwrap()
+        else {
+            panic!("send_message should decrypt as a command");
+        };
 
         assert_eq!(req_id.as_deref(), Some("req_abc"));
         if let RemoteCommand::SendMessage {
@@ -400,6 +662,57 @@ mod tests {
             assert_eq!(content, "Hello from mobile!");
         } else {
             panic!("unexpected command variant");
+        }
+    }
+
+    /// Every structured rejection must come back as an answerable *response*
+    /// carrying the original `_request_id`. If a malformed ACP payload were
+    /// dropped into the transport-error branch instead, the host would go
+    /// silent, and the client's silence probe would then misdiagnose a bad
+    /// payload as "host predates the ACP command family".
+    #[test]
+    fn structured_acp_rejections_answer_instead_of_going_silent() {
+        let alice = KeyPair::generate();
+        let shared = alice.derive_shared_secret(&alice.public_key_bytes());
+        let bridge = RemoteServer::new(shared);
+
+        for (payload, expected_code) in [
+            (
+                // Known ACP command, `session_id` missing.
+                serde_json::json!({
+                    "cmd": "acp_get_plan",
+                    "_request_id": "req_bad_params"
+                }),
+                bitfun_services_integrations::remote_connect::INVALID_ACP_COMMAND_PARAMS,
+            ),
+            (
+                // Unknown future ACP command name.
+                serde_json::json!({
+                    "cmd": "acp_not_a_real_command",
+                    "_request_id": "req_bad_params"
+                }),
+                bitfun_services_integrations::remote_connect::UNSUPPORTED_REMOTE_CAPABILITY,
+            ),
+        ] {
+            let (enc, nonce) =
+                encryption::encrypt_to_base64(&shared, &payload.to_string()).unwrap();
+            let envelope = bridge
+                .decrypt_command(&enc, &nonce)
+                .expect("a structured rejection is not a transport failure");
+            let DecryptedRemoteEnvelope::Rejected {
+                response,
+                request_id,
+            } = envelope
+            else {
+                panic!("{payload} must be rejected, not accepted as a command");
+            };
+            assert_eq!(request_id.as_deref(), Some("req_bad_params"));
+            match response {
+                RemoteResponse::Error { code, .. } => {
+                    assert_eq!(code.as_deref(), Some(expected_code), "for {payload}")
+                }
+                other => panic!("expected a coded error for {payload}, got {other:?}"),
+            }
         }
     }
 
@@ -640,6 +953,7 @@ mod tests {
             total_msg_count: None,
             message_snapshot: None,
             active_turn: Some(active_turn),
+            acp_projection: None,
             model_catalog: Box::new(None),
         })
         .expect("serialize poll response");

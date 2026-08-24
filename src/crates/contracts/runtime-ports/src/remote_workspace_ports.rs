@@ -94,6 +94,43 @@ pub struct RemoteWorkspaceUpdate {
     pub remote_ssh_host: Option<String>,
 }
 
+/// Remote-visible session owner. This is not [`bitfun_core_types::SessionKind`]
+/// (Standard/Subagent); it distinguishes native Runtime sessions from
+/// externally projected ACP sessions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoteSessionKind {
+    /// Missing or unreadable on an old record. Never treat this as native.
+    #[default]
+    Unknown,
+    Native,
+    Acp,
+}
+
+impl RemoteSessionKind {
+    pub const fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Native => "native",
+            Self::Acp => "acp",
+        }
+    }
+
+    /// Classify a session we persist. ACP is tagged with `provider=acp`;
+    /// everything else we own is native. Missing *wire* `session_kind` still
+    /// deserializes as [`Self::Unknown`] via serde default.
+    pub fn from_persisted_provider(provider: Option<&str>) -> Self {
+        match provider {
+            Some("acp") => Self::Acp,
+            _ => Self::Native,
+        }
+    }
+}
+
+/// Capability id advertised on remote session metadata and negotiated in
+/// command/response, never by package version equality.
+pub const REMOTE_CAPABILITY_ACP_REMOTE_CONTROL: &str = "acp_remote_control";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteSessionMetadata {
@@ -103,6 +140,15 @@ pub struct RemoteSessionMetadata {
     pub created_at_ms: u64,
     pub last_active_at_ms: u64,
     pub turn_count: usize,
+    /// Absent on old records; defaults to [`RemoteSessionKind::Unknown`].
+    #[serde(default, skip_serializing_if = "is_unknown_remote_session_kind")]
+    pub session_kind: RemoteSessionKind,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+}
+
+fn is_unknown_remote_session_kind(kind: &RemoteSessionKind) -> bool {
+    matches!(kind, RemoteSessionKind::Unknown)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,6 +251,8 @@ mod tests {
             created_at_ms: 10,
             last_active_at_ms: 20,
             turn_count: 3,
+            session_kind: RemoteSessionKind::Native,
+            capabilities: Vec::new(),
         };
 
         assert_eq!(workspace.kind.as_wire_str(), "remote");
@@ -212,6 +260,30 @@ mod tests {
         assert_eq!(workspace.remote_connection_id.as_deref(), Some("conn-1"));
         assert_eq!(workspace.remote_ssh_host.as_deref(), Some("host-1"));
         assert_eq!(session.turn_count, 3);
+        assert_eq!(session.session_kind, RemoteSessionKind::Native);
+    }
+
+    #[test]
+    fn remote_session_kind_defaults_to_unknown_on_legacy_payloads() {
+        let session: RemoteSessionMetadata = serde_json::from_value(serde_json::json!({
+            "sessionId": "legacy",
+            "name": "old",
+            "agentType": "agentic",
+            "createdAtMs": 1,
+            "lastActiveAtMs": 2,
+            "turnCount": 0
+        }))
+        .expect("legacy session metadata should deserialize");
+        assert_eq!(session.session_kind, RemoteSessionKind::Unknown);
+        assert!(session.capabilities.is_empty());
+        assert_eq!(
+            RemoteSessionKind::from_persisted_provider(Some("acp")),
+            RemoteSessionKind::Acp
+        );
+        assert_eq!(
+            RemoteSessionKind::from_persisted_provider(None),
+            RemoteSessionKind::Native
+        );
     }
 
     #[test]

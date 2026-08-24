@@ -406,7 +406,9 @@ fn event_turn_id(event: &AgenticEvent) -> Option<&str> {
         | AgenticEvent::ThinkingChunk { turn_id, .. }
         | AgenticEvent::ToolEvent { turn_id, .. }
         | AgenticEvent::DeepReviewQueueStateChanged { turn_id, .. }
-        | AgenticEvent::UserSteeringInjected { turn_id, .. } => Some(turn_id),
+        | AgenticEvent::UserSteeringInjected { turn_id, .. }
+        | AgenticEvent::AcpContextUsageUpdated { turn_id, .. }
+        | AgenticEvent::AcpPlanUpdated { turn_id, .. } => Some(turn_id),
         AgenticEvent::SubagentSessionLinked {
             subagent_dialog_turn_id,
             ..

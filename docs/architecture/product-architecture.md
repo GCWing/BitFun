@@ -31,6 +31,9 @@ Cargo feature、第三方依赖 owner、测试目标和本地/CI 验证分工见
 
 本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
+ACP Client 与 Runtime 事件投递、远程控制及 HarmonyOS 演进的分阶段设计见
+[ACP Client、Runtime 事件总线与移动端支持设计](acp-client-runtime-event-integration-design.md)。
+
 ## 1. 架构目标
 
 BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和插件生态。架构目标是降低后端实现高频变更对稳定接口的影响，同时保持插件生态和 OpenCode-compatible 能力可以按受控路径扩展。

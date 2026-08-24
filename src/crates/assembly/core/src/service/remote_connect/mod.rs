@@ -58,7 +58,37 @@ pub use pairing::{PairingProtocol, PairingState};
 pub use qr_generator::QrGenerator;
 pub use relay_client::ensure_rustls_crypto_provider;
 pub use relay_client::RelayClient;
-pub use remote_server::RemoteServer;
+pub use remote_server::{
+    clear_remote_acp_control_session, remote_acp_control_host_installed,
+    set_remote_acp_control_host, RemoteServer,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedRemoteSessionWorkspaceScope {
+    pub workspace_path: String,
+    pub session_storage_path: std::path::PathBuf,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+/// Resolve the complete workspace scope for a remote-controlled session.
+#[cfg(feature = "remote-connect")]
+pub async fn resolve_remote_session_workspace_scope(
+    session_id: &str,
+) -> Option<ResolvedRemoteSessionWorkspaceScope> {
+    crate::service_agent_runtime::CoreServiceAgentRuntime::resolve_session_workspace_scope(
+        session_id,
+    )
+    .await
+}
+
+/// Resolve the on-disk session storage directory for a remote-controlled session.
+#[cfg(feature = "remote-connect")]
+pub async fn resolve_remote_session_storage_dir(session_id: &str) -> Option<std::path::PathBuf> {
+    resolve_remote_session_workspace_scope(session_id)
+        .await
+        .map(|scope| scope.session_storage_path)
+}
 
 use anyhow::Result;
 use bitfun_services_integrations::remote_connect::upload_mobile_web_to_relay;
@@ -345,6 +375,7 @@ impl AuthorizedCredentialResolution {
         Self {
             response: remote_server::RemoteResponse::Error {
                 message: message.into(),
+                code: None,
             },
             _host_lease: None,
         }
@@ -796,9 +827,13 @@ impl RemoteConnectService {
         message: String,
     ) {
         let server = RemoteServer::new(*shared_secret);
-        if let Ok((enc, nonce)) =
-            server.encrypt_response(&remote_server::RemoteResponse::Error { message }, None)
-        {
+        if let Ok((enc, nonce)) = server.encrypt_response(
+            &remote_server::RemoteResponse::Error {
+                message,
+                code: None,
+            },
+            None,
+        ) {
             if let Some(ref client) = *relay_arc.read().await {
                 let _ = client
                     .send_relay_response(correlation_id, &enc, &nonce)
@@ -1100,7 +1135,33 @@ impl RemoteConnectService {
                             let server_guard = server_arc.read().await;
                             if let Some(ref server) = *server_guard {
                                 match server.decrypt_command(&encrypted_data, &nonce) {
-                                    Ok((cmd, request_id)) => {
+                                    Ok(remote_server::DecryptedRemoteEnvelope::Rejected {
+                                        response,
+                                        request_id,
+                                    }) => {
+                                        handled_as_active_command = true;
+                                        match server.encrypt_response(&response, request_id.as_deref())
+                                        {
+                                            Ok((enc, resp_nonce)) => {
+                                                if let Some(ref client) = *relay_arc.read().await {
+                                                    let _ = client
+                                                        .send_relay_response(
+                                                            &correlation_id,
+                                                            &enc,
+                                                            &resp_nonce,
+                                                        )
+                                                        .await;
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error!("Failed to encrypt unsupported response: {e}");
+                                            }
+                                        }
+                                    }
+                                    Ok(remote_server::DecryptedRemoteEnvelope::Command {
+                                        command: cmd,
+                                        request_id,
+                                    }) => {
                                         handled_as_active_command = true;
                                         debug!("Remote command decrypted");
                                         // Account-credential commands are answered
@@ -2435,7 +2496,7 @@ mod tests {
         .await;
         assert!(matches!(
             response.response,
-            remote_server::RemoteResponse::Error { message }
+            remote_server::RemoteResponse::Error { message, code: None }
                 if message.contains("no longer matches")
         ));
     }
@@ -2696,7 +2757,10 @@ mod tests {
         match response.response {
             // The person is standing there watching a watch spin; a generic
             // failure would send them to the wrong fix.
-            remote_server::RemoteResponse::Error { message } => {
+            remote_server::RemoteResponse::Error {
+                message,
+                code: None,
+            } => {
                 assert!(message.contains("relay rejected the request"), "{message}");
             }
             other => panic!("expected the relay reason to survive, got {other:?}"),

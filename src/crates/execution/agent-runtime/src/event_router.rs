@@ -12,6 +12,12 @@ use std::sync::Arc;
 #[async_trait::async_trait]
 pub trait EventSubscriber: Send + Sync + 'static {
     async fn on_event(&self, event: &AgenticEvent) -> EventSubscriberResult;
+
+    /// Default forwards to [`Self::on_event`]. Override only when origin
+    /// isolation is required (for example Cron).
+    async fn on_envelope(&self, envelope: &EventEnvelope) -> EventSubscriberResult {
+        self.on_event(&envelope.event).await
+    }
 }
 
 /// Event router
@@ -35,8 +41,6 @@ impl EventRouter {
     ///
     /// Note: frontend events are sent directly using lib.rs:emit_to_frontend(), not through this router
     pub async fn route(&self, envelope: EventEnvelope) -> EventBusResult<()> {
-        let event = &envelope.event;
-
         // First collect subscribers list (avoid holding DashMap iterator across await points)
         let subscribers: Vec<(String, Arc<dyn EventSubscriber>)> = self
             .internal_subscribers
@@ -58,7 +62,7 @@ impl EventRouter {
 
         // Send to all internal subscribers
         for (subscriber_id, subscriber) in subscribers {
-            if let Err(e) = subscriber.on_event(event).await {
+            if let Err(e) = subscriber.on_envelope(&envelope).await {
                 warn!(
                     "Internal subscriber {} failed to process event: {}",
                     subscriber_id, e
@@ -79,9 +83,8 @@ impl EventRouter {
             .collect();
 
         for envelope in envelopes {
-            let event = &envelope.event;
             for (subscriber_id, subscriber) in &subscribers {
-                if let Err(e) = subscriber.on_event(event).await {
+                if let Err(e) = subscriber.on_envelope(&envelope).await {
                     warn!(
                         "Internal subscriber {} failed to process event: {}",
                         subscriber_id, e
@@ -117,5 +120,78 @@ impl EventRouter {
 impl Default for EventRouter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EventRouter, EventSubscriber};
+    use crate::event_bus::EventSubscriberResult;
+    use bitfun_events::{
+        AgenticEvent, AgenticEventEnvelope, AgenticEventOrigin, AgenticEventPriority,
+    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct RecordingSubscriber {
+        events: AtomicUsize,
+        external_envelopes: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl EventSubscriber for RecordingSubscriber {
+        async fn on_event(&self, _event: &AgenticEvent) -> EventSubscriberResult {
+            self.events.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn on_envelope(&self, envelope: &AgenticEventEnvelope) -> EventSubscriberResult {
+            if envelope.origin == AgenticEventOrigin::ExternalAcp {
+                self.external_envelopes.fetch_add(1, Ordering::SeqCst);
+            }
+            self.on_event(&envelope.event).await
+        }
+    }
+
+    struct DefaultForwardSubscriber {
+        events: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl EventSubscriber for DefaultForwardSubscriber {
+        async fn on_event(&self, _event: &AgenticEvent) -> EventSubscriberResult {
+            self.events.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn route_delivers_external_origin_to_envelope_override() {
+        let router = EventRouter::new();
+        let recording = Arc::new(RecordingSubscriber {
+            events: AtomicUsize::new(0),
+            external_envelopes: AtomicUsize::new(0),
+        });
+        let forwarding = Arc::new(DefaultForwardSubscriber {
+            events: AtomicUsize::new(0),
+        });
+        router.subscribe_internal("recording".to_string(), recording.clone());
+        router.subscribe_internal("forwarding".to_string(), forwarding.clone());
+
+        router
+            .route(AgenticEventEnvelope::new_with_origin(
+                AgenticEvent::SessionStateChanged {
+                    session_id: "session-1".to_string(),
+                    new_state: "idle".to_string(),
+                },
+                AgenticEventPriority::High,
+                AgenticEventOrigin::ExternalAcp,
+            ))
+            .await
+            .expect("route");
+
+        assert_eq!(recording.events.load(Ordering::SeqCst), 1);
+        assert_eq!(recording.external_envelopes.load(Ordering::SeqCst), 1);
+        assert_eq!(forwarding.events.load(Ordering::SeqCst), 1);
     }
 }

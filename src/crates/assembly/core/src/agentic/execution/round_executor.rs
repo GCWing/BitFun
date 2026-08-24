@@ -355,8 +355,11 @@ impl RoundExecutor {
                     round_id: round_id.clone(),
                     round_group_id: context.round_group_id.clone(),
                     round_index: context.round_number,
-                    model_config_id: context.model_config_id.clone(),
-                    effective_model_name: context.effective_model_name.clone(),
+                    identity: bitfun_events::ModelRoundIdentity::Native {
+                        model_config_id: context.model_config_id.clone(),
+                        effective_model_name: context.effective_model_name.clone(),
+                    },
+                    render_hints: None,
                 },
                 EventPriority::High,
             )

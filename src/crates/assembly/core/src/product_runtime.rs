@@ -3745,6 +3745,19 @@ mod tests {
                 .len(),
             1
         );
+        assert!(
+            compatibility
+                .is_externally_projected_session(&storage_path, acp_session_id)
+                .await
+                .expect("projected kind"),
+            "persisting an ACP turn must not rewrite the session into a native Runtime session"
+        );
+        assert!(
+            !compatibility
+                .is_session_loaded_in_memory(acp_session_id)
+                .expect("memory occupancy"),
+            "ACP durable projection must not load the session into SessionManager"
+        );
 
         let runtime_session_id = "runtime-owned";
         persistence

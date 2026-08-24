@@ -767,6 +767,67 @@ mod tests {
     }
 
     #[test]
+    fn acp_shaped_text_chunks_with_empty_attempt_fields_share_one_key() {
+        // ACP stream mapping leaves attempt_id/attempt_index as None. The
+        // coalescer must normalize both to the same "none" token so one round
+        // stays one stream. If this fallback ever becomes a uuid or round_id,
+        // ACP streaming text silently fragments into one event per chunk.
+        let mut coalescer = TextChunkCoalescer::new();
+        assert_eq!(resolve_attempt_token(&None, None), "none");
+        assert!(coalescer
+            .push(text_chunk(
+                "acp-session",
+                "turn-1",
+                "round-1",
+                None,
+                None,
+                "Hel"
+            ))
+            .is_empty());
+        assert!(coalescer
+            .push(text_chunk(
+                "acp-session",
+                "turn-1",
+                "round-1",
+                None,
+                None,
+                "lo "
+            ))
+            .is_empty());
+        assert!(coalescer
+            .push(text_chunk(
+                "acp-session",
+                "turn-1",
+                "round-1",
+                None,
+                None,
+                "ACP"
+            ))
+            .is_empty());
+
+        let events = coalescer.flush();
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            AgenticEvent::TextChunk {
+                session_id,
+                turn_id,
+                round_id,
+                attempt_id,
+                attempt_index,
+                text,
+            } => {
+                assert_eq!(session_id, "acp-session");
+                assert_eq!(turn_id, "turn-1");
+                assert_eq!(round_id, "round-1");
+                assert!(attempt_id.is_none());
+                assert!(attempt_index.is_none());
+                assert_eq!(text, "Hello ACP");
+            }
+            other => panic!("expected merged ACP TextChunk, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn rate_ema_resets_after_long_idle_gap() {
         // A window longer than the reset threshold must replace the estimate
         // with the instant rate. Use a previous estimate that differs from the

@@ -21,11 +21,152 @@ use std::sync::{Arc, OnceLock};
 pub use super::locale::{current_bot_language, BotLanguage};
 use super::locale::{fmt_count, strings_for, BotStrings};
 use super::menu::{MenuItem, MenuView};
+use bitfun_core_types::SESSION_PROVIDER_METADATA_KEY;
+use bitfun_services_core::session::SessionMetadata;
 pub use bitfun_services_integrations::remote_connect::bot::{
-    parse_command, BotAction, BotActionStyle, BotChatState, BotCommand, BotDisplayMode,
-    BotInteractionHandler, BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption,
-    BotWorkspaceChoice, BotWorkspaceRef, PendingAction, RemoteDeviceTarget,
+    is_acp_session_provider, parse_command, remote_rpc_error_message, remote_session_json_is_acp,
+    BotAction, BotActionStyle, BotChatState, BotCommand, BotDisplayMode, BotInteractionHandler,
+    BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption, BotWorkspaceChoice,
+    BotWorkspaceRef, PendingAction, RemoteDeviceTarget,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BotResumeWorkspaceError {
+    NeedWorkspace,
+    NeedAssistant,
+}
+
+/// Workspace used for local bot resume / ACP guards.
+///
+/// Must follow `display_mode`: Pro → `current_workspace`, Assistant →
+/// `current_assistant`. Do not prefer a leftover Pro workspace while in
+/// Assistant mode.
+fn resolve_bot_resume_workspace(
+    state: &BotChatState,
+) -> Result<BotWorkspaceRef, BotResumeWorkspaceError> {
+    if state.display_mode == BotDisplayMode::Pro {
+        state
+            .current_workspace
+            .clone()
+            .ok_or(BotResumeWorkspaceError::NeedWorkspace)
+    } else {
+        state
+            .current_assistant
+            .as_ref()
+            .map(|path| BotWorkspaceRef::local(path.clone()))
+            .ok_or(BotResumeWorkspaceError::NeedAssistant)
+    }
+}
+
+fn session_metadata_is_acp(metadata: &SessionMetadata) -> bool {
+    is_acp_session_provider(
+        metadata
+            .custom_metadata
+            .as_ref()
+            .and_then(|custom| custom.get(SESSION_PROVIDER_METADATA_KEY))
+            .and_then(Value::as_str),
+    )
+}
+
+/// Fail-closed ACP classification for a local metadata load.
+///
+/// `Ok(Some(meta))` uses provider; anything else (missing workspace, IO error,
+/// missing metadata) is treated as ACP so the session cannot enter the native
+/// send path by accident.
+fn classify_loaded_session_as_acp(load: Result<Option<&SessionMetadata>, ()>) -> bool {
+    match load {
+        Ok(Some(metadata)) => session_metadata_is_acp(metadata),
+        _ => true,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum FilteredRemoteResumePage {
+    Entries {
+        sessions: Vec<Value>,
+        has_more: bool,
+    },
+    /// Server page had rows, but all were ACP and more pages remain.
+    SkipToNextPage,
+    NoSessions,
+}
+
+fn filtered_remote_resume_page(
+    raw_sessions: Vec<Value>,
+    has_more: bool,
+) -> FilteredRemoteResumePage {
+    let sessions: Vec<Value> = raw_sessions
+        .into_iter()
+        .filter(|sess| !remote_session_json_is_acp(sess))
+        .collect();
+    if sessions.is_empty() {
+        if has_more {
+            FilteredRemoteResumePage::SkipToNextPage
+        } else {
+            FilteredRemoteResumePage::NoSessions
+        }
+    } else {
+        FilteredRemoteResumePage::Entries { sessions, has_more }
+    }
+}
+
+/// Remote chat send: treat `RemoteResponse::Error` as failure, never as success.
+fn decide_remote_chat_send_result(resp_json: &str) -> Result<(), String> {
+    match remote_rpc_error_message(resp_json) {
+        Some(message) => Err(message),
+        None => Ok(()),
+    }
+}
+
+fn acp_session_unsupported_view(s: &'static BotStrings) -> MenuView {
+    MenuView::plain(s.acp_session_unsupported)
+        .with_items(vec![MenuItem::default(s.item_back, "/menu")])
+}
+
+/// Max consecutive ACP-only remote pages that `/resume` may auto-skip in one
+/// request. Each skip is a full relay round-trip; keep this small and hand
+/// paging back to the user when the budget is exhausted.
+const REMOTE_RESUME_ACP_SKIP_LIMIT: usize = 5;
+
+/// Whether another automatic ACP-only page skip is allowed.
+///
+/// `consecutive_skips_so_far` counts ACP-only pages already fetched in this
+/// `/resume` chain (0 on the first page). Returning false means hand paging
+/// back to the user instead of issuing another relay RPC.
+fn may_auto_skip_another_acp_page(consecutive_skips_so_far: usize) -> bool {
+    consecutive_skips_so_far + 1 < REMOTE_RESUME_ACP_SKIP_LIMIT
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test-only override for `local_session_is_acp` so UX regressions that need
+    /// a forward path can force a known native session without spinning up disk.
+    static LOCAL_ACP_GUARD_OVERRIDE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+async fn local_session_is_acp(workspace: &BotWorkspaceRef, session_id: &str) -> bool {
+    #[cfg(test)]
+    if let Some(forced) = LOCAL_ACP_GUARD_OVERRIDE.with(|cell| cell.get()) {
+        let _ = (workspace, session_id);
+        return forced;
+    }
+
+    let Some(storage_path) = resolve_bot_session_storage_path_for_ref(workspace).await else {
+        return classify_loaded_session_as_acp(Err(()));
+    };
+    let Ok(pm) = crate::infrastructure::PathManager::new() else {
+        return classify_loaded_session_as_acp(Err(()));
+    };
+    let Ok(store) = crate::agentic::persistence::PersistenceManager::new(std::sync::Arc::new(pm))
+    else {
+        return classify_loaded_session_as_acp(Err(()));
+    };
+    match store.load_session_metadata(&storage_path, session_id).await {
+        Ok(Some(metadata)) => classify_loaded_session_as_acp(Ok(Some(&metadata))),
+        Ok(None) => classify_loaded_session_as_acp(Ok(None)),
+        Err(_) => classify_loaded_session_as_acp(Err(())),
+    }
+}
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -1496,6 +1637,46 @@ async fn start_resume(
     page: usize,
     s: &'static BotStrings,
 ) -> HandleResult {
+    Box::pin(start_resume_inner(state, page, 0, s)).await
+}
+
+fn remote_resume_acp_skip_handoff(
+    state: &mut BotChatState,
+    page: usize,
+    s: &'static BotStrings,
+) -> HandleResult {
+    state.set_pending(PendingAction::SelectSession {
+        options: Vec::new(),
+        page,
+        has_more: true,
+    });
+    let items = vec![
+        MenuItem::default(s.item_next_page, "0"),
+        MenuItem::default(s.item_back, "/menu"),
+    ];
+    let title = if let Some(dev) = state.active_remote_device.as_ref() {
+        format!(
+            "{} · {} · #{}",
+            s.resume_page_label,
+            dev.device_name,
+            page + 1
+        )
+    } else {
+        format!("{} · #{}", s.resume_page_label, page + 1)
+    };
+    let view = MenuView::plain(title)
+        .with_body(s.resume_acp_only_pages_hint.to_string())
+        .with_items(items)
+        .with_footer(s.footer_reply_session_or_next);
+    result_from_menu(state, view)
+}
+
+async fn start_resume_inner(
+    state: &mut BotChatState,
+    page: usize,
+    consecutive_acp_skips: usize,
+    s: &'static BotStrings,
+) -> HandleResult {
     // ── Remote device branch ──
     if state.active_remote_device.is_some() {
         let workspace = match query_remote_device_workspace(state).await {
@@ -1539,7 +1720,7 @@ async fn start_resume(
                             .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
                     );
                 }
-                let sessions = val
+                let raw_sessions = val
                     .get("sessions")
                     .and_then(|v| v.as_array())
                     .cloned()
@@ -1548,9 +1729,27 @@ async fn start_resume(
                     .get("has_more")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                if sessions.is_empty() {
-                    return result_from_menu(state, need_session_view(state, s));
-                }
+                let (sessions, has_more) = match filtered_remote_resume_page(raw_sessions, has_more)
+                {
+                    FilteredRemoteResumePage::SkipToNextPage => {
+                        if !may_auto_skip_another_acp_page(consecutive_acp_skips) {
+                            return remote_resume_acp_skip_handoff(state, page, s);
+                        }
+                        return Box::pin(start_resume_inner(
+                            state,
+                            page + 1,
+                            consecutive_acp_skips + 1,
+                            s,
+                        ))
+                        .await;
+                    }
+                    FilteredRemoteResumePage::NoSessions => {
+                        return result_from_menu(state, need_session_view(state, s));
+                    }
+                    FilteredRemoteResumePage::Entries { sessions, has_more } => {
+                        (sessions, has_more)
+                    }
+                };
                 let mut options: Vec<(String, String)> = Vec::new();
                 let mut body = String::new();
                 let mut items = Vec::new();
@@ -1629,34 +1828,29 @@ async fn start_resume(
     }
 
     // ── Local branch (original logic) ──
+    let _ = consecutive_acp_skips;
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::PathManager;
 
-    let workspace_ref = if state.display_mode == BotDisplayMode::Pro {
-        match state.current_workspace.clone() {
-            Some(workspace) => workspace,
-            None => {
-                return result_from_menu(
-                    state,
-                    MenuView::plain(s.no_workspace).with_items(vec![
-                        MenuItem::primary(s.item_switch_workspace, "/switch"),
-                        MenuItem::default(s.item_back, "/menu"),
-                    ]),
-                );
-            }
+    let workspace_ref = match resolve_bot_resume_workspace(state) {
+        Ok(workspace) => workspace,
+        Err(BotResumeWorkspaceError::NeedWorkspace) => {
+            return result_from_menu(
+                state,
+                MenuView::plain(s.no_workspace).with_items(vec![
+                    MenuItem::primary(s.item_switch_workspace, "/switch"),
+                    MenuItem::default(s.item_back, "/menu"),
+                ]),
+            );
         }
-    } else {
-        match &state.current_assistant {
-            Some(p) => BotWorkspaceRef::local(p.clone()),
-            None => {
-                return result_from_menu(
-                    state,
-                    MenuView::plain(s.no_assistant).with_items(vec![
-                        MenuItem::primary(s.item_switch_assistant, "/switch"),
-                        MenuItem::default(s.item_back, "/menu"),
-                    ]),
-                );
-            }
+        Err(BotResumeWorkspaceError::NeedAssistant) => {
+            return result_from_menu(
+                state,
+                MenuView::plain(s.no_assistant).with_items(vec![
+                    MenuItem::primary(s.item_switch_assistant, "/switch"),
+                    MenuItem::default(s.item_back, "/menu"),
+                ]),
+            );
         }
     };
 
@@ -1693,7 +1887,10 @@ async fn start_resume(
         }
     };
     let all_meta = match store.list_session_metadata(&storage_path).await {
-        Ok(m) => m,
+        Ok(m) => m
+            .into_iter()
+            .filter(|sess| !session_metadata_is_acp(sess))
+            .collect::<Vec<_>>(),
         Err(e) => {
             return result_from_menu(
                 state,
@@ -1768,11 +1965,41 @@ async fn select_session(
     session_name: &str,
     s: &'static BotStrings,
 ) -> HandleResult {
+    let resume_workspace = if state.active_remote_device.is_none() {
+        match resolve_bot_resume_workspace(state) {
+            Ok(workspace) => {
+                if local_session_is_acp(&workspace, session_id).await {
+                    return result_from_menu(state, acp_session_unsupported_view(s));
+                }
+                Some(workspace)
+            }
+            Err(BotResumeWorkspaceError::NeedWorkspace) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(s.no_workspace).with_items(vec![
+                        MenuItem::primary(s.item_switch_workspace, "/switch"),
+                        MenuItem::default(s.item_back, "/menu"),
+                    ]),
+                );
+            }
+            Err(BotResumeWorkspaceError::NeedAssistant) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(s.no_assistant).with_items(vec![
+                        MenuItem::primary(s.item_switch_assistant, "/switch"),
+                        MenuItem::default(s.item_back, "/menu"),
+                    ]),
+                );
+            }
+        }
+    } else {
+        None
+    };
+
     state.current_session_id = Some(session_id.to_string());
     info!("Bot resumed session: {session_id}");
 
-    let last_pair =
-        load_last_dialog_pair_from_turns(state.current_workspace.as_ref(), session_id).await;
+    let last_pair = load_last_dialog_pair_from_turns(resume_workspace.as_ref(), session_id).await;
     let mut body = format!("{}{}\n", s.resume_resumed_prefix, session_name);
     if let Some((user_text, ai_text)) = last_pair {
         body.push('\n');
@@ -2687,7 +2914,14 @@ async fn handle_chat(
         });
         let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
         match exec_remote_rpc(state, &cmd_json).await {
-            Ok(_resp) => {
+            Ok(resp) => {
+                if let Err(message) = decide_remote_chat_send_result(&resp) {
+                    return result_from_menu(
+                        state,
+                        MenuView::plain(format!("{}{message}", s.devices_send_failed_prefix))
+                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                    );
+                }
                 // The response contains {resp: "message_sent", session_id, turn_id}.
                 // For now, show a brief confirmation. A future improvement could
                 // poll for the agent's reply and stream it back.
@@ -2708,20 +2942,35 @@ async fn handle_chat(
     } else {
         // ── Local branch (original logic) ──
 
-        if state.display_mode == BotDisplayMode::Pro && state.current_workspace.is_none() {
-            return result_from_menu(
-                state,
-                MenuView::plain(s.no_workspace).with_items(vec![
-                    MenuItem::primary(s.item_switch_workspace, "/switch"),
-                    MenuItem::default(s.item_back, "/menu"),
-                ]),
-            );
-        }
         if state.current_session_id.is_none() {
             return result_from_menu(state, need_session_view(state, s));
         }
 
         let session_id = state.current_session_id.clone().unwrap();
+        let workspace = match resolve_bot_resume_workspace(state) {
+            Ok(workspace) => workspace,
+            Err(BotResumeWorkspaceError::NeedWorkspace) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(s.no_workspace).with_items(vec![
+                        MenuItem::primary(s.item_switch_workspace, "/switch"),
+                        MenuItem::default(s.item_back, "/menu"),
+                    ]),
+                );
+            }
+            Err(BotResumeWorkspaceError::NeedAssistant) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(s.no_assistant).with_items(vec![
+                        MenuItem::primary(s.item_switch_assistant, "/switch"),
+                        MenuItem::default(s.item_back, "/menu"),
+                    ]),
+                );
+            }
+        };
+        if local_session_is_acp(&workspace, &session_id).await {
+            return result_from_menu(state, acp_session_unsupported_view(s));
+        }
         let turn_id = format!("turn_{}", uuid::Uuid::new_v4());
 
         // Pick the agent type from the actual session — NOT a hardcoded
@@ -3365,7 +3614,9 @@ mod handle_chat_tests {
         state.current_assistant = Some("/tmp/a".into());
         state.current_session_id = Some("s1".into());
         let s = strings_for(BotLanguage::ZhCN);
+        LOCAL_ACP_GUARD_OVERRIDE.with(|cell| cell.set(Some(false)));
         let result = handle_chat(&mut state, "hello bitfun", vec![], s).await;
+        LOCAL_ACP_GUARD_OVERRIDE.with(|cell| cell.set(None));
 
         assert!(
             result.forward_to_session.is_some(),
@@ -3389,5 +3640,177 @@ mod handle_chat_tests {
             "cancel-task button must not be sent: {}",
             result.reply
         );
+    }
+}
+
+#[cfg(test)]
+mod acp_wiring_tests {
+    use super::*;
+    use bitfun_core_types::{SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
+    use serde_json::json;
+
+    fn meta_with_provider(provider: Option<&str>) -> SessionMetadata {
+        let mut metadata = SessionMetadata::new(
+            "s1".to_string(),
+            "n".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+        if let Some(provider) = provider {
+            metadata.custom_metadata = Some(json!({ SESSION_PROVIDER_METADATA_KEY: provider }));
+        }
+        metadata
+    }
+
+    #[test]
+    fn resume_workspace_follows_display_mode_not_leftover_pro_workspace() {
+        let mut state = BotChatState::new("c".into());
+        state.display_mode = BotDisplayMode::Assistant;
+        state.current_workspace = Some(BotWorkspaceRef::local("/tmp/stale-pro"));
+        state.current_assistant = Some("/tmp/assistant".into());
+
+        let resolved = resolve_bot_resume_workspace(&state).expect("assistant workspace");
+        assert_eq!(resolved.path, "/tmp/assistant");
+
+        state.display_mode = BotDisplayMode::Pro;
+        let resolved = resolve_bot_resume_workspace(&state).expect("pro workspace");
+        assert_eq!(resolved.path, "/tmp/stale-pro");
+    }
+
+    #[test]
+    fn resume_workspace_errors_match_mode_requirements() {
+        let mut state = BotChatState::new("c".into());
+        state.display_mode = BotDisplayMode::Pro;
+        assert_eq!(
+            resolve_bot_resume_workspace(&state),
+            Err(BotResumeWorkspaceError::NeedWorkspace)
+        );
+
+        state.display_mode = BotDisplayMode::Assistant;
+        assert_eq!(
+            resolve_bot_resume_workspace(&state),
+            Err(BotResumeWorkspaceError::NeedAssistant)
+        );
+    }
+
+    #[test]
+    fn local_acp_classification_is_fail_closed() {
+        let acp = meta_with_provider(Some(SESSION_PROVIDER_ACP));
+        let native = meta_with_provider(None);
+        assert!(classify_loaded_session_as_acp(Ok(Some(&acp))));
+        assert!(!classify_loaded_session_as_acp(Ok(Some(&native))));
+        assert!(
+            classify_loaded_session_as_acp(Ok(None)),
+            "missing metadata must not open the native send path"
+        );
+        assert!(
+            classify_loaded_session_as_acp(Err(())),
+            "load errors must not open the native send path"
+        );
+    }
+
+    #[test]
+    fn remote_acp_auto_skip_budget_is_consecutive_not_absolute_page() {
+        assert!(may_auto_skip_another_acp_page(0));
+        assert!(may_auto_skip_another_acp_page(
+            REMOTE_RESUME_ACP_SKIP_LIMIT - 2
+        ));
+        assert!(
+            !may_auto_skip_another_acp_page(REMOTE_RESUME_ACP_SKIP_LIMIT - 1),
+            "the Nth consecutive ACP-only page must hand paging back to the user"
+        );
+        // Absolute high page numbers are irrelevant — only consecutive skips count.
+        assert!(
+            may_auto_skip_another_acp_page(0),
+            "a fresh /resume chain (including after user replies 0) resets the budget"
+        );
+    }
+
+    #[tokio::test]
+    async fn select_session_requires_display_mode_workspace_before_setting_current() {
+        let s = strings_for(BotLanguage::ZhCN);
+        let mut state = BotChatState::new("c".into());
+        state.display_mode = BotDisplayMode::Assistant;
+        state.current_workspace = Some(BotWorkspaceRef::local("/tmp/stale-pro"));
+        // Assistant mode without current_assistant must not select.
+        let result = select_session(&mut state, "s1", "name", s).await;
+        assert!(state.current_session_id.is_none());
+        assert!(result.reply.contains(s.no_assistant));
+
+        state.current_assistant = Some("/tmp/assistant".into());
+        LOCAL_ACP_GUARD_OVERRIDE.with(|cell| cell.set(Some(false)));
+        let result = select_session(&mut state, "s1", "name", s).await;
+        LOCAL_ACP_GUARD_OVERRIDE.with(|cell| cell.set(None));
+        assert_eq!(state.current_session_id.as_deref(), Some("s1"));
+        assert!(result.reply.contains(s.resume_resumed_prefix));
+    }
+
+    #[test]
+    fn remote_resume_page_all_acp_with_more_skips_instead_of_dead_end() {
+        let page = filtered_remote_resume_page(
+            vec![
+                json!({"session_id": "a", "session_kind": "acp"}),
+                json!({"session_id": "b", "session_kind": "acp"}),
+            ],
+            true,
+        );
+        assert_eq!(page, FilteredRemoteResumePage::SkipToNextPage);
+    }
+
+    #[test]
+    fn remote_resume_page_all_acp_without_more_is_empty() {
+        let page = filtered_remote_resume_page(
+            vec![json!({"session_id": "a", "session_kind": "acp"})],
+            false,
+        );
+        assert_eq!(page, FilteredRemoteResumePage::NoSessions);
+    }
+
+    #[test]
+    fn remote_resume_page_keeps_native_and_has_more() {
+        let page = filtered_remote_resume_page(
+            vec![
+                json!({"session_id": "a", "session_kind": "acp"}),
+                json!({"session_id": "n", "session_kind": "native", "name": "ok"}),
+            ],
+            true,
+        );
+        match page {
+            FilteredRemoteResumePage::Entries { sessions, has_more } => {
+                assert_eq!(sessions.len(), 1);
+                assert_eq!(sessions[0]["session_id"], "n");
+                assert!(has_more);
+            }
+            other => panic!("expected entries, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn remote_chat_send_treats_error_resp_as_failure() {
+        assert_eq!(
+            decide_remote_chat_send_result(
+                r#"{"resp":"error","message":"ACP session requires ACP control capability"}"#
+            ),
+            Err("ACP session requires ACP control capability".to_string())
+        );
+        assert_eq!(
+            decide_remote_chat_send_result(r#"{"resp":"message_sent","turn_id":"t1"}"#),
+            Ok(())
+        );
+    }
+
+    #[tokio::test]
+    async fn handle_chat_blocks_when_local_acp_guard_says_acp() {
+        let mut state = BotChatState::new("peer".into());
+        state.paired = true;
+        state.current_assistant = Some("/tmp/a".into());
+        state.current_session_id = Some("acp-s1".into());
+        let s = strings_for(BotLanguage::ZhCN);
+        LOCAL_ACP_GUARD_OVERRIDE.with(|cell| cell.set(Some(true)));
+        let result = handle_chat(&mut state, "hello", vec![], s).await;
+        LOCAL_ACP_GUARD_OVERRIDE.with(|cell| cell.set(None));
+
+        assert!(result.forward_to_session.is_none());
+        assert!(result.reply.contains(s.acp_session_unsupported));
     }
 }

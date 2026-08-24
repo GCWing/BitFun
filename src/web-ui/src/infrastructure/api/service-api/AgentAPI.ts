@@ -738,6 +738,15 @@ export interface ModelRoundStartedEvent extends AgenticEvent {
   modelConfigId?: string;
   /** Provider model name sent on the request. */
   effectiveModelName?: string;
+  externalModel?: {
+    provider: string;
+    clientId: string;
+    modelId?: string;
+    displayName?: string;
+  };
+  renderHints?: {
+    disableExploreGrouping?: boolean;
+  };
 }
 
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {

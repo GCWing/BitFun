@@ -13,9 +13,11 @@ pub mod speech;
 pub mod types;
 
 pub use agentic::{
-    AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, DeepReviewQueueReason,
-    DeepReviewQueueState, DeepReviewQueueStatus, ModelRoundAttemptDiagnostic,
-    ModelRoundAttemptToolDiagnostic, SubagentParentInfo, ToolEventData, ToolEventIdentity,
+    AcpAvailableCommandFact, AcpPlanEntryFact, AgenticEvent, AgenticEventEnvelope,
+    AgenticEventOrigin, AgenticEventPriority, DeepReviewQueueReason, DeepReviewQueueState,
+    DeepReviewQueueStatus, ModelRoundAttemptDiagnostic, ModelRoundAttemptToolDiagnostic,
+    ModelRoundIdentity, ModelRoundRenderHints, SubagentParentInfo, ToolEventData,
+    ToolEventIdentity,
 };
 pub use backend::{
     BackgroundCommandLifecycleInfo, ToolExecutionCompletedInfo, ToolExecutionErrorInfo,

@@ -3,6 +3,7 @@
 //! Platform adapters and command routing remain in product assembly until their
 //! concrete session/runtime dependencies are reduced to service ports.
 
+mod acp_bot_policy;
 mod command;
 pub mod feishu;
 mod locale;
@@ -14,6 +15,9 @@ pub mod weixin;
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex as StdMutex, OnceLock};
 
+pub use acp_bot_policy::{
+    is_acp_session_provider, remote_rpc_error_message, remote_session_json_is_acp,
+};
 pub use command::{parse_command, BotCommand};
 pub use feishu::{FeishuBotApi, FeishuConfig};
 pub use locale::{fmt_count, strings_for, BotLanguage, BotStrings};

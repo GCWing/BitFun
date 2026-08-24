@@ -2198,6 +2198,7 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
     // Model identity is optional: external ACP agents carry none.
     ...(event.modelConfigId ? { modelConfigId: event.modelConfigId.trim() } : {}),
     ...(event.effectiveModelName ? { effectiveModelName: event.effectiveModelName.trim() } : {}),
+    ...(event.externalModel ? { externalModel: event.externalModel } : {}),
     ...(disableExploreGrouping
       ? { renderHints: { disableExploreGrouping: true } }
       : {}),

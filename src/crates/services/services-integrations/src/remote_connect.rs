@@ -8,6 +8,8 @@
 //! session/runtime hosts stay in `bitfun-core` until their ports are explicit.
 
 pub mod account;
+pub mod acp_control;
+pub mod acp_permission_mailbox;
 pub mod bot;
 mod chat_projection;
 pub mod device;
@@ -24,17 +26,212 @@ pub mod session_store;
 pub mod sync_state;
 
 use bitfun_core_types::{ModelsDevReasoningCatalog, ProviderCatalog, ReasoningCatalogProjection};
-use bitfun_events::AgenticEvent;
+use bitfun_events::{AcpAvailableCommandFact, AcpPlanEntryFact, AgenticEvent};
 use bitfun_runtime_ports::{
     AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
     RemoteControlStateSnapshot,
 };
 pub use bitfun_runtime_ports::{
     RemoteAssistantWorkspaceFacts, RemoteFileChunkRange, RemoteInitialSyncRuntimeHost,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionKind, RemoteSessionMetadata,
     RemoteSessionWorkspaceIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
     RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
     RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    REMOTE_CAPABILITY_ACP_REMOTE_CONTROL,
+};
+
+/// Structured error code for a remote command or session that the host cannot
+/// serve. Clients must not treat this as a native `agentic` fallback.
+pub const UNSUPPORTED_REMOTE_CAPABILITY: &str = "unsupported_remote_capability";
+
+/// Fail-loud copy when a native `send_message` targets an ACP session.
+pub const ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE: &str =
+    "ACP session requires ACP control capability";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteSessionControlFacts {
+    pub session_kind: RemoteSessionKind,
+    pub capabilities: Vec<String>,
+}
+
+impl RemoteSessionControlFacts {
+    pub fn unknown() -> Self {
+        Self {
+            session_kind: RemoteSessionKind::Unknown,
+            capabilities: Vec::new(),
+        }
+    }
+
+    pub fn native() -> Self {
+        Self {
+            session_kind: RemoteSessionKind::Native,
+            capabilities: Vec::new(),
+        }
+    }
+
+    pub fn acp(capabilities: Vec<String>) -> Self {
+        Self {
+            session_kind: RemoteSessionKind::Acp,
+            capabilities,
+        }
+    }
+
+    pub fn has_capability(&self, capability: &str) -> bool {
+        self.capabilities.iter().any(|item| item == capability)
+    }
+}
+
+/// Native `SendMessage` is never legal for ACP sessions. ACP control uses the
+/// `Acp*` command family after `acp_remote_control` is advertised; capability
+/// presence must not reopen the native dialog path.
+pub fn reject_native_dialog_for_session(
+    facts: &RemoteSessionControlFacts,
+) -> Option<RemoteUnsupportedCapability> {
+    if facts.session_kind != RemoteSessionKind::Acp {
+        return None;
+    }
+    Some(RemoteUnsupportedCapability {
+        code: UNSUPPORTED_REMOTE_CAPABILITY.to_string(),
+        message: ACP_SESSION_REQUIRES_ACP_CONTROL_MESSAGE.to_string(),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteUnsupportedCapability {
+    pub code: String,
+    pub message: String,
+}
+
+impl RemoteUnsupportedCapability {
+    pub fn into_error_string(self) -> String {
+        format!("{}: {}", self.code, self.message)
+    }
+}
+
+/// Structured error code when a known `acp_*` command name fails payload
+/// deserialization (missing fields, wrong types). Distinct from
+/// [`UNSUPPORTED_REMOTE_CAPABILITY`], which means the command name itself is
+/// not part of the host's ACP family.
+pub const INVALID_ACP_COMMAND_PARAMS: &str = "invalid_acp_command_params";
+
+/// ACP remote-control command names recognized by the current wire enum.
+/// Unknown `acp_*` names are unsupported; known names with bad payloads are
+/// [`INVALID_ACP_COMMAND_PARAMS`].
+const KNOWN_ACP_REMOTE_COMMANDS: &[&str] = &[
+    "acp_send_message",
+    "acp_cancel_turn",
+    "acp_get_options",
+    "acp_set_option",
+    "acp_get_commands",
+    "acp_get_plan",
+    "acp_permission_respond",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteCommandParseError {
+    Unsupported {
+        cmd: String,
+        code: String,
+        message: String,
+    },
+    /// Known ACP command name, but the payload could not be deserialized.
+    InvalidAcpParams {
+        cmd: String,
+        code: String,
+        message: String,
+    },
+    Invalid {
+        message: String,
+    },
+}
+
+impl RemoteCommandParseError {
+    pub fn unsupported_acp_command(cmd: impl Into<String>) -> Self {
+        let cmd = cmd.into();
+        Self::Unsupported {
+            message: format!("Host does not support ACP command `{cmd}`"),
+            cmd,
+            code: UNSUPPORTED_REMOTE_CAPABILITY.to_string(),
+        }
+    }
+
+    pub fn invalid_acp_command_params(cmd: impl Into<String>, detail: impl Into<String>) -> Self {
+        let cmd = cmd.into();
+        let detail = detail.into();
+        Self::InvalidAcpParams {
+            message: format!("Invalid ACP command params for `{cmd}`: {detail}"),
+            cmd,
+            code: INVALID_ACP_COMMAND_PARAMS.to_string(),
+        }
+    }
+
+    pub fn into_remote_response(self) -> RemoteResponse {
+        match self {
+            Self::Unsupported {
+                code, message, cmd, ..
+            }
+            | Self::InvalidAcpParams {
+                code, message, cmd, ..
+            } => remote_unsupported_response(code, format!("{message} (cmd={cmd})")),
+            Self::Invalid { message } => remote_error_response(message),
+        }
+    }
+}
+
+/// Parse a remote command value.
+///
+/// - Unknown `acp_*` command **names** → structured unsupported (not native send).
+/// - Known `acp_*` names with bad payloads → [`INVALID_ACP_COMMAND_PARAMS`].
+/// - Other parse failures → plain invalid (no capability code).
+pub fn parse_remote_command(
+    value: serde_json::Value,
+) -> Result<RemoteCommand, RemoteCommandParseError> {
+    let cmd = value
+        .get("cmd")
+        .and_then(|item| item.as_str())
+        .unwrap_or("")
+        .to_string();
+    match serde_json::from_value::<RemoteCommand>(value) {
+        Ok(command) => Ok(command),
+        Err(error) if cmd.starts_with("acp_") => {
+            if KNOWN_ACP_REMOTE_COMMANDS.contains(&cmd.as_str()) {
+                Err(RemoteCommandParseError::invalid_acp_command_params(
+                    cmd,
+                    error.to_string(),
+                ))
+            } else {
+                Err(RemoteCommandParseError::unsupported_acp_command(cmd))
+            }
+        }
+        Err(error) => Err(RemoteCommandParseError::Invalid {
+            message: format!("parse command: {error}"),
+        }),
+    }
+}
+
+pub fn remote_unsupported_response(
+    code: impl Into<String>,
+    message: impl Into<String>,
+) -> RemoteResponse {
+    RemoteResponse::Error {
+        message: message.into(),
+        code: Some(code.into()),
+    }
+}
+pub use acp_control::{
+    acp_cancel_response, acp_commands_response, acp_native_session_control_unsupported,
+    acp_native_tool_interaction_unsupported, acp_options_response, acp_permission_respond_response,
+    acp_permission_respond_unsupported, acp_plan_response, acp_send_response,
+    RemoteAcpCancelOutcome, RemoteAcpCancelRequest, RemoteAcpCommandsOutcome,
+    RemoteAcpControlError, RemoteAcpControlRuntimeHost, RemoteAcpGetCommandsRequest,
+    RemoteAcpGetOptionsRequest, RemoteAcpGetPlanRequest, RemoteAcpOptionsOutcome,
+    RemoteAcpPermissionRespondOutcome, RemoteAcpPermissionRespondRequest, RemoteAcpPlanOutcome,
+    RemoteAcpSendOutcome, RemoteAcpSendRequest, RemoteAcpSetOptionRequest,
+    RemoteRetryClassification,
+};
+pub use acp_permission_mailbox::{
+    acp_permission_mailbox, acp_permission_now_ms, install_acp_permission_mailbox,
+    sync_acp_permission_mailbox_into_tracker, AcpPermissionMailbox, AcpPermissionMailboxEntry,
 };
 pub use chat_projection::{
     agent_input_attachment_from_remote_image_context, project_remote_chat_user,
@@ -468,6 +665,13 @@ pub trait RemoteDialogRuntimeHost: Send + Sync {
 
     fn generate_turn_id(&self) -> String;
 
+    /// Session kind/capability facts used to fail-loud on ACP sessions.
+    /// Default is unknown so older hosts do not silently claim native.
+    async fn remote_session_control(&self, session_id: &str) -> RemoteSessionControlFacts {
+        let _ = session_id;
+        RemoteSessionControlFacts::unknown()
+    }
+
     async fn submit_dialog(
         &self,
         submission: RemoteDialogResolvedSubmission<Self::ImageContext>,
@@ -507,6 +711,11 @@ where
             .as_ref()
             .map(|binding| binding.workspace_path.clone()),
     });
+
+    let control = host.remote_session_control(&session_id).await;
+    if let Some(rejected) = reject_native_dialog_for_session(&control) {
+        return Err(rejected.into_error_string());
+    }
 
     let resolved_agent_type = resolve_remote_agent_type(agent_type.as_deref()).to_string();
     let turn_id = turn_id.unwrap_or_else(|| host.generate_turn_id());
@@ -751,7 +960,10 @@ pub fn remote_file_content_response(
                 size: content.size,
             }
         }
-        Err(message) => RemoteResponse::Error { message },
+        Err(message) => RemoteResponse::Error {
+            message,
+            code: None,
+        },
     }
 }
 
@@ -770,7 +982,10 @@ pub fn remote_file_chunk_response(
                 mime_type: chunk.mime_type.to_string(),
             }
         }
-        Err(message) => RemoteResponse::Error { message },
+        Err(message) => RemoteResponse::Error {
+            message,
+            code: None,
+        },
     }
 }
 
@@ -783,7 +998,10 @@ pub fn remote_file_info_response(
             size: info.size,
             mime_type: info.mime_type.to_string(),
         },
-        Err(message) => RemoteResponse::Error { message },
+        Err(message) => RemoteResponse::Error {
+            message,
+            code: None,
+        },
     }
 }
 
@@ -832,6 +1050,7 @@ where
         }
         _ => RemoteResponse::Error {
             message: "Unsupported remote workspace file command".to_string(),
+            code: None,
         },
     }
 }
@@ -851,8 +1070,23 @@ pub fn remote_dialog_submit_response(
             session_id,
             turn_id,
         },
-        Err(message) => RemoteResponse::Error { message },
+        Err(message) => remote_dialog_error_response(message),
     }
+}
+
+pub fn remote_error_response(message: impl Into<String>) -> RemoteResponse {
+    RemoteResponse::Error {
+        message: message.into(),
+        code: None,
+    }
+}
+
+fn remote_dialog_error_response(message: impl Into<String>) -> RemoteResponse {
+    let message = message.into();
+    if let Some(stripped) = message.strip_prefix(&format!("{UNSUPPORTED_REMOTE_CAPABILITY}: ")) {
+        return remote_unsupported_response(UNSUPPORTED_REMOTE_CAPABILITY, stripped);
+    }
+    remote_error_response(message)
 }
 
 pub fn remote_task_cancel_response(
@@ -863,7 +1097,10 @@ pub fn remote_task_cancel_response(
         Ok(()) => RemoteResponse::TaskCancelled {
             session_id: session_id.into(),
         },
-        Err(message) => RemoteResponse::Error { message },
+        Err(message) => RemoteResponse::Error {
+            message,
+            code: None,
+        },
     }
 }
 
@@ -877,14 +1114,20 @@ pub fn remote_interaction_accepted_response(
             action: action.into(),
             target_id: target_id.into(),
         },
-        Err(message) => RemoteResponse::Error { message },
+        Err(message) => RemoteResponse::Error {
+            message,
+            code: None,
+        },
     }
 }
 
 pub fn remote_answer_question_response(result: Result<(), String>) -> RemoteResponse {
     match result {
         Ok(()) => RemoteResponse::AnswerAccepted,
-        Err(message) => RemoteResponse::Error { message },
+        Err(message) => RemoteResponse::Error {
+            message,
+            code: None,
+        },
     }
 }
 
@@ -1002,6 +1245,8 @@ pub fn remote_session_info(
         message_count: metadata.turn_count,
         workspace_path: workspace_path.map(ToOwned::to_owned),
         workspace_name: workspace_name.map(ToOwned::to_owned),
+        session_kind: metadata.session_kind,
+        capabilities: metadata.capabilities.clone(),
     }
 }
 
@@ -1106,6 +1351,7 @@ where
         }
         _ => RemoteResponse::Error {
             message: "Unknown workspace command".into(),
+            code: None,
         },
     }
 }
@@ -1250,7 +1496,8 @@ where
             else {
                 return RemoteResponse::Error {
                     message: "No workspace is open on the remote device; select a recent workspace or create one first".to_string(),
-                };
+                code: None,
+        };
             };
 
             let workspace_path_str = workspace_path.to_string_lossy().to_string();
@@ -1289,7 +1536,10 @@ where
                         page_offset,
                     )
                 }
-                Err(message) => RemoteResponse::Error { message },
+                Err(message) => RemoteResponse::Error {
+                    message,
+                    code: None,
+                },
             }
         }
         RemoteCommand::CreateSession {
@@ -1313,7 +1563,12 @@ where
             let binding_workspace = if is_claw {
                 match host.resolve_default_assistant_workspace_path().await {
                     Ok(path) => Some(path),
-                    Err(message) => return RemoteResponse::Error { message },
+                    Err(message) => {
+                        return RemoteResponse::Error {
+                            message,
+                            code: None,
+                        }
+                    }
                 }
             } else {
                 workspace_path
@@ -1330,6 +1585,7 @@ where
                     } else {
                         "No workspace is open on the remote device; select a recent workspace or create one first".to_string()
                     },
+                    code: None,
                 };
             };
 
@@ -1345,13 +1601,19 @@ where
             );
             match host.create_session(request).await {
                 Ok(session_id) => remote_session_created_response(session_id),
-                Err(message) => RemoteResponse::Error { message },
+                Err(message) => RemoteResponse::Error {
+                    message,
+                    code: None,
+                },
             }
         }
         RemoteCommand::GetModelCatalog { session_id } => {
             match host.load_model_catalog(session_id.as_deref()).await {
                 Ok(catalog) => RemoteResponse::ModelCatalog { catalog },
-                Err(message) => RemoteResponse::Error { message },
+                Err(message) => RemoteResponse::Error {
+                    message,
+                    code: None,
+                },
             }
         }
         RemoteCommand::SetSessionModel {
@@ -1367,11 +1629,17 @@ where
             .await
         {
             Ok(selection) => remote_session_model_updated_response(session_id.clone(), selection),
-            Err(message) => RemoteResponse::Error { message },
+            Err(message) => RemoteResponse::Error {
+                message,
+                code: None,
+            },
         },
         RemoteCommand::UpdateSessionTitle { session_id, title } => {
             if let Err(message) = host.ensure_session_loaded(session_id).await {
-                return RemoteResponse::Error { message };
+                return RemoteResponse::Error {
+                    message,
+                    code: None,
+                };
             }
 
             match host.update_session_title(session_id, title).await {
@@ -1379,7 +1647,10 @@ where
                     session_id: session_id.clone(),
                     title: normalized_title,
                 },
-                Err(message) => RemoteResponse::Error { message },
+                Err(message) => RemoteResponse::Error {
+                    message,
+                    code: None,
+                },
             }
         }
         RemoteCommand::GetSessionMessages {
@@ -1394,6 +1665,7 @@ where
                         "Session storage directory not available for session: {}",
                         session_id
                     ),
+                    code: None,
                 };
             };
             let (chat_messages, has_more) = match host
@@ -1401,7 +1673,12 @@ where
                 .await
             {
                 Ok(messages) => messages,
-                Err(message) => return RemoteResponse::Error { message },
+                Err(message) => {
+                    return RemoteResponse::Error {
+                        message,
+                        code: None,
+                    }
+                }
             };
             remote_messages_response(session_id.clone(), chat_messages, has_more)
         }
@@ -1413,6 +1690,7 @@ where
                         "Session storage directory not available for session: {}",
                         session_id
                     ),
+                    code: None,
                 };
             };
 
@@ -1421,11 +1699,15 @@ where
                     host.remove_tracker(session_id);
                     remote_session_deleted_response(session_id.clone())
                 }
-                Err(message) => RemoteResponse::Error { message },
+                Err(message) => RemoteResponse::Error {
+                    message,
+                    code: None,
+                },
             }
         }
         _ => RemoteResponse::Error {
             message: "Unknown session command".into(),
+            code: None,
         },
     }
 }
@@ -1458,6 +1740,7 @@ where
     else {
         return RemoteResponse::Error {
             message: "expected poll_session".into(),
+            code: None,
         };
     };
 
@@ -1492,6 +1775,7 @@ where
                 "Session storage directory not available for session: {}",
                 session_id
             ),
+            code: None,
         };
     };
     let (all_chat_messages, _) = match host
@@ -1499,13 +1783,23 @@ where
         .await
     {
         Ok(messages) => messages,
-        Err(message) => return RemoteResponse::Error { message },
+        Err(message) => {
+            return RemoteResponse::Error {
+                message,
+                code: None,
+            }
+        }
     };
     // A history invalidation has no active projection to append against. Send
     // a replacement snapshot so an equal-count message whose content grew at
     // completion is repaired on remote controllers.
-    let message_snapshot = tracker
-        .is_history_snapshot_required()
+    // A zero cursor with an already-populated controller cache means the host
+    // process restarted (or the controller restored a cache before its first
+    // poll). The new tracker cannot prove that cache's message identities are
+    // canonical, so return the authoritative persisted snapshot. Older
+    // clients still receive the additive `new_messages` field below.
+    let message_snapshot = (tracker.is_history_snapshot_required()
+        || (*since_version == 0 && *known_msg_count > 0))
         .then(|| all_chat_messages.clone());
     let total_msg_count = all_chat_messages.len();
     let new_messages = all_chat_messages
@@ -1544,12 +1838,14 @@ where
     H: RemoteInteractionRuntimeHost + ?Sized,
 {
     match command {
-        RemoteCommand::ConfirmTool { tool_id } => remote_interaction_accepted_response(
+        RemoteCommand::ConfirmTool { tool_id, .. } => remote_interaction_accepted_response(
             "confirm_tool",
             tool_id.clone(),
             host.confirm_tool(tool_id).await,
         ),
-        RemoteCommand::RejectTool { tool_id, reason } => remote_interaction_accepted_response(
+        RemoteCommand::RejectTool {
+            tool_id, reason, ..
+        } => remote_interaction_accepted_response(
             "reject_tool",
             tool_id.clone(),
             host.reject_tool(
@@ -1562,11 +1858,17 @@ where
         ),
         RemoteCommand::GetPermissionMode => match host.get_permission_mode().await {
             Ok(mode) => RemoteResponse::PermissionMode { mode },
-            Err(message) => RemoteResponse::Error { message },
+            Err(message) => RemoteResponse::Error {
+                message,
+                code: None,
+            },
         },
         RemoteCommand::SetPermissionMode { mode } => match host.set_permission_mode(*mode).await {
             Ok(mode) => RemoteResponse::PermissionMode { mode },
-            Err(message) => RemoteResponse::Error { message },
+            Err(message) => RemoteResponse::Error {
+                message,
+                code: None,
+            },
         },
         RemoteCommand::CancelTool { tool_id, reason } => {
             let cancel_reason = reason
@@ -1583,6 +1885,7 @@ where
         }
         _ => RemoteResponse::Error {
             message: "Unknown execution command".into(),
+            code: None,
         },
     }
 }
@@ -1841,6 +2144,14 @@ pub struct SessionInfo {
     pub workspace_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_name: Option<String>,
+    #[serde(default, skip_serializing_if = "is_unknown_remote_session_kind")]
+    pub session_kind: RemoteSessionKind,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+}
+
+fn is_unknown_remote_session_kind(kind: &RemoteSessionKind) -> bool {
+    matches!(kind, RemoteSessionKind::Unknown)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2205,6 +2516,51 @@ pub enum RemoteCommand {
         images: Option<Vec<ImageAttachment>>,
         image_contexts: Option<Vec<RemoteImageContext>>,
     },
+    AcpSendMessage {
+        session_id: String,
+        content: String,
+        images: Option<Vec<ImageAttachment>>,
+        image_contexts: Option<Vec<RemoteImageContext>>,
+        #[serde(default)]
+        request_id: Option<String>,
+    },
+    AcpCancelTurn {
+        session_id: String,
+        turn_id: Option<String>,
+        #[serde(default)]
+        request_id: Option<String>,
+    },
+    AcpGetOptions {
+        session_id: String,
+        #[serde(default)]
+        request_id: Option<String>,
+    },
+    AcpSetOption {
+        session_id: String,
+        config_id: String,
+        value: serde_json::Value,
+        #[serde(default)]
+        request_id: Option<String>,
+    },
+    AcpGetCommands {
+        session_id: String,
+        #[serde(default)]
+        request_id: Option<String>,
+    },
+    AcpGetPlan {
+        session_id: String,
+        #[serde(default)]
+        request_id: Option<String>,
+    },
+    /// ACP permission reply. Signature is permission_id + option_id only —
+    /// native tool ids are rejected by contract (see §8.1 / §13).
+    AcpPermissionRespond {
+        session_id: String,
+        permission_id: String,
+        option_id: String,
+        #[serde(default)]
+        request_id: Option<String>,
+    },
     CancelTask {
         session_id: String,
         turn_id: Option<String>,
@@ -2218,10 +2574,14 @@ pub enum RemoteCommand {
     },
     ConfirmTool {
         tool_id: String,
+        #[serde(default)]
+        session_id: Option<String>,
     },
     RejectTool {
         tool_id: String,
         reason: Option<String>,
+        #[serde(default)]
+        session_id: Option<String>,
     },
     GetPermissionMode,
     SetPermissionMode {
@@ -2324,6 +2684,74 @@ pub enum RemoteCommand {
     },
 }
 
+/// ACP metadata projection carried by a remote session poll.
+///
+/// Each sub-projection owns an independent, monotonic `version`. These versions
+/// are deliberately separate from `SessionPoll::version` (the message snapshot
+/// cursor): an ACP metadata refresh must never reuse or overwrite the message
+/// snapshot version, so remote controllers can re-render ACP facts by cursor
+/// without disturbing their message-stream replay.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RemoteAcpProjectionSnapshot {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_usage: Option<RemoteAcpContextUsageProjection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available_commands: Option<RemoteAcpAvailableCommandsProjection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<RemoteAcpPlanProjection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_options: Option<RemoteAcpSessionOptionsProjection>,
+}
+
+impl RemoteAcpProjectionSnapshot {
+    pub fn is_empty(&self) -> bool {
+        self.context_usage.is_none()
+            && self.available_commands.is_none()
+            && self.plan.is_none()
+            && self.session_options.is_none()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RemoteAcpContextUsageProjection {
+    pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    pub used: u64,
+    pub size: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteAcpAvailableCommandsProjection {
+    pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    #[serde(default)]
+    pub commands: Vec<AcpAvailableCommandFact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteAcpPlanProjection {
+    pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    #[serde(default)]
+    pub entries: Vec<AcpPlanEntryFact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteAcpSessionOptionsProjection {
+    pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+}
+
 /// Responses sent from desktop back to remote clients.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "resp", rename_all = "snake_case")]
@@ -2392,8 +2820,69 @@ pub enum RemoteResponse {
         session_id: String,
         turn_id: String,
     },
+    AcpMessageSent {
+        session_id: String,
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        retry: acp_control::RemoteRetryClassification,
+        turn_id: String,
+    },
     TaskCancelled {
         session_id: String,
+    },
+    AcpTurnCancelled {
+        session_id: String,
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        retry: acp_control::RemoteRetryClassification,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        turn_id: Option<String>,
+    },
+    AcpOptions {
+        session_id: String,
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        retry: acp_control::RemoteRetryClassification,
+        options: serde_json::Value,
+    },
+    AcpCommands {
+        session_id: String,
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        retry: acp_control::RemoteRetryClassification,
+        commands: serde_json::Value,
+        version: u64,
+    },
+    AcpPlan {
+        session_id: String,
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        retry: acp_control::RemoteRetryClassification,
+        entries: serde_json::Value,
+        version: u64,
+    },
+    AcpCommandError {
+        session_id: String,
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        retry: acp_control::RemoteRetryClassification,
+        code: String,
+        message: String,
+    },
+    AcpPermissionResolved {
+        session_id: String,
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        retry: acp_control::RemoteRetryClassification,
+        permission_id: String,
+        resolved: bool,
     },
     SessionDeleted {
         session_id: String,
@@ -2436,6 +2925,8 @@ pub enum RemoteResponse {
         active_turn: Option<ActiveTurnSnapshot>,
         #[serde(skip_serializing_if = "Option::is_none")]
         model_catalog: Box<Option<RemoteModelCatalog>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        acp_projection: Option<RemoteAcpProjectionSnapshot>,
     },
     AnswerAccepted,
     InteractionAccepted {
@@ -2515,6 +3006,8 @@ pub enum RemoteResponse {
     },
     Error {
         message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
     },
 }
 
@@ -2538,6 +3031,7 @@ pub trait RemoteCommandRuntimeHost: Send + Sync {
     async fn handle_device_command(&self, _command: &RemoteCommand) -> RemoteResponse {
         RemoteResponse::Error {
             message: "Device-to-device commands are not supported on this device".to_string(),
+            code: None,
         }
     }
 
@@ -2547,6 +3041,80 @@ pub trait RemoteCommandRuntimeHost: Send + Sync {
     ) -> Result<RemoteDialogSubmitOutcome, String>;
 
     async fn cancel_task(&self, request: RemoteCancelTaskRequest) -> Result<(), String>;
+
+    /// Execute an ACP remote-control command. Default keeps the P0
+    /// unsupported contract until a product host injects a real adapter.
+    async fn handle_acp_control_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        match command {
+            RemoteCommand::AcpPermissionRespond {
+                session_id,
+                request_id,
+                ..
+            } => acp_control::acp_permission_respond_unsupported(session_id, request_id.clone()),
+            RemoteCommand::AcpSendMessage {
+                session_id,
+                request_id,
+                ..
+            }
+            | RemoteCommand::AcpCancelTurn {
+                session_id,
+                request_id,
+                ..
+            }
+            | RemoteCommand::AcpGetOptions {
+                session_id,
+                request_id,
+                ..
+            }
+            | RemoteCommand::AcpSetOption {
+                session_id,
+                request_id,
+                ..
+            }
+            | RemoteCommand::AcpGetCommands {
+                session_id,
+                request_id,
+                ..
+            }
+            | RemoteCommand::AcpGetPlan {
+                session_id,
+                request_id,
+                ..
+            } => acp_control::RemoteAcpControlError::unsupported(
+                session_id.clone(),
+                request_id.clone(),
+            )
+            .into_response(),
+            _ => RemoteResponse::Error {
+                message: "Not an ACP control command".to_string(),
+                code: None,
+            },
+        }
+    }
+
+    /// Whether native Confirm/Reject must be blocked for this ACP target.
+    async fn reject_native_tool_interaction_for_acp(
+        &self,
+        session_id: Option<&str>,
+        tool_id: &str,
+    ) -> Option<RemoteResponse> {
+        let _ = (session_id, tool_id);
+        None
+    }
+
+    /// Whether a native *session-scoped control* command must be blocked
+    /// because the target is an ACP session. `cancel_task` and
+    /// `set_session_model` reach the native scheduler and the native session
+    /// metadata respectively; for an externally projected ACP session both are
+    /// the agent's business, not ours. Default keeps old hosts unchanged.
+    async fn reject_native_session_control_for_acp(
+        &self,
+        session_id: &str,
+        command_name: &str,
+    ) -> Option<RemoteResponse> {
+        let _ = (session_id, command_name);
+        None
+    }
 
     fn legacy_image_contexts(&self, images: Option<&[ImageAttachment]>) -> Vec<Self::ImageContext>;
 
@@ -2574,10 +3142,23 @@ where
         RemoteCommand::ListSessions { .. }
         | RemoteCommand::CreateSession { .. }
         | RemoteCommand::GetModelCatalog { .. }
-        | RemoteCommand::SetSessionModel { .. }
         | RemoteCommand::UpdateSessionTitle { .. }
         | RemoteCommand::GetSessionMessages { .. }
         | RemoteCommand::DeleteSession { .. } => host.handle_session_command(command).await,
+
+        // Native model selection is not a thing an ACP session has: the agent
+        // owns its model/config surface behind `acp_get_options`. Reading the
+        // catalog stays allowed (`GetModelCatalog` above) so the UI can still
+        // render "observable, not selectable".
+        RemoteCommand::SetSessionModel { session_id, .. } => {
+            if let Some(rejected) = host
+                .reject_native_session_control_for_acp(session_id, "set_session_model")
+                .await
+            {
+                return rejected;
+            }
+            host.handle_session_command(command).await
+        }
 
         RemoteCommand::PollSession { .. } => host.handle_poll_command(command).await,
 
@@ -2590,7 +3171,35 @@ where
         | RemoteCommand::GetPermissionMode
         | RemoteCommand::SetPermissionMode { .. }
         | RemoteCommand::CancelTool { .. }
-        | RemoteCommand::AnswerQuestion { .. } => host.handle_interaction_command(command).await,
+        | RemoteCommand::AnswerQuestion { .. } => {
+            let (session_id, tool_id) = match command {
+                RemoteCommand::ConfirmTool {
+                    tool_id,
+                    session_id,
+                } => (session_id.as_deref(), tool_id.as_str()),
+                RemoteCommand::RejectTool {
+                    tool_id,
+                    session_id,
+                    ..
+                } => (session_id.as_deref(), tool_id.as_str()),
+                // These two carry no session_id on the wire, so only the
+                // permission-id half of the guard can fire — but it must fire.
+                // Leaving them in the `_` bucket let a native cancel/answer
+                // address an ACP permission id unchecked.
+                RemoteCommand::CancelTool { tool_id, .. } => (None, tool_id.as_str()),
+                RemoteCommand::AnswerQuestion { tool_id, .. } => (None, tool_id.as_str()),
+                _ => (None, ""),
+            };
+            if !tool_id.is_empty() {
+                if let Some(rejected) = host
+                    .reject_native_tool_interaction_for_acp(session_id, tool_id)
+                    .await
+                {
+                    return rejected;
+                }
+            }
+            host.handle_interaction_command(command).await
+        }
 
         RemoteCommand::SendMessage {
             session_id,
@@ -2624,29 +3233,51 @@ where
             )
         }
 
+        RemoteCommand::AcpSendMessage { .. }
+        | RemoteCommand::AcpCancelTurn { .. }
+        | RemoteCommand::AcpGetOptions { .. }
+        | RemoteCommand::AcpSetOption { .. }
+        | RemoteCommand::AcpGetCommands { .. }
+        | RemoteCommand::AcpGetPlan { .. }
+        | RemoteCommand::AcpPermissionRespond { .. } => {
+            host.handle_acp_control_command(command).await
+        }
+
         RemoteCommand::CancelTask {
             session_id,
             turn_id,
-        } => remote_task_cancel_response(
-            session_id.clone(),
-            host.cancel_task(RemoteCancelTaskRequest {
-                session_id: session_id.clone(),
-                requested_turn_id: turn_id.clone(),
-            })
-            .await,
-        ),
+        } => {
+            // The native cancel path talks to the native scheduler. An ACP turn
+            // lives in the agent process and is cancelled with `acp_cancel_turn`.
+            if let Some(rejected) = host
+                .reject_native_session_control_for_acp(session_id, "cancel_task")
+                .await
+            {
+                return rejected;
+            }
+            remote_task_cancel_response(
+                session_id.clone(),
+                host.cancel_task(RemoteCancelTaskRequest {
+                    session_id: session_id.clone(),
+                    requested_turn_id: turn_id.clone(),
+                })
+                .await,
+            )
+        }
 
         // Answered by the host runtime (which owns the delegated identity
         // provider) before dispatch reaches this router; this is the fallback
         // for hosts that cannot delegate an account identity.
         RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
             message: "Delegated identity is not available on this host".to_string(),
+            code: None,
         },
 
         // Same contract as GetDelegatedIdentity above: the host runtime owns the
         // account credentials and answers before dispatch reaches this router.
         RemoteCommand::ProvisionPeerDevice { .. } => RemoteResponse::Error {
             message: "Device provisioning is not available on this host".to_string(),
+            code: None,
         },
 
         RemoteCommand::SendSessionToDevice { .. }
@@ -2697,6 +3328,10 @@ struct TrackerState {
     persistence_dirty: bool,
     history_snapshot_required: bool,
     linked_subagent_sessions: HashMap<String, String>,
+    acp_context_usage: Option<RemoteAcpContextUsageProjection>,
+    acp_available_commands: Option<RemoteAcpAvailableCommandsProjection>,
+    acp_plan: Option<RemoteAcpPlanProjection>,
+    acp_session_options: Option<RemoteAcpSessionOptionsProjection>,
 }
 
 /// Lightweight event broadcast by the tracker for real-time consumers.
@@ -2755,6 +3390,10 @@ impl RemoteSessionStateTracker {
                 persistence_dirty: true,
                 history_snapshot_required: false,
                 linked_subagent_sessions: HashMap::new(),
+                acp_context_usage: None,
+                acp_available_commands: None,
+                acp_plan: None,
+                acp_session_options: None,
             }),
             event_tx,
         }
@@ -2770,6 +3409,93 @@ impl RemoteSessionStateTracker {
 
     fn bump_version(&self) {
         self.version.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn next_acp_version(&self, current: Option<u64>) -> u64 {
+        current.map_or(1, |version| version + 1)
+    }
+
+    pub fn record_acp_context_usage(
+        &self,
+        turn_id: String,
+        client_id: String,
+        used: u64,
+        size: u64,
+        cost: Option<serde_json::Value>,
+    ) {
+        let mut state = self.state.write().unwrap();
+        let version = self.next_acp_version(state.acp_context_usage.as_ref().map(|p| p.version));
+        state.acp_context_usage = Some(RemoteAcpContextUsageProjection {
+            version,
+            turn_id: Some(turn_id),
+            client_id: Some(client_id),
+            used,
+            size,
+            cost,
+        });
+        drop(state);
+        self.bump_version();
+    }
+
+    pub fn record_acp_available_commands(
+        &self,
+        client_id: String,
+        commands: Vec<AcpAvailableCommandFact>,
+    ) {
+        let mut state = self.state.write().unwrap();
+        let version =
+            self.next_acp_version(state.acp_available_commands.as_ref().map(|p| p.version));
+        state.acp_available_commands = Some(RemoteAcpAvailableCommandsProjection {
+            version,
+            client_id: Some(client_id),
+            commands,
+        });
+        drop(state);
+        self.bump_version();
+    }
+
+    pub fn record_acp_plan(
+        &self,
+        turn_id: String,
+        client_id: String,
+        entries: Vec<AcpPlanEntryFact>,
+    ) {
+        let mut state = self.state.write().unwrap();
+        let version = self.next_acp_version(state.acp_plan.as_ref().map(|p| p.version));
+        state.acp_plan = Some(RemoteAcpPlanProjection {
+            version,
+            turn_id: Some(turn_id),
+            client_id: Some(client_id),
+            entries,
+        });
+        drop(state);
+        self.bump_version();
+    }
+
+    pub fn record_acp_session_options_changed(&self, client_id: String) {
+        let mut state = self.state.write().unwrap();
+        let version = self.next_acp_version(state.acp_session_options.as_ref().map(|p| p.version));
+        state.acp_session_options = Some(RemoteAcpSessionOptionsProjection {
+            version,
+            client_id: Some(client_id),
+        });
+        drop(state);
+        self.bump_version();
+    }
+
+    pub fn snapshot_acp_projection(&self) -> Option<RemoteAcpProjectionSnapshot> {
+        let state = self.state.read().unwrap();
+        let snapshot = RemoteAcpProjectionSnapshot {
+            context_usage: state.acp_context_usage.clone(),
+            available_commands: state.acp_available_commands.clone(),
+            plan: state.acp_plan.clone(),
+            session_options: state.acp_session_options.clone(),
+        };
+        if snapshot.is_empty() {
+            None
+        } else {
+            Some(snapshot)
+        }
     }
 
     pub fn snapshot_active_turn(&self) -> Option<ActiveTurnSnapshot> {
@@ -2907,6 +3633,16 @@ impl RemoteSessionStateTracker {
 
     pub fn is_history_snapshot_required(&self) -> bool {
         self.state.read().unwrap().history_snapshot_required
+    }
+
+    /// Fail-loud when the durable transcript writer could not commit.
+    /// Keeps the live projection; remote poll must re-read persisted history.
+    pub fn require_history_snapshot(&self) {
+        let mut state = self.state.write().unwrap();
+        state.persistence_dirty = true;
+        state.history_snapshot_required = true;
+        drop(state);
+        self.bump_version();
     }
 
     fn invalidate_history_projection(&self) {
@@ -3380,6 +4116,38 @@ impl RemoteSessionStateTracker {
                 drop(state);
                 self.bump_version();
             }
+            AE::AcpContextUsageUpdated {
+                turn_id,
+                client_id,
+                used,
+                size,
+                cost,
+                ..
+            } if is_direct => self.record_acp_context_usage(
+                turn_id.clone(),
+                client_id.clone(),
+                *used,
+                *size,
+                cost.clone(),
+            ),
+            AE::AcpAvailableCommandsUpdated {
+                client_id,
+                commands,
+                ..
+            } if is_direct => {
+                self.record_acp_available_commands(client_id.clone(), commands.clone())
+            }
+            AE::AcpPlanUpdated {
+                turn_id,
+                client_id,
+                entries,
+                ..
+            } if is_direct => {
+                self.record_acp_plan(turn_id.clone(), client_id.clone(), entries.clone())
+            }
+            AE::AcpSessionOptionsChanged { client_id, .. } if is_direct => {
+                self.record_acp_session_options_changed(client_id.clone())
+            }
             AE::SessionHistoryChanged {
                 settled_turn_id, ..
             } if is_direct => match settled_turn_id {
@@ -3496,6 +4264,7 @@ pub fn remote_no_change_poll_response(version: u64) -> RemoteResponse {
         message_snapshot: None,
         active_turn: None,
         model_catalog: Box::new(None),
+        acp_projection: None,
     }
 }
 
@@ -3517,6 +4286,7 @@ pub fn remote_snapshot_poll_response(
         message_snapshot: None,
         active_turn,
         model_catalog: Box::new(model_catalog),
+        acp_projection: tracker.snapshot_acp_projection(),
     }
 }
 
@@ -3575,6 +4345,7 @@ pub fn remote_persisted_poll_response(
         message_snapshot: send_snapshot,
         active_turn,
         model_catalog: Box::new(model_catalog),
+        acp_projection: tracker.snapshot_acp_projection(),
     }
 }
 
@@ -3721,6 +4492,8 @@ mod tests {
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 3,
+                    session_kind: RemoteSessionKind::Native,
+                    capabilities: Vec::new(),
                 },
                 RemoteSessionMetadata {
                     session_id: "session-b".to_string(),
@@ -3729,6 +4502,8 @@ mod tests {
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 1,
+                    session_kind: RemoteSessionKind::Native,
+                    capabilities: Vec::new(),
                 },
             ])
         }
@@ -3983,6 +4758,7 @@ mod tests {
             response,
             RemoteResponse::Error {
                 message: "Session history restore is incomplete".to_string(),
+                code: None,
             }
         );
     }
@@ -4043,6 +4819,7 @@ mod tests {
             RemoteResponse::Error {
                 message: "Session storage directory not available for session: session-a"
                     .to_string(),
+                code: None,
             }
         );
     }
@@ -4090,8 +4867,68 @@ mod tests {
                 message_snapshot: None,
                 active_turn: None,
                 model_catalog: Box::new(None),
+                acp_projection: None,
             }
         );
+    }
+
+    #[tokio::test]
+    async fn restarted_host_replaces_an_existing_controller_cache() {
+        let messages = vec![
+            ChatMessage {
+                id: "turn-1-user".to_string(),
+                role: "user".to_string(),
+                content: "hello".to_string(),
+                timestamp: "1".to_string(),
+                metadata: None,
+                tools: None,
+                thinking: None,
+                items: None,
+                images: None,
+            },
+            ChatMessage {
+                id: "turn-1-assistant".to_string(),
+                role: "assistant".to_string(),
+                content: "world".to_string(),
+                timestamp: "2".to_string(),
+                metadata: None,
+                tools: None,
+                thinking: None,
+                items: None,
+                images: None,
+            },
+        ];
+        let host = FakePollHost {
+            tracker: Arc::new(RemoteSessionStateTracker::new("session-a".to_string())),
+            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            messages: messages.clone(),
+            history_read_count: Arc::new(AtomicUsize::new(0)),
+        };
+
+        let response = handle_remote_poll_command(
+            &host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: 0,
+                known_msg_count: 2,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+
+        match response {
+            RemoteResponse::SessionPoll {
+                new_messages,
+                total_msg_count,
+                message_snapshot,
+                ..
+            } => {
+                assert_eq!(new_messages, Some(Vec::new()));
+                assert_eq!(total_msg_count, Some(2));
+                assert_eq!(message_snapshot, Some(messages));
+            }
+            other => panic!("expected SessionPoll, got {other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -4170,6 +5007,7 @@ mod tests {
                 }]),
                 active_turn: None,
                 model_catalog: Box::new(None),
+                acp_projection: None,
             }
         );
         assert!(!tracker.is_persistence_dirty());

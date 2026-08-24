@@ -48,11 +48,12 @@ use bitfun_services_integrations::remote_connect::{
     RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding, RemoteImageContext,
     RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
     RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode,
-    RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionModelSelection, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionControlFacts,
+    RemoteSessionMetadata, RemoteSessionModelSelection, RemoteSessionRuntimeHost,
+    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
+    RemoteWorkspaceUpdate,
 };
 #[cfg(feature = "remote-connect")]
 use log::{debug, info};
@@ -241,13 +242,31 @@ async fn load_remote_session_metadata_for_workspace(
 
     Ok(metadata
         .into_iter()
-        .map(|session| RemoteSessionMetadata {
-            session_id: session.session_id,
-            name: session.session_name,
-            agent_type: session.agent_type,
-            created_at_ms: session.created_at,
-            last_active_at_ms: session.last_active_at,
-            turn_count: session.turn_count,
+        .map(|session| {
+            let provider = session
+                .custom_metadata
+                .as_ref()
+                .and_then(|custom| custom.get(bitfun_core_types::SESSION_PROVIDER_METADATA_KEY))
+                .and_then(serde_json::Value::as_str);
+            let session_kind =
+                bitfun_runtime_ports::RemoteSessionKind::from_persisted_provider(provider);
+            let capabilities = if session_kind == bitfun_runtime_ports::RemoteSessionKind::Acp
+                && crate::service::remote_connect::remote_server::remote_acp_control_host_installed(
+                ) {
+                vec![bitfun_runtime_ports::REMOTE_CAPABILITY_ACP_REMOTE_CONTROL.to_string()]
+            } else {
+                Vec::new()
+            };
+            RemoteSessionMetadata {
+                session_id: session.session_id,
+                name: session.session_name,
+                agent_type: session.agent_type,
+                created_at_ms: session.created_at,
+                last_active_at_ms: session.last_active_at,
+                turn_count: session.turn_count,
+                session_kind,
+                capabilities,
+            }
         })
         .collect())
 }
@@ -1065,6 +1084,20 @@ fn scheduled_session_revert_port(
     Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
 }
 
+#[cfg(feature = "remote-connect")]
+fn resolved_remote_session_workspace_scope(
+    binding: WorkspaceBinding,
+    session_storage_path: std::path::PathBuf,
+) -> crate::service::remote_connect::ResolvedRemoteSessionWorkspaceScope {
+    let is_remote = binding.is_remote();
+    crate::service::remote_connect::ResolvedRemoteSessionWorkspaceScope {
+        workspace_path: binding.logical_workspace_path_string(),
+        session_storage_path,
+        remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
+        remote_ssh_host: is_remote.then(|| binding.session_identity.hostname.clone()),
+    }
+}
+
 pub(crate) struct CoreServiceAgentRuntime;
 
 impl CoreServiceAgentRuntime {
@@ -1090,12 +1123,24 @@ impl CoreServiceAgentRuntime {
     }
 
     #[cfg(feature = "remote-connect")]
+    pub(crate) async fn resolve_session_workspace_scope(
+        session_id: &str,
+    ) -> Option<crate::service::remote_connect::ResolvedRemoteSessionWorkspaceScope> {
+        Self::resolve_session_workspace_binding(session_id)
+            .await
+            .map(|binding| {
+                let session_storage_path = binding.session_storage_dir();
+                resolved_remote_session_workspace_scope(binding, session_storage_path)
+            })
+    }
+
+    #[cfg(feature = "remote-connect")]
     pub(crate) async fn resolve_session_storage_dir(
         session_id: &str,
     ) -> Option<std::path::PathBuf> {
-        Self::resolve_session_workspace_paths(session_id)
+        Self::resolve_session_workspace_scope(session_id)
             .await
-            .map(|(_, storage_dir)| storage_dir)
+            .map(|scope| scope.session_storage_path)
     }
 
     #[cfg(feature = "remote-connect")]
@@ -2095,6 +2140,41 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
         generate_remote_turn_id()
     }
 
+    async fn remote_session_control(&self, session_id: &str) -> RemoteSessionControlFacts {
+        let Some(session_storage_dir) =
+            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
+        else {
+            return RemoteSessionControlFacts::unknown();
+        };
+        match self
+            .coordinator
+            .get_session_manager()
+            .load_session_metadata(&session_storage_dir, session_id)
+            .await
+        {
+            Ok(Some(metadata)) => {
+                let provider = metadata
+                    .custom_metadata
+                    .as_ref()
+                    .and_then(|custom| custom.get(bitfun_core_types::SESSION_PROVIDER_METADATA_KEY))
+                    .and_then(serde_json::Value::as_str);
+                match bitfun_runtime_ports::RemoteSessionKind::from_persisted_provider(provider) {
+                    bitfun_runtime_ports::RemoteSessionKind::Acp => {
+                        let capabilities = if crate::service::remote_connect::remote_server::remote_acp_control_host_installed()
+                        {
+                            vec![bitfun_runtime_ports::REMOTE_CAPABILITY_ACP_REMOTE_CONTROL.to_string()]
+                        } else {
+                            Vec::new()
+                        };
+                        RemoteSessionControlFacts::acp(capabilities)
+                    }
+                    _ => RemoteSessionControlFacts::native(),
+                }
+            }
+            _ => RemoteSessionControlFacts::unknown(),
+        }
+    }
+
     async fn submit_dialog(
         &self,
         submission: RemoteDialogResolvedSubmission<Self::ImageContext>,
@@ -2380,6 +2460,9 @@ impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
     }
 
     fn sync_pending_permissions(&self, session_id: &str, tracker: &RemoteSessionStateTracker) {
+        bitfun_services_integrations::remote_connect::sync_acp_permission_mailbox_into_tracker(
+            session_id, tracker,
+        );
         let Ok(manager) = crate::product_runtime::core_permission_request_manager() else {
             return;
         };
@@ -2574,6 +2657,7 @@ mod tests {
     use std::collections::HashSet;
 
     use bitfun_runtime_ports::SessionTranscriptReader;
+    use bitfun_services_core::workspace_identity::workspace_session_identity;
 
     use super::*;
     use crate::service::session::{
@@ -2592,6 +2676,46 @@ mod tests {
             error.kind,
             bitfun_runtime_ports::PortErrorKind::SessionInUse
         );
+    }
+
+    #[test]
+    fn remote_session_workspace_scope_preserves_logical_and_storage_locations() {
+        let identity = workspace_session_identity(
+            "/srv/remote/project",
+            Some("connection-1"),
+            Some("remote.example"),
+        )
+        .expect("remote workspace identity");
+        let storage_path = std::path::PathBuf::from("/local/mirror/sessions");
+        let scope = resolved_remote_session_workspace_scope(
+            WorkspaceBinding::new_remote(
+                None,
+                std::path::PathBuf::from("/srv/remote/project"),
+                "connection-1".to_string(),
+                "Remote host".to_string(),
+                identity,
+            ),
+            storage_path.clone(),
+        );
+
+        assert_eq!(scope.workspace_path, "/srv/remote/project");
+        assert_eq!(scope.session_storage_path, storage_path);
+        assert_eq!(scope.remote_connection_id.as_deref(), Some("connection-1"));
+        assert_eq!(scope.remote_ssh_host.as_deref(), Some("remote.example"));
+    }
+
+    #[test]
+    fn local_session_workspace_scope_omits_remote_facts() {
+        let storage_path = std::path::PathBuf::from("/local/project/.bitfun/sessions");
+        let scope = resolved_remote_session_workspace_scope(
+            WorkspaceBinding::new(None, std::path::PathBuf::from("/local/project")),
+            storage_path.clone(),
+        );
+
+        assert_eq!(scope.workspace_path, "/local/project");
+        assert_eq!(scope.session_storage_path, storage_path);
+        assert_eq!(scope.remote_connection_id, None);
+        assert_eq!(scope.remote_ssh_host, None);
     }
 
     #[test]

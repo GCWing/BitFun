@@ -77,6 +77,7 @@ pub struct AppState {
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
     pub acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
+    pub acp_event_publisher: Arc<crate::runtime::AcpEventPublisher>,
     pub token_usage_service: Arc<token_usage::TokenUsageService>,
     pub miniapp_manager: Arc<MiniAppManager>,
     pub js_worker_pool: Option<Arc<JsWorkerPool>>,
@@ -101,6 +102,7 @@ pub struct AppState {
 impl AppState {
     pub async fn new_async(
         token_usage_service: Arc<token_usage::TokenUsageService>,
+        acp_event_publisher: Arc<crate::runtime::AcpEventPublisher>,
     ) -> BitFunResult<Self> {
         let start_time = std::time::Instant::now();
 
@@ -344,6 +346,7 @@ impl AppState {
             agent_registry,
             mcp_service,
             acp_client_service,
+            acp_event_publisher,
             token_usage_service,
             miniapp_manager,
             js_worker_pool,

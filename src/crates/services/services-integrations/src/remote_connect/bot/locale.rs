@@ -186,6 +186,10 @@ pub struct BotStrings {
     pub devices_switched_local: &'static str,
     pub devices_remote_prefix: &'static str,
     pub devices_msg_sent: &'static str,
+    /// ACP sessions are observation-only on IM until P3 remote-control UX lands.
+    pub acp_session_unsupported: &'static str,
+    /// Remote resume hit consecutive ACP-only pages; ask the user to page onward.
+    pub resume_acp_only_pages_hint: &'static str,
 }
 
 const STRINGS_ZH: BotStrings = BotStrings {
@@ -343,6 +347,8 @@ const STRINGS_ZH: BotStrings = BotStrings {
     devices_switched_local: "已切换回本地设备",
     devices_remote_prefix: "远程设备",
     devices_msg_sent: "消息已发送，远程 agent 正在执行",
+    acp_session_unsupported: "该会话由外部 ACP 代理驱动，当前 IM 机器人不能发送或恢复。请在 Desktop / 手机端使用 ACP 远程控制。",
+    resume_acp_only_pages_hint: "本页没有可在机器人中恢复的会话（已跳过若干 ACP 会话）。回复 0 继续翻页，或发送 /menu 返回。",
 };
 
 const STRINGS_ZH_TW: BotStrings = BotStrings {
@@ -500,6 +506,8 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     devices_switched_local: "已切換回本地裝置",
     devices_remote_prefix: "遠端裝置",
     devices_msg_sent: "訊息已傳送，遠端 agent 正在執行",
+    acp_session_unsupported: "此工作階段由外部 ACP 代理驅動，目前 IM 機器人無法傳送或恢復。請在 Desktop / 手機端使用 ACP 遠端控制。",
+    resume_acp_only_pages_hint: "本頁沒有可在機器人中恢復的會話（已跳過若干 ACP 會話）。回覆 0 繼續翻頁，或發送 /menu 返回。",
 };
 
 const STRINGS_EN: BotStrings = BotStrings {
@@ -659,6 +667,8 @@ Open Remote Connect in BitFun Desktop and send the 6-digit pairing code here to 
     devices_switched_local: "Switched back to local device",
     devices_remote_prefix: "Remote device",
     devices_msg_sent: "Message sent, remote agent is working",
+    acp_session_unsupported: "This session is driven by an external ACP agent. The IM bot cannot send or resume it yet. Use Desktop or mobile ACP remote control.",
+    resume_acp_only_pages_hint: "No bot-resumable sessions on this page (ACP-only pages were skipped). Reply 0 for the next page, or send /menu to go back.",
 };
 
 pub fn strings_for(language: BotLanguage) -> &'static BotStrings {

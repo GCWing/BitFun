@@ -9,8 +9,22 @@ use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
 use tokio::sync::RwLock;
 
+mod acp_event_publisher;
+mod acp_permission_observer;
+mod acp_projection_writer;
+mod acp_request_idempotency;
+mod remote_acp_control_host;
 mod session_application;
 mod session_host_effects;
+
+pub(crate) use acp_event_publisher::{
+    acp_dialog_turn_started_event, acp_session_created_event, AcpEventPublisher, AcpTurnMapper,
+};
+pub(crate) use acp_permission_observer::DesktopAcpPermissionObserver;
+pub(crate) use acp_projection_writer::{
+    flush_desktop_acp_writer_blocking, install_desktop_acp_writer, AcpDurableProjectionWriter,
+};
+pub(crate) use remote_acp_control_host::DesktopRemoteAcpControlHost;
 
 use session_host_effects::ProductionDesktopSessionHostEffects;
 

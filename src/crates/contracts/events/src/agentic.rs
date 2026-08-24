@@ -16,6 +16,70 @@ pub enum AgenticEventPriority {
     Low = 3,
 }
 
+/// Who produced this envelope. Lives on the envelope, not on each event
+/// variant, so subscribers can isolate without forking event types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgenticEventOrigin {
+    /// BitFun Agent Runtime owns the turn.
+    #[default]
+    NativeRuntime,
+    /// An externally projected ACP client session.
+    ExternalAcp,
+}
+
+/// Which model drove a round. Native and external cases are variants so a
+/// round cannot be both or neither.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ModelRoundIdentity {
+    Native {
+        /// Resolved `AIModelConfig.id` used for this round.
+        model_config_id: String,
+        /// Provider model name sent on the request.
+        effective_model_name: String,
+    },
+    External {
+        /// Owning provider, currently only `"acp"`.
+        provider: String,
+        /// Adapter identity within the provider, e.g. `"gemini"`.
+        client_id: String,
+        /// Model id reported by the external agent, when it reports one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model_id: Option<String>,
+        /// Display name reported by the external agent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
+    },
+}
+
+/// ACP-only presentation facts for a model round. Native rounds omit this.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoundRenderHints {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disable_explore_grouping: bool,
+}
+
+/// Slash command advertised by an ACP agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpAvailableCommandFact {
+    pub name: String,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_hint: Option<String>,
+}
+
+/// One entry of an ACP agent execution plan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpPlanEntryFact {
+    pub content: String,
+    pub priority: String,
+    pub status: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentParentInfo {
     #[serde(rename = "toolCallId")]
@@ -282,10 +346,9 @@ pub enum AgenticEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         round_group_id: Option<String>,
         round_index: usize,
-        /// Resolved `AIModelConfig.id` used for this round.
-        model_config_id: String,
-        /// Provider model name sent on the request.
-        effective_model_name: String,
+        identity: ModelRoundIdentity,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        render_hints: Option<ModelRoundRenderHints>,
     },
 
     /// Emitted as soon as an automatic retry supersedes one model attempt.
@@ -364,6 +427,34 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         queue_state: DeepReviewQueueState,
+    },
+
+    AcpContextUsageUpdated {
+        session_id: String,
+        turn_id: String,
+        client_id: String,
+        used: u64,
+        size: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cost: Option<serde_json::Value>,
+    },
+
+    AcpAvailableCommandsUpdated {
+        session_id: String,
+        client_id: String,
+        commands: Vec<AcpAvailableCommandFact>,
+    },
+
+    AcpPlanUpdated {
+        session_id: String,
+        turn_id: String,
+        client_id: String,
+        entries: Vec<AcpPlanEntryFact>,
+    },
+
+    AcpSessionOptionsChanged {
+        session_id: String,
+        client_id: String,
     },
 
     SystemError {
@@ -596,6 +687,9 @@ pub struct AgenticEventEnvelope {
     pub event: AgenticEvent,
     pub priority: AgenticEventPriority,
     pub timestamp: SystemTime,
+    /// Absent on old snapshots; defaults to [`AgenticEventOrigin::NativeRuntime`].
+    #[serde(default)]
+    pub origin: AgenticEventOrigin,
 }
 
 impl PartialEq for AgenticEventEnvelope {
@@ -623,11 +717,20 @@ impl Ord for AgenticEventEnvelope {
 
 impl AgenticEventEnvelope {
     pub fn new(event: AgenticEvent, priority: AgenticEventPriority) -> Self {
+        Self::new_with_origin(event, priority, AgenticEventOrigin::NativeRuntime)
+    }
+
+    pub fn new_with_origin(
+        event: AgenticEvent,
+        priority: AgenticEventPriority,
+        origin: AgenticEventOrigin,
+    ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             event,
             priority,
             timestamp: SystemTime::now(),
+            origin,
         }
     }
 }
@@ -664,7 +767,11 @@ impl AgenticEvent {
             | Self::UserSteeringInjected { session_id, .. }
             | Self::DeepReviewQueueStateChanged { session_id, .. }
             | Self::SessionModelAutoMigrated { session_id, .. }
-            | Self::SessionReasoningPresetAutoCleared { session_id, .. } => Some(session_id),
+            | Self::SessionReasoningPresetAutoCleared { session_id, .. }
+            | Self::AcpContextUsageUpdated { session_id, .. }
+            | Self::AcpAvailableCommandsUpdated { session_id, .. }
+            | Self::AcpPlanUpdated { session_id, .. }
+            | Self::AcpSessionOptionsChanged { session_id, .. } => Some(session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
     }
@@ -689,7 +796,9 @@ impl AgenticEvent {
             | Self::ThinkingChunk { turn_id, .. }
             | Self::ToolEvent { turn_id, .. }
             | Self::DeepReviewQueueStateChanged { turn_id, .. }
-            | Self::UserSteeringInjected { turn_id, .. } => Some(turn_id),
+            | Self::UserSteeringInjected { turn_id, .. }
+            | Self::AcpContextUsageUpdated { turn_id, .. }
+            | Self::AcpPlanUpdated { turn_id, .. } => Some(turn_id),
             _ => None,
         }
     }
@@ -726,7 +835,11 @@ impl AgenticEvent {
             | Self::ContextCompressionStarted { .. }
             | Self::ThreadGoalUpdated { .. }
             | Self::UserSteeringInjected { .. }
-            | Self::ContextCompressionCompleted { .. } => AgenticEventPriority::Normal,
+            | Self::ContextCompressionCompleted { .. }
+            | Self::AcpContextUsageUpdated { .. }
+            | Self::AcpAvailableCommandsUpdated { .. }
+            | Self::AcpPlanUpdated { .. }
+            | Self::AcpSessionOptionsChanged { .. } => AgenticEventPriority::Normal,
 
             Self::ToolEvent { tool_event, .. } => tool_event.default_priority(),
 
@@ -1079,5 +1192,37 @@ mod tests {
         let serialized = serde_json::to_value(event).expect("serialize event");
         assert_eq!(serialized["type"], "SessionReasoningPresetAutoCleared");
         assert_eq!(serialized["previous_preset_id"], "high");
+    }
+
+    #[test]
+    fn envelope_without_origin_deserializes_as_native_runtime() {
+        let event = AgenticEvent::SessionStateChanged {
+            session_id: "session-1".to_string(),
+            new_state: "idle".to_string(),
+        };
+        let mut value =
+            serde_json::to_value(AgenticEventEnvelope::new(event, AgenticEventPriority::High))
+                .expect("serialize envelope");
+        value.as_object_mut().expect("object").remove("origin");
+
+        let envelope: AgenticEventEnvelope =
+            serde_json::from_value(value).expect("legacy envelope");
+        assert_eq!(envelope.origin, AgenticEventOrigin::NativeRuntime);
+    }
+
+    #[test]
+    fn envelope_preserves_explicit_external_acp_origin() {
+        let envelope = AgenticEventEnvelope::new_with_origin(
+            AgenticEvent::SessionStateChanged {
+                session_id: "session-1".to_string(),
+                new_state: "idle".to_string(),
+            },
+            AgenticEventPriority::High,
+            AgenticEventOrigin::ExternalAcp,
+        );
+        let round_trip: AgenticEventEnvelope =
+            serde_json::from_value(serde_json::to_value(&envelope).expect("serialize"))
+                .expect("deserialize");
+        assert_eq!(round_trip.origin, AgenticEventOrigin::ExternalAcp);
     }
 }

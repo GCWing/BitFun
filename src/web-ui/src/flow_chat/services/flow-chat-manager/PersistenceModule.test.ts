@@ -358,6 +358,20 @@ describe('PersistenceModule', () => {
     expect(mockSaveSessionTurn).not.toHaveBeenCalled();
   });
 
+  it('does not become a second transcript writer for ACP turns', async () => {
+    const turn = createDialogTurn('completed');
+    const context = createContext(turn);
+    const session = context.flowChatStore.getState().sessions.get(SESSION_ID);
+    session.config.agentType = 'acp:dsh';
+    session.mode = 'acp:dsh';
+
+    await saveDialogTurnToDisk(context, SESSION_ID, TURN_ID);
+    await flushMicrotasks();
+
+    expect(mockSaveSessionTurn).not.toHaveBeenCalled();
+    expect(mockSaveSessionMetadata).not.toHaveBeenCalled();
+  });
+
   it('defers partial-history saves until a storage identity is available', async () => {
     const turn = createDialogTurn('completed');
     delete turn.storageTurnIndex;

@@ -4162,8 +4162,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 round_id: round_id.clone(),
                 round_group_id: None,
                 round_index: 0,
-                model_config_id: String::new(),
-                effective_model_name: String::new(),
+                identity: bitfun_events::ModelRoundIdentity::Native {
+                    model_config_id: String::new(),
+                    effective_model_name: String::new(),
+                },
+                render_hints: None,
             })
             .await;
             self.emit_event(AgenticEvent::ToolEvent {

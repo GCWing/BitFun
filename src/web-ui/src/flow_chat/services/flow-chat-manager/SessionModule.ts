@@ -28,6 +28,7 @@ import type {
 } from './types';
 import type { Session } from '../../types/flow-chat';
 import { touchSessionActivity } from './PersistenceModule';
+import { rehydrateAcpPermissionsFromMailbox } from './AcpPermissionToolCardModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
@@ -359,6 +360,7 @@ async function hydrateHistoricalSession(
     startupTrace.markPhase('historical_session_hydrate_request_end', {
       durationMs: elapsedMs(traceStartedAt),
     });
+    void rehydrateAcpPermissionsFromMailbox(sessionId);
   } catch (error) {
     if (isSurfaceChangedError(error)) {
       throw error;
