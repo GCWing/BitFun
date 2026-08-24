@@ -11,8 +11,10 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: mocks.invoke,
+vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
+  api: {
+    invoke: mocks.invoke,
+  },
 }));
 
 vi.mock('./mainWindowInspector', () => ({
@@ -91,6 +93,10 @@ describe('useDebugInspector', () => {
       root.render(<DebugInspectorHarness />);
     });
     await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith('debug_devtools_available'));
+    // loadDevToolsAvailable awaits api.invoke before registering the keydown
+    // listener; flush the effect's microtask so the handler is attached
+    // before we dispatch.
+    await act(async () => { await Promise.resolve(); });
     mocks.invoke.mockClear();
 
     const event = dispatchKey({ key: 'F12' });
@@ -105,6 +111,7 @@ describe('useDebugInspector', () => {
       root.render(<DebugInspectorHarness />);
     });
     await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith('debug_devtools_available'));
+    await act(async () => { await Promise.resolve(); });
     mocks.invoke.mockClear();
 
     const event = dispatchKey({ key: 'i', ctrlKey: true, shiftKey: true });
