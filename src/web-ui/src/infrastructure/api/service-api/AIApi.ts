@@ -191,6 +191,7 @@ export interface ReasoningCatalogProjectionRequest {
 }
 
 export type SubscriptionLoginStatus = 'pending' | 'authorized' | 'failed' | 'cancelled';
+export type SubscriptionLoginMethod = 'browser' | 'device';
 
 export interface SubscriptionOfferingModel {
   id: string;
@@ -211,6 +212,7 @@ export interface SubscriptionAccount {
   account?: string | null;
   expires_at?: number | null;
   connected: boolean;
+  login_methods?: SubscriptionLoginMethod[];
   reauthentication_required?: boolean;
   vault_unavailable?: boolean;
   suggested_format: string;
@@ -227,6 +229,7 @@ export interface SubscriptionLogoutResult {
 export interface SubscriptionLoginStartResult {
   provider: SubscriptionProvider;
   session_id: string;
+  method?: SubscriptionLoginMethod;
   authorization_url: string;
   user_code?: string | null;
   instructions: string;
@@ -236,6 +239,7 @@ export interface SubscriptionLoginSessionSnapshot {
   provider: SubscriptionProvider;
   session_id: string;
   status: SubscriptionLoginStatus;
+  method?: SubscriptionLoginMethod | null;
   authorization_url?: string | null;
   user_code?: string | null;
   instructions?: string | null;
@@ -416,13 +420,14 @@ export class AIApi {
   async startSubscriptionLogin(
     provider: SubscriptionProvider,
     sessionId: string,
+    method?: SubscriptionLoginMethod,
   ): Promise<SubscriptionLoginStartResult> {
     try {
       return await api.invoke<SubscriptionLoginStartResult>('start_subscription_login', {
-        request: { provider, sessionId },
+        request: { provider, sessionId, method },
       });
     } catch (error) {
-      throw createTauriCommandError('start_subscription_login', error, { provider, sessionId });
+      throw createTauriCommandError('start_subscription_login', error, { provider, sessionId, method });
     }
   }
 

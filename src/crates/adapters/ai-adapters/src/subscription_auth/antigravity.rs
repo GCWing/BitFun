@@ -1,7 +1,7 @@
 //! Antigravity (Google) subscription login and credential resolution.
 //!
 //! Browser PKCE login against Google OAuth on a loopback listener (preferring
-//! port `51121` and falling back to an ephemeral port), then Bearer access to
+//! the registered port `51121`), then Bearer access to
 //! the Cloud Code Assist (`cloudcode-pa`) endpoint using the
 //! `gemini-code-assist` request format. Constants mirror
 //! `opencode-antigravity-auth`.
@@ -13,18 +13,23 @@ use super::{
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 const CLIENT_ID: &str = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
 const CALLBACK_PATH: &str = "/oauth-callback";
 const CALLBACK_PORT: u16 = 51121;
-const CALLBACK_PORTS: &[u16] = &[CALLBACK_PORT, 0];
+const CALLBACK_PORTS: &[u16] = &[CALLBACK_PORT];
 const AUTHORIZE_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const CODE_ASSIST_BASE_URL: &str = "https://cloudcode-pa.googleapis.com";
+const USER_INFO_URL: &str = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json";
+const CODE_ASSIST_BASE_URL: &str = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 const CODE_ASSIST_REQUEST_URL: &str =
-    "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
-const ANTIGRAVITY_VERSION: &str = "1.18.3";
+    "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse";
+const ANTIGRAVITY_VERSION_URL: &str =
+    "https://antigravity-auto-updater-974169037036.us-central1.run.app";
+const ANTIGRAVITY_CHANGELOG_URL: &str = "https://antigravity.google/changelog";
+const ANTIGRAVITY_VERSION_FALLBACK: &str = "2.0.6";
 const GOOG_API_CLIENT: &str = "google-cloud-sdk vscode_cloudshelleditor/0.1";
 const DEFAULT_MODEL: &str = "gemini-3-pro-high";
 const REFRESH_LEEWAY_MS: i64 = 5 * 60 * 1000;
@@ -57,23 +62,14 @@ fn platform_tokens() -> (String, &'static str) {
 }
 
 fn platform_tokens_for(os: &str, arch: &str) -> (String, &'static str) {
-    let user_agent_os = match os {
-        "windows" => "windows",
-        "macos" => "darwin",
-        _ => "linux",
-    };
-    let metadata_os = match os {
-        "windows" => "WINDOWS",
-        "macos" => "MACOS",
-        _ => "LINUX",
-    };
-    let user_agent_arch = match arch {
-        "x86_64" => "amd64",
-        "aarch64" => "arm64",
-        "x86" => "386",
-        other => other,
-    };
-    (format!("{user_agent_os}/{user_agent_arch}"), metadata_os)
+    // Antigravity only advertises Windows/macOS desktop builds. The OpenCode
+    // plugin deliberately chooses from these supported fingerprints even when
+    // it runs under Linux, WSL, or a container.
+    match (os, arch) {
+        (_, "aarch64") => ("darwin/arm64".to_string(), "MACOS"),
+        ("macos", _) => ("darwin/amd64".to_string(), "MACOS"),
+        _ => ("windows/amd64".to_string(), "WINDOWS"),
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,6 +82,14 @@ struct TokenResponse {
     refresh_token: Option<String>,
     #[serde(default)]
     expires_in: Option<i64>,
+    #[serde(default, skip_deserializing)]
+    email: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UserInfoResponse {
+    #[serde(default)]
+    email: Option<String>,
 }
 
 fn build_authorize_url(pkce: &Pkce, state: &str, redirect_uri: &str) -> String {
@@ -113,6 +117,85 @@ fn http_client(options: &SubscriptionHttpOptions) -> Result<reqwest::Client> {
     super::build_http_client(options, "Antigravity")
 }
 
+fn parse_antigravity_version(text: &str) -> Option<String> {
+    text.split(|character: char| !(character.is_ascii_digit() || character == '.'))
+        .find_map(|candidate| {
+            let parts = candidate.split('.').collect::<Vec<_>>();
+            (parts.len() == 3
+                && parts
+                    .iter()
+                    .all(|part| !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit())))
+            .then(|| candidate.to_string())
+        })
+}
+
+async fn fetch_antigravity_version(options: &SubscriptionHttpOptions) -> Option<String> {
+    let client = http_client(options).ok()?;
+    for (url, max_chars) in [
+        (ANTIGRAVITY_VERSION_URL, None),
+        (ANTIGRAVITY_CHANGELOG_URL, Some(5_000usize)),
+    ] {
+        let response = match client.get(url).timeout(Duration::from_secs(5)).send().await {
+            Ok(response) if response.status().is_success() => response,
+            _ => continue,
+        };
+        let mut body = match response.text().await {
+            Ok(body) => body,
+            Err(_) => continue,
+        };
+        if let Some(limit) = max_chars {
+            if body.len() > limit {
+                let boundary = body
+                    .char_indices()
+                    .map(|(index, _)| index)
+                    .take_while(|index| *index <= limit)
+                    .last()
+                    .unwrap_or(0);
+                body.truncate(boundary);
+            }
+        }
+        if let Some(version) = parse_antigravity_version(&body) {
+            return Some(version);
+        }
+    }
+    None
+}
+
+async fn antigravity_version(options: &SubscriptionHttpOptions) -> &'static str {
+    static VERSION: tokio::sync::OnceCell<String> = tokio::sync::OnceCell::const_new();
+    VERSION
+        .get_or_init(|| async {
+            fetch_antigravity_version(options)
+                .await
+                .unwrap_or_else(|| ANTIGRAVITY_VERSION_FALLBACK.to_string())
+        })
+        .await
+        .as_str()
+}
+
+async fn fetch_user_email(access_token: &str, options: &SubscriptionHttpOptions) -> Option<String> {
+    let response = http_client(options)
+        .ok()?
+        .get(USER_INFO_URL)
+        .bearer_auth(access_token)
+        .header(
+            reqwest::header::USER_AGENT,
+            "google-api-nodejs-client/9.15.1",
+        )
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    response
+        .json::<UserInfoResponse>()
+        .await
+        .ok()?
+        .email
+        .filter(|email| !email.trim().is_empty())
+}
+
 async fn exchange_code(
     code: &str,
     verifier: &str,
@@ -131,6 +214,11 @@ async fn exchange_code(
     ];
     let resp = client
         .post(TOKEN_URL)
+        .header(
+            reqwest::header::USER_AGENT,
+            "google-api-nodejs-client/9.15.1",
+        )
+        .header(reqwest::header::ACCEPT, "*/*")
         .form(&params)
         .send()
         .await
@@ -142,9 +230,14 @@ async fn exchange_code(
             "antigravity token exchange failed: HTTP {status}: {body}"
         ));
     }
-    resp.json()
+    let mut tokens = resp
+        .json::<TokenResponse>()
         .await
-        .context("parse antigravity token response")
+        .context("parse antigravity token response")?;
+    if let Some(access) = tokens.access_token.as_deref() {
+        tokens.email = fetch_user_email(access, options).await;
+    }
+    Ok(tokens)
 }
 
 async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Result<TokenResponse> {
@@ -185,7 +278,11 @@ fn metadata_from(
     let mut object = previous
         .and_then(|value| value.as_object().cloned())
         .unwrap_or_default();
-    if let Some(email) = tokens.id_token.as_deref().and_then(jwt::email) {
+    if let Some(email) = tokens
+        .email
+        .clone()
+        .or_else(|| tokens.id_token.as_deref().and_then(jwt::email))
+    {
         object.insert("email".to_string(), serde_json::Value::String(email));
     }
     if object.is_empty() {
@@ -255,6 +352,7 @@ pub(crate) async fn begin_login(
     };
 
     Ok(StartedLogin {
+        method: super::SubscriptionLoginMethod::Browser,
         authorization_url,
         user_code: None,
         instructions: "Complete authorization in your browser, then return to BitFun.".to_string(),
@@ -337,10 +435,11 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
 pub(crate) async fn resolve(options: &SubscriptionHttpOptions) -> Result<ResolvedCredential> {
     let (access, expires) = ensure_fresh(options).await?;
     let (ua_platform, meta_platform) = platform_tokens();
+    let version = antigravity_version(options).await;
     let mut headers = HashMap::new();
     headers.insert(
         "User-Agent".to_string(),
-        format!("antigravity/{ANTIGRAVITY_VERSION} {ua_platform}"),
+        format!("antigravity/{version} {ua_platform}"),
     );
     headers.insert("X-Goog-Api-Client".to_string(), GOOG_API_CLIENT.to_string());
     headers.insert(
@@ -367,7 +466,10 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_authorize_url, platform_tokens_for, redirect_uri};
+    use super::{
+        build_authorize_url, parse_antigravity_version, platform_tokens_for, redirect_uri,
+        ANTIGRAVITY_VERSION_FALLBACK, CODE_ASSIST_BASE_URL,
+    };
     use crate::subscription_auth::pkce::Pkce;
 
     #[test]
@@ -382,14 +484,14 @@ mod tests {
     }
 
     #[test]
-    fn reports_real_architecture_on_all_desktop_platforms() {
+    fn uses_only_antigravity_supported_desktop_fingerprints() {
         assert_eq!(
             platform_tokens_for("windows", "x86_64"),
             ("windows/amd64".to_string(), "WINDOWS")
         );
         assert_eq!(
             platform_tokens_for("windows", "aarch64"),
-            ("windows/arm64".to_string(), "WINDOWS")
+            ("darwin/arm64".to_string(), "MACOS")
         );
         assert_eq!(
             platform_tokens_for("macos", "aarch64"),
@@ -397,11 +499,24 @@ mod tests {
         );
         assert_eq!(
             platform_tokens_for("linux", "x86_64"),
-            ("linux/amd64".to_string(), "LINUX")
+            ("windows/amd64".to_string(), "WINDOWS")
         );
         assert_eq!(
             platform_tokens_for("linux", "aarch64"),
-            ("linux/arm64".to_string(), "LINUX")
+            ("darwin/arm64".to_string(), "MACOS")
+        );
+    }
+
+    #[test]
+    fn parses_live_antigravity_version_and_uses_current_fallback() {
+        assert_eq!(
+            parse_antigravity_version("Auto updater is running. Fixed Version: 2.0.6"),
+            Some("2.0.6".to_string())
+        );
+        assert_eq!(ANTIGRAVITY_VERSION_FALLBACK, "2.0.6");
+        assert_eq!(
+            CODE_ASSIST_BASE_URL,
+            "https://daily-cloudcode-pa.sandbox.googleapis.com"
         );
     }
 }

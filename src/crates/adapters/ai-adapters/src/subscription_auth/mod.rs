@@ -1,7 +1,7 @@
 //! In-app subscription authentication.
 //!
 //! Lets BitFun sign in to another product's subscription (Codex/ChatGPT,
-//! Antigravity/Google, OpenCode, Grok Build/SuperGrok) with an in-app OAuth flow,
+//! Antigravity/Google, OpenCode, xAI/SuperGrok) with an in-app OAuth flow,
 //! and use the resulting tokens to authenticate AI requests. Secret material
 //! is stored in the operating-system credential vault; the local JSON file
 //! contains non-secret account metadata only.
@@ -40,6 +40,14 @@ pub enum SubscriptionProvider {
     Antigravity,
     Opencode,
     Grok,
+}
+
+/// User-visible authorization method supported by a subscription provider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionLoginMethod {
+    Browser,
+    Device,
 }
 
 /// Transport policy shared by subscription-auth requests.
@@ -92,7 +100,7 @@ impl SubscriptionProvider {
             Self::Codex => "Codex (ChatGPT)",
             Self::Antigravity => "Antigravity (Google)",
             Self::Opencode => "OpenCode (Go/Zen)",
-            Self::Grok => "Grok Build (SuperGrok)",
+            Self::Grok => "xAI (SuperGrok)",
         }
         .to_string()
     }
@@ -104,6 +112,43 @@ impl SubscriptionProvider {
             Self::Opencode => opencode::suggested(),
             Self::Grok => grok::suggested(),
         }
+    }
+
+    /// Login methods exposed by the provider, in preferred display order.
+    pub fn login_methods(self) -> &'static [SubscriptionLoginMethod] {
+        use SubscriptionLoginMethod::{Browser, Device};
+
+        match self {
+            Self::Codex => &[Browser, Device],
+            Self::Antigravity => &[Browser],
+            Self::Opencode | Self::Grok => &[Device],
+        }
+    }
+
+    fn supports_login_method(self, method: SubscriptionLoginMethod) -> bool {
+        self.login_methods().contains(&method)
+    }
+}
+
+/// Returns a runtime-only model replacement for blank or retired subscription
+/// model ids. Persisted user configuration remains untouched, while existing
+/// installs keep working when a provider removes an old default slug.
+pub fn runtime_model_override(
+    provider: SubscriptionProvider,
+    configured_model: &str,
+) -> Option<&'static str> {
+    let model = configured_model.trim();
+    if model.is_empty() {
+        return Some(provider.suggested().2);
+    }
+    match (provider, model) {
+        // BitFun used this as its original Codex subscription default. It is
+        // no longer in OpenCode's current ChatGPT subscription model set.
+        (SubscriptionProvider::Codex, "gpt-5-codex") => Some("gpt-5.5"),
+        // The retired Grok proxy exposed an unversioned coding-model alias;
+        // xAI's standard Responses API now publishes the versioned model id.
+        (SubscriptionProvider::Grok, "grok-build") => Some("grok-build-0.1"),
+        _ => None,
     }
 }
 
@@ -150,6 +195,9 @@ pub struct SubscriptionAccount {
     /// Unix seconds when the current credential expires (for UI display).
     pub expires_at: Option<i64>,
     pub connected: bool,
+    /// Authorization methods this provider currently supports.
+    #[serde(default)]
+    pub login_methods: Vec<SubscriptionLoginMethod>,
     /// The account was known previously, but its secret is absent from the
     /// system credential vault. The UI should ask the user to sign in again.
     #[serde(default)]
@@ -192,6 +240,7 @@ pub struct ResolvedCredential {
 pub struct LoginStartResult {
     pub provider: SubscriptionProvider,
     pub session_id: String,
+    pub method: SubscriptionLoginMethod,
     pub authorization_url: String,
     pub user_code: Option<String>,
     pub instructions: String,
@@ -213,6 +262,7 @@ pub struct LoginSessionSnapshot {
     pub provider: SubscriptionProvider,
     pub session_id: String,
     pub status: LoginStatus,
+    pub method: Option<SubscriptionLoginMethod>,
     pub authorization_url: Option<String>,
     pub user_code: Option<String>,
     pub instructions: Option<String>,
@@ -222,6 +272,7 @@ pub struct LoginSessionSnapshot {
 
 /// Internal handle returned by each provider's `begin_login`.
 pub(crate) struct StartedLogin {
+    pub method: SubscriptionLoginMethod,
     pub authorization_url: String,
     pub user_code: Option<String>,
     pub instructions: String,
@@ -232,6 +283,7 @@ struct SessionState {
     /// Client-generated UUID used to correlate start/status/cancel commands.
     session_id: String,
     status: LoginStatus,
+    method: Option<SubscriptionLoginMethod>,
     authorization_url: Option<String>,
     user_code: Option<String>,
     instructions: Option<String>,
@@ -248,6 +300,7 @@ impl SessionState {
             provider,
             session_id: self.session_id.clone(),
             status: self.status,
+            method: self.method,
             authorization_url: self.authorization_url.clone(),
             user_code: self.user_code.clone(),
             instructions: self.instructions.clone(),
@@ -439,6 +492,7 @@ fn build_account(
         account,
         expires_at,
         connected,
+        login_methods: provider.login_methods().to_vec(),
         reauthentication_required,
         vault_unavailable,
         suggested_format: format.to_string(),
@@ -505,7 +559,25 @@ pub async fn start_login_with_options(
     session_id: String,
     options: SubscriptionHttpOptions,
 ) -> Result<LoginStartResult> {
+    start_login_with_method_and_options(provider, session_id, None, options).await
+}
+
+/// Starts a subscription login using an explicitly selected authorization
+/// method. `None` preserves the legacy preferred-method behavior.
+pub async fn start_login_with_method_and_options(
+    provider: SubscriptionProvider,
+    session_id: String,
+    method: Option<SubscriptionLoginMethod>,
+    options: SubscriptionHttpOptions,
+) -> Result<LoginStartResult> {
     validate_session_id(&session_id)?;
+    if let Some(method) = method.filter(|method| !provider.supports_login_method(*method)) {
+        return Err(anyhow!(
+            "{} does not support the requested {:?} login method",
+            provider.display_label(),
+            method
+        ));
+    }
     let cancel = CancellationToken::new();
     let generation = next_generation();
     // Serialize the durable revision snapshot with any local refresh/commit and
@@ -523,6 +595,7 @@ pub async fn start_login_with_options(
             SessionState {
                 session_id: session_id.clone(),
                 status: LoginStatus::Pending,
+                method,
                 authorization_url: None,
                 user_code: None,
                 instructions: None,
@@ -543,7 +616,13 @@ pub async fn start_login_with_options(
     let begin = async move {
         match provider {
             SubscriptionProvider::Codex => {
-                codex::begin_login(begin_cancel.clone(), expected_revision, options.clone()).await
+                codex::begin_login(
+                    begin_cancel.clone(),
+                    expected_revision,
+                    method,
+                    options.clone(),
+                )
+                .await
             }
             SubscriptionProvider::Antigravity => {
                 antigravity::begin_login(begin_cancel.clone(), expected_revision, options.clone())
@@ -582,6 +661,7 @@ pub async fn start_login_with_options(
     };
 
     let authorization_url = started.authorization_url.clone();
+    let started_method = started.method;
     // Desktop opener rejects relative URLs ("Not allowed to open url /...").
     // Every provider must return an absolute http(s) authorization URL.
     if !(authorization_url.starts_with("https://") || authorization_url.starts_with("http://")) {
@@ -616,6 +696,7 @@ pub async fn start_login_with_options(
             return Err(anyhow!("login cancelled"));
         };
         state.authorization_url = Some(authorization_url.clone());
+        state.method = Some(started_method);
         state.user_code = user_code.clone();
         state.instructions = Some(instructions.clone());
     }
@@ -632,6 +713,7 @@ pub async fn start_login_with_options(
     Ok(LoginStartResult {
         provider,
         session_id,
+        method: started_method,
         authorization_url,
         user_code,
         instructions,
@@ -833,14 +915,14 @@ pub async fn resolve_opencode_with_options(
     opencode::resolve_for(plan, format, options).await
 }
 
-/// Resolves a Grok Build credential for a concrete model. The adapter owns
-/// both the subscription endpoint and model-routing header so the OAuth token
-/// can never be sent to an arbitrary URL supplied by model configuration.
+/// Resolves an xAI subscription credential for a concrete model. The adapter
+/// owns the trusted Responses endpoint so the OAuth token can never be sent to
+/// an arbitrary URL supplied by model configuration.
 pub async fn resolve_grok(model: &str) -> Result<ResolvedCredential> {
     resolve_grok_with_options(model, &SubscriptionHttpOptions::default()).await
 }
 
-/// Resolves a Grok Build credential with an explicit transport policy.
+/// Resolves an xAI subscription credential with an explicit transport policy.
 pub async fn resolve_grok_with_options(
     model: &str,
     options: &SubscriptionHttpOptions,
@@ -922,6 +1004,63 @@ mod tests {
             Some(SubscriptionProvider::Grok)
         );
         assert_eq!(SubscriptionProvider::from_key("unknown"), None);
+    }
+
+    #[test]
+    fn subscription_login_methods_match_provider_protocols() {
+        assert_eq!(
+            SubscriptionProvider::Codex.login_methods(),
+            &[
+                SubscriptionLoginMethod::Browser,
+                SubscriptionLoginMethod::Device,
+            ]
+        );
+        assert_eq!(
+            SubscriptionProvider::Antigravity.login_methods(),
+            &[SubscriptionLoginMethod::Browser]
+        );
+        assert_eq!(
+            SubscriptionProvider::Opencode.login_methods(),
+            &[SubscriptionLoginMethod::Device]
+        );
+        assert_eq!(
+            serde_json::to_value(SubscriptionLoginMethod::Device).unwrap(),
+            serde_json::json!("device")
+        );
+    }
+
+    #[tokio::test]
+    async fn unsupported_login_method_is_rejected_before_session_start() {
+        let error = start_login_with_method_and_options(
+            SubscriptionProvider::Antigravity,
+            test_session_id(),
+            Some(SubscriptionLoginMethod::Device),
+            SubscriptionHttpOptions::default(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("does not support"));
+    }
+
+    #[test]
+    fn retired_subscription_defaults_receive_runtime_only_replacements() {
+        assert_eq!(
+            runtime_model_override(SubscriptionProvider::Codex, "gpt-5-codex"),
+            Some("gpt-5.5")
+        );
+        assert_eq!(
+            runtime_model_override(SubscriptionProvider::Grok, "grok-build"),
+            Some("grok-build-0.1")
+        );
+        assert_eq!(
+            runtime_model_override(SubscriptionProvider::Antigravity, "  "),
+            Some("gemini-3-pro-high")
+        );
+        assert_eq!(
+            runtime_model_override(SubscriptionProvider::Grok, "grok-4.5"),
+            None
+        );
     }
 
     #[tokio::test]
@@ -1550,6 +1689,7 @@ mod tests {
                 SessionState {
                     session_id: current_session_id,
                     status: LoginStatus::Pending,
+                    method: None,
                     authorization_url: None,
                     user_code: None,
                     instructions: None,
@@ -1675,6 +1815,7 @@ mod tests {
                 SessionState {
                     session_id: session_id.clone(),
                     status: LoginStatus::Pending,
+                    method: None,
                     authorization_url: None,
                     user_code: None,
                     instructions: None,
@@ -1717,6 +1858,7 @@ mod tests {
                 SessionState {
                     session_id: session_id.clone(),
                     status: LoginStatus::Pending,
+                    method: None,
                     authorization_url: None,
                     user_code: None,
                     instructions: None,
@@ -1766,6 +1908,7 @@ mod tests {
                 SessionState {
                     session_id: current_session_id.clone(),
                     status: LoginStatus::Pending,
+                    method: None,
                     authorization_url: None,
                     user_code: None,
                     instructions: None,
@@ -1798,6 +1941,7 @@ mod tests {
                 SessionState {
                     session_id: session_id.clone(),
                     status: LoginStatus::Authorized,
+                    method: None,
                     authorization_url: None,
                     user_code: None,
                     instructions: None,
@@ -1833,6 +1977,7 @@ mod tests {
                 SessionState {
                     session_id: new_session_id,
                     status: LoginStatus::Pending,
+                    method: None,
                     authorization_url: None,
                     user_code: None,
                     instructions: None,

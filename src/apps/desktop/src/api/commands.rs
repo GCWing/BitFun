@@ -5113,6 +5113,8 @@ pub struct SubscriptionProviderRequest {
 pub struct SubscriptionLoginRequest {
     pub provider: bitfun_core::infrastructure::subscription_auth::SubscriptionProvider,
     pub session_id: String,
+    #[serde(default)]
+    pub method: Option<bitfun_core::infrastructure::subscription_auth::SubscriptionLoginMethod>,
 }
 
 async fn configured_ai_proxy(
@@ -5147,9 +5149,10 @@ pub async fn start_subscription_login(
         proxy_config,
         false,
     );
-    bitfun_core::infrastructure::subscription_auth::start_login_with_options(
+    bitfun_core::infrastructure::subscription_auth::start_login_with_method_and_options(
         request.provider,
         request.session_id,
+        request.method,
         options,
     )
     .await

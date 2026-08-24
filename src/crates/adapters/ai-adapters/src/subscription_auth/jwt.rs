@@ -55,6 +55,26 @@ pub(crate) fn chatgpt_account_id(token: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Extracts the optional regional inference residency advertised by ChatGPT.
+/// `no_constraint` means the credential does not request a residency header.
+pub(crate) fn chatgpt_compute_residency(token: &str) -> Option<String> {
+    let claims = decode_claims(token)?;
+    let residency = claims
+        .get("https://api.openai.com/auth")
+        .and_then(|auth| auth.get("chatgpt_compute_residency"))
+        .and_then(Value::as_str)
+        .or_else(|| {
+            claims
+                .get("chatgpt_compute_residency")
+                .and_then(Value::as_str)
+        })?;
+    if residency.trim().is_empty() || residency == "no_constraint" {
+        None
+    } else {
+        Some(residency.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,16 +87,28 @@ mod tests {
     }
 
     #[test]
-    fn parses_email_and_account_id() {
+    fn parses_email_account_id_and_compute_residency() {
         let token = make_token(serde_json::json!({
             "exp": 1_800_000_000i64,
             "sub": "user_123",
             "email": "user@example.com",
-            "https://api.openai.com/auth": { "chatgpt_account_id": "acct_123" }
+            "https://api.openai.com/auth": {
+                "chatgpt_account_id": "acct_123",
+                "chatgpt_compute_residency": "us"
+            }
         }));
         assert_eq!(email(&token).as_deref(), Some("user@example.com"));
         assert_eq!(subject(&token).as_deref(), Some("user_123"));
         assert_eq!(chatgpt_account_id(&token).as_deref(), Some("acct_123"));
+        assert_eq!(chatgpt_compute_residency(&token).as_deref(), Some("us"));
+    }
+
+    #[test]
+    fn omits_unconstrained_compute_residency() {
+        let token = make_token(serde_json::json!({
+            "chatgpt_compute_residency": "no_constraint"
+        }));
+        assert_eq!(chatgpt_compute_residency(&token), None);
     }
 
     #[test]
