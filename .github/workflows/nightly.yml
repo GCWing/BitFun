@@ -315,7 +315,9 @@ jobs:
         shell: bash
         env:
           NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
-        run: echo "asset_version=${NIGHTLY_VERSION%%+*}" >>"$GITHUB_OUTPUT"
+        run: |
+          echo "asset_version=${NIGHTLY_VERSION%%+*}" >>"$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bitfun-relay-server" >>"$GITHUB_OUTPUT"
 
       - name: Build and push multi-platform Relay image
         id: relay-image
@@ -331,8 +333,8 @@ jobs:
             VERSION=${{ needs.check-changes.outputs.nightly_version }}
             REVISION=${{ github.sha }}
           tags: |
-            ghcr.io/gcwing/bitfun-relay-server:${{ env.NIGHTLY_TAG }}
-            ghcr.io/gcwing/bitfun-relay-server:${{ steps.nightly-image-meta.outputs.asset_version }}
+            ${{ steps.nightly-image-meta.outputs.image }}:${{ env.NIGHTLY_TAG }}
+            ${{ steps.nightly-image-meta.outputs.image }}:${{ steps.nightly-image-meta.outputs.asset_version }}
 
       - name: Smoke-test published Relay image on both platforms
         shell: bash
@@ -340,7 +342,7 @@ jobs:
           IMAGE_DIGEST: ${{ steps.relay-image.outputs.digest }}
         run: |
           bash scripts/relay/smoke-image.sh \
-            "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}"
+            "${{ steps.nightly-image-meta.outputs.image }}@${IMAGE_DIGEST}"
 
       - name: Generate signed Relay image descriptor
         shell: bash
@@ -355,7 +357,7 @@ jobs:
           asset_version="${NIGHTLY_VERSION%%+*}"
           [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
           docker buildx imagetools inspect \
-            "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}" \
+            "${{ steps.nightly-image-meta.outputs.image }}@${IMAGE_DIGEST}" \
             --raw >relay-image-manifest.json
           jq -e '
             [.manifests[].platform | .os + "/" + .architecture] as $platforms
@@ -363,7 +365,7 @@ jobs:
             and ($platforms | index("linux/arm64")) != null
           ' relay-image-manifest.json >/dev/null
           jq -n \
-            --arg image "ghcr.io/gcwing/bitfun-relay-server" \
+            --arg image "${{ steps.nightly-image-meta.outputs.image }}" \
             --arg tag "${NIGHTLY_TAG}" \
             --arg version "${asset_version}" \
             --arg digest "${IMAGE_DIGEST}" \
@@ -388,7 +390,7 @@ jobs:
           clean_config="$(mktemp -d)"
           trap 'rm -rf "$clean_config"' EXIT
           DOCKER_CONFIG="$clean_config" docker buildx imagetools inspect \
-            "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}" >/dev/null
+            "${{ steps.nightly-image-meta.outputs.image }}@${IMAGE_DIGEST}" >/dev/null
 
       - name: List release assets
         run: |
@@ -413,7 +415,7 @@ jobs:
             --assets-dir linux-release-assets \
             --version "${NIGHTLY_VERSION%%+*}" \
             --tag "${{ env.NIGHTLY_TAG }}" \
-            --repo "GCWing/BitFun" \
+            --repo "${{ github.repository }}" \
             --out linux-release-assets/linux-binaries.json
 
       - name: Prepare versioned Windows installer
@@ -507,14 +509,14 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${NIGHTLY_TAG}/relay-image.json" \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${NIGHTLY_TAG}/relay-image.json" \
             -o relay-image.published.json
           test "$(jq -r '.tag' relay-image.published.json)" = "${NIGHTLY_TAG}"
           test "$(jq -r '.version' relay-image.published.json)" = "${NIGHTLY_VERSION%%+*}"
-          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/gcwing/bitfun-relay-server"
+          test "$(jq -r '.image' relay-image.published.json)" = "${{ steps.nightly-image-meta.outputs.image }}"
           jq -e '.digest | test("^sha256:[0-9a-f]{64}$")' relay-image.published.json >/dev/null
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${NIGHTLY_TAG}/relay-image.json.sig" \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${NIGHTLY_TAG}/relay-image.json.sig" \
             -o /dev/null
 
       - name: Verify published macOS CLI assets
@@ -524,7 +526,7 @@ jobs:
         run: |
           set -euo pipefail
           ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
-          RELEASE_ROOT="https://github.com/GCWing/BitFun/releases/download/${{ env.NIGHTLY_TAG }}"
+          RELEASE_ROOT="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${{ env.NIGHTLY_TAG }}"
           for target in aarch64-apple-darwin x86_64-apple-darwin; do
             archive="${RELEASE_ROOT}/bitfun-cli-${ASSET_VERSION}-${target}.tar.gz"
             curl -fsSL --retry 5 --retry-delay 3 "$archive" -o /dev/null

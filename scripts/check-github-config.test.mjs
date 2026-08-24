@@ -488,17 +488,51 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   );
 });
 
-test('nightly Relay smoke test passes an exact image reference', () => {
+test('nightly publishes and verifies the Relay image in the current repository owner scope', () => {
   const workflow = yaml.parse(
     readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
   );
-  const smoke = workflow.jobs['publish-nightly'].steps.find(
+  const steps = workflow.jobs['publish-nightly'].steps;
+  const metadata = steps.find(
+    (step) => step.name === 'Resolve nightly image metadata',
+  );
+  const publish = steps.find(
+    (step) => step.name === 'Build and push multi-platform Relay image',
+  );
+  const smoke = steps.find(
     (step) => step.name === 'Smoke-test published Relay image on both platforms',
   );
+  const manifest = steps.find(
+    (step) => step.name === 'Generate Linux binaries manifest',
+  );
+  const verifyDescriptor = steps.find(
+    (step) => step.name === 'Verify published Relay image descriptor',
+  );
+  const verifyMacCli = steps.find(
+    (step) => step.name === 'Verify published macOS CLI assets',
+  );
+  const image = '${{ steps.nightly-image-meta.outputs.image }}';
 
+  assert.match(
+    metadata?.run ?? '',
+    /image=ghcr\.io\/\$\{GITHUB_REPOSITORY_OWNER,,\}\/bitfun-relay-server/,
+  );
+  assert.equal(
+    publish?.with?.tags,
+    `${image}:${'${{ env.NIGHTLY_TAG }}'}\n${image}:${'${{ steps.nightly-image-meta.outputs.asset_version }}'}\n`,
+  );
   assert.equal(
     smoke?.run,
-    'bash scripts/relay/smoke-image.sh \\\n  "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}"\n',
+    `bash scripts/relay/smoke-image.sh \\\n  "${image}@\${IMAGE_DIGEST}"\n`,
+  );
+  assert.match(manifest?.run ?? '', /--repo "\$\{\{ github\.repository \}\}"/);
+  assert.match(
+    verifyDescriptor?.run ?? '',
+    /\$\{GITHUB_SERVER_URL\}\/\$\{GITHUB_REPOSITORY\}\/releases\/download/,
+  );
+  assert.match(
+    verifyMacCli?.run ?? '',
+    /\$\{GITHUB_SERVER_URL\}\/\$\{GITHUB_REPOSITORY\}\/releases\/download/,
   );
 });
 
