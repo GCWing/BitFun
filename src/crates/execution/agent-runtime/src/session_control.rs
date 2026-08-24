@@ -11,6 +11,7 @@ pub enum SessionControlAction {
     Cancel,
     Delete,
     List,
+    Rename,
 }
 
 impl SessionControlAction {
@@ -20,6 +21,7 @@ impl SessionControlAction {
             Self::Cancel => "cancel",
             Self::Delete => "delete",
             Self::List => "list",
+            Self::Rename => "rename",
         }
     }
 }
@@ -159,8 +161,19 @@ fn validate_mutating_action_target(
     if input.agent_type.is_some() {
         return invalid("agent_type is only allowed for create");
     }
-    if input.session_name.is_some() {
+    // `rename` carries the new session title via session_name; every other
+    // mutating action rejects it (only `create` otherwise accepts session_name).
+    if input.session_name.is_some() && !matches!(action, SessionControlAction::Rename) {
         return invalid("session_name is only allowed for create");
+    }
+    // `rename` requires a non-empty new title.
+    if matches!(action, SessionControlAction::Rename) {
+        let Some(session_name) = input.session_name.as_deref() else {
+            return invalid("session_name is required for rename");
+        };
+        if session_name.trim().is_empty() {
+            return invalid("session_name must not be empty for rename");
+        }
     }
 
     let Some(session_id) = input.session_id.as_deref() else {
@@ -211,7 +224,9 @@ pub fn validate_session_control_input(
                 return invalid("create requires a creator session in tool context");
             }
         }
-        SessionControlAction::Cancel | SessionControlAction::Delete => {
+        SessionControlAction::Cancel
+        | SessionControlAction::Delete
+        | SessionControlAction::Rename => {
             return validate_mutating_action_target(&input.action, input, context);
         }
         SessionControlAction::List => {
@@ -251,6 +266,7 @@ pub fn render_session_control_tool_use_message(input: &Value) -> String {
         "create" => format!("Create session in {workspace}"),
         "cancel" => format!("Cancel active turn for session {session_id}"),
         "delete" => format!("Delete session {session_id}"),
+        "rename" => format!("Rename session {session_id}"),
         "list" => format!("List sessions in {workspace}"),
         _ => format!("Manage sessions in {workspace}"),
     }
@@ -290,4 +306,141 @@ pub fn session_control_cancel_result_message(
 
 pub fn session_control_deleted_result_message(session_id: &str, workspace: &str) -> String {
     format!("Deleted session '{session_id}' from workspace '{workspace}'.")
+}
+
+pub fn session_control_renamed_result_message(
+    session_id: &str,
+    workspace: &str,
+    session_name: &str,
+) -> String {
+    format!("Renamed session '{session_id}' to '{session_name}' in workspace '{workspace}'.")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn context(current: Option<&str>) -> SessionControlValidationContext<'_> {
+        SessionControlValidationContext {
+            current_session_id: current,
+            has_workspace_root: true,
+        }
+    }
+
+    #[test]
+    fn rename_action_parses_payload_session_id_and_name() {
+        let input: SessionControlInput = serde_json::from_value(json!({
+            "action": "rename",
+            "session_id": "worker_1",
+            "session_name": "new-title",
+        }))
+        .expect("rename payload must parse");
+        assert_eq!(input.action, SessionControlAction::Rename);
+        assert_eq!(input.session_id.as_deref(), Some("worker_1"));
+        assert_eq!(input.session_name.as_deref(), Some("new-title"));
+        assert_eq!(SessionControlAction::Rename.as_str(), "rename");
+    }
+
+    #[test]
+    fn rename_validation_requires_session_id() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Rename,
+            workspace: None,
+            session_id: None,
+            session_name: Some("new-title".to_string()),
+            agent_type: None,
+        };
+        let result = validate_session_control_input(&input, context(None));
+        assert!(!result.result);
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_id is required"));
+    }
+
+    #[test]
+    fn rename_validation_requires_session_name() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Rename,
+            workspace: None,
+            session_id: Some("worker_1".to_string()),
+            session_name: None,
+            agent_type: None,
+        };
+        let result = validate_session_control_input(&input, context(None));
+        assert!(!result.result);
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_name is required for rename"));
+    }
+
+    #[test]
+    fn rename_validation_rejects_blank_session_name() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Rename,
+            workspace: None,
+            session_id: Some("worker_1".to_string()),
+            session_name: Some("   ".to_string()),
+            agent_type: None,
+        };
+        let result = validate_session_control_input(&input, context(None));
+        assert!(!result.result);
+        assert_eq!(
+            result.message.as_deref(),
+            Some("session_name must not be empty for rename")
+        );
+    }
+
+    #[test]
+    fn rename_validation_accepts_valid_input() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Rename,
+            workspace: None,
+            session_id: Some("worker_1".to_string()),
+            session_name: Some("new-title".to_string()),
+            agent_type: None,
+        };
+        let result = validate_session_control_input(&input, context(None));
+        assert!(result.result, "{:?}", result.message);
+    }
+
+    #[test]
+    fn rename_validation_rejects_current_session() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Rename,
+            workspace: None,
+            session_id: Some("self_1".to_string()),
+            session_name: Some("new-title".to_string()),
+            agent_type: None,
+        };
+        let result = validate_session_control_input(&input, context(Some("self_1")));
+        assert!(!result.result);
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("cannot rename the current session"));
+    }
+
+    #[test]
+    fn rename_render_mentions_session() {
+        let rendered = render_session_control_tool_use_message(&json!({
+            "action": "rename",
+            "session_id": "worker_1",
+        }));
+        assert!(rendered.contains("Rename session"));
+        assert!(rendered.contains("worker_1"));
+    }
+
+    #[test]
+    fn renamed_result_message_mentions_id_and_new_name() {
+        let message = session_control_renamed_result_message("worker_1", "/ws", "new-title");
+        assert!(message.contains("worker_1"));
+        assert!(message.contains("new-title"));
+        assert!(message.contains("/ws"));
+    }
 }
