@@ -37,6 +37,7 @@ import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { AppearanceBackgroundMediaLayer, appearanceRuntime, useAppearance } from '@/infrastructure/appearance';
 import './AppLayout.scss';
 
@@ -445,10 +446,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       try {
         // Both macOS and Windows/Linux: Rust intercepts the native close request
         // and emits this event. We decide hide vs quit; persist interrupted turns only on quit.
-        const [{ listen }, { invoke }] = await Promise.all([
-          import('@tauri-apps/api/event'),
-          import('@tauri-apps/api/core'),
-        ]);
+        const { listen } = await import('@tauri-apps/api/event');
 
         const persistInterruptedTurnsForExit = async () => {
           try {
@@ -466,7 +464,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           if (isMacOS) {
             // macOS always hides to keep the app alive in the dock.
             try {
-              await invoke('hide_main_window_after_close_request');
+              await api.invoke('hide_main_window_after_close_request');
             } catch (error) {
               log.error('Failed to hide main window after close request', error);
             }

@@ -126,6 +126,76 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'speech_append_audio_chunk',
   'speech_finish_input_session',
   'speech_cancel_input_session',
+  // UI locale is controller app-shell state: it writes the controller's config
+  // file, rebuilds THIS machine's macOS menubar/tray, and drives the UI the user
+  // is looking at. Routing it to a peer both writes the wrong config and rebuilds
+  // the wrong machine's chrome (CLI peer returns unsupported). See PR #2428.
+  'i18n_get_current_language',
+  'i18n_set_language',
+  'i18n_get_supported_languages',
+  'i18n_get_config',
+  'i18n_set_config',
+  // Announcement cards/scheduler are controller app-shell state. get_pending /
+  // get_tips trigger the scheduler (mutate app_open_count + persist); seen /
+  // dismiss / never-show write the controller's announcement state. CLI peer
+  // returns unsupported. Keeping them LOCAL_ONLY also removes them from peer
+  // read-retry (see SIDE_EFFECTING_GET_COMMANDS). See scheduler.rs run().
+  'get_pending_announcements',
+  'get_announcement_tips',
+  'mark_announcement_seen',
+  'dismiss_announcement',
+  'never_show_announcement',
+  'trigger_announcement',
+  // Companion pets live on the controller's desktop. The import zip is picked by
+  // a local dialog on A; its absolute path only exists on A. Peer B cannot read
+  // it, and B's returned spritesheetPath is a B-absolute path A's plugin-fs
+  // cannot open. CLI peer returns unsupported at dispatch. Keeping these
+  // LOCAL_ONLY gates Peer Mode (invariant 10: download destinations stay on the
+  // controller). See PR #2428.
+  'list_agent_companion_pets',
+  'import_agent_companion_pet_package',
+  'delete_agent_companion_pet_package',
+  // Insights is the controller's own usage report: it reads the controller's
+  // session history and writes the HTML to the controller's user_data_dir. In
+  // Peer Mode generate_insights would run on B but listenProgress listens on A,
+  // openReport opens B's absolute path on A, and the 30s mutation timeout fires
+  // while B keeps running. Keep it controller-local so report, progress event
+  // and openPath all land on one machine. (Cross-device insights tracking is
+  // out of scope; this LOCAL gate is the reviewer-asked fix.) See PR #2428.
+  'generate_insights',
+  'get_latest_insights',
+  'load_insights_report',
+  'has_insights_data',
+  'cancel_insights_generation',
+  // IDE control events drive THIS window's panels (window.dispatchEvent). The
+  // listen is local; the result report must use the same transport on both
+  // success and error branches so a request never splits across hosts. CLI peer
+  // returns unsupported. See PR #2428.
+  'report_ide_control_result',
+  // Controller app-shell / local-device commands reached by migrating dynamic
+  // invoke() sites behind the adapter fence. These previously hit the local
+  // Tauri host directly; routing them to a peer would be a regression (the peer
+  // host does not implement them, and they operate on the controller's own
+  // browser/webview/DevTools/desktop-pet/diagnostics). Declared LOCAL_ONLY so
+  // api.invoke keeps them on the controller. See PR #2428 (lint fence + dynamic
+  // import migration).
+  'browser_control_launch',
+  'browser_control_list_browsers',
+  'browser_control_get_status',
+  'browser_control_restart_with_cdp',
+  'browser_control_enable_default_cdp',
+  'browser_webview_create',
+  'browser_webview_eval',
+  'browser_webview_navigate',
+  'browser_webview_reload',
+  'browser_webview_set_bounds',
+  'computer_use_get_status',
+  'debug_devtools_available',
+  'debug_open_devtools',
+  'resize_agent_companion_desktop_pet',
+  'show_agent_companion_desktop_pet',
+  'hide_agent_companion_desktop_pet',
+  'append_flow_chat_diagnostics',
 ]);
 
 /**
@@ -226,7 +296,22 @@ export function isPeerLocalOnlyCommand(command: string): boolean {
   return LOCAL_ONLY_COMMANDS.has(command);
 }
 
+/**
+ * `get_*` commands that run the announcement scheduler (mutate app_open_count +
+ * persist state). They are NOT side-effect-free reads and must never be
+ * auto-retried by the peer read path, where a retry would multiply the side
+ * effect. They are also LOCAL_ONLY, but this guard keeps the contract explicit
+ * if ownership ever moves back to the peer. See scheduler.rs run().
+ */
+const SIDE_EFFECTING_GET_COMMANDS = new Set([
+  'get_pending_announcements',
+  'get_announcement_tips',
+]);
+
 export function isPeerRetryableReadCommand(command: string): boolean {
+  if (SIDE_EFFECTING_GET_COMMANDS.has(command)) {
+    return false;
+  }
   return RETRYABLE_READ_COMMANDS.has(command) ||
     command.startsWith('read_') ||
     command.startsWith('list_') ||
