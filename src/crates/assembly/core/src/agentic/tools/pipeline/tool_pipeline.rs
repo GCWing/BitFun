@@ -98,6 +98,12 @@ fn convert_tool_result(
             // next decision.
             let assistant_text = result_for_assistant
                 .or_else(|| Some(render_tool_result_for_assistant(effective_tool_name, &data)));
+            // Tools with a typed response envelope can report a recoverable
+            // domain failure without throwing away their structured error and
+            // hints. Preserve that payload, but propagate its semantic status
+            // so the tool card, hooks, persistence, and model all agree that
+            // `{ ok: false }` is a failure rather than a completed operation.
+            let is_error = data.get("ok").and_then(|value| value.as_bool()) == Some(false);
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -108,7 +114,7 @@ fn convert_tool_result(
                 ),
                 result: data,
                 result_for_assistant: assistant_text,
-                is_error: false,
+                is_error,
                 duration_ms: None,
                 image_attachments,
             }
@@ -4386,6 +4392,36 @@ mod tests {
         assert!(assistant_text.contains("\"exit_code\": 1"));
         assert!(assistant_text.contains("\"working_directory\": \"/private/tmp\""));
         assert!(!assistant_text.contains("completed with error"));
+    }
+
+    #[test]
+    fn typed_ok_false_result_is_a_semantic_tool_error() {
+        let result = convert_tool_result(
+            FrameworkToolResult::Result {
+                data: json!({
+                    "ok": false,
+                    "domain": "browser",
+                    "action": "open_builtin",
+                    "error": {
+                        "code": "TIMEOUT",
+                        "message": "target did not become ready",
+                    },
+                }),
+                result_for_assistant: Some("TIMEOUT: target did not become ready".to_string()),
+                image_attachments: None,
+            },
+            "tool_1",
+            "ControlHub",
+            "ControlHub",
+        );
+
+        assert!(result.is_error);
+        assert_eq!(result.result["ok"], false);
+        assert_eq!(result.result["error"]["code"], "TIMEOUT");
+        assert_eq!(
+            result.result_for_assistant.as_deref(),
+            Some("TIMEOUT: target did not become ready")
+        );
     }
 
     #[test]

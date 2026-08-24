@@ -308,7 +308,7 @@ impl Tool for BitFunControlTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            "Control BitFun itself through its internal ProductControl API. Use the two-step flow: first `list` or `search`, then `get` the matching capability and follow its returned schema and availability to `configure`, `execute`, or `open`. The full catalog loads only on demand; never guess IDs or values."
+            "Control BitFun itself through its internal ProductControl API. Use the two-step flow: first `list` or `search`, then `get` the matching capability and follow its returned schema and availability to `configure`, `execute`, or `open`. To show a capability's root surface, call `open` with only its capability_id. destination.actionId is presentation metadata, never an item_id or operation_id. The full catalog loads only on demand; never guess IDs or values."
                 .to_string(),
         )
     }
@@ -338,11 +338,11 @@ impl Tool for BitFunControlTool {
                 },
                 "item_id": {
                     "type": "string",
-                    "description": "Optional canonical tool field: copy a returned itemId here; open uses it to navigate to an exact subview."
+                    "description": "Optional canonical tool field: copy a returned items[].id/itemId here to open an exact subview. Omit it to open the capability root; never copy destination.actionId here."
                 },
                 "operation_id": {
                     "type": "string",
-                    "description": "User-level operation ID returned by get; required for execute."
+                    "description": "User-level operations[].id returned by get; required for execute. A destination.actionId is not an operation ID."
                 },
                 "arguments": {
                     "type": "object",
@@ -527,7 +527,19 @@ impl Tool for BitFunControlTool {
             let capability_id = Self::capability_id(input).unwrap_or_default();
             if action == "open" {
                 if let Err(error) = validate_open_target(capability_id, Self::item_id(input)) {
-                    return invalid(&error);
+                    let valid_items = product_capability(capability_id)
+                        .map(|capability| {
+                            capability
+                                .items
+                                .iter()
+                                .map(|item| item.id.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .unwrap_or_default();
+                    return invalid(&format!(
+                        "{error}. Valid item_id values: [{valid_items}]. To open the capability root, call {{\"action\":\"open\",\"capability_id\":\"{capability_id}\"}} and omit item_id. destination.actionId is presentation metadata, not an item_id or operation_id."
+                    ));
                 }
             } else if product_capability(capability_id).is_err() {
                 return invalid("capability_id does not identify a known BitFun capability.");
@@ -544,7 +556,20 @@ impl Tool for BitFunControlTool {
                 .iter()
                 .find(|operation| operation.id == operation_id)
             else {
-                return invalid("operation_id is not exposed by this BitFun capability.");
+                let valid_operations = capability
+                    .operations
+                    .iter()
+                    .map(|operation| operation.id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let delegated_tool = capability
+                    .agent_control
+                    .as_ref()
+                    .map(|control| control.tool.as_str())
+                    .unwrap_or("none");
+                return invalid(&format!(
+                    "operation_id is not exposed by this BitFun capability. Valid operation_id values: [{valid_operations}]. The delegated Agent tool is {delegated_tool}. destination.actionId is presentation metadata and cannot be executed as an operation."
+                ));
             };
             if let Err(error) =
                 validate_operation_arguments(&operation.input_schema, input.get("arguments"))
@@ -680,9 +705,46 @@ impl Tool for BitFunControlTool {
                     self.inspect_shared_capability(capability_id).await?
                 };
                 if let Some(object) = result.as_object_mut() {
+                    let capability =
+                        product_capability(capability_id).map_err(BitFunError::tool)?;
                     object.insert(
                         "toolInput".to_string(),
                         json!({ "capability_id": capability_id }),
+                    );
+                    object.insert(
+                        "nextToolCalls".to_string(),
+                        json!({
+                            "openCapabilityRoot": {
+                                "action": "open",
+                                "capability_id": capability_id,
+                            },
+                            "delegateTool": capability
+                                .agent_control
+                                .as_ref()
+                                .map(|control| control.tool.as_str()),
+                            "validItemIds": capability
+                                .items
+                                .iter()
+                                .map(|item| item.id.as_str())
+                                .collect::<Vec<_>>(),
+                            "validOperationIds": capability
+                                .operations
+                                .iter()
+                                .map(|operation| operation.id.as_str())
+                                .collect::<Vec<_>>(),
+                            "validOptionIds": capability
+                                .options
+                                .iter()
+                                .map(|option| option.id.as_str())
+                                .collect::<Vec<_>>(),
+                        }),
+                    );
+                    object.insert(
+                        "idNamespaceRules".to_string(),
+                        json!({
+                            "destinationActionIdCallable": false,
+                            "note": "capability.destination and item.destination are presentation metadata. Use only returned item, operation, and option IDs in their matching BitFunControl fields.",
+                        }),
                     );
                 }
                 result
@@ -896,6 +958,42 @@ mod tests {
                 .await
                 .result
         );
+    }
+
+    #[tokio::test]
+    async fn invalid_presentation_ids_return_an_exact_recovery_call() {
+        let tool = BitFunControlTool::new();
+        let invalid_item = tool
+            .validate_input(
+                &json!({
+                    "action": "open",
+                    "capability_id": "feature.browser",
+                    "item_id": "surface.browser.open",
+                }),
+                None,
+            )
+            .await;
+        assert!(!invalid_item.result);
+        let item_message = invalid_item.message.unwrap_or_default();
+        assert!(item_message.contains("omit item_id"));
+        assert!(item_message.contains("\"capability_id\":\"feature.browser\""));
+        assert!(item_message.contains("presentation metadata"));
+
+        let invalid_operation = tool
+            .validate_input(
+                &json!({
+                    "action": "execute",
+                    "capability_id": "feature.browser",
+                    "operation_id": "surface.browser.open",
+                }),
+                None,
+            )
+            .await;
+        assert!(!invalid_operation.result);
+        let operation_message = invalid_operation.message.unwrap_or_default();
+        assert!(operation_message.contains("Valid operation_id values: []"));
+        assert!(operation_message.contains("ControlHub"));
+        assert!(operation_message.contains("cannot be executed as an operation"));
     }
 
     #[tokio::test]
@@ -1161,6 +1259,18 @@ mod tests {
         };
         assert_eq!(data["controlAvailability"]["status"], "unavailable");
         assert_eq!(data["controlAvailability"]["contractAvailable"], true);
+        assert_eq!(
+            data["nextToolCalls"]["openCapabilityRoot"]["action"],
+            "open"
+        );
+        assert_eq!(
+            data["nextToolCalls"]["openCapabilityRoot"]["capability_id"],
+            "setting.application.pet"
+        );
+        assert_eq!(
+            data["idNamespaceRules"]["destinationActionIdCallable"],
+            false
+        );
 
         let error = tool
             .call_impl(

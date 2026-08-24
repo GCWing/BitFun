@@ -55,6 +55,7 @@ import { useBackgroundCommandActivityStore } from '../../store/backgroundCommand
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
 import { reconcileSubagentIdentitiesFromFlowState } from '../../subagent-identity';
 import { createTab } from '@/shared/utils/tabUtils';
+import type { TabCreationOptions } from '@/shared/utils/tabUtils';
 import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 import {
@@ -178,6 +179,7 @@ export const __test_only__ = {
   handleDialogTurnInterrupted,
   handleDialogTurnRecovered,
   handleDialogTurnCancelled,
+  buildBuiltInBrowserTabOptions,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -2576,28 +2578,44 @@ function handleThreadGoalUpdatedEvent(event: any): void {
   });
 }
 
-function handleOpenBuiltInBrowser(event: OpenBuiltInBrowserEvent): void {
+function buildBuiltInBrowserTabOptions(
+  event: OpenBuiltInBrowserEvent,
+): TabCreationOptions | null {
   const url = typeof event?.url === 'string' ? event.url.trim() : '';
-  if (!url) {
-    log.warn('OpenBuiltInBrowser missing url', { event });
-    return;
-  }
+  if (!url) return null;
 
   const title = typeof event?.title === 'string' && event.title.trim()
     ? event.title.trim()
     : 'Browser';
-  const duplicateCheckKey = `browser-panel:${url}`;
+  const requestId = typeof event?.requestId === 'string' && event.requestId.trim()
+    ? event.requestId.trim()
+    : undefined;
+  const replaceExisting = event?.replaceExisting !== false;
+  // Replacing uses one stable product surface. A true new-tab request gets a
+  // request-scoped key so identical URLs can still open as distinct targets.
+  const duplicateCheckKey = replaceExisting
+    ? 'browser-panel'
+    : `browser-panel:${requestId ?? url}`;
 
-  createTab({
+  return {
     type: 'browser',
     title,
-    data: { url },
+    data: { url, openRequestId: requestId },
     metadata: { duplicateCheckKey },
     checkDuplicate: true,
     duplicateCheckKey,
-    replaceExisting: event?.replaceExisting !== false,
+    replaceExisting,
     mode: 'agent',
-  });
+  };
+}
+
+function handleOpenBuiltInBrowser(event: OpenBuiltInBrowserEvent): void {
+  const options = buildBuiltInBrowserTabOptions(event);
+  if (!options) {
+    log.warn('OpenBuiltInBrowser missing url', { event });
+    return;
+  }
+  createTab(options);
 }
 
 export function handleDialogTurnComplete(

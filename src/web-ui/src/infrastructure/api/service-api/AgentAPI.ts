@@ -611,6 +611,7 @@ export interface RecoverInterruptedDialogTurnResponse {
 export type DialogTurnStartedEvent = AgenticEvent;
 
 export interface OpenBuiltInBrowserEvent {
+  requestId?: string;
   url: string;
   title?: string;
   replaceExisting?: boolean;

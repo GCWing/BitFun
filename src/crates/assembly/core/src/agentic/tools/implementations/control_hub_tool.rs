@@ -17,8 +17,8 @@ use crate::agentic::tools::browser_control::browser_launcher::{
 };
 use crate::agentic::tools::browser_control::builtin_browser::{
     builtin_browser_host_available, connect_builtin_browser, connect_builtin_browser_matching,
-    default_builtin_browser_target_id, list_builtin_browser_targets,
-    set_default_builtin_browser_target, BuiltInBrowserClient,
+    default_builtin_browser_target_id, list_builtin_browser_targets, open_builtin_browser,
+    set_default_builtin_browser_target, BuiltInBrowserClient, BuiltInBrowserOpenRequest,
 };
 use crate::agentic::tools::browser_control::cdp_client::{CdpClient, CdpPageInfo, CdpVersionInfo};
 use crate::agentic::tools::browser_control::session_registry::{
@@ -27,7 +27,6 @@ use crate::agentic::tools::browser_control::session_registry::{
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::infrastructure::events::{get_global_event_system, BackendEvent};
 use crate::service::config::{get_global_config_service, GlobalConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolImageAttachment;
@@ -45,8 +44,6 @@ use super::control_hub::{err_response, ControlHubError, ErrorCode};
 /// in-flight `wait` / lifecycle subscriptions.
 static BROWSER_SESSIONS: std::sync::OnceLock<Arc<BrowserSessionRegistry>> =
     std::sync::OnceLock::new();
-
-const OPEN_BUILT_IN_BROWSER_EVENT: &str = "agentic://open-built-in-browser";
 
 /// `connect { mode: "headless" }` only attaches, it never launches. It must
 /// therefore not default to the logical port used by the `default` mode:
@@ -186,49 +183,17 @@ impl ControlHubTool {
         })
     }
 
-    fn urls_equivalent(left: &str, right: &str) -> bool {
-        left.trim_end_matches('/') == right.trim_end_matches('/')
-    }
-
-    async fn wait_for_opened_builtin_target(
-        url: &str,
-        previous_ids: &[String],
-    ) -> Result<BuiltInBrowserClient, ControlHubError> {
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
-        loop {
-            match list_builtin_browser_targets().await {
-                Ok(targets) => {
-                    let selected = targets.iter().find(|target| {
-                        target.active
-                            && (Self::urls_equivalent(&target.url, url)
-                                || !previous_ids.contains(&target.id))
-                    });
-                    if let Some(target) = selected {
-                        return connect_builtin_browser(Some(&target.id))
-                            .await
-                            .map_err(|error| {
-                                ControlHubError::new(ErrorCode::NotAvailable, error.to_string())
-                            });
-                    }
-                }
-                Err(error) => {
-                    return Err(ControlHubError::new(
-                        ErrorCode::NotAvailable,
-                        error.to_string(),
-                    ));
-                }
-            }
-            if tokio::time::Instant::now() >= deadline {
-                return Err(ControlHubError::new(
-                    ErrorCode::Timeout,
-                    "The built-in browser surface did not become ready for Agent control after it was opened.",
-                )
-                .with_hint(
-                    "Keep the BitFun Desktop window open and retry browser.open_builtin; CLI/headless runtimes do not provide a built-in browser surface.",
-                ));
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
+    fn builtin_open_error(error: BitFunError) -> ControlHubError {
+        let message = error.to_string();
+        let code = if message.contains("did not become ready") {
+            ErrorCode::Timeout
+        } else {
+            ErrorCode::NotAvailable
+        };
+        ControlHubError::new(code, message).with_hints([
+            "Keep the BitFun Desktop window open and retry browser.open_builtin; CLI/headless runtimes do not provide a built-in browser surface.",
+            "If the user only asked to show BitFun's browser without a URL, use BitFunControl open on capability_id='feature.browser' instead of inventing a placeholder URL.",
+        ])
     }
 
     fn browser_connect_mode_from_params(params: &Value) -> &'static str {
@@ -382,13 +347,25 @@ impl ControlHubTool {
                 ErrorCode::InvalidParams,
                 "browser.open_builtin requires params.url.",
             )
-            .with_hint(
+            .with_hints([
                 "Pass an http(s) URL or domain, e.g. { \"url\": \"https://example.com\" }.",
-            ));
+                "If the user only wants to show BitFun's browser surface, call BitFunControl open with capability_id='feature.browser' and omit item_id.",
+            ]));
         }
 
-        let normalized = if trimmed.contains("://") {
+        let lower_trimmed = trimmed.to_ascii_lowercase();
+        let normalized = if lower_trimmed.starts_with("http://")
+            || lower_trimmed.starts_with("https://")
+        {
             trimmed.to_string()
+        } else if trimmed.contains("://") || Self::has_explicit_uri_scheme(trimmed) {
+            return Err(ControlHubError::new(
+                ErrorCode::InvalidParams,
+                "Only complete http and https URLs can be opened in the built-in browser.",
+            )
+            .with_hint(
+                "Do not invent about:blank or another placeholder. If the user only wants the browser surface, call BitFunControl open with capability_id='feature.browser' and omit item_id.",
+            ));
         } else {
             format!("https://{trimmed}")
         };
@@ -409,6 +386,28 @@ impl ControlHubTool {
         Ok(normalized)
     }
 
+    fn has_explicit_uri_scheme(value: &str) -> bool {
+        let Some((scheme, remainder)) = value.split_once(':') else {
+            return false;
+        };
+        let mut characters = scheme.chars();
+        if !characters
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic())
+            || !characters.all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
+            })
+        {
+            return false;
+        }
+
+        // Preserve common host:port input such as localhost:3000. Every other
+        // RFC-style scheme prefix is explicit and must not be rewritten into
+        // a misleading https:// URL.
+        let port = remainder.split('/').next().unwrap_or_default();
+        !(port.chars().all(|character| character.is_ascii_digit()) && !port.is_empty())
+    }
+
     fn description_text() -> String {
         r#"ControlHub — the unified control entry point for browser, terminal, and routing metadata.
 
@@ -421,8 +420,9 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
   * `params.target: "builtin" | "external"` selects BitFun's native built-in WebView or an external CDP browser. Existing calls default to `external`; a built-in `session_id` also selects `builtin` automatically.
   * Portable actions use one `BrowserActions` implementation on both targets, with the same parameters, @eN refs, results, and errors. The browser engine is the adapter, not a second action stack.
 - Default URL-opening policy:
+  * If the user only asks to open/show BitFun's browser surface and provides no URL, use `BitFunControl` with `{ action: "open", capability_id: "feature.browser" }`. Do not invent `about:blank` or another URL.
   * For requests that only open, show, preview, or view a URL, use `open_builtin`. This is the default browser-opening action and keeps the page inside BitFun.
-  * `open_builtin { url, title?, replace_existing? }` opens the page and returns its built-in `session_id`; the Agent can immediately snapshot/read/interact with it using `target: "builtin"`.
+  * `open_builtin { url, title?, replace_existing? }` requires a real http(s) URL/domain, waits for the exact native WebView to become controllable, and returns its built-in `session_id`; the Agent can immediately snapshot/read/interact with it using `target: "builtin"`.
 - Shared workflow: `connect { target, target_url?, target_title? }` -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill with `{ target, selector: "@e1" }`. URL/title matching and exact `session_id` selection work on both targets; take a fresh snapshot after DOM mutations.
 - Automation modes (external browser):
   * `connect { mode: "default" }` (default) — on Chrome 144+ and current Edge, request a user-approved connection to the currently running real profile so existing tabs and login state are preserved. Other supported Chromium browsers also reuse the real profile when it publishes DevToolsActivePort; otherwise BitFun starts or attaches its persistent managed profile on port 9222.
@@ -615,7 +615,7 @@ Branch on `ok` and `error.code`, not on English messages.
                                     "session_count": builtin_target_count,
                                     "action_contract": "shared",
                                     "open_action": "open_builtin",
-                                    "event": OPEN_BUILT_IN_BROWSER_EVENT,
+                                    "readiness": "host_correlated_target",
                                 },
                                 "external": {
                                     "available": true,
@@ -706,6 +706,38 @@ Branch on `ok` and `error.code`, not on English messages.
                     "内置浏览器",
                     "侧边浏览器",
                 ];
+                let mentions_builtin_surface = [
+                    "built-in browser",
+                    "builtin browser",
+                    "embedded browser",
+                    "side browser",
+                    "right-side browser",
+                    "内置浏览器",
+                    "侧边浏览器",
+                ]
+                .iter()
+                .any(|keyword| lower.contains(keyword));
+                let has_concrete_url = [
+                    "http://",
+                    "https://",
+                    "localhost",
+                    "127.0.0.1",
+                    ".com",
+                    ".org",
+                    ".net",
+                    ".cn",
+                ]
+                .iter()
+                .any(|keyword| lower.contains(keyword));
+                if mentions_builtin_surface && !has_concrete_url {
+                    push(
+                        &mut suggestions,
+                        "unavailable",
+                        Some("BitFunControl"),
+                        95,
+                        "The request is to show BitFun's browser surface without a URL. Call BitFunControl open with capability_id='feature.browser' and omit item_id; do not invent about:blank.",
+                    );
+                }
                 let desktop_kw = [
                     "screenshot",
                     "click on",
@@ -1044,30 +1076,21 @@ Branch on `ok` and `error.code`, not on English messages.
                         ),
                     ));
                 }
-                let previous_ids = list_builtin_browser_targets()
-                    .await
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|target| target.id)
-                    .collect::<Vec<_>>();
-
-                get_global_event_system()
-                    .emit(BackendEvent::Custom {
-                        event_name: OPEN_BUILT_IN_BROWSER_EVENT.to_string(),
-                        payload: json!({
-                            "url": url,
-                            "title": title,
-                            "replaceExisting": replace_existing,
-                        }),
-                    })
-                    .await
-                    .map_err(|error| {
-                        BitFunError::tool(format!("failed to open built-in browser: {error}"))
-                    })?;
-
-                let client = match Self::wait_for_opened_builtin_target(&url, &previous_ids).await {
+                let client = match open_builtin_browser(BuiltInBrowserOpenRequest {
+                    url: url.clone(),
+                    title: title.clone(),
+                    replace_existing,
+                })
+                .await
+                {
                     Ok(client) => client,
-                    Err(error) => return Ok(err_response("browser", "open_builtin", error)),
+                    Err(error) => {
+                        return Ok(err_response(
+                            "browser",
+                            "open_builtin",
+                            Self::builtin_open_error(error),
+                        ))
+                    }
                 };
                 let target = client.target();
 
@@ -1654,32 +1677,22 @@ Branch on `ok` and `error.code`, not on English messages.
                             ),
                         ));
                     }
-                    let previous_ids = list_builtin_browser_targets()
-                        .await
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|target| target.id)
-                        .collect::<Vec<_>>();
-                    get_global_event_system()
-                        .emit(BackendEvent::Custom {
-                            event_name: OPEN_BUILT_IN_BROWSER_EVENT.to_string(),
-                            payload: json!({
-                                "url": url,
-                                "title": "Browser",
-                                "replaceExisting": false,
-                            }),
-                        })
-                        .await
-                        .map_err(|error| {
-                            BitFunError::tool(format!(
-                                "failed to open built-in browser tab: {error}"
+                    let client = match open_builtin_browser(BuiltInBrowserOpenRequest {
+                        url: url.clone(),
+                        title: "Browser".to_string(),
+                        replace_existing: false,
+                    })
+                    .await
+                    {
+                        Ok(client) => client,
+                        Err(error) => {
+                            return Ok(err_response(
+                                "browser",
+                                "tab_new",
+                                Self::builtin_open_error(error),
                             ))
-                        })?;
-                    let client =
-                        match Self::wait_for_opened_builtin_target(&url, &previous_ids).await {
-                            Ok(client) => client,
-                            Err(error) => return Ok(err_response("browser", "tab_new", error)),
-                        };
+                        }
+                    };
                     let target = client.target();
                     return Ok(vec![ToolResult::ok(
                         json!({
@@ -2948,7 +2961,7 @@ impl Tool for ControlHubTool {
                 },
                 "action": {
                     "type": "string",
-                    "description": "The atomic action to perform within the domain. For browser URL-opening or display requests, default to open_builtin. Browser params.target selects builtin or external; both use the same portable action contract."
+                    "description": "The atomic action to perform within the domain. For a concrete browser URL, default to open_builtin. To show BitFun's browser surface without a URL, use BitFunControl open on feature.browser instead of inventing a URL. Browser params.target selects builtin or external; both use the same portable action contract."
                 },
                 "params": {
                     "type": "object",
@@ -3254,6 +3267,17 @@ fn envelope_wrap_results(domain: &str, action: &str, results: Vec<ToolResult>) -
                 result_for_assistant,
                 image_attachments,
             } => {
+                // Domain helpers already return the canonical envelope for
+                // structured failures (and a few direct successes). Wrapping
+                // it again as `{ ok: true, data: { ok: false } }` makes both
+                // the model and UI report a failed operation as completed.
+                if data.get("ok").and_then(Value::as_bool).is_some() {
+                    return ToolResult::Result {
+                        data,
+                        result_for_assistant,
+                        image_attachments,
+                    };
+                }
                 let summary = result_for_assistant.clone();
                 let mut body = json!({
                     "ok": true,
@@ -3344,7 +3368,8 @@ fn map_dispatch_error(domain: &str, _action: &str, err: BitFunError) -> ControlH
 mod control_hub_tests {
     use super::*;
     use crate::agentic::tools::browser_control::builtin_browser::{
-        set_builtin_browser_host, BuiltInBrowserCommand, BuiltInBrowserHost, BuiltInBrowserTarget,
+        set_builtin_browser_host, BuiltInBrowserCommand, BuiltInBrowserHost,
+        BuiltInBrowserOpenRequest, BuiltInBrowserTarget,
     };
     use crate::agentic::tools::implementations::computer_use_actions::ComputerUseActions;
 
@@ -3352,6 +3377,18 @@ mod control_hub_tests {
 
     #[async_trait]
     impl BuiltInBrowserHost for FakeBuiltInBrowserHost {
+        async fn open(
+            &self,
+            request: BuiltInBrowserOpenRequest,
+        ) -> Result<BuiltInBrowserTarget, String> {
+            Ok(BuiltInBrowserTarget {
+                id: "embedded-browser-panel-view-test".to_string(),
+                url: request.url,
+                title: request.title,
+                active: true,
+            })
+        }
+
         async fn list_targets(&self) -> Result<Vec<BuiltInBrowserTarget>, String> {
             Ok(vec![BuiltInBrowserTarget {
                 id: "embedded-browser-panel-view-test".to_string(),
@@ -3415,6 +3452,29 @@ mod control_hub_tests {
         assert!(
             !msg.contains("ComputerUse"),
             "ComputerUse must not be advertised as a ControlHub domain: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn canonical_error_envelope_is_not_wrapped_as_a_success() {
+        let tool = ControlHubTool::new();
+        let results = tool
+            .call_impl(
+                &json!({
+                    "domain": "nope",
+                    "action": "any",
+                    "params": {},
+                }),
+                &empty_context(),
+            )
+            .await
+            .expect("unknown domain remains an in-band structured failure");
+        let payload = results.first().expect("one result").content();
+        assert_eq!(payload["ok"], false);
+        assert_eq!(payload["error"]["code"], "UNKNOWN_DOMAIN");
+        assert!(
+            payload.get("data").is_none(),
+            "must not nest ok=false under ok=true: {payload}"
         );
     }
 
@@ -3678,6 +3738,25 @@ mod control_hub_tests {
             payload.to_string().contains("open_builtin"),
             "route hint should point built-in browser requests to browser.open_builtin: {payload}"
         );
+    }
+
+    #[tokio::test]
+    async fn route_hint_uses_bitfun_control_for_surface_only_browser_intent() {
+        let tool = ControlHubTool::new();
+        let results = tool
+            .dispatch(
+                "meta",
+                "route_hint",
+                &json!({ "intent": "打开内置浏览器" }),
+                &empty_context(),
+            )
+            .await
+            .expect("route_hint succeeds");
+        let payload = results.first().expect("one result").content();
+        assert_eq!(payload["suggested_domain"], "unavailable");
+        assert_eq!(payload["suggested_tool"], "BitFunControl");
+        assert!(payload.to_string().contains("feature.browser"));
+        assert!(payload.to_string().contains("about:blank"));
     }
 
     #[test]
@@ -3976,6 +4055,11 @@ mod control_hub_tests {
             "description must default URL requests to the controllable built-in browser and document the shared action layer"
         );
         assert!(
+            desc.contains("capability_id: \"feature.browser\"")
+                && desc.contains("Do not invent `about:blank`"),
+            "description must separate a surface-only request from URL opening"
+        );
+        assert!(
             desc.contains("mode: \"headless\"") && desc.contains("mode: \"default\""),
             "description must mention both browser connect modes"
         );
@@ -4134,6 +4218,33 @@ mod control_hub_tests {
             serde_json::from_value(results[0].content().clone()).unwrap();
         assert_eq!(payload["ok"], serde_json::Value::Bool(false));
         assert_eq!(payload["error"]["code"], "INVALID_PARAMS");
+    }
+
+    #[tokio::test]
+    async fn browser_open_builtin_rejects_non_hierarchical_placeholder_scheme() {
+        let tool = ControlHubTool::new();
+        let results = tool
+            .dispatch(
+                "browser",
+                "open_builtin",
+                &json!({ "url": "about:blank" }),
+                &empty_context(),
+            )
+            .await
+            .expect("placeholder scheme should be a structured validation error");
+        let payload = results.first().expect("one result").content();
+        assert_eq!(payload["ok"], false);
+        assert_eq!(payload["error"]["code"], "INVALID_PARAMS");
+        assert!(payload.to_string().contains("BitFunControl"));
+        assert!(payload.to_string().contains("feature.browser"));
+    }
+
+    #[test]
+    fn browser_open_builtin_preserves_host_port_input() {
+        assert_eq!(
+            ControlHubTool::normalize_builtin_browser_url("localhost:4173", true).unwrap(),
+            "https://localhost:4173"
+        );
     }
 
     #[tokio::test]

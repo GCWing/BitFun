@@ -79,6 +79,13 @@ Product Control Registry 是闭集路由，不是第二个业务 owner，也不�
 兼容 Tauri command 可以保留为薄 adapter。对已经纳管的配置路径，旧 `set_config`
 必须转入相同 owner transaction；未纳管的内部路径保持兼容但不进入公开解析图。
 
+浏览器展示与浏览器自动化采用两段明确语义：没有 URL 的“显示内置浏览器”是
+`feature.browser` 的 ProductControl presentation command；携带 URL 的打开、导航和页面
+操作由 `ControlHub` 委托同一 `BrowserActions` owner。Desktop `BuiltInBrowserHost` 必须用
+请求 ID 将 presentation 事件与实际创建、激活的原生 WebView 关联，只有该精确 target
+注册为 Agent 可控后才能报告 `open_builtin` 成功。禁止通过 URL、target 数量或固定延时
+猜测就绪，也禁止把“面板已收到打开事件”冒充为“页面已可自动化”。
+
 ## 5. 控制分类
 
 每个用户条目必须具有机器可检查的控制分类：

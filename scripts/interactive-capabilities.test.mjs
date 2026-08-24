@@ -259,7 +259,9 @@ test('built-in and external browsers share one agent action contract', async () 
   assert.ok(browser.searchTerms.some((term) => /one BrowserActions/iu.test(term)));
   assert.equal(browser.agentControl.tool, 'ControlHub');
   assert.ok(browser.agentControl.workflowZh.some((step) => step.includes('browser.open_builtin')));
+  assert.ok(browser.agentControl.workflowZh.some((step) => step.includes('BitFunControl') && step.includes('about:blank')));
   assert.ok(browser.agentControl.workflowEn.some((step) => /share.*contract/iu.test(step)));
+  assert.ok(browser.agentControl.workflowEn.some((step) => /BitFunControl/iu.test(step) && /about:blank/iu.test(step)));
 
   const actions = await read(
     'src/crates/assembly/core/src/agentic/tools/browser_control/actions.rs',

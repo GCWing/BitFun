@@ -57,7 +57,7 @@ Open webpages and local services inside BitFun, where an agent can inspect the p
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| ControlHub · 1 | 用 browser.open_builtin 打开网址并取得内置页面的 session_id | Open the URL with browser.open_builtin and keep the returned built-in session_id |
+| ControlHub · 1 | 用户给出网址时，用 browser.open_builtin 打开并取得内置页面的 session_id；用户只要求显示内置浏览器且没有网址时，改用 BitFunControl 打开 feature.browser 能力根入口，不得臆造 about:blank | When the user supplies a URL, open it with browser.open_builtin and keep the returned built-in session_id; when they only want the built-in browser surface, open the feature.browser capability root with BitFunControl and never invent about:blank |
 | ControlHub · 2 | 对同一个 session_id 指定 target 为 builtin，也可用 target_url 或 target_title 定位；快照、点击、填写、滚动和截图等动作与外部 CDP 浏览器共用同一套契约 | Address that session_id with target set to builtin, or locate it by target_url or target_title; snapshots, clicks, fills, scrolling, screenshots, and other portable actions share the external CDP contract |
 | ControlHub · 3 | 页面变化后重新快照并使用最新元素引用；只有网络追踪、原始 CDP 和文件输入等协议扩展才切换到 external | Take a new snapshot after page changes and use fresh element refs; switch to external only for protocol extensions such as network tracing, raw CDP, or file-input injection |
 

@@ -847,8 +847,10 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div className="bitfun-flexible-panel__loading" data-bf-component="flexible-panel" data-bf-part="loading" data-bf-state="loading">{t('flexiblePanel.loading.terminal')}</div>}>
             <BrowserPanel
+              key={content.data?.openRequestId ?? 'browser-panel'}
               isActive={isActive}
               initialUrl={content.data?.url}
+              openRequestId={content.data?.openRequestId}
             />
           </React.Suspense>
         );
