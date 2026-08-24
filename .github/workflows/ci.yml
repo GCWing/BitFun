@@ -331,12 +331,13 @@ jobs:
     name: Nightly Build Contract
     needs: rust-impact
     if: ${{ !cancelled() && needs.rust-impact.result == 'success' }}
-    uses: ./.github/workflows/nightly.yml
+    uses: ./.github/workflows/nightly-artifacts.yml
     permissions:
       contents: read
     with:
-      force_build: true
-      build_only: true
+      checkout_ref: ${{ github.sha }}
+      version: 0.0.0-nightly.ci.${{ github.run_id }}
+      artifact_prefix: ci-${{ github.run_id }}
       artifact_retention_days: 1
 
   # Stable Rust/CLI result for CI runs: matrix jobs may be skipped for a proven
