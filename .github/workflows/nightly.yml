@@ -5,13 +5,48 @@ on:
     # Weekdays at 02:00 UTC
     - cron: "0 2 * * 1-5"
   workflow_dispatch:
+    inputs:
+      build_only:
+        description: "Build and package every artifact without publishing it."
+        required: false
+        default: false
+        type: boolean
+      artifact_retention_days:
+        description: "Retention for build artifacts."
+        required: false
+        default: 7
+        type: number
+  workflow_call:
+    inputs:
+      force_build:
+        description: "Run the build contract even when the latest commit is older than 25 hours."
+        required: false
+        default: true
+        type: boolean
+      build_only:
+        description: "Build and package every artifact without publishing it."
+        required: false
+        default: true
+        type: boolean
+      artifact_retention_days:
+        description: "Retention for build artifacts."
+        required: false
+        default: 1
+        type: number
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+      TAURI_UPDATER_PUBKEY:
+        required: false
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 concurrency:
-  group: nightly
+  # Reusable CI calls must not cancel a scheduled Nightly or another PR.
+  group: nightly-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -33,6 +68,8 @@ jobs:
       - name: Check for recent changes
         id: check
         shell: bash
+        env:
+          FORCE_BUILD: ${{ inputs.force_build || false }}
         run: |
           set -euo pipefail
 
@@ -43,7 +80,7 @@ jobs:
 
           echo "nightly_version=$NIGHTLY_VERSION" >> "$GITHUB_OUTPUT"
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "$FORCE_BUILD" == "true" ]]; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -164,6 +201,11 @@ jobs:
           shared-key: "nightly-v2-${{ matrix.platform.name }}"
           cache-bin: false
 
+      - name: Verify committed Cargo metadata
+        run: |
+          cargo metadata --locked --no-deps
+          cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -188,7 +230,9 @@ jobs:
           echo "Cargo.toml version:   $(grep 'x-release-please-version' Cargo.toml)"
 
       - name: Verify projected Cargo metadata
-        run: cargo metadata --locked --no-deps
+        run: |
+          cargo metadata --locked --no-deps
+          cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml
 
       - name: Run Windows CLI terminal contracts
         if: runner.os == 'Windows'
@@ -237,7 +281,7 @@ jobs:
         with:
           name: bitfun-nightly-${{ matrix.platform.name }}-bundle
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ inputs.artifact_retention_days || 7 }}
           path: |
             target/*/release/bundle
             target/release/bundle
@@ -261,13 +305,19 @@ jobs:
       checkout_ref: ${{ github.sha }}
       version: ${{ needs.check-changes.outputs.nightly_version }}
       artifact_prefix: nightly
+      artifact_retention_days: ${{ inputs.artifact_retention_days || 7 }}
 
   # ── Publish nightly pre-release ────────────────────────────────────
   publish-nightly:
     name: Publish Nightly
     needs: [check-changes, package, linux-binaries]
-    if: needs.check-changes.outputs.should_build == 'true'
+    if: >-
+      needs.check-changes.outputs.should_build == 'true' &&
+      inputs.build_only != true
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - uses: actions/checkout@v5

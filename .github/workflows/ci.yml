@@ -82,7 +82,7 @@ jobs:
   cli-test:
     name: CLI Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -219,14 +219,9 @@ jobs:
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           cache-on-failure: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
-      # Nightly and beta project a prerelease version before their nested
-      # `cargo --locked` build hooks run. Exercise that state transition in the
-      # ordinary CI OS matrix so a green commit cannot carry a stale lockfile
-      # contract into packaging.
-      - name: Project CI build version
-        run: node scripts/set-build-version.mjs --version 0.0.0-nightly.ci
-
-      - name: Verify projected Cargo metadata
+      # Validate the committed manifests and lockfile before any release
+      # projection is allowed to rewrite workspace package entries.
+      - name: Verify committed Cargo metadata
         run: cargo metadata --locked --no-deps
 
       # rust-cache prunes the workspace target directory before saving it, so
@@ -265,7 +260,7 @@ jobs:
       # so the workspace check above cannot catch drift in its shared Rust APIs.
       - name: Check installer compilation
         if: runner.os == 'Windows'
-        run: cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml
+        run: cargo check --locked --manifest-path BitFun-Installer/src-tauri/Cargo.toml
 
       - name: Run core library tests
         run: cargo test --locked -p bitfun-core --lib
@@ -336,6 +331,20 @@ jobs:
       # derivation treats separators differently) and need their own fix.
       - name: Run search tool tests
         run: "cargo test --locked -p tool-runtime --lib search::"
+
+  # Execute the exact five-platform Nightly artifact producers with publishing
+  # disabled. This is the build contract: a required CI result cannot be green
+  # unless the same release linking, Tauri bundling, Installer, macOS CLI, and
+  # Linux CLI/Relay paths used by Nightly all succeed.
+  nightly-build-contract:
+    name: Nightly Build Contract
+    uses: ./.github/workflows/nightly.yml
+    permissions:
+      contents: read
+    with:
+      force_build: true
+      build_only: true
+      artifact_retention_days: 1
 
   # ── DeepSeek Harness bridge: profile packaging on Windows ──────────
   # `prepare:dsh-profile` runs from `frontend:build-all` / official desktop

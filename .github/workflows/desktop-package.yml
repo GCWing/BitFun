@@ -277,6 +277,11 @@ jobs:
           shared-key: "package-v2-${{ matrix.platform.name }}"
           cache-bin: false
 
+      - name: Verify committed Cargo metadata
+        run: |
+          cargo metadata --locked --no-deps
+          cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -297,6 +302,11 @@ jobs:
       - name: Project beta build version
         if: needs.prepare.outputs.release_channel == 'beta'
         run: node scripts/set-build-version.mjs --version "${{ needs.prepare.outputs.version }}"
+
+      - name: Verify build Cargo metadata
+        run: |
+          cargo metadata --locked --no-deps
+          cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml
 
       - name: Verify release version metadata
         run: node scripts/verify-release-version-sync.mjs --version "${{ needs.prepare.outputs.version }}"
