@@ -113,6 +113,50 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // belongs to the person at this machine, so refuse it explicitly rather
     // than relying on the command being unimplemented here.
     "git_trust_repository",
+    // Controller app-shell state mirrored from the FE deny list. An older or
+    // non-Web-UI controller can still HostInvoke these onto this peer, so the
+    // CLI peer host must refuse them independently of the FE optimization.
+    // Keep in sync with `src/web-ui/.../adapters/peer-device-adapter.ts`
+    // LOCAL_ONLY_COMMANDS and `src/apps/desktop/src/api/peer_host_invoke.rs`.
+    // These controller-owned commands are not implemented here either, but
+    // being unimplemented is not the boundary — refuse explicitly.
+    "i18n_get_current_language",
+    "i18n_set_language",
+    "i18n_get_supported_languages",
+    "i18n_get_config",
+    "i18n_set_config",
+    "get_pending_announcements",
+    "get_announcement_tips",
+    "mark_announcement_seen",
+    "dismiss_announcement",
+    "never_show_announcement",
+    "trigger_announcement",
+    "list_agent_companion_pets",
+    "import_agent_companion_pet_package",
+    "delete_agent_companion_pet_package",
+    "generate_insights",
+    "get_latest_insights",
+    "load_insights_report",
+    "has_insights_data",
+    "cancel_insights_generation",
+    "report_ide_control_result",
+    "browser_control_launch",
+    "browser_control_list_browsers",
+    "browser_control_get_status",
+    "browser_control_restart_with_cdp",
+    "browser_control_enable_default_cdp",
+    "browser_webview_create",
+    "browser_webview_eval",
+    "browser_webview_navigate",
+    "browser_webview_reload",
+    "browser_webview_set_bounds",
+    "computer_use_get_status",
+    "debug_devtools_available",
+    "debug_open_devtools",
+    "resize_agent_companion_desktop_pet",
+    "show_agent_companion_desktop_pet",
+    "hide_agent_companion_desktop_pet",
+    "append_flow_chat_diagnostics",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.
