@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,6 +41,35 @@ export function setBuildVersion(root, version) {
     /^version = "[^"]+"$/m,
     `version = "${version}"`,
   );
+
+  syncCargoLock(root);
+}
+
+// Workspace members inherit the root version, so the lockfile carries a copy of
+// it for every member. Leaving those stale breaks any later `cargo --locked`
+// invocation. Cargo has to do the rewrite: a text substitution would also catch
+// third-party crates that happen to publish the same version string, and would
+// miss members that pin a version of their own.
+//
+// This cannot run with --offline: resolving the workspace walks every source,
+// and the git dependencies (tauri) are not in a cold CI cargo home yet.
+function syncCargoLock(root) {
+  if (!existsSync(path.join(root, 'Cargo.lock'))) {
+    return;
+  }
+
+  const result = spawnSync('cargo', ['update', '--workspace'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  if (result.error) {
+    throw new Error(`Failed to run cargo update: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `cargo update --workspace failed with exit code ${result.status}\n${result.stderr || ''}`,
+    );
+  }
 }
 
 function replaceVersion(file, pattern, replacement) {
