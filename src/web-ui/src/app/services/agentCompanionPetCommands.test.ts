@@ -9,8 +9,10 @@ const saveSettingsMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const openSettingsMock = vi.hoisted(() => vi.fn());
 const invokeMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: invokeMock,
+vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
+  api: {
+    invoke: invokeMock,
+  },
 }));
 
 vi.mock('@/flow_chat/services/FlowChatManager', () => ({
