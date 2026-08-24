@@ -5,6 +5,7 @@
 
 const { spawn } = require('child_process');
 const fs = require('fs');
+const http = require('http');
 const https = require('https');
 const os = require('os');
 const path = require('path');
@@ -116,6 +117,26 @@ function dbgWorker(tag, detail) {
 dbgWorker('boot', `pid=${process.pid} runtime=${process.version}`);
 
 let cachedPrefix = null; // { argv, env }
+
+// 续跑对账缓存：`todo list` 只会在 turn 完成后变化，短时间内重复查询纯属浪费。
+// key = goalId@projectDir；60s 内直接复用上一轮对账结果。
+const RESUME_RECON_TTL_MS = 60 * 1000;
+let resumeReconCache = null; // { key, at, resume, resumeNote }
+
+// 外部已解决（issue 被维护者关闭）的实时复核结果缓存：GitHub 匿名配额很小，
+// 不能每次轮询都打一遍。key = goalId；10 分钟内复用，且受全局限流退避约束。
+const LIVE_ISSUE_CHECK_TTL_MS = 10 * 60 * 1000;
+const LIVE_ISSUE_CHECK_MAX_ISSUES = 10; // cap per-cycle issue-status lookups
+const liveIssueCheckCache = new Map(); // goalId -> { at, resolved }
+
+// 增量 OpenViking 同步：仓库 HEAD 没变就不用再整仓 add-resource 一次。
+// key = repoLabel -> 上次成功同步时的 HEAD sha。
+const ovSyncRevision = new Map();
+
+// loopx serve-status 后台进程（reward 反馈走它的 loopback-only HTTP /reward/append）。
+// 按需拉起、进程内复用；跨 projectDir 切换时换一个端口重启。
+let statusServerProc = null; // { child, port, projectDir }
+const STATUS_SERVER_PORTS = [18711, 18712, 18713];
 
 // loopx is a Python CLI; on zh-CN Windows its stdout defaults to GBK, which
 // breaks both JSON.parse and any non-ASCII reason strings. Force UTF-8, and
@@ -383,13 +404,31 @@ async function probePython() {
   return firstFound || { found: false, version: null, ok: false, exe: null };
 }
 
-async function probeGit() {
-  try {
-    const { code, stdout, stderr } = await spawnLoopx({ argv: ['git'] }, ['--version'], { timeoutMs: 8000 });
-    return { found: code === 0, version: (stdout + stderr).trim().split(/\r?\n/)[0] || null };
-  } catch (_) {
-    return { found: false, version: null };
+// Mirror of absolutePythonExes for git: the worker can inherit a restricted
+// PATH, and a git installed at its default location must not be reported
+// missing (that would send the user to install something they already have).
+function absoluteGitExes() {
+  const list = [];
+  if (process.platform === 'win32') {
+    for (const programFiles of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
+      if (programFiles) list.push(path.join(programFiles, 'Git', 'cmd', 'git.exe'));
+    }
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) list.push(path.join(localAppData, 'Programs', 'Git', 'cmd', 'git.exe'));
+  } else {
+    list.push('/opt/homebrew/bin/git', '/usr/local/bin/git', '/usr/bin/git');
   }
+  return list.filter((p) => { try { return fs.existsSync(p); } catch (_) { return false; } });
+}
+
+async function probeGit() {
+  for (const argv of [['git'], ...absoluteGitExes().map((exe) => [exe])]) {
+    try {
+      const { code, stdout, stderr } = await spawnLoopx({ argv }, ['--version'], { timeoutMs: 8000 });
+      if (code === 0) return { found: true, version: (stdout + stderr).trim().split(/\r?\n/)[0] || null, exe: argv[0] };
+    } catch (_) { /* try the next candidate */ }
+  }
+  return { found: false, version: null, exe: null };
 }
 
 function prereqErrorMessage(prereqs) {
@@ -571,6 +610,47 @@ function readRegistry(projectDir) {
   }
 }
 
+// loopx bootstrap hardcodes coordination.requires_parent_approval =
+// ["write", "publish", "production-action"], which makes EVERY repo write emit
+// an "Owner approval gate" user_gate — even though the intake confirmation
+// sheet already granted --write-scope write (that flag only sets write_scope,
+// it does NOT clear requires_parent_approval). For an auto-fix console the
+// owner has already consented to code edits, so drop "write" from the list and
+// keep publish + production-action gated (a public PR still deserves review).
+// Registry surgery with the same timestamped-backup discipline as deleteGoal;
+// idempotent — a registry without "write" in the list is left untouched.
+function clearWriteApprovalRequirement(projectDir, goalId) {
+  const candidates = [...new Set([resolveRegistryPath(projectDir), resolveRegistryPath(null)])];
+  let changed = 0;
+  for (const registryPath of candidates) {
+    try {
+      if (!fs.existsSync(registryPath)) continue;
+      const raw = fs.readFileSync(registryPath, 'utf8');
+      const registry = JSON.parse(raw);
+      if (!Array.isArray(registry.goals)) continue;
+      for (const goal of registry.goals) {
+        const id = goal.goal_id || goal.id;
+        if (id !== goalId) continue;
+        const coord = goal.coordination && typeof goal.coordination === 'object' ? goal.coordination : {};
+        const list = Array.isArray(coord.requires_parent_approval)
+          ? coord.requires_parent_approval
+          : [];
+        if (!list.includes('write')) continue;
+        coord.requires_parent_approval = list.filter((v) => v !== 'write');
+        const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+        fs.copyFileSync(registryPath, `${registryPath}.write-bak-${stamp}`);
+        registry.updated_at = new Date().toISOString();
+        fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+        dbgWorker('clearWriteApproval:done', `${id} -> ${JSON.stringify(coord.requires_parent_approval)} (${registryPath})`);
+        changed += 1;
+      }
+    } catch (err) {
+      dbgWorker('clearWriteApproval:error', `${registryPath}: ${err.message || err}`);
+    }
+  }
+  return changed;
+}
+
 function normalizeScheduler(schedulerHint) {
   if (!schedulerHint || typeof schedulerHint !== 'object') return null;
   // Hot path: reset token + codex_app fallback. Cold path
@@ -621,6 +701,9 @@ function turnPreamble({ projectDir, goalId, agentId }) {
     '规则：只在仓库目录内工作；不要强杀不是你启动的进程；',
     '在结束本轮前，通过 loopx（todo complete / 证据记录）记录进度。',
     '如果 loopx 命令失败，先读错误信息再修正调用方式 —— 同一命令不要盲目重试超过两次。',
+    '规则：不要反复读取同一个文件、不要反复复述同一个计划。每读一个文件后必须立刻采取一个实际动作（写代码、跑命令、或更新 loopx todo），禁止陷入「读取 → 复述 → 再读取」的空转循环。',
+    '如果连续读完两个文件后仍不确定下一步该做什么，直接结束本轮，用中文说明卡在哪里、需要什么信息，不要继续空转。',
+    '规则：任何可能长时间运行的命令（python 脚本、网络请求、服务/后台进程、import 大模块）都必须显式带超时；禁止运行交互式、等待 stdin 输入、或无限循环的命令 —— 这类命令会让本轮卡死。',
     `提交规范：每次 git commit 的提交信息末尾必须保留一行 "${COMMIT_TRAILER}"（仓库已安装 commit-msg 钩子会自动补上；不要删除这一行）。`,
     '工作语言：所有面向用户的说明、总结与回复请使用中文。',
     '',
@@ -778,19 +861,240 @@ function readGoalObjective(projectDir, goal) {
   }
 }
 
-async function planIssueIntake({ argvPrefix, srcDir, projectDir, url }) {
+// ── OpenViking repository memory (issue-fix workflow-plan) ─────────────
+// loopx only queries repository memory when the issue-fix plan command receives
+// BOTH a repository-context JSON (pinning the checkout revision) AND a provider
+// config (openviking). Without either, the planner silently skips memory — so
+// we build both here and inject them explicitly. Everything fails open: a
+// missing git HEAD or a temp-file write just yields no memory args.
+function repoMemoryScopeRef(repoLabel) {
+  const slug = String(repoLabel || '').replace(/[^A-Za-z0-9._-]/g, '-');
+  return `viking://resources/${slug}/main`;
+}
+
+async function gitHeadRevision(repoDir) {
+  if (!repoDir) return null;
+  try {
+    const { code, stdout } = await spawnLoopx(
+      { argv: ['git'] }, ['-C', repoDir, 'rev-parse', 'HEAD'], { timeoutMs: 15000 },
+    );
+    const sha = String(stdout || '').trim();
+    return code === 0 && /^[0-9a-fA-F]{12,64}$/.test(sha) ? sha : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function writeJsonTemp(prefix, obj) {
+  const file = path.join(os.tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+  fs.writeFileSync(file, JSON.stringify(obj), 'utf8');
+  return file;
+}
+
+function repositoryMemoryProviderConfig(repoLabel) {
+  return {
+    schema_version: 'issue_fix_repository_memory_provider_config_v0',
+    enabled: true,
+    provider: 'openviking',
+    namespace: 'public-repository',
+    visibility: 'public',
+    revision_policy: 'rolling_default_branch',
+    scope_ref: repoMemoryScopeRef(repoLabel),
+    resource_references: [],
+    max_results: 3,
+    timeout_seconds: 15,
+    sync_timeout_seconds: 180,
+  };
+}
+
+async function buildRepositoryMemoryArgs(repoLabel, repoDir) {
+  const scopeRef = repoMemoryScopeRef(repoLabel);
+  const revision = await gitHeadRevision(repoDir);
+  if (!revision) return { args: [], scopeRef };
+  const ctx = {
+    schema_version: 'issue_fix_repository_context_input_v0',
+    repository_revision: revision,
+    sources: [],
+  };
+  const ctxPath = writeJsonTemp('bitfun-loopx-repoctx', ctx);
+  const cfgPath = writeJsonTemp('bitfun-loopx-repomem', repositoryMemoryProviderConfig(repoLabel));
+  return {
+    args: ['--repository-context-json', ctxPath, '--repository-memory-provider-json', cfgPath],
+    scopeRef,
+  };
+}
+
+// Does the OpenViking scope actually have content? `ov add-resource` can return
+// exit 0 with {"ok":false,…} (a DEADLINE_EXCEEDED on the final commit) even
+// though the files and vectors already landed — the resource tree is the real
+// source of truth, not the CLI's exit code or its JSON `ok` field.
+async function ovResourceExists(scopeRef) {
+  if (!scopeRef) return false;
+  try {
+    const ls = await spawnLoopx({ argv: ['ov'] }, ['ls', scopeRef, '-o', 'json', '-c', 'true'], { timeoutMs: 15000 });
+    if (ls.code !== 0) return false;
+    const parsed = parseJsonPayload(String(ls.stdout || ''));
+    const list = parsed && Array.isArray(parsed.result) ? parsed.result : null;
+    return Array.isArray(list) && list.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Best-effort: seed the repo's public source into OpenViking so repository
+// memory actually has content to recall. `ov add-resource` on a folder with
+// --ignore-dirs keeps the index bounded; failures are non-fatal (memory simply
+// starts empty and fills on a later successful run).
+async function syncRepoToOpenViking({ repoLabel, repoDir }) {
+  if (!repoLabel || !repoDir) return { ok: false, reason: 'no_repo' };
+  const scopeRef = repoMemoryScopeRef(repoLabel);
+  try {
+    // 增量：HEAD 与上次成功同步一致 → 跳过整仓重传（本地未产生新提交就没新内容）。
+    const head = await gitHeadRevision(repoDir);
+    if (head && ovSyncRevision.get(repoLabel) === head) {
+      return { ok: true, scopeRef, skipped: true };
+    }
+    // No --wait: the upload returns immediately and the server indexes in the
+    // background, so a first intake never blocks for minutes. Memory fills in
+    // for the agent's subsequent turns. Note: the local file upload itself is
+    // synchronous, so a large repo (several thousand files) needs a generous
+    // timeout — 60s was killing the seed before it finished, leaving the scope
+    // empty and the goal silently memory-less.
+    const { code, stdout, stderr } = await spawnLoopx(
+      { argv: ['ov'] },
+      [
+        'add-resource', repoDir,
+        '--parent-auto-create', scopeRef,
+        '--ignore-dirs', '.git,node_modules,dist,build,.venv,venv,__pycache__,target',
+        '-o', 'json', '-c', 'true',
+      ],
+      { timeoutMs: 240000 },
+    );
+    const landed = await ovResourceExists(scopeRef);
+    const ok = landed;
+    if (ok && head) { ovSyncRevision.set(repoLabel, head); saveGhState(); }
+    dbgWorker('repoMemory:sync', `ok=${ok} scope=${scopeRef} code=${code} landed=${landed}`);
+    return { ok, scopeRef, error: ok ? null : String(stderr || stdout).slice(-200) };
+  } catch (err) {
+    dbgWorker('repoMemory:syncError', String(err && err.message || err));
+    return { ok: false, scopeRef, error: String(err && err.message || err) };
+  }
+}
+
+// ── Reward memory (loopx reward_memory_experiment_config_v1) ───────────
+// loopx enables reward memory only when configure-goal receives an explicit
+// --reward-memory-config + --reward-memory-agent. We write a canonical
+// issue-fix patch-planning experiment (openviking provider) and register it on
+// the goal right after the agent is registered.
+function rewardMemoryConfigPath(projectDir) {
+  return path.join(projectDir, '.loopx', 'config', 'reward-memory', 'experiment.json');
+}
+
+function rewardMemoryExperimentConfig(repoLabel) {
+  const slug = String(repoLabel || '').replace(/[^A-Za-z0-9._-]/g, '-');
+  const workspaceRef = 'workspace:bitfun-loopx';
+  const projectRef = `repository:${slug}`;
+  const scopeRef = `viking://resources/reward-memory/${slug}`;
+  const corpusId = 'openviking_patch_policy';
+  const ownerRef = 'openviking_reward_memory_owner';
+  return {
+    schema_version: 'reward_memory_experiment_config_v1',
+    project_provider_binding: {
+      provider_id: 'openviking',
+      namespace: 'reward_memory',
+      timeout_seconds: 30,
+      minimum_provider_version: '0.4.9',
+      corpus_scopes: [{ corpus_id: corpusId, scope_ref: scopeRef }],
+    },
+    corpora: [{
+      corpus: {
+        corpus_id: corpusId,
+        class_id: 'hard_policy',
+        provider_id: 'openviking',
+        owner_ref: ownerRef,
+        source_of_truth: 'reviewed_maintainer_feedback',
+        read_authority: 'module_scoped',
+        write_authority: 'provider_managed',
+        scope: { workspace_ref: workspaceRef, project_ref: projectRef, surface_ids: ['issue_fix.patch_planning'] },
+        freshness: { mode: 'revision_bound', source_revision: 'revision:rolling' },
+        lifecycle: { state: 'active', supersedes: [] },
+        retrieval: { index_required: true, readback_required: true, application_receipt_required: true },
+        maintenance: {
+          writeback_triggers: ['reviewed_maintainer_feedback'],
+          closure_policy: 'write_exact_readback_then_recall',
+          retirement_authority: ownerRef,
+        },
+        privacy: { visibility: 'private', raw_content_in_registry: false },
+      },
+      standing_policy: {
+        schema_version: 'reward_memory_standing_policy_v0',
+        policy_id: 'policy:openviking:issue-fix-maintainer-feedback',
+        enabled: true,
+        auto_activate: true,
+        owner_ref: ownerRef,
+        reviewer_ref: 'agent:bitfun-agent',
+        authority_source_ref: 'policy:openviking:issue-fix',
+        scope: { workspace_ref: workspaceRef, project_ref: projectRef, surface_ids: ['issue_fix.patch_planning'] },
+        allowed_target_classes: ['hard_policy'],
+        allowed_source_kinds: ['maintainer_correction'],
+        allowed_actor_roles: ['verified_repository_core_contributor'],
+        allowed_action_scopes: ['issue_fix:scope_selection'],
+        raw_content_captured: false,
+      },
+    }],
+    surfaces: [{
+      surface_id: 'issue_fix.patch_planning',
+      adapter: 'issue_fix_maintainer_feedback',
+      corpus_ids: [corpusId],
+      ingest_corpus_id: corpusId,
+      recall_profile: { profile_id: 'patch_planning_v1', mode: 'bounded_agentic_search', max_queries: 2, limit: 5 },
+    }],
+    automation: { automatic_recall: true, automatic_ingest: true, fail_open: true },
+  };
+}
+
+async function enableRewardMemory({ argvPrefix, srcDir, projectDir, goalId, agentId, repoLabel }) {
+  if (!projectDir || !goalId || !agentId || !repoLabel) {
+    return { ok: false, reason: 'missing_args' };
+  }
+  try {
+    const confPath = rewardMemoryConfigPath(projectDir);
+    fs.mkdirSync(path.dirname(confPath), { recursive: true });
+    fs.writeFileSync(confPath, JSON.stringify(rewardMemoryExperimentConfig(repoLabel), null, 2), 'utf8');
+    const { result, payload } = await runJson(argvPrefix, projectDir, [
+      'configure-goal', '--goal-id', goalId,
+      '--reward-memory-config', '.loopx/config/reward-memory/experiment.json',
+      '--reward-memory-agent', agentId,
+      '--execute',
+    ], { srcDir, timeoutMs: 60000 });
+    const ok = result.code === 0 && payload?.ok !== false;
+    dbgWorker('rewardMemory:done', `ok=${ok} ${(payload && payload.error) || ''}`);
+    return { ok, error: ok ? null : (payload?.error || result.stderr.slice(0, 300) || 'configure-goal failed') };
+  } catch (err) {
+    dbgWorker('rewardMemory:error', String(err && err.message || err));
+    return { ok: false, error: String(err && err.message || err) };
+  }
+}
+
+async function planIssueIntake({ argvPrefix, srcDir, projectDir, url, repoLabel = null }) {
   const planArgsBase = ['issue-fix', 'workflow-plan', '--url', String(url).trim()];
   if (projectDir) planArgsBase.push('--repo-path', projectDir);
+  let memoryArgs = [];
+  try {
+    memoryArgs = (await buildRepositoryMemoryArgs(repoLabel, projectDir)).args;
+  } catch (err) {
+    dbgWorker('repoMemory:argsError', String(err && err.message || err));
+  }
   let result, payload;
   ({ result, payload } = await runJson(argvPrefix, projectDir, [
-    ...planArgsBase, '--fetch-metadata', '--fetch-timeout-seconds', '20',
+    ...planArgsBase, '--fetch-metadata', '--fetch-timeout-seconds', '20', ...memoryArgs,
   ], { srcDir, timeoutMs: 90000 }));
   let fetchedMetadata = true;
   const planEmpty = (value) => !value || value.ok === false
     || !(value.ordered_loopx_todo_writeback_preview || []).length;
   if (planEmpty(payload)) {
     fetchedMetadata = false;
-    ({ result, payload } = await runJson(argvPrefix, projectDir, planArgsBase, {
+    ({ result, payload } = await runJson(argvPrefix, projectDir, [...planArgsBase, ...memoryArgs], {
       srcDir, timeoutMs: 90000,
     }));
   }
@@ -871,6 +1175,60 @@ async function writePlannedTodos({ argvPrefix, srcDir, projectDir, goalId, agent
 // GitHub REST API. Public repos only; unauthenticated quota is 60 req/hour.
 // With a token the request authenticates (Bearer) and POST/PUT become
 // available — used by the PR publish flow (fork / push / pull request).
+//
+// Read-only GET cache + rate-limit backoff: the live issue re-check polls the
+// same /repos/{r}/issues/{n} endpoints repeatedly, and anonymous quota is tiny.
+// Cache successful GETs briefly (issue state rarely flips within minutes) and,
+// once GitHub reports 0 remaining, stop issuing GETs until the reset window.
+const GH_GET_CACHE_TTL_MS = 5 * 60 * 1000;
+const ghGetCache = new Map(); // apiPath -> { at, value }
+let ghRateLimitedUntil = 0; // epoch ms; GETs short-circuit until this passes
+
+// ── persisted GitHub request state ─────────────────────────
+// ghRateLimitedUntil and the per-goal live-check cache survive a worker
+// restart: the first stops re-hammering GitHub right after a rate limit, the
+// second avoids re-checking the same goals on every boot. The per-URL GET
+// cache stays in-memory only (bounded + short TTL).
+const GH_STATE_FILE = path.join(consoleHome(), 'gh-request-cache.json');
+function loadGhState() {
+  try {
+    const raw = fs.readFileSync(GH_STATE_FILE, 'utf8');
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj.rateLimitedUntil === 'number' && obj.rateLimitedUntil > Date.now()) {
+      ghRateLimitedUntil = obj.rateLimitedUntil;
+    }
+    if (obj && obj.liveIssueCheck && typeof obj.liveIssueCheck === 'object') {
+      for (const [goalId, v] of Object.entries(obj.liveIssueCheck)) {
+        if (v && typeof v.at === 'number' && Array.isArray(v.resolved)) {
+          liveIssueCheckCache.set(goalId, { at: v.at, resolved: v.resolved, cursor: Number.isInteger(v.cursor) ? v.cursor : 0 });
+        }
+      }
+    }
+    // repoLabel -> HEAD sha of the last successful OpenViking seed: without
+    // this a worker restart forgets the sync and re-uploads the whole repo.
+    if (obj && obj.ovSyncRevision && typeof obj.ovSyncRevision === 'object') {
+      for (const [repoLabel, sha] of Object.entries(obj.ovSyncRevision)) {
+        if (typeof sha === 'string' && sha) ovSyncRevision.set(repoLabel, sha);
+      }
+    }
+  } catch (_) { /* first run / unreadable: ignore */ }
+}
+function saveGhState() {
+  try {
+    fs.mkdirSync(path.dirname(GH_STATE_FILE), { recursive: true });
+    const live = {};
+    for (const [goalId, v] of liveIssueCheckCache) live[goalId] = { at: v.at, resolved: v.resolved, cursor: v.cursor || 0 };
+    const ovRev = {};
+    for (const [repoLabel, sha] of ovSyncRevision) ovRev[repoLabel] = sha;
+    fs.writeFileSync(GH_STATE_FILE, JSON.stringify({
+      rateLimitedUntil: ghRateLimitedUntil,
+      liveIssueCheck: live,
+      ovSyncRevision: ovRev,
+    }), 'utf8');
+  } catch (_) { /* best-effort */ }
+}
+loadGhState();
+
 function githubApiRequest(apiPath, {
   method = 'GET', token = null, jsonBody = null, allow404 = false,
 } = {}) {
@@ -896,7 +1254,13 @@ function githubApiRequest(apiPath, {
       res.on('end', () => {
         if (allow404 && res.statusCode === 404) { resolve(null); return; }
         if (res.statusCode === 403 || res.statusCode === 429) {
-          reject(new Error(res.headers['x-ratelimit-remaining'] === '0'
+          const remaining = res.headers['x-ratelimit-remaining'];
+          const resetSec = Number(res.headers['x-ratelimit-reset']);
+          if (remaining === '0' && resetSec > 0) {
+            ghRateLimitedUntil = resetSec * 1000 + 1000;
+            saveGhState();
+          }
+          reject(new Error(remaining === '0'
             ? 'GitHub API rate limit exceeded; retry later'
             : `GitHub API refused the request (HTTP ${res.statusCode})`));
           return;
@@ -927,8 +1291,42 @@ function githubApiRequest(apiPath, {
   });
 }
 
-function githubApiGet(apiPath) {
-  return githubApiRequest(apiPath);
+// Cached read path for issue-status re-checks: avoids re-hitting the same
+// endpoint every poll, and honors the global rate-limit backoff window. When a
+// GitHub CLI token is available it authenticates the request, replacing the
+// anonymous 60/h quota with the authenticated 5000/h quota.
+let ghApiTokenCache = { at: 0, token: null };
+// PAT fallback: the miniapp stores a pasted token in its config storage; read
+// it directly so method 1 (paste a PAT) also authenticates the GET path.
+function readPatFromStorage() {
+  try {
+    const dir = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'bitfun', 'data', 'miniapps', 'builtin-bitfun-loopx');
+    const obj = JSON.parse(fs.readFileSync(path.join(dir, 'storage.json'), 'utf8'));
+    return (obj && obj.config && typeof obj.config.githubToken === 'string' && obj.config.githubToken.trim()) || null;
+  } catch (_) { return null; }
+}
+async function githubApiToken() {
+  if (Date.now() - ghApiTokenCache.at < 5 * 60 * 1000) return ghApiTokenCache.token;
+  let token = await ghCliToken();
+  if (!token) token = readPatFromStorage();
+  ghApiTokenCache = { at: Date.now(), token };
+  return token;
+}
+
+async function githubApiGetCached(apiPath) {
+  if (Date.now() < ghRateLimitedUntil) {
+    throw new Error('GitHub API rate limit exceeded; retry later');
+  }
+  const hit = ghGetCache.get(apiPath);
+  if (hit && Date.now() - hit.at < GH_GET_CACHE_TTL_MS) return hit.value;
+  const token = await githubApiToken();
+  const value = await githubApiRequest(apiPath, { token });
+  ghGetCache.set(apiPath, { at: Date.now(), value });
+  if (ghGetCache.size > 500) {
+    const oldest = ghGetCache.keys().next().value;
+    ghGetCache.delete(oldest);
+  }
+  return value;
 }
 
 // Re-pasting an already-intaken issue must not mint a duplicate todo: check
@@ -979,6 +1377,14 @@ function ghExeCandidates() {
   const list = [];
   const localAppData = process.env.LOCALAPPDATA;
   if (localAppData) list.push(path.join(localAppData, 'Programs', 'GitHub CLI', 'gh.exe'));
+  if (process.platform === 'win32') {
+    // winget/MSI default to a machine-level install under Program Files, and
+    // the worker's PATH is fixed at spawn time — without these candidates a
+    // fresh `winget install GitHub.cli` succeeds but findGhExe still misses it.
+    for (const programFiles of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
+      if (programFiles) list.push(path.join(programFiles, 'GitHub CLI', 'gh.exe'));
+    }
+  }
   if (process.platform === 'darwin') {
     list.push('/opt/homebrew/bin/gh', '/usr/local/bin/gh');
   } else if (process.platform === 'linux') {
@@ -1031,21 +1437,29 @@ function ghCliToken() {
 
 // Windows system proxy (WinINET). gh and winget honor it when network is
 // otherwise restricted; surfaced in the login progress so the user knows the
-// download is going through their configured proxy.
+// download is going through their configured proxy. ProxyServer is a sticky
+// leftover value — the real on/off switch is ProxyEnable, so a disabled proxy
+// (ProxyEnable=0) must resolve to null instead of routing installs into a
+// dead proxy.
 function readWindowsSystemProxy() {
-  return new Promise((resolve) => {
+  const regQuery = (valueName) => new Promise((resolve) => {
     try {
-      const child = spawn('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', 'ProxyServer'], { windowsHide: true });
+      const child = spawn('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', valueName], { windowsHide: true });
       let out = '';
       child.stdout.setEncoding('utf8');
       child.stdout.on('data', (d) => { out += d; });
       child.on('error', () => resolve(null));
-      child.on('close', () => {
-        const m = out.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
-        resolve(m ? m[1].trim() : null);
-      });
+      child.on('close', () => resolve(out || null));
     } catch (_) { resolve(null); }
   });
+  return (async () => {
+    const enabledOut = await regQuery('ProxyEnable');
+    const em = enabledOut && enabledOut.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-f]+)/i);
+    if (!em || parseInt(em[1], 16) === 0) return null;
+    const serverOut = await regQuery('ProxyServer');
+    const m = serverOut && serverOut.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
+    return m ? m[1].trim() : null;
+  })();
 }
 
 function proxyUrlFrom(value) {
@@ -1114,6 +1528,39 @@ function ghReleaseAsset() {
   return null;
 }
 
+// Proxy-aware fallback for the release version lookup: githubApiRequest uses
+// Node https directly (no proxy support), so on proxied networks it fails
+// even though the actual download (Invoke-WebRequest / curl) would work.
+// Resolve https://github.com/cli/cli/releases/latest through the SAME
+// proxy-aware channels and read the version out of the redirect target.
+async function resolveLatestGhTag(emit) {
+  try {
+    if (process.platform === 'win32') {
+      // HttpWebRequest honors the WinINET system proxy by default.
+      const ps = "$r=[System.Net.HttpWebRequest]::Create('https://github.com/cli/cli/releases/latest');$r.AllowAutoRedirect=$false;$resp=$r.GetResponse();Write-Output $resp.Headers['Location'];$resp.Close()";
+      const out = await spawnLoopx(
+        { argv: [powershellExe()] },
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+        { timeoutMs: 30000 },
+      );
+      const m = String(out.stdout || '').match(/releases\/tag\/(v[\d.]+)/);
+      return m ? m[1] : null;
+    }
+    // curl follows the redirect and reports the effective URL; honors
+    // https_proxy on POSIX.
+    const out = await spawnLoopx(
+      { argv: ['curl'] },
+      ['-fsSLo', '/dev/null', '-w', '%{url_effective}', 'https://github.com/cli/cli/releases/latest'],
+      { timeoutMs: 30000 },
+    );
+    const m = String(out.stdout || '').match(/releases\/tag\/(v[\d.]+)/);
+    return m ? m[1] : null;
+  } catch (err) {
+    if (emit) emit(`版本重定向解析失败：${String(err.message || err).slice(0, 120)}`);
+    return null;
+  }
+}
+
 // Direct-download gh installer (no winget/brew/root required): fetches the
 // platform release archive from GitHub and places the single gh binary into a
 // user-owned directory that findGhExe already scans. Windows downloads through
@@ -1132,7 +1579,18 @@ async function installGhFromRelease(emit) {
       ? release.assets.find((a) => a && assetInfo.pattern.test(String(a.browser_download_url || '')))
       : null;
     url = asset ? asset.browser_download_url : null;
-  } catch (_) { /* fall through to the error below */ }
+  } catch (_) { /* fall through to the redirect fallback below */ }
+  if (!url) {
+    // Version-stamped asset names (gh_<ver>_<platform>) rule out a static
+    // latest/download URL — resolve the version via the proxy-aware redirect
+    // instead of the (proxy-blind) API.
+    const tag = await resolveLatestGhTag(emit);
+    if (tag) {
+      const ver = tag.replace(/^v/, '');
+      url = `https://github.com/cli/cli/releases/download/${tag}/gh_${ver}_${assetInfo.name}`;
+      emit('API 查询走不通，已通过重定向解析最新版本…');
+    }
+  }
   if (!url) {
     throw new Error(`无法获取 GitHub CLI 最新版本信息。请手动安装：https://github.com/cli/cli/releases（下载 ${assetInfo.name} 并解压）`);
   }
@@ -1225,7 +1683,15 @@ async function installGhViaPackageManager(emit, envOverlay) {
         { timeoutMs: 600000, onStderrLine: (line) => emit(String(line).slice(0, 140)) },
       );
       if (install.code !== 0) {
-        throw new Error(String(install.stderr || install.stdout || '').trim().slice(-200) || `winget exit ${install.code}`);
+        // 0x8A15002B APPINSTALLER_CLI_ERROR_PACKAGE_ALREADY_INSTALLED: gh is
+        // already on the machine (worker PATH was just stale) — success, not
+        // failure; findGhExe re-resolves it from the absolute candidates.
+        const alreadyInstalled = (install.code >>> 0) === 0x8A15002B
+          || /already installed/i.test(String(install.stderr || install.stdout || ''));
+        if (!alreadyInstalled) {
+          throw new Error(String(install.stderr || install.stdout || '').trim().slice(-200) || `winget exit ${install.code}`);
+        }
+        emit('GitHub CLI 已安装（跳过重复安装）');
       }
     } catch (err) {
       return `安装 GitHub CLI 失败：${String(err.message || err)}。可手动安装后再试：https://github.com/cli/cli/releases`;
@@ -1341,7 +1807,7 @@ async function fetchOpenIssues(repo) {
   // /repos/…/issues interleaves PRs (every PR is an issue) — filter them out,
   // otherwise a busy repo's fix loop would keep "fixing" its own PRs.
   for (let page = 1; page <= 3; page += 1) {
-    const batch = await githubApiGet(`/repos/${repo}/issues?state=open&per_page=100&page=${page}`);
+    const batch = await githubApiGetCached(`/repos/${repo}/issues?state=open&per_page=100&page=${page}`);
     if (!Array.isArray(batch)) break;
     for (const item of batch) {
       if (!item || item.pull_request || !item.number) continue;
@@ -1359,6 +1825,271 @@ async function fetchOpenIssues(repo) {
   }
   // Page 3 came back full — more issues/PRs likely exist beyond the cap.
   return { issues, truncated: true };
+}
+
+// Best-effort live status of one issue: an issue closed by a maintainer (or a
+// merged PR) must NOT be re-fixed. Rate-limit / network failures fail open
+// (open=true) so a transient lookup error never silently drops a real issue.
+// An OPEN issue can still be effectively resolved: someone's fix PR merged
+// without a "Fixes #N" (or the maintainer just hasn't closed it) — probe the
+// timeline for a merged cross-referenced PR so the agent skips those too
+// instead of shipping a duplicate fix. Same GET cache + backoff applies.
+async function checkIssueStatus(repo, number) {
+  try {
+    const detail = await githubApiGetCached(`/repos/${repo}/issues/${number}`);
+    const open = !detail || detail.state !== 'closed';
+    const base = {
+      ok: true,
+      open,
+      state: detail ? (detail.state || 'unknown') : 'unknown',
+      stateReason: detail ? (detail.state_reason || null) : null,
+      isPr: !!(detail && detail.pull_request),
+    };
+    if (!open || base.isPr) return base;
+    try {
+      const timeline = await githubApiGetCached(`/repos/${repo}/issues/${number}/timeline?per_page=100`);
+      if (Array.isArray(timeline)) {
+        const mergedPr = timeline.find((ev) => ev && ev.event === 'cross-referenced'
+          && ev.source && ev.source.issue && ev.source.issue.pull_request
+          && ev.source.issue.pull_request.merged_at);
+        if (mergedPr) {
+          return {
+            ...base,
+            open: false,
+            state: 'open',
+            stateReason: 'linked_pr_merged',
+            linkedPrUrl: mergedPr.source.issue.pull_request.html_url || mergedPr.source.issue.html_url || null,
+          };
+        }
+      }
+    } catch (_) { /* timeline probe is best-effort; the issue stays open */ }
+    return base;
+  } catch (err) {
+    dbgWorker('checkIssueStatus:error', `${repo}#${number}: ${err.message || err}`);
+    return { ok: false, open: true, state: 'unknown', stateReason: null, isPr: false };
+  }
+}
+
+// ── OpenViking (context database) support ─────────────────
+// OpenViking is the external context provider loopx's repository-memory and
+// reward-memory capabilities bind to through the `ov` CLI. This console gates
+// the auto-fix surface behind a one-click environment check / install /
+// configure flow so a fresh user never lands on a dead input box.
+function whichOnPath(cmd) {
+  const probe = process.platform === 'win32' ? 'where' : 'which';
+  return spawnLoopx({ argv: [probe] }, [cmd], { timeoutMs: 8000 })
+    .then(({ code, stdout }) => (code === 0 && String(stdout).trim() ? String(stdout).trim().split(/\r?\n/)[0] : null))
+    .catch(() => null);
+}
+
+async function openvikingRunning() {
+  try {
+    const res = await fetch('http://127.0.0.1:1933/', { signal: AbortSignal.timeout(2500) });
+    return { ok: res.status < 500 };
+  } catch (_) {
+    return { ok: false };
+  }
+}
+
+// The `ov` CLI needs a saved ovcli.conf pointing at the local server before it
+// can answer `search`/`read`/`add-resource`. The server binary being installed
+// is NOT the same as the CLI being connected — a missing ovcli.conf makes every
+// loopx repository/reward-memory provider call fail closed as "unavailable".
+async function ovCliHealth() {
+  try {
+    const { code } = await spawnLoopx({ argv: ['ov'] }, ['health'], { timeoutMs: 8000 });
+    return code === 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Idempotent: register the local custom server config and activate it.
+function runOvConfigCli() {
+  return spawnLoopx(
+    { argv: ['ov'] },
+    ['config', 'add', 'custom', '--name', 'local', '--url', 'http://127.0.0.1:1933', '--activate'],
+    { timeoutMs: 30000 },
+  );
+}
+
+function openvikingConfPath() {
+  return path.join(os.homedir(), '.openviking', 'ov.conf');
+}
+
+// Best-effort default VLM: reuse the OpenAI-compatible model BitFun already has
+// configured (OpenBitFun), so the wizard can pre-fill provider/model/base/key.
+// Never throws — a missing app.json just yields null and the UI falls back to
+// letting the user type credentials.
+function readBitfunVlmDefault() {
+  try {
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    const appJson = path.join(appData, 'bitfun', 'config', 'app.json');
+    if (!fs.existsSync(appJson)) return null;
+    const cfg = JSON.parse(fs.readFileSync(appJson, 'utf8'));
+    const models = (cfg.ai && cfg.ai.models) || [];
+    const ovs = models.filter((m) => m && /openbitfun/i.test(String(m.id || m.name || '')));
+    if (!ovs.length) return null;
+    // Prefer the "flash" model (cheap/fast VLM) when both flash and pro exist.
+    const ov = ovs.find((m) => /flash/i.test(String(m.id || m.name || ''))) || ovs[0];
+    return {
+      provider: 'openai',
+      model: ov.model_name || 'deepseek-v4-flash',
+      api_base: ov.base_url || 'https://api.openbitfun.com/v1',
+      api_key: ov.api_key || '',
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+// Project a goal's fix-issue todos into a per-issue board row (url/number/
+// title/status/done). Batch intake writes one agent todo per issue
+// ("[P1] Fix GitHub issue #N: <title> (<url>)", action_kind=fix_issue), so the
+// done/open split here IS the "which issues are already fixed vs still open"
+// reconciliation used on resume.
+function projectGoalIssues(todos) {
+  const issues = [];
+  for (const td of todos) {
+    if (td.role && td.role !== 'agent') continue;
+    const text = String(td.text || td.title || '');
+    const labeled = text.match(/fix github issue #(\d+)\s*[:：]?\s*(.*?)\s*\((https?:\/\/github\.com\/[^\s)]+)\)/i);
+    if (!labeled && td.action_kind !== 'fix_issue') continue;
+    let url = null;
+    let number = null;
+    let title = '';
+    if (labeled) {
+      number = Number(labeled[1]);
+      title = labeled[2] || '';
+      url = labeled[3];
+    } else {
+      const bare = text.match(/https?:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/(?:issues|pull)\/(\d+)/i);
+      if (!bare) continue;
+      url = bare[0];
+      number = Number(bare[1]);
+    }
+    const status = td.status || 'open';
+    // Blocking reason for the UI: `reason` is a short human summary, `resume_when`
+    // a technical resume condition, `note` a detailed paragraph. Keep all three so
+    // the UI can derive a localized (Chinese) summary while the full note stays on hover.
+    issues.push({
+      url, number, title, status,
+      done: status === 'done',
+      todoId: td.todo_id ?? null,
+      reason: td.reason || null,
+      resumeWhen: td.resume_when || null,
+      note: td.note || td.reason || null,
+    });
+  }
+  const done = issues.filter((issue) => issue.done).length;
+  return { issues, total: issues.length, done, open: issues.length - done };
+}
+
+// ── Human reward feedback (loopx serve-status HTTP) ──────────────────
+// loopx exposes operator feedback ("this run was useful / not useful") through
+// `loopx serve-status --enable-reward-write-api` on loopback only. The worker
+// lazily starts that server, then posts a two-phase reward append: dry-run
+// (gets a preview_id) -> append (writes the human_reward overlay into the run
+// index + ACTIVE_GOAL_STATE.md's Recent User Feedback). See loopx's own
+// examples/reward-append-api-smoke.py for the exact contract.
+
+function httpJson(method, port, route, body) {
+  return new Promise((resolve, reject) => {
+    const data = body == null ? null : JSON.stringify(body);
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port,
+      path: route,
+      method,
+      headers: {
+        ...(data ? { 'Content-Type': 'application/json' } : {}),
+        'Content-Length': data ? Buffer.byteLength(data) : 0,
+        Origin: 'http://127.0.0.1',
+      },
+      timeout: 5000,
+    }, (res) => {
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { buf += c; });
+      res.on('end', () => {
+        let payload = null;
+        try { payload = buf ? JSON.parse(buf) : null; } catch (_) {}
+        resolve({ status: res.statusCode || 0, payload });
+      });
+    });
+    req.on('timeout', () => { req.destroy(new Error('status server timeout')); });
+    req.on('error', reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+
+async function statusServerHealth(port) {
+  try {
+    const res = await httpJson('GET', port, '/healthz', null);
+    return res.status === 200 && res.payload && res.payload.ok === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function ensureStatusServer(argvPrefix, projectDir) {
+  const argv = Array.isArray(argvPrefix) ? argvPrefix : (argvPrefix && argvPrefix.argv) || [];
+  const envOverlay = Array.isArray(argvPrefix) ? null : (argvPrefix && argvPrefix.env);
+  // Reuse the live server when it belongs to the same project and answers health.
+  if (statusServerProc && statusServerProc.projectDir === projectDir
+      && statusServerProc.child && statusServerProc.child.exitCode == null) {
+    if (await statusServerHealth(statusServerProc.port)) return statusServerProc;
+  }
+  // Stop a stale server before starting a new one.
+  if (statusServerProc && statusServerProc.child) {
+    try { statusServerProc.child.kill(); } catch (_) {}
+    statusServerProc = null;
+  }
+  let lastErr = null;
+  for (const port of STATUS_SERVER_PORTS) {
+    const [cmd, ...prefixArgs] = argv.length ? argv : ['loopx'];
+    const child = spawn(cmd, [
+      ...prefixArgs,
+      ...registryArgs(projectDir),
+      'serve-status', '--host', '127.0.0.1', '--port', String(port),
+      '--scan-root', projectDir, '--enable-reward-write-api',
+    ], {
+      shell: false,
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+      cwd: projectDir,
+      env: buildEnv(envOverlay),
+      stdio: 'ignore',
+    });
+    // Wait for health (bounded).
+    const deadline = Date.now() + 15000;
+    let healthy = false;
+    while (Date.now() < deadline) {
+      if (await statusServerHealth(port)) { healthy = true; break; }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (healthy) {
+      statusServerProc = { child, port, projectDir };
+      dbgWorker('reward:statusServer', `up port=${port} project=${projectDir}`);
+      return statusServerProc;
+    }
+    lastErr = `serve-status did not become healthy on port ${port}`;
+    try { child.kill(); } catch (_) {}
+  }
+  throw new Error(lastErr || 'could not start serve-status');
+}
+
+// Latest run's generated_at from `loopx history` markdown (first table row).
+async function latestRunGeneratedAt(argvPrefix, projectDir, goalId) {
+  const { code, stdout } = await spawnLoopx(
+    argvPrefix,
+    [...registryArgs(projectDir), 'history', '--goal-id', goalId, '--limit', '1'],
+    { timeoutMs: 30000 },
+  );
+  if (code !== 0) return null;
+  const m = String(stdout || '').match(/\|\s*`([^`]+)`\s*\|/);
+  return m ? m[1].trim() : null;
 }
 
 module.exports = {
@@ -1413,6 +2144,143 @@ module.exports = {
     const python = await probePython();
     const git = await probeGit();
     return { ready: !!(python.ok && git.found), python, git };
+  },
+
+  // OpenViking environment gate: one structured answer for the onboarding page.
+  async 'loopx.envCheck'({} = {}) {
+    const [python, git, loopx, ovBin, ovServerBin, ovRunning, ovCli, ghToken] = await Promise.all([
+      probePython(),
+      probeGit(),
+      detectLoopx(null, null),
+      whichOnPath('ov'),
+      whichOnPath('openviking-server'),
+      openvikingRunning(),
+      ovCliHealth(),
+      ghCliToken(),
+    ]);
+    const items = {
+      python: { ok: !!(python && python.ok), version: (python && python.version) || null },
+      git: { ok: !!(git && git.found), version: (git && git.version) || null },
+      loopx: { ok: !!(loopx && loopx.found), version: (loopx && loopx.version) || null },
+      openviking: { ok: !!ovBin, version: null },
+      openvikingServer: { ok: !!ovServerBin },
+      openvikingRunning: { ok: !!ovRunning.ok },
+      // True only when the `ov` CLI can actually reach the server — the real
+      // precondition for repository/reward memory (not just "binary present").
+      openvikingCli: { ok: !!ovCli },
+      // GitHub CLI login: a credential, not a hard dependency — it lifts the
+      // anonymous API quota and enables PR publish, but fixing issues locally
+      // does not require it. So it is reported for the checklist, not gated on.
+      gh: { ok: !!ghToken },
+    };
+    const ready = items.python.ok && items.git.ok && items.loopx.ok
+      && items.openviking.ok && items.openvikingServer.ok && items.openvikingRunning.ok
+      && items.openvikingCli.ok;
+    return { ready, items };
+  },
+
+  // One-click install of OpenViking (server + `ov` CLI + local CPU embedding).
+  // Progress lines stream through installOpenViking:progress events.
+  async 'loopx.installOpenViking'({} = {}) {
+    const emit = (line) => global.rpcEmit('installOpenViking:progress', { line });
+    const target = 'openviking[local-embed]';
+    const attempts = [];
+    for (const pythonExe of pythonCandidates()) {
+      attempts.push({ argv: [pythonExe, '-m', 'pip', 'install', target, '--upgrade'] });
+    }
+    attempts.push({ argv: ['pip', 'install', target, '--upgrade'] });
+    attempts.push({ argv: ['python', '-m', 'pip', 'install', target, '--upgrade'] });
+    if (process.platform !== 'win32') {
+      attempts.push({ argv: ['python3', '-m', 'pip', 'install', target, '--upgrade'] });
+    }
+    let lastError = null;
+    for (const prefix of attempts) {
+      emit(`$ ${prefix.argv.join(' ')}`);
+      try {
+        const { code, stderr } = await spawnLoopx(prefix, [], {
+          timeoutMs: 900000,
+          onStderrLine: (line) => emit(String(line).slice(0, 160)),
+        });
+        if (code === 0) {
+          emit('install complete');
+          return { ok: true };
+        }
+        lastError = stderr.slice(-300) || `exit ${code}`;
+      } catch (err) {
+        lastError = String(err.message || err);
+      }
+      emit(`failed: ${lastError.slice(0, 140)}`);
+    }
+    return { ok: false, error: lastError || 'pip install failed' };
+  },
+
+  // Read the default VLM (OpenBitFun) already configured in BitFun, so the
+  // config page can pre-fill it instead of asking the user to paste keys.
+  async 'loopx.defaultVlmConfig'({} = {}) {
+    return { vlm: readBitfunVlmDefault() };
+  },
+
+  // Write ~/.openviking/ov.conf non-interactively (replaces the init wizard).
+  // An existing conf is backed up and shallow-merged (only embedding/vlm are
+  // replaced) so re-running onboarding never destroys hand-tuned settings.
+  async 'loopx.writeOvConf'({ vlm = null, embedding = null } = {}) {
+    const confPath = openvikingConfPath();
+    let existing = {};
+    try {
+      if (fs.existsSync(confPath)) {
+        existing = JSON.parse(fs.readFileSync(confPath, 'utf8')) || {};
+        fs.copyFileSync(confPath, `${confPath}.bak-${Date.now()}`);
+      }
+    } catch (_) { existing = {}; }
+    const config = {
+      ...existing,
+      embedding: {
+        dense: embedding || (existing.embedding && existing.embedding.dense) || { provider: 'local', model: 'bge-small-zh-v1.5-f16' },
+      },
+      vlm: vlm || existing.vlm || { provider: 'openai', model: 'deepseek-v4-flash', api_key: '', api_base: 'https://api.openbitfun.com/v1' },
+    };
+    // A blank api_key silently breaks VLM calls at runtime; prefer whatever
+    // the existing conf already had over overwriting it with an empty string.
+    if (vlm && !String(vlm.api_key || '').trim() && existing.vlm && String(existing.vlm.api_key || '').trim()) {
+      config.vlm = existing.vlm;
+    }
+    try {
+      fs.mkdirSync(path.dirname(confPath), { recursive: true });
+      fs.writeFileSync(confPath, JSON.stringify(config, null, 2), 'utf8');
+      return { ok: true, path: confPath, vlmKeyEmpty: !String(config.vlm.api_key || '').trim() };
+    } catch (err) {
+      return { ok: false, error: String(err.message || err) };
+    }
+  },
+
+  // Start the OpenViking server as a detached background process.
+  async 'loopx.startOvServer'({} = {}) {
+    try {
+      const child = spawn('openviking-server', [], { detached: true, stdio: 'ignore', windowsHide: true });
+      child.unref();
+      return { ok: true, pid: child.pid };
+    } catch (err) {
+      return { ok: false, error: String(err.message || err) };
+    }
+  },
+
+  // Point the `ov` CLI at the local server.
+  async 'loopx.ovConfigCli'({} = {}) {
+    const { code, stdout, stderr } = await runOvConfigCli();
+    return { ok: code === 0, error: code === 0 ? null : (String(stderr || stdout).slice(-200) || `exit ${code}`) };
+  },
+
+  // Self-heal the CLI connection whenever the env gate passes on installed
+  // binaries but the CLI never got (or lost) its ovcli.conf. Idempotent: a
+  // healthy CLI returns immediately; otherwise re-register and re-verify.
+  async 'loopx.ensureOvCli'({} = {}) {
+    if (await ovCliHealth()) return { ok: true, already: true };
+    const conf = await runOvConfigCli();
+    if (conf.code !== 0) {
+      return { ok: false, error: (String(conf.stderr || conf.stdout).slice(-200) || `exit ${conf.code}`) };
+    }
+    const ok = await ovCliHealth();
+    return { ok, error: ok ? null : 'ov CLI config registered but health check still failing' };
   },
 
   // One-click vendor: clone (or re-pin) the loopx source checkout into
@@ -1557,7 +2425,9 @@ module.exports = {
     if (!url || !/^https:\/\/github\.com\//.test(String(url).trim())) {
       throw new Error('loopx.issueIntake: url must be a public https://github.com/ issue or PR link');
     }
-    const intake = await planIssueIntake({ argvPrefix, srcDir, projectDir, url });
+    const refs = githubReferences(String(url)).refs;
+    const repoLabel = refs.length ? refs[0].repo : null;
+    const intake = await planIssueIntake({ argvPrefix, srcDir, projectDir, url, repoLabel });
     if (!execute) return intake;
     if (!goalId) throw new Error('loopx.issueIntake: goalId is required to write todos');
     return writePlannedTodos({ argvPrefix, srcDir, projectDir, goalId, agentId: null, intake });
@@ -1718,13 +2588,19 @@ module.exports = {
       hasImages: false,
     }));
     // Single-issue intake: fetch the body so the sheet can warn about images
-    // that a text-only model cannot see (bounded to a handful of links to
-    // stay inside the anonymous rate limit).
+    // that a text-only model cannot see, AND the live open/closed state so the
+    // sheet can flag an issue that was already resolved before we start.
+    // (bounded to a handful of links to stay inside the anonymous rate limit).
     if (issues.length > 0 && issues.length <= 5) {
       await Promise.all(issues.map(async (issue) => {
         try {
-          const detail = await githubApiGet(`/repos/${refs[0].repo}/issues/${issue.number}`);
+          const detail = await githubApiGetCached(`/repos/${refs[0].repo}/issues/${issue.number}`);
           if (detail && typeof detail.body === 'string') issue.hasImages = bodyHasImages(detail.body);
+          if (detail) {
+            issue.state = detail.state || 'open';
+            issue.closed = detail.state === 'closed';
+            issue.stateReason = detail.state_reason || null;
+          }
         } catch (_) { /* conservative: keep false */ }
       }));
     }
@@ -1759,8 +2635,15 @@ module.exports = {
     };
   },
 
-  // List a goal's todos (zero-write projection). Used to surface open
-  // user-lane gates on the board.
+  // Remove the per-write "Owner approval gate" that loopx bootstrap hardcodes
+  // (coordination.requires_parent_approval includes "write"). Keeps publish +
+  // production-action gated. Idempotent registry surgery.
+  async 'loopx.grantWriteAuthority'({ projectDir = null, goalId } = {}) {
+    if (!goalId) throw new Error('loopx.grantWriteAuthority: goalId is required');
+    const changed = clearWriteApprovalRequirement(projectDir, goalId);
+    return { ok: changed > 0, changed, message: changed > 0 ? 'write approval requirement cleared' : 'no change needed' };
+  },
+
   // Delete a task entirely: archive its runtime directory via loopx
   // (--allow-registered --execute) and remove the registry entry, keeping a
   // backup of the registry file before rewriting it.
@@ -1960,45 +2843,114 @@ module.exports = {
   async 'loopx.goalIssues'({ argvPrefix = null, projectDir = null, goalId } = {}) {
     if (!goalId) throw new Error('loopx.goalIssues: goalId is required');
     const { result, payload } = await runJson(argvPrefix, projectDir, ['todo', 'list', '--goal-id', goalId]);
-    const todos = (payload && payload.todos) || [];
-    const issues = [];
-    for (const td of todos) {
-      if (td.role && td.role !== 'agent') continue;
-      const text = String(td.text || td.title || '');
-      const labeled = text.match(/fix github issue #(\d+)\s*[:：]?\s*(.*?)\s*\((https?:\/\/github\.com\/[^\s)]+)\)/i);
-      if (!labeled && td.action_kind !== 'fix_issue') continue;
-      let url = null;
-      let number = null;
-      let title = '';
-      if (labeled) {
-        number = Number(labeled[1]);
-        title = labeled[2] || '';
-        url = labeled[3];
-      } else {
-        const bare = text.match(/https?:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/(?:issues|pull)\/(\d+)/i);
-        if (!bare) continue;
-        url = bare[0];
-        number = Number(bare[1]);
-      }
-      const status = td.status || 'open';
-      issues.push({
-        url,
-        number,
-        title,
-        status,
-        done: status === 'done',
-        todoId: td.todo_id ?? null,
-      });
-    }
-    const done = issues.filter((issue) => issue.done).length;
+    const projection = projectGoalIssues((payload && payload.todos) || []);
     return {
       ok: result.code === 0,
-      issues,
-      total: issues.length,
-      done,
-      open: issues.length - done,
+      ...projection,
       error: result.code === 0 ? null : result.stderr.slice(0, 300),
     };
+  },
+
+  // Live re-check: which of the goal's still-open issue-todos are now closed on
+  // GitHub (maintainer resolved / merged) and therefore must NOT be re-fixed.
+  // Rate-limited twice over: a per-goal 10-min result cache plus the global
+  // GET cache / backoff in checkIssueStatus. Failures fail open (resolved=[]).
+  async 'loopx.liveIssueCheck'({ argvPrefix = null, projectDir = null, goalId } = {}) {
+    if (!goalId) throw new Error('loopx.liveIssueCheck: goalId is required');
+    const hit = liveIssueCheckCache.get(goalId);
+    if (hit && Date.now() - hit.at < LIVE_ISSUE_CHECK_TTL_MS) {
+      return { ok: true, resolved: hit.resolved, cached: true };
+    }
+    const { result, payload } = await runJson(argvPrefix, projectDir, ['todo', 'list', '--goal-id', goalId]);
+    const projection = projectGoalIssues((payload && payload.todos) || []);
+    // Rotating cursor: a >10-issue goal must not re-check the SAME first 10
+    // forever while the tail stays a permanent blind spot — each cycle starts
+    // where the last one left off and wraps around, so every open issue is
+    // re-verified within (N/10) cycles.
+    const candidates = projection.issues.filter((issue) => {
+      if (issue.done) return false;
+      return /github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/(?:issues|pull)\/\d+/i.test(String(issue.url || ''));
+    });
+    const prevResolved = (hit && Array.isArray(hit.resolved)) ? hit.resolved : [];
+    const resolvedUrls = new Set(prevResolved.map((r) => r.url));
+    const pending = candidates.filter((issue) => !resolvedUrls.has(issue.url));
+    const cursor = (hit && Number.isInteger(hit.cursor)) ? hit.cursor : 0;
+    const start = pending.length ? cursor % pending.length : 0;
+    const batch = pending.slice(start, start + LIVE_ISSUE_CHECK_MAX_ISSUES)
+      .concat(pending.slice(0, Math.max(0, start + LIVE_ISSUE_CHECK_MAX_ISSUES - pending.length)));
+    const resolved = [...prevResolved];
+    for (const issue of batch) {
+      const m = String(issue.url || '').match(/github\.com\/([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)\/(?:issues|pull)\/(\d+)/i);
+      if (!m) continue;
+      const st = await checkIssueStatus(`${m[1]}/${m[2]}`, Number(m[3]));
+      if (st.ok && !st.open) {
+        resolved.push({
+          url: issue.url,
+          number: issue.number,
+          title: issue.title,
+          state: st.state,
+          stateReason: st.stateReason,
+        });
+      }
+    }
+    liveIssueCheckCache.set(goalId, {
+      at: Date.now(),
+      resolved,
+      cursor: pending.length ? (start + batch.length) % pending.length : 0,
+    });
+    saveGhState();
+    return { ok: result.code === 0, resolved, cached: false };
+  },
+
+  // Repository-memory indexing status: is OpenViking up, and did this repo's
+  // scope actually get seeded? Surfaces the silent-failure case (sync timed out
+  // on a large repo and the scope stayed empty) so the UI can warn instead of
+  // pretending memory is available.
+  async 'loopx.memoryStatus'({ repoLabel = null } = {}) {
+    const scopeRef = repoLabel ? repoMemoryScopeRef(repoLabel) : null;
+    const out = { ok: true, serverOk: false, resourceExists: false, scopeRef };
+    try {
+      const health = await spawnLoopx({ argv: ['ov'] }, ['health'], { timeoutMs: 15000 });
+      out.serverOk = health.code === 0;
+    } catch (_) { out.serverOk = false; }
+    if (scopeRef && out.serverOk) {
+      out.resourceExists = await ovResourceExists(scopeRef);
+    }
+    return out;
+  },
+
+  // Human reward feedback: record "this turn was useful / not useful" into
+  // loopx's run index + ACTIVE_GOAL_STATE.md via the serve-status reward API.
+  async 'loopx.rewardFeedback'({ argvPrefix = null, projectDir = null, goalId, reward = 'positive', decision = 'continue_route', reasonSummary = null } = {}) {
+    if (!goalId) throw new Error('loopx.rewardFeedback: goalId is required');
+    if (!projectDir) throw new Error('loopx.rewardFeedback: projectDir is required');
+    if (!['positive', 'negative', 'mixed', 'neutral'].includes(reward)) {
+      throw new Error(`loopx.rewardFeedback: bad reward "${reward}"`);
+    }
+    const generatedAt = await latestRunGeneratedAt(argvPrefix, projectDir, goalId);
+    if (!generatedAt) return { ok: false, error: 'no run history found for this goal yet' };
+    const server = await ensureStatusServer(argvPrefix, projectDir);
+    const body = {
+      goal_id: goalId,
+      run_generated_at: generatedAt,
+      decision,
+      reward,
+      reason_summary: String(reasonSummary || (reward === 'positive' ? 'user marked this turn useful' : 'user marked this turn not useful')).slice(0, 300),
+    };
+    const dry = await httpJson('POST', server.port, '/reward/dry-run', body);
+    if (dry.status !== 200 || !dry.payload || !dry.payload.preview_id) {
+      return { ok: false, error: (dry.payload && dry.payload.error) || `reward dry-run HTTP ${dry.status}` };
+    }
+    const append = await httpJson('POST', server.port, '/reward/append', {
+      ...body,
+      preview_id: dry.payload.preview_id,
+      write_active_state_summary: true,
+    });
+    if (append.status !== 200 || !append.payload || append.payload.appended !== true) {
+      return { ok: false, error: (append.payload && append.payload.error) || `reward append HTTP ${append.status}` };
+    }
+    dbgWorker('reward:feedback', `goal=${goalId} reward=${reward} decision=${decision}`);
+    return { ok: true, appended: true, reward, decision };
   },
 
   // Commit subjects for a branch — feeds the PR "解决方案" section and the
@@ -2030,11 +2982,35 @@ module.exports = {
     const effective = range || target;
     const names = await gitRun(projectDir, ['diff', '--name-only', effective], 30000);
     const stat = await gitRun(projectDir, ['diff', '--shortstat', effective], 30000);
+    // Per-file +/- counts feed the diff-first approval view ("改了哪些文件、
+    // 每个文件加删了多少行") — the human must see WHAT changed before
+    // approving a PR, not just a prose summary.
+    const numstatOut = await gitRun(projectDir, ['diff', '--numstat', effective], 30000);
+    const numstat = String(numstatOut.stdout || '').split(/\r?\n/)
+      .map((line) => {
+        const m = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/);
+        if (!m) return null;
+        const added = m[1] === '-' ? 0 : Number(m[1]);
+        const deleted = m[2] === '-' ? 0 : Number(m[2]);
+        return { path: m[3], added, deleted };
+      })
+      .filter(Boolean);
+    // A single capped unified diff for the expandable "看差异" view. Diffs can
+    // be enormous (generated files, lockfiles); cap the bytes so a huge branch
+    // never round-trips megabytes through the RPC bridge.
+    let hunks = null;
+    try {
+      const diffOut = await gitRun(projectDir, ['diff', '--unified=3', effective], 30000);
+      const raw = String(diffOut.stdout || '');
+      hunks = raw.length > 40000 ? `${raw.slice(0, 40000)}\n… (diff truncated)` : raw;
+    } catch (_) { hunks = null; }
     return {
       ok: true,
       range,
       files: String(names.stdout || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
       stat: String(stat.stdout || '').trim() || null,
+      numstat,
+      hunks,
     };
   },
 
@@ -2052,6 +3028,61 @@ module.exports = {
     const { result, payload } = await runJson(argvPrefix, projectDir, args, { srcDir });
     const ok = result.code === 0 && payload?.ok !== false;
     return { ok, payload, error: ok ? null : (payload?.error || result.stderr.slice(0, 300) || 'todo complete failed') };
+  },
+
+  // Transition one todo's lifecycle status (open/done/blocked/deferred) — the
+  // per-issue pause/resume control. `reason` rides --reason for the
+  // blocked/deferred transitions; `note` is a general public-safe note.
+  async 'loopx.updateTodo'({
+    argvPrefix = null, srcDir = null, projectDir = null,
+    goalId, todoId, status, note = null, reason = null,
+  } = {}) {
+    if (!goalId || !todoId || !status) throw new Error('loopx.updateTodo: goalId, todoId and status are required');
+    const args = ['todo', 'update', '--goal-id', goalId, '--todo-id', todoId, '--status', status];
+    if (note) args.push('--note', note);
+    if (reason) args.push('--reason', reason);
+    const { result, payload } = await runJson(argvPrefix, projectDir, args, { srcDir });
+    const ok = result.code === 0 && payload?.ok !== false;
+    return { ok, payload, error: ok ? null : (payload?.error || result.stderr.slice(0, 300) || 'todo update failed') };
+  },
+
+  // Remove one todo (supersede) — the per-issue delete control.
+  async 'loopx.supersedeTodo'({
+    argvPrefix = null, srcDir = null, projectDir = null,
+    goalId, todoId, reason = null,
+  } = {}) {
+    if (!goalId || !todoId) throw new Error('loopx.supersedeTodo: goalId and todoId are required');
+    const args = ['todo', 'supersede', '--goal-id', goalId, '--todo-id', todoId];
+    if (reason) args.push('--reason', reason);
+    const { result, payload } = await runJson(argvPrefix, projectDir, args, { srcDir });
+    const ok = result.code === 0 && payload?.ok !== false;
+    return { ok, payload, error: ok ? null : (payload?.error || result.stderr.slice(0, 300) || 'todo supersede failed') };
+  },
+
+  // Append one GitHub issue as a new agent todo (fix_issue) — the per-goal
+  // "新增 issue" action.
+  async 'loopx.addIssueTodo'({
+    argvPrefix = null, srcDir = null, projectDir = null,
+    goalId, text, repo = null, agentId = null,
+  } = {}) {
+    if (!goalId || !text) throw new Error('loopx.addIssueTodo: goalId and text are required');
+    const args = [
+      'todo', 'add', '--goal-id', goalId, '--role', 'agent',
+      '--text', text, '--task-class', 'advancement_task', '--action-kind', 'fix_issue',
+    ];
+    if (repo) args.push('--task-repository', `git:github.com/${repo}`);
+    if (agentId) args.push('--claimed-by', agentId);
+    const { result, payload } = await runJson(argvPrefix, projectDir, args, { srcDir });
+    const ok = result.code === 0 && payload?.ok !== false;
+    return { ok, todoId: payload?.todo_id ?? null, error: ok ? null : (payload?.error || result.stderr.slice(0, 300) || 'todo add failed') };
+  },
+
+  // List ALL open issues of a GitHub repository (public, anonymous API) — the
+  // source for the goal picker's issue checklist (selected + available).
+  async 'loopx.listRepoIssues'({ repo = null } = {}) {
+    if (!repo) throw new Error('loopx.listRepoIssues: repo is required');
+    const fetched = await fetchOpenIssues(repo);
+    return { ok: true, repo, issues: fetched.issues, truncated: fetched.truncated };
   },
 
   // Validates a GitHub token and returns its login — the settings dialog
@@ -2380,6 +3411,9 @@ module.exports = {
       const written = [];
       const issueResults = [];
       const skippedDuplicates = [];
+      const skippedResolved = [];
+      let rewardMemory = null;
+      let repoMemorySync = null;
       let failure = null;
       // Which stage failed matters: after bootstrap+register succeed the goal
       // EXISTS, and reporting 'bootstrap_failed' would invite a retry that
@@ -2424,6 +3458,12 @@ module.exports = {
           if (bootstrap.result.code !== 0 || bootstrap.payload?.ok === false) {
             throw new Error(bootstrap.payload?.error || bootstrap.result.stderr.trim() || 'loopx bootstrap failed');
           }
+          // bootstrap hardcodes requires_parent_approval=["write",...] no
+          // matter what --write-scope says, so the pre-grant above does NOT
+          // actually un-gate code edits. Drop "write" explicitly (publish +
+          // production-action stay gated) so a fix never parks on a write
+          // approval the user already gave at intake.
+          clearWriteApprovalRequirement(workingDir, targetGoalId);
         }
 
         // Registration runs for BOTH modes: todo add --claimed-by rejects
@@ -2439,21 +3479,45 @@ module.exports = {
         }
         goalCreated = true;
 
+        // Reward memory + repository memory wiring is best-effort and never
+        // gates the fix: a provider hiccup degrades to the pre-memory path.
+        rewardMemory = await enableRewardMemory({ argvPrefix, srcDir, projectDir: workingDir, goalId: targetGoalId, agentId, repoLabel });
+        // The full-repo OpenViking seed can take minutes on a big repo AND the
+        // server indexes in the background anyway — running it inline blocked
+        // intake for up to 4 minutes while the first (and only) memory query
+        // still came up empty. Fire-and-forget: the sync proceeds while the
+        // todos are written and the first turn starts; later turns (and the
+        // next goal on this repo) hit a warm index.
+        repoMemorySync = { ok: null, pending: true, scopeRef: repoLabel ? repoMemoryScopeRef(repoLabel) : null };
+        syncRepoToOpenViking({ repoLabel, repoDir: workingDir }).then((sync) => {
+          dbgWorker('repoMemory:bgSync', `ok=${sync && sync.ok} scope=${sync && sync.scopeRef}`);
+          global.rpcEmit('repoMemorySync:done', { goalId: targetGoalId, ...sync });
+        }).catch((err) => {
+          dbgWorker('repoMemory:bgSyncError', String(err && err.message || err));
+        });
+
         if (issueList.length === 1) {
           // Single issue: the full workflow-plan path yields ordered,
           // classed todos (branch plan, validation, PR readiness). A
-          // re-pasted issue skips the write entirely.
-          if (await hasOpenIssueTodo(argvPrefix, srcDir, workingDir, targetGoalId, issueList[0].url)) {
-            skippedDuplicates.push(issueList[0]);
-            issueResults.push({ url: issueList[0].url, ok: true, skippedDuplicate: true, written: [] });
+          // re-pasted issue skips the write entirely; an issue that was
+          // already closed upstream is skipped with a non-blocking notice.
+          const issue = issueList[0];
+          const status = repoLabel ? await checkIssueStatus(repoLabel, issue.number) : null;
+          if (status && !status.open) {
+            skippedResolved.push({ ...issue, state: status.state, stateReason: status.stateReason });
+            issueResults.push({ url: issue.url, ok: true, skippedResolved: true, state: status.state, stateReason: status.stateReason, written: [] });
+            emit('resolved', { detail: issue.url, state: status.state, stateReason: status.stateReason });
+          } else if (await hasOpenIssueTodo(argvPrefix, srcDir, workingDir, targetGoalId, issue.url)) {
+            skippedDuplicates.push(issue);
+            issueResults.push({ url: issue.url, ok: true, skippedDuplicate: true, written: [] });
           } else {
-            emit('plan', { current: 1, total: 1, detail: issueList[0].url });
+            emit('plan', { current: 1, total: 1, detail: issue.url });
             failedStage = 'plan';
-            const intake = await planIssueIntake({ argvPrefix, srcDir, projectDir: workingDir, url: issueList[0].url });
+            const intake = await planIssueIntake({ argvPrefix, srcDir, projectDir: workingDir, url: issue.url, repoLabel });
             const result = intake.ok
               ? await writePlannedTodos({ argvPrefix, srcDir, projectDir: workingDir, goalId: targetGoalId, agentId, intake })
               : intake;
-            issueResults.push({ url: issueList[0].url, ...result });
+            issueResults.push({ url: issue.url, ...result });
             written.push(...(result.written || []));
           }
         } else if (issueList.length > 1) {
@@ -2463,6 +3527,14 @@ module.exports = {
           failedStage = 'todos';
           for (let i = 0; i < issueList.length; i += 1) {
             const issue = issueList[i];
+            // Live status first: an issue closed upstream must not be re-fixed.
+            const status = repoLabel ? await checkIssueStatus(repoLabel, issue.number) : null;
+            if (status && !status.open) {
+              skippedResolved.push({ ...issue, state: status.state, stateReason: status.stateReason });
+              written.push({ ok: true, skippedResolved: true, actionKind: 'fix_issue', url: issue.url, state: status.state, stateReason: status.stateReason });
+              emit('resolved', { detail: issue.url, state: status.state, stateReason: status.stateReason });
+              continue;
+            }
             // Per-issue dedup: an open todo for this URL already exists —
             // skip instead of writing a duplicate.
             if (await hasOpenIssueTodo(argvPrefix, srcDir, workingDir, targetGoalId, issue.url)) {
@@ -2481,8 +3553,18 @@ module.exports = {
             ];
             if (repoLabel) args.push('--task-repository', `git:github.com/${repoLabel}`);
             try {
-              const response = await runJson(argvPrefix, workingDir, args, { srcDir, timeoutMs: 60000 });
-              const ok = response.result.code === 0 && response.payload?.ok !== false;
+              let response = await runJson(argvPrefix, workingDir, args, { srcDir, timeoutMs: 60000 });
+              let ok = response.result.code === 0 && response.payload?.ok !== false;
+              // loopx can crash (Python traceback) AFTER actually writing the
+              // todo. One retry distinguishes a transient post-write crash from
+              // a real failure via already_exists, so the todo is never lost.
+              if (!ok) {
+                const retry = await runJson(argvPrefix, workingDir, args, { srcDir, timeoutMs: 60000 });
+                if (retry.result.code === 0 && (retry.payload?.ok !== false || retry.payload?.already_exists)) {
+                  response = retry;
+                  ok = true;
+                }
+              }
               written.push({
                 ok,
                 todoId: response.payload?.todo_id ?? null,
@@ -2539,6 +3621,10 @@ module.exports = {
         intakeKind,
         issueCount: issueList.length,
         skippedDuplicates: skippedDuplicates.length,
+        skippedResolved: skippedResolved.length,
+        skippedResolvedIssues: skippedResolved,
+        rewardMemory,
+        repoMemorySync,
         writtenOk: okWritten,
         repository: repoLabel,
         projectDir: workingDir,
@@ -2582,6 +3668,7 @@ module.exports = {
     const agentsByGoal = {};
     const objectivesByGoal = {};
     const dirByGoal = {};
+    const needsWriteGrant = []; // goalId -> projectDir, for auto-heal below
     for (const target of targets) {
       // target is <dir>/.loopx/registry.json — strip both segments to get the
       // project directory itself.
@@ -2596,7 +3683,17 @@ module.exports = {
           .filter(Boolean);
         objectivesByGoal[goalId] = readGoalObjective(dir, goal);
         if (dir) dirByGoal[goalId] = dir;
+        // Auto-heal: goals bootstrapped before the fix still carry the
+        // hardcoded "write" parent-approval requirement — clear it so they
+        // stop parking on a write gate. Idempotent (no write if absent).
+        if (Array.isArray(coordination.requires_parent_approval)
+          && coordination.requires_parent_approval.includes('write')) {
+          needsWriteGrant.push({ goalId, dir });
+        }
       }
+    }
+    for (const { goalId, dir } of needsWriteGrant) {
+      clearWriteApprovalRequirement(dir, goalId);
     }
 
     let lastOk = true;
@@ -2696,6 +3793,13 @@ module.exports = {
     return { ok: result.code === 0, payload, stderr: result.stderr };
   },
 
+  // A turn may have changed todo statuses; the resume-reconciliation cache must
+  // not feed the next turn a stale "从 #X 继续" note. ui.js calls this at turn end.
+  async 'loopx.invalidateResumeCache'() {
+    resumeReconCache = null;
+    return { ok: true };
+  },
+
   async 'loopx.shouldRun'({ argvPrefix = null, projectDir = null, goalId, agentId } = {}) {
     if (!goalId) throw new Error('loopx.shouldRun: goalId is required');
     const t0 = Date.now();
@@ -2703,7 +3807,14 @@ module.exports = {
     const args = [
       'quota', 'should-run',
       '--goal-id', goalId,
-      '--runtime-profile', 'outer_controller',
+      // Explicit scheduler execution context: newer loopx rejects the
+      // `--runtime-profile outer_controller` shortcut as an invalid context
+      // (missing host_surface/scheduler_owner/execution_mode → "repair scheduler
+      // context" / "stop until repaired"). The BitFun host runs the agent
+      // headlessly as the outer controller through a generic CLI surface.
+      '--host-surface', 'generic_cli',
+      '--scheduler-owner', 'outer_controller',
+      '--execution-mode', 'isolated_headless',
       '--include-scheduler-detail',
       '--scan-root', quotaScanRoot(),
     ];
@@ -2743,7 +3854,11 @@ module.exports = {
     ensureCommitTrailerHook(projectDir);
     const { result, payload } = await runJson(argvPrefix, projectDir, [
       'heartbeat-prompt', '--goal-id', goalId, '--agent-id', agentId,
-      '--runtime-profile', 'outer_controller', '--compact',
+      // Same scheduler context as shouldRun — keep the two in lock-step.
+      '--host-surface', 'generic_cli',
+      '--scheduler-owner', 'outer_controller',
+      '--execution-mode', 'isolated_headless',
+      '--compact',
     ], { srcDir, timeoutMs: 180000 });
     dbgWorker('turnPrompt:done', `code=${result.code} hasBody=${Boolean(payload && payload.task_body)}`);
     const body = payload && typeof payload.task_body === 'string' ? payload.task_body : null;
@@ -2762,6 +3877,40 @@ module.exports = {
       /\bDo not ask for permissions when the current Codex session is already trusted\./g,
       'Do not re-ask for permissions BitFun has already granted in this session.',
     );
-    return { ok: true, prompt: turnPreamble({ projectDir, goalId, agentId }) + sanitized };
+    // Stateless resume reconciliation (loopx philosophy: the registry/todos are
+    // the source of truth, not the chat session). Compute which issue-todos are
+    // already done (skip) vs still open (continue from the first), so a fresh
+    // agent session can resume exactly where the last turn left off.
+    let resume = null;
+    let resumeNote = '';
+    const reconKey = `${goalId}@${projectDir}`;
+    if (resumeReconCache && resumeReconCache.key === reconKey && (Date.now() - resumeReconCache.at) < RESUME_RECON_TTL_MS) {
+      resume = resumeReconCache.resume;
+      resumeNote = resumeReconCache.resumeNote;
+      dbgWorker('turnPrompt:resumeCacheHit', reconKey);
+    } else {
+      try {
+        const issueList = await runJson(argvPrefix, projectDir, ['todo', 'list', '--goal-id', goalId], { srcDir, timeoutMs: 60000 });
+        const projection = projectGoalIssues((issueList.payload && issueList.payload.todos) || []);
+        resume = projection;
+        if (projection.total > 0) {
+          const doneNums = projection.issues.filter((i) => i.done).map((i) => `#${i.number}`);
+          const openNums = projection.issues.filter((i) => !i.done).map((i) => `#${i.number}`);
+          const donePart = doneNums.length ? `已完成（跳过）：${doneNums.join('、')}` : '暂无已完成';
+          const openPart = openNums.length ? `未完成（从这里继续，按顺序处理）：${openNums.join('、')}` : '全部已完成';
+          resumeNote = `${donePart}。${openPart}。`;
+        }
+        resumeReconCache = { key: reconKey, at: Date.now(), resume, resumeNote };
+      } catch (err) {
+        dbgWorker('turnPrompt:resumeError', String(err && err.message || err));
+      }
+    }
+    const resumeBlock = resumeNote ? `\n\n本轮续跑对账（来自 loopx 注册表，非会话记忆）：${resumeNote}\n` : '';
+    return {
+      ok: true,
+      prompt: turnPreamble({ projectDir, goalId, agentId }) + resumeBlock + sanitized,
+      resume,
+      resumeNote,
+    };
   },
 };

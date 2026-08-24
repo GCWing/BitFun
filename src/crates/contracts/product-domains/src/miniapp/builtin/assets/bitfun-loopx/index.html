@@ -29,6 +29,41 @@
   </script>
 </head>
 <body>
+  <div id="env-onboard" class="env-onboard" hidden>
+    <div class="env-onboard__card">
+      <div id="env-state-loading" class="env-onboard__state">
+        <span class="spinner"></span>
+        <span data-i18n="envCheckLoading">正在检查环境…</span>
+      </div>
+      <div id="env-state-guide" class="env-onboard__state" hidden>
+        <h2 data-i18n="envOnboardTitle">首次使用 · 配置环境</h2>
+        <p data-i18n="envOnboardHint">自动修复 issue 需要下面几项依赖，一键装好后即可开始。</p>
+        <ul id="env-onboard-list" class="env-onboard__list"></ul>
+        <details class="env-onboard__config" id="env-config-details">
+          <summary data-i18n="envConfigSummary">高级配置（模型，默认已填好）</summary>
+          <div class="env-onboard__config-body">
+            <label class="env-onboard__field"><span data-i18n="envVlmModel">VLM 模型</span><input id="env-cfg-vlm-model" type="text" /></label>
+            <label class="env-onboard__field"><span data-i18n="envVlmBase">VLM 地址</span><input id="env-cfg-vlm-base" type="text" /></label>
+            <label class="env-onboard__field"><span data-i18n="envVlmKey">VLM API Key</span><input id="env-cfg-vlm-key" type="password" /></label>
+          </div>
+        </details>
+        <div class="env-onboard__actions">
+          <button id="btn-env-install" class="btn btn--primary" type="button" data-i18n="envInstallBtn">一键安装并配置</button>
+          <button id="btn-env-retry" class="btn" type="button" data-i18n="retry">重新检测</button>
+        </div>
+      </div>
+      <div id="env-state-progress" class="env-onboard__state" hidden>
+        <h2 data-i18n="envProgressTitle">正在安装…</h2>
+        <pre id="env-onboard-log" class="env-onboard__log"></pre>
+      </div>
+      <div id="env-state-done" class="env-onboard__state" hidden>
+        <div class="env-onboard__done-mark">✓</div>
+        <h2 data-i18n="envDoneTitle">环境就绪</h2>
+        <p data-i18n="envDoneHint">可以开始自动修复 issue 了。</p>
+        <button id="btn-env-done" class="btn btn--primary" type="button" data-i18n="envDoneBtn">开始使用</button>
+      </div>
+    </div>
+  </div>
   <div id="app" class="lx">
     <div id="banner-nodetect" class="banner banner--warn" hidden>
       <div class="banner__body">
@@ -44,10 +79,11 @@
     </div>
 
     <main class="layout">
+      <div id="status-bar" class="status-bar" hidden></div>
       <div class="workspace" id="workspace-root">
         <section class="review-zone" id="review-zone">
           <div class="zone-head" id="review-zone-head">
-            <div class="zone-head-row"><span class="dot dot--review"></span><span id="review-zone-title"></span><span class="zone-count" id="review-zone-count">0</span></div>
+            <div class="zone-head-row"><span class="dot dot--review"></span><span id="review-zone-title"></span><span class="zone-count" id="review-zone-count">0</span><span id="review-zone-badge" class="review-zone__badge" hidden></span></div>
             <div class="zone-sub" id="review-zone-sub"></div>
           </div>
           <div class="zone-list" id="review-list"></div>
@@ -55,43 +91,62 @@
         </section>
         <div class="resize-handle" id="resize-review" data-i18n-attr="title" data-i18n="resizeHandleHint"></div>
         <section class="run-frame">
-          <nav class="run-rail" id="run-rail">
-            <div class="zone-head" id="active-zone-head">
-              <div class="zone-head-row"><span class="dot dot--active"></span><span id="active-zone-title"></span><span class="zone-count" id="active-zone-count">0</span></div>
-              <div class="zone-sub" id="active-zone-sub"></div>
-            </div>
-            <div class="run-rail__list" id="active-list"></div>
-          </nav>
-          <div class="resize-handle" id="resize-rail" data-i18n-attr="title" data-i18n="resizeHandleHint"></div>
           <aside id="goal-detail-panel" class="detail-panel" hidden>
             <header class="detail-panel__header">
-              <div><div id="goal-detail-kicker" class="drawer__kicker"></div><h2 id="goal-detail-title"></h2><span id="goal-detail-timer" class="detail-panel__timer"></span><div id="goal-detail-stage" class="detail-panel__stage" hidden></div><div id="goal-detail-conclusion" class="detail-panel__conclusion" hidden></div></div>
-              <button id="btn-close-goal" class="btn btn--icon" type="button" data-i18n-attr="title" data-i18n="close">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3l10 10M13 3L3 13"/></svg>
-              </button>
+              <div><div id="goal-detail-kicker" class="drawer__kicker"></div><div class="detail-panel__title-row"><h2 id="goal-detail-title"></h2><div id="goal-detail-stepper" class="detail-panel__stepper-inline" hidden></div></div><div id="goal-detail-action" class="detail-panel__action" hidden></div><div id="goal-detail-conclusion" class="detail-panel__conclusion" hidden></div></div>
+              <div class="detail-panel__head-actions">
+                <button id="btn-close-goal" class="btn btn--icon" type="button" data-i18n-attr="title" data-i18n="close">
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3l10 10M13 3L3 13"/></svg>
+                </button>
+              </div>
             </header>
             <div id="goal-detail-body" class="detail-panel__body"></div>
+            <div id="goal-detail-status" class="detail-panel__status" hidden>
+              <span class="detail-panel__status-text" data-i18n="activityDiving"></span>
+              <span id="goal-detail-status-clock" class="detail-panel__status-clock"></span>
+              <button id="btn-detail-toggle-run" class="btn btn--tiny" type="button" hidden></button>
+            </div>
             <button id="btn-log-bottom" class="log-bottom" type="button" data-i18n-attr="title" data-i18n="logBottomHint" hidden>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v10M4 9l4 4 4-4"/></svg>
             </button>
           </aside>
           <div id="detail-empty" class="detail-empty">
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="19" cy="17" r="2.2"/></svg>
-            <span data-i18n="detailEmptyHint">点选「进行中」的条目查看任务详情与实时日志</span>
+            <span id="detail-empty-hint" data-i18n="detailEmptyHint">点选「进行中」的条目查看任务详情与实时日志</span>
+            <div id="onboard" class="onboard" hidden>
+              <h3 id="onboard-title" class="onboard__title"></h3>
+              <p id="onboard-hint" class="onboard__hint"></p>
+              <div class="onboard__samples">
+                <button id="onboard-sample-issue" class="btn btn--small" type="button"></button>
+                <button id="onboard-sample-repo" class="btn btn--small" type="button"></button>
+              </div>
+            </div>
           </div>
         </section>
       </div>
       <section class="composer" aria-label="Create task">
+        <div class="composer__modes" role="tablist" aria-label="Composer mode">
+          <button id="mode-new" class="composer__mode is-active" type="button" role="tab" aria-selected="true" data-i18n="composerModeNew">新建修复任务</button>
+          <button id="mode-guide" class="composer__mode" type="button" role="tab" aria-selected="false" data-i18n="composerModeGuide">引导运行中任务</button>
+        </div>
         <div id="task-feedback" class="composer__feedback" role="status" hidden></div>
+        <div id="intake-stepper" class="intake-stepper" hidden></div>
+        <div id="composer-vision-hint" class="composer__vision-hint" hidden></div>
         <div class="composer__box">
-          <textarea id="task-input" rows="2" maxlength="4000" data-i18n-placeholder="taskPlaceholder" placeholder="粘贴 GitHub Issue / 仓库 / Issues 列表链接，可附加修复要求"></textarea>
+          <div id="composer-link-row" class="composer__link-row">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5 9.5 6.5M5 11 3.5 12.5a2.12 2.12 0 0 1-3-3L3 7M11 5l1.5-1.5a2.12 2.12 0 0 1 3 3L13 9"/></svg>
+            <input id="composer-link-input" type="text" maxlength="2000" data-i18n-placeholder="taskLinkPlaceholder" placeholder="粘贴 GitHub Issue / 仓库 / Issues 列表链接" spellcheck="false" autocomplete="off" />
+          </div>
+          <div id="composer-unfurl" class="composer__unfurl" hidden></div>
+          <textarea id="task-input" rows="2" maxlength="4000" data-i18n-placeholder="taskNotePlaceholder" placeholder="附加修复要求（可选）"></textarea>
           <div class="composer__footer">
             <div class="composer__context">
               <label class="composer__model" data-i18n-attr="title" data-i18n="composerModelTitle">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.5 10 6l4.5 2L10 10l-2 4.5L6 10 1.5 8 6 6z"/></svg>
                 <select id="composer-model"></select>
               </label>
-              <div class="composer__target" data-i18n-attr="title" data-i18n="composerTargetTitle" id="composer-target">
+              <button id="btn-github" class="composer__chip" type="button" data-i18n-attr="title" data-i18n="githubTokenTitle">GitHub</button>
+              <div class="composer__target" data-i18n-attr="title" data-i18n="composerTargetTitle" id="composer-target" hidden>
                 <button type="button" class="composer-target__trigger" id="composer-target-trigger" aria-haspopup="listbox">
                   <span id="composer-target-label">新建任务</span>
                   <svg class="composer-target__caret" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
@@ -102,7 +157,7 @@
             </div>
             <button id="btn-create-task" class="composer__submit" type="button" data-i18n-title="taskCreate">
               <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5V3.5M4.5 7 8 3.5 11.5 7"/></svg>
-              <span class="sr-only" data-i18n="taskCreate">创建任务</span>
+              <span class="sr-only" id="btn-create-task-label" data-i18n="taskCreate">创建任务</span>
             </button>
           </div>
         </div>
@@ -114,6 +169,7 @@
         <h2 id="intake-title"></h2>
         <p id="intake-summary" class="dlg__note"></p>
         <div id="intake-vision-warn" class="dlg__note dlg__note--warn" hidden></div>
+        <div id="intake-resolved-warn" class="dlg__note dlg__note--ok" hidden></div>
         <div id="intake-selectbar" class="intake-selectbar" hidden>
           <label class="intake-selectall"><input type="checkbox" id="intake-select-all" checked /><span data-i18n="intakeSelectAll">全选</span></label>
           <span id="intake-count" class="intake-count"></span>
@@ -130,10 +186,16 @@
       <form method="dialog" class="dlg__form">
         <h2 data-i18n="approveTitle">确认这项操作？</h2>
         <div id="approve-text" class="approve-text"></div>
+        <div id="approve-diff" class="approve-diff" hidden>
+          <div class="approve-diff__head"><span id="approve-diff-count" class="approve-diff__count"></span><span id="approve-diff-stat" class="approve-diff__stat"></span></div>
+          <div id="approve-diff-list" class="approve-diff__list"></div>
+          <details id="approve-diff-hunk" class="approve-diff__hunk"><summary id="approve-diff-hunk-summary"></summary><pre id="approve-diff-hunk-body" class="run-argv raw-body"></pre></details>
+        </div>
         <label class="field"><span data-i18n="approveNote">备注（可选）</span><input id="approve-note" type="text" spellcheck="false" /></label>
         <div class="dlg__actions">
           <button type="button" value="cancel" class="btn dlg-cancel" data-i18n="cancel">取消</button>
           <button type="button" id="btn-approve-only" class="btn" hidden data-i18n="approveOnly">仅批准</button>
+          <button type="button" id="btn-approve-reject" class="btn btn--danger" hidden data-i18n="rejectGate">拒绝</button>
           <button value="approve" class="btn btn--approve" data-i18n="approveConfirm">确认批准</button>
         </div>
       </form>
@@ -176,9 +238,6 @@
       </form>
     </dialog>
 
-    <dialog id="dlg-raw" class="dlg dlg--wide">
-      <form method="dialog" class="dlg__form"><h2 id="raw-title">JSON</h2><pre id="raw-body" class="run-argv raw-body" tabindex="0"></pre><div class="dlg__actions"><button type="button" id="btn-copy-raw" class="btn" data-i18n="copy">复制</button><button value="close" class="btn btn--primary" data-i18n="close">关闭</button></div></form>
-    </dialog>
   </div>
 </body>
 </html>

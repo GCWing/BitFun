@@ -50,6 +50,36 @@ interface AiStreamPayload {
 let composerTokenSeq = 0;
 const log = createLogger('useMiniAppBridge');
 
+/**
+ * Module-level registry of MiniApp-owned agent session ids, keyed by runner
+ * scope. Installed apps and draft previews intentionally share an app id, but
+ * must never share Agent ownership.
+ *
+ * A hidden agent turn runs in the host while this hook owns its event routing.
+ * When the hook REMOUNTS mid-turn (tab switch, iframe reload), a per-hook
+ * `useRef` would reset to empty and silently drop the turn's remaining
+ * `agentic://*` events — most importantly `dialog-turn-completed`. The MiniApp
+ * then never learns the turn finished, so its own stall watchdog later cancels
+ * an already-completed turn. Keeping the set at module scope makes it survive
+ * remounts for the lifetime of the webview.
+ */
+const agentSessionIdsByRunner = new Map<string, Set<string>>();
+
+function agentSessionRegistryKey(scope: MiniAppRunScope): string {
+  return scope.kind === 'draft'
+    ? `draft:${scope.appId}:${scope.draftId}`
+    : `active:${scope.appId}`;
+}
+
+function agentSessionIdsFor(registryKey: string): Set<string> {
+  let set = agentSessionIdsByRunner.get(registryKey);
+  if (!set) {
+    set = new Set<string>();
+    agentSessionIdsByRunner.set(registryKey, set);
+  }
+  return set;
+}
+
 export function useMiniAppBridge(
   iframeRef: RefObject<HTMLIFrameElement>,
   app: MiniApp,
@@ -99,8 +129,16 @@ export function useMiniAppBridge(
   ]);
 
   // Hidden agent sessions started by this iframe; used to filter the global
-  // agentic:// event stream before forwarding events into the iframe.
-  const agentSessionIdsRef = useRef<Set<string>>(new Set());
+  // agentic:// event stream before forwarding events into the iframe. Backed by
+  // a module-level map (see agentSessionIdsFor) so a mid-turn remount does not
+  // reset the set and drop the turn's completion event.
+  const sessionRegistryKey = agentSessionRegistryKey(runScope);
+  const sessionRegistryKeyRef = useRef(sessionRegistryKey);
+  const agentSessionIdsRef = useRef<Set<string>>(agentSessionIdsFor(sessionRegistryKey));
+  if (sessionRegistryKeyRef.current !== sessionRegistryKey) {
+    sessionRegistryKeyRef.current = sessionRegistryKey;
+    agentSessionIdsRef.current = agentSessionIdsFor(sessionRegistryKey);
+  }
 
   // This runner's identity for bubble composer claims.
   const composerTokenRef = useRef<string>('');
@@ -770,6 +808,20 @@ export function useMiniAppBridge(
             },
             '*',
           );
+          if (
+            eventName === 'dialog-turn-completed'
+            || eventName === 'dialog-turn-failed'
+            || eventName === 'dialog-turn-cancelled'
+          ) {
+            agentSessionIdsRef.current.delete(eventSessionId);
+            const registryKey = sessionRegistryKeyRef.current;
+            if (
+              agentSessionIdsRef.current.size === 0
+              && agentSessionIdsByRunner.get(registryKey) === agentSessionIdsRef.current
+            ) {
+              agentSessionIdsByRunner.delete(registryKey);
+            }
+          }
         },
       ),
     );

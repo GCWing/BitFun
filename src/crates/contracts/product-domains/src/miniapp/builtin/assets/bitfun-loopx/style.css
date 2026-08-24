@@ -1,5 +1,10 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; width: 100%; height: 100%; }
+/* The html canvas itself must follow the theme, not the webview's default
+   (white): a white canvas behind the visibility gate is the first of the two
+   launch flashes. Body already paints --lx-bg; html matches it so there is no
+   white frame before the theme vars land. */
+html { background: var(--lx-bg); }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
@@ -25,6 +30,35 @@ html, body { margin: 0; width: 100%; height: 100%; }
   --lx-radius-lg: var(--bitfun-radius-lg, 12px);
   --lx-mono: var(--bitfun-font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
   --lx-sans: var(--bitfun-font-sans, -apple-system, "Segoe UI", system-ui, sans-serif);
+  /* Craft tokens: one easing curve and two durations keep every hover/press
+     micro-interaction in the same hand; radius-sm tightens nested surfaces. */
+  --lx-ease: cubic-bezier(.2, .6, .2, 1);
+  --lx-dur-fast: 110ms;
+  --lx-dur: 170ms;
+  --lx-radius-sm: 6px;
+}
+
+/* Light-theme fallbacks: the host injects --bitfun-* tokens asynchronously, so
+   a light-mode session would otherwise paint the dark fallback (#111214) for a
+   frame and flash black. data-bf-appearance-mode is set synchronously at
+   compile time, so these light fallbacks apply from the very first paint. */
+[data-bf-appearance-mode="light"] {
+  --lx-bg: var(--bitfun-bg, #f3f3f5);
+  --lx-surface: var(--bitfun-bg-secondary, #ffffff);
+  --lx-surface-muted: var(--bitfun-bg-tertiary, #f1f2f5);
+  --lx-elevated: var(--bitfun-bg-elevated, #ffffff);
+  --lx-surface-2: var(--bitfun-element-bg, rgba(15,23,42,.045));
+  --lx-hover: var(--bitfun-element-hover, rgba(15,23,42,.07));
+  --lx-border: var(--bitfun-border-subtle, rgba(15,23,42,.10));
+  --lx-border-strong: var(--bitfun-border, rgba(15,23,42,.16));
+  --lx-text: var(--bitfun-text, #1f2328);
+  --lx-text-soft: var(--bitfun-text-secondary, #4b5563);
+  --lx-text-mute: var(--bitfun-text-muted, #6b7280);
+  --lx-accent: var(--bitfun-accent, #5b8def);
+  --lx-accent-hover: var(--bitfun-accent-hover, #477de8);
+  --lx-ok: var(--bitfun-success, #1f9d61);
+  --lx-warn: var(--bitfun-warning, #c07f1f);
+  --lx-error: var(--bitfun-error, #d64550);
 }
 
 body { background: var(--lx-bg); color: var(--lx-text); font: 13px/1.45 var(--lx-sans); overflow: hidden; }
@@ -46,6 +80,7 @@ button, input, select { font: inherit; }
 .goal-status--ok { color: var(--lx-ok); background: color-mix(in srgb, var(--lx-ok) 10%, transparent); }
 .goal-status--err { color: var(--lx-error); background: color-mix(in srgb, var(--lx-error) 12%, transparent); }
 .goal-status--muted { color: var(--lx-text-mute); background: color-mix(in srgb, var(--lx-text-mute) 10%, transparent); }
+.goal-status--review { color: var(--lx-review); background: color-mix(in srgb, var(--lx-review) 10%, transparent); }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px;
@@ -76,6 +111,37 @@ button, input, select { font: inherit; }
      centered symmetrically within the remaining space. */
   flex: 0 0 auto; padding: 8px 72px 12px 14px; background: var(--lx-bg);
 }
+/* 双态 composer：新建 / 引导 模式 tab + 链接优先输入 + unfurl 预览。 */
+.composer__modes {
+  width: min(960px, 100%); margin: 0 auto 6px; display: flex; gap: 4px;
+  padding: 2px; border: 1px solid var(--lx-border); border-radius: 10px;
+  background: var(--lx-surface-muted);
+}
+.composer__mode {
+  flex: 1; min-height: 28px; padding: 3px 12px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--lx-text-mute); font-size: 11.5px; cursor: pointer;
+}
+.composer__mode:hover { color: var(--lx-text); }
+.composer__mode.is-active {
+  background: var(--lx-elevated); color: var(--lx-text); font-weight: 600;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--lx-text) 8%, transparent);
+}
+.composer__link-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 18px 4px; color: var(--lx-text-mute);
+}
+.composer__link-row svg { flex: 0 0 auto; }
+.composer__link-row input {
+  flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent;
+  color: var(--lx-text); font: 14px/1.5 var(--lx-sans);
+}
+.composer__link-row input::placeholder { color: var(--lx-text-mute); }
+.composer__unfurl {
+  display: flex; align-items: center; gap: 6px; margin: 4px 18px 0; padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--lx-accent) 40%, var(--lx-border));
+  border-radius: 8px; background: color-mix(in srgb, var(--lx-accent) 8%, transparent);
+  color: var(--lx-text-soft); font-size: 11.5px;
+}
+.composer__unfurl-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer__box {
   width: min(960px, 100%); min-height: 64px; margin: 0 auto; overflow: hidden;
   border: 1px solid var(--lx-border); border-radius: var(--lx-radius-lg); background: var(--lx-elevated);
@@ -146,9 +212,25 @@ button, input, select { font: inherit; }
 .composer__submit:hover { background: var(--lx-accent-hover); }
 .composer__submit:disabled { opacity: .42; cursor: not-allowed; }
 .composer__submit:focus-visible { outline: 2px solid var(--lx-accent); outline-offset: 2px; }
-.composer__feedback { width: min(960px, 100%); margin: 0 auto 6px; padding: 0 4px; color: var(--lx-text-mute); font-size: 11px; }
+.composer__feedback { width: min(960px, 100%); margin: 0 auto 6px; padding: 0 4px; color: var(--lx-text-mute); font-size: 11px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .composer__feedback--error { color: var(--lx-error); }
 .composer__feedback--ok { color: var(--lx-ok); }
+/* 任务创建进度 stepper：把 intake 固定阶段全列出来，用户看到总体进度。 */
+.intake-stepper {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
+  width: min(960px, 100%); margin: 0 auto 6px; padding: 0 4px; font-size: 11px;
+}
+.intake-stepper__seg { display: inline-flex; align-items: center; gap: 5px; color: var(--lx-text-mute); }
+.intake-stepper__seg.is-done { color: var(--lx-ok); }
+.intake-stepper__seg.is-active { color: var(--lx-accent); font-weight: 600; }
+.intake-stepper__mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid var(--lx-border-strong); font: 700 9px/1 var(--lx-mono);
+}
+.intake-stepper__seg.is-done .intake-stepper__mark { border-color: var(--lx-ok); color: var(--lx-ok); }
+.intake-stepper__seg.is-active .intake-stepper__mark { border-color: var(--lx-accent); color: var(--lx-accent); animation: activity-pulse 1.4s ease-in-out infinite; }
+.intake-stepper__sep { color: var(--lx-border-strong); }
 
 .layout { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .workspace {
@@ -175,8 +257,8 @@ button, input, select { font: inherit; }
   overflow: hidden; border: 1px solid var(--lx-border);
   border-radius: var(--lx-radius-lg); background: var(--lx-surface);
 }
-/* The run unit: the 进行中 directory rail + the selected task's live log,
-   visibly ONE frame. */
+/* The run unit: the selected task's live log frame (the 进行中 directory rail
+   was removed — in-progress goals now live in the composer's goal-picker). */
 .run-frame {
   flex: 1; min-width: 0; display: flex; overflow: hidden;
   border: 1px solid var(--lx-border); border-radius: var(--lx-radius-lg); background: var(--lx-surface);
@@ -218,12 +300,11 @@ button, input, select { font: inherit; }
 .run-rail__divider { margin: 6px 2px 2px; padding: 6px 7px 2px; border-top: 1px dashed var(--lx-border); color: var(--lx-text-mute); font-size: 10px; text-transform: uppercase; }
 .run-item--parked { opacity: .62; }
 .run-item--parked:hover { opacity: 1; }
-/* Master-detail: the selected goal's info + live activity stream takes the
-   remaining width beside the directory rail. */
+/* The log panel fills the run frame (no rail divider anymore). */
 .detail-panel {
   position: relative;
   flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
-  min-height: 0; border-left: 1px solid var(--lx-border);
+  min-height: 0;
   background: var(--lx-elevated);
 }
 /* One-click back to the log tail: appears once the reader scrolls up. */
@@ -235,6 +316,9 @@ button, input, select { font: inherit; }
   box-shadow: 0 2px 8px color-mix(in srgb, var(--lx-text) 12%, transparent);
 }
 .log-bottom:hover { border-color: var(--lx-accent); color: var(--lx-accent); }
+/* When the running-status bar is visible, lift the scroll-to-bottom button
+   above it so the two controls never overlap. */
+.detail-panel:has(#goal-detail-status:not([hidden])) .log-bottom { bottom: 46px; }
 .detail-empty {
   flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 10px;
@@ -249,39 +333,90 @@ button, input, select { font: inherit; }
   background: var(--lx-surface); flex: 0 0 auto;
 }
 .detail-panel__header h2 { margin: 2px 0 0; font: 600 15px/1.35 var(--lx-sans); overflow-wrap: anywhere; }
-.detail-panel__timer { display: inline-block; margin-top: 5px; color: var(--lx-ok); font: 11px/1.3 var(--lx-mono); }
 .detail-panel__body { flex: 1; min-height: 0; overflow-y: auto; }
-.goal.is-selected {
-  border-color: color-mix(in srgb, var(--lx-accent) 52%, var(--lx-border));
-  background: color-mix(in srgb, var(--lx-accent) 5%, var(--lx-elevated));
-  box-shadow: inset 2px 0 0 var(--lx-accent);
+/* Running status bar pinned to the panel's foot: shimmering label + clock. */
+.detail-panel__status {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-top: 1px solid var(--lx-border);
+  background: var(--lx-surface); font-size: 14px;
+}
+.detail-panel__status-text {
+  display: inline-block; white-space: nowrap; font-weight: 600;
+  background: linear-gradient(
+    90deg,
+    var(--lx-accent) 0%, var(--lx-accent) 40%,
+    color-mix(in srgb, var(--lx-accent) 42%, #ffffff) 50%,
+    var(--lx-accent) 60%, var(--lx-accent) 100%
+  );
+  background-position: 100% 0; background-size: 250% 100%;
+  background-clip: text; color: transparent;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  animation: lx-status-shimmer 1.8s linear infinite;
+}
+.detail-panel__status-clock { font-size: 11px; font-weight: 400; color: var(--lx-text-mute); }
+/* The run/stop toggle sits at the far right of the running status bar. */
+.detail-panel__status .btn { margin-left: auto; flex: 0 0 auto; }
+/* Paused state: no shimmer, muted text — it is a resting slot, not a live dive. */
+.detail-panel__status--paused .detail-panel__status-text {
+  background: none; color: var(--lx-text-mute);
+  -webkit-text-fill-color: currentColor; animation: none;
+}
+/* Idle state: the turn is "running" but produced no output for a while — warn
+   instead of shimmering like everything is fine. */
+.detail-panel__status--idle .detail-panel__status-text {
+  background: none; color: var(--lx-warn);
+  -webkit-text-fill-color: currentColor; animation: none;
+}
+.detail-panel__status--idle .detail-panel__status-clock { color: var(--lx-warn); }
+@keyframes lx-status-shimmer { to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .detail-panel__status-text { background-position: 0 0; background-size: 100% 100%; animation: none; }
 }
 .dot--backlog { background: var(--lx-text-mute); }
 .dot--active { background: var(--lx-ok); }
 .dot--review { background: var(--lx-review); }
+.dot--decisions { background: var(--lx-review); }
+.dot--notices { background: var(--lx-text-mute); }
 .dot--done { background: var(--lx-accent); }
 .dot--paused { background: var(--lx-text-mute); }
 .dot--error { background: var(--lx-error); }
 .dot--archived { background: var(--lx-accent); opacity: .45; }
 
-.goal {
-  display: flex; flex-direction: column; gap: 8px; width: 100%; min-height: 94px; padding: 11px;
-  border: 1px solid var(--lx-border); border-radius: var(--lx-radius); background: var(--lx-elevated);
-  color: var(--lx-text); text-align: left; cursor: pointer;
-  box-shadow: none;
+/* ══ 紧凑看板行（左列）────────────────────────────────────── */
+.board-row {
+  display: flex; align-items: flex-start; gap: 9px; width: 100%;
+  padding: 9px 10px; border: 1px solid var(--lx-border); border-radius: var(--lx-radius);
+  background: var(--lx-elevated); color: var(--lx-text); cursor: pointer; text-align: left;
 }
-.goal:hover {
-  border-color: var(--lx-border-strong); background: var(--lx-elevated);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--lx-text) 7%, transparent);
+.board-row:hover { border-color: var(--lx-border-strong); background: var(--lx-hover); }
+.board-row.is-selected {
+  border-color: color-mix(in srgb, var(--lx-accent) 40%, var(--lx-border));
+  background: var(--lx-surface-2); box-shadow: inset 2px 0 0 var(--lx-accent);
 }
-.goal__head { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.goal__id { min-width: 0; overflow: hidden; color: var(--lx-text-mute); font: 10.5px/1.3 var(--lx-mono); text-overflow: ellipsis; white-space: nowrap; }
-.goal__arrow { margin-left: auto; color: var(--lx-text-mute); }
-.goal__reason { display: -webkit-box; overflow: hidden; color: var(--lx-text); font-size: 13px; font-weight: 600; line-height: 1.42; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
-.goal__section { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; padding-top: 6px; border-top: 1px dashed var(--lx-border); }
-.goal__section-label { color: var(--lx-text-mute); font-size: 10px; font-weight: 700; letter-spacing: .05em; }
-.goal__section--decision { border-top-color: color-mix(in srgb, var(--lx-review) 45%, var(--lx-border)); }
-.goal__section--decision .goal__section-label { color: var(--lx-review); }
+.board-row--decisions { border-left: 3px solid var(--lx-review); }
+.board-row--notices { border-left: 3px solid var(--lx-text-mute); background: transparent; }
+.board-row .dot { margin-top: 5px; }
+.board-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.board-row__title { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.board-row__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lx-text); font-weight: 600; font-size: 12.5px; }
+.board-row__badge { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 650; white-space: nowrap; }
+.board-row__badge--decision { color: var(--lx-review); background: color-mix(in srgb, var(--lx-review) 12%, transparent); border: 1px solid color-mix(in srgb, var(--lx-review) 34%, var(--lx-border)); }
+.board-row__badge--notice { color: var(--lx-text-mute); background: color-mix(in srgb, var(--lx-text-mute) 10%, transparent); border: 1px solid var(--lx-border); }
+.board-row__actions { margin-left: auto; flex: 0 0 auto; display: inline-flex; }
+.board-row__actions .goal-actions { margin-top: 0; gap: 4px; }
+.board-row__actions .btn { opacity: .55; }
+.board-row:hover .board-row__actions .btn { opacity: 1; }
+.board-row__sub { display: flex; flex-direction: column; gap: 3px; min-width: 0; color: var(--lx-text-mute); font-size: 11px; }
+.board-row__summary { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.board-row__summary-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lx-text); }
+.board-row__summary-preview { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lx-text-mute); }
+.board-row__summary-more { flex: 0 0 auto; color: var(--lx-text-mute); font: 600 10px/1 var(--lx-mono); }
+.board-row__activity { color: var(--lx-text-soft); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row__error { color: var(--lx-error); font: 10.5px/1.4 var(--lx-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row__narration { color: var(--lx-text-soft); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow-wrap: anywhere; }
+.board-row__decision { display: flex; align-items: center; gap: 6px; }
+.board-row__decision-more { color: var(--lx-text-mute); font: 600 10px/1 var(--lx-mono); }
+
 .goal__issues { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; margin-top: 5px; }
 .goal__issues-head { margin-right: 2px; color: var(--lx-text-mute); font: 600 10.5px/1.3 var(--lx-mono); }
 .goal__issues--rail { margin-top: 4px; gap: 2px 4px; }
@@ -292,17 +427,47 @@ button, input, select { font: inherit; }
 .issue-chip--blocked { border-color: color-mix(in srgb, var(--lx-error) 55%, var(--lx-border)); color: var(--lx-error); background: color-mix(in srgb, var(--lx-error) 10%, transparent); }
 .issue-chip--deferred { border-color: var(--lx-border-strong); color: var(--lx-text-mute); opacity: .75; }
 .issue-chip--pending { border-color: var(--lx-border); color: var(--lx-text-mute); background: transparent; }
-.issue-chip--more { cursor: default; opacity: .8; }
-.goal__activity { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--lx-text-mute); font-size: 10.5px; }
-.goal__activity-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--lx-text-mute); }
-.goal__activity--live .goal__activity-dot { background: var(--lx-ok); animation: activity-pulse 1.4s ease-in-out infinite; }
-.goal__activity-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-chip--resolved { border-color: color-mix(in srgb, var(--lx-ok) 55%, var(--lx-border)); color: var(--lx-ok); background: color-mix(in srgb, var(--lx-ok) 10%, transparent); text-decoration: line-through; }
+.issue-chip--more { cursor: pointer; opacity: .85; }
+/* Issue 总览看板（方案 A）：状态总览条 + 分组小卡。 */
+.issue-board { margin-top: 8px; }
+.issue-overview { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.issue-overview__seg {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--lx-border); background: transparent;
+  color: var(--lx-text-mute); font-size: 10.5px; line-height: 1;
+  padding: 3px 8px; border-radius: 999px; cursor: pointer;
+}
+.issue-overview__seg::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.issue-overview__seg--blocked { color: var(--lx-error); border-color: color-mix(in srgb, var(--lx-error) 45%, var(--lx-border)); }
+.issue-overview__seg--deferred { color: var(--lx-text-mute); }
+.issue-overview__seg--open { color: var(--lx-accent); border-color: color-mix(in srgb, var(--lx-accent) 45%, var(--lx-border)); }
+.issue-overview__seg--resolved { color: var(--lx-ok); border-color: color-mix(in srgb, var(--lx-ok) 45%, var(--lx-border)); }
+.issue-board__group { margin-top: 8px; color: var(--lx-text-mute); font-size: 11px; font-weight: 600; }
+.issue-board__group:first-of-type { margin-top: 4px; }
+.issue-board__details { margin-top: 6px; }
+.issue-board__details summary { cursor: pointer; color: var(--lx-text-mute); font-size: 11px; font-weight: 600; }
+.issue-board__details summary:hover { color: var(--lx-text-soft); }
+.issue-board__items { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.issue-card {
+  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 1px;
+  text-decoration: none; color: inherit;
+  border: 1px solid var(--lx-border); border-left: 3px solid var(--lx-border-strong);
+  border-radius: 6px; padding: 4px 8px; line-height: 1.45;
+}
+.issue-card:hover { border-color: var(--lx-border-strong); background: color-mix(in srgb, var(--lx-border) 30%, transparent); }
+.issue-card__num { flex: 0 0 auto; font: 600 11px/1.45 var(--lx-mono); color: var(--lx-text-mute); }
+.issue-card__title { flex: 1 1 auto; min-width: 0; color: var(--lx-text); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.issue-card__concl { flex: 0 0 100%; color: var(--lx-text-mute); font-size: 10.5px; overflow-wrap: anywhere; }
+.issue-card--blocked { border-left-color: var(--lx-error); }
+.issue-card--deferred { border-left-color: var(--lx-border-strong); }
+.issue-card--open { border-left-color: var(--lx-accent); }
+.issue-card--done { border-left-color: var(--lx-ok); }
+.issue-card--resolved { border-left-color: var(--lx-ok); }
+.issue-card--done .issue-card__title, .issue-card--resolved .issue-card__title { color: var(--lx-text-mute); }
+.issue-card--resolved .issue-card__num::after { content: ' ✓'; color: var(--lx-ok); }
+
 @keyframes activity-pulse { 50% { opacity: .35; transform: scale(.78); } }
-.goal__meta { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: auto; color: var(--lx-text-mute); font-size: 10.5px; line-height: 1.35; }
-.goal__meta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.goal__meta-sep { color: var(--lx-border-strong); }
-.goal--terminal { min-height: 76px; background: transparent; box-shadow: none; opacity: .78; }
-.goal--terminal .goal__reason { color: var(--lx-text-soft); font-size: 12px; font-weight: 450; }
 
 /* "More" chips at the bottom of the review zone: terminal/stopped/error
    goals and other-host goals; nothing renders when empty. */
@@ -336,21 +501,6 @@ button, input, select { font: inherit; }
 }
 .composer__chip:hover { border-color: var(--lx-border-strong); background: var(--lx-hover); color: var(--lx-text); }
 
-/* Gate attention: cards that wait on the user must be impossible to miss. */
-.goal--gated {
-  border-color: var(--lx-border); border-left: 3px solid var(--lx-review);
-  background: var(--lx-elevated);
-}
-.goal--gated.is-selected {
-  border-color: color-mix(in srgb, var(--lx-accent) 52%, var(--lx-border));
-  border-left-color: var(--lx-review); box-shadow: none;
-}
-.goal__gate-badge {
-  margin-left: auto; flex: 0 0 auto; padding: 1px 7px;
-  border: 1px solid color-mix(in srgb, var(--lx-review) 34%, var(--lx-border)); border-radius: 999px;
-  background: color-mix(in srgb, var(--lx-review) 9%, transparent);
-  color: var(--lx-review); font-size: 10px; font-weight: 650; white-space: nowrap;
-}
 /* Attention stays semantic without tinting the entire column. */
 .review-zone .zone-head { color: var(--lx-text); }
 .review-zone .zone-count { color: var(--lx-review); font-weight: 700; }
@@ -366,6 +516,9 @@ button, input, select { font: inherit; }
 .gate-card, .gate-card__raw, .gate-card__summary, .gate-card__background { user-select: text; -webkit-user-select: text; }
 .gate-card--block { border-color: color-mix(in srgb, var(--lx-review) 55%, var(--lx-border)); background: color-mix(in srgb, var(--lx-review) 4%, var(--lx-surface)); }
 .gate-card--info { background: var(--lx-bg); }
+.gate-card--notify { background: var(--lx-bg); border-style: dashed; }
+.gate-card--notify .gate-card__label { color: var(--lx-text-mute); }
+.gate-card__notify-num { flex: 0 0 auto; font: 600 11px/1.4 var(--lx-mono); color: var(--lx-text-mute); }
 .gate-card__kicker { color: var(--lx-text-mute); font: 10px/1.4 var(--lx-mono); }
 .gate-card__title { display: flex; align-items: center; gap: 8px; color: var(--lx-text); font-size: 12px; line-height: 1.5; }
 .gate-card__label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
@@ -400,8 +553,9 @@ button, input, select { font: inherit; }
 .gate-card__raw-details summary { cursor: pointer; color: var(--lx-text-mute); font-size: 10.5px; }
 .gate-card__raw-details summary:hover { color: var(--lx-text-soft); }
 .gate-card__raw-details .gate-card__raw { margin-top: 4px; }
-.goal__conclusion { margin-top: 2px; color: var(--lx-ok); font-size: 12px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
-.goal__stage { margin-top: 2px; color: var(--lx-text-mute); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.gate-card__note { margin-top: 4px; color: var(--lx-text-soft); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow-y: auto; }
+.gate-card__link { color: var(--lx-accent); text-decoration: none; }
+.gate-card__link:hover { text-decoration: underline; }
 .detail-panel__stage { margin-top: 4px; color: var(--lx-text-mute); font: 11px/1.4 var(--lx-sans); overflow-wrap: anywhere; }
 .detail-panel__conclusion { margin-top: 6px; color: var(--lx-ok); font: 600 12.5px/1.4 var(--lx-sans); overflow-wrap: anywhere; }
 .approve-text {
@@ -420,12 +574,16 @@ button, input, select { font: inherit; }
   display: flex; flex-direction: column; max-height: 300px; overflow: auto;
   border: 1px solid var(--lx-border); border-radius: 5px; background: var(--lx-bg);
 }
-.intake-issue { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-bottom: 1px solid var(--lx-border); cursor: pointer; }
+.intake-issue { display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; border-bottom: 1px solid var(--lx-border); cursor: pointer; }
 .intake-issue:last-child { border-bottom: 0; }
 .intake-issue:hover { background: var(--lx-hover); }
-.intake-issue input { width: 14px; height: 14px; flex: 0 0 auto; accent-color: var(--lx-accent); }
-.intake-issue__num { flex: 0 0 auto; color: var(--lx-text-mute); font: 11px/1.2 var(--lx-mono); }
-.intake-issue__title { min-width: 0; overflow: hidden; color: var(--lx-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.intake-issue input { width: 14px; height: 14px; flex: 0 0 auto; accent-color: var(--lx-accent); margin-top: 2px; }
+.intake-issue__num { flex: 0 0 auto; color: var(--lx-text-mute); font: 11px/1.4 var(--lx-mono); margin-top: 1px; }
+.intake-issue__body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.intake-issue__title { color: var(--lx-text); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.intake-issue__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.issue-label { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 9px; border: 1px solid var(--lx-border-strong); background: var(--lx-surface-2); color: var(--lx-text-soft); font: 10px/1.4 var(--lx-mono); }
+.intake-issue__comments, .intake-issue__age { color: var(--lx-text-mute); font: 10.5px/1.4 var(--lx-mono); }
 
 .dlg::backdrop { background: rgba(0,0,0,.38); }
 .drawer__kicker { color: var(--lx-text-mute); font: 10.5px/1.2 var(--lx-mono); text-transform: uppercase; }
@@ -434,9 +592,19 @@ button, input, select { font: inherit; }
   overflow: auto; border: 1px solid var(--lx-border); border-radius: 4px; background: var(--lx-bg);
   color: var(--lx-text-soft); font: 11px/1.45 var(--lx-mono);
 }
-.activity-stream__line { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; overflow-wrap: anywhere; }
-.activity-stream__time { color: var(--lx-text-mute); }
+.activity-stream__line { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; overflow-wrap: anywhere; }
+.activity-stream__time { color: var(--lx-text-mute); white-space: nowrap; }
 .activity-stream__line--err { color: var(--lx-error); }
+/* Tool calls: ordinary commands stay muted; key actions (clone/commit/publish/
+   test/install) get an accent tint + a ▸ marker so the main line of work stands
+   out from the noise. */
+.activity-stream__line--tool .activity-stream__text { color: var(--lx-text-mute); }
+.activity-stream__line--key .activity-stream__text { color: color-mix(in srgb, var(--lx-accent) 78%, var(--lx-text-soft)); font-weight: 600; }
+/* 本轮结论：一句话收尾，弱强调，和普通状态行区分。 */
+.activity-stream__line--conclusion .activity-stream__text { color: var(--lx-accent); font-weight: 600; }
+.activity-stream__keymark { color: var(--lx-accent); }
+/* Waiting status line: spinner + text, dimmed. */
+.activity-stream__text--waiting { display: inline-flex; align-items: center; gap: 6px; color: var(--lx-text-mute); }
 /* Agent streamed text reads like chat: one live block, pre-wrap keeps the
    model's line breaks. Reasoning is one collapsed block, dimmed. */
 .activity-stream__line--agent .activity-stream__text {
@@ -445,9 +613,25 @@ button, input, select { font: inherit; }
 }
 /* Expandable blocks (sent prompt, reasoning) sit in the content column so
    their summary shares one line with the timestamp. */
-.activity-prompt summary { cursor: pointer; color: var(--lx-accent); }
+.activity-prompt summary {
+  display: flex; align-items: center; gap: 6px; list-style: none;
+  cursor: pointer; color: var(--lx-accent); user-select: none;
+}
+.activity-prompt summary::-webkit-details-marker { display: none; }
+.activity-prompt summary::before {
+  content: '▸'; flex: 0 0 auto; width: 10px; text-align: center;
+  color: var(--lx-text-mute); font: 600 10px/1 var(--lx-mono);
+  transition: transform 120ms ease;
+}
+.activity-prompt[open] > summary::before { transform: rotate(90deg); }
 .activity-prompt summary:hover { text-decoration: underline; }
 .activity-prompt--think summary { color: var(--lx-text-mute); }
+.activity-prompt__think-label { flex: 0 0 auto; color: var(--lx-text-mute); }
+.activity-prompt__think-sep { flex: 0 0 auto; color: var(--lx-border-strong); }
+.activity-prompt__think-preview {
+  flex: 1; min-width: 0; color: var(--lx-text-soft); font: 11px/1.45 var(--lx-mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .activity-prompt--think pre { max-height: 200px; }
 /* In the detail panel the reasoning block grows fully: ONE scroll context
    (the panel body) means new content always follows the bottom instead of
@@ -469,7 +653,10 @@ button, input, select { font: inherit; }
 .dlg h2 { margin: 0; font-size: 14px; }
 .dlg__note { margin: 0; color: var(--lx-text-soft); font-size: 12px; }
 .dlg__note--warn { color: var(--lx-warn); border: 1px solid color-mix(in srgb, var(--lx-warn) 45%, transparent); background: color-mix(in srgb, var(--lx-warn) 8%, transparent); border-radius: 6px; padding: 6px 8px; }
+.dlg__note--ok { color: var(--lx-ok); border: 1px solid color-mix(in srgb, var(--lx-ok) 45%, transparent); background: color-mix(in srgb, var(--lx-ok) 8%, transparent); border-radius: 6px; padding: 6px 8px; }
 .intake-issue__img { flex: 0 0 auto; font-size: 12px; }
+.intake-issue__resolved { display: inline-flex; align-items: center; padding: 0 6px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--lx-ok) 55%, var(--lx-border)); background: color-mix(in srgb, var(--lx-ok) 10%, transparent); color: var(--lx-ok); font: 10px/1.4 var(--lx-mono); }
+.intake-issue--resolved .intake-issue__title { color: var(--lx-text-mute); text-decoration: line-through; }
 .dlg__actions { display: flex; justify-content: flex-end; gap: 7px; }
 .field { display: flex; flex-direction: column; gap: 5px; color: var(--lx-text-soft); font-size: 11.5px; }
 .field input, .field select {
@@ -484,9 +671,29 @@ button, input, select { font: inherit; }
 .goal-actions--column { flex-direction: column; align-items: stretch; flex: 0 0 auto; margin-top: 0; }
 .run-item { cursor: pointer; }
 .run-item__meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-/* The detail panel is the log. */
+/* The detail panel is the log. The body is the ONE scroll container; the
+   stream stays content-height (flex: 0 0 auto) so its scrollHeight never
+   diverges from clientHeight — a flex:1 stream with the stepper/banner
+   siblings above used to shrink and become a phantom inner scroll region,
+   which made the visible scrollbar disagree with the content. */
 .detail-panel__body { display: flex; flex-direction: column; }
-.activity-stream--panel { flex: 1; max-height: none; border: 0; padding: 12px 14px; background: var(--lx-elevated); }
+/* 决策工作台：需决策/知会 目标右侧面板顶部的审批上下文块。 */
+.decision-workspace {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--lx-border);
+  background: var(--lx-elevated);
+}
+.decision-workspace__head {
+  color: var(--lx-text-mute); font-size: 10px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+}
+/* Issues 管理：进行中/排队/暂停/异常 目标右侧面板顶部的 issue 勾选增删块。 */
+.detail-issues {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; border-bottom: 1px solid var(--lx-border);
+  background: var(--lx-elevated);
+}
+.activity-stream--panel { flex: 0 0 auto; max-height: none; border: 0; padding: 12px 14px; background: var(--lx-elevated); }
 .activity-empty { padding: 10px 2px; color: var(--lx-text-mute); font-size: 11.5px; }
 .run-argv { max-height: 160px; margin: 0; padding: 9px 10px; overflow: auto; border: 1px solid var(--lx-border); border-radius: 5px; background: var(--lx-bg); font: 11px/1.45 var(--lx-mono); white-space: pre-wrap; word-break: break-all; }
 .raw-body { max-height: 54vh; }
@@ -509,4 +716,295 @@ button, input, select { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
   .goal__activity--live .goal__activity-dot { animation: none; }
+  .status-bar__seg--pulse, .review-zone--unread .zone-head, .stepper__step--active .stepper__marker { animation: none !important; }
+}
+
+/* ══ #10 全局状态条 ───────────────────────────────────────── */
+.status-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 14px 0; padding: 0 2px; }
+.status-bar__seg {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  border: 1px solid var(--lx-border); border-radius: 12px; background: transparent;
+  color: var(--lx-text-mute); font-size: 11px; cursor: pointer;
+}
+.status-bar__seg:hover { border-color: var(--lx-border-strong); color: var(--lx-text); }
+.status-bar__seg b { color: var(--lx-text-soft); font: 600 11px/1 var(--lx-mono); }
+/* Tab accent colors per group. */
+.status-bar__seg--active { color: var(--lx-ok); border-color: color-mix(in srgb, var(--lx-ok) 34%, var(--lx-border)); }
+.status-bar__seg--decisions { color: var(--lx-review); border-color: color-mix(in srgb, var(--lx-review) 40%, var(--lx-border)); }
+.status-bar__seg--error { color: var(--lx-error); border-color: color-mix(in srgb, var(--lx-error) 34%, var(--lx-border)); }
+.status-bar__seg--pulse { animation: status-pulse 1.4s ease-in-out infinite; }
+/* The active tab reads as a pressed/selected chip. */
+.status-bar__seg.is-active { background: var(--lx-hover); border-color: var(--lx-border-strong); color: var(--lx-text); }
+.status-bar__seg.is-active b { color: var(--lx-text); }
+@keyframes status-pulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--lx-review) 25%, transparent); } }
+
+/* review 未读脉冲 + 角标 */
+.review-zone--unread .zone-head { animation: review-pulse 1.2s ease-in-out infinite; }
+@keyframes review-pulse { 50% { background: color-mix(in srgb, var(--lx-review) 7%, transparent); } }
+.review-zone__badge {
+  margin-left: auto; padding: 0 6px; border-radius: 9px; background: var(--lx-review);
+  color: #161616; font: 700 10px/1.6 var(--lx-sans);
+}
+
+/* detail header：动作行 + 内联取消 */
+.detail-panel__head-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.detail-panel__action {
+  margin-top: 5px; color: var(--lx-accent); font: 12px/1.4 var(--lx-mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 440px;
+}
+
+/* ══ #4 按 turn 分组日志 ──────────────────────────────────── */
+.activity-turn { border: 0; margin: 0; }
+.activity-turn > summary {
+  display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer;
+  padding: 5px 8px; margin: 4px 0 2px; border: 1px solid var(--lx-border);
+  border-radius: 6px; background: var(--lx-surface-2); color: var(--lx-text-soft);
+  font: 600 11px/1.4 var(--lx-mono); user-select: none;
+}
+.activity-turn > summary::-webkit-details-marker { display: none; }
+.activity-turn > summary .activity-turn__caret { transition: transform 120ms ease; color: var(--lx-text-mute); }
+.activity-turn[open] > summary .activity-turn__caret { transform: rotate(90deg); }
+.activity-turn > summary .activity-turn__count { margin-left: auto; color: var(--lx-text-mute); font-weight: 400; }
+.activity-turn__body { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 6px 6px; border-left: 1px solid var(--lx-border); margin-left: 8px; }
+
+/* ══ #1 diff-first 审批 ───────────────────────────────────── */
+.approve-diff { display: flex; flex-direction: column; gap: 6px; padding: 8px 9px; border: 1px solid var(--lx-border); border-radius: var(--lx-radius); background: var(--lx-bg); }
+.approve-diff__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.approve-diff__count { color: var(--lx-text); font-size: 11.5px; font-weight: 600; }
+.approve-diff__stat { color: var(--lx-ok); font: 11px/1.4 var(--lx-mono); }
+.approve-diff__list { display: flex; flex-direction: column; max-height: 180px; overflow: auto; border-top: 1px solid var(--lx-border); }
+.approve-diff__file { display: flex; align-items: center; gap: 8px; padding: 3px 2px; font: 11px/1.5 var(--lx-mono); border-bottom: 1px solid var(--lx-border); }
+.approve-diff__file:last-child { border-bottom: 0; }
+.approve-diff__file-path { flex: 1; min-width: 0; color: var(--lx-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.approve-diff__file-num { flex: 0 0 auto; color: var(--lx-text-mute); }
+.approve-diff__file-num--add { color: var(--lx-ok); }
+.approve-diff__file-num--del { color: var(--lx-error); }
+.approve-diff__hunk summary { cursor: pointer; color: var(--lx-accent); font-size: 11px; }
+.approve-diff__hunk summary:hover { text-decoration: underline; }
+.approve-diff__loading { color: var(--lx-text-mute); font-size: 11px; font-style: italic; }
+
+/* ══ #2 阶段流水线 stepper ────────────────────────────────── */
+.detail-panel__stepper { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; padding: 10px 14px 0; }
+/* 横向内联 stepper：放进标题行右侧，不占 body 高度。 */
+.detail-panel__title-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.detail-panel__stepper-inline { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+.stepper-inline { display: inline-flex; align-items: baseline; gap: 5px; font-size: 11px; }
+.stepper-inline__sep { color: var(--lx-text-mute); }
+.stepper-inline__step { color: var(--lx-text-mute); }
+.stepper-inline__step--done { color: var(--lx-ok); }
+.stepper-inline__step--active { color: var(--lx-accent); font-weight: 600; }
+.stepper__step { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.stepper__marker { flex: 0 0 auto; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--lx-border-strong); color: var(--lx-text-mute); font: 700 9px/1 var(--lx-mono); }
+.stepper__step--done .stepper__marker { border-color: var(--lx-ok); color: var(--lx-ok); background: color-mix(in srgb, var(--lx-ok) 10%, transparent); }
+.stepper__step--active .stepper__marker { border-color: var(--lx-accent); color: var(--lx-accent); animation: activity-pulse 1.4s ease-in-out infinite; }
+.stepper__step--error .stepper__marker { border-color: var(--lx-error); color: var(--lx-error); }
+.stepper__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lx-text-soft); font-size: 11.5px; }
+.stepper__step--active .stepper__label { color: var(--lx-text); font-weight: 600; }
+.stepper__step--done .stepper__label { color: var(--lx-text-mute); }
+.stepper__sub { margin-left: 23px; color: var(--lx-text-mute); font-size: 10.5px; }
+
+/* ══ #5 空状态 / 上手引导 ─────────────────────────────────── */
+.onboard { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 460px; text-align: center; }
+.onboard__title { margin: 6px 0 0; font-size: 14px; }
+.onboard__hint { margin: 0; color: var(--lx-text-mute); font-size: 12px; }
+.onboard__samples { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.onboard__browse { display: flex; gap: 6px; align-items: center; }
+.onboard__browse input {
+  min-height: 30px; width: 220px; padding: 5px 9px; border: 1px solid var(--lx-border-strong);
+  border-radius: 6px; background: var(--lx-surface-2); color: var(--lx-text); font: 12px/1.3 var(--lx-mono);
+}
+.onboard__browse input:focus-visible { outline: 2px solid var(--lx-accent); outline-offset: 1px; }
+
+/* ══ #8 错误恢复横幅 ──────────────────────────────────────── */
+.goal__error-banner {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; margin-top: 7px; padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--lx-error) 45%, var(--lx-border));
+  border-radius: var(--lx-radius); background: color-mix(in srgb, var(--lx-error) 7%, transparent);
+}
+.goal__error-text { color: var(--lx-error); font: 10.5px/1.45 var(--lx-mono); word-break: break-all; }
+.goal__error-actions { display: flex; gap: 6px; }
+
+/* ══ 模型未响应行动卡 ──────────────────────────────────────── */
+.goal__model-hang {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; margin-top: 7px; padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--lx-warn) 45%, var(--lx-border));
+  border-radius: var(--lx-radius); background: color-mix(in srgb, var(--lx-warn) 7%, transparent);
+}
+.goal__model-hang-text { color: var(--lx-warn); font: 10.5px/1.45 var(--lx-mono); word-break: break-all; }
+.goal__model-hang-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.goal__model-hang-select {
+  flex: 1 1 140px; min-width: 0; max-width: 240px; height: 22px; padding: 0 6px;
+  border: 1px solid var(--lx-border-strong); border-radius: 5px;
+  background: var(--lx-bg); color: var(--lx-text); font: 11px/1 var(--lx-mono);
+}
+
+/* ══ #9 模型能力标签 / 视觉提示 ───────────────────────────── */
+.composer__vision-hint { width: min(960px, 100%); margin: 0 auto 6px; padding: 0 4px; color: var(--lx-warn); font-size: 11px; }
+.model-tag { color: var(--lx-text-mute); font-size: 10px; }
+.model-tag--vision { color: var(--lx-ok); }
+.model-tag--novision { color: var(--lx-warn); }
+
+/* ══ #10 排队中（backlog 可见） ───────────────────────────── */
+.run-rail__queued { margin: 6px 2px 2px; padding: 6px 7px 2px; border-top: 1px dashed var(--lx-border); color: var(--lx-text-mute); font-size: 10px; text-transform: uppercase; }
+.run-item--queued { opacity: .68; }
+.run-item--queued:hover { opacity: 1; }
+
+/* ══ issue 清单样式（已接入右侧面板的 Issues 区块）════════ */
+.goal-picker__checklist { display: flex; flex-direction: column; gap: 2px; }
+.goal-picker__checkrow { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+.goal-picker__checkrow:hover { background: var(--lx-hover); }
+.goal-picker__checkrow input[type="checkbox"] { flex: 0 0 auto; width: 13px; height: 13px; accent-color: var(--lx-accent); margin: 0; }
+.goal-picker__available { display: flex; flex-direction: column; gap: 2px; }
+.goal-picker__apply { align-self: stretch; margin-top: 2px; }
+.goal-picker__detail-head { display: flex; align-items: center; gap: 8px; }
+.goal-picker__detail-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lx-text); font-weight: 600; font-size: 12.5px; }
+.goal-picker__section-head { color: var(--lx-text-mute); font-size: 10px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.goal-picker__detail-summary { color: var(--lx-text-mute); font-size: 11px; padding-bottom: 4px; border-bottom: 1px dashed var(--lx-border); }
+.goal-picker__empty { color: var(--lx-text-mute); font-size: 11px; }
+
+/* ══ 视觉工艺打磨（只动样式，不动 DOM / 行为）───────────────
+   Anti-slop pass: one easing hand, press feedback, tabular
+   numerals for every run/count/timing readout, and keyboard
+   focus parity across every interactive surface. */
+
+/* Crisper text rendering. */
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+/* Every count / id / timer / stat uses tabular figures so the
+   readouts stop jittering as the clock ticks. */
+.goal__id, .run-item__id, .other-tasks__id, .zone-count, .intake-count,
+.countdown, .detail-panel__status-clock, .approve-diff__stat, .approve-diff__count,
+.approve-diff__file-num, .issue-chip, .goal-status, .activity-stream__time,
+.intake-issue__num, .intake-issue__comments, .intake-issue__age,
+.stepper__marker, .goal__gate-badge, .review-zone__badge, .model-tag,
+.composer__kind, .board-more__chip b, .status-bar__seg b {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One easing hand for hover/press across interactive surfaces. */
+.btn, .goal, .run-item, .issue-chip, .board-more__chip, .composer__chip,
+.composer-target__trigger, .composer-target__item, .goal-picker__item,
+.goal-picker__item-main, .goal-picker__issue-btn, .log-bottom,
+.composer__model, .composer__target, .composer__submit {
+  transition: border-color var(--lx-dur-fast) var(--lx-ease),
+    background var(--lx-dur-fast) var(--lx-ease),
+    color var(--lx-dur-fast) var(--lx-ease),
+    transform var(--lx-dur-fast) var(--lx-ease),
+    box-shadow var(--lx-dur-fast) var(--lx-ease),
+    opacity var(--lx-dur-fast) var(--lx-ease);
+}
+
+/* Press feedback — a hair of travel so the click registers. */
+.btn:active:not(:disabled), .composer__chip:active,
+.board-more__chip:active, .composer-target__item:active,
+.goal-picker__issue-btn:active, .goal-picker__item-main:active {
+  transform: translateY(1px);
+}
+.composer__submit:active:not(:disabled) { transform: scale(.96); }
+
+/* The composer is the primary surface: a soft accent ring on focus. */
+.composer__box:focus-within {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lx-accent) 26%, transparent),
+    0 2px 8px color-mix(in srgb, var(--lx-text) 5%, transparent);
+}
+
+/* Keyboard parity: the same 2px accent ring on every focusable surface
+   that previously only got it on buttons/cards. The model/target chips
+   light their border when their inner select/trigger is focused. */
+.run-item:focus-visible, .issue-chip:focus-visible,
+.composer-target__trigger:focus-visible, .composer-target__item:focus-visible,
+.goal-picker__trigger:focus-visible, .goal-picker__item-main:focus-visible,
+.goal-picker__issue-btn:focus-visible, .goal-picker__item:focus-visible,
+.intake-issue:focus-visible, .activity-turn > summary:focus-visible,
+.composer__chip:focus-visible, .log-bottom:focus-visible {
+  outline: 2px solid var(--lx-accent); outline-offset: 1px;
+}
+.composer__model:focus-within, .composer__target:focus-within {
+  border-color: color-mix(in srgb, var(--lx-accent) 68%, var(--lx-border));
+}
+
+/* ══ 待审批 gate 卡 · 注意力引导 ────────────────────────────
+   等待人工的动作必须一眼可见：左侧决策色轨 + 琥珀 kicker +
+   状态点轻微呼吸（reduced-motion 下静止）。 */
+.gate-card--block {
+  border-left: 3px solid var(--lx-review);
+  background: color-mix(in srgb, var(--lx-review) 6%, var(--lx-surface));
+}
+.gate-card--block .gate-card__kicker { color: var(--lx-review); }
+.gate-card--block .gate-card__label::before {
+  animation: gate-pulse 1.6s ease-in-out infinite;
+}
+@keyframes gate-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--lx-review) 32%, transparent); }
+}
+
+/* ══ 日志流 · 排版层级 ─────────────────────────────────────
+   agent 的原话是主角：更松的行距 + pretty 换行避免孤字；
+   时间列与 turn 头收紧字距，系统噪声退后。 */
+.activity-stream__time { letter-spacing: .02em; }
+.activity-stream__line--agent .activity-stream__text {
+  font-size: 12.5px; line-height: 1.65; text-wrap: pretty;
+}
+.activity-turn > summary { letter-spacing: .02em; }
+
+/* ══ 审批 diff · 数值可读性 ─────────────────────────────── */
+.approve-diff__count, .approve-diff__stat { letter-spacing: .01em; }
+
+/* reduced-motion：待审批状态点静止。 */
+@media (prefers-reduced-motion: reduce) {
+  .gate-card--block .gate-card__label::before { animation: none; }
+}
+
+/* loading spinner */
+.loading { display: inline-flex; align-items: center; gap: 6px; color: var(--lx-text-mute); font-size: 11px; }
+.spinner { flex: 0 0 auto; display: inline-block; width: 12px; height: 12px; border: 2px solid var(--lx-border); border-top-color: var(--lx-accent); border-radius: 50%; animation: lx-spin 0.8s linear infinite; }
+@keyframes lx-spin { to { transform: rotate(360deg); } }
+/* Resolved waiting line: spinner → done checkmark (✓) or failure cross (✗). */
+.status-icon--done { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; color: var(--lx-ok); font-weight: 700; font-size: 11px; line-height: 1; }
+.status-icon--fail { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; color: var(--lx-error); font-weight: 700; font-size: 11px; line-height: 1; }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+/* ══ 环境引导页（Setup Gate）─────────────────────────────── */
+.env-onboard {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; background: color-mix(in srgb, var(--lx-bg, #16171c) 88%, transparent);
+  backdrop-filter: blur(6px);
+  animation: env-fade-in .28s ease;
+}
+.env-onboard[hidden] { display: none; }
+.env-onboard__card {
+  width: min(520px, 100%); max-height: 86vh; overflow-y: auto;
+  padding: 26px 28px; border: 1px solid var(--lx-border); border-radius: 14px;
+  background: var(--lx-surface); box-shadow: 0 18px 60px color-mix(in srgb, var(--lx-text) 22%, transparent);
+}
+.env-onboard__state { display: flex; flex-direction: column; gap: 14px; }
+.env-onboard__state[hidden] { display: none; }
+.env-onboard h2 { margin: 0; font: 650 17px/1.35 var(--lx-sans); }
+.env-onboard p { margin: 0; color: var(--lx-text-mute); font-size: 12.5px; line-height: 1.55; }
+#env-state-loading { flex-direction: row; align-items: center; justify-content: center; color: var(--lx-text-mute); padding: 10px 0; }
+.env-onboard__list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.env-onboard__item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--lx-border); border-radius: 9px; font-size: 12.5px; }
+.env-onboard__item--ok { border-color: color-mix(in srgb, var(--lx-ok) 40%, var(--lx-border)); }
+.env-onboard__item--miss { border-color: color-mix(in srgb, var(--lx-review) 55%, var(--lx-border)); }
+.env-onboard__item-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+.env-onboard__item--ok .env-onboard__item-dot { background: var(--lx-ok); }
+.env-onboard__item--miss .env-onboard__item-dot { background: var(--lx-review); }
+.env-onboard__item-label { flex: 1; }
+.env-onboard__item-why { color: var(--lx-text-mute); font-size: 11px; }
+.env-onboard__item-cmd { flex: 0 0 auto; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 7px; border: 1px solid var(--lx-border); border-radius: 6px; background: color-mix(in srgb, var(--lx-text) 5%, transparent); color: var(--lx-text-mute); font: 500 10.5px/1.5 var(--lx-mono, monospace); user-select: all; }
+.env-onboard__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.env-onboard__config { border: 1px solid var(--lx-border); border-radius: 9px; padding: 4px 12px 10px; }
+.env-onboard__config summary { cursor: pointer; font-size: 12px; color: var(--lx-accent); padding: 8px 0; user-select: none; list-style: none; }
+.env-onboard__config summary::before { content: '▸ '; }
+.env-onboard__config[open] summary::before { content: '▾ '; }
+.env-onboard__config-body { display: flex; flex-direction: column; gap: 8px; }
+.env-onboard__field { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; font-size: 11.5px; color: var(--lx-text-mute); }
+.env-onboard__field input { width: 100%; padding: 6px 8px; border: 1px solid var(--lx-border); border-radius: 7px; background: var(--lx-elevated); color: var(--lx-text); font-size: 12px; }
+.env-onboard__log { margin: 0; padding: 10px 12px; max-height: 260px; overflow-y: auto; border: 1px solid var(--lx-border); border-radius: 9px; background: var(--lx-elevated); color: var(--lx-text-mute); font: 11px/1.6 var(--lx-mono, monospace); white-space: pre-wrap; word-break: break-all; }
+.env-onboard__done-mark { width: 44px; height: 44px; margin: 0 auto; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--lx-ok) 16%, transparent); color: var(--lx-ok); font-size: 22px; font-weight: 700; }
+@keyframes env-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .env-onboard { animation: none; backdrop-filter: none; }
 }

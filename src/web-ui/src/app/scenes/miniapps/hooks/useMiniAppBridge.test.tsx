@@ -115,6 +115,21 @@ function BridgeHarness() {
   return <iframe ref={iframeRef} title="Market Lens test" />;
 }
 
+function ScopedBridgeHarness({
+  appId,
+  title,
+  runScope,
+}: {
+  appId: string;
+  title: string;
+  runScope: { kind: 'active'; appId: string } | { kind: 'draft'; appId: string; draftId: string };
+}) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const scopedApp = { ...app, id: appId, name: title } as MiniApp;
+  useMiniAppBridge(iframeRef, scopedApp, runScope, true);
+  return <iframe ref={iframeRef} title={title} />;
+}
+
 async function dispatchRpc(
   iframe: HTMLIFrameElement,
   id: number,
@@ -273,5 +288,74 @@ describe('useMiniAppBridge floating Agent routing', () => {
     // research allowlist instead, so the bridge must not disable the loop.
     expect(mocks.agentEnsureSession.mock.calls[0][1].enableTools).toBeUndefined();
     expect(mocks.agentRun.mock.calls[0][3].enableTools).toBeUndefined();
+  });
+
+  it('keeps Agent session ownership across a remount of the same runner scope', async () => {
+    const appId = 'remount-agent-app';
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId={appId}
+          title="Remount runner"
+          runScope={{ kind: 'active', appId }}
+        />,
+      );
+    });
+    let iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    await dispatchRpc(iframe, 1, 'agent.ensureSession', {
+      sessionName: 'Remount runner',
+      appDataWorkspace: 'chat',
+    });
+
+    await act(async () => {
+      root.render(<></>);
+    });
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId={appId}
+          title="Remount runner"
+          runScope={{ kind: 'active', appId }}
+        />,
+      );
+    });
+    iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    await dispatchRpc(iframe, 2, 'agent.run', {
+      sessionId: 'session-1',
+      prompt: 'Continue after remount',
+    });
+
+    expect(mocks.agentRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('isolates Agent sessions between active and draft runners of the same app', async () => {
+    const appId = 'scope-isolation-app';
+    await act(async () => {
+      root.render(
+        <>
+          <ScopedBridgeHarness
+            appId={appId}
+            title="Active runner"
+            runScope={{ kind: 'active', appId }}
+          />
+          <ScopedBridgeHarness
+            appId={appId}
+            title="Draft runner"
+            runScope={{ kind: 'draft', appId, draftId: 'draft-1' }}
+          />
+        </>,
+      );
+    });
+    const [activeIframe, draftIframe] = [...container.querySelectorAll('iframe')];
+    await dispatchRpc(activeIframe, 1, 'agent.ensureSession', {
+      sessionName: 'Active runner',
+      appDataWorkspace: 'chat',
+    });
+    await dispatchRpc(draftIframe, 2, 'agent.run', {
+      sessionId: 'session-1',
+      prompt: 'Must not cross runner scopes',
+    });
+
+    expect(mocks.agentRun).not.toHaveBeenCalled();
   });
 });
