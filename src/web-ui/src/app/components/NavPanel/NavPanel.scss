@@ -1709,8 +1709,8 @@ $_section-header-height: 24px;
   width: 100%;
   min-width: 0;
   max-width: none;
-  height: 42px;
-  padding: 4px 6px;
+  height: 30px;
+  padding: 0 6px;
   border: none;
   border-radius: $size-radius-sm;
   background: transparent;
@@ -1738,19 +1738,8 @@ $_section-header-height: 24px;
   }
 }
 
-.bitfun-nav-panel__footer-device-status-copy {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  text-align: left;
-}
-
 .bitfun-nav-panel__footer-device-status-label {
-  display: block;
-  width: 100%;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1761,16 +1750,36 @@ $_section-header-height: 24px;
   line-height: 1.25;
 }
 
-.bitfun-nav-panel__footer-device-status-meta {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--bf-appearance-token-color-text-muted);
-  font-size: 10px;
-  line-height: 1.25;
+// Attached remote parties are shown as one badge per device kind in the
+// connection-live green the workspace list already teaches in this panel. The
+// number lives inside a badge, so twenty attached hosts occupy the same width
+// as one and no state sentence sits in permanent navigation chrome.
+.bitfun-nav-panel__footer-device-status-attached {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  color: var(--bf-appearance-token-color-success);
+}
+
+.bitfun-nav-panel__footer-device-status-attached-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+}
+
+.bitfun-nav-panel__footer-device-status-attached-count {
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.bitfun-nav-panel__footer-device-status-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 // Footer notification: yellow only when there are unread messages (BellDot)
@@ -2372,6 +2381,19 @@ $_section-header-height: 24px;
     font-weight: 550;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    // Same live-state dot the footer trigger uses, so the summary and the
+    // expanded list read as one status language.
+    &:not(:empty)::before {
+      content: '';
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      margin-right: 5px;
+      border-radius: $size-radius-full;
+      background: var(--bf-appearance-token-color-success);
+      vertical-align: 1px;
+    }
   }
 }
 

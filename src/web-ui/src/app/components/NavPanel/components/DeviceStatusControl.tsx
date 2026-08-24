@@ -16,9 +16,13 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { useNotification } from '@/shared/notification-system';
-import type {
-  DeviceOverviewConnectionService,
-  DeviceOverviewDevice,
+import {
+  selectActivityFacts,
+  selectAttachedGroups,
+  type DeviceOverviewActivityFact,
+  type DeviceOverviewConnectionService,
+  type DeviceOverviewDevice,
+  type DeviceOverviewDeviceKind,
 } from '../deviceInterconnectionOverview';
 import { useDeviceInterconnectionOverview } from './useDeviceInterconnectionOverview';
 
@@ -28,16 +32,16 @@ interface DeviceStatusControlProps {
   onManageDevices: () => void;
 }
 
-function DeviceIcon({ device }: { device: DeviceOverviewDevice }) {
-  switch (device.kind) {
+function DeviceIcon({ kind, size = 17 }: { kind: DeviceOverviewDeviceKind; size?: number }) {
+  switch (kind) {
     case 'mobile':
-      return <Smartphone size={17} aria-hidden="true" />;
+      return <Smartphone size={size} aria-hidden="true" />;
     case 'execution-host':
-      return <Server size={17} aria-hidden="true" />;
+      return <Server size={size} aria-hidden="true" />;
     case 'message-app':
-      return <MessageCircle size={17} aria-hidden="true" />;
+      return <MessageCircle size={size} aria-hidden="true" />;
     default:
-      return <Monitor size={17} aria-hidden="true" />;
+      return <Monitor size={size} aria-hidden="true" />;
   }
 }
 
@@ -116,21 +120,58 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     onManageDevices();
   }, [onManageDevices, onOpenChange]);
 
-  const controller = overview.devices.find(device => (
-    !device.local && device.activities.includes('controlling')
-  ));
-  const footerSubtitle = overview.mode === 'local'
-    ? t('deviceOverview.footerLocalSimple')
-    : overview.peerActive
-      ? t('deviceOverview.footerControlledFromHere')
-      : controller
-        ? t('deviceOverview.footerControlledBy', { device: controller.name })
-        : t('deviceOverview.footerDistributedExecution', {
-            count: overview.connectedDevices.filter(device => (
-              device.activities.includes('background-execution')
-            )).length,
-          });
-  const tooltip = `${overview.currentWorkDeviceName} · ${footerSubtitle}`;
+  const activityFactSentence = useCallback((fact: DeviceOverviewActivityFact) => {
+    switch (fact.kind) {
+      case 'local':
+        return t('deviceOverview.footerLocalSimple');
+      case 'controlled-from-here':
+        return t('deviceOverview.footerControlledFromHere');
+      case 'controlled-by':
+        return t('deviceOverview.footerControlledBy', { device: fact.device });
+      case 'controllers':
+        return t('deviceOverview.footerControllers', { count: fact.count });
+      default:
+        return t('deviceOverview.footerDistributedExecution', { count: fact.count });
+    }
+  }, [t]);
+  const activityLines = useMemo(
+    () => selectActivityFacts(overview).map(activityFactSentence),
+    [activityFactSentence, overview],
+  );
+  const attachedGroups = useMemo(() => selectAttachedGroups(overview), [overview]);
+  const accessibleSummary = [overview.currentWorkDeviceName, ...activityLines].join(' · ');
+
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const [labelClipped, setLabelClipped] = useState(false);
+
+  useEffect(() => {
+    const label = labelRef.current;
+    if (!label) return undefined;
+    const measure = () => setLabelClipped(label.scrollWidth > label.clientWidth + 1);
+
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(label);
+    return () => observer.disconnect();
+  }, [overview.currentWorkDeviceName]);
+
+  // Hover is where the detail belongs: the trigger itself stays glanceable, so
+  // the tooltip carries the name the layout had to clip and the sentence the
+  // device-kind badges only imply.
+  const hoverDetail = useMemo(() => {
+    const lines = [
+      ...(labelClipped ? [overview.currentWorkDeviceName] : []),
+      ...(overview.mode === 'local' ? [] : activityLines),
+    ];
+    if (lines.length === 0) return null;
+    if (lines.length === 1) return lines[0];
+    return (
+      <span className="bitfun-nav-panel__footer-device-status-tip">
+        {lines.map(line => <span key={line}>{line}</span>)}
+      </span>
+    );
+  }, [activityLines, labelClipped, overview.currentWorkDeviceName, overview.mode]);
 
   const deviceActivity = useCallback((device: DeviceOverviewDevice) => {
     const parts: string[] = [];
@@ -172,12 +213,16 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
 
   return (
     <>
-      <Tooltip content={tooltip} placement="right" followCursor disabled={open}>
+      <Tooltip
+        content={hoverDetail}
+        placement="top"
+        disabled={open || hoverDetail === null}
+      >
         <button
           ref={triggerRef}
           type="button"
           className={`bitfun-nav-panel__footer-device-status${open ? ' is-open' : ''}`}
-          aria-label={tooltip}
+          aria-label={accessibleSummary}
           aria-expanded={open}
           aria-haspopup="dialog"
           onClick={() => onOpenChange(!open)}
@@ -186,15 +231,33 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
           data-bf-part="deviceStatus"
           data-bf-state={overview.mode}
         >
-          <Monitor size={16} aria-hidden="true" />
-          <span className="bitfun-nav-panel__footer-device-status-copy">
-            <span className="bitfun-nav-panel__footer-device-status-label">
-              {overview.currentWorkDeviceName}
-            </span>
-            <span className="bitfun-nav-panel__footer-device-status-meta">
-              {footerSubtitle}
-            </span>
+          <DeviceIcon kind={overview.primaryDevice.kind} size={15} />
+          <span
+            ref={labelRef}
+            className="bitfun-nav-panel__footer-device-status-label"
+          >
+            {overview.currentWorkDeviceName}
           </span>
+          {attachedGroups.length > 0 && (
+            <span
+              className="bitfun-nav-panel__footer-device-status-attached"
+              aria-hidden="true"
+            >
+              {attachedGroups.map(group => (
+                <span
+                  className="bitfun-nav-panel__footer-device-status-attached-group"
+                  key={group.kind}
+                >
+                  <DeviceIcon kind={group.kind} size={13} />
+                  {group.count > 1 && (
+                    <span className="bitfun-nav-panel__footer-device-status-attached-count">
+                      {group.count}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </span>
+          )}
         </button>
       </Tooltip>
 
@@ -229,7 +292,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 className="bitfun-device-overview__local-device"
                 data-testid="nav-device-status-summary"
               >
-                <Monitor size={19} aria-hidden="true" />
+                <DeviceIcon kind={overview.primaryDevice.kind} size={19} />
                 <strong>{overview.currentWorkDeviceName}</strong>
               </div>
             ) : (
@@ -237,7 +300,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 <section className="bitfun-device-overview__device-group is-primary">
                   <h3>{t('deviceOverview.currentUse')}</h3>
                   <div className="bitfun-device-overview__device-row">
-                    <DeviceIcon device={overview.primaryDevice} />
+                    <DeviceIcon kind={overview.primaryDevice.kind} />
                     <strong>{overview.primaryDevice.name}</strong>
                     {overview.primaryDevice.activities.includes('background-execution') && (
                       <span>{deviceActivity(overview.primaryDevice)}</span>
@@ -257,7 +320,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                         data-bf-device-kind={device.kind}
                         data-bf-activities={device.activities.join(' ')}
                       >
-                        <DeviceIcon device={device} />
+                        <DeviceIcon kind={device.kind} />
                         <strong>{device.name}</strong>
                         <span>{deviceActivity(device)}</span>
                       </div>
