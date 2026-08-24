@@ -60,6 +60,14 @@ export class AgentClient {
       query: initialized.capabilities.query,
       sessions: initialized.capabilities.sessionCreate,
       cancellation: initialized.capabilities.queryCancel,
+      eventStream: initialized.capabilities.eventStream,
+      toolEvents: initialized.capabilities.toolEvents,
+      permissionResponses: initialized.capabilities.permissionResponses,
+      structuredOutput: initialized.capabilities.structuredOutput,
+      usage: initialized.capabilities.usage,
+      customTools: initialized.capabilities.customTools,
+      hooks: initialized.capabilities.hooks,
+      mcpConfiguration: initialized.capabilities.mcpConfiguration,
     });
     this.sessions = Sessions.forClient(
       connection,

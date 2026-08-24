@@ -49,6 +49,8 @@ const requiredTypes = [
   "HostCapabilities",
   "InitializeParams",
   "InitializeResult",
+  "PermissionRespondParams",
+  "PermissionRespondResult",
   "QueryCancelParams",
   "QueryCancelResult",
   "QueryEventParams",

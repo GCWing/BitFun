@@ -25,6 +25,14 @@ export interface AgentCapabilities {
   query: boolean;
   sessions: boolean;
   cancellation: boolean;
+  eventStream: boolean;
+  toolEvents: boolean;
+  permissionResponses: boolean;
+  structuredOutput: boolean;
+  usage: boolean;
+  customTools: boolean;
+  hooks: boolean;
+  mcpConfiguration: boolean;
 }
 
 export type SdkErrorCode =
@@ -107,6 +115,47 @@ export interface AssistantTextDelta {
   text: string;
 }
 
+export interface ToolEvent {
+  type: "tool_event";
+  queryId: string;
+  sessionId: string;
+  turnId: string;
+  operationId: string;
+  sequence: number;
+  toolCallId: string;
+  toolName: string;
+  status: "started" | "progress" | "completed" | "failed" | "cancelled";
+  progress?: number;
+  durationMs?: number;
+}
+
+export interface PermissionSource {
+  kind: "tool_call" | "provider" | "extension";
+  identity: string;
+}
+
+export interface PermissionRequestEvent {
+  type: "permission_request";
+  queryId: string;
+  sessionId: string;
+  turnId: string;
+  operationId: string;
+  sequence: number;
+  requestId: string;
+  action: string;
+  resources: readonly string[];
+  source: PermissionSource;
+  toolCallId?: string;
+  responseTimeoutMs: number;
+}
+
+export type PermissionDecision = "allow_once" | "allow_always" | "reject";
+
+export interface PermissionResponse {
+  decision: PermissionDecision;
+  feedback?: string;
+}
+
 export type ResultStatus = "completed" | "failed" | "cancelled";
 
 export interface ResultError extends SdkErrorDetails {
@@ -124,4 +173,8 @@ export interface Result {
   error?: ResultError;
 }
 
-export type QueryStreamItem = AssistantTextDelta | Result;
+export type QueryStreamItem =
+  | AssistantTextDelta
+  | ToolEvent
+  | PermissionRequestEvent
+  | Result;

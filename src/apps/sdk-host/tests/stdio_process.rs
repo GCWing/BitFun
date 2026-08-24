@@ -43,9 +43,12 @@ async fn standalone_sdk_host_negotiates_and_shuts_down_without_cli() {
         1,
         "initialize",
         json!({
-            "protocolVersion": 2,
+            "protocolVersion": 3,
             "clientInfo": { "name": "standalone-process-fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true },
+            "capabilities": {
+                "serverNotifications": true,
+                "permissionResponses": true
+            },
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",
@@ -57,7 +60,7 @@ async fn standalone_sdk_host_negotiates_and_shuts_down_without_cli() {
     .await;
     let initialized = read_response(&mut stdout, "initialize").await;
     assert_eq!(initialized["id"], 1);
-    assert_eq!(initialized["result"]["protocolVersion"], 2);
+    assert_eq!(initialized["result"]["protocolVersion"], 3);
     assert!(initialized["result"]["modelId"]
         .as_str()
         .is_some_and(|model_id| model_id.starts_with("sdk:openai:")));
