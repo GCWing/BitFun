@@ -8325,28 +8325,62 @@ export const requiredContentRules = [
         regex: /\bpub struct WorkspaceSearchRepoConfig\b/,
         message: 'missing stable workspace-search repo config contract',
       },
-      {
-        regex: /\bwith_scan_fallback\b/,
-        message: 'missing flashgrep scan fallback request flag',
-      },
     ],
   },
   {
     path: 'src/crates/services/services-integrations/src/workspace_search/result_mapping.rs',
     reason:
-      'services-integrations workspace_search result mapping must own shared flashgrep preview/result conversion',
+      'services-integrations workspace_search result mapping must own flashgrep result conversion and delegate content previews to line_hydration',
     patterns: [
       {
         regex: /\bconvert_hits_to_file_search_results\b/,
         message: 'missing hit-to-file-result conversion owner',
       },
       {
-        regex: /\bsplit_preview\b/,
-        message: 'missing preview split contract',
+        regex: /\bline_hydration\b/,
+        message: 'missing preview hydration ownership note',
       },
       {
         regex: /\bpreview_inside\b/,
         message: 'missing preview-inside rendering contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/workspace_search/line_hydration.rs',
+    reason:
+      'services-integrations workspace_search must own disk hydration of daemon line positions, because flashgrep never returns line text',
+    patterns: [
+      {
+        regex: /\bpub\(crate\)\s+fn\s+hydrate_grouped_line_matches\b/,
+        message: 'missing grouped line-match hydration owner',
+      },
+      {
+        regex: /\bMAX_HYDRATED_LINE_COLUMNS\b/,
+        message: 'missing long-line clamp shared with the ripgrep path',
+      },
+      {
+        regex: /\bContentMatchPreviewBuilder\b/,
+        message: 'previews must be built with the shared services-core builder',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/filesystem/content_preview.rs',
+    reason:
+      'services-core filesystem must own the content preview primitives shared by the ripgrep and indexed search paths',
+    patterns: [
+      {
+        regex: /\bpub fn compile_content_search_regex\b/,
+        message: 'missing shared content-search regex compiler',
+      },
+      {
+        regex: /\bpub fn build_content_match_preview\b/,
+        message: 'missing shared content preview builder',
+      },
+      {
+        regex: /\bpub struct ContentMatchPreviewBuilder\b/,
+        message: 'missing reusable preview builder for batched hydration',
       },
     ],
   },
@@ -8432,10 +8466,6 @@ export const requiredContentRules = [
       {
         regex: /\bensure_remote_search_context\b/,
         message: 'missing remote search context lifecycle owner',
-      },
-      {
-        regex: /\ballow_scan_fallback:\s*true\b/,
-        message: 'missing remote scan fallback contract',
       },
       {
         regex: /\bfallback_query\b/,

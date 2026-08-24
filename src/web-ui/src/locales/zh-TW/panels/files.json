@@ -23,27 +23,37 @@
         "running": "索引中..."
       },
       "badges": {
-        "rebuildRecommended": "建議重建"
+        "baseAdvancing": "索引追趕中",
+        "probePending": "上次觀測檢視"
       },
       "phase": {
         "preparing": "準備中",
         "needs_index": "未建索引",
+        "no_index_needed": "無需索引",
         "building": "建立中",
         "ready": "索引可用",
         "tracking_changes": "跟蹤變更中",
         "refreshing": "重新整理中",
         "limited": "受限",
-        "unknown": "未知"
+        "unknown": "未知",
+        "non_git": "非 Git 倉庫"
       },
       "summary": {
         "preparing": "正在準備托管搜尋工作區。",
-        "needs_index": "目前搜尋仍可透過 fallback 使用，建立索引後內容搜尋會更快。",
+        "needs_index": "自動索引策略正在評估目前工作區，或已選擇繼續使用回退搜尋，無需手動操作。",
         "building": "正在為目前工作區建立索引。",
         "ready": "索引已就緒，內容搜尋可優先走索引後端。",
-        "tracking_changes": "索引目前可用，工作區變更正在被跟蹤。只有出現建議重建時，才需要關注重建。",
+        "tracking_changes": "索引目前可用，工作區變更正在被跟蹤。切換分支後索引會自動追趕到最新提交。",
         "refreshing": "正在根據最新檔案變更重新整理索引。",
-        "limited": "索引能力受限。搜尋仍可 fallback，但建議重建。",
-        "unavailable": "目前無法獲取索引狀態。"
+        "limited": "索引能力受限。搜尋仍可 fallback，可嘗試重建索引恢復。",
+        "unavailable": "目前無法獲取索引狀態。",
+        "non_git": "目前工作區不是 Git 倉庫，索引搜尋不適用；內容搜尋會走回退實作。"
+      },
+      "autoIndex": {
+        "pending": "正在評估是否需要建索引。",
+        "eligible": "已達建索引門檻，索引任務即將開始。",
+        "belowThreshold": "工作區僅 {{files}} 個檔案，未達 {{threshold}} 門檻，直接搜尋更快。",
+        "unsupported": "無法建立索引：{{reason}}。"
       },
       "indicator": {
         "label": "工作區索引狀態",
@@ -51,13 +61,14 @@
         "tones": {
           "green": "索引正常",
           "yellow": "索引需關注",
-          "gray": "尚未建索引",
-          "red": "需要重建索引"
+          "gray": "回退搜尋可用",
+          "red": "索引異常"
         },
         "progressKnown": "{{processed}} / {{total}}",
         "progressUnknown": "已處理 {{processed}} 項",
         "dirtyFiles": "待同步變更：修改 {{modified}}，刪除 {{deleted}}，新增 {{new}}",
-        "rebuildRecommended": "目前建議執行重建。",
+        "baseAdvancing": "正在把索引推進到最新提交。",
+        "probePending": "正在核對工作區改動，當前臟檔案數是上次觀測結果。",
         "probeDegraded": "工作區探測狀態異常，工作區索引視圖可能不再持續跟進變更。",
         "hoverTooltip": "Flashgrep 索引：{{status}}"
       },

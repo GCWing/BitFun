@@ -1076,12 +1076,25 @@ impl WorkspaceService {
 
     /// Removes a workspace.
     pub async fn remove_workspace(&self, workspace_id: &str) -> BitFunResult<()> {
-        let result = {
+        let (removed_workspace, result) = {
             let mut manager = self.manager.write().await;
-            manager.remove_workspace(workspace_id)
+            let workspace = manager.get_workspace(workspace_id).cloned();
+            let result = manager.remove_workspace(workspace_id);
+            (workspace, result)
         };
 
         if result.is_ok() {
+            if let Some(workspace) = removed_workspace {
+                if workspace.workspace_kind != WorkspaceKind::Remote {
+                    if let Some(search_service) =
+                        crate::service::search::get_global_workspace_search_service()
+                    {
+                        search_service
+                            .remove_workspace_index(&workspace.root_path)
+                            .await;
+                    }
+                }
+            }
             if let Err(e) = self.save_workspace_data().await {
                 warn!("Failed to save workspace data after removal: {}", e);
             }

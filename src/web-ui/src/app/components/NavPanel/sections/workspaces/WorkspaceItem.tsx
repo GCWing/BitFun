@@ -79,13 +79,6 @@ interface WorkspaceItemProps {
   onDragEnd?: React.DragEventHandler<HTMLDivElement>;
 }
 
-function getIndexActionKind(phase?: string | null): 'build' | 'rebuild' {
-  if (!phase || phase === 'needs_index' || phase === 'preparing') {
-    return 'build';
-  }
-  return 'rebuild';
-}
-
 const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   workspace,
   isActive,
@@ -260,11 +253,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
     const repoStatus = workspaceSearchIndex.indexStatus?.repoStatus ?? null;
     const activeTask = workspaceSearchIndex.indexStatus?.activeTask ?? null;
+    // A non-Git workspace can never be indexed; that is a property of the folder, not a fault,
+    // so it stays on the neutral gray tone and gets its own wording instead of a red "unhealthy".
+    const isNonGitWorkspace = workspaceSearchIndex.unsupportedReason === 'non_git';
     const phase = repoStatus?.phase;
     const isTaskActive = activeTask?.state === 'queued' || activeTask?.state === 'running';
     const hasError = Boolean(
       workspaceSearchIndex.error
       || repoStatus?.lastError
+      || repoStatus?.lastMaintenanceError
       || activeTask?.error
       || activeTask?.state === 'failed'
     );
@@ -282,24 +279,50 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       || phase === 'preparing'
       || phase === 'building'
       || phase === 'refreshing'
-      || Boolean(repoStatus?.rebuildRecommended)
+      || Boolean(repoStatus?.baseAdvanceInProgress)
     ) {
       tone = 'yellow';
     } else if (phase === 'ready' || phase === 'tracking_changes') {
       tone = 'green';
     }
 
-    const phaseLabel = tFiles(`search.index.phase.${phase ?? 'unknown'}`, {
-      defaultValue: phase ?? tFiles('search.index.phase.unknown'),
-    });
+    // The daemon says `needs_index` both while BitFun's auto-index policy is still evaluating the
+    // workspace and after it deliberately declined, so without the policy's own decision the UI
+    // can only hedge. When the decision is known it replaces the hedged wording with the reason.
+    const autoIndex = workspaceSearchIndex.indexStatus?.autoIndex ?? null;
+    const autoIndexExplanation =
+      phase === 'needs_index' && !isTaskActive && autoIndex
+        ? tFiles(`search.index.autoIndex.${autoIndex.decision}`, {
+            defaultValue: '',
+            files: autoIndex.indexableFiles ?? 0,
+            threshold: autoIndex.threshold,
+            reason: autoIndex.reason ?? '',
+          }) || null
+        : null;
+    const isBelowThreshold = autoIndex?.decision === 'belowThreshold';
+
+    const phaseLabel = isNonGitWorkspace
+      ? tFiles('search.index.phase.non_git')
+      : isBelowThreshold && phase === 'needs_index'
+        ? tFiles('search.index.phase.no_index_needed')
+        : tFiles(`search.index.phase.${phase ?? 'unknown'}`, {
+            defaultValue: phase ?? tFiles('search.index.phase.unknown'),
+          });
     const title = tFiles(`search.index.indicator.tones.${tone}`);
-    const summary = repoStatus
-      ? tFiles(`search.index.summary.${phase ?? 'unavailable'}`, {
-          defaultValue: tFiles('search.index.summary.unavailable'),
-        })
-      : workspaceSearchIndex.loading
-        ? tFiles('search.index.indicator.checking')
-        : tFiles('search.index.summary.unavailable');
+    let summary: string;
+    if (isNonGitWorkspace) {
+      summary = tFiles('search.index.summary.non_git');
+    } else if (autoIndexExplanation) {
+      summary = autoIndexExplanation;
+    } else if (repoStatus) {
+      summary = tFiles(`search.index.summary.${phase ?? 'unavailable'}`, {
+        defaultValue: tFiles('search.index.summary.unavailable'),
+      });
+    } else if (workspaceSearchIndex.loading) {
+      summary = tFiles('search.index.indicator.checking');
+    } else {
+      summary = tFiles('search.index.summary.unavailable');
+    }
     const activeTaskLabel = activeTask
       ? tFiles(`search.index.taskState.${activeTask.state}`, {
           defaultValue: activeTask.state,
@@ -331,7 +354,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             new: repoStatus.dirtyFiles.new,
           })
         : null;
-    const errorText = workspaceSearchIndex.error ?? activeTask?.error ?? repoStatus?.lastError ?? null;
+    // `lastError` is cleared by every successful worktree probe, so it is usually already gone by
+    // the time we poll; `lastMaintenanceError` is the slot a background compaction/advance failure
+    // survives in, and is the only one that reliably reaches this render.
+    const errorText =
+      workspaceSearchIndex.error
+      ?? activeTask?.error
+      ?? repoStatus?.lastError
+      ?? repoStatus?.lastMaintenanceError
+      ?? null;
 
     return {
       tone,
@@ -344,8 +375,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       progressPercent,
       progressPercentLabel,
       dirtyFilesLabel,
-      rebuildRecommended: Boolean(repoStatus?.rebuildRecommended),
+      baseAdvanceInProgress: Boolean(repoStatus?.baseAdvanceInProgress),
       probeHealthy: repoStatus?.probeHealthy ?? true,
+      // Not a degradation: the daemon owes a worktree reconcile, so the dirty counts above are from
+      // a moment ago. It clears itself, which is why it stays a tooltip note and not a badge.
+      workspaceProbePending: Boolean(repoStatus?.workspaceProbePending),
       errorText,
       ariaLabel: `${tFiles('search.index.indicator.label')}: ${title} · ${phaseLabel}`,
     };
@@ -355,35 +389,28 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     workspaceSearchIndex.error,
     workspaceSearchIndex.indexStatus,
     workspaceSearchIndex.loading,
+    workspaceSearchIndex.unsupportedReason,
   ]);
-  const searchIndexActionKind = getIndexActionKind(
-    workspaceSearchIndex.indexStatus?.repoStatus.phase ?? null
-  );
-  const searchIndexActionLabel = tFiles(
-    searchIndexActionKind === 'build'
-      ? 'search.index.actions.build'
-      : 'search.index.actions.rebuild'
+  const searchIndexPhase = workspaceSearchIndex.indexStatus?.repoStatus.phase ?? null;
+  const canRebuildSearchIndex = Boolean(
+    searchIndexPhase
+    && searchIndexPhase !== 'needs_index'
+    && searchIndexPhase !== 'preparing'
+    && searchIndexPhase !== 'building'
   );
 
   const handleSearchIndexAction = useCallback(async () => {
-    const result =
-      searchIndexActionKind === 'build'
-        ? await workspaceSearchIndex.buildIndex()
-        : await workspaceSearchIndex.rebuildIndex();
+    const result = await workspaceSearchIndex.rebuildIndex();
 
     if (!result) {
       return;
     }
 
     notificationService.success(
-      tFiles(
-        searchIndexActionKind === 'build'
-          ? 'notifications.searchIndexBuildStarted'
-          : 'notifications.searchIndexRebuildStarted'
-      ),
+      tFiles('notifications.searchIndexRebuildStarted'),
       { duration: 2200 }
     );
-  }, [searchIndexActionKind, tFiles, workspaceSearchIndex]);
+  }, [tFiles, workspaceSearchIndex]);
 
   const updateMenuPosition = useCallback(() => {
     const anchor = menuAnchorRef.current;
@@ -1219,9 +1246,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                           {searchIndexIndicator.dirtyFilesLabel}
                         </div>
                       ) : null}
-                      {searchIndexIndicator.rebuildRecommended ? (
+                      {searchIndexIndicator.workspaceProbePending ? (
+                        <div className="bitfun-nav-panel__workspace-index-tooltip-meta">
+                          {tFiles('search.index.indicator.probePending')}
+                        </div>
+                      ) : null}
+                      {searchIndexIndicator.baseAdvanceInProgress ? (
                         <div className="bitfun-nav-panel__workspace-index-tooltip-meta is-warning">
-                          {tFiles('search.index.indicator.rebuildRecommended')}
+                          {tFiles('search.index.indicator.baseAdvancing')}
                         </div>
                       ) : null}
                       {!searchIndexIndicator.probeHealthy ? (
@@ -1234,24 +1266,26 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                           {searchIndexIndicator.errorText}
                         </div>
                       ) : null}
-                      <div className="bitfun-nav-panel__workspace-index-tooltip-actions">
-                        <Button
-                          size="small"
-                          variant={searchIndexActionKind === 'build' ? 'accent' : 'secondary'}
-                          onClick={() => {
-                            void handleSearchIndexAction();
-                          }}
-                          disabled={
-                            workspaceSearchIndex.loading
-                            || workspaceSearchIndex.actionRunning
-                            || workspaceSearchIndex.hasActiveTask
-                          }
-                        >
-                          {workspaceSearchIndex.actionRunning || workspaceSearchIndex.hasActiveTask
-                            ? tFiles('search.index.actions.running')
-                            : searchIndexActionLabel}
-                        </Button>
-                      </div>
+                      {canRebuildSearchIndex ? (
+                        <div className="bitfun-nav-panel__workspace-index-tooltip-actions">
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            onClick={() => {
+                              void handleSearchIndexAction();
+                            }}
+                            disabled={
+                              workspaceSearchIndex.loading
+                              || workspaceSearchIndex.actionRunning
+                              || workspaceSearchIndex.hasActiveTask
+                            }
+                          >
+                            {workspaceSearchIndex.actionRunning || workspaceSearchIndex.hasActiveTask
+                              ? tFiles('search.index.actions.running')
+                              : tFiles('search.index.actions.rebuild')}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   </Modal>
                 </>

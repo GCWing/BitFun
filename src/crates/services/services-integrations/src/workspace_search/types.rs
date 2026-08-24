@@ -37,8 +37,9 @@ pub struct ContentSearchRequest {
     pub use_regex: bool,
     pub whole_word: bool,
     pub multiline: bool,
-    pub before_context: usize,
-    pub after_context: usize,
+    // No context-line fields: the daemon has no context-line support, so a request that asks for
+    // them is routed to ripgrep before it ever becomes a `ContentSearchRequest`. Carrying them
+    // here is what let `-A`/`-B`/`-C` be silently dropped on the wire once before.
     pub max_results: Option<usize>,
     pub globs: Vec<String>,
     pub file_types: Vec<String>,
@@ -104,6 +105,8 @@ impl From<FlashgrepRepoPhase> for WorkspaceSearchRepoPhase {
 pub enum WorkspaceSearchTaskKind {
     Build,
     Rebuild,
+    Advance,
+    Compact,
     Refresh,
 }
 
@@ -112,6 +115,8 @@ impl From<FlashgrepTaskKind> for WorkspaceSearchTaskKind {
         match value {
             FlashgrepTaskKind::BuildBaseSnapshot => Self::Build,
             FlashgrepTaskKind::RebuildBaseSnapshot => Self::Rebuild,
+            FlashgrepTaskKind::AdvanceBaseSnapshot => Self::Advance,
+            FlashgrepTaskKind::CompactBaseDeltas => Self::Compact,
             FlashgrepTaskKind::RefreshWorkspace => Self::Refresh,
         }
     }
@@ -182,6 +187,7 @@ impl From<FlashgrepDirtyFileStats> for WorkspaceSearchDirtyFiles {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchOverlayStatus {
+    pub base_manifest_id: Option<String>,
     pub committed_seq_no: u64,
     pub last_seq_no: u64,
     pub uncommitted_ops: u64,
@@ -199,6 +205,7 @@ pub struct WorkspaceSearchOverlayStatus {
 impl From<FlashgrepWorkspaceOverlayStatus> for WorkspaceSearchOverlayStatus {
     fn from(value: FlashgrepWorkspaceOverlayStatus) -> Self {
         Self {
+            base_manifest_id: value.base_manifest_id,
             committed_seq_no: value.committed_seq_no,
             last_seq_no: value.last_seq_no,
             uncommitted_ops: value.uncommitted_ops,
@@ -225,13 +232,26 @@ pub struct WorkspaceSearchRepoStatus {
     pub workspace_overlay_root: String,
     pub phase: WorkspaceSearchRepoPhase,
     pub snapshot_key: Option<String>,
+    pub base_head_commit: Option<String>,
+    pub workspace_head_commit: Option<String>,
+    /// True while the daemon is advancing the base snapshot toward a newer commit.
+    pub base_advance_in_progress: bool,
+    pub base_advance_target_head: Option<String>,
+    pub base_delta_depth: u32,
+    pub base_compaction_recommended: bool,
     pub last_probe_unix_secs: Option<u64>,
     pub last_rebuild_unix_secs: Option<u64>,
     pub dirty_files: WorkspaceSearchDirtyFiles,
-    pub rebuild_recommended: bool,
     pub active_task_id: Option<String>,
     pub probe_healthy: bool,
+    /// True while the daemon still owes a worktree reconcile, which makes `dirty_files` and `phase`
+    /// the last observed state rather than the current one. Daemons that reconcile synchronously at
+    /// open never report it.
+    pub workspace_probe_pending: bool,
     pub last_error: Option<String>,
+    /// Failure of the daemon's last background base-maintenance task. Unlike `last_error`, this is
+    /// not cleared by a successful worktree probe, so status polling can actually observe it.
+    pub last_maintenance_error: Option<String>,
     pub overlay: Option<WorkspaceSearchOverlayStatus>,
 }
 
@@ -245,13 +265,20 @@ impl From<FlashgrepRepoStatus> for WorkspaceSearchRepoStatus {
             workspace_overlay_root: value.workspace_overlay_root,
             phase: value.phase.into(),
             snapshot_key: value.snapshot_key,
+            base_head_commit: value.base_head_commit,
+            workspace_head_commit: value.workspace_head_commit,
+            base_advance_in_progress: value.base_advance_target_head.is_some(),
+            base_advance_target_head: value.base_advance_target_head,
+            base_delta_depth: value.base_delta_depth,
+            base_compaction_recommended: value.base_compaction_recommended,
             last_probe_unix_secs: value.last_probe_unix_secs,
             last_rebuild_unix_secs: value.last_rebuild_unix_secs,
             dirty_files: value.dirty_files.into(),
-            rebuild_recommended: value.rebuild_recommended,
             active_task_id: value.active_task_id,
             probe_healthy: value.probe_healthy,
+            workspace_probe_pending: value.workspace_probe_pending,
             last_error: value.last_error,
+            last_maintenance_error: value.last_maintenance_error,
             overlay: value.overlay.map(Into::into),
         }
     }
@@ -349,11 +376,47 @@ pub struct WorkspaceSearchHit {
     pub lines: Vec<WorkspaceSearchLine>,
 }
 
+/// Outcome of BitFun's automatic-index policy for a workspace.
+///
+/// flashgrep reports `needs_index` both while the policy is still evaluating a workspace and
+/// after it has deliberately declined to build one, so the daemon's phase alone cannot explain
+/// to a user why nothing is happening. This carries that BitFun-side decision to the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceSearchAutoIndexDecision {
+    /// The policy has not evaluated this workspace yet.
+    Pending,
+    /// The workspace qualifies; an index build was started.
+    Eligible,
+    /// The workspace is too small to be worth indexing; fallback search stays in use.
+    BelowThreshold,
+    /// The workspace cannot be indexed at all (for example, it is not a Git worktree).
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSearchAutoIndexStatus {
+    pub decision: WorkspaceSearchAutoIndexDecision,
+    /// Indexable-file count the policy requires before it builds an index.
+    pub threshold: usize,
+    /// Exact for `BelowThreshold`. For `Eligible` the count stops as soon as the threshold is
+    /// reached, so it is a lower bound there. `None` for `Pending` and `Unsupported`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indexable_files: Option<usize>,
+    /// Set for `Unsupported` only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceIndexStatus {
     pub repo_status: WorkspaceSearchRepoStatus,
     pub active_task: Option<WorkspaceSearchTaskStatus>,
+    /// Absent on transports that have no BitFun-side auto-index policy (remote SSH workspaces).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_index: Option<WorkspaceSearchAutoIndexStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,4 +447,52 @@ pub struct GlobSearchResult {
 pub struct IndexTaskHandle {
     pub task: WorkspaceSearchTaskStatus,
     pub repo_status: WorkspaceSearchRepoStatus,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The frontend reads these names directly, and it distinguishes "no count available" from
+    /// "zero files", so absent optionals must stay absent rather than serialize as `null`.
+    #[test]
+    fn auto_index_status_serializes_in_the_shape_the_ui_expects() {
+        let below = WorkspaceSearchAutoIndexStatus {
+            decision: WorkspaceSearchAutoIndexDecision::BelowThreshold,
+            threshold: 2_000,
+            indexable_files: Some(216),
+            reason: None,
+        };
+        let value = serde_json::to_value(&below).expect("serialize");
+        assert_eq!(value["decision"], "belowThreshold");
+        assert_eq!(value["threshold"], 2_000);
+        assert_eq!(value["indexableFiles"], 216);
+        assert!(value.get("reason").is_none());
+
+        let pending = WorkspaceSearchAutoIndexStatus {
+            decision: WorkspaceSearchAutoIndexDecision::Pending,
+            threshold: 2_000,
+            indexable_files: None,
+            reason: None,
+        };
+        let value = serde_json::to_value(&pending).expect("serialize");
+        assert_eq!(value["decision"], "pending");
+        assert!(value.get("indexableFiles").is_none());
+    }
+
+    /// `Unsupported` is the only decision that carries a reason, and it has no file count to
+    /// report; the UI interpolates the reason straight into its sentence.
+    #[test]
+    fn unsupported_carries_a_reason_and_no_count() {
+        let value = serde_json::to_value(WorkspaceSearchAutoIndexStatus {
+            decision: WorkspaceSearchAutoIndexDecision::Unsupported,
+            threshold: 2_000,
+            indexable_files: None,
+            reason: Some("not a Git worktree".to_string()),
+        })
+        .expect("serialize");
+        assert_eq!(value["decision"], "unsupported");
+        assert_eq!(value["reason"], "not a Git worktree");
+        assert!(value.get("indexableFiles").is_none());
+    }
 }
