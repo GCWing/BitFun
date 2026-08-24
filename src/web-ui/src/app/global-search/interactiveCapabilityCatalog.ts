@@ -22,17 +22,6 @@ export interface InteractiveCapabilityValueSchema {
   maxLength?: number;
 }
 
-export type InteractiveCapabilityOperationHandler =
-  | { kind: 'productAction'; actionId: ProductActionId }
-  | { kind: 'provider'; providerId: string; operationId: string };
-
-export type InteractiveCapabilityOptionHandler =
-  | { kind: 'config'; path: string }
-  | { kind: 'mergeConfig'; path: string; fields: string[] }
-  | { kind: 'appearanceSelection' }
-  | { kind: 'language' }
-  | { kind: 'provider'; providerId: string; optionId: string };
-
 export interface InteractiveCapabilityOperation {
   id: string;
   titleZh: string;
@@ -42,7 +31,6 @@ export interface InteractiveCapabilityOperation {
   risk: InteractiveCapabilityRisk;
   inputSchema: Record<string, unknown>;
   argumentScopes?: Record<string, 'productHostLocal'>;
-  handler: InteractiveCapabilityOperationHandler;
 }
 
 export interface InteractiveCapabilityOption {
@@ -52,7 +40,16 @@ export interface InteractiveCapabilityOption {
   descriptionZh: string;
   descriptionEn: string;
   valueSchema: InteractiveCapabilityValueSchema;
-  handler: InteractiveCapabilityOptionHandler;
+}
+
+export interface InteractiveCapabilityControlDefinition {
+  id: string;
+  capabilityId: string;
+  itemIds: string[];
+  kind: 'query' | 'option' | 'operation' | 'delegate' | 'open';
+  risk: InteractiveCapabilityRisk;
+  executionHost: 'productHost' | 'workspaceHost' | 'presentationSurface';
+  presentationTarget: InteractiveCapabilityDestination;
 }
 
 export interface InteractiveCapabilityItem {
@@ -113,6 +110,7 @@ export interface InteractiveCapabilityCatalog {
   origin: string;
   source: string;
   digest: string;
+  ownerDigest: string;
   searchAcceptance: Array<{
     id: string;
     query: string;
@@ -139,6 +137,7 @@ export interface InteractiveCapabilityCatalog {
     descriptionEn: string;
   }>;
   capabilities: InteractiveCapability[];
+  definitions: InteractiveCapabilityControlDefinition[];
 }
 
 export const INTERACTIVE_CAPABILITY_CATALOG = generatedCatalog as InteractiveCapabilityCatalog;
@@ -146,7 +145,16 @@ export const INTERACTIVE_CAPABILITY_CATALOG = generatedCatalog as InteractiveCap
 const capabilityById = new Map(
   INTERACTIVE_CAPABILITY_CATALOG.capabilities.map((capability) => [capability.id, capability]),
 );
+const definitionById = new Map(
+  INTERACTIVE_CAPABILITY_CATALOG.definitions.map((definition) => [definition.id, definition]),
+);
 
 export function getInteractiveCapability(capabilityId: string): InteractiveCapability | undefined {
   return capabilityById.get(capabilityId);
+}
+
+export function getInteractiveControlDefinition(
+  definitionId: string,
+): InteractiveCapabilityControlDefinition | undefined {
+  return definitionById.get(definitionId);
 }

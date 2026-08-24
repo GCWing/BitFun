@@ -234,7 +234,7 @@ export class I18nService {
         return;
       }
 
-      await this.changeLanguage(savedLocale);
+      await this.applyPersistedLanguage(savedLocale);
       logDuration(log, 'Backend locale applied after initialization', elapsedMs(startedAt), {
         data: {
         locale: savedLocale,
@@ -280,7 +280,8 @@ export class I18nService {
     try {
       await i18nAPI.setLanguage(locale);
     } catch (error) {
-      log.warn('Failed to save locale config', error);
+      log.error('Failed to commit locale through ProductControl', { locale, error });
+      throw error;
     }
   }
 
@@ -313,15 +314,31 @@ export class I18nService {
 
    
   async changeLanguage(locale: LocaleId): Promise<void> {
-    await this.applyLanguage(locale, true);
+    if (!isLocaleSupported(locale)) {
+      log.error('Unsupported locale', { locale });
+      throw new Error(`Unsupported locale: ${locale}`);
+    }
+    if (locale === this.currentLocaleId) {
+      log.debug('Locale unchanged, skipping', { locale });
+      return;
+    }
+
+    // Desktop ProductControl persists first, applies backend effects, asks the
+    // live Web UI to apply this locale, and only then acknowledges success.
+    // Web/server adapters without that effect channel still receive the same
+    // persistence result and apply locally below.
+    await this.saveCurrentLocale(locale);
+    if (this.currentLocaleId !== locale) {
+      await this.applyLanguage(locale);
+    }
   }
 
   /** Apply a locale that another product-control port already persisted. */
   async applyPersistedLanguage(locale: LocaleId): Promise<void> {
-    await this.applyLanguage(locale, false);
+    await this.applyLanguage(locale);
   }
 
-  private async applyLanguage(locale: LocaleId, persist: boolean): Promise<void> {
+  private async applyLanguage(locale: LocaleId): Promise<void> {
     if (!isLocaleSupported(locale)) {
       log.error('Unsupported locale', { locale });
       throw new Error(`Unsupported locale: ${locale}`);
@@ -361,15 +378,12 @@ export class I18nService {
       store.setCurrentLanguage(locale);
 
       
-      if (persist) await this.saveCurrentLocale(locale);
-
-      
       if (this.hooks.afterChange) {
         await this.hooks.afterChange(locale, oldLocale);
       }
       this.emitEvent('i18n:after-change', locale, oldLocale);
 
-      log.info('Language changed', { locale, previousLocale: oldLocale, persisted: persist });
+      log.info('Language changed', { locale, previousLocale: oldLocale });
     } catch (error) {
       log.error('Failed to change language', { locale, error });
       this.emitEvent('i18n:error', locale, oldLocale, undefined, error as Error);

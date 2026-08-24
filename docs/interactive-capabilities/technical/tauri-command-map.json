@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "3c78642ff2ca49ce070288d4e9dc22c9615f731f46a56d8135fea25cf5c474bf",
-  "commandCount": 649,
+  "catalogDigest": "2d4c8013472af3940d91a5095855bfe8c5dbba173e312e23711637b3e62110dc",
+  "commandCount": 651,
   "coverage": {
-    "commandCount": 649,
+    "commandCount": 651,
     "documentedCommandCount": 613,
-    "implementationCommandCount": 36,
-    "implementationDigest": "c2e1dcd1baeeace542f9f6129d25e5a896c264299a9417a63fef888216c152be"
+    "implementationCommandCount": 38,
+    "implementationDigest": "965d441b20c0092bc25c1dd48db3e31f72a977479fe9d1ff7c788d8e17d7395b"
   },
   "commands": [
     {
@@ -4546,7 +4546,7 @@
       "visibility": "documented",
       "rustPath": "i18n_set_config",
       "sourceFile": "src/apps/desktop/src/api/i18n_api.rs",
-      "signature": "fn i18n_set_config(state: State<'_, AppState>, config: Value) -> Result<String, String>",
+      "signature": "fn i18n_set_config( _state: State<'_, AppState>, app: tauri::AppHandle, config: Value, ) -> Result<String, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -4562,7 +4562,7 @@
       "visibility": "documented",
       "rustPath": "i18n_set_language",
       "sourceFile": "src/apps/desktop/src/api/i18n_api.rs",
-      "signature": "fn i18n_set_language( state: State<'_, AppState>, _app: tauri::AppHandle, request: SetLanguageRequest, ) -> Result<String, String>",
+      "signature": "fn i18n_set_language( _state: State<'_, AppState>, app: tauri::AppHandle, request: SetLanguageRequest, ) -> Result<String, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -5304,6 +5304,18 @@
       "rustPath": "bitfun_control_host::mark_bitfun_control_surface_ready",
       "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
       "signature": "fn mark_bitfun_control_surface_ready()",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "mark_bitfun_control_surface_unready",
+      "moduleId": "bitfun_control_host",
+      "capabilityId": null,
+      "capabilityIds": [],
+      "documentedItemIds": [],
+      "visibility": "internal",
+      "rustPath": "bitfun_control_host::mark_bitfun_control_surface_unready",
+      "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
+      "signature": "fn mark_bitfun_control_surface_unready()",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -6541,6 +6553,18 @@
       "sourceFile": "src/apps/desktop/src/api/acp_client_api.rs",
       "signature": "fn probe_acp_client_requirements( state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, request: ProbeAcpClientRequirementsRequest, ) -> Result<Vec<AcpClientRequirementProbe>, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "product_control_invoke",
+      "moduleId": "bitfun_control_host",
+      "capabilityId": null,
+      "capabilityIds": [],
+      "documentedItemIds": [],
+      "visibility": "internal",
+      "rustPath": "bitfun_control_host::product_control_invoke",
+      "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
+      "signature": "fn product_control_invoke( app: AppHandle, mut request: BitFunControlHostRequest, ) -> Result<Value, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "project_ai_model_reasoning_catalog",
@@ -8506,7 +8530,7 @@
       "visibility": "implementation",
       "rustPath": "set_config",
       "sourceFile": "src/apps/desktop/src/api/config_api.rs",
-      "signature": "fn set_config( state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, request: SetConfigRequest, ) -> Result<String, String>",
+      "signature": "fn set_config( _state: State<'_, AppState>, app: tauri::AppHandle, startup_trace: State<'_, DesktopStartupTrace>, request: SetConfigRequest, ) -> Result<String, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -8792,7 +8816,7 @@
       "visibility": "documented",
       "rustPath": "sleep_prevention::set_prevent_sleep_enabled",
       "sourceFile": "src/apps/desktop/src/sleep_prevention.rs",
-      "signature": "fn set_prevent_sleep_enabled( app_state: State<'_, AppState>, sleep_prevention: State<'_, SleepPreventionState>, request: SetPreventSleepEnabledRequest, ) -> Result<(), String>",
+      "signature": "fn set_prevent_sleep_enabled( app: AppHandle, request: SetPreventSleepEnabledRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {

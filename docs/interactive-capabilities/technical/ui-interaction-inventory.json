@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "3c78642ff2ca49ce070288d4e9dc22c9615f731f46a56d8135fea25cf5c474bf",
+  "catalogDigest": "2d4c8013472af3940d91a5095855bfe8c5dbba173e312e23711637b3e62110dc",
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "4014e457423c97bd88890945735519c314403af2cb2d49a09b7775e8859409e3",
+  "digest": "b18358b1b797cb4bd5896b3a1c06f0b35f6a0fc4a31dd0508b557afbe669b8ba",
   "fileCount": 367,
-  "interactionCount": 4424,
+  "interactionCount": 4423,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -271,8 +271,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/global-search/interactiveCapabilityCatalog.ts",
-      "interactionCount": 4,
-      "digest": "b97dc81fc9fce9cbe57ac10f3faee92b333ce68b81a2d0ad6b84d7db58f93b32"
+      "interactionCount": 3,
+      "digest": "3a8b0dfbb1b185dd9df915f397163d735e58df0256c637f9c703c50be4edb085"
     },
     {
       "sourceFile": "src/web-ui/src/app/global-search/productActionActivator.ts",

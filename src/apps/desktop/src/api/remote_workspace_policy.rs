@@ -1441,6 +1441,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "mark_bitfun_control_surface_unready",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "product_control_invoke",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "remove_recent_workspace",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

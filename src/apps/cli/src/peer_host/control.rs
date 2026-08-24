@@ -104,6 +104,7 @@ pub(crate) fn peer_mode_ping_value() -> Value {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
             "token_usage_statistics": true,
+            "product_control_v1": true,
         },
     })
 }

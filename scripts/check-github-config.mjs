@@ -258,6 +258,77 @@ function validateRootNodeEngine() {
   }
 }
 
+function validateProductControlWorkflowGate() {
+  const packageJson = readJson('package.json');
+  if (!packageJson.scripts?.['capabilities:check']) return;
+
+  const workflowPath = path.join(rootDir, '.github/workflows/ci.yml');
+  if (!existsSync(workflowPath)) {
+    errors.push('.github/workflows/ci.yml: required ProductControl CI gate is missing.');
+    return;
+  }
+  const workflow = yaml.parse(readFileSync(workflowPath, 'utf8'));
+  const steps = Object.values(workflow.jobs ?? {})
+    .flatMap((job) => Array.isArray(job?.steps) ? job.steps : []);
+  const generatedGate = steps.find(
+    (step) => step?.name === 'Validate interactive capability contract',
+  );
+  const requiredGeneratedCommand =
+    'pnpm run capabilities:check && pnpm run capabilities:test && pnpm run website:test && pnpm run website:build';
+  if (!generatedGate) {
+    errors.push('.github/workflows/ci.yml: the blocking interactive capability generation/Playbook gate is missing.');
+  } else {
+    if (generatedGate.run !== requiredGeneratedCommand) {
+      errors.push(`.github/workflows/ci.yml: interactive capability gate must run exactly ${JSON.stringify(requiredGeneratedCommand)}.`);
+    }
+    if (generatedGate.if !== undefined) {
+      errors.push('.github/workflows/ci.yml: interactive capability gate must not be conditional.');
+    }
+    if (generatedGate['continue-on-error'] === true) {
+      errors.push('.github/workflows/ci.yml: interactive capability gate must remain blocking.');
+    }
+  }
+
+  const ownerGate = steps.find(
+    (step) => step?.name === 'Run product-control domain and delivery-profile contracts',
+  );
+  if (!ownerGate) {
+    errors.push('.github/workflows/ci.yml: the blocking ProductControl owner/delivery-profile gate is missing.');
+  } else {
+    const command = String(ownerGate.run ?? '');
+    for (const required of [
+      'cargo test --locked -p bitfun-product-domains --no-default-features product_control',
+      'cargo test --locked -p bitfun-product-capabilities every_agent_runtime_delivery_profile_includes_product_control_discovery',
+    ]) {
+      if (!command.includes(required)) {
+        errors.push(`.github/workflows/ci.yml: ProductControl owner gate must include ${JSON.stringify(required)}.`);
+      }
+    }
+    if (ownerGate.if !== undefined) {
+      errors.push('.github/workflows/ci.yml: ProductControl owner gate must run on every CI matrix target.');
+    }
+    if (ownerGate['continue-on-error'] === true) {
+      errors.push('.github/workflows/ci.yml: ProductControl owner gate must remain blocking.');
+    }
+  }
+
+  const cliJob = workflow.jobs?.['cli-test'];
+  const cliSteps = Array.isArray(cliJob?.steps) ? cliJob.steps : [];
+  const cliCommands = cliSteps
+    .filter((step) => step?.run && step['continue-on-error'] !== true)
+    .map((step) => String(step.run));
+  for (const required of [
+    'cargo test --locked -p bitfun-cli -p bitfun-acp',
+    'cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime',
+  ]) {
+    if (!cliCommands.includes(required)) {
+      errors.push(
+        `.github/workflows/ci.yml: CLI ProductControl self-control coverage requires the blocking command ${JSON.stringify(required)}.`,
+      );
+    }
+  }
+}
+
 for (const { relativePath, absolutePath } of yamlFiles) {
   const document = yaml.parseDocument(readFileSync(absolutePath, 'utf8'), {
     prettyErrors: true,
@@ -279,6 +350,7 @@ for (const { relativePath, absolutePath } of yamlFiles) {
 }
 
 validateRootNodeEngine();
+validateProductControlWorkflowGate();
 
 if (errors.length > 0) {
   console.error('GitHub YAML config check failed:');

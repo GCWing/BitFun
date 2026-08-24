@@ -277,6 +277,22 @@ Still to migrate, in order: the interaction mailbox, then history positions.
     write an exception for a path that only exists on the peer. A controller
     surfaces the probe's `manualCommand` instead.
 
+16. **ProductControl commands follow the product host; presentation ACKs stay
+    with the window.** `product_control_invoke` is a normal product mutation and
+    routes to the selected peer only after `peer_mode_ping` advertises
+    `product_control_v1`; an older peer fails explicitly and never falls back
+    to the controller. Definitions that need a native provider or a live UI
+    additionally declare `product_control_native_v1` or
+    `product_control_presentation_v1`; the CLI host advertises neither and
+    returns a typed unsupported result. `mark_bitfun_control_surface_ready`,
+    `mark_bitfun_control_surface_unready`, and `report_bitfun_control_result`
+    describe or acknowledge the controller window's live Web UI and therefore
+    remain `LOCAL_ONLY` in the frontend, Desktop host, and CLI host lists. A
+    peer executes the same owner handler and uses its own attached presentation
+    surface when a required runtime effect needs acknowledgement; an
+    unavailable surface fails explicitly and never mutates the controller as a
+    fallback.
+
 ## Related account-login guards
 
 Incomplete login (cloud vs local settings choice) must not persist a session

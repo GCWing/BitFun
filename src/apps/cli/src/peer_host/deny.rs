@@ -75,6 +75,9 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
     "browser_webview_set_agent_target_state",
+    "mark_bitfun_control_surface_ready",
+    "mark_bitfun_control_surface_unready",
+    "report_bitfun_control_result",
     "relay_deploy_preflight",
     "relay_deploy_install_docker",
     "relay_deploy_start",
@@ -227,6 +230,18 @@ mod tests {
         assert!(is_local_only_command(
             "browser_webview_set_agent_target_state"
         ));
+    }
+
+    #[test]
+    fn product_control_presentation_callbacks_stay_on_the_controller_device() {
+        for command in [
+            "mark_bitfun_control_surface_ready",
+            "mark_bitfun_control_surface_unready",
+            "report_bitfun_control_result",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
+        assert!(!is_local_only_command("product_control_invoke"));
     }
 
     /// Reading why Git refuses a repository is safe to answer for a controller

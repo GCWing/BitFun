@@ -6,6 +6,7 @@ use serde_json::Value;
 
 pub use bitfun_product_domains::product_control::{
     ProductControlAction, ProductControlPort, ProductControlRequest as BitFunControlHostRequest,
+    ProductControlSource,
 };
 
 static BITFUN_CONTROL_PORT: OnceLock<Arc<dyn ProductControlPort>> = OnceLock::new();
@@ -44,6 +45,7 @@ mod tests {
             value: None,
             cursor: None,
             limit: None,
+            source: ProductControlSource::Agent,
         })
         .unwrap();
 

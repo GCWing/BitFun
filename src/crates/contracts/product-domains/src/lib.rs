@@ -9,6 +9,7 @@ pub mod canvas;
 pub mod mcp;
 pub mod native_hooks;
 pub mod product_control;
+pub mod product_control_owner_registry;
 pub mod product_search;
 pub mod tool_permissions;
 

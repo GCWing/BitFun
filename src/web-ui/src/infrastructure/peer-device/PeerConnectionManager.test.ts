@@ -28,6 +28,9 @@ describe('PeerConnectionManager attach', () => {
         idempotentDialogSubmit: true,
         targetedSessionRollback: false,
         tokenUsageStatistics: true,
+        productControlV1: true,
+        productControlNativeV1: false,
+        productControlPresentationV1: false,
       },
     });
     expect(manager.get('peer-1')).toBe(connection);
@@ -364,6 +367,7 @@ function createRpc(options: { failCommands?: Set<string> } = {}) {
           capabilities: {
             idempotent_dialog_submit: true,
             token_usage_statistics: true,
+            product_control_v1: true,
           },
         },
       });

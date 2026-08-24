@@ -180,43 +180,27 @@ mod tests {
 
 #[tauri::command]
 pub async fn set_config(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
+    app: tauri::AppHandle,
     startup_trace: State<'_, DesktopStartupTrace>,
     request: SetConfigRequest,
 ) -> Result<String, String> {
-    let config_service = &state.config_service;
     let trace_started = Instant::now();
     let trace_target = request.path.clone();
 
-    let result = match config_service
-        .set_config(&request.path, request.value)
-        .await
-    {
-        Ok(_) => {
-            if request.path.starts_with("ai.models")
-                || request.path.starts_with("ai.default_models")
-                || request.path.starts_with("ai.agent_model_defaults")
-                || request.path.starts_with("ai.stream_idle_timeout_secs")
-                || request.path.starts_with("ai.stream_ttft_timeout_secs")
-                || request.path.starts_with("ai.proxy")
-            {
-                state.ai_client_factory.invalidate_cache();
-                info!(
-                    "AI config changed, cache invalidated: path={}",
-                    request.path
+    let result =
+        match crate::bitfun_control_host::set_config_from_gui(&app, &request.path, request.value)
+            .await
+        {
+            Ok(_) => Ok("Configuration set successfully".to_string()),
+            Err(error) => {
+                error!(
+                    "Failed to set config through product control: path={}, error={}",
+                    request.path, error
                 );
+                Err(format!("Failed to set config: {error}"))
             }
-
-            // Notify auto-sync to upload the updated config to the relay
-            crate::api::remote_connect_api::notify_settings_changed();
-
-            Ok("Configuration set successfully".to_string())
-        }
-        Err(e) => {
-            error!("Failed to set config: path={}, error={}", request.path, e);
-            Err(format!("Failed to set config: {}", e))
-        }
-    };
+        };
     startup_trace.record_tauri_command_elapsed(
         "set_config",
         Some(trace_target.as_str()),

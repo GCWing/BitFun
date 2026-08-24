@@ -29,6 +29,46 @@ pub struct TranslateRequest {
     pub args: Option<Value>,
 }
 
+pub(crate) async fn apply_language_runtime_effects(
+    app: &tauri::AppHandle,
+    state: &AppState,
+    language: &str,
+) -> Result<(), String> {
+    let Some(locale_id) = LocaleId::from_str(language) else {
+        return Err(format!("Unsupported language: {language}"));
+    };
+    match sync_global_i18n_service_locale(locale_id).await {
+        Ok(true) => {}
+        Ok(false) => {
+            warn!(
+                "Global I18nService not initialized after language change: language={}",
+                language
+            );
+        }
+        Err(error) => {
+            return Err(format!(
+                "Failed to sync backend language runtime: language={language}, error={error}"
+            ));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let has_workspace = state.workspace_path.read().await.is_some();
+        let mode = if has_workspace {
+            crate::macos_menubar::MenubarMode::Workspace
+        } else {
+            crate::macos_menubar::MenubarMode::Startup
+        };
+        let edit_mode = *state.macos_edit_menu_mode.read().await;
+        crate::macos_menubar::set_macos_menubar_with_mode(app, language, mode, edit_mode)
+            .map_err(|error| format!("Failed to rebuild the localized menu: {error}"))?;
+    }
+
+    crate::tray::rebuild_tray_menu_public(app).await;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn i18n_get_current_language(state: State<'_, AppState>) -> Result<String, String> {
     let config_service = &state.config_service;
@@ -47,68 +87,27 @@ pub async fn i18n_get_current_language(state: State<'_, AppState>) -> Result<Str
 
 #[tauri::command]
 pub async fn i18n_set_language(
-    state: State<'_, AppState>,
-    _app: tauri::AppHandle,
+    _state: State<'_, AppState>,
+    app: tauri::AppHandle,
     request: SetLanguageRequest,
 ) -> Result<String, String> {
     let Some(locale_id) = LocaleId::from_str(&request.language) else {
         return Err(format!("Unsupported language: {}", request.language));
     };
-    let language = locale_id.as_str();
-
-    let config_service = &state.config_service;
-
-    match config_service.set_config("app.language", language).await {
-        Ok(_) => {
-            info!("Language set to: {}", language);
-
-            // Sync the in-memory I18nService so bot/remote-connect responses
-            // use the newly selected language without requiring an app restart.
-            match sync_global_i18n_service_locale(locale_id).await {
-                Ok(true) => {}
-                Ok(false) => {
-                    warn!(
-                        "Global I18nService not initialized after language change: language={}",
-                        language
-                    );
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to sync I18nService locale after language change: language={}, error={}",
-                        language, e
-                    );
-                }
-            }
-
-            #[cfg(target_os = "macos")]
-            {
-                let has_workspace = state.workspace_path.read().await.is_some();
-                let mode = if has_workspace {
-                    crate::macos_menubar::MenubarMode::Workspace
-                } else {
-                    crate::macos_menubar::MenubarMode::Startup
-                };
-                let edit_mode = *state.macos_edit_menu_mode.read().await;
-                let _ = crate::macos_menubar::set_macos_menubar_with_mode(
-                    &_app, language, mode, edit_mode,
-                );
-            }
-
-            // Rebuild the system tray menu in the new language.
-            {
-                let app_handle = _app.clone();
-                tauri::async_runtime::spawn(async move {
-                    crate::tray::rebuild_tray_menu_public(&app_handle).await;
-                });
-            }
-
-            Ok(format!("Language switched to: {}", language))
-        }
-        Err(e) => {
-            error!("Failed to set language: language={}, error={}", language, e);
-            Err(format!("Failed to set language: {}", e))
-        }
-    }
+    let language = locale_id.as_str().to_string();
+    crate::bitfun_control_host::configure_option_from_gui(
+        &app,
+        "setting.application.appearance",
+        "language",
+        Value::String(language.clone()),
+    )
+    .await
+    .map_err(|error| {
+        error!("Failed to set language: language={language}, error={error}");
+        format!("Failed to set language: {error}")
+    })?;
+    info!("Language set to: {language}");
+    Ok(format!("Language switched to: {language}"))
 }
 
 #[tauri::command]
@@ -148,45 +147,28 @@ pub async fn i18n_get_config(state: State<'_, AppState>) -> Result<Value, String
 }
 
 #[tauri::command]
-pub async fn i18n_set_config(state: State<'_, AppState>, config: Value) -> Result<String, String> {
-    let config_service = &state.config_service;
-
+pub async fn i18n_set_config(
+    _state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    config: Value,
+) -> Result<String, String> {
     if let Some(language) = config.get("currentLanguage").and_then(|v| v.as_str()) {
         let Some(locale_id) = LocaleId::from_str(language) else {
             return Err(format!("Unsupported language: {}", language));
         };
 
-        match config_service
-            .set_config("app.language", locale_id.as_str())
-            .await
-        {
-            Ok(_) => {
-                match sync_global_i18n_service_locale(locale_id).await {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        warn!(
-                            "Global I18nService not initialized after i18n config save: language={}",
-                            locale_id.as_str()
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to sync I18nService locale after i18n config save: language={}, error={}",
-                            locale_id.as_str(),
-                            e
-                        );
-                    }
-                }
-                Ok("i18n config saved".to_string())
-            }
-            Err(e) => {
-                error!(
-                    "Failed to save i18n config: language={}, error={}",
-                    language, e
-                );
-                Err(format!("Failed to save i18n config: {}", e))
-            }
-        }
+        crate::bitfun_control_host::configure_option_from_gui(
+            &app,
+            "setting.application.appearance",
+            "language",
+            Value::String(locale_id.as_str().to_string()),
+        )
+        .await
+        .map(|_| "i18n config saved".to_string())
+        .map_err(|error| {
+            error!("Failed to save i18n config: language={language}, error={error}");
+            format!("Failed to save i18n config: {error}")
+        })
     } else {
         Ok("i18n config saved (no language change)".to_string())
     }

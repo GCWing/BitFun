@@ -48,11 +48,16 @@ describe('SystemAPI', () => {
   });
 
   it('reads the persisted desktop preference', async () => {
-    invokeMock.mockResolvedValueOnce(false);
+    invokeMock.mockResolvedValueOnce({
+      catalogDigest: 'digest',
+      revision: 3,
+      currentOptionValues: { 'prevent-sleep': false },
+      controlAvailability: { status: 'available', adapter: 'desktop-native', readBack: true },
+    });
 
     await expect(systemAPI.getPreventSleepEnabled()).resolves.toBe(false);
-    expect(invokeMock).toHaveBeenCalledWith('get_prevent_sleep_enabled', {
-      request: {},
+    expect(invokeMock).toHaveBeenCalledWith('product_control_invoke', {
+      request: { action: 'get', capabilityId: 'setting.application.general' },
     });
   });
 
@@ -60,8 +65,13 @@ describe('SystemAPI', () => {
     invokeMock.mockResolvedValueOnce(undefined);
 
     await expect(systemAPI.setPreventSleepEnabled(true)).resolves.toBeUndefined();
-    expect(invokeMock).toHaveBeenCalledWith('set_prevent_sleep_enabled', {
-      request: { enabled: true },
+    expect(invokeMock).toHaveBeenCalledWith('product_control_invoke', {
+      request: {
+        action: 'configure',
+        capabilityId: 'setting.application.general',
+        optionId: 'prevent-sleep',
+        value: true,
+      },
     });
   });
 });

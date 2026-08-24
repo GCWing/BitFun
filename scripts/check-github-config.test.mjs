@@ -36,6 +36,13 @@ function createRepo({ workflow, nodeVersionFile }) {
   return root;
 }
 
+function enableProductControlContract(root) {
+  const manifestPath = path.join(root, 'package.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  manifest.scripts = { 'capabilities:check': 'node scripts/check.mjs' };
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
 function runCheck(root) {
   return spawnSync(process.execPath, [scriptPath], {
     cwd: repoRoot,
@@ -69,6 +76,32 @@ jobs:
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /node-version-file \.node-version resolves to 20/);
   assert.match(result.stderr, /Node\.js 22\.12\.0 or newer/);
+});
+
+test('rejects removal or weakening of the ProductControl and Playbook gates', (t) => {
+  const root = createRepo({
+    workflow: `
+name: CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate interactive capability contract
+        continue-on-error: true
+        run: pnpm run capabilities:check
+`,
+  });
+  enableProductControlContract(root);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = runCheck(root);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /interactive capability gate must run exactly/u);
+  assert.match(result.stderr, /interactive capability gate must remain blocking/u);
+  assert.match(result.stderr, /ProductControl owner\/delivery-profile gate is missing/u);
+  assert.match(result.stderr, /CLI ProductControl self-control coverage requires/u);
 });
 
 test('rejects explicit setup-node node-version below the project baseline when node-version-file is valid', (t) => {

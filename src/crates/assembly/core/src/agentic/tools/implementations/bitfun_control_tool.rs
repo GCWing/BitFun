@@ -2,7 +2,7 @@
 
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::tools::bitfun_control_config::{
-    configure_config_backed_option, read_config_backed_option,
+    global_shared_product_control_executor, SharedProductControlExecutor,
 };
 use crate::agentic::tools::bitfun_control_host::{
     bitfun_control_host_available, invoke_bitfun_control, BitFunControlHostRequest,
@@ -11,16 +11,16 @@ use crate::agentic::tools::bitfun_control_host::{
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::service::config::{get_global_config_service, ConfigService};
+#[cfg(test)]
+use crate::service::config::ConfigService;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_product_domains::product_control::{
     capability as product_capability, discover as discover_product_capabilities,
-    inspect_contract as inspect_product_control_contract, validate_open_target,
-    validate_operation_argument_scopes, validate_operation_arguments, validate_option_value,
-    ProductControlRisk,
+    validate_open_target, validate_operation_argument_scopes, validate_operation_arguments,
+    validate_option_value, ProductControlDeliveryProfile, ProductControlRisk, ProductControlSource,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 const ACTIONS: &[&str] = &["list", "search", "get", "open", "execute", "configure"];
@@ -32,30 +32,28 @@ const INPUT_ID_ALIASES: &[(&str, &str)] = &[
 ];
 
 pub struct BitFunControlTool {
-    config_service: Option<Arc<ConfigService>>,
+    shared_executor: Option<Arc<SharedProductControlExecutor>>,
 }
 
 impl BitFunControlTool {
     pub fn new() -> Self {
         Self {
-            config_service: None,
+            shared_executor: None,
         }
     }
 
     #[cfg(test)]
     fn with_config_service(config_service: Arc<ConfigService>) -> Self {
         Self {
-            config_service: Some(config_service),
+            shared_executor: Some(Arc::new(SharedProductControlExecutor::new(config_service))),
         }
     }
 
-    async fn config_service(&self) -> Result<Arc<ConfigService>, String> {
-        if let Some(config_service) = &self.config_service {
-            return Ok(config_service.clone());
+    async fn shared_executor(&self) -> Result<Arc<SharedProductControlExecutor>, String> {
+        if let Some(executor) = &self.shared_executor {
+            return Ok(executor.clone());
         }
-        get_global_config_service()
-            .await
-            .map_err(|error| error.to_string())
+        global_shared_product_control_executor().await
     }
 
     fn assistant_payload(result: &Value) -> String {
@@ -65,16 +63,18 @@ impl BitFunControlTool {
     }
 
     async fn inspect_shared_capability(&self, capability_id: &str) -> BitFunResult<Value> {
-        let capability = product_capability(capability_id).map_err(BitFunError::tool)?;
-        let mut result =
-            inspect_product_control_contract(capability_id).map_err(BitFunError::tool)?;
-        let object = result.as_object_mut().ok_or_else(|| {
-            BitFunError::tool("Product-control inspection was not an object".to_string())
-        })?;
-
-        let config_service = match self.config_service().await {
-            Ok(config_service) => config_service,
+        match self.shared_executor().await {
+            Ok(executor) => executor
+                .inspect(capability_id, ProductControlDeliveryProfile::Cli)
+                .await
+                .map_err(BitFunError::tool),
             Err(error) => {
+                let mut result =
+                    bitfun_product_domains::product_control::inspect_contract(capability_id)
+                        .map_err(BitFunError::tool)?;
+                let object = result.as_object_mut().ok_or_else(|| {
+                    BitFunError::tool("Product-control inspection was not an object".to_string())
+                })?;
                 object.insert(
                     "controlAvailability".to_string(),
                     json!({
@@ -84,135 +84,21 @@ impl BitFunControlTool {
                         "reason": format!("Shared BitFun configuration is unavailable: {error}"),
                     }),
                 );
-                return Ok(result);
-            }
-        };
-
-        let mut current_values = Map::new();
-        let mut shared_option_ids = Vec::new();
-        let mut host_option_ids = Vec::new();
-        for option in &capability.options {
-            match read_config_backed_option(&config_service, option).await {
-                Ok(Some(value)) => {
-                    shared_option_ids.push(option.id.clone());
-                    current_values.insert(option.id.clone(), value);
-                }
-                Ok(None) => {
-                    host_option_ids.push(option.id.clone());
-                    current_values.insert(
-                        option.id.clone(),
-                        json!({
-                            "availability": "unavailable",
-                            "reason": "This option requires a product-host provider on the active surface",
-                        }),
-                    );
-                }
-                Err(error) => {
-                    shared_option_ids.push(option.id.clone());
-                    current_values.insert(
-                        option.id.clone(),
-                        json!({ "availability": "degraded", "reason": error }),
-                    );
-                }
+                Ok(result)
             }
         }
-        let operation_ids: Vec<&str> = capability
-            .operations
-            .iter()
-            .map(|operation| operation.id.as_str())
-            .collect();
-        let operation_availability: Map<String, Value> = operation_ids
-            .iter()
-            .map(|operation_id| {
-                (
-                    (*operation_id).to_string(),
-                    json!({
-                        "status": "unavailable",
-                        "reason": "This operation requires a product-host adapter on the active surface",
-                    }),
-                )
-            })
-            .collect();
-
-        object.insert(
-            "currentOptionValues".to_string(),
-            Value::Object(current_values),
-        );
-        object.insert(
-            "operationAvailability".to_string(),
-            Value::Object(operation_availability),
-        );
-        object.insert(
-            "controlAvailability".to_string(),
-            json!({
-                "status": if shared_option_ids.is_empty() { "unavailable" } else { "available" },
-                "adapter": "shared-config",
-                "contractAvailable": true,
-                "readBack": !shared_option_ids.is_empty(),
-                "actions": {
-                    "get": { "status": "available" },
-                    "configure": {
-                        "status": if shared_option_ids.is_empty() { "unavailable" } else { "available" },
-                        "optionIds": shared_option_ids,
-                        "requiresHostOptionIds": host_option_ids,
-                    },
-                    "open": {
-                        "status": "unavailable",
-                        "reason": "This product surface has no presentation adapter",
-                    },
-                    "execute": {
-                        "status": "unavailable",
-                        "operationIds": operation_ids,
-                        "reason": "This product surface has no product-operation adapter",
-                    },
-                },
-            }),
-        );
-        Ok(result)
     }
 
     async fn configure_shared_option(
         &self,
         request: &BitFunControlHostRequest,
     ) -> BitFunResult<Value> {
-        let capability_id = request
-            .capability_id
-            .as_deref()
-            .ok_or_else(|| BitFunError::tool("capability_id is required".to_string()))?;
-        let option_id = request
-            .option_id
-            .as_deref()
-            .ok_or_else(|| BitFunError::tool("option_id is required".to_string()))?;
-        let value = request
-            .value
-            .as_ref()
-            .ok_or_else(|| BitFunError::tool("value is required".to_string()))?;
-        let capability = product_capability(capability_id).map_err(BitFunError::tool)?;
-        let option = capability
-            .options
-            .iter()
-            .find(|option| option.id == option_id)
-            .ok_or_else(|| {
-                BitFunError::tool(format!("Unknown option for {capability_id}: {option_id}"))
-            })?;
-        let config_service = self.config_service().await.map_err(BitFunError::tool)?;
-        let applied = configure_config_backed_option(&config_service, option, value)
+        self.shared_executor()
             .await
             .map_err(BitFunError::tool)?
-            .ok_or_else(|| {
-                BitFunError::tool(format!(
-                    "Option {capability_id}:{option_id} requires a product-host provider on the active surface"
-                ))
-            })?;
-        Ok(json!({
-            "capabilityId": capability_id,
-            "optionId": option_id,
-            "configured": true,
-            "effectiveValue": applied.effective_value,
-            "changedPath": applied.changed_path,
-            "adapter": "shared-config",
-            "readBack": true,
-        }))
+            .configure(request)
+            .await
+            .map_err(BitFunError::tool)
     }
 
     fn action(input: &Value) -> Option<&str> {
@@ -355,6 +241,43 @@ impl BitFunControlTool {
             .is_some_and(|operation| operation.risk == ProductControlRisk::Read)
     }
 
+    fn headless_unsupported(request: &BitFunControlHostRequest) -> String {
+        let definition_id = match request.action {
+            ProductControlAction::Execute => request.operation_id.as_ref().map(|operation_id| {
+                format!(
+                    "{}:operation:{operation_id}",
+                    request.capability_id.as_deref().unwrap_or_default()
+                )
+            }),
+            ProductControlAction::Open => request.item_id.as_ref().map(|item_id| {
+                format!(
+                    "{}:open:{item_id}",
+                    request.capability_id.as_deref().unwrap_or_default()
+                )
+            }),
+            _ => None,
+        };
+        let reason = definition_id
+            .as_deref()
+            .and_then(|definition_id| {
+                bitfun_product_domains::product_control::ProductControlRegistry::global()
+                    .definition(definition_id)
+                    .ok()
+            })
+            .and_then(|definition| {
+                definition
+                    .availability
+                    .get(&ProductControlDeliveryProfile::Cli)
+            })
+            .and_then(|availability| availability.reason.as_deref())
+            .unwrap_or("This action requires a product-host or presentation adapter");
+        format!(
+            "unsupported[profile=headless]: {} {} is unavailable on this BitFun surface: {reason}",
+            request.action.as_str(),
+            definition_id.as_deref().unwrap_or("product-control action")
+        )
+    }
+
     fn validate_operation_scope(input: &Value, context: &ToolUseContext) -> Result<(), String> {
         if Self::action(input) != Some("execute") {
             return Ok(());
@@ -385,7 +308,7 @@ impl Tool for BitFunControlTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            "Control BitFun features and settings through its internal API. Use a two-step flow: (1) call `list` or `search`, then copy `nextToolCall` to `get` the capability; (2) follow `control.kind`: `direct` uses `execute`/`configure`, `delegate` calls the named tool, and `open` opens the UI. For configure, map valueSchema.type to exactly one value_boolean/value_string/value_integer/value_number/value_object/value_array field, or value_null=true. The catalog loads only on demand."
+            "Control BitFun itself through its internal ProductControl API. Use the two-step flow: first `list` or `search`, then `get` the matching capability and follow its returned schema and availability to `configure`, `execute`, or `open`. The full catalog loads only on demand; never guess IDs or values."
                 .to_string(),
         )
     }
@@ -724,6 +647,7 @@ impl Tool for BitFunControlTool {
                 .get("limit")
                 .and_then(Value::as_u64)
                 .and_then(|value| usize::try_from(value).ok()),
+            source: ProductControlSource::Agent,
         };
 
         let result = match typed_action {
@@ -774,10 +698,7 @@ impl Tool for BitFunControlTool {
             }
             ProductControlAction::Open | ProductControlAction::Execute => {
                 if !bitfun_control_host_available() {
-                    return Err(BitFunError::tool(
-                        "This BitFun product surface can discover the capability but does not provide its control adapter"
-                            .to_string(),
-                    ));
+                    return Err(BitFunError::tool(Self::headless_unsupported(&request)));
                 }
                 invoke_bitfun_control(request)
                     .await
@@ -853,7 +774,7 @@ mod tests {
         assert!(description.contains("two-step"));
         assert!(description.contains("list"));
         assert!(description.contains("search"));
-        assert!(description.contains("value_boolean"));
+        assert!(description.contains("get"));
         assert!(!description.contains("get_configs"));
         assert!(description.len() < 600);
 
@@ -1094,6 +1015,82 @@ mod tests {
         assert!(assistant.contains("currentOptionValues"));
     }
 
+    #[tokio::test]
+    async fn headless_mutations_reject_invalid_values_and_serialize_concurrent_updates() {
+        assert!(!bitfun_control_host_available());
+        let (tool, _dir) = tool_with_temp_config("bitfun-control-tool-transaction").await;
+
+        let invalid = tool
+            .call_impl(
+                &json!({
+                    "action": "configure",
+                    "capability_id": "setting.tools.execution",
+                    "option_id": "subagent-max-concurrency",
+                    "value_integer": 1000
+                }),
+                &context(),
+            )
+            .await
+            .unwrap_err();
+        assert!(invalid.to_string().contains("value must be at most 32"));
+
+        let first_context = context();
+        let second_context = context();
+        let first_request = json!({
+            "action": "configure",
+            "capability_id": "setting.tools.execution",
+            "option_id": "subagent-max-concurrency",
+            "value_integer": 7
+        });
+        let second_request = json!({
+            "action": "configure",
+            "capability_id": "setting.tools.execution",
+            "option_id": "subagent-max-concurrency",
+            "value_integer": 9
+        });
+        let (first, second) = tokio::join!(
+            tool.call_impl(&first_request, &first_context),
+            tool.call_impl(&second_request, &second_context)
+        );
+        let mut outcomes = [first.unwrap(), second.unwrap()]
+            .into_iter()
+            .map(|results| match &results[0] {
+                ToolResult::Result { data, .. } => (
+                    data["revision"].as_u64().unwrap(),
+                    data["effectiveValue"].as_u64().unwrap(),
+                ),
+                _ => panic!("expected product-control result"),
+            })
+            .collect::<Vec<_>>();
+        outcomes.sort_by_key(|(revision, _)| *revision);
+        assert_eq!(
+            outcomes
+                .iter()
+                .map(|(revision, _)| *revision)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+
+        let inspected = tool
+            .call_impl(
+                &json!({
+                    "action": "get",
+                    "capability_id": "setting.tools.execution"
+                }),
+                &context(),
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &inspected[0] else {
+            panic!("expected a structured product-control result");
+        };
+        assert_eq!(
+            data["currentOptionValues"]["subagent-max-concurrency"],
+            outcomes[1].1
+        );
+        assert_eq!(data["revision"], 2);
+    }
+
     #[test]
     fn discovery_is_permission_free_but_execution_is_scoped() {
         let tool = BitFunControlTool::new();
@@ -1176,9 +1173,7 @@ mod tests {
             )
             .await
             .unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("does not provide its control adapter"));
+        assert!(error.to_string().contains("unsupported[profile=headless]"));
     }
 
     #[tokio::test]

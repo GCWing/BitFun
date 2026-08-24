@@ -22,7 +22,8 @@ Headless CLI 与各产品入口的统一心智见
 状态共享、隔离、容量与 Plugin Host 关系见
 [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)；Desktop GUI、Web UI 和交互式 TUI 的产品后端边界、
 Embedded direct-runtime、Shared App Server 及迁移约束见
-[`app-server-architecture.md`](app-server-architecture.md)。Embedded interactive TUI direct-runtime 已交付；Shared App Server
+[`app-server-architecture.md`](app-server-architecture.md)；GUI、Agent、搜索和说明书如何共享同一产品功能/设置 owner 见
+[`product-control-plane.md`](product-control-plane.md)。Embedded interactive TUI direct-runtime 已交付；Shared App Server
 仍是待评审提案。当前调用路径和稳定 owner 边界以本文及已接线代码为准。其他已批准的详细设计与本文件冲突时，以本文件为准。
 
 Cargo feature、第三方依赖 owner、测试目标和本地/CI 验证分工见

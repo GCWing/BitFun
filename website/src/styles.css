@@ -185,7 +185,7 @@ code, kbd, pre { font-family: var(--mono); }
 .hero h1 > span, .hero h1 em { display: block; }
 .hero h1 em { font-family: Georgia, 'Songti SC', 'STSong', serif; font-weight: 400; line-height: 1.03; letter-spacing: -0.045em; color: var(--accent); }
 .hero-copy { max-width: 650px; margin: 34px 0 38px; font-size: 18px; line-height: 1.7; color: var(--muted); }
-.hero-actions { display: grid; grid-template-columns: minmax(420px, 1fr) auto; align-items: end; gap: clamp(24px, 3vw, 44px); }
+.hero-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: clamp(24px, 3vw, 44px); }
 .search-box {
   width: 100%; min-width: 0; height: 68px; display: flex; align-items: center; gap: 14px;
   padding: 0 18px 0 22px; border: 1px solid var(--ink); border-radius: 16px;
@@ -301,13 +301,18 @@ code, kbd, pre { font-family: var(--mono); }
 .loading-shell, .fatal-error { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 16px; }
 .loading-mark { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 14px; background: var(--ink); color: var(--paper); font-size: 26px; font-weight: 700; }
 
+/* The persistent desktop contents rail leaves less room than the viewport
+   width suggests. Stack before the stats' intrinsic width can overflow. */
+@media (max-width: 1360px) {
+  .hero-actions { grid-template-columns: minmax(0, 1fr); }
+  .search-box { max-width: 800px; }
+  .hero-stat { justify-self: start; }
+}
+
 @media (max-width: 1180px) {
   .docs-shell { grid-template-columns: 230px minmax(0, 1fr); gap: 28px; }
   .docs-content { padding-left: 28px; }
   .detail-layout { grid-template-columns: minmax(0, 1fr) 270px; gap: 46px; }
-  .hero-actions { grid-template-columns: 1fr; }
-  .search-box { max-width: 800px; }
-  .hero-stat { justify-self: start; }
 }
 
 @media (max-width: 980px) {
