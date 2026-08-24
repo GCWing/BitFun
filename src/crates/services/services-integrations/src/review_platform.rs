@@ -1844,62 +1844,63 @@ async fn gitcode_review_target_parts(
     );
     let initial_detail =
         send_bounded_json(gitcode_request(client.clone(), &base, ctx.token.as_deref())).await?;
-    let token = ctx.token.clone();
     let files_url = format!("{}/files", base);
-    let files = fetch_bounded_paginated_array(
-        |page| {
-            let page = page.to_string();
-            gitcode_request(client.clone(), &files_url, token.as_deref())
-                .query(&[("per_page", "100"), ("page", &page)])
-        },
-        github_next_page,
-        MAX_REVIEW_TARGET_LIST_ITEMS,
-    )
+    let files_response = send_bounded_gitcode_files_response(gitcode_request(
+        client.clone(),
+        &files_url,
+        ctx.token.as_deref(),
+    ))
     .await?;
+    let files = files_response
+        .value
+        .as_array()
+        .ok_or_else(|| {
+            ReviewPlatformError::Parse(
+                "GitCode pull request files response was not an array".to_string(),
+            )
+        })?
+        .iter()
+        .take(MAX_REVIEW_TARGET_LIST_ITEMS)
+        .map(gitcode_file_from_value)
+        .collect::<Vec<_>>();
     let confirmed_detail =
         send_bounded_json(gitcode_request(client, &base, ctx.token.as_deref())).await?;
     let initial_pull_request = gitcode_pull_request_from_value(&initial_detail);
-    let confirmed_pull_request = gitcode_pull_request_from_value(&confirmed_detail);
+    let mut confirmed_pull_request = gitcode_pull_request_from_value(&confirmed_detail);
     ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
-    Ok((
-        confirmed_pull_request,
-        array_items(&files)
-            .iter()
-            .map(gitcode_file_from_value)
-            .collect(),
-    ))
+    apply_gitcode_review_target_file_stats(&mut confirmed_pull_request, &files);
+    Ok((confirmed_pull_request, files))
 }
 
 async fn gitcode_review_file_parts(
     ctx: &ProviderContext,
     pull_request_id: &str,
     file_path: &str,
-    file_page_hint: Option<u32>,
+    _file_page_hint: Option<u32>,
 ) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
     let client = http_client()?;
     let base = format!(
         "{}/repos/{}/{}/pulls/{}",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
     );
-    let token = ctx.token.clone();
     let files_url = format!("{}/files", base);
-    let file = fetch_bounded_paginated_file(
-        |page| {
-            let page = page.to_string();
-            gitcode_request(client.clone(), &files_url, token.as_deref())
-                .query(&[("per_page", "100"), ("page", &page)])
-        },
-        github_next_page,
-        file_page_hint.unwrap_or(1),
-        if file_page_hint.is_some() {
-            100
-        } else {
-            MAX_REVIEW_TARGET_LIST_ITEMS
-        },
-        file_path,
-        gitcode_file_from_value,
-    )
-    .await?;
+    let files = send_bounded_gitcode_files_response(gitcode_request(
+        client.clone(),
+        &files_url,
+        ctx.token.as_deref(),
+    ))
+    .await?
+    .value;
+    let file = files
+        .as_array()
+        .ok_or_else(|| {
+            ReviewPlatformError::Parse(
+                "GitCode pull request files response was not an array".to_string(),
+            )
+        })?
+        .iter()
+        .map(gitcode_file_from_value)
+        .find(|file| file.path == file_path || file.old_path.as_deref() == Some(file_path));
     let detail = send_bounded_json(gitcode_request(client, &base, ctx.token.as_deref())).await?;
     Ok((
         gitcode_pull_request_from_value(&detail),
@@ -2851,7 +2852,7 @@ async fn gitcode_pull_request_detail_page(
 
     match section {
         ReviewPlatformDetailSection::Overview => {
-            if let Ok(response) = send_json_response(gitcode_request(
+            if let Ok(response) = send_bounded_gitcode_files_response(gitcode_request(
                 client.clone(),
                 &format!("{}/files", base),
                 ctx.token.as_deref(),
@@ -2866,22 +2867,21 @@ async fn gitcode_pull_request_detail_page(
             ci = slice_page(ci, pagination);
         }
         ReviewPlatformDetailSection::Files => {
-            if let Ok(response) = fetch_array_page(
-                gitcode_request(
-                    client.clone(),
-                    &format!("{}/files", base),
-                    ctx.token.as_deref(),
-                ),
-                pagination,
-            )
+            if let Ok(response) = send_bounded_gitcode_files_response(gitcode_request(
+                client.clone(),
+                &format!("{}/files", base),
+                ctx.token.as_deref(),
+            ))
             .await
             {
-                apply_gitcode_pull_request_change_stats(&mut pull_request, &response);
-                section_pagination = pagination_from_response(&response, pagination);
-                files = array_items(&response.value)
-                    .iter()
-                    .map(gitcode_file_from_value)
-                    .collect();
+                if let Some(values) = response.value.as_array() {
+                    apply_gitcode_pull_request_change_stats(&mut pull_request, &response);
+                    section_pagination = gitcode_files_pagination(pagination, values.len());
+                    files = slice_page(
+                        values.iter().map(gitcode_file_from_value).collect(),
+                        pagination,
+                    );
+                }
             }
         }
         ReviewPlatformDetailSection::Commits => {
@@ -3003,7 +3003,7 @@ impl ReviewProvider for GitcodeProvider {
         let detail =
             send_json(gitcode_request(client.clone(), &base, ctx.token.as_deref())).await?;
         let files_url = format!("{}/files", base);
-        let files_response = send_json_response(gitcode_request(
+        let files_response = send_bounded_gitcode_files_response(gitcode_request(
             client.clone(),
             &files_url,
             ctx.token.as_deref(),
@@ -3242,6 +3242,15 @@ fn review_http_error(error: ReviewHttpError) -> ReviewPlatformError {
     }
 }
 
+fn gitcode_files_http_error(error: ReviewHttpError) -> ReviewPlatformError {
+    match error {
+        ReviewHttpError::ResponseTooLarge { limit_bytes } => ReviewPlatformError::Api(format!(
+            "GitCode pull request files response exceeded the {limit_bytes}-byte limit"
+        )),
+        error => review_http_error(error),
+    }
+}
+
 async fn send_json(request: ReviewHttpRequest) -> Result<Value, ReviewPlatformError> {
     send_review_json(request).await.map_err(review_http_error)
 }
@@ -3267,6 +3276,14 @@ async fn send_bounded_json_response(
     send_review_json_response_bounded(request, MAX_REVIEW_TARGET_RESPONSE_BYTES)
         .await
         .map_err(review_http_error)
+}
+
+async fn send_bounded_gitcode_files_response(
+    request: ReviewHttpRequest,
+) -> Result<JsonResponse, ReviewPlatformError> {
+    send_review_json_response_bounded(request, MAX_REVIEW_TARGET_RESPONSE_BYTES)
+        .await
+        .map_err(gitcode_files_http_error)
 }
 
 async fn send_bounded_text(
@@ -3432,6 +3449,17 @@ fn pagination_from_total(
     }
 }
 
+fn gitcode_files_pagination(
+    pagination: PullRequestPagination,
+    available_files: usize,
+) -> ReviewPlatformPagination {
+    let mut result = pagination_from_total(pagination, available_files);
+    if available_files >= GITCODE_PULL_REQUEST_FILES_RESPONSE_LIMIT {
+        result.total = None;
+    }
+    result
+}
+
 fn slice_page<T>(items: Vec<T>, pagination: PullRequestPagination) -> Vec<T> {
     let start = pagination
         .page
@@ -3536,7 +3564,8 @@ async fn enrich_gitcode_pull_request_change_stats(
         let token = ctx.token.clone();
         async move {
             if let Ok(response) =
-                send_json_response(gitcode_request(client, &url, token.as_deref())).await
+                send_bounded_gitcode_files_response(gitcode_request(client, &url, token.as_deref()))
+                    .await
             {
                 apply_gitcode_pull_request_change_stats(&mut pull_request, &response);
             }
@@ -6646,15 +6675,35 @@ fn gitcode_file_from_value(value: &Value) -> ReviewPlatformFile {
             value_string(value, "filename"),
             value_string(value, "new_path"),
         ]),
-        old_path: value
-            .get("previous_filename")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        status: file_status(&value_string(value, "status")),
+        old_path: optional_string(value, "old_path")
+            .or_else(|| optional_string(value, "previous_filename")),
+        status: gitcode_file_status(value),
         additions: value_i64(value, "additions") as i32,
         deletions: value_i64(value, "deletions") as i32,
-        patch: optional_string(value, "patch").or_else(|| optional_string(value, "diff")),
+        patch: gitcode_patch_from_value(value),
     }
+}
+
+fn gitcode_file_status(value: &Value) -> ReviewFileStatus {
+    if value_bool(value, "new_file") {
+        ReviewFileStatus::Added
+    } else if value_bool(value, "deleted_file") {
+        ReviewFileStatus::Deleted
+    } else if value_bool(value, "renamed_file") {
+        ReviewFileStatus::Renamed
+    } else {
+        file_status(&value_string(value, "status"))
+    }
+}
+
+fn gitcode_patch_from_value(value: &Value) -> Option<String> {
+    optional_string(value, "patch")
+        .or_else(|| {
+            value
+                .get("patch")
+                .and_then(|patch| optional_string(patch, "diff"))
+        })
+        .or_else(|| optional_string(value, "diff"))
 }
 
 fn gitlab_files(value: &Value) -> Vec<ReviewPlatformFile> {
@@ -7117,6 +7166,15 @@ fn apply_files_stats(pull_request: &mut ReviewPlatformPullRequest, files: &[Revi
     });
     pull_request.additions = additions;
     pull_request.deletions = deletions;
+}
+
+fn apply_gitcode_review_target_file_stats(
+    pull_request: &mut ReviewPlatformPullRequest,
+    files: &[ReviewPlatformFile],
+) {
+    apply_files_stats(pull_request, files);
+    pull_request.changed_files = i32::try_from(files.len()).unwrap_or(i32::MAX);
+    pull_request.changed_file_count_known = files.len() < MAX_REVIEW_TARGET_LIST_ITEMS;
 }
 
 async fn fetch_bounded_paginated_array<F>(
@@ -8243,6 +8301,83 @@ mod tests {
         assert!(!pull_request.changed_file_count_known);
         assert_eq!(pull_request.additions, 133);
         assert_eq!(pull_request.deletions, 22);
+    }
+
+    #[test]
+    fn gitcode_file_maps_nested_patch_and_change_flags() {
+        let file = gitcode_file_from_value(&json!({
+            "filename": "src/new.rs",
+            "old_path": "src/old.rs",
+            "status": null,
+            "new_file": false,
+            "renamed_file": true,
+            "deleted_file": false,
+            "additions": 1,
+            "deletions": 1,
+            "patch": { "diff": "@@ -1 +1 @@\n-old\n+new" }
+        }));
+
+        assert_eq!(file.path, "src/new.rs");
+        assert_eq!(file.old_path.as_deref(), Some("src/old.rs"));
+        assert_eq!(file.status, ReviewFileStatus::Renamed);
+        assert_eq!(file.patch.as_deref(), Some("@@ -1 +1 @@\n-old\n+new"));
+        assert!(file_has_complete_patch(&file));
+    }
+
+    #[test]
+    fn gitcode_capped_files_pagination_does_not_claim_exact_total() {
+        let pagination = gitcode_files_pagination(
+            PullRequestPagination {
+                page: 60,
+                per_page: 50,
+            },
+            GITCODE_PULL_REQUEST_FILES_RESPONSE_LIMIT,
+        );
+
+        assert_eq!(pagination.total, None);
+        assert!(!pagination.has_next);
+    }
+
+    #[test]
+    fn gitcode_review_target_stats_use_the_same_thousand_file_budget() {
+        let mut pull_request = gitcode_pull_request_from_value(&json!({
+            "number": 5,
+            "title": "large change",
+            "state": "open",
+            "added_lines": 9_999,
+            "removed_lines": 8_888,
+            "changes_count": "2500"
+        }));
+        let files = vec![
+            ReviewPlatformFile {
+                path: "src/file.rs".to_string(),
+                old_path: None,
+                status: ReviewFileStatus::Modified,
+                additions: 1,
+                deletions: 2,
+                patch: Some("@@ -1 +1 @@\n-old\n+new".to_string()),
+            };
+            MAX_REVIEW_TARGET_LIST_ITEMS
+        ];
+
+        apply_gitcode_review_target_file_stats(&mut pull_request, &files);
+
+        assert_eq!(pull_request.changed_files, 1_000);
+        assert!(!pull_request.changed_file_count_known);
+        assert_eq!(pull_request.additions, 1_000);
+        assert_eq!(pull_request.deletions, 2_000);
+    }
+
+    #[test]
+    fn gitcode_files_response_too_large_reports_explicit_reason() {
+        let error = gitcode_files_http_error(ReviewHttpError::ResponseTooLarge {
+            limit_bytes: MAX_REVIEW_TARGET_RESPONSE_BYTES,
+        });
+
+        assert_eq!(
+            error.to_string(),
+            "Provider API failed: GitCode pull request files response exceeded the 4194304-byte limit"
+        );
     }
 
     #[test]
