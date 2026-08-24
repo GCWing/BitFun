@@ -469,6 +469,9 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   const patchIndex = steps.findIndex(
     (step) => step.name === 'Patch nightly version',
   );
+  const tauriAlignmentIndex = steps.findIndex(
+    (step) => step.name === 'Verify Installer Tauri package alignment',
+  );
   const metadataIndex = steps.findIndex(
     (step) => step.name === 'Verify projected Cargo metadata',
   );
@@ -483,6 +486,7 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   assert.equal(workflow.permissions.contents, 'read');
 
   assert.notEqual(committedMetadataIndex, -1);
+  assert.notEqual(tauriAlignmentIndex, -1);
   assert.notEqual(generationIndex, -1);
   assert.notEqual(typeCheckIndex, -1);
   assert.equal(
@@ -495,6 +499,7 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   );
   assert.ok(
     committedMetadataIndex < patchIndex &&
+      tauriAlignmentIndex < patchIndex &&
       typeCheckIndex < patchIndex &&
       patchIndex < metadataIndex &&
       metadataIndex < buildIndex,
@@ -505,6 +510,11 @@ test('nightly validates generated inputs and projected lockfiles before packagin
     'cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml\n';
   assert.equal(steps[committedMetadataIndex].run, expectedMetadata);
   assert.equal(steps[metadataIndex].run, expectedMetadata);
+  assert.equal(steps[tauriAlignmentIndex].if, "runner.os == 'Windows'");
+  assert.match(
+    steps[tauriAlignmentIndex].run,
+    /Found version mismatched Tauri packages/,
+  );
   assert.equal(
     steps.some((step) => step.run?.includes('cargo generate-lockfile')),
     false,
