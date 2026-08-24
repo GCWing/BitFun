@@ -3,7 +3,10 @@ import type { RemoteConnectStatus } from '@/infrastructure/api/service-api/Remot
 import {
   classifyAccountRelayUrl,
   connectionServiceFromRelayUrl,
+  formatDeviceDisplayName,
   projectDeviceInterconnectionOverview,
+  selectActivityFacts,
+  selectAttachedGroups,
   type DeviceInterconnectionOverviewInput,
 } from './deviceInterconnectionOverview';
 
@@ -149,6 +152,178 @@ describe('projectDeviceInterconnectionOverview', () => {
       'background-execution',
     ]);
     expect(overview.primaryDevice.backgroundTaskCount).toBe(1);
+  });
+});
+
+describe('selectActivityFacts', () => {
+  const connectedPhone = {
+    ...disconnectedStatus,
+    is_connected: true,
+    pairing_state: 'connected' as const,
+    active_method: 'BitfunServer',
+    peer_device_name: 'My iPhone',
+    peer_user_id: 'mobile-user',
+  };
+
+  it('reports nothing beyond the local host when no device is attached', () => {
+    expect(selectActivityFacts(projectDeviceInterconnectionOverview(baseInput())))
+      .toEqual([{ kind: 'local' }]);
+  });
+
+  it('names the single remote party that holds this host', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      remoteStatus: connectedPhone,
+    }));
+
+    expect(selectActivityFacts(overview)).toEqual([
+      { kind: 'controlled-by', device: 'My iPhone' },
+    ]);
+  });
+
+  it('counts controllers instead of naming only the first when several hold this host', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      remoteStatus: { ...connectedPhone, bot_connected: 'Weixin (group)' },
+    }));
+
+    expect(selectActivityFacts(overview)).toEqual([{ kind: 'controllers', count: 2 }]);
+  });
+
+  it('states that this device drives the work when peer mode is active', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      peer: { deviceId: 'linux-1', deviceName: 'Linux Workstation' },
+      remoteStatus: connectedPhone,
+    }));
+
+    expect(selectActivityFacts(overview)).toEqual([{ kind: 'controlled-from-here' }]);
+  });
+
+  it('reports distributed execution when devices only run background work', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      dispatchJobs: [
+        {
+          id: 'job-device',
+          state: 'running',
+          target: { kind: 'device', id: 'linux-2', name: 'Build Server' },
+        },
+      ],
+    }));
+
+    expect(selectActivityFacts(overview)).toEqual([
+      { kind: 'distributed-execution', count: 1 },
+    ]);
+  });
+
+  it('keeps control and distributed execution as separate facts when both hold', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      remoteStatus: connectedPhone,
+      dispatchJobs: [
+        { id: 'a', state: 'running', target: { kind: 'device', id: 'host-1', name: 'Host 1' } },
+        { id: 'b', state: 'queued', target: { kind: 'device', id: 'host-2', name: 'Host 2' } },
+      ],
+    }));
+
+    expect(selectActivityFacts(overview)).toEqual([
+      { kind: 'controlled-by', device: 'My iPhone' },
+      { kind: 'distributed-execution', count: 2 },
+    ]);
+  });
+});
+
+describe('selectAttachedGroups', () => {
+  it('shows nothing while no other device is attached', () => {
+    expect(selectAttachedGroups(projectDeviceInterconnectionOverview(baseInput())))
+      .toEqual([]);
+  });
+
+  it('keeps one group per device kind so the footer width never grows with device count', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      remoteStatus: {
+        ...disconnectedStatus,
+        is_connected: true,
+        pairing_state: 'connected',
+        active_method: 'BitfunServer',
+        peer_device_name: 'My iPhone',
+        peer_user_id: 'mobile-user',
+        bot_connected: 'Weixin (family group)',
+      },
+      dispatchJobs: [
+        { id: 'a', state: 'running', target: { kind: 'device', id: 'host-1', name: 'Host 1' } },
+        { id: 'b', state: 'queued', target: { kind: 'device', id: 'host-2', name: 'Host 2' } },
+        { id: 'c', state: 'running', target: { kind: 'device', id: 'host-3', name: 'Host 3' } },
+      ],
+    }));
+
+    expect(selectAttachedGroups(overview)).toEqual([
+      { kind: 'mobile', count: 1 },
+      { kind: 'message-app', count: 1 },
+      { kind: 'execution-host', count: 3 },
+    ]);
+  });
+
+  it('counts the controlling desktop when this device drives a peer', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      peer: { deviceId: 'linux-1', deviceName: 'Linux Workstation' },
+    }));
+
+    expect(selectAttachedGroups(overview)).toEqual([{ kind: 'desktop', count: 1 }]);
+  });
+
+  it('leaves the current device out of the attached groups', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      peer: { deviceId: 'linux-1', deviceName: 'Linux Workstation' },
+      dispatchJobs: [
+        {
+          id: 'job-1',
+          state: 'running',
+          target: { kind: 'device', id: 'linux-1', name: 'Linux Workstation' },
+        },
+      ],
+    }));
+
+    expect(overview.primaryDevice.activities).toContain('background-execution');
+    expect(selectAttachedGroups(overview)).toEqual([{ kind: 'desktop', count: 1 }]);
+  });
+});
+
+describe('device display names', () => {
+  it('drops the discovery zone suffix that no person uses to name a machine', () => {
+    expect(formatDeviceDisplayName('yuyuqingqingdeMacBook-Pro.local')).toBe('yuyuqingqingdeMacBook-Pro');
+    expect(formatDeviceDisplayName('build-box.LAN')).toBe('build-box');
+    expect(formatDeviceDisplayName('nas.internal.')).toBe('nas');
+  });
+
+  it('keeps names that only look like a zone suffix', () => {
+    expect(formatDeviceDisplayName('.local')).toBe('.local');
+    expect(formatDeviceDisplayName('  My iPhone  ')).toBe('My iPhone');
+    expect(formatDeviceDisplayName(null)).toBe('');
+  });
+
+  it('normalizes every device name the overview projects', () => {
+    const overview = projectDeviceInterconnectionOverview(baseInput({
+      localDeviceName: 'Studio-Mac.local',
+      remoteStatus: {
+        ...disconnectedStatus,
+        is_connected: true,
+        pairing_state: 'connected',
+        active_method: 'BitfunServer',
+        peer_device_name: 'Pixel.lan',
+        peer_user_id: 'mobile-user',
+      },
+      dispatchJobs: [
+        {
+          id: 'job-device',
+          state: 'running',
+          target: { kind: 'device', id: 'linux-2', name: 'Build-Server.local' },
+        },
+      ],
+    }));
+
+    expect(overview.localDeviceName).toBe('Studio-Mac');
+    expect(overview.devices.map(device => device.name)).toEqual([
+      'Studio-Mac',
+      'Pixel',
+      'Build-Server',
+    ]);
   });
 });
 

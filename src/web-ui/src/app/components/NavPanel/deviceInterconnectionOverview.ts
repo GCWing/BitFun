@@ -47,6 +47,87 @@ export interface DeviceInterconnectionOverview {
   topologyUnavailable: boolean;
 }
 
+/**
+ * What the device status has to state, as facts rather than phrases, so the
+ * selection stays testable and the surface owns only the wording.
+ */
+export type DeviceOverviewActivityFact =
+  | { kind: 'local' }
+  | { kind: 'controlled-from-here' }
+  | { kind: 'controlled-by'; device: string }
+  | { kind: 'controllers'; count: number }
+  | { kind: 'distributed-execution'; count: number };
+
+/**
+ * Control and distributed execution are separate facts that can hold at the
+ * same time. Collapsing them into a single phrase would silently drop whichever
+ * one lost, and these sentences are now the only place the detail is spelled
+ * out, so they have to be complete.
+ */
+export function selectActivityFacts(
+  overview: DeviceInterconnectionOverview,
+): DeviceOverviewActivityFact[] {
+  if (overview.mode === 'local') return [{ kind: 'local' }];
+
+  const facts: DeviceOverviewActivityFact[] = [];
+  if (overview.peerActive) {
+    facts.push({ kind: 'controlled-from-here' });
+  } else {
+    // Every remote party holding this host counts. Naming only the first one
+    // would claim a single controller while several are attached.
+    const controllers = overview.devices.filter(device => (
+      !device.local && device.activities.includes('controlling')
+    ));
+    if (controllers.length === 1) {
+      facts.push({ kind: 'controlled-by', device: controllers[0].name });
+    } else if (controllers.length > 1) {
+      facts.push({ kind: 'controllers', count: controllers.length });
+    }
+  }
+
+  const executingDeviceCount = overview.connectedDevices.filter(device => (
+    device.activities.includes('background-execution')
+  )).length;
+  if (executingDeviceCount > 0) {
+    facts.push({ kind: 'distributed-execution', count: executingDeviceCount });
+  }
+
+  return facts;
+}
+
+export interface DeviceOverviewAttachedGroup {
+  kind: DeviceOverviewDeviceKind;
+  count: number;
+}
+
+const ATTACHED_GROUP_ORDER: DeviceOverviewDeviceKind[] = [
+  'desktop',
+  'mobile',
+  'message-app',
+  'execution-host',
+];
+
+/**
+ * Attached devices collapsed to one group per device kind. The footer trigger
+ * lives in fixed navigation chrome, so it has to stay the same size whether one
+ * phone or twenty hosts are attached: the number belongs inside a group, never
+ * in the layout, and the names belong in the overview a click away.
+ */
+export function selectAttachedGroups(
+  overview: DeviceInterconnectionOverview,
+): DeviceOverviewAttachedGroup[] {
+  const counts = new Map<DeviceOverviewDeviceKind, number>();
+  for (const device of overview.connectedDevices) {
+    const attached = device.activities.includes('controlling')
+      || device.activities.includes('background-execution');
+    if (!attached) continue;
+    counts.set(device.kind, (counts.get(device.kind) ?? 0) + 1);
+  }
+  return ATTACHED_GROUP_ORDER
+    .filter(kind => counts.has(kind))
+    .map(kind => ({ kind, count: counts.get(kind) as number }));
+}
+
 export interface DeviceOverviewDispatchJob {
   id: string;
   state: 'submitting' | 'submission_unknown' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
@@ -73,6 +154,22 @@ const ACTIVE_DISPATCH_STATES = new Set<DeviceOverviewDispatchJob['state']>([
 ]);
 
 const OFFICIAL_RELAY_HOST = 'remote.openbitfun.com';
+
+// Device names reach us as discovery host names, so macOS reports
+// `<name>.local` and LAN hosts add their own zone. That suffix identifies a
+// network zone, not a machine, and it spends the scarce width the footer has
+// for the part a person actually recognizes.
+const NETWORK_ZONE_SUFFIXES = ['.local', '.lan', '.home', '.internal'];
+
+export function formatDeviceDisplayName(rawName: string | null | undefined): string {
+  const trimmed = rawName?.trim() ?? '';
+  const withoutRoot = trimmed.replace(/\.+$/, '');
+  const lowered = withoutRoot.toLowerCase();
+  const suffix = NETWORK_ZONE_SUFFIXES.find(candidate => (
+    lowered.endsWith(candidate) && withoutRoot.length > candidate.length
+  ));
+  return (suffix ? withoutRoot.slice(0, -suffix.length) : withoutRoot) || trimmed;
+}
 
 export function connectionServiceFromRelayUrl(
   relayUrl: string | null | undefined,
@@ -159,8 +256,8 @@ function addOrMergeDevice(
 export function projectDeviceInterconnectionOverview(
   input: DeviceInterconnectionOverviewInput,
 ): DeviceInterconnectionOverview {
-  const localDeviceName = input.localDeviceName.trim();
-  const currentWorkDeviceName = input.peer?.deviceName.trim() || localDeviceName;
+  const localDeviceName = formatDeviceDisplayName(input.localDeviceName);
+  const currentWorkDeviceName = formatDeviceDisplayName(input.peer?.deviceName) || localDeviceName;
   const devices: DeviceOverviewDevice[] = [];
 
   const primaryDevice = addOrMergeDevice(devices, {
@@ -188,7 +285,7 @@ export function projectDeviceInterconnectionOverview(
   if (input.remoteStatus?.is_connected) {
     addOrMergeDevice(devices, {
       id: `mobile:${input.remoteStatus.peer_user_id ?? input.remoteStatus.peer_device_name ?? 'connected'}`,
-      name: input.remoteStatus.peer_device_name?.trim() || 'Mobile device',
+      name: formatDeviceDisplayName(input.remoteStatus.peer_device_name) || 'Mobile device',
       kind: 'mobile',
       local: false,
       activities: ['controlling'],
@@ -225,7 +322,7 @@ export function projectDeviceInterconnectionOverview(
     backgroundTaskCount += 1;
     const device = addOrMergeDevice(devices, {
       id: `device:${job.target.id}`,
-      name: job.target.name,
+      name: formatDeviceDisplayName(job.target.name) || job.target.name,
       kind: 'execution-host',
       local: false,
       activities: ['background-execution'],
