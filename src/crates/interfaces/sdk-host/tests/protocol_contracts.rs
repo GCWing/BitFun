@@ -1,9 +1,10 @@
 use bitfun_sdk_host::protocol::{
     ErrorCode, ErrorData, ErrorStage, HostCapabilities, InitializeParams, InitializeResult,
-    JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty, QueryEvent,
-    QueryOutput, QueryResultError, QueryResultParams, QueryTerminalStatus, RecoveryAction,
-    RequestId, SessionLifetime, Stability, TemporaryModelConfig, TemporaryModelProvider,
-    PROTOCOL_VERSION,
+    JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty,
+    PermissionDecision, PermissionRespondParams, PermissionSource, PermissionSourceKind,
+    QueryEvent, QueryOutput, QueryResultError, QueryResultParams, QueryTerminalStatus,
+    RecoveryAction, RequestId, SessionLifetime, Stability, TemporaryModelConfig,
+    TemporaryModelProvider, ToolEventStatus, PROTOCOL_VERSION,
 };
 
 #[test]
@@ -13,9 +14,12 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": 2,
+            "protocolVersion": 3,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true },
+            "capabilities": {
+                "serverNotifications": true,
+                "permissionResponses": true
+            },
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",
@@ -28,9 +32,10 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
     let params: InitializeParams = request.params_as().unwrap();
 
     assert_eq!(request.id, Some(RequestId::Number(1)));
-    assert_eq!(PROTOCOL_VERSION, 2);
+    assert_eq!(PROTOCOL_VERSION, 3);
     assert_eq!(params.protocol_version, PROTOCOL_VERSION);
     assert!(params.capabilities.server_notifications);
+    assert!(params.capabilities.permission_responses);
     assert_eq!(params.model.provider, TemporaryModelProvider::Openai);
     assert_eq!(params.model.model, "fixture-model");
     assert_eq!(params.model.api_key, "fixture-secret");
@@ -72,10 +77,11 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
             query_cancel: true,
             session_close: true,
             event_stream: true,
+            tool_events: true,
             structured_output: false,
             usage: false,
             custom_tools: false,
-            permission_callbacks: false,
+            permission_responses: true,
             hooks: false,
             mcp_configuration: false,
             prestarted_transport: false,
@@ -95,6 +101,7 @@ fn current_host_capabilities_are_a_deliberate_subset_of_the_headless_cli_target(
     assert!(capabilities.query_cancel);
     assert!(capabilities.session_close);
     assert!(capabilities.event_stream);
+    assert!(capabilities.tool_events);
 
     assert_eq!(
         capabilities.session_create_lifetime,
@@ -103,7 +110,7 @@ fn current_host_capabilities_are_a_deliberate_subset_of_the_headless_cli_target(
     assert!(!capabilities.structured_output);
     assert!(!capabilities.usage);
     assert!(!capabilities.custom_tools);
-    assert!(!capabilities.permission_callbacks);
+    assert!(capabilities.permission_responses);
     assert!(!capabilities.hooks);
     assert!(!capabilities.mcp_configuration);
     assert!(!capabilities.prestarted_transport);
@@ -119,6 +126,55 @@ fn query_events_and_terminal_errors_are_closed_protocol_values() {
         event,
         serde_json::json!({ "type": "assistant_text_delta", "text": "hello" })
     );
+
+    let tool_event = serde_json::to_value(QueryEvent::ToolEvent {
+        tool_call_id: "tool-1".to_string(),
+        tool_name: "Read".to_string(),
+        status: ToolEventStatus::Started,
+        progress: None,
+        duration_ms: None,
+    })
+    .unwrap();
+    assert_eq!(
+        tool_event,
+        serde_json::json!({
+            "type": "tool_event",
+            "toolCallId": "tool-1",
+            "toolName": "Read",
+            "status": "started"
+        })
+    );
+    assert!(tool_event.get("params").is_none());
+    assert!(tool_event.get("result").is_none());
+
+    let permission_event = serde_json::to_value(QueryEvent::PermissionRequest {
+        request_id: "permission-1".to_string(),
+        action: "edit".to_string(),
+        resources: vec!["src/lib.rs".to_string()],
+        source: PermissionSource {
+            kind: PermissionSourceKind::ToolCall,
+            identity: "edit".to_string(),
+        },
+        tool_call_id: Some("tool-1".to_string()),
+        response_timeout_ms: 120_000,
+    })
+    .unwrap();
+    assert_eq!(permission_event["type"], "permission_request");
+    assert_eq!(permission_event["requestId"], "permission-1");
+    assert_eq!(permission_event["source"]["kind"], "tool_call");
+    assert_eq!(permission_event["responseTimeoutMs"], 120_000);
+
+    let respond: PermissionRespondParams = serde_json::from_value(serde_json::json!({
+        "queryId": "query-1",
+        "sessionId": "session-1",
+        "turnId": "turn-1",
+        "operationId": "operation-1",
+        "requestId": "permission-1",
+        "decision": "allow_once"
+    }))
+    .unwrap();
+    assert_eq!(respond.decision, PermissionDecision::AllowOnce);
+    assert!(respond.feedback.is_none());
 
     let result = serde_json::to_value(QueryResultParams {
         query_id: "query-1".to_string(),
@@ -239,9 +295,12 @@ fn json_rpc_request_debug_redacts_temporary_model_secret() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": 2,
+            "protocolVersion": 3,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
-            "capabilities": { "serverNotifications": true },
+            "capabilities": {
+                "serverNotifications": true,
+                "permissionResponses": true
+            },
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",

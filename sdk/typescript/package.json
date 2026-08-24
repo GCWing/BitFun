@@ -23,6 +23,7 @@
     "generate:wire": "node scripts/generate-wire.mjs",
     "stage:host": "node scripts/stage-host.mjs",
     "smoke:bun": "bun test/real-host-smoke.mjs",
+    "smoke:consumer": "node test/local-package-consumer.mjs",
     "smoke:node": "node test/real-host-smoke.mjs",
     "test": "pnpm run build && node --test scripts/*.test.mjs dist/src/crates/adapters/transport/typescript/test/**/*.test.js dist/sdk/typescript/test/**/*.test.js",
     "type-check": "pnpm run generate:wire && tsc -p tsconfig.json --noEmit"

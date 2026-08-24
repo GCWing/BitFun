@@ -6,12 +6,13 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 pub const METHOD_INITIALIZE: &str = "initialize";
 pub const METHOD_SESSION_CREATE: &str = "session/create";
 pub const METHOD_QUERY_START: &str = "query/start";
 pub const METHOD_QUERY_CANCEL: &str = "query/cancel";
+pub const METHOD_PERMISSION_RESPOND: &str = "permission/respond";
 pub const METHOD_SESSION_CLOSE: &str = "session/close";
 pub const METHOD_SHUTDOWN: &str = "shutdown";
 pub const NOTIFICATION_QUERY_EVENT: &str = "query/event";
@@ -221,6 +222,7 @@ pub struct ClientInfo {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ClientCapabilities {
     pub server_notifications: bool,
+    pub permission_responses: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -264,10 +266,11 @@ pub struct HostCapabilities {
     pub query_cancel: bool,
     pub session_close: bool,
     pub event_stream: bool,
+    pub tool_events: bool,
     pub structured_output: bool,
     pub usage: bool,
     pub custom_tools: bool,
-    pub permission_callbacks: bool,
+    pub permission_responses: bool,
     pub hooks: bool,
     pub mcp_configuration: bool,
     pub prestarted_transport: bool,
@@ -282,10 +285,11 @@ impl HostCapabilities {
             query_cancel: true,
             session_close: true,
             event_stream: true,
+            tool_events: true,
             structured_output: false,
             usage: false,
             custom_tools: false,
-            permission_callbacks: false,
+            permission_responses: true,
             hooks: false,
             mcp_configuration: false,
             prestarted_transport: false,
@@ -497,6 +501,55 @@ pub struct QueryCancelResult {
     pub requested: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionDecision {
+    AllowOnce,
+    AllowAlways,
+    Reject,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct PermissionRespondParams {
+    pub query_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub operation_id: String,
+    pub request_id: String,
+    pub decision: PermissionDecision,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    #[serde(default)]
+    pub feedback: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionRespondResult {
+    pub request_id: String,
+    pub accepted: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionSourceKind {
+    ToolCall,
+    Provider,
+    Extension,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionSource {
+    pub kind: PermissionSourceKind,
+    pub identity: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -539,11 +592,49 @@ pub struct QueryEventParams {
     pub event: QueryEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum QueryEvent {
-    AssistantTextDelta { text: String },
+    AssistantTextDelta {
+        text: String,
+    },
+    ToolEvent {
+        tool_call_id: String,
+        tool_name: String,
+        status: ToolEventStatus,
+        #[cfg_attr(feature = "ts", ts(optional))]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        progress: Option<f32>,
+        #[cfg_attr(feature = "ts", ts(optional))]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+    },
+    PermissionRequest {
+        request_id: String,
+        action: String,
+        resources: Vec<String>,
+        source: PermissionSource,
+        #[cfg_attr(feature = "ts", ts(optional))]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool_call_id: Option<String>,
+        response_timeout_ms: u64,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum ToolEventStatus {
+    Started,
+    Progress,
+    Completed,
+    Failed,
+    Cancelled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -9,12 +9,12 @@ use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionCreateResult,
     AgentSubmissionSource, AgentTransientSessionDiscardRequest, AgentTurnCancellationRequest,
     AgentTurnSettlementRequest, DialogSubmissionPolicy, DialogSubmitOutcome, PermissionReply,
-    PermissionReplySource, PermissionRequest, PermissionRequestEvent, PortErrorKind, RuntimeError,
-    AUTO_APPROVE_ASK_CONTEXT_KEY,
+    PermissionReplySource, PermissionRequest, PermissionRequestEvent, PermissionRequestSourceKind,
+    PortErrorKind, RuntimeError, AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_core_types::ErrorCategory;
-use bitfun_events::AgenticEvent;
+use bitfun_events::{AgenticEvent, ToolEventData};
 use futures_util::{stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::sync::{mpsc, oneshot, Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
@@ -24,19 +24,23 @@ use tokio_util::sync::CancellationToken;
 use crate::protocol::{
     ErrorCode, ErrorData, ErrorStage, InitializeParams, InitializeResult, JsonRpcErrorResponse,
     JsonRpcNotification, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty,
-    QueryCancelParams, QueryCancelResult, QueryEvent, QueryEventParams, QueryOutput,
-    QueryResultError, QueryResultParams, QueryStartParams, QueryStartResult, QueryTerminalStatus,
-    RecoveryAction, RequestId, SessionCloseParams, SessionCloseResult, SessionCreateParams,
-    SessionCreateResult, SessionLifetime, ShutdownParams, ShutdownResult, TemporaryModelConfig,
-    JSON_RPC_VERSION, METHOD_INITIALIZE, METHOD_QUERY_CANCEL, METHOD_QUERY_START,
-    METHOD_SESSION_CLOSE, METHOD_SESSION_CREATE, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT,
-    NOTIFICATION_QUERY_RESULT, PROTOCOL_VERSION,
+    PermissionDecision, PermissionRespondParams, PermissionRespondResult, PermissionSource,
+    PermissionSourceKind, QueryCancelParams, QueryCancelResult, QueryEvent, QueryEventParams,
+    QueryOutput, QueryResultError, QueryResultParams, QueryStartParams, QueryStartResult,
+    QueryTerminalStatus, RecoveryAction, RequestId, SessionCloseParams, SessionCloseResult,
+    SessionCreateParams, SessionCreateResult, SessionLifetime, ShutdownParams, ShutdownResult,
+    TemporaryModelConfig, ToolEventStatus, JSON_RPC_VERSION, METHOD_INITIALIZE,
+    METHOD_PERMISSION_RESPOND, METHOD_QUERY_CANCEL, METHOD_QUERY_START, METHOD_SESSION_CLOSE,
+    METHOD_SESSION_CREATE, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT, NOTIFICATION_QUERY_RESULT,
+    PROTOCOL_VERSION,
 };
 
 const DEFAULT_SESSION_NAME: &str = "BitFun SDK query";
 const DEFAULT_AGENT: &str = "agentic";
 const DEFAULT_TURN_SETTLEMENT_TIMEOUT_MS: u64 = 5_000;
 const PERMISSION_REJECTION_TIMEOUT_MS: u64 = 2_000;
+const DEFAULT_PERMISSION_RESPONSE_TIMEOUT_MS: u64 = 120_000;
+const MAX_PERMISSION_FEEDBACK_BYTES: usize = 4 * 1024;
 const MAX_SESSION_CLOSE_TIMEOUT_MS: u64 = 30_000;
 const MAX_QUERY_OUTPUT_WIRE_BYTES: usize = 768 * 1024;
 
@@ -59,6 +63,7 @@ pub struct SdkHostConfig {
     pub max_in_flight_control_requests: usize,
     pub max_active_queries: usize,
     pub max_leased_sessions: usize,
+    pub permission_response_timeout: Duration,
 }
 
 impl Default for SdkHostConfig {
@@ -68,6 +73,9 @@ impl Default for SdkHostConfig {
             max_in_flight_control_requests: 4,
             max_active_queries: 16,
             max_leased_sessions: 64,
+            permission_response_timeout: Duration::from_millis(
+                DEFAULT_PERMISSION_RESPONSE_TIMEOUT_MS,
+            ),
         }
     }
 }
@@ -118,6 +126,7 @@ struct ConnectionInner {
     control_request_budget: Arc<Semaphore>,
     query_budget: Arc<Semaphore>,
     session_budget: Arc<Semaphore>,
+    permission_response_timeout: Duration,
     shutdown_started: CancellationToken,
     connection_failed: CancellationToken,
 }
@@ -126,6 +135,7 @@ struct ConnectionInner {
 struct ConnectionState {
     initialization: InitializationState,
     model_id: Option<String>,
+    permission_responses: bool,
     shutting_down: bool,
     cleanup_failed: bool,
     sessions: HashMap<String, SessionLease>,
@@ -181,6 +191,7 @@ struct QueryLease {
     terminal: AtomicBool,
     stop_forwarding: CancellationToken,
     emit_output: bool,
+    pending_permissions: StdMutex<HashMap<String, CancellationToken>>,
     _budget: OwnedSemaphorePermit,
 }
 
@@ -234,6 +245,7 @@ impl SdkHostConnection {
                 )),
                 query_budget: Arc::new(Semaphore::new(config.max_active_queries.max(1))),
                 session_budget: Arc::new(Semaphore::new(config.max_leased_sessions.max(1))),
+                permission_response_timeout: config.permission_response_timeout,
                 shutdown_started: CancellationToken::new(),
                 connection_failed: CancellationToken::new(),
             }),
@@ -279,7 +291,7 @@ impl SdkHostConnection {
         } else {
             let budget = if matches!(
                 request.method.as_str(),
-                METHOD_QUERY_CANCEL | METHOD_SESSION_CLOSE
+                METHOD_QUERY_CANCEL | METHOD_PERMISSION_RESPOND | METHOD_SESSION_CLOSE
             ) {
                 self.inner.control_request_budget.clone()
             } else {
@@ -354,6 +366,7 @@ impl SdkHostConnection {
             METHOD_SESSION_CREATE => self.handle_session_create(request).await,
             METHOD_QUERY_START => self.handle_query_start(request).await,
             METHOD_QUERY_CANCEL => self.handle_query_cancel(request).await,
+            METHOD_PERMISSION_RESPOND => self.handle_permission_respond(request).await,
             METHOD_SESSION_CLOSE => self.handle_session_close(request).await,
             METHOD_SHUTDOWN => {
                 if self
@@ -770,6 +783,7 @@ impl SdkHostConnection {
             .await;
             return;
         }
+        let permission_responses = params.capabilities.permission_responses;
         let initialization_error = {
             let mut state = self.inner.state.lock().await;
             if state.shutting_down {
@@ -842,6 +856,7 @@ impl SdkHostConnection {
                 true
             } else {
                 state.model_id = Some(model_id.clone());
+                state.permission_responses = permission_responses;
                 state.initialization = InitializationState::Initialized;
                 false
             }
@@ -859,11 +874,9 @@ impl SdkHostConnection {
             .await;
             return;
         }
-        self.send_success(
-            request.id.clone(),
-            InitializeResult::current(self.inner.runtime_version, model_id),
-        )
-        .await;
+        let mut result = InitializeResult::current(self.inner.runtime_version, model_id);
+        result.capabilities.permission_responses = permission_responses;
+        self.send_success(request.id.clone(), result).await;
     }
 
     async fn handle_session_create(&self, request: JsonRpcRequest) {
@@ -1174,6 +1187,7 @@ impl SdkHostConnection {
             terminal: AtomicBool::new(false),
             stop_forwarding: CancellationToken::new(),
             emit_output,
+            pending_permissions: StdMutex::new(HashMap::new()),
             _budget: query_budget,
         });
         {
@@ -1224,16 +1238,33 @@ impl SdkHostConnection {
                                     &lease,
                                 ) =>
                             {
-                                connection.reject_permission_and_finish(&lease, &request).await;
-                                return;
+                                if !connection
+                                    .forward_permission_request(&lease, &request, &mut sequence)
+                                    .await
+                                {
+                                    return;
+                                }
+                                continue;
+                            }
+                            Ok(PermissionRequestEvent::Replied { request_id, .. })
+                            | Ok(PermissionRequestEvent::Cancelled { request_id, .. }) => {
+                                if let Some(timeout_cancel) = lease
+                                    .pending_permissions
+                                    .lock()
+                                    .expect("SDK Host pending permission lock poisoned")
+                                    .remove(&request_id)
+                                {
+                                    timeout_cancel.cancel();
+                                }
+                                continue;
                             }
                             Ok(_) => continue,
                             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                                 match connection.inner.runtime.pending_permission_requests() {
                                     Ok(pending) => {
-                                        if let Some(request) = pending
+                                        let pending = pending
                                             .into_iter()
-                                            .find(|request| {
+                                            .filter(|request| {
                                                 permission_request_targets_query(
                                                     request,
                                                     connection
@@ -1248,9 +1279,36 @@ impl SdkHostConnection {
                                                     &lease,
                                                 )
                                             })
+                                            .collect::<Vec<_>>();
+                                        let authoritative = pending
+                                            .iter()
+                                            .map(|request| request.request_id.as_str())
+                                            .collect::<HashSet<_>>();
                                         {
-                                            connection.reject_permission_and_finish(&lease, &request).await;
-                                            return;
+                                            let mut tracked = lease
+                                                .pending_permissions
+                                                .lock()
+                                                .expect("SDK Host pending permission lock poisoned");
+                                            tracked.retain(|request_id, timeout_cancel| {
+                                                let keep = authoritative
+                                                    .contains(request_id.as_str());
+                                                if !keep {
+                                                    timeout_cancel.cancel();
+                                                }
+                                                keep
+                                            });
+                                        }
+                                        for request in pending {
+                                            if !connection
+                                                .forward_permission_request(
+                                                    &lease,
+                                                    &request,
+                                                    &mut sequence,
+                                                )
+                                                .await
+                                            {
+                                                return;
+                                            }
                                         }
                                         continue;
                                     }
@@ -1322,38 +1380,39 @@ impl SdkHostConnection {
                 let terminal = terminal_fact(&envelope.event, &lease.turn_id, &lease.query_id);
                 if lease.emit_output {
                     if let Some(projected) = project_query_event(&envelope.event) {
-                        let QueryEvent::AssistantTextDelta { text } = &projected;
-                        let output_exceeded = {
-                            let encoded_bytes = json_string_content_bytes(text);
-                            let mut output = lease
-                                .output
-                                .lock()
-                                .expect("SDK Host Query output lock poisoned");
-                            if encoded_bytes
-                                > MAX_QUERY_OUTPUT_WIRE_BYTES.saturating_sub(output.wire_bytes)
-                            {
-                                true
-                            } else {
-                                output.text.push_str(text);
-                                output.wire_bytes += encoded_bytes;
-                                false
+                        if let QueryEvent::AssistantTextDelta { text } = &projected {
+                            let output_exceeded = {
+                                let encoded_bytes = json_string_content_bytes(text);
+                                let mut output = lease
+                                    .output
+                                    .lock()
+                                    .expect("SDK Host Query output lock poisoned");
+                                if encoded_bytes
+                                    > MAX_QUERY_OUTPUT_WIRE_BYTES.saturating_sub(output.wire_bytes)
+                                {
+                                    true
+                                } else {
+                                    output.text.push_str(text);
+                                    output.wire_bytes += encoded_bytes;
+                                    false
+                                }
+                            };
+                            if output_exceeded {
+                                connection
+                                    .cancel_and_finish(
+                                        &lease,
+                                        QueryResultError::new(
+                                            ErrorCode::Overloaded,
+                                            false,
+                                            None,
+                                            &lease.query_id,
+                                            "SDK Host Query output exceeded the protocol size limit",
+                                        ),
+                                        true,
+                                    )
+                                    .await;
+                                return;
                             }
-                        };
-                        if output_exceeded {
-                            connection
-                                .cancel_and_finish(
-                                    &lease,
-                                    QueryResultError::new(
-                                        ErrorCode::Overloaded,
-                                        false,
-                                        None,
-                                        &lease.query_id,
-                                        "SDK Host Query output exceeded the protocol size limit",
-                                    ),
-                                    true,
-                                )
-                                .await;
-                            return;
                         }
                         sequence += 1;
                         if !connection
@@ -1483,6 +1542,174 @@ impl SdkHostConnection {
                     Some(lease.operation_id.clone()),
                     Some(RecoveryAction::Retry),
                     "SDK Host Query cancellation timed out",
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn handle_permission_respond(&self, request: JsonRpcRequest) {
+        let Some(mut params) = self
+            .parse_params::<PermissionRespondParams>(&request, ErrorStage::Query)
+            .await
+        else {
+            return;
+        };
+        if params.decision != PermissionDecision::Reject && params.feedback.is_some() {
+            self.send_invalid_params(
+                request.id.clone(),
+                ErrorStage::Query,
+                "feedback is only valid when rejecting a permission request",
+            )
+            .await;
+            return;
+        }
+        if params
+            .feedback
+            .as_ref()
+            .is_some_and(|feedback| feedback.len() > MAX_PERMISSION_FEEDBACK_BYTES)
+        {
+            self.send_invalid_params(
+                request.id.clone(),
+                ErrorStage::Query,
+                "Permission rejection feedback exceeds the size limit",
+            )
+            .await;
+            return;
+        }
+        params.feedback = params
+            .feedback
+            .map(|feedback| feedback.trim().to_string())
+            .filter(|feedback| !feedback.is_empty());
+        let (permission_responses, lease) = {
+            let state = self.inner.state.lock().await;
+            (
+                state.permission_responses,
+                state.queries.get(&params.query_id).cloned(),
+            )
+        };
+        if !permission_responses {
+            self.send_error(
+                request.id.clone(),
+                ErrorCode::CapabilityUnavailable,
+                ErrorStage::Query,
+                false,
+                None,
+                "permission responses were not negotiated for this connection",
+            )
+            .await;
+            return;
+        }
+        let Some(lease) = lease else {
+            self.send_error(
+                request.id.clone(),
+                ErrorCode::NotFound,
+                ErrorStage::Query,
+                false,
+                None,
+                "Query is not active on this SDK Host connection",
+            )
+            .await;
+            return;
+        };
+        if lease.session_id != params.session_id
+            || lease.turn_id != params.turn_id
+            || lease.operation_id != params.operation_id
+        {
+            self.send_invalid_params(
+                request.id.clone(),
+                ErrorStage::Query,
+                "Permission response identity does not match the owning Query",
+            )
+            .await;
+            return;
+        }
+        let timeout_cancel = lease
+            .pending_permissions
+            .lock()
+            .expect("SDK Host pending permission lock poisoned")
+            .remove(&params.request_id);
+        let Some(timeout_cancel) = timeout_cancel else {
+            self.send_error(
+                request.id.clone(),
+                ErrorCode::NotFound,
+                ErrorStage::Query,
+                false,
+                None,
+                "Permission request is unknown, expired, or already answered",
+            )
+            .await;
+            return;
+        };
+        timeout_cancel.cancel();
+        let reply = match params.decision {
+            PermissionDecision::AllowOnce => PermissionReply::Once,
+            PermissionDecision::AllowAlways => PermissionReply::Always,
+            PermissionDecision::Reject => PermissionReply::Reject {
+                feedback: params.feedback,
+            },
+        };
+        match timeout(
+            Duration::from_millis(PERMISSION_REJECTION_TIMEOUT_MS),
+            self.inner.runtime.respond_permission_with_source(
+                &params.request_id,
+                reply,
+                PermissionReplySource::User,
+            ),
+        )
+        .await
+        {
+            Ok(Ok(())) => {
+                self.send_success(
+                    request.id.clone(),
+                    PermissionRespondResult {
+                        request_id: params.request_id,
+                        accepted: true,
+                    },
+                )
+                .await;
+            }
+            Ok(Err(error)) => {
+                self.cancel_and_finish(
+                    &lease,
+                    query_error_from_runtime(
+                        &lease.query_id,
+                        error,
+                        "SDK Host permission response failed",
+                    ),
+                    true,
+                )
+                .await;
+                self.send_error(
+                    request.id.clone(),
+                    ErrorCode::Internal,
+                    ErrorStage::Query,
+                    false,
+                    None,
+                    "Permission response failed and the Query was cancelled",
+                )
+                .await;
+            }
+            Err(_) => {
+                self.cancel_and_finish(
+                    &lease,
+                    QueryResultError::new(
+                        ErrorCode::Timeout,
+                        false,
+                        None,
+                        &lease.query_id,
+                        "SDK Host permission response timed out",
+                    ),
+                    true,
+                )
+                .await;
+                self.send_error(
+                    request.id.clone(),
+                    ErrorCode::Timeout,
+                    ErrorStage::Query,
+                    false,
+                    None,
+                    "Permission response outcome is unknown and the Query was cancelled",
                 )
                 .await;
             }
@@ -1927,6 +2154,15 @@ impl SdkHostConnection {
         if !lease.finish_once() {
             return;
         }
+        lease.stop_forwarding.cancel();
+        for (_, timeout_cancel) in lease
+            .pending_permissions
+            .lock()
+            .expect("SDK Host pending permission lock poisoned")
+            .drain()
+        {
+            timeout_cancel.cancel();
+        }
         let settlement = timeout(
             Duration::from_millis(DEFAULT_TURN_SETTLEMENT_TIMEOUT_MS + 500),
             self.inner
@@ -2100,6 +2336,145 @@ impl SdkHostConnection {
             true,
         )
         .await;
+    }
+
+    async fn forward_permission_request(
+        &self,
+        lease: &Arc<QueryLease>,
+        request: &PermissionRequest,
+        sequence: &mut u64,
+    ) -> bool {
+        if !self.inner.state.lock().await.permission_responses {
+            self.reject_permission_and_finish(lease, request).await;
+            return false;
+        }
+        let timeout_cancel = {
+            let mut pending = lease
+                .pending_permissions
+                .lock()
+                .expect("SDK Host pending permission lock poisoned");
+            if pending.contains_key(&request.request_id) {
+                return true;
+            }
+            let timeout_cancel = CancellationToken::new();
+            pending.insert(request.request_id.clone(), timeout_cancel.clone());
+            timeout_cancel
+        };
+        *sequence += 1;
+        let delivered = self
+            .send_notification(
+                NOTIFICATION_QUERY_EVENT,
+                QueryEventParams {
+                    query_id: lease.query_id.clone(),
+                    session_id: lease.session_id.clone(),
+                    turn_id: lease.turn_id.clone(),
+                    operation_id: lease.operation_id.clone(),
+                    sequence: *sequence,
+                    event: QueryEvent::PermissionRequest {
+                        request_id: request.request_id.clone(),
+                        action: request.action.clone(),
+                        resources: request.resources.clone(),
+                        source: PermissionSource {
+                            kind: match request.source.kind {
+                                PermissionRequestSourceKind::ToolCall => {
+                                    PermissionSourceKind::ToolCall
+                                }
+                                PermissionRequestSourceKind::Provider => {
+                                    PermissionSourceKind::Provider
+                                }
+                                PermissionRequestSourceKind::Extension => {
+                                    PermissionSourceKind::Extension
+                                }
+                            },
+                            identity: request.source.identity.clone(),
+                        },
+                        tool_call_id: request.tool_call_id.clone(),
+                        response_timeout_ms: duration_ms(self.inner.permission_response_timeout),
+                    },
+                },
+            )
+            .await;
+        if !delivered {
+            if let Some(timeout_cancel) = lease
+                .pending_permissions
+                .lock()
+                .expect("SDK Host pending permission lock poisoned")
+                .remove(&request.request_id)
+            {
+                timeout_cancel.cancel();
+            }
+            self.reject_permission_and_finish(lease, request).await;
+            return false;
+        }
+        self.spawn_permission_timeout(lease.clone(), request.request_id.clone(), timeout_cancel);
+        true
+    }
+
+    fn spawn_permission_timeout(
+        &self,
+        lease: Arc<QueryLease>,
+        request_id: String,
+        timeout_cancel: CancellationToken,
+    ) {
+        let connection = self.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = lease.stop_forwarding.cancelled() => return,
+                _ = timeout_cancel.cancelled() => return,
+                _ = tokio::time::sleep(connection.inner.permission_response_timeout) => {}
+            }
+            let expired = lease
+                .pending_permissions
+                .lock()
+                .expect("SDK Host pending permission lock poisoned")
+                .remove(&request_id)
+                .is_some();
+            if !expired {
+                return;
+            }
+            let rejection = timeout(
+                Duration::from_millis(PERMISSION_REJECTION_TIMEOUT_MS),
+                connection.inner.runtime.respond_permission_with_source(
+                    &request_id,
+                    PermissionReply::Reject {
+                        feedback: Some("SDK permission response timed out".to_string()),
+                    },
+                    PermissionReplySource::System,
+                ),
+            )
+            .await;
+            match rejection {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    connection
+                        .cancel_and_finish(
+                            &lease,
+                            query_error_from_runtime(
+                                &lease.query_id,
+                                error,
+                                "SDK Host could not reject an expired permission request",
+                            ),
+                            true,
+                        )
+                        .await;
+                }
+                Err(_) => {
+                    connection
+                        .cancel_and_finish(
+                            &lease,
+                            QueryResultError::new(
+                                ErrorCode::Timeout,
+                                true,
+                                Some(RecoveryAction::RestartHost),
+                                &lease.query_id,
+                                "SDK Host permission timeout rejection did not settle",
+                            ),
+                            true,
+                        )
+                        .await;
+                }
+            }
+        });
     }
 
     async fn parse_params<T>(&self, request: &JsonRpcRequest, stage: ErrorStage) -> Option<T>
@@ -2283,7 +2658,8 @@ fn event_turn_id(event: &AgenticEvent) -> Option<&str> {
         AgenticEvent::DialogTurnCompleted { turn_id, .. }
         | AgenticEvent::DialogTurnCancelled { turn_id, .. }
         | AgenticEvent::DialogTurnFailed { turn_id, .. }
-        | AgenticEvent::TextChunk { turn_id, .. } => Some(turn_id),
+        | AgenticEvent::TextChunk { turn_id, .. }
+        | AgenticEvent::ToolEvent { turn_id, .. } => Some(turn_id),
         _ => None,
     }
 }
@@ -2296,6 +2672,31 @@ fn project_query_event(event: &AgenticEvent) -> Option<QueryEvent> {
     match event {
         AgenticEvent::TextChunk { text, .. } => {
             Some(QueryEvent::AssistantTextDelta { text: text.clone() })
+        }
+        AgenticEvent::ToolEvent { tool_event, .. } => {
+            let (status, progress, duration_ms) = match tool_event {
+                ToolEventData::Started { .. } => (ToolEventStatus::Started, None, None),
+                ToolEventData::Progress { percentage, .. } => {
+                    (ToolEventStatus::Progress, Some(*percentage), None)
+                }
+                ToolEventData::Completed { duration_ms, .. } => {
+                    (ToolEventStatus::Completed, None, Some(*duration_ms))
+                }
+                ToolEventData::Failed { duration_ms, .. } => {
+                    (ToolEventStatus::Failed, None, *duration_ms)
+                }
+                ToolEventData::Cancelled { duration_ms, .. } => {
+                    (ToolEventStatus::Cancelled, None, *duration_ms)
+                }
+                _ => return None,
+            };
+            Some(QueryEvent::ToolEvent {
+                tool_call_id: tool_event.tool_id().to_string(),
+                tool_name: tool_event.effective_tool_name().to_string(),
+                status,
+                progress,
+                duration_ms,
+            })
         }
         _ => None,
     }
