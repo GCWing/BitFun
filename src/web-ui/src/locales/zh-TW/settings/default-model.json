@@ -84,6 +84,8 @@
     "loadFailed": "載入設定失敗",
     "updateFailed": "更新失敗",
     "modelUpdated": "{{slot}}已設置為 {{name}}",
+    "modelCleared": "{{slot}}已取消設定",
+    "fastModelCleared": "快速模型已取消設定，將使用主力模型",
     "capabilityUpdated": "能力模型已更新"
   }
 }

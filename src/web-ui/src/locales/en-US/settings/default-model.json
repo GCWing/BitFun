@@ -84,6 +84,8 @@
     "loadFailed": "Failed to load configuration",
     "updateFailed": "Update failed",
     "modelUpdated": "{{slot}} set to {{name}}",
+    "modelCleared": "{{slot}} is no longer set",
+    "fastModelCleared": "Fast model cleared; the primary model will be used",
     "capabilityUpdated": "Capability model updated"
   }
 }

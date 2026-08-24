@@ -625,7 +625,7 @@ pub enum ModelCategory {
 pub struct DefaultModelsConfig {
     /// Primary model ID (for complex tasks).
     pub primary: Option<String>,
-    /// Fast model ID (for simple tasks).
+    /// Fast model ID (for simple tasks). When unset, selection falls back to primary.
     pub fast: Option<String>,
     /// Search model.
     pub search: Option<String>,
