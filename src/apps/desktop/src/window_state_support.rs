@@ -17,10 +17,9 @@
 use std::path::Path;
 
 use tauri::Manager;
+use tauri_plugin_window_state::AppHandleExt;
 
 const MAIN_WINDOW_LABEL: &str = "main";
-/// Keep in sync with `tauri_plugin_window_state::DEFAULT_FILENAME`.
-const WINDOW_STATE_FILENAME: &str = ".window-state.json";
 
 // ─── Authoritative maximized placement ────────────────────────────────────────
 
@@ -107,9 +106,10 @@ pub(crate) fn apply_maximized_correction(
 
 /// Reads the persisted `maximized` flag of the `main` entry so the restore
 /// path can re-assert the maximized state after the window becomes visible.
+#[cfg(target_os = "windows")]
 pub(crate) fn read_persisted_main_maximized(app: &tauri::AppHandle) -> Option<bool> {
     let config_dir = app.path().app_config_dir().ok()?;
-    let state_path = config_dir.join(WINDOW_STATE_FILENAME);
+    let state_path = config_dir.join(app.filename());
     let bytes = std::fs::read(state_path).ok()?;
     let document: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     document.get(MAIN_WINDOW_LABEL)?.get("maximized")?.as_bool()
@@ -150,7 +150,7 @@ pub(crate) fn correct_saved_main_window_state(app: &tauri::AppHandle) {
         log::warn!("Saved main-window state correction skipped: app config dir unavailable");
         return;
     };
-    let state_path = config_dir.join(WINDOW_STATE_FILENAME);
+    let state_path = config_dir.join(app.filename());
 
     match correct_saved_state_file(&state_path, &report) {
         Ok(_) => {}
@@ -181,12 +181,49 @@ fn correct_saved_state_file(
     let temporary_path = state_path.with_extension("json.tmp");
     std::fs::write(&temporary_path, serialized)
         .map_err(|error| format!("temporary write failed: {}", error))?;
-    if state_path.exists() {
-        std::fs::remove_file(state_path).map_err(|error| format!("replace failed: {}", error))?;
-    }
-    std::fs::rename(&temporary_path, state_path)
-        .map_err(|error| format!("rename failed: {}", error))?;
+    replace_state_file_atomically(state_path, &temporary_path)?;
     Ok(true)
+}
+
+fn replace_state_file_atomically(state_path: &Path, temporary_path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::iter::once;
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::{ReplaceFileW, REPLACEFILE_WRITE_THROUGH};
+
+        let state_path_wide: Vec<u16> = state_path
+            .as_os_str()
+            .encode_wide()
+            .chain(once(0))
+            .collect();
+        let temporary_path_wide: Vec<u16> = temporary_path
+            .as_os_str()
+            .encode_wide()
+            .chain(once(0))
+            .collect();
+
+        // SAFETY: both UTF-16 buffers are NUL-terminated and live for the
+        // duration of the call. The backup and reserved parameters are unused.
+        unsafe {
+            ReplaceFileW(
+                PCWSTR::from_raw(state_path_wide.as_ptr()),
+                PCWSTR::from_raw(temporary_path_wide.as_ptr()),
+                None,
+                REPLACEFILE_WRITE_THROUGH,
+                None,
+                None,
+            )
+        }
+        .map_err(|error| format!("atomic replace failed: {}", error))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    std::fs::rename(temporary_path, state_path)
+        .map_err(|error| format!("atomic rename failed: {}", error))?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -340,6 +377,23 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&state_path).expect("content preserved"),
             "{not json"
+        );
+    }
+
+    #[test]
+    fn failed_state_file_replacement_keeps_original_content() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let state_path = directory.path().join(".window-state.json");
+        let missing_temporary_path = directory.path().join("missing.json.tmp");
+        std::fs::write(&state_path, "original").expect("seed state file");
+
+        let error = replace_state_file_atomically(&state_path, &missing_temporary_path)
+            .expect_err("missing replacement must fail");
+
+        assert!(error.contains("replace") || error.contains("rename"));
+        assert_eq!(
+            std::fs::read_to_string(&state_path).expect("original content preserved"),
+            "original"
         );
     }
 }
