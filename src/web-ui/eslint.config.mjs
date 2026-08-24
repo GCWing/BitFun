@@ -19,7 +19,6 @@ export default tseslint.config(
       'src/component-library/components/registry.tsx',
       'src/component-library/preview/**',
       'src/shared/context-system/core/types/**',
-      'src/shared/context-menu-system/examples/**',
     ],
   },
   {

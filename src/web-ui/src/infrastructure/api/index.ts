@@ -21,7 +21,6 @@ import { aiApi } from './service-api/AIApi';
 import { toolAPI } from './service-api/ToolAPI';
 import { agentAPI } from './service-api/AgentAPI';
 import { systemAPI } from './service-api/SystemAPI';
-import { projectAPI } from './service-api/ProjectAPI';
 import { diffAPI } from './service-api/DiffAPI';
 import { snapshotAPI } from './service-api/SnapshotAPI';
 import { globalAPI } from './service-api/GlobalAPI';
@@ -31,7 +30,6 @@ import { permissionAPI } from './service-api/PermissionAPI';
 import { pageAPI } from './service-api/PageAPI';
 import { gitAPI } from './service-api/GitAPI';
 import { gitAgentAPI } from './service-api/GitAgentAPI';
-import { gitRepoHistoryAPI, type GitRepoHistory } from './service-api/GitRepoHistoryAPI';
 import { sessionAPI } from './service-api/SessionAPI';
 import { i18nAPI } from './service-api/I18nAPI';
 import { btwAPI } from './service-api/BtwAPI';
@@ -43,7 +41,7 @@ import { speechAPI } from './service-api/SpeechAPI';
 import { worktreeAPI } from './service-api/WorktreeAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, tokenUsageStatisticsApi, speechAPI, worktreeAPI };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, tokenUsageStatisticsApi, speechAPI, worktreeAPI };
 export { TokenUsageStatisticsUnavailableError } from './tokenUsageStatisticsApi';
 export * from './service-api/ReviewPlatformAPI';
 export type {
@@ -58,38 +56,4 @@ export type {
 } from './tokenUsageStatisticsApi';
 
 // Export types
-export type { GitRepoHistory };
 export type { CheckForUpdatesResponse } from './service-api/SystemAPI';
-
-// BitFun API collection: a single access point for all API modules.
-export const bitfunAPI = {
-  workspace: workspaceAPI,
-  config: configAPI,
-  ai: aiApi,
-  tool: toolAPI,
-  agent: agentAPI,
-  system: systemAPI,
-  project: projectAPI,
-  diff: diffAPI,
-  snapshot: snapshotAPI,
-  global: globalAPI,
-  context: contextAPI,
-  cron: cronAPI,
-  permission: permissionAPI,
-  pages: pageAPI,
-  git: gitAPI,
-  gitAgent: gitAgentAPI,
-  gitRepoHistory: gitRepoHistoryAPI,
-  session: sessionAPI,
-  i18n: i18nAPI,
-  btw: btwAPI,
-  editorAi: editorAiAPI,
-  reviewPlatform: reviewPlatformAPI,
-  insights: insightsApi,
-  tokenUsageStatistics: tokenUsageStatisticsApi,
-  speech: speechAPI,
-  worktree: worktreeAPI,
-};
-
-// Default export
-export default bitfunAPI;
