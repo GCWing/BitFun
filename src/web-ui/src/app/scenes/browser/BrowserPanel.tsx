@@ -34,9 +34,11 @@ export interface BrowserPanelProps {
   isActive: boolean;
   /** Optional initial URL (falls back to DEFAULT_URL) */
   initialUrl?: string;
+  /** Correlates a host open request with this exact native WebView target. */
+  openRequestId?: string;
 }
 
-const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => {
+const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openRequestId }) => {
   const { t } = useTranslation('common');
   const activeTabId = useSceneStore((s) => s.activeTabId);
   const shouldShowWebview = isActive && activeTabId === 'session';
@@ -50,6 +52,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
     isVisible: shouldShowWebview,
     labelPrefix: 'embedded-browser-panel-view',
     log,
+    openRequestId,
   });
 
   const {

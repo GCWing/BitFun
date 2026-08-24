@@ -31,8 +31,27 @@ pub struct BuiltInBrowserCommand {
     pub params: Option<Value>,
 }
 
+/// Ask the Desktop host to present a built-in browser page and return only
+/// after that exact native WebView has been registered for Agent control.
+///
+/// Opening the product surface and registering its automation target are two
+/// separate asynchronous frontend phases. Keeping their correlation inside
+/// the host port prevents ControlHub from guessing readiness by URL or by a
+/// process-wide target count.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BuiltInBrowserOpenRequest {
+    pub url: String,
+    pub title: String,
+    pub replace_existing: bool,
+}
+
 #[async_trait]
 pub trait BuiltInBrowserHost: Send + Sync {
+    async fn open(
+        &self,
+        request: BuiltInBrowserOpenRequest,
+    ) -> Result<BuiltInBrowserTarget, String>;
+
     async fn list_targets(&self) -> Result<Vec<BuiltInBrowserTarget>, String>;
 
     async fn execute(&self, command: BuiltInBrowserCommand) -> Result<Value, String>;
@@ -87,6 +106,19 @@ fn host() -> BitFunResult<Arc<dyn BuiltInBrowserHost>> {
 pub async fn list_builtin_browser_targets() -> BitFunResult<Vec<BuiltInBrowserTarget>> {
     host()?.list_targets().await.map_err(|error| {
         BitFunError::tool(format!("Built-in browser target discovery failed: {error}"))
+    })
+}
+
+pub async fn open_builtin_browser(
+    request: BuiltInBrowserOpenRequest,
+) -> BitFunResult<BuiltInBrowserClient> {
+    let target = host()?.open(request).await.map_err(|error| {
+        BitFunError::tool(format!("Built-in browser surface failed to open: {error}"))
+    })?;
+    set_default_builtin_browser_target(Some(target.id.clone()));
+    Ok(BuiltInBrowserClient {
+        events: event_sender(&target.id),
+        target,
     })
 }
 

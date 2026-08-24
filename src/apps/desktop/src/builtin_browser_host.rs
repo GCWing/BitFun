@@ -1,17 +1,25 @@
 //! Desktop adapter for the built-in browser automation host port.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bitfun_core::agentic::tools::browser_control::builtin_browser::{
-    set_builtin_browser_host, BuiltInBrowserCommand, BuiltInBrowserHost, BuiltInBrowserTarget,
+    set_builtin_browser_host, BuiltInBrowserCommand, BuiltInBrowserHost, BuiltInBrowserOpenRequest,
+    BuiltInBrowserTarget,
 };
+use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::RwLock;
 
 use crate::api::browser_api;
+
+const OPEN_BUILT_IN_BROWSER_EVENT: &str = "agentic://open-built-in-browser";
+const OPEN_BROWSER_READY_TIMEOUT: Duration = Duration::from_secs(20);
+static NEXT_OPEN_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
 struct DesktopBuiltInBrowserHost {
     app: AppHandle,
@@ -48,6 +56,44 @@ impl DesktopBuiltInBrowserHost {
 
 #[async_trait]
 impl BuiltInBrowserHost for DesktopBuiltInBrowserHost {
+    async fn open(
+        &self,
+        request: BuiltInBrowserOpenRequest,
+    ) -> Result<BuiltInBrowserTarget, String> {
+        let request_id = format!(
+            "builtin-browser-open-{}-{}",
+            std::process::id(),
+            NEXT_OPEN_REQUEST_ID.fetch_add(1, Ordering::Relaxed)
+        );
+        emit_global_event(BackendEvent::Custom {
+            event_name: OPEN_BUILT_IN_BROWSER_EVENT.to_string(),
+            payload: json!({
+                "requestId": request_id.clone(),
+                "url": request.url,
+                "title": request.title,
+                "replaceExisting": request.replace_existing,
+            }),
+        })
+        .await
+        .map_err(|error| format!("failed to present the built-in browser: {error}"))?;
+
+        let deadline = tokio::time::Instant::now() + OPEN_BROWSER_READY_TIMEOUT;
+        loop {
+            if let Some(target) =
+                browser_api::browser_target_for_open_request(&self.app, &request_id)
+            {
+                return Ok(target);
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err(
+                    "the browser panel was requested, but its correlated native WebView did not become ready for Agent control"
+                        .to_string(),
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
     async fn list_targets(&self) -> Result<Vec<BuiltInBrowserTarget>, String> {
         let mut targets = browser_api::list_browser_targets(&self.app);
         let live_ids = targets

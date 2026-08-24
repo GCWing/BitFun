@@ -20,7 +20,7 @@ pub use automation_client::{
 pub use browser_launcher::BrowserLauncher;
 pub use builtin_browser::{
     connect_builtin_browser, connect_builtin_browser_matching, list_builtin_browser_targets,
-    BuiltInBrowserClient, BuiltInBrowserTarget,
+    open_builtin_browser, BuiltInBrowserClient, BuiltInBrowserOpenRequest, BuiltInBrowserTarget,
 };
 pub use cdp_client::CdpClient;
 pub use session_registry::{
