@@ -2093,48 +2093,53 @@ impl SessionManager {
     /// Callers must hold the Session mutation boundary. The evidence operation
     /// lock serializes this retention with evidence appends and restores.
     ///
-    /// `force_prune_persisted_sidecar` covers explicit staged-revert history
-    /// mutations: a durable `session-revert.json` marker can exist even when
-    /// automatic Session persistence is disabled, and committing that marker
-    /// must prune the sidecar too. Legacy in-memory rollback keeps its existing
-    /// behavior unless automatic persistence is enabled.
+    /// `prune_persisted_sidecar` must only be true for permanent history
+    /// truncations. Staged undo/redo keeps the sidecar complete so a later
+    /// redo can restore hidden evidence; committing the revert or performing a
+    /// legacy rollback permanently discards the hidden suffix, so those paths
+    /// prune the sidecar as well.
     async fn retain_evidence_events_locked(
         &self,
         session_storage_path: Option<&Path>,
         session_id: &str,
         surviving_turn_ids: &HashSet<String>,
-        force_prune_persisted_sidecar: bool,
+        prune_persisted_sidecar: bool,
     ) -> BitFunResult<()> {
         let _operation_guard = self.evidence_ledger_operation_locks.lock(session_id).await;
-        let durable_session = self
-            .sessions
-            .get(session_id)
-            .map(|session| self.should_persist_session(&session))
-            .unwrap_or(true);
-        let prune_persisted_sidecar =
-            durable_session && (self.config.enable_persistence || force_prune_persisted_sidecar);
+        let storage_path = session_storage_path.ok_or_else(|| {
+            BitFunError::session(format!(
+                "Session storage path unavailable while retaining evidence: {}",
+                session_id
+            ))
+        })?;
         if prune_persisted_sidecar {
-            let storage_path = session_storage_path.ok_or_else(|| {
-                BitFunError::session(format!(
-                    "Session storage path unavailable while retaining evidence: {}",
-                    session_id
-                ))
-            })?;
-            let retained = self
+            let mut retained = Vec::new();
+            if let Some(events) = self
                 .persistence_manager
                 .retain_evidence_ledger_events(storage_path, session_id, surviving_turn_ids)
-                .await?;
-            if self.config.enable_persistence {
-                if let Some(retained) = retained {
-                    self.evidence_ledger
-                        .replace_session(session_id, retained)
-                        .map_err(|error| BitFunError::parse(error.to_string()))?;
-                    return Ok(());
-                }
+                .await?
+            {
+                retained = events;
             }
+            self.evidence_ledger
+                .replace_session(session_id, retained)
+                .map_err(|error| BitFunError::parse(error.to_string()))?;
+            return Ok(());
         }
+        // Staged undo/redo only changes what this runtime can see. Rebuild
+        // memory from the untouched sidecar so redo can reveal hidden evidence
+        // without losing it from disk.
+        let sidecar_events = self
+            .persistence_manager
+            .load_evidence_ledger_events(storage_path, session_id)
+            .await?;
+        let retained = sidecar_events
+            .into_iter()
+            .filter(|event| surviving_turn_ids.contains(&event.turn_id))
+            .collect::<Vec<_>>();
         self.evidence_ledger
-            .retain_turn_ids(session_id, surviving_turn_ids);
+            .replace_session(session_id, retained)
+            .map_err(|error| BitFunError::parse(error.to_string()))?;
         Ok(())
     }
 
@@ -6162,8 +6167,10 @@ impl SessionManager {
     }
 
     /// Move the loaded Session to a persisted staged-revert boundary without
-    /// deleting any turn, context snapshot, or compression artifact. The
-    /// durable `session-revert.json` remains the authoritative visibility fact.
+    /// deleting any turn, context snapshot, compression artifact, or evidence
+    /// sidecar. The durable `session-revert.json` remains the authoritative
+    /// visibility fact, and the complete sidecar lets a later redo restore the
+    /// hidden evidence.
     pub(crate) async fn apply_staged_revert_context_locked(
         &self,
         session_storage_path: &Path,
@@ -6248,7 +6255,7 @@ impl SessionManager {
             Some(session_storage_path),
             session_id,
             &surviving_turn_ids,
-            true,
+            false,
         )
         .await?;
         Ok(())
@@ -6274,12 +6281,8 @@ impl SessionManager {
                 .save_session(session_storage_path, &session)
                 .await?;
         }
-        // A durable revert marker means persisted Session artifacts exist even
-        // when automatic Session persistence is disabled for the current
-        // runtime (for example, an adapter restoring an explicitly selected
-        // history). Committing that marker must therefore always prune the
-        // persisted suffix; `enable_persistence` only controls automatic
-        // Session writes, not explicit history mutations.
+        // Committing the marker permanently discards the hidden suffix, so the
+        // evidence sidecar must be pruned to the surviving turns as well.
         self.persistence_manager
             .delete_dialog_turns_from(session_storage_path, session_id, boundary_turn)
             .await?;
@@ -6470,7 +6473,7 @@ impl SessionManager {
             Some(workspace_path),
             session_id,
             &surviving_dialog_turn_ids,
-            false,
+            true,
         )
         .await?;
 
@@ -15870,8 +15873,100 @@ mod tests {
         assert_eq!(summary.latest_checkpoints[0].target, "src/lib.rs");
     }
 
+    fn evidence_event_ids(ledger_path: &std::path::Path) -> Vec<String> {
+        let stored: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(ledger_path).expect("ledger sidecar should exist"),
+        )
+        .expect("ledger sidecar should deserialize");
+        stored
+            .events
+            .iter()
+            .map(|event| event.event_id.clone())
+            .collect()
+    }
+
+    struct StagedEvidenceSession {
+        session_id: String,
+        ledger_path: PathBuf,
+    }
+
+    async fn create_staged_evidence_session(
+        manager: &SessionManager,
+        persistence_manager: &PersistenceManager,
+        workspace: &TestWorkspace,
+        turn_count: usize,
+    ) -> StagedEvidenceSession {
+        let session = manager
+            .create_session(
+                "Staged evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        for index in 0..turn_count {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+            let messages = (0..=index)
+                .map(|message_index| {
+                    crate::agentic::core::Message::user(format!("prompt {message_index}"))
+                })
+                .collect::<Vec<_>>();
+            persistence_manager
+                .save_turn_context_snapshot(workspace.path(), &session.session_id, index, &messages)
+                .await
+                .expect("context snapshot should save");
+        }
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids = (0..turn_count)
+            .map(|index| format!("turn-{index}"))
+            .collect();
+        for index in 0..turn_count {
+            manager
+                .record_subagent_partial_timeout(
+                    &session.session_id,
+                    &format!("turn-{index}"),
+                    "ReviewSecurity",
+                    &format!("Partial turn {index}"),
+                    Some("timeout"),
+                )
+                .await
+                .expect("turn evidence should persist");
+        }
+        let storage_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+        let ledger_path = storage_path
+            .join(&session.session_id)
+            .join("evidence-ledger.json");
+        StagedEvidenceSession {
+            session_id: session.session_id,
+            ledger_path,
+        }
+    }
+
     #[tokio::test]
-    async fn staged_revert_prunes_evidence_ledger_to_visible_turn_ids() {
+    async fn staged_revert_filters_memory_but_keeps_evidence_sidecar() {
         use crate::agentic::session::revert::{
             SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
         };
@@ -16016,7 +16111,11 @@ mod tests {
         .expect("ledger sidecar should deserialize");
         assert_eq!(
             stored_after.events,
-            vec![turn_0_event, turn_1_event.clone()]
+            vec![
+                turn_0_event.clone(),
+                turn_1_event.clone(),
+                turn_2_event.clone()
+            ]
         );
 
         assert!(manager
@@ -16033,17 +16132,281 @@ mod tests {
         );
         assert_eq!(
             manager.evidence_events_for_turn(&session.session_id, "turn-1"),
-            vec![turn_1_event]
+            vec![turn_1_event.clone()]
         );
         assert!(manager
             .evidence_events_for_turn(&session.session_id, "turn-2")
             .is_empty());
+        assert_eq!(
+            evidence_event_ids(&ledger_path),
+            vec![
+                turn_0_event.event_id.clone(),
+                turn_1_event.event_id.clone(),
+                turn_2_event.event_id.clone(),
+            ]
+        );
         assert_eq!(
             manager
                 .evidence_summary_for_session(&session.session_id, 10)
                 .partial_subagent_results
                 .len(),
             2
+        );
+    }
+
+    #[tokio::test]
+    async fn staged_undo_then_redo_restores_evidence_from_sidecar() {
+        use crate::agentic::session::revert::{
+            SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
+        };
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let staged =
+            create_staged_evidence_session(&manager, &persistence_manager, &workspace, 3).await;
+        let original_ledger = evidence_event_ids(&staged.ledger_path);
+        assert_eq!(original_ledger.len(), 3);
+
+        let state = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 2,
+            original_turn_end: 3,
+            phase: SessionRevertPhase::Staged,
+            workspace_checkpoint: Vec::new(),
+        };
+        persistence_manager
+            .save_session_revert_state(workspace.path(), &staged.session_id, &state)
+            .await
+            .expect("staged undo should persist");
+        let _mutation = manager
+            .acquire_session_mutation(&staged.session_id)
+            .await
+            .expect("session mutation");
+        manager
+            .apply_staged_revert_context_locked(
+                workspace.path(),
+                &staged.session_id,
+                state.boundary_turn,
+            )
+            .await
+            .expect("staged undo should apply");
+        assert!(manager
+            .evidence_events_for_turn(&staged.session_id, "turn-2")
+            .is_empty());
+        assert_eq!(evidence_event_ids(&staged.ledger_path), original_ledger);
+
+        // Redo clears the staged boundary back to the original end. The intact
+        // sidecar must repopulate memory with the hidden turn evidence.
+        manager
+            .apply_staged_revert_context_locked(
+                workspace.path(),
+                &staged.session_id,
+                state.original_turn_end,
+            )
+            .await
+            .expect("redo should reapply the full boundary");
+        assert_eq!(
+            manager
+                .evidence_events_for_turn(&staged.session_id, "turn-2")
+                .len(),
+            1
+        );
+        persistence_manager
+            .delete_session_revert_state(workspace.path(), &staged.session_id)
+            .await
+            .expect("redo marker should clear");
+        assert_eq!(
+            manager
+                .get_session(&staged.session_id)
+                .expect("session should remain active")
+                .dialog_turn_ids,
+            vec![
+                "turn-0".to_string(),
+                "turn-1".to_string(),
+                "turn-2".to_string()
+            ]
+        );
+        assert_eq!(evidence_event_ids(&staged.ledger_path), original_ledger);
+        assert_eq!(
+            manager
+                .evidence_summary_for_session(&staged.session_id, 10)
+                .partial_subagent_results
+                .len(),
+            3
+        );
+    }
+
+    #[tokio::test]
+    async fn consecutive_staged_undo_and_redo_keep_sidecar_evidence() {
+        use crate::agentic::session::revert::{
+            SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
+        };
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let staged =
+            create_staged_evidence_session(&manager, &persistence_manager, &workspace, 3).await;
+        let original_ledger = evidence_event_ids(&staged.ledger_path);
+        assert_eq!(original_ledger.len(), 3);
+        let _mutation = manager
+            .acquire_session_mutation(&staged.session_id)
+            .await
+            .expect("session mutation");
+
+        for boundary in [2usize, 1, 0] {
+            let state = SessionRevertState {
+                schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                boundary_turn: boundary,
+                original_turn_end: 3,
+                phase: SessionRevertPhase::Staged,
+                workspace_checkpoint: Vec::new(),
+            };
+            persistence_manager
+                .save_session_revert_state(workspace.path(), &staged.session_id, &state)
+                .await
+                .expect("staged undo should persist");
+            manager
+                .apply_staged_revert_context_locked(workspace.path(), &staged.session_id, boundary)
+                .await
+                .expect("staged undo should apply");
+        }
+        assert!(manager
+            .evidence_events_for_turn(&staged.session_id, "turn-2")
+            .is_empty());
+        assert!(manager
+            .evidence_events_for_turn(&staged.session_id, "turn-1")
+            .is_empty());
+        assert_eq!(evidence_event_ids(&staged.ledger_path), original_ledger);
+
+        for boundary in [1usize, 2, 3] {
+            let state = SessionRevertState {
+                schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                boundary_turn: boundary,
+                original_turn_end: 3,
+                phase: SessionRevertPhase::Staged,
+                workspace_checkpoint: Vec::new(),
+            };
+            persistence_manager
+                .save_session_revert_state(workspace.path(), &staged.session_id, &state)
+                .await
+                .expect("staged redo should persist");
+            manager
+                .apply_staged_revert_context_locked(workspace.path(), &staged.session_id, boundary)
+                .await
+                .expect("staged redo should apply");
+        }
+        persistence_manager
+            .delete_session_revert_state(workspace.path(), &staged.session_id)
+            .await
+            .expect("redo marker should clear");
+        assert_eq!(
+            manager
+                .get_session(&staged.session_id)
+                .expect("session should remain active")
+                .dialog_turn_ids,
+            vec![
+                "turn-0".to_string(),
+                "turn-1".to_string(),
+                "turn-2".to_string()
+            ]
+        );
+        assert_eq!(evidence_event_ids(&staged.ledger_path), original_ledger);
+        assert_eq!(
+            manager
+                .evidence_events_for_turn(&staged.session_id, "turn-2")
+                .len(),
+            1
+        );
+        assert_eq!(
+            manager
+                .evidence_events_for_turn(&staged.session_id, "turn-1")
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn restoring_clearing_phase_keeps_redo_evidence_available() {
+        use crate::agentic::session::revert::{
+            SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
+        };
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let staged =
+            create_staged_evidence_session(&manager, &persistence_manager, &workspace, 3).await;
+        let original_ledger = evidence_event_ids(&staged.ledger_path);
+        assert_eq!(original_ledger.len(), 3);
+
+        let state = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 3,
+            original_turn_end: 3,
+            phase: SessionRevertPhase::Clearing,
+            workspace_checkpoint: Vec::new(),
+        };
+        persistence_manager
+            .save_session_revert_state(workspace.path(), &staged.session_id, &state)
+            .await
+            .expect("clearing marker should persist");
+        assert!(manager
+            .unload_session_from_memory(&staged.session_id)
+            .await
+            .expect("session should unload"));
+
+        manager
+            .restore_session(workspace.path(), &staged.session_id)
+            .await
+            .expect("clearing session should restore");
+        let _mutation = manager
+            .acquire_session_mutation(&staged.session_id)
+            .await
+            .expect("session mutation");
+        manager
+            .apply_staged_revert_context_locked(
+                workspace.path(),
+                &staged.session_id,
+                state.boundary_turn,
+            )
+            .await
+            .expect("clearing boundary should reapply");
+        persistence_manager
+            .delete_session_revert_state(workspace.path(), &staged.session_id)
+            .await
+            .expect("clearing marker should clear");
+        assert_eq!(
+            manager
+                .get_session(&staged.session_id)
+                .expect("session should restore")
+                .dialog_turn_ids,
+            vec![
+                "turn-0".to_string(),
+                "turn-1".to_string(),
+                "turn-2".to_string()
+            ]
+        );
+        assert_eq!(
+            manager
+                .evidence_events_for_turn(&staged.session_id, "turn-2")
+                .len(),
+            1
+        );
+        assert_eq!(evidence_event_ids(&staged.ledger_path), original_ledger);
+        assert_eq!(
+            manager
+                .evidence_summary_for_session(&staged.session_id, 10)
+                .partial_subagent_results
+                .len(),
+            3
         );
     }
 
