@@ -725,8 +725,6 @@
     "deviceService": "设备连接服务",
     "connectControlDevices": "连接控制设备",
     "connectedTo": "连接 {{target}}",
-    "messageAppControl": "消息应用",
-    "messageAppDetail": "通过消息应用操作",
     "mobileDevice": "移动设备",
     "backupSyncing": "加密备份 · 同步中",
     "backupSynced": "加密备份 · 已同步",

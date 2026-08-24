@@ -10,13 +10,18 @@ export type DeviceOverviewActivity =
   | 'current-use'
   | 'controlling'
   | 'background-execution';
+/**
+ * A connection service answers "which relay or network carries this link", a
+ * fact no device row can state. A message app is not one of those: it is the
+ * controller itself, already listed as a device, so reporting it here would only
+ * repeat that row's icon and name.
+ */
 export type DeviceOverviewConnectionServiceKind =
   | 'official'
   | 'self-hosted'
   | 'local-network'
   | 'public-tunnel'
-  | 'device-service'
-  | 'message-app';
+  | 'device-service';
 
 export interface DeviceOverviewDevice {
   id: string;
@@ -294,6 +299,9 @@ export function projectDeviceInterconnectionOverview(
     connectionService ??= connectionServiceFromActiveMethod(input.remoteStatus.active_method);
   }
 
+  // A paired bot contributes a controller and nothing else. It does not claim
+  // the connection service, so a link that also carries dispatch or peer traffic
+  // can still report the relay that actually carries it.
   if (input.remoteStatus?.bot_connected) {
     const applicationName = messageApplicationName(input.remoteStatus.bot_connected);
     addOrMergeDevice(devices, {
@@ -304,11 +312,6 @@ export function projectDeviceInterconnectionOverview(
       activities: ['controlling'],
       backgroundTaskCount: 0,
     });
-    connectionService ??= {
-      kind: 'message-app',
-      url: null,
-      host: applicationName ?? null,
-    };
   }
 
   let backgroundTaskCount = 0;

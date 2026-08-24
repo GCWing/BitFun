@@ -725,8 +725,6 @@
     "deviceService": "裝置連線服務",
     "connectControlDevices": "連線控制裝置",
     "connectedTo": "連線 {{target}}",
-    "messageAppControl": "訊息應用程式",
-    "messageAppDetail": "透過訊息應用程式操作",
     "mobileDevice": "行動裝置",
     "backupSyncing": "加密備份 · 同步中",
     "backupSynced": "加密備份 · 已同步",

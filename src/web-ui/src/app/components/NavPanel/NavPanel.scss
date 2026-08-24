@@ -2376,14 +2376,15 @@ $_section-header-height: 24px;
   > span {
     max-width: 128px;
     overflow: hidden;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 10px;
     font-weight: 550;
     text-overflow: ellipsis;
     white-space: nowrap;
 
-    // Same live-state dot the footer trigger uses, so the summary and the
-    // expanded list read as one status language.
+    // Green dot plus muted label, the live-state pairing the workspace list
+    // already teaches in this panel. Colouring the text as well would make one
+    // fact speak in two different status hues.
     &:not(:empty)::before {
       content: '';
       display: inline-block;
