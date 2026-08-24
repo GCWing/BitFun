@@ -3,7 +3,7 @@
  * Displays multiple questions, collects user answers and submits them
  */
 
-import React, { useState, useCallback, useMemo, useLayoutEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
 import { Loader2, AlertCircle, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
@@ -12,6 +12,14 @@ import { createLogger } from '@/shared/utils/logger';
 import { Button, Tooltip } from '@/component-library';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
+import {
+  askUserQuestionDraftKey,
+  askUserQuestionDraftStore,
+  createEmptyAskUserQuestionDraft,
+  useAskUserQuestionDraftStore,
+  type AskUserQuestionSubmissionPhase,
+} from '../store/askUserQuestionDraftStore';
+import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 import './AskUserQuestionCard.scss';
 
 const log = createLogger('AskUserQuestionCard');
@@ -88,6 +96,7 @@ function isAwaitingQuestionPayload(
 export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
   toolItem,
   isLastItem,
+  sessionId,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { status, toolCall, toolResult, isParamsStreaming, partialParams } = toolItem;
@@ -104,13 +113,25 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     status
   );
   
-  const [answers, setAnswers] = useState<Record<number, string | string[]>>({});
-  const [otherInputs, setOtherInputs] = useState<Record<number, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const toolId = toolItem.id ?? toolCall?.id;
+  const draftToolId = toolCall?.id || toolId;
+  const activeSurfaceId = getActiveSurfaceId();
+  const draftKey = useMemo(
+    () => sessionId && draftToolId
+      ? askUserQuestionDraftKey(sessionId, draftToolId, activeSurfaceId)
+      : null,
+    [activeSurfaceId, draftToolId, sessionId],
+  );
+  const storedDraft = useAskUserQuestionDraftStore(state => (
+    draftKey ? state.drafts[draftKey] : undefined
+  ));
+  const [localDraft, setLocalDraft] = useState(createEmptyAskUserQuestionDraft);
+  const draft = storedDraft ?? localDraft;
+  const { answers, otherInputs, submissionPhase } = draft;
+  const isSubmitting = submissionPhase === 'submitting';
+  const isSubmitted = submissionPhase === 'submitted';
   const [isExpanded, setIsExpanded] = useState(false);
   const [showCompletedSummary, setShowCompletedSummary] = useState(status === 'completed');
-  const toolId = toolItem.id ?? toolCall?.id;
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId,
     toolName: toolItem.toolName,
@@ -134,63 +155,144 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     }
   }, [applyExpandedState, isLastItem, showCompletedSummary, status]);
 
+  useEffect(() => {
+    if (
+      draftKey
+      && (
+        status === 'completed'
+        || status === 'cancelled'
+        || status === 'rejected'
+        || status === 'error'
+      )
+    ) {
+      askUserQuestionDraftStore.getState().clearDraft(draftKey);
+    }
+  }, [draftKey, status]);
+
+  const setSubmissionPhase = useCallback((phase: AskUserQuestionSubmissionPhase) => {
+    if (draftKey) {
+      askUserQuestionDraftStore.getState().setSubmissionPhase(draftKey, phase);
+      return;
+    }
+    setLocalDraft(current => ({
+      ...current,
+      submissionPhase: phase,
+      updatedAt: Date.now(),
+    }));
+  }, [draftKey]);
+
   const isAllAnswered = useCallback(() => {
     if (questions.length === 0) return false;
     
     for (let i = 0; i < questions.length; i++) {
       const answer = answers[i];
       if (!answer) return false;
-      if (Array.isArray(answer) && answer.length === 0) return false;
+      const otherInput = otherInputs[i]?.trim() || '';
+      if (
+        Array.isArray(answer)
+        && !answer.some(value => value !== 'Other' || otherInput.length > 0)
+      ) return false;
       if (typeof answer === 'string' && answer === '') return false;
+      if (answer === 'Other' && otherInput.length === 0) return false;
     }
     return true;
-  }, [answers, questions.length]);
+  }, [answers, otherInputs, questions.length]);
 
   const handleSingleChange = useCallback((questionIndex: number, value: string) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionIndex]: value
+    if (draftKey) {
+      askUserQuestionDraftStore.getState().setSingleAnswer(draftKey, questionIndex, value);
+      return;
+    }
+    setLocalDraft(current => ({
+      ...current,
+      answers: {
+        ...current.answers,
+        [questionIndex]: value,
+      },
+      updatedAt: Date.now(),
     }));
-  }, []);
+  }, [draftKey]);
 
   const handleMultiChange = useCallback((questionIndex: number, value: string, checked: boolean) => {
-    setAnswers(prev => {
-      const current = prev[questionIndex];
-      const currentArray = Array.isArray(current) ? current : [];
-      
-      if (checked) {
-        return { ...prev, [questionIndex]: [...currentArray, value] };
-      } else {
-        return { ...prev, [questionIndex]: currentArray.filter(v => v !== value) };
-      }
+    if (draftKey) {
+      askUserQuestionDraftStore.getState().setMultiAnswer(
+        draftKey,
+        questionIndex,
+        value,
+        checked,
+      );
+      return;
+    }
+    setLocalDraft(current => {
+      const currentAnswer = current.answers[questionIndex];
+      const currentValues = Array.isArray(currentAnswer) ? currentAnswer : [];
+      const nextValues = checked
+        ? (currentValues.includes(value) ? currentValues : [...currentValues, value])
+        : currentValues.filter(candidate => candidate !== value);
+      return {
+        ...current,
+        answers: {
+          ...current.answers,
+          [questionIndex]: nextValues,
+        },
+        updatedAt: Date.now(),
+      };
     });
-  }, []);
+  }, [draftKey]);
 
   const handleOtherInputChange = useCallback((questionIndex: number, value: string) => {
-    setOtherInputs(prev => ({
-      ...prev,
-      [questionIndex]: value
-    }));
-  }, []);
+    if (draftKey) {
+      askUserQuestionDraftStore.getState().setOtherInput(draftKey, questionIndex, value);
+      return;
+    }
+    setLocalDraft(current => {
+      const isEmpty = value.trim().length === 0;
+      const currentAnswer = current.answers[questionIndex];
+      let nextAnswers = current.answers;
+      if (isEmpty && Array.isArray(currentAnswer) && currentAnswer.includes('Other')) {
+        nextAnswers = {
+          ...current.answers,
+          [questionIndex]: currentAnswer.filter(answer => answer !== 'Other'),
+        };
+      } else if (isEmpty && currentAnswer === 'Other') {
+        nextAnswers = { ...current.answers };
+        delete nextAnswers[questionIndex];
+      }
+      return {
+        ...current,
+        answers: nextAnswers,
+        otherInputs: {
+          ...current.otherInputs,
+          [questionIndex]: isEmpty ? '' : value,
+        },
+        updatedAt: Date.now(),
+      };
+    });
+  }, [draftKey]);
 
   const handleSubmit = useCallback(async () => {
     if (!isAllAnswered() || isSubmitting || isSubmitted) return;
 
-    const toolId = toolItem.id;
-    setIsSubmitting(true);
+    setSubmissionPhase('submitting');
     try {
       const processedAnswers: Record<string, string | string[]> = {};
       
       for (let i = 0; i < questions.length; i++) {
         const answer = answers[i];
-        const otherInput = otherInputs[i] || '';
+        const otherInput = otherInputs[i]?.trim() || '';
         
         if (Array.isArray(answer)) {
-          processedAnswers[String(i)] = answer.map(v => 
-            v === 'Other' ? (otherInput || 'Other') : v
-          );
+          processedAnswers[String(i)] = answer.flatMap(value => (
+            value === 'Other'
+              ? (otherInput ? [otherInput] : [])
+              : [value]
+          ));
+        } else if (answer === 'Other') {
+          if (otherInput) {
+            processedAnswers[String(i)] = otherInput;
+          }
         } else {
-          processedAnswers[String(i)] = answer === 'Other' ? (otherInput || 'Other') : answer;
+          processedAnswers[String(i)] = answer;
         }
       }
 
@@ -198,13 +300,12 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
       
       await toolAPI.submitUserAnswers(toolId, answersPayload);
       
-      setIsSubmitted(true);
+      setSubmissionPhase('submitted');
     } catch (error) {
       log.error('Failed to submit answers', { toolId, error });
-    } finally {
-      setIsSubmitting(false);
+      setSubmissionPhase('idle');
     }
-  }, [toolItem.id, answers, otherInputs, questions.length, isAllAnswered, isSubmitting, isSubmitted]);
+  }, [answers, isAllAnswered, isSubmitted, isSubmitting, otherInputs, questions.length, setSubmissionPhase, toolId]);
 
   const getStatusIcon = () => {
     if (status === 'completed') {
@@ -377,7 +478,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     
     if (!answer) return '';
     if (Array.isArray(answer)) {
-      return answer.map(v => v === 'Other' ? otherInput || 'Other' : v).join(', ');
+      return answer.map(value => value === 'Other' ? otherInput || 'Other' : value).join(', ');
     }
     return answer === 'Other' ? otherInput || 'Other' : String(answer);
   };
@@ -457,7 +558,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                 size="small"
                 className="submit-button"
                 onClick={handleSubmit}
-                disabled={!isAllAnswered() || isSubmitting || Boolean(isParamsStreaming)}
+                disabled={!isAllAnswered() || isSubmitting || isSubmitted || Boolean(isParamsStreaming)}
                 isLoading={isSubmitting}
                 title={!isAllAnswered() ? t('toolCards.askUser.answerAllBeforeSubmit') : ""}
               >
