@@ -1675,6 +1675,48 @@ impl PersistenceManager {
             .map_err(|error| BitFunError::parse(error.to_string()))
     }
 
+    pub(crate) async fn retain_evidence_ledger_events(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        surviving_turn_ids: &std::collections::HashSet<String>,
+    ) -> BitFunResult<Option<Vec<EvidenceLedgerEvent>>> {
+        Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
+
+        let path = self.evidence_ledger_path(workspace_path, session_id);
+        let _file_lock = JsonFileStore
+            .acquire_cross_process_lock(&path)
+            .await
+            .map_err(Self::json_store_error)?;
+        if !path.exists() {
+            return Ok(None);
+        }
+        let Some(mut file) = JsonFileStore
+            .read_optional::<PersistedEvidenceLedgerFile>(&path)
+            .await
+            .map_err(Self::json_store_error)?
+        else {
+            return Err(BitFunError::io(format!(
+                "Evidence ledger disappeared while retaining: {}",
+                path.display()
+            )));
+        };
+        let retained = file
+            .retain_turn_ids(session_id, surviving_turn_ids)
+            .map_err(|error| BitFunError::parse(error.to_string()))?;
+        file.schema_version = EVIDENCE_LEDGER_SCHEMA_VERSION;
+        JsonFileStore
+            .write_atomic_strict(&path, &file)
+            .await
+            .map_err(Self::json_store_error)?;
+        Ok(Some(retained))
+    }
+
     pub async fn load_prompt_cache(
         &self,
         workspace_path: &Path,

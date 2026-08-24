@@ -2090,6 +2090,54 @@ impl SessionManager {
         Ok(event)
     }
 
+    /// Callers must hold the Session mutation boundary. The evidence operation
+    /// lock serializes this retention with evidence appends and restores.
+    ///
+    /// `force_prune_persisted_sidecar` covers explicit staged-revert history
+    /// mutations: a durable `session-revert.json` marker can exist even when
+    /// automatic Session persistence is disabled, and committing that marker
+    /// must prune the sidecar too. Legacy in-memory rollback keeps its existing
+    /// behavior unless automatic persistence is enabled.
+    async fn retain_evidence_events_locked(
+        &self,
+        session_storage_path: Option<&Path>,
+        session_id: &str,
+        surviving_turn_ids: &HashSet<String>,
+        force_prune_persisted_sidecar: bool,
+    ) -> BitFunResult<()> {
+        let _operation_guard = self.evidence_ledger_operation_locks.lock(session_id).await;
+        let durable_session = self
+            .sessions
+            .get(session_id)
+            .map(|session| self.should_persist_session(&session))
+            .unwrap_or(true);
+        let prune_persisted_sidecar =
+            durable_session && (self.config.enable_persistence || force_prune_persisted_sidecar);
+        if prune_persisted_sidecar {
+            let storage_path = session_storage_path.ok_or_else(|| {
+                BitFunError::session(format!(
+                    "Session storage path unavailable while retaining evidence: {}",
+                    session_id
+                ))
+            })?;
+            let retained = self
+                .persistence_manager
+                .retain_evidence_ledger_events(storage_path, session_id, surviving_turn_ids)
+                .await?;
+            if self.config.enable_persistence {
+                if let Some(retained) = retained {
+                    self.evidence_ledger
+                        .replace_session(session_id, retained)
+                        .map_err(|error| BitFunError::parse(error.to_string()))?;
+                    return Ok(());
+                }
+            }
+        }
+        self.evidence_ledger
+            .retain_turn_ids(session_id, surviving_turn_ids);
+        Ok(())
+    }
+
     pub async fn record_checkpoint_created(
         &self,
         session_id: &str,
@@ -5665,10 +5713,17 @@ impl SessionManager {
         if let Some(revert) = staged_revert.as_ref() {
             persisted_turns.retain(|turn| turn.turn_index < revert.boundary_turn);
         }
+        let surviving_turn_ids: HashSet<String> = persisted_turns
+            .iter()
+            .map(|turn| turn.turn_id.clone())
+            .collect();
         let restored_evidence_events = self
             .persistence_manager
             .load_evidence_ledger_events(session_storage_path, session_id)
-            .await?;
+            .await?
+            .into_iter()
+            .filter(|event| surviving_turn_ids.contains(&event.turn_id))
+            .collect::<Vec<_>>();
         debug!(
             "Session restore phase completed: session_id={}, phase=load_session_with_turns, turn_count={}, duration_ms={}",
             session_id,
@@ -6185,6 +6240,17 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
         }
+        let surviving_turn_ids = visible_turns
+            .iter()
+            .map(|turn| turn.turn_id.clone())
+            .collect::<HashSet<_>>();
+        self.retain_evidence_events_locked(
+            Some(session_storage_path),
+            session_id,
+            &surviving_turn_ids,
+            true,
+        )
+        .await?;
         Ok(())
     }
 
@@ -6244,6 +6310,13 @@ impl SessionManager {
             .unwrap_or_default();
         self.rollback_edit_constraint_state_to_turns(session_id, &surviving_turn_ids)
             .await;
+        self.retain_evidence_events_locked(
+            Some(session_storage_path),
+            session_id,
+            &surviving_turn_ids,
+            true,
+        )
+        .await?;
         let messages = self.context_store.get_context_messages(session_id);
         self.prune_token_anchors_to_messages(session_id, &messages)
             .await;
@@ -6393,6 +6466,13 @@ impl SessionManager {
             .remove_from(session_id, target_turn);
         self.rollback_edit_constraint_state_to_turns(session_id, &surviving_dialog_turn_ids)
             .await;
+        self.retain_evidence_events_locked(
+            Some(workspace_path),
+            session_id,
+            &surviving_dialog_turn_ids,
+            false,
+        )
+        .await?;
 
         Ok(())
     }
@@ -9975,7 +10055,7 @@ mod tests {
         let persistence_manager = Arc::new(
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
-        let manager = test_manager(persistence_manager);
+        let manager = test_manager(persistence_manager.clone());
         let session = manager
             .create_session(
                 "Recovery permission".to_string(),
@@ -15709,7 +15789,7 @@ mod tests {
         let persistence_manager = Arc::new(
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
-        let manager = test_manager(persistence_manager);
+        let manager = test_manager(persistence_manager.clone());
         let session = manager
             .create_session(
                 "Durable evidence".to_string(),
@@ -15725,6 +15805,26 @@ mod tests {
             .effective_session_storage_path(&session.session_id)
             .await
             .expect("storage path");
+        let turn = DialogTurnData::new(
+            "turn-a".to_string(),
+            0,
+            session.session_id.clone(),
+            UserMessageData {
+                id: "turn-a-user".to_string(),
+                content: "continue".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids = vec!["turn-a".to_string()];
         let event = manager
             .record_checkpoint_created(
                 &session.session_id,
@@ -15769,6 +15869,463 @@ mod tests {
         let summary = manager.evidence_summary_for_session(&session.session_id, 10);
         assert_eq!(summary.latest_checkpoints.len(), 1);
         assert_eq!(summary.latest_checkpoints[0].target, "src/lib.rs");
+    }
+
+    #[tokio::test]
+    async fn staged_revert_prunes_evidence_ledger_to_visible_turn_ids() {
+        use crate::agentic::session::revert::{
+            SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
+        };
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Staged revert evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        for index in 0..3 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+            let messages = (0..=index)
+                .map(|message_index| {
+                    crate::agentic::core::Message::user(format!("prompt {message_index}"))
+                })
+                .collect::<Vec<_>>();
+            persistence_manager
+                .save_turn_context_snapshot(workspace.path(), &session.session_id, index, &messages)
+                .await
+                .expect("context snapshot should save");
+        }
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids = vec![
+            "turn-0".to_string(),
+            "turn-1".to_string(),
+            "turn-2".to_string(),
+        ];
+        let turn_0_event = manager
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-0",
+                "ReviewSecurity",
+                "Partial turn 0",
+                Some("timeout"),
+            )
+            .await
+            .expect("turn-0 evidence should persist");
+        let turn_1_event = manager
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-1",
+                "ReviewTests",
+                "Partial turn 1",
+                Some("timeout"),
+            )
+            .await
+            .expect("turn-1 evidence should persist");
+        let turn_2_event = manager
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-2",
+                "Edit",
+                "Partial turn 2",
+                Some("timeout"),
+            )
+            .await
+            .expect("turn-2 evidence should persist");
+        let storage_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+        let ledger_path = storage_path
+            .join(&session.session_id)
+            .join("evidence-ledger.json");
+        let stored_before: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(&ledger_path).expect("ledger sidecar should exist"),
+        )
+        .expect("ledger sidecar should deserialize");
+        assert_eq!(
+            stored_before
+                .events
+                .iter()
+                .map(|event| event.event_id.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                turn_0_event.event_id.clone(),
+                turn_1_event.event_id.clone(),
+                turn_2_event.event_id.clone(),
+            ]
+        );
+
+        let state = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 2,
+            original_turn_end: 3,
+            phase: SessionRevertPhase::Staged,
+            workspace_checkpoint: Vec::new(),
+        };
+        persistence_manager
+            .save_session_revert_state(workspace.path(), &session.session_id, &state)
+            .await
+            .expect("staged revert should persist");
+
+        manager
+            .apply_staged_revert_context_locked(
+                workspace.path(),
+                &session.session_id,
+                state.boundary_turn,
+            )
+            .await
+            .expect("staged context should apply");
+
+        assert!(manager
+            .evidence_events_for_turn(&session.session_id, "turn-2")
+            .is_empty());
+        assert_eq!(
+            manager.evidence_events_for_turn(&session.session_id, "turn-1"),
+            vec![turn_1_event.clone()]
+        );
+        let stored_after: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(&ledger_path).expect("ledger sidecar should still exist"),
+        )
+        .expect("ledger sidecar should deserialize");
+        assert_eq!(
+            stored_after.events,
+            vec![turn_0_event, turn_1_event.clone()]
+        );
+
+        assert!(manager
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect("session should unload"));
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("staged session should restore");
+        assert_eq!(
+            restored.dialog_turn_ids,
+            vec!["turn-0".to_string(), "turn-1".to_string()]
+        );
+        assert_eq!(
+            manager.evidence_events_for_turn(&session.session_id, "turn-1"),
+            vec![turn_1_event]
+        );
+        assert!(manager
+            .evidence_events_for_turn(&session.session_id, "turn-2")
+            .is_empty());
+        assert_eq!(
+            manager
+                .evidence_summary_for_session(&session.session_id, 10)
+                .partial_subagent_results
+                .len(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn staged_revert_prunes_evidence_sidecar_without_automatic_persistence() {
+        use crate::agentic::session::revert::{
+            SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
+        };
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let writer = test_manager(persistence_manager.clone());
+        let session = writer
+            .create_session(
+                "Staged revert explicit history evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        for index in 0..2 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+            let messages = (0..=index)
+                .map(|message_index| {
+                    crate::agentic::core::Message::user(format!("prompt {message_index}"))
+                })
+                .collect::<Vec<_>>();
+            persistence_manager
+                .save_turn_context_snapshot(workspace.path(), &session.session_id, index, &messages)
+                .await
+                .expect("context snapshot should save");
+        }
+        writer
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids = vec!["turn-0".to_string(), "turn-1".to_string()];
+        let turn_0_event = writer
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-0",
+                "ReviewSecurity",
+                "Partial turn 0",
+                Some("timeout"),
+            )
+            .await
+            .expect("turn-0 evidence should persist");
+        let _turn_1_event = writer
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-1",
+                "ReviewTests",
+                "Partial turn 1",
+                Some("timeout"),
+            )
+            .await
+            .expect("turn-1 evidence should persist");
+        let storage_path = writer
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+        persistence_manager
+            .save_session_revert_state(
+                workspace.path(),
+                &session.session_id,
+                &SessionRevertState {
+                    schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                    boundary_turn: 1,
+                    original_turn_end: 2,
+                    phase: SessionRevertPhase::Committing,
+                    workspace_checkpoint: Vec::new(),
+                },
+            )
+            .await
+            .expect("staged revert should persist");
+        assert!(writer
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect("session should unload"));
+
+        let manager = test_manager_with_config(
+            persistence_manager.clone(),
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        );
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("explicit history should restore");
+        assert_eq!(restored.dialog_turn_ids, vec!["turn-0".to_string()]);
+        manager
+            .commit_staged_revert_context_locked(&storage_path, &session.session_id, 1)
+            .await
+            .expect("staged revert should commit without automatic persistence");
+
+        let stored: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(
+                storage_path
+                    .join(&session.session_id)
+                    .join("evidence-ledger.json"),
+            )
+            .expect("ledger sidecar should still exist"),
+        )
+        .expect("ledger sidecar should deserialize");
+        assert_eq!(stored.events, vec![turn_0_event.clone()]);
+        assert_eq!(
+            manager.evidence_events_for_turn(&session.session_id, "turn-0"),
+            vec![turn_0_event]
+        );
+        assert!(manager
+            .evidence_events_for_turn(&session.session_id, "turn-1")
+            .is_empty());
+        assert_eq!(
+            manager
+                .evidence_summary_for_session(&session.session_id, 10)
+                .partial_subagent_results
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_rollback_prunes_evidence_ledger_to_surviving_turn_ids() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Rollback evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        for index in 0..2 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+            let messages = (0..=index)
+                .map(|message_index| {
+                    crate::agentic::core::Message::user(format!("prompt {message_index}"))
+                })
+                .collect::<Vec<_>>();
+            persistence_manager
+                .save_turn_context_snapshot(workspace.path(), &session.session_id, index, &messages)
+                .await
+                .expect("context snapshot should save");
+        }
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids = vec!["turn-0".to_string(), "turn-1".to_string()];
+        let turn_0_event = manager
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-0",
+                "ReviewSecurity",
+                "Partial turn 0",
+                Some("timeout"),
+            )
+            .await
+            .expect("turn-0 evidence should persist");
+        let _turn_1_event = manager
+            .record_subagent_partial_timeout(
+                &session.session_id,
+                "turn-1",
+                "ReviewTests",
+                "Partial turn 1",
+                Some("timeout"),
+            )
+            .await
+            .expect("turn-1 evidence should persist");
+
+        manager
+            .rollback_context_to_turn_start(workspace.path(), &session.session_id, 1)
+            .await
+            .expect("rollback should succeed");
+
+        assert!(manager
+            .evidence_events_for_turn(&session.session_id, "turn-1")
+            .is_empty());
+        assert_eq!(
+            manager.evidence_events_for_turn(&session.session_id, "turn-0"),
+            vec![turn_0_event.clone()]
+        );
+        let storage_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path");
+        let stored: PersistedEvidenceLedgerFile = serde_json::from_slice(
+            &std::fs::read(
+                storage_path
+                    .join(&session.session_id)
+                    .join("evidence-ledger.json"),
+            )
+            .expect("ledger sidecar should exist"),
+        )
+        .expect("ledger sidecar should deserialize");
+        assert_eq!(stored.events, vec![turn_0_event.clone()]);
+
+        assert!(manager
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect("session should unload"));
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("rolled-back session should restore");
+        assert_eq!(restored.dialog_turn_ids, vec!["turn-0".to_string()]);
+        assert_eq!(
+            manager.evidence_events_for_turn(&session.session_id, "turn-0"),
+            vec![turn_0_event]
+        );
+        assert!(manager
+            .evidence_events_for_turn(&session.session_id, "turn-1")
+            .is_empty());
+        let contract = manager
+            .compression_contract_for_session(&session.session_id, 10)
+            .expect("compression contract should be available");
+        assert!(
+            contract
+                .subagent_statuses
+                .iter()
+                .all(|item| item.target != "ReviewTests"),
+            "rolled-back turn evidence must not enter the compression contract"
+        );
+        assert!(contract
+            .subagent_statuses
+            .iter()
+            .any(|item| item.target == "ReviewSecurity"));
+        assert_eq!(
+            manager
+                .evidence_summary_for_session(&session.session_id, 10)
+                .partial_subagent_results
+                .len(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -15930,6 +16487,44 @@ mod tests {
             .expect_err("corrupt evidence must not degrade to an empty ledger");
 
         assert!(manager.get_session(&session.session_id).is_none());
+        assert_eq!(
+            std::fs::read(&ledger_path).expect("corrupt sidecar should remain"),
+            corrupt_bytes
+        );
+    }
+
+    #[tokio::test]
+    async fn corrupt_evidence_ledger_blocks_retention_without_overwriting_original_bytes() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Corrupt retention evidence".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let ledger_path = manager
+            .effective_session_storage_path(&session.session_id)
+            .await
+            .expect("storage path")
+            .join(&session.session_id)
+            .join("evidence-ledger.json");
+        let corrupt_bytes = b"{not valid evidence";
+        std::fs::write(&ledger_path, corrupt_bytes).expect("corrupt fixture should write");
+
+        persistence_manager
+            .retain_evidence_ledger_events(workspace.path(), &session.session_id, &HashSet::new())
+            .await
+            .expect_err("corrupt evidence must not degrade to an empty ledger");
+
         assert_eq!(
             std::fs::read(&ledger_path).expect("corrupt sidecar should remain"),
             corrupt_bytes
