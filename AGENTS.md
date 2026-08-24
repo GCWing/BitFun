@@ -152,6 +152,16 @@ await api.invoke('your_command', { request: { ... } });
 - Desktop-only host adapters belong in `src/apps/desktop`, then flow through typed capability interfaces and, when event delivery is needed, the production transport adapter.
 - In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`.
 
+#### Child processes in GUI hosts
+
+- GUI hosts such as Desktop and Installer must not spawn child processes with bare
+  `std::process::Command` or `tokio::process::Command`. Prefer
+  `bitfun_services_core::process_manager::{create_command, create_tokio_command}`
+  or the existing facade for that layer. If a direct command is unavoidable,
+  Windows code must explicitly apply `CREATE_NO_WINDOW`; Node child processes
+  must set `windowsHide: true`. Apply the same policy to test fixtures so tests
+  do not flash console windows either.
+
 ### Remote scenarios
 
 BitFun is not a local-only desktop app. The workspace, the runtime that executes
