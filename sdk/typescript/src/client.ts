@@ -1,7 +1,6 @@
-import { isAbsolute } from "node:path";
-
 import type { InitializeResult, QueryStartParams, QueryStartResult } from "./internal/wire/index.js";
 import type { JsonRpcConnection } from "./internal/json-rpc.js";
+import { resolveHostPath } from "./internal/host-path.js";
 import { SdkError } from "./errors.js";
 import { Query } from "./query.js";
 import { Session, Sessions } from "./session.js";
@@ -32,16 +31,7 @@ export class AgentClient {
 
   static async start(options: AgentClientOptions): Promise<AgentClient> {
     validateModelOptions(options.model as unknown);
-    const hostPath = options.hostPath;
-    if (typeof hostPath !== "string" || !isAbsolute(hostPath)) {
-      throw new SdkError("SDK Host path must be an explicit absolute path", {
-        code: "invalid_request",
-        stage: "initialize",
-        retryable: false,
-        correlationId: "local:host_validation",
-        outcomeCertainty: "not_started",
-      });
-    }
+    const hostPath = resolveHostPath(options.hostPath);
     const [{ createAgentClient }, { startManagedHost }] = await Promise.all([
       import("./internal/client.js"),
       import("./internal/managed-host.js"),

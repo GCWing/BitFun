@@ -41,6 +41,7 @@ test("package files keep internal declarations and wire DTOs private", async () 
     "dist/sdk/typescript/src/*.d.ts",
     "dist/sdk/typescript/src/*.js",
     "dist/sdk/typescript/src/internal/*.js",
+    "dist/sdk/typescript/native/**",
     "dist/src/crates/adapters/transport/typescript/src/*.js",
     "README.md",
   ]);

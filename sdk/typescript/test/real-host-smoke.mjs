@@ -31,10 +31,6 @@ async function runParent() {
     ),
   );
 
-  const hostPath = process.env.BITFUN_SDK_HOST_PATH;
-  assert.equal(typeof hostPath, "string", "BITFUN_SDK_HOST_PATH is required");
-  assert.notEqual(hostPath.length, 0, "BITFUN_SDK_HOST_PATH is required");
-
   const apiKey = `bitfun-sdk-${randomBytes(24).toString("hex")}`;
   let requestCount = 0;
   const requestTraces = [];
@@ -79,7 +75,6 @@ async function runParent() {
     const address = await listenLocalhost(server);
     const workerEnvironment = {
       BITFUN_SDK_SMOKE_BASE_URL: `http://127.0.0.1:${String(address.port)}/v1`,
-      BITFUN_SDK_HOST_PATH: hostPath,
       BITFUN_SDK_SMOKE_WORKSPACE: workspace,
       BITFUN_E2E_STORAGE_GUARD: "1",
       BITFUN_E2E_USER_ROOT: userRoot,
@@ -147,7 +142,6 @@ async function runParent() {
 async function runWorker() {
   const apiKey = await readApiKeyFromStdin();
   const workspace = requiredEnvironment("BITFUN_SDK_SMOKE_WORKSPACE");
-  const hostPath = requiredEnvironment("BITFUN_SDK_HOST_PATH");
   const baseUrl = requiredEnvironment("BITFUN_SDK_SMOKE_BASE_URL");
   const missingHost = join(workspace, "missing-bitfun-sdk-host");
 
@@ -186,7 +180,6 @@ async function runWorker() {
 
   const client = await AgentClient.start({
     cwd: workspace,
-    hostPath,
     model: validModel,
   });
   process.stdout.write("phase:client_started\n");

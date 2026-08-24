@@ -26,9 +26,21 @@ existing `agent-runtime::sdk` API.
 
 ## Repository usage
 
-Build `bitfun-sdk-host`, then pass its absolute path and one process-lifetime
-model configuration while the platform-native package layout is still pending.
-The Host path must be explicit in this slice:
+Build the private SDK and `bitfun-sdk-host`, then stage that already-built Host
+into the local package. This does not install BitFun or publish anything:
+
+```bash
+cargo build -p bitfun-sdk-host-app
+pnpm --dir sdk/typescript build
+pnpm --dir sdk/typescript stage:host -- ../../target/debug/bitfun-sdk-host.exe
+```
+
+Use `bitfun-sdk-host` without `.exe` on macOS and Linux. The staging command
+copies only the current platform's executable into the package build under
+`dist/sdk/typescript/native/<platform>-<arch>/`.
+
+The trusted application then supplies one process-lifetime model configuration;
+the SDK finds and manages the staged native Host automatically:
 
 ```typescript
 import { AgentClient } from "@bitfun/agent-sdk";
@@ -36,7 +48,6 @@ import { AgentClient } from "@bitfun/agent-sdk";
 const apiKey = await trustedSecretStore.read("openai");
 await using client = await AgentClient.start({
   cwd: process.cwd(),
-  hostPath: "/absolute/path/to/bitfun-sdk-host",
   model: {
     provider: "openai",
     model: "gpt-5.4",
@@ -54,15 +65,20 @@ for await (const item of query) {
 const result = await query.result();
 ```
 
+An explicit absolute `hostPath` remains available as a development override.
+The SDK never searches `PATH` or an environment variable for the Host.
+
 This repository-local package is private and unpublished. Node 24.14.1 and Bun
-1.4.0 are the locally verified runners for this slice; they are not bundled
-executables or a final minimum-version policy. The eventual installable package
-must bundle or resolve a matching signed Host; it must not require a separately
-installed BitFun CLI.
+1.3.14 are the locally verified runners for this slice; they are not bundled
+executables or a final minimum-version policy. `pnpm --dir sdk/typescript pack`
+can produce a local tarball containing the staged Host, but this PR does not
+publish it. A future registry release still needs platform packages, signing,
+and release verification; it must not require a separately installed BitFun CLI.
 
 Browser and mobile runtimes cannot launch the local native Host. Custom
 functions, permission and user-input callbacks, structured output, usage,
-Session resume, Python support, and native package staging remain deferred.
+Session resume, Python support, platform package publication, signing, and
+downloads remain deferred.
 
 ## Development
 

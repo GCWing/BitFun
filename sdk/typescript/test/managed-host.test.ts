@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { AgentClient, SdkError } from "../src/index.js";
 import { createAgentClient } from "../src/internal/client.js";
+import { resolveHostPath } from "../src/internal/host-path.js";
 import { forceKillTree, startManagedHost } from "../src/internal/managed-host.js";
 import type { AgentClientOptions } from "../src/types.js";
 
@@ -51,41 +52,19 @@ test("AgentClient.start reports a missing Host before an operation begins", asyn
   );
 });
 
-test("AgentClient.start rejects missing and relative Host paths before spawning", async (context) => {
+test("the Host resolver uses the package-local executable without environment fallback", () => {
   const previousHostPath = process.env.BITFUN_SDK_HOST_PATH;
-  delete process.env.BITFUN_SDK_HOST_PATH;
+  process.env.BITFUN_SDK_HOST_PATH = process.execPath;
   try {
-    const cases: Array<{ name: string; options: unknown }> = [
-      {
-        name: "missing path",
-        options: { cwd: process.cwd(), model },
-      },
-      {
-        name: "relative path",
-        options: {
-          cwd: dirname(process.execPath),
-          hostPath: basename(process.execPath),
-          initializeTimeoutMs: 100,
-          model,
-        },
-      },
-    ];
-
-    for (const fixture of cases) {
-      await context.test(fixture.name, async () => {
-        await assert.rejects(
-          AgentClient.start(fixture.options as AgentClientOptions),
-          (error: unknown) => {
-            assert.ok(error instanceof SdkError);
-            assert.equal(error.code, "invalid_request");
-            assert.equal(error.stage, "initialize");
-            assert.equal(error.outcomeCertainty, "not_started");
-            assert.doesNotMatch(String(error.stack), /fixture-secret/);
-            return true;
-          },
-        );
-      });
-    }
+    const executableName = process.platform === "win32" ? "bitfun-sdk-host.exe" : "bitfun-sdk-host";
+    const expectedHost = fileURLToPath(
+      new URL(
+        `../native/${process.platform}-${process.arch}/${executableName}`,
+        import.meta.url,
+      ),
+    );
+    assert.equal(resolveHostPath(), expectedHost);
+    assert.notEqual(resolveHostPath(), process.execPath);
   } finally {
     if (previousHostPath === undefined) {
       delete process.env.BITFUN_SDK_HOST_PATH;
@@ -93,6 +72,25 @@ test("AgentClient.start rejects missing and relative Host paths before spawning"
       process.env.BITFUN_SDK_HOST_PATH = previousHostPath;
     }
   }
+});
+
+test("AgentClient.start rejects a relative Host override before spawning", async () => {
+  await assert.rejects(
+    AgentClient.start({
+      cwd: dirname(process.execPath),
+      hostPath: basename(process.execPath),
+      initializeTimeoutMs: 100,
+      model,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof SdkError);
+      assert.equal(error.code, "invalid_request");
+      assert.equal(error.stage, "initialize");
+      assert.equal(error.outcomeCertainty, "not_started");
+      assert.doesNotMatch(String(error.stack), /fixture-secret/);
+      return true;
+    },
+  );
 });
 
 test("AgentClient.start rejects invalid model options before spawning a Host", async (context) => {
