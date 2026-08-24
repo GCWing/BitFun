@@ -23,27 +23,37 @@
         "running": "Indexing..."
       },
       "badges": {
-        "rebuildRecommended": "Rebuild Recommended"
+        "baseAdvancing": "Index Catching Up",
+        "probePending": "Last Observed View"
       },
       "phase": {
         "preparing": "Preparing",
         "needs_index": "Needs Index",
+        "no_index_needed": "No index needed",
         "building": "Building",
         "ready": "Ready",
         "tracking_changes": "Tracking Changes",
         "refreshing": "Refreshing",
         "limited": "Limited",
-        "unknown": "Unknown"
+        "unknown": "Unknown",
+        "non_git": "Not a Git repo"
       },
       "summary": {
         "preparing": "Preparing the managed search workspace.",
-        "needs_index": "Search works with fallback now. Build the index for faster content search.",
+        "needs_index": "Automatic indexing is evaluating this workspace or has selected fallback search. No manual action is needed.",
         "building": "Building the workspace index.",
         "ready": "Managed index is ready. Content search can use the indexed backend.",
-        "tracking_changes": "Managed index is usable and workspace changes are being tracked. Rebuild is only needed when one is recommended.",
+        "tracking_changes": "Managed index is usable and workspace changes are being tracked. After a branch switch the index catches up to the new commit automatically.",
         "refreshing": "Refreshing the workspace index with the latest file changes.",
-        "limited": "Managed index is limited. Search can still fall back, but rebuild is recommended.",
-        "unavailable": "Search index status is unavailable right now."
+        "limited": "Managed index is limited. Search can still fall back; rebuilding the index may restore it.",
+        "unavailable": "Search index status is unavailable right now.",
+        "non_git": "This workspace is not a Git repository, so the search index does not apply; content search uses the fallback implementation."
+      },
+      "autoIndex": {
+        "pending": "Evaluating whether an index is needed.",
+        "eligible": "Above the indexing threshold; the index task is starting.",
+        "belowThreshold": "Only {{files}} files, below the {{threshold}} threshold — searching directly is faster.",
+        "unsupported": "Cannot be indexed: {{reason}}."
       },
       "indicator": {
         "label": "Workspace index status",
@@ -51,13 +61,14 @@
         "tones": {
           "green": "Index ready",
           "yellow": "Index needs attention",
-          "gray": "Index not built",
-          "red": "Index rebuild required"
+          "gray": "Fallback search available",
+          "red": "Index unhealthy"
         },
         "progressKnown": "{{processed}} / {{total}}",
         "progressUnknown": "{{processed}} items processed",
         "dirtyFiles": "Pending changes: {{modified}} modified, {{deleted}} deleted, {{new}} new",
-        "rebuildRecommended": "A rebuild is recommended.",
+        "baseAdvancing": "Advancing the index to the latest commit.",
+        "probePending": "Reconciling worktree changes; the dirty file counts above are from the last observation.",
         "probeDegraded": "Workspace probe is degraded and the indexed workspace view may stop tracking changes.",
         "hoverTooltip": "Flashgrep index: {{status}}"
       },

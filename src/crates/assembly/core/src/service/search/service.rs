@@ -86,6 +86,28 @@ impl WorkspaceSearchService {
         self.inner.schedule_repo_release(repo_root);
     }
 
+    pub async fn schedule_auto_index(
+        self: &Arc<Self>,
+        repo_root: impl AsRef<Path>,
+        priority: owner::WorkspaceSearchAutoIndexPriority,
+    ) {
+        self.inner.schedule_auto_index(repo_root, priority).await;
+    }
+
+    pub async fn enforce_index_disk_budget(
+        &self,
+        workspace_roots: Vec<PathBuf>,
+        protected_roots: Vec<PathBuf>,
+    ) {
+        self.inner
+            .enforce_index_disk_budget(workspace_roots, protected_roots)
+            .await;
+    }
+
+    pub async fn remove_workspace_index(&self, repo_root: impl AsRef<Path>) {
+        self.inner.remove_workspace_index(repo_root).await;
+    }
+
     pub async fn shutdown_all_daemons(&self) {
         self.inner.shutdown_all_daemons().await;
     }

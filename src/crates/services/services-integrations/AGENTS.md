@@ -49,7 +49,11 @@ slices that are outside pure product logic but still platform-neutral.
   wrapper: `src/apps/desktop/src/api/relay_deploy_api.rs`.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
-  and workspace bootstrap stay in the core facade as injected hooks.
+  and workspace bootstrap stay in the core facade as injected hooks. The daemon
+  returns match positions only, so content output uses
+  `search/grouped_line_matches` and hydrates line text from disk in
+  `workspace_search/line_hydration.rs`; the preview primitives it shares with
+  the ripgrep path live in `bitfun-services-core::filesystem::content_preview`.
 - Remote SSH workspace-search owns the disabled surface, path/scope/probe,
   bundle/retry strategy, and flashgrep session/context lifecycle behind a
   provider boundary.

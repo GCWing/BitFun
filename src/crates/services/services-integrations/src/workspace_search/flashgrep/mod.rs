@@ -53,8 +53,8 @@ pub(crate) use protocol::{
 pub(crate) use repo_session::FlashgrepRepoSession;
 pub(crate) use rpc_client::{drain_content_length_messages, ProtocolClient};
 pub(crate) use types::{
-    DirtyFileStats, FileCount, GlobOutcome, GlobRequest, OpenRepoParams, PathScope, QuerySpec,
-    RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend, SearchModeConfig,
-    SearchOutcome, SearchRequest, SearchResults, TaskKind, TaskPhase, TaskState, TaskStatus,
-    WorkspaceOverlayStatus,
+    DirtyFileStats, FileCount, GlobOutcome, GlobRequest, GroupedLineMatchResults, OpenRepoParams,
+    PathScope, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend,
+    SearchModeConfig, SearchOutcome, SearchRequest, SearchResults, TaskKind, TaskPhase, TaskState,
+    TaskStatus, WorkspaceOverlayStatus,
 };
