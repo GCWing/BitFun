@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use base64::Engine as _;
 use bitfun_services_core::dispatch_workspace::sha256_file;
+use bitfun_services_core::process_manager;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -1573,7 +1574,7 @@ fn commit_exists(repo: &Path, commit: &str) -> Result<bool> {
 }
 
 fn git_command(dir: &Path) -> Command {
-    let mut command = Command::new("git");
+    let mut command = process_manager::create_command("git");
     command
         .current_dir(dir)
         // A detached dispatch worker has nobody to answer a credential or

@@ -63,11 +63,11 @@ pub(super) async fn run_verifier(
     retries_used: u32,
 ) -> VerifyOutcome {
     let mut process = if cfg!(windows) {
-        let mut process = tokio::process::Command::new("cmd");
+        let mut process = bitfun_services_core::process_manager::create_tokio_command("cmd");
         process.arg("/C").arg(command);
         process
     } else {
-        let mut process = tokio::process::Command::new("sh");
+        let mut process = bitfun_services_core::process_manager::create_tokio_command("sh");
         process.arg("-c").arg(command);
         process
     };

@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
+#[cfg(test)]
 use std::process::Command;
 
+use bitfun_services_core::process_manager;
 use tokio::task::spawn_blocking;
 
 pub(crate) const DEFAULT_AUTO_INDEX_MIN_FILES: usize = 2_000;
@@ -99,7 +101,7 @@ fn git_ls_files_indexable_count(
     policy: AutoIndexPolicy,
     carried: usize,
 ) -> Result<usize, String> {
-    let output = Command::new("git")
+    let output = process_manager::create_command("git")
         .arg("ls-files")
         .args(selectors)
         .arg("-z")
@@ -128,7 +130,7 @@ fn git_ls_files_indexable_count(
 }
 
 fn git_worktree_root(repo_root: &Path) -> Result<PathBuf, String> {
-    let output = Command::new("git")
+    let output = process_manager::create_command("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(repo_root)
         .output()
@@ -146,7 +148,7 @@ fn git_worktree_root(repo_root: &Path) -> Result<PathBuf, String> {
     }
     let worktree_root = dunce::canonicalize(root)
         .map_err(|error| format!("cannot canonicalize Git worktree root: {error}"))?;
-    let head = Command::new("git")
+    let head = process_manager::create_command("git")
         .args(["rev-parse", "--verify", "HEAD^{commit}"])
         .current_dir(&worktree_root)
         .output()
