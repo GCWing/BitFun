@@ -176,6 +176,35 @@ impl PersistenceManager {
                 .await?;
             }
 
+            // Copy evidence ledger events for the branched turns, rewriting
+            // session_id to the target session so the fork inherits
+            // checkpoints, failed commands, and partial subagent results.
+            let source_evidence_events = self
+                .load_evidence_ledger_events(workspace_path, &request.source_session_id)
+                .await?;
+            if !source_evidence_events.is_empty() {
+                let copied_turn_ids: std::collections::HashSet<String> = branched_turns
+                    .iter()
+                    .map(|turn| turn.turn_id.clone())
+                    .collect();
+                let branched_evidence_events = source_evidence_events
+                    .into_iter()
+                    .filter(|event| copied_turn_ids.contains(&event.turn_id))
+                    .map(|mut event| {
+                        event.session_id = target_session_id.clone();
+                        event
+                    })
+                    .collect::<Vec<_>>();
+                if !branched_evidence_events.is_empty() {
+                    self.save_evidence_ledger_events(
+                        workspace_path,
+                        &target_session_id,
+                        branched_evidence_events,
+                    )
+                    .await?;
+                }
+            }
+
             let now_ms = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
