@@ -13,8 +13,8 @@ export interface AgentModelOptions {
 
 export interface AgentClientOptions {
   cwd: string;
-  /** Explicit absolute path to the native `bitfun-sdk-host`. */
-  hostPath: string;
+  /** Advanced absolute-path override for the package-local native Host. */
+  hostPath?: string;
   /** Deadline for the SDK Host initialize handshake. */
   initializeTimeoutMs?: number;
   /** Process-lifetime model credentials installed into this Host connection. */

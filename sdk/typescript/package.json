@@ -14,12 +14,14 @@
     "dist/sdk/typescript/src/*.d.ts",
     "dist/sdk/typescript/src/*.js",
     "dist/sdk/typescript/src/internal/*.js",
+    "dist/sdk/typescript/native/**",
     "dist/src/crates/adapters/transport/typescript/src/*.js",
     "README.md"
   ],
   "scripts": {
     "build": "pnpm run generate:wire && tsc -p tsconfig.json",
     "generate:wire": "node scripts/generate-wire.mjs",
+    "stage:host": "node scripts/stage-host.mjs",
     "smoke:bun": "bun test/real-host-smoke.mjs",
     "smoke:node": "node test/real-host-smoke.mjs",
     "test": "pnpm run build && node --test scripts/*.test.mjs dist/src/crates/adapters/transport/typescript/test/**/*.test.js dist/sdk/typescript/test/**/*.test.js",
