@@ -229,29 +229,21 @@ export class SystemAPI {
 
   /** Desktop only: whether BitFun should keep the local computer awake. */
   async getPreventSleepEnabled(): Promise<boolean> {
-    try {
-      const result = await productControlAPI.get('setting.application.general');
-      const enabled = result.currentOptionValues['prevent-sleep'];
-      if (typeof enabled !== 'boolean') {
-        throw new Error('ProductControl returned a non-boolean prevent-sleep state');
-      }
-      return enabled;
-    } catch (error) {
-      throw error;
+    const result = await productControlAPI.get('setting.application.general');
+    const enabled = result.currentOptionValues['prevent-sleep'];
+    if (typeof enabled !== 'boolean') {
+      throw new Error('ProductControl returned a non-boolean prevent-sleep state');
     }
+    return enabled;
   }
 
   /** Desktop only: apply and persist the app-wide sleep-prevention preference. */
   async setPreventSleepEnabled(enabled: boolean): Promise<void> {
-    try {
-      await productControlAPI.configure(
-        'setting.application.general',
-        'prevent-sleep',
-        enabled,
-      );
-    } catch (error) {
-      throw error;
-    }
+    await productControlAPI.configure(
+      'setting.application.general',
+      'prevent-sleep',
+      enabled,
+    );
   }
 
   // ─── Window / Tray behavior ────────────────────────────────────────────────
