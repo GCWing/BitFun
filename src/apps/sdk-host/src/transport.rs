@@ -17,8 +17,8 @@ use bitfun_sdk_host::host::{
     ConnectionControl, HostOutput, SdkHostConfig, SdkHostConnection, TemporaryModelInstaller,
 };
 use bitfun_sdk_host::protocol::{
-    JsonRpcErrorResponse, JsonRpcRequest, RequestId, METHOD_INITIALIZE, METHOD_QUERY_CANCEL,
-    METHOD_SESSION_CLOSE, METHOD_SHUTDOWN,
+    JsonRpcErrorResponse, JsonRpcRequest, RequestId, METHOD_INITIALIZE, METHOD_PERMISSION_RESPOND,
+    METHOD_QUERY_CANCEL, METHOD_SESSION_CLOSE, METHOD_SHUTDOWN,
 };
 
 #[derive(Debug, Clone)]
@@ -278,7 +278,7 @@ where
 
         let is_control_request = matches!(
             request.method.as_str(),
-            METHOD_QUERY_CANCEL | METHOD_SESSION_CLOSE
+            METHOD_PERMISSION_RESPOND | METHOD_QUERY_CANCEL | METHOD_SESSION_CLOSE
         );
         let request_set = if is_control_request {
             &mut control_requests

@@ -35,7 +35,7 @@ void queryModelOverride;
 void sessionModelOverride;
 void packageHostOptions;
 
-test("a Query streams ordered events and returns the Host terminal Result", async () => {
+test("a Query streams tool and permission events before the terminal Result", async () => {
   const clientToHost = new PassThrough();
   const hostToClient = new PassThrough();
   const initializeRequests: unknown[] = [];
@@ -55,9 +55,12 @@ test("a Query streams ordered events and returns the Host terminal Result", asyn
   assert.ok(client instanceof AgentClient);
   assert.equal(initializeRequests.length, 1);
   assert.deepEqual(initializeRequests[0], {
-    protocolVersion: 2,
+    protocolVersion: 3,
     clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
-    capabilities: { serverNotifications: true },
+    capabilities: {
+      serverNotifications: true,
+      permissionResponses: true,
+    },
     model: {
       provider: "openai",
       model: "fixture-model",
@@ -72,19 +75,76 @@ test("a Query streams ordered events and returns the Host terminal Result", asyn
   assert.equal(query.id, "query-1");
   assert.equal(query.operationId, "operation-1");
   assert.deepEqual(query.turn, { id: "turn-1", sessionId: "session-1" });
+  assert.deepEqual(client.capabilities, {
+    query: true,
+    sessions: true,
+    cancellation: true,
+    eventStream: true,
+    toolEvents: true,
+    permissionResponses: true,
+    structuredOutput: false,
+    usage: false,
+    customTools: false,
+    hooks: false,
+    mcpConfiguration: false,
+  });
   const items = [];
   for await (const item of query) {
     items.push(item);
+    if (item.type === "permission_request") {
+      await query.respondPermission(item.requestId, { decision: "allow_once" });
+      await assert.rejects(
+        query.respondPermission(item.requestId, { decision: "allow_once" }),
+        /unknown, expired, or already answered/,
+      );
+    }
   }
 
   assert.deepEqual(items, [
+    {
+      type: "tool_event",
+      queryId: "query-1",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      operationId: "operation-1",
+      sequence: 1,
+      toolCallId: "tool-1",
+      toolName: "Read",
+      status: "started",
+    },
+    {
+      type: "permission_request",
+      queryId: "query-1",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      operationId: "operation-1",
+      sequence: 2,
+      requestId: "permission-1",
+      action: "read",
+      resources: ["README.md"],
+      source: { kind: "tool_call", identity: "Read" },
+      toolCallId: "tool-1",
+      responseTimeoutMs: 120_000,
+    },
+    {
+      type: "tool_event",
+      queryId: "query-1",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      operationId: "operation-1",
+      sequence: 3,
+      toolCallId: "tool-1",
+      toolName: "Read",
+      status: "completed",
+      durationMs: 12,
+    },
     {
       type: "assistant_text_delta",
       queryId: "query-1",
       sessionId: "session-1",
       turnId: "turn-1",
       operationId: "operation-1",
-      sequence: 1,
+      sequence: 4,
       text: "fixture result",
     },
     {
@@ -470,7 +530,7 @@ async function runFixtureHost(
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          protocolVersion: 2,
+          protocolVersion: 3,
           runtimeVersion: "0.2.17",
           stability: "not_delivered",
           capabilities: {
@@ -480,10 +540,11 @@ async function runFixtureHost(
             queryCancel: true,
             sessionClose: true,
             eventStream: true,
+            toolEvents: true,
             structuredOutput: false,
             usage: false,
             customTools: false,
-            permissionCallbacks: false,
+            permissionResponses: true,
             hooks: false,
             mcpConfiguration: false,
             prestartedTransport: false,
@@ -524,6 +585,77 @@ async function runFixtureHost(
           turnId: "turn-1",
           operationId: "operation-1",
           sequence: 1,
+          event: {
+            type: "tool_event",
+            toolCallId: "tool-1",
+            toolName: "Read",
+            status: "started",
+          },
+        },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/event",
+        params: {
+          queryId: "query-1",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          operationId: "operation-1",
+          sequence: 2,
+          event: {
+            type: "permission_request",
+            requestId: "permission-1",
+            action: "read",
+            resources: ["README.md"],
+            source: { kind: "tool_call", identity: "Read" },
+            toolCallId: "tool-1",
+            responseTimeoutMs: 120_000,
+          },
+        },
+      });
+      continue;
+    }
+    if (request.method === "permission/respond") {
+      assert.deepEqual(request.params, {
+        queryId: "query-1",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        operationId: "operation-1",
+        requestId: "permission-1",
+        decision: "allow_once",
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { requestId: "permission-1", accepted: true },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/event",
+        params: {
+          queryId: "query-1",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          operationId: "operation-1",
+          sequence: 3,
+          event: {
+            type: "tool_event",
+            toolCallId: "tool-1",
+            toolName: "Read",
+            status: "completed",
+            durationMs: 12,
+          },
+        },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/event",
+        params: {
+          queryId: "query-1",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          operationId: "operation-1",
+          sequence: 4,
           event: { type: "assistant_text_delta", text: "fixture result" },
         },
       });
@@ -1095,7 +1227,7 @@ function initializeResponse(id: number): unknown {
     jsonrpc: "2.0",
     id,
     result: {
-      protocolVersion: 2,
+      protocolVersion: 3,
       runtimeVersion: "0.2.17",
       stability: "not_delivered",
       capabilities: {
@@ -1105,10 +1237,11 @@ function initializeResponse(id: number): unknown {
         queryCancel: true,
         sessionClose: true,
         eventStream: true,
+        toolEvents: true,
         structuredOutput: false,
         usage: false,
         customTools: false,
-        permissionCallbacks: false,
+        permissionResponses: true,
         hooks: false,
         mcpConfiguration: false,
         prestartedTransport: false,

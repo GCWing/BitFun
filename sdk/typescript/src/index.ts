@@ -9,6 +9,10 @@ export type {
   AgentModelProvider,
   AssistantTextDelta,
   OutcomeCertainty,
+  PermissionDecision,
+  PermissionRequestEvent,
+  PermissionResponse,
+  PermissionSource,
   QueryInput,
   QueryStreamItem,
   RecoveryAction,
@@ -22,4 +26,5 @@ export type {
   SessionLifetime,
   Turn,
   TurnInput,
+  ToolEvent,
 } from "./types.js";
