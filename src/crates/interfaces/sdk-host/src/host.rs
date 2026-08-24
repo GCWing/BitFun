@@ -27,10 +27,10 @@ use crate::protocol::{
     QueryCancelParams, QueryCancelResult, QueryEvent, QueryEventParams, QueryOutput,
     QueryResultError, QueryResultParams, QueryStartParams, QueryStartResult, QueryTerminalStatus,
     RecoveryAction, RequestId, SessionCloseParams, SessionCloseResult, SessionCreateParams,
-    SessionCreateResult, SessionLifetime, ShutdownParams, ShutdownResult, JSON_RPC_VERSION,
-    METHOD_INITIALIZE, METHOD_QUERY_CANCEL, METHOD_QUERY_START, METHOD_SESSION_CLOSE,
-    METHOD_SESSION_CREATE, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT, NOTIFICATION_QUERY_RESULT,
-    PROTOCOL_VERSION,
+    SessionCreateResult, SessionLifetime, ShutdownParams, ShutdownResult, TemporaryModelConfig,
+    JSON_RPC_VERSION, METHOD_INITIALIZE, METHOD_QUERY_CANCEL, METHOD_QUERY_START,
+    METHOD_SESSION_CLOSE, METHOD_SESSION_CREATE, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT,
+    NOTIFICATION_QUERY_RESULT, PROTOCOL_VERSION,
 };
 
 const DEFAULT_SESSION_NAME: &str = "BitFun SDK query";
@@ -82,6 +82,22 @@ pub trait HostOutput: Send + Sync {
     async fn send(&self, value: serde_json::Value) -> Result<(), ()>;
 }
 
+#[async_trait::async_trait]
+pub trait TemporaryModelInstaller: Send + Sync {
+    async fn install(
+        &self,
+        model: TemporaryModelConfig,
+    ) -> Result<String, TemporaryModelInstallError>;
+    async fn remove(&self, model_id: &str);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemporaryModelInstallError {
+    InvalidModel,
+    InvalidBaseUrl,
+    Internal,
+}
+
 struct ChannelHostOutput(mpsc::Sender<serde_json::Value>);
 
 #[async_trait::async_trait]
@@ -96,6 +112,7 @@ struct ConnectionInner {
     runtime_version: &'static str,
     default_cwd: String,
     output: Arc<dyn HostOutput>,
+    temporary_model_installer: Arc<dyn TemporaryModelInstaller>,
     state: Arc<Mutex<ConnectionState>>,
     request_budget: Arc<Semaphore>,
     control_request_budget: Arc<Semaphore>,
@@ -107,7 +124,8 @@ struct ConnectionInner {
 
 #[derive(Default)]
 struct ConnectionState {
-    initialized: bool,
+    initialization: InitializationState,
+    model_id: Option<String>,
     shutting_down: bool,
     cleanup_failed: bool,
     sessions: HashMap<String, SessionLease>,
@@ -118,6 +136,14 @@ struct ConnectionState {
     poisoned_sessions: HashSet<String>,
     pending_session_tasks: Vec<PendingSessionTask>,
     untracked_transient_cleanups: HashMap<String, TransientSessionCleanup>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum InitializationState {
+    #[default]
+    Uninitialized,
+    Installing,
+    Initialized,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,12 +202,14 @@ impl SdkHostConnection {
         default_cwd: impl Into<String>,
         output: mpsc::Sender<serde_json::Value>,
         config: SdkHostConfig,
+        temporary_model_installer: Arc<dyn TemporaryModelInstaller>,
     ) -> Self {
         Self::with_output(
             runtime,
             default_cwd,
             Arc::new(ChannelHostOutput(output)),
             config,
+            temporary_model_installer,
         )
     }
 
@@ -190,6 +218,7 @@ impl SdkHostConnection {
         default_cwd: impl Into<String>,
         output: Arc<dyn HostOutput>,
         config: SdkHostConfig,
+        temporary_model_installer: Arc<dyn TemporaryModelInstaller>,
     ) -> Self {
         Self {
             inner: Arc::new(ConnectionInner {
@@ -197,6 +226,7 @@ impl SdkHostConnection {
                 runtime_version: env!("CARGO_PKG_VERSION"),
                 default_cwd: default_cwd.into(),
                 output,
+                temporary_model_installer,
                 state: Arc::new(Mutex::new(ConnectionState::default())),
                 request_budget: Arc::new(Semaphore::new(config.max_in_flight_requests.max(1))),
                 control_request_budget: Arc::new(Semaphore::new(
@@ -278,7 +308,7 @@ impl SdkHostConnection {
         let (initialized, shutting_down, cleanup_failed) = {
             let state = self.inner.state.lock().await;
             (
-                state.initialized,
+                state.initialization == InitializationState::Initialized,
                 state.shutting_down,
                 state.cleanup_failed || !state.untracked_transient_cleanups.is_empty(),
             )
@@ -376,7 +406,7 @@ impl SdkHostConnection {
     /// Reports whether this connection has completed the required initialize
     /// handshake so a transport can serialize re-initialization safely.
     pub async fn is_initialized(&self) -> bool {
-        self.inner.state.lock().await.initialized
+        self.inner.state.lock().await.initialization == InitializationState::Initialized
     }
 
     async fn reap_finished_pending_session_tasks(&self) {
@@ -555,6 +585,17 @@ impl SdkHostConnection {
                 }
             }
         }
+        let model_id = {
+            let mut state = self.inner.state.lock().await;
+            let model_id = state.model_id.take();
+            if model_id.is_some() {
+                state.initialization = InitializationState::Uninitialized;
+            }
+            model_id
+        };
+        if let Some(model_id) = model_id {
+            self.inner.temporary_model_installer.remove(&model_id).await;
+        }
         cleanup_complete
     }
 
@@ -729,26 +770,98 @@ impl SdkHostConnection {
             .await;
             return;
         }
-        {
+        let initialization_error = {
             let mut state = self.inner.state.lock().await;
-            if state.initialized {
+            if state.shutting_down {
+                Some((ErrorCode::Cancelled, "SDK Host connection is shutting down"))
+            } else if state.initialization != InitializationState::Uninitialized {
+                Some((
+                    ErrorCode::AlreadyInitialized,
+                    "SDK Host connection is already initialized",
+                ))
+            } else {
+                state.initialization = InitializationState::Installing;
+                None
+            }
+        };
+        if let Some((code, message)) = initialization_error {
+            self.send_error(
+                request.id.clone(),
+                code,
+                ErrorStage::Initialize,
+                false,
+                None,
+                message,
+            )
+            .await;
+            return;
+        }
+        let model_id = match self
+            .inner
+            .temporary_model_installer
+            .install(params.model)
+            .await
+        {
+            Ok(model_id) => model_id,
+            Err(error) => {
+                let mut state = self.inner.state.lock().await;
+                if state.initialization == InitializationState::Installing {
+                    state.initialization = InitializationState::Uninitialized;
+                }
                 drop(state);
+                let (code, message) = match error {
+                    TemporaryModelInstallError::InvalidModel => (
+                        ErrorCode::InvalidRequest,
+                        "model provider, model, and apiKey are required",
+                    ),
+                    TemporaryModelInstallError::InvalidBaseUrl => (
+                        ErrorCode::InvalidRequest,
+                        "baseUrl must be an absolute http or https URL without credentials, query, or fragment",
+                    ),
+                    TemporaryModelInstallError::Internal => (
+                        ErrorCode::Internal,
+                        "SDK Host could not install the temporary model",
+                    ),
+                };
                 self.send_error(
                     request.id.clone(),
-                    ErrorCode::AlreadyInitialized,
+                    code,
                     ErrorStage::Initialize,
                     false,
                     None,
-                    "SDK Host connection is already initialized",
+                    message,
                 )
                 .await;
                 return;
             }
-            state.initialized = true;
+        };
+        let remove_after_shutdown = {
+            let mut state = self.inner.state.lock().await;
+            if state.shutting_down {
+                state.initialization = InitializationState::Uninitialized;
+                true
+            } else {
+                state.model_id = Some(model_id.clone());
+                state.initialization = InitializationState::Initialized;
+                false
+            }
+        };
+        if remove_after_shutdown {
+            self.inner.temporary_model_installer.remove(&model_id).await;
+            self.send_error(
+                request.id.clone(),
+                ErrorCode::Cancelled,
+                ErrorStage::Initialize,
+                false,
+                None,
+                "SDK Host connection is shutting down",
+            )
+            .await;
+            return;
         }
         self.send_success(
             request.id.clone(),
-            InitializeResult::current(self.inner.runtime_version),
+            InitializeResult::current(self.inner.runtime_version, model_id),
         )
         .await;
     }
@@ -773,6 +886,7 @@ impl SdkHostConnection {
             return;
         };
         let workspace_path = params.cwd.unwrap_or_else(|| self.inner.default_cwd.clone());
+        let model_id = self.inner.state.lock().await.model_id.clone();
         let result = self
             .create_leased_session(
                 AgentSessionCreateRequest {
@@ -786,7 +900,7 @@ impl SdkHostConnection {
                     workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
-                    model_id: params.model,
+                    model_id,
                     metadata: serde_json::Map::new(),
                 },
                 workspace_path,
@@ -895,6 +1009,7 @@ impl SdkHostConnection {
                     .cwd
                     .clone()
                     .unwrap_or_else(|| self.inner.default_cwd.clone());
+                let model_id = self.inner.state.lock().await.model_id.clone();
                 match self
                     .create_leased_session(
                         AgentSessionCreateRequest {
@@ -912,7 +1027,7 @@ impl SdkHostConnection {
                             workspace_id: None,
                             remote_connection_id: None,
                             remote_ssh_host: None,
-                            model_id: params.model.clone(),
+                            model_id,
                             metadata: serde_json::Map::new(),
                         },
                         workspace_path,

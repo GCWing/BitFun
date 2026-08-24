@@ -4,18 +4,24 @@ import { JsonRpcConnection } from "./json-rpc.js";
 import type { HostTransport } from "./transport.js";
 import type { InitializeParams, InitializeResult } from "./wire/index.js";
 
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 const DEFAULT_INITIALIZE_TIMEOUT_MS = 30_000;
 
 export async function createAgentClient(
   transport: HostTransport,
-  options: AgentClientOptions,
+  options: Pick<AgentClientOptions, "cwd" | "initializeTimeoutMs" | "model">,
 ): Promise<AgentClient> {
   const connection = new JsonRpcConnection(transport);
   const params: InitializeParams = {
     protocolVersion: PROTOCOL_VERSION,
     clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
     capabilities: { serverNotifications: true },
+    model: {
+      provider: options.model.provider,
+      model: options.model.model,
+      apiKey: options.model.apiKey,
+      baseUrl: options.model.baseUrl,
+    },
   };
   const initialized = await connection.request<InitializeResult>(
     "initialize",

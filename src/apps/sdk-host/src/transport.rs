@@ -13,7 +13,9 @@ use tokio::time::{timeout, Instant};
 use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
 use tokio_util::sync::CancellationToken;
 
-use bitfun_sdk_host::host::{ConnectionControl, HostOutput, SdkHostConfig, SdkHostConnection};
+use bitfun_sdk_host::host::{
+    ConnectionControl, HostOutput, SdkHostConfig, SdkHostConnection, TemporaryModelInstaller,
+};
 use bitfun_sdk_host::protocol::{
     JsonRpcErrorResponse, JsonRpcRequest, RequestId, METHOD_INITIALIZE, METHOD_QUERY_CANCEL,
     METHOD_SESSION_CLOSE, METHOD_SHUTDOWN,
@@ -91,6 +93,7 @@ where
 pub async fn serve_streams<Reader, Writer>(
     runtime: AgentRuntime,
     default_cwd: impl Into<String>,
+    temporary_model_installer: Arc<dyn TemporaryModelInstaller>,
     reader: Reader,
     writer: Writer,
     config: SdkHostTransportConfig,
@@ -108,8 +111,13 @@ where
         config.max_output_line_bytes,
     ));
     let output_failed = output.failure_token();
-    let connection =
-        SdkHostConnection::with_output(runtime, default_cwd, output.clone(), config.host);
+    let connection = SdkHostConnection::with_output(
+        runtime,
+        default_cwd,
+        output.clone(),
+        config.host,
+        temporary_model_installer,
+    );
     let connection_failed = connection.connection_failed_token();
     let mut lines = FramedRead::new(
         reader,
@@ -372,10 +380,12 @@ async fn drain_requests(requests: &mut JoinSet<ConnectionControl>, drain_timeout
 pub async fn serve_stdio(
     runtime: AgentRuntime,
     default_cwd: impl Into<String>,
+    temporary_model_installer: Arc<dyn TemporaryModelInstaller>,
 ) -> Result<(), std::io::Error> {
     serve_streams(
         runtime,
         default_cwd,
+        temporary_model_installer,
         tokio::io::stdin(),
         tokio::io::stdout(),
         SdkHostTransportConfig::default(),

@@ -5,6 +5,8 @@ export { Session, Sessions } from "./session.js";
 export type {
   AgentCapabilities,
   AgentClientOptions,
+  AgentModelOptions,
+  AgentModelProvider,
   AssistantTextDelta,
   OutcomeCertainty,
   QueryInput,

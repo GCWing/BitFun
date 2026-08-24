@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
@@ -9,12 +9,37 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
     AgentSubmissionResult, AgentTransientSessionDiscardRequest, PortResult,
 };
+use bitfun_sdk_host::host::{TemporaryModelInstallError, TemporaryModelInstaller};
+use bitfun_sdk_host::protocol::TemporaryModelConfig;
 use bitfun_sdk_host_app::transport::{serve_streams, SdkHostTransportConfig};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Notify;
 use tokio::time::{timeout, Duration};
 
 struct MinimalOwner;
+
+#[derive(Default)]
+struct FakeTemporaryModelInstaller {
+    removed: Mutex<Vec<String>>,
+}
+
+#[async_trait]
+impl TemporaryModelInstaller for FakeTemporaryModelInstaller {
+    async fn install(
+        &self,
+        _model: TemporaryModelConfig,
+    ) -> Result<String, TemporaryModelInstallError> {
+        Ok("sdk:openai:transport".to_string())
+    }
+
+    async fn remove(&self, model_id: &str) {
+        self.removed.lock().unwrap().push(model_id.to_string());
+    }
+}
+
+fn fake_installer() -> Arc<dyn TemporaryModelInstaller> {
+    Arc::new(FakeTemporaryModelInstaller::default())
+}
 
 fn created_session_result(
     session_id: impl Into<String>,
@@ -185,9 +210,11 @@ async fn stdio_transport_serves_initialize_and_shutdown_without_non_protocol_std
     let (client, server) = tokio::io::duplex(16 * 1024);
     let (client_read, mut client_write) = tokio::io::split(client);
     let (server_read, server_write) = tokio::io::split(server);
+    let installer = Arc::new(FakeTemporaryModelInstaller::default());
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        installer.clone(),
         server_read,
         server_write,
         SdkHostTransportConfig::default(),
@@ -195,7 +222,7 @@ async fn stdio_transport_serves_initialize_and_shutdown_without_non_protocol_std
     client_write
         .write_all(
             concat!(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"shutdown\",\"params\":{}}\n"
             )
             .as_bytes(),
@@ -211,11 +238,16 @@ async fn stdio_transport_serves_initialize_and_shutdown_without_non_protocol_std
         serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
 
     assert_eq!(initialized["id"], 1);
-    assert_eq!(initialized["result"]["protocolVersion"], 1);
+    assert_eq!(initialized["result"]["protocolVersion"], 2);
+    assert_eq!(initialized["result"]["modelId"], "sdk:openai:transport");
     assert_eq!(shutdown["id"], 2);
     assert_eq!(shutdown["result"]["accepted"], true);
     assert!(lines.next_line().await.unwrap().is_none());
     task.await.unwrap().unwrap();
+    assert_eq!(
+        installer.removed.lock().unwrap().as_slice(),
+        &["sdk:openai:transport".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -232,6 +264,7 @@ async fn stdio_transport_executes_json_rpc_notifications_without_replying() {
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        fake_installer(),
         server_read,
         server_write,
         SdkHostTransportConfig::default(),
@@ -239,7 +272,7 @@ async fn stdio_transport_executes_json_rpc_notifications_without_replying() {
     client_write
         .write_all(
             concat!(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
                 "{\"jsonrpc\":\"2.0\",\"method\":\"shutdown\",\"params\":{}}\n"
             )
             .as_bytes(),
@@ -274,6 +307,7 @@ async fn malformed_and_oversized_lines_fail_closed_with_standard_parse_errors() 
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        fake_installer(),
         server_read,
         server_write,
         SdkHostTransportConfig {
@@ -324,6 +358,7 @@ async fn transport_accepts_input_while_an_owner_call_is_pending_and_bounds_reque
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        fake_installer(),
         server_read,
         server_write,
         SdkHostTransportConfig {
@@ -337,7 +372,7 @@ async fn transport_accepts_input_while_an_owner_call_is_pending_and_bounds_reque
     client_write
         .write_all(
             concat!(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/create\",\"params\":{}}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"session/create\",\"params\":{}}\n"
             )
@@ -395,6 +430,7 @@ async fn shutdown_remains_available_when_the_data_request_budget_is_exhausted() 
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        fake_installer(),
         server_read,
         server_write,
         SdkHostTransportConfig {
@@ -408,7 +444,7 @@ async fn shutdown_remains_available_when_the_data_request_budget_is_exhausted() 
     ));
     client_write
         .write_all(
-            b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+            b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
         )
         .await
         .unwrap();
@@ -463,6 +499,7 @@ async fn duplicate_initialize_does_not_abort_an_in_flight_request() {
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        fake_installer(),
         server_read,
         server_write,
         SdkHostTransportConfig::default(),
@@ -470,9 +507,9 @@ async fn duplicate_initialize_does_not_abort_an_in_flight_request() {
     client_write
         .write_all(
             concat!(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/create\",\"params\":{}}\n",
-                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n"
+                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n"
             )
             .as_bytes(),
         )
@@ -515,9 +552,11 @@ async fn connection_eof_cleans_a_session_created_after_its_request_is_aborted() 
     let (client, server) = tokio::io::duplex(16 * 1024);
     let (client_read, mut client_write) = tokio::io::split(client);
     let (server_read, server_write) = tokio::io::split(server);
+    let installer = Arc::new(FakeTemporaryModelInstaller::default());
     let mut task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        installer.clone(),
         server_read,
         server_write,
         SdkHostTransportConfig {
@@ -528,7 +567,7 @@ async fn connection_eof_cleans_a_session_created_after_its_request_is_aborted() 
     client_write
         .write_all(
             concat!(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/create\",\"params\":{}}\n"
             )
             .as_bytes(),
@@ -555,6 +594,10 @@ async fn connection_eof_cleans_a_session_created_after_its_request_is_aborted() 
         .unwrap();
     assert_eq!(owner.deleted.load(Ordering::Acquire), 1);
     assert!(lines.next_line().await.unwrap().is_none());
+    assert_eq!(
+        installer.removed.lock().unwrap().as_slice(),
+        &["sdk:openai:transport".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -572,6 +615,7 @@ async fn explicit_shutdown_bounds_request_drain_and_transient_cleanup_together()
     let mut task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        fake_installer(),
         server_read,
         server_write,
         SdkHostTransportConfig {
@@ -582,7 +626,7 @@ async fn explicit_shutdown_bounds_request_drain_and_transient_cleanup_together()
     client_write
         .write_all(
             concat!(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/create\",\"params\":{}}\n"
             )
             .as_bytes(),
@@ -630,6 +674,7 @@ async fn requests_before_a_successful_initialize_cannot_cross_the_handshake() {
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        fake_installer(),
         server_read,
         server_write,
         SdkHostTransportConfig::default(),
@@ -637,9 +682,9 @@ async fn requests_before_a_successful_initialize_cannot_cross_the_handshake() {
     client_write
         .write_all(
             concat!(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":999,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":999,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/create\",\"params\":{}}\n",
-                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n"
+                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n"
             )
             .as_bytes(),
         )
@@ -658,7 +703,8 @@ async fn requests_before_a_successful_initialize_cannot_cross_the_handshake() {
     assert_eq!(pre_initialize["id"], 2);
     assert_eq!(pre_initialize["error"]["data"]["code"], "not_initialized");
     assert_eq!(initialized["id"], 3);
-    assert_eq!(initialized["result"]["protocolVersion"], 1);
+    assert_eq!(initialized["result"]["protocolVersion"], 2);
+    assert_eq!(initialized["result"]["modelId"], "sdk:openai:transport");
 
     client_write
         .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"shutdown\",\"params\":{}}\n")
@@ -684,9 +730,11 @@ async fn blocked_output_times_out_and_ends_the_connection() {
     let (client, server) = tokio::io::duplex(64);
     let (_client_read, mut client_write) = tokio::io::split(client);
     let (server_read, server_write) = tokio::io::split(server);
+    let installer = Arc::new(FakeTemporaryModelInstaller::default());
     let task = tokio::spawn(serve_streams(
         runtime,
         "D:/workspace/project",
+        installer.clone(),
         server_read,
         server_write,
         SdkHostTransportConfig {
@@ -696,7 +744,7 @@ async fn blocked_output_times_out_and_ends_the_connection() {
     ));
     client_write
         .write_all(
-            b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true}}}\n",
+            b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":2,\"clientInfo\":{\"name\":\"fixture\",\"version\":\"0.1\"},\"capabilities\":{\"serverNotifications\":true},\"model\":{\"provider\":\"openai\",\"model\":\"fixture-model\",\"apiKey\":\"fixture-secret\"}}}\n",
         )
         .await
         .unwrap();
@@ -706,4 +754,8 @@ async fn blocked_output_times_out_and_ends_the_connection() {
         .expect("blocked SDK Host output must have a deadline")
         .unwrap();
     assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::BrokenPipe);
+    assert_eq!(
+        installer.removed.lock().unwrap().as_slice(),
+        &["sdk:openai:transport".to_string()]
+    );
 }

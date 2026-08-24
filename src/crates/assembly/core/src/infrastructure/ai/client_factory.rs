@@ -144,12 +144,11 @@ impl AIClientFactory {
     }
 
     async fn resolve_model_id(&self, model_id: &str) -> Result<String> {
-        let global_config: crate::service::config::GlobalConfig =
-            self.config_service.get_config(None).await?;
+        let ai_config = self.config_service.get_effective_ai_config().await?;
         resolve_required_model_selector(
             model_id,
-            |selector| global_config.ai.resolve_model_selection(selector),
-            |model_ref| global_config.ai.resolve_model_reference(model_ref),
+            |selector| ai_config.resolve_model_selection(selector),
+            |model_ref| ai_config.resolve_model_reference(model_ref),
         )
         .map_err(|error| anyhow!(error.to_string()))
     }
@@ -166,10 +165,8 @@ impl AIClientFactory {
         else {
             return Ok(client);
         };
-        let global_config: crate::service::config::GlobalConfig =
-            self.config_service.get_config(None).await?;
-        let model = global_config
-            .ai
+        let ai_config = self.config_service.get_effective_ai_config().await?;
+        let model = ai_config
             .models
             .iter()
             .find(|model| model.id == model_id)
@@ -236,35 +233,31 @@ impl AIClientFactory {
         if normalized_model_id.is_empty() {
             return Err(anyhow!("Model configuration id is empty"));
         }
-        if global_config
-            .ai
-            .models
-            .iter()
-            .filter(|model| model.id == normalized_model_id)
-            .nth(1)
-            .is_some()
-        {
-            return Err(anyhow!(
-                "Multiple model configurations use the same ID: {}",
-                normalized_model_id
-            ));
-        }
-
         debug!("Creating new AI client: model_id={}", normalized_model_id);
-        let mut matching_models = global_config
-            .ai
-            .models
-            .iter()
-            .filter(|m| m.id == normalized_model_id);
-        let model_config = matching_models
-            .next()
-            .ok_or_else(|| anyhow!("Model configuration not found: {}", normalized_model_id))?;
-        if matching_models.next().is_some() {
-            return Err(anyhow!(
-                "Multiple model configurations use the same ID: {}",
-                normalized_model_id
-            ));
-        }
+        let model_config = if let Some(runtime_model) = self
+            .config_service
+            .get_runtime_ai_model(&normalized_model_id)
+            .await
+        {
+            runtime_model
+        } else {
+            let mut matching_models = global_config
+                .ai
+                .models
+                .iter()
+                .filter(|model| model.id == normalized_model_id);
+            let model = matching_models
+                .next()
+                .cloned()
+                .ok_or_else(|| anyhow!("Model configuration not found: {}", normalized_model_id))?;
+            if matching_models.next().is_some() {
+                return Err(anyhow!(
+                    "Multiple model configurations use the same ID: {}",
+                    normalized_model_id
+                ));
+            }
+            model
+        };
 
         if !model_config.enabled {
             return Err(anyhow!(
@@ -274,7 +267,7 @@ impl AIClientFactory {
             ));
         }
 
-        let configuration_fingerprint = model_runtime_binding_fingerprint(model_config);
+        let configuration_fingerprint = model_runtime_binding_fingerprint(&model_config);
         if expected_configuration_fingerprint
             .is_some_and(|expected| expected != configuration_fingerprint)
         {
@@ -286,7 +279,7 @@ impl AIClientFactory {
 
         let models_dev = load_models_dev_reasoning_catalog().await;
         let reasoning_projection =
-            project_model_reasoning_catalog(model_config, models_dev.catalog.as_deref());
+            project_model_reasoning_catalog(&model_config, models_dev.catalog.as_deref());
         let default_reasoning_preset =
             resolve_default_reasoning_preset(&reasoning_projection).cloned();
 
@@ -328,7 +321,7 @@ impl AIClientFactory {
         #[cfg(not(feature = "subscription-auth"))]
         let _ = credential_expires_at;
 
-        let stream_options = build_stream_options_for_model(&global_config.ai, Some(model_config));
+        let stream_options = build_stream_options_for_model(&global_config.ai, Some(&model_config));
         let client = apply_default_reasoning_preset(
             AIClient::new_with_runtime_options(ai_config, proxy_config, stream_options),
             &reasoning_projection,
@@ -578,12 +571,16 @@ pub async fn list_subscription_accounts() -> Vec<subscription_auth::Subscription
 
 #[cfg(test)]
 mod tests {
-    use super::apply_subscription_auth;
+    use std::sync::Arc;
+
+    use super::{apply_subscription_auth, AIClientFactory};
+    use crate::infrastructure::PathManager;
     #[cfg(not(feature = "subscription-auth"))]
     use crate::service::config::types::SubscriptionProvider;
     use crate::service::config::types::{
         model_runtime_binding_fingerprint, AIModelConfig, AuthConfig, GlobalConfig,
     };
+    use crate::service::config::{ConfigManagerSettings, ConfigService};
     use crate::util::types::AIConfig;
     use bitfun_ai_adapters::{
         classify_model_selector, resolve_required_model_selector, ModelSelectorKind,
@@ -619,6 +616,32 @@ mod tests {
             custom_request_body: None,
             custom_request_body_mode: None,
         }
+    }
+
+    #[tokio::test]
+    async fn runtime_model_is_available_to_ai_client_factory() {
+        let dir = tempfile::tempdir().expect("temporary config directory");
+        let config = Arc::new(
+            ConfigService::with_settings(ConfigManagerSettings {
+                path_manager: Some(Arc::new(PathManager::with_user_root_for_tests(
+                    dir.path().join("runtime-client"),
+                ))),
+                auto_save: true,
+                backup_count: 0,
+            })
+            .await
+            .expect("test ConfigService"),
+        );
+        let mut model = build_model("sdk:openai:fixture", "SDK fixture", "fixture-model");
+        model.provider = "openai".to_string();
+        model.base_url = "http://127.0.0.1:43123/v1".to_string();
+        model.api_key = "fixture-secret".to_string();
+        config.install_runtime_ai_model(model).await.unwrap();
+
+        AIClientFactory::new(config)
+            .get_client_by_id("sdk:openai:fixture")
+            .await
+            .expect("runtime model should resolve through the AI client factory");
     }
 
     #[cfg(feature = "subscription-auth")]

@@ -43,6 +43,7 @@ tokio = { workspace = true, features = ["io-std", "io-util", "macros", "rt-multi
 tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

@@ -5,11 +5,42 @@ import test from "node:test";
 
 import { AgentClient, SdkError } from "../src/index.js";
 import { createAgentClient } from "../src/internal/client.js";
+import type {
+  AgentClientOptions,
+  QueryInput,
+  SessionCreateInput,
+} from "../src/types.js";
+
+const clientOptions = {
+  cwd: "D:/workspace/project",
+  hostPath: process.execPath,
+  model: {
+    provider: "openai" as const,
+    model: "fixture-model",
+    apiKey: "fixture-secret",
+    baseUrl: "http://127.0.0.1:43123/v1",
+  },
+} satisfies AgentClientOptions;
+
+// @ts-expect-error An explicit native Host path is required until platform packages exist.
+const missingHostPathOptions: AgentClientOptions = {
+  cwd: "D:/workspace/project",
+  model: clientOptions.model,
+};
+
+// @ts-expect-error Query model selection is bound at AgentClient.start.
+const queryModelOverride: QueryInput = { prompt: "hello", model: "attempted-override" };
+// @ts-expect-error Session model selection is bound at AgentClient.start.
+const sessionModelOverride: SessionCreateInput = { model: "attempted-override" };
+void queryModelOverride;
+void sessionModelOverride;
+void missingHostPathOptions;
 
 test("a Query streams ordered events and returns the Host terminal Result", async () => {
   const clientToHost = new PassThrough();
   const hostToClient = new PassThrough();
-  const host = runFixtureHost(clientToHost, hostToClient);
+  const initializeRequests: unknown[] = [];
+  const host = runFixtureHost(clientToHost, hostToClient, initializeRequests);
   const client = await createAgentClient(
     {
       readable: hostToClient,
@@ -19,11 +50,26 @@ test("a Query streams ordered events and returns the Host terminal Result", asyn
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   assert.ok(client instanceof AgentClient);
-  const query = await client.query({ prompt: "hello" });
+  assert.equal(initializeRequests.length, 1);
+  assert.deepEqual(initializeRequests[0], {
+    protocolVersion: 2,
+    clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
+    capabilities: { serverNotifications: true },
+    model: {
+      provider: "openai",
+      model: "fixture-model",
+      apiKey: "fixture-secret",
+      baseUrl: "http://127.0.0.1:43123/v1",
+    },
+  });
+  const query = await client.query({
+    prompt: "hello",
+    model: "attempted-override",
+  } as QueryInput);
   assert.equal(query.id, "query-1");
   assert.equal(query.operationId, "operation-1");
   assert.deepEqual(query.turn, { id: "turn-1", sessionId: "session-1" });
@@ -73,10 +119,13 @@ test("an explicit Session starts Turns on the existing client connection", async
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
-  const session = await client.sessions.create({ agent: "agentic" });
+  const session = await client.sessions.create({
+    agent: "agentic",
+    model: "attempted-override",
+  } as SessionCreateInput);
   assert.equal(session.id, "session-explicit");
   assert.equal(session.agent, "agentic");
 
@@ -111,7 +160,7 @@ test("Query cancel and close are idempotent and the Host Result remains authorit
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   const query = await client.query({ prompt: "wait" });
@@ -146,7 +195,7 @@ test("leaving Query iteration early cancels and settles the Turn", async () => {
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   const query = await client.query({ prompt: "stream" });
@@ -175,7 +224,7 @@ test("Host loss rejects an accepted Query with unknown outcome instead of fabric
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   const query = await client.query({ prompt: "may have side effects" });
@@ -189,6 +238,36 @@ test("Host loss rejects an accepted Query with unknown outcome instead of fabric
   await assert.rejects(query[Symbol.asyncIterator]().next(), SdkError);
 
   await client.close();
+  assert.equal(transportClosed, true);
+});
+
+test("an empty initialized model id fails the connection closed", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  let transportClosed = false;
+  const host = runEmptyModelIdFixtureHost(clientToHost, hostToClient);
+
+  await assert.rejects(
+    createAgentClient(
+      {
+        readable: hostToClient,
+        writable: clientToHost,
+        close: async () => {
+          transportClosed = true;
+          clientToHost.end();
+          await host;
+        },
+      },
+      clientOptions,
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof SdkError);
+      assert.equal(error.code, "process_lost");
+      assert.equal(error.stage, "protocol");
+      assert.equal(error.outcomeCertainty, "unknown");
+      return true;
+    },
+  );
   assert.equal(transportClosed, true);
 });
 
@@ -206,7 +285,7 @@ test("AgentClient.close settles owned Queries before shutting down its connectio
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   const query = await client.query({ prompt: "still running" });
@@ -234,7 +313,7 @@ test("Host operation errors preserve stable SDK error facts", async () => {
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   await assert.rejects(client.query({ prompt: "requires auth" }), (error: unknown) => {
@@ -264,7 +343,7 @@ test("unknown Host error facts fail the protocol closed", async () => {
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   await assert.rejects(client.query({ prompt: "invalid error" }), (error: unknown) => {
@@ -289,7 +368,7 @@ test("ambiguous JSON-RPC response envelopes fail the protocol closed", async () 
         await host;
       },
     },
-    { cwd: "D:/workspace/project" },
+    clientOptions,
   );
 
   await assert.rejects(client.query({ prompt: "reject ambiguous response" }), (error: unknown) => {
@@ -356,7 +435,7 @@ test("unknown Query event and Result status fail the protocol closed", async (co
             await host;
           },
         },
-        { cwd: "D:/workspace/project" },
+        clientOptions,
       );
 
       try {
@@ -377,6 +456,7 @@ test("unknown Query event and Result status fail the protocol closed", async (co
 async function runFixtureHost(
   requests: PassThrough,
   responses: PassThrough,
+  initializeRequests: unknown[],
 ): Promise<void> {
   const lines = createInterface({ input: requests, crlfDelay: Infinity });
   for await (const line of lines) {
@@ -386,11 +466,12 @@ async function runFixtureHost(
       params: Record<string, unknown>;
     };
     if (request.method === "initialize") {
+      initializeRequests.push(request.params);
       write(responses, {
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          protocolVersion: 1,
+          protocolVersion: 2,
           runtimeVersion: "0.2.17",
           stability: "not_delivered",
           capabilities: {
@@ -408,11 +489,20 @@ async function runFixtureHost(
             mcpConfiguration: false,
             prestartedTransport: false,
           },
+          modelId: "sdk:openai:resolved",
         },
       });
       continue;
     }
     if (request.method === "query/start") {
+      assert.deepEqual(request.params, {
+        prompt: "hello",
+        sessionId: null,
+        sessionName: null,
+        agent: null,
+        cwd: "D:/workspace/project",
+        model: "sdk:openai:resolved",
+      });
       write(responses, {
         jsonrpc: "2.0",
         id: request.id,
@@ -495,7 +585,7 @@ async function runSessionFixtureHost(
         sessionName: null,
         agent: "agentic",
         cwd: "D:/workspace/project",
-        model: null,
+        model: "sdk:openai:resolved",
       });
       write(responses, {
         jsonrpc: "2.0",
@@ -807,6 +897,23 @@ async function runClientCloseFixtureHost(
   }
 }
 
+async function runEmptyModelIdFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as { id: number; method: string };
+    assert.equal(request.method, "initialize");
+    const response = initializeResponse(request.id) as {
+      result: { modelId: string };
+    };
+    response.result.modelId = "";
+    write(responses, response);
+  }
+  responses.end();
+}
+
 async function runOperationErrorFixtureHost(
   requests: PassThrough,
   responses: PassThrough,
@@ -989,7 +1096,7 @@ function initializeResponse(id: number): unknown {
     jsonrpc: "2.0",
     id,
     result: {
-      protocolVersion: 1,
+      protocolVersion: 2,
       runtimeVersion: "0.2.17",
       stability: "not_delivered",
       capabilities: {
@@ -1007,6 +1114,7 @@ function initializeResponse(id: number): unknown {
         mcpConfiguration: false,
         prestartedTransport: false,
       },
+      modelId: "sdk:openai:resolved",
     },
   };
 }

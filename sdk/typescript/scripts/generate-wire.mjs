@@ -60,6 +60,8 @@ const requiredTypes = [
   "SessionCreateParams",
   "SessionCreateResult",
   "ShutdownResult",
+  "TemporaryModelConfig",
+  "TemporaryModelProvider",
 ];
 const missing = requiredTypes.filter((type) => !files.includes(type));
 if (missing.length > 0) {

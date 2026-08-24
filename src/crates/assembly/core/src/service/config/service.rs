@@ -7,12 +7,14 @@ use super::types::*;
 use crate::util::errors::*;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Configuration service.
 pub struct ConfigService {
     manager: Arc<RwLock<ConfigManager>>,
+    runtime_ai_models: Arc<RwLock<BTreeMap<String, AIModelConfig>>>,
 }
 
 /// Configuration import/export format.
@@ -59,6 +61,7 @@ impl ConfigService {
 
         let service = Self {
             manager: Arc::new(RwLock::new(manager)),
+            runtime_ai_models: Arc::new(RwLock::new(BTreeMap::new())),
         };
 
         let recovered_with_defaults = service
@@ -89,6 +92,43 @@ impl ConfigService {
             serde_json::from_value(serde_json::to_value(config)?)
                 .map_err(|e| BitFunError::config(format!("Failed to serialize config: {}", e)))
         }
+    }
+
+    pub async fn install_runtime_ai_model(&self, model: AIModelConfig) -> BitFunResult<()> {
+        if model.id.trim().is_empty() {
+            return Err(BitFunError::validation(
+                "Runtime model id is required".to_string(),
+            ));
+        }
+        self.runtime_ai_models
+            .write()
+            .await
+            .insert(model.id.clone(), model);
+        Ok(())
+    }
+
+    pub async fn get_runtime_ai_model(&self, model_id: &str) -> Option<AIModelConfig> {
+        self.runtime_ai_models.read().await.get(model_id).cloned()
+    }
+
+    pub async fn get_effective_ai_config(&self) -> BitFunResult<AIConfig> {
+        let mut ai: AIConfig = self.get_config(Some("ai")).await?;
+        for runtime_model in self.runtime_ai_models.read().await.values() {
+            if let Some(model) = ai
+                .models
+                .iter_mut()
+                .find(|model| model.id == runtime_model.id)
+            {
+                *model = runtime_model.clone();
+            } else {
+                ai.models.push(runtime_model.clone());
+            }
+        }
+        Ok(ai)
+    }
+
+    pub async fn remove_runtime_ai_model(&self, model_id: &str) {
+        self.runtime_ai_models.write().await.remove(model_id);
     }
 
     /// Sets a configuration value (supports dot-paths).
@@ -620,6 +660,21 @@ mod tests {
         }
     }
 
+    fn runtime_model(id: &str, key: &str) -> AIModelConfig {
+        AIModelConfig {
+            id: id.to_string(),
+            name: "SDK fixture".to_string(),
+            provider: "openai".to_string(),
+            model_name: "fixture-model".to_string(),
+            base_url: "http://127.0.0.1:43123/v1".to_string(),
+            api_key: key.to_string(),
+            enabled: true,
+            category: ModelCategory::GeneralChat,
+            capabilities: vec![ModelCapability::TextChat],
+            ..AIModelConfig::default()
+        }
+    }
+
     async fn test_service(name: &str) -> (ConfigService, tempfile::TempDir) {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join(name);
@@ -634,6 +689,110 @@ mod tests {
         .expect("config service");
 
         (service, dir)
+    }
+
+    #[tokio::test]
+    async fn runtime_ai_model_is_effective_but_never_persisted() {
+        let (service, _dir) = test_service("runtime-overlay-test").await;
+
+        service
+            .install_runtime_ai_model(runtime_model("sdk:openai:fixture", "fixture-secret"))
+            .await
+            .unwrap();
+        let runtime = service
+            .get_runtime_ai_model("sdk:openai:fixture")
+            .await
+            .unwrap();
+        assert_eq!(runtime.api_key, "fixture-secret");
+        let effective_ai = service.get_effective_ai_config().await.unwrap();
+        assert!(effective_ai
+            .models
+            .iter()
+            .any(|model| model.id == "sdk:openai:fixture"));
+        let persisted: GlobalConfig = service.get_config(None).await.unwrap();
+        assert!(!persisted
+            .ai
+            .models
+            .iter()
+            .any(|model| model.id == "sdk:openai:fixture"));
+        let persisted_models: Vec<AIModelConfig> =
+            service.get_config(Some("ai.models")).await.unwrap();
+        assert!(!persisted_models
+            .iter()
+            .any(|model| model.id == "sdk:openai:fixture"));
+        let persisted_ai: AIConfig = service.get_config(Some("ai")).await.unwrap();
+        assert!(!persisted_ai
+            .models
+            .iter()
+            .any(|model| model.id == "sdk:openai:fixture"));
+
+        let export = service.export_config().await.unwrap();
+        let export_json = serde_json::to_string(&export).unwrap();
+        assert!(!export_json.contains("sdk:openai:fixture"));
+        assert!(!export_json.contains("fixture-secret"));
+
+        service
+            .reconcile_models("runtime-overlay-test")
+            .await
+            .unwrap();
+        service
+            .add_ai_model(model("persisted", true, ModelCategory::GeneralChat))
+            .await
+            .unwrap();
+        let app_file = service
+            .get_statistics()
+            .await
+            .config_directory
+            .join("app.json");
+        let disk = tokio::fs::read_to_string(app_file).await.unwrap();
+        assert!(!disk.contains("sdk:openai:fixture"));
+        assert!(!disk.contains("fixture-secret"));
+
+        let backup = service.create_backup().await.unwrap();
+        let backup_text = tokio::fs::read_to_string(backup).await.unwrap();
+        assert!(!backup_text.contains("sdk:openai:fixture"));
+        assert!(!backup_text.contains("fixture-secret"));
+
+        service.remove_runtime_ai_model("sdk:openai:fixture").await;
+        let effective = service.get_effective_ai_config().await.unwrap();
+        assert!(!effective
+            .models
+            .iter()
+            .any(|model| model.id == "sdk:openai:fixture"));
+        assert!(service
+            .get_runtime_ai_model("sdk:openai:fixture")
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn runtime_ai_model_overlays_a_persisted_duplicate_for_effective_reads() {
+        let (service, _dir) = test_service("runtime-overlay-duplicate-test").await;
+        service
+            .add_ai_model(runtime_model("sdk:openai:duplicate", "persisted-secret"))
+            .await
+            .unwrap();
+        service
+            .install_runtime_ai_model(runtime_model("sdk:openai:duplicate", "runtime-secret"))
+            .await
+            .unwrap();
+
+        let effective = service.get_effective_ai_config().await.unwrap();
+        let matches = effective
+            .models
+            .iter()
+            .filter(|model| model.id == "sdk:openai:duplicate")
+            .collect::<Vec<_>>();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].api_key, "runtime-secret");
+
+        let persisted: AIConfig = service.get_config(Some("ai")).await.unwrap();
+        let persisted = persisted
+            .models
+            .iter()
+            .find(|model| model.id == "sdk:openai:duplicate")
+            .unwrap();
+        assert_eq!(persisted.api_key, "persisted-secret");
     }
 
     #[tokio::test]
