@@ -26,15 +26,23 @@ existing `agent-runtime::sdk` API.
 
 ## Repository usage
 
-Build `bitfun-sdk-host`, then pass its absolute path while the platform-native
-package layout is still pending:
+Build `bitfun-sdk-host`, then pass its absolute path and one process-lifetime
+model configuration while the platform-native package layout is still pending.
+The Host path must be explicit in this slice:
 
 ```typescript
 import { AgentClient } from "@bitfun/agent-sdk";
 
+const apiKey = await trustedSecretStore.read("openai");
 await using client = await AgentClient.start({
   cwd: process.cwd(),
-  hostPath: process.env.BITFUN_SDK_HOST_PATH,
+  hostPath: "/absolute/path/to/bitfun-sdk-host",
+  model: {
+    provider: "openai",
+    model: "gpt-5.4",
+    apiKey,
+    baseUrl: "https://api.openai.com/v1",
+  },
 });
 
 await using query = await client.query({ prompt: "Summarize this repository" });
@@ -46,15 +54,23 @@ for await (const item of query) {
 const result = await query.result();
 ```
 
-`BITFUN_SDK_HOST_PATH` is also read directly when `hostPath` is omitted. The
-eventual installable package must bundle or resolve a matching signed Host; it
-must not require a separately installed BitFun CLI.
+This repository-local package is private and unpublished. Node 24.14.1 and Bun
+1.4.0 are the locally verified runners for this slice; they are not bundled
+executables or a final minimum-version policy. The eventual installable package
+must bundle or resolve a matching signed Host; it must not require a separately
+installed BitFun CLI.
+
+Browser and mobile runtimes cannot launch the local native Host. Custom
+functions, permission and user-input callbacks, structured output, usage,
+Session resume, Python support, and native package staging remain deferred.
 
 ## Development
 
 ```bash
 pnpm --dir sdk/typescript test
 pnpm --dir sdk/typescript type-check
+pnpm --dir sdk/typescript smoke:node
+pnpm --dir sdk/typescript smoke:bun
 ```
 
 The internal TypeScript wire bindings are generated from the Rust SDK Host

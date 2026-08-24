@@ -1,9 +1,24 @@
+export type AgentModelProvider =
+  | "openai"
+  | "responses"
+  | "anthropic"
+  | "gemini";
+
+export interface AgentModelOptions {
+  provider: AgentModelProvider;
+  model: string;
+  apiKey: string;
+  baseUrl?: string;
+}
+
 export interface AgentClientOptions {
   cwd: string;
-  /** Native `bitfun-sdk-host` path. Platform packages will provide this later. */
-  hostPath?: string;
+  /** Explicit absolute path to the native `bitfun-sdk-host`. */
+  hostPath: string;
   /** Deadline for the SDK Host initialize handshake. */
   initializeTimeoutMs?: number;
+  /** Process-lifetime model credentials installed into this Host connection. */
+  model: AgentModelOptions;
 }
 
 export interface AgentCapabilities {
@@ -66,13 +81,11 @@ export type SessionLifetime = "connection";
 export interface QueryInput {
   prompt: string;
   agent?: string;
-  model?: string;
 }
 
 export interface SessionCreateInput {
   sessionName?: string;
   agent?: string;
-  model?: string;
 }
 
 export interface TurnInput {
