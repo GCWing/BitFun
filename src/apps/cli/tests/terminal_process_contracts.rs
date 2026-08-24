@@ -2,7 +2,7 @@ mod support;
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::{Read, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use support::{
@@ -34,9 +34,18 @@ const MULTILINE_INPUT_SENTINEL: &str = "M7Q4";
 const RECOVERY_INPUT: &[u8] = b"READY_AFTER_CANCEL K4W8";
 const RECOVERY_INPUT_SENTINEL: &str = "K4W8";
 
+fn serialize_native_pty_contracts() -> MutexGuard<'static, ()> {
+    static NATIVE_PTY_GATE: OnceLock<Mutex<()>> = OnceLock::new();
+    NATIVE_PTY_GATE
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[cfg(unix)]
 #[test]
 fn startup_bracketed_paste_attaches_an_image_path_without_rendering_the_path() {
+    let _serial = serialize_native_pty_contracts();
     let server = MockOpenAiServer::immediate();
     let environment = CliTestEnvironment::new();
     environment.initialize_git_repository();
@@ -98,6 +107,7 @@ fn startup_bracketed_paste_attaches_an_image_path_without_rendering_the_path() {
 
 #[test]
 fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
+    let _serial = serialize_native_pty_contracts();
     let environment = CliTestEnvironment::new();
     let mut process = PtyProcess::spawn(environment.pty_command(), INITIAL_SIZE);
 
@@ -180,6 +190,7 @@ fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
 
 #[test]
 fn active_turn_resize_can_be_cancelled_and_returns_to_editable_input() {
+    let _serial = serialize_native_pty_contracts();
     let server = MockOpenAiServer::gated();
     let environment = CliTestEnvironment::new();
     environment.initialize_git_repository();
@@ -249,6 +260,7 @@ fn active_turn_resize_can_be_cancelled_and_returns_to_editable_input() {
 
 #[test]
 fn external_editor_restores_the_tui_and_applies_the_edited_draft() {
+    let _serial = serialize_native_pty_contracts();
     let server = MockOpenAiServer::immediate();
     let environment = CliTestEnvironment::new();
     environment.initialize_git_repository();
@@ -320,6 +332,7 @@ fn external_editor_restores_the_tui_and_applies_the_edited_draft() {
 
 #[test]
 fn export_dialog_writes_markdown_under_the_local_cli_directory() {
+    let _serial = serialize_native_pty_contracts();
     let server = MockOpenAiServer::immediate();
     let environment = CliTestEnvironment::new();
     environment.initialize_git_repository();
@@ -454,6 +467,7 @@ fn legacy_exec_stream_json_ctrl_c_emits_one_cancelled_terminal_and_disconnects()
 }
 
 fn assert_exec_stream_json_ctrl_c_contract(deprecated_entrypoint: bool) {
+    let _serial = serialize_native_pty_contracts();
     let server = MockOpenAiServer::gated();
     let environment = CliTestEnvironment::new();
     environment.configure_mock_model(server.base_url());

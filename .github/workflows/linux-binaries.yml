@@ -15,6 +15,11 @@ on:
         description: "Stable prefix that isolates artifacts in the caller run."
         required: true
         type: string
+      artifact_retention_days:
+        description: "Retention for uploaded build artifacts."
+        required: false
+        default: 7
+        type: number
     secrets:
       release_signing_key:
         description: "Tauri/minisign private key, base64. Absent on forks: archives ship unsigned."
@@ -62,6 +67,12 @@ jobs:
         with:
           bun-version: "1.3.14"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
       - name: Build plugin Host resources
         run: |
           bun install --cwd src/apps/extension-host --frozen-lockfile
@@ -94,6 +105,9 @@ jobs:
           shared-key: "linux-binaries-v1-${{ matrix.platform.name }}"
           cache-bin: false
 
+      - name: Verify committed Cargo metadata
+        run: cargo metadata --locked --no-deps
+
       - name: Patch build version
         shell: bash
         env:
@@ -106,12 +120,10 @@ jobs:
           # the same way, which also keeps the two asset sets on one version string.
           ASSET_VERSION="${RELEASE_VERSION%%+*}"
           echo "ASSET_VERSION=${ASSET_VERSION}" >>"$GITHUB_ENV"
-          sed -i \
-            "s/^version = \".*\" # x-release-please-version/version = \"${ASSET_VERSION}\" # x-release-please-version/" \
-            Cargo.toml
-          sed -i \
-            "s/^version = \".*\" # x-release-please-version/version = \"${ASSET_VERSION}\" # x-release-please-version/" \
-            src/apps/relay-server/Cargo.toml
+          node scripts/set-build-version.mjs --version "$ASSET_VERSION"
+
+      - name: Verify projected Cargo metadata
+        run: cargo metadata --locked --no-deps
 
       - name: Build CLI and Relay Server
         shell: bash
@@ -121,7 +133,7 @@ jobs:
           # checksum-only.
           BITFUN_RELEASE_PUBKEY: ${{ secrets.release_pubkey }}
         run: |
-          cargo build --release \
+          cargo build --locked --release \
             --target ${{ matrix.platform.target }} \
             -p bitfun-cli \
             -p bitfun-relay-server \
@@ -184,7 +196,7 @@ jobs:
         with:
           name: bitfun-linux-${{ inputs.artifact_prefix }}-${{ matrix.platform.name }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ inputs.artifact_retention_days }}
           path: |
             ${{ steps.cli-stage.outputs.archive }}
             ${{ steps.cli-stage.outputs.checksum }}

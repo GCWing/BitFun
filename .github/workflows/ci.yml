@@ -112,7 +112,7 @@ jobs:
     needs: rust-impact
     if: ${{ !cancelled() && needs.rust-impact.outputs.rust_required != 'false' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -250,14 +250,9 @@ jobs:
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           cache-on-failure: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
-      # Nightly and beta project a prerelease version before their nested
-      # `cargo --locked` build hooks run. Exercise that state transition in the
-      # ordinary CI OS matrix so a green commit cannot carry a stale lockfile
-      # contract into packaging.
-      - name: Project CI build version
-        run: node scripts/set-build-version.mjs --version 0.0.0-nightly.ci
-
-      - name: Verify projected Cargo metadata
+      # Validate the committed manifests and lockfile before any release
+      # projection is allowed to rewrite workspace package entries.
+      - name: Verify committed Cargo metadata
         run: cargo metadata --locked --no-deps
 
       # rust-cache prunes the workspace target directory before saving it, so
@@ -296,7 +291,7 @@ jobs:
       # so the workspace check above cannot catch drift in its shared Rust APIs.
       - name: Check installer compilation
         if: runner.os == 'Windows'
-        run: cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml
+        run: cargo check --locked --manifest-path BitFun-Installer/src-tauri/Cargo.toml
 
       - name: Run core and desktop library tests
         run: cargo test --locked -p bitfun-core -p bitfun-desktop --lib
@@ -328,14 +323,31 @@ jobs:
       - name: Run search tool tests
         run: "cargo test --locked -p tool-runtime --lib search::"
 
+  # Execute the exact five-platform Nightly artifact producers with publishing
+  # disabled. This is the build contract: a required CI result cannot be green
+  # unless the same release linking, Tauri bundling, Installer, Extension Host,
+  # macOS CLI, and Linux CLI/Relay paths used by Nightly all succeed.
+  nightly-build-contract:
+    name: Nightly Build Contract
+    needs: rust-impact
+    if: ${{ !cancelled() && needs.rust-impact.result == 'success' }}
+    uses: ./.github/workflows/nightly.yml
+    permissions:
+      contents: read
+    with:
+      force_build: true
+      build_only: true
+      artifact_retention_days: 1
+
   # Stable Rust/CLI result for CI runs: matrix jobs may be skipped for a proven
-  # Web-only change, but this result verifies why they ran or skipped.
+  # Web-only change, but this result verifies why they ran or skipped and makes
+  # the exact Nightly artifact graph part of the required result.
   rust-validation-result:
     name: Rust / CLI Validation
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: ${{ always() }}
-    needs: [rust-impact, cli-test, rust-build-check]
+    needs: [rust-impact, cli-test, rust-build-check, nightly-build-contract]
     steps:
       - name: Verify Rust and CLI result
         shell: pwsh
@@ -344,6 +356,7 @@ jobs:
           IMPACT_RESULT: ${{ needs.rust-impact.result }}
           CLI_RESULT: ${{ needs.cli-test.result }}
           RUST_RESULT: ${{ needs.rust-build-check.result }}
+          BUILD_RESULT: ${{ needs.nightly-build-contract.result }}
         run: |
           $ErrorActionPreference = 'Stop'
           if ($env:IMPACT_RESULT -ne 'success') {
@@ -352,13 +365,13 @@ jobs:
 
           switch ($env:RUST_REQUIRED) {
             'false' {
-              if ($env:CLI_RESULT -ne 'skipped' -or $env:RUST_RESULT -ne 'skipped') {
-                throw "Expected skipped Rust and CLI jobs for a Web-only change; CLI=$env:CLI_RESULT Rust=$env:RUST_RESULT"
+              if ($env:CLI_RESULT -ne 'skipped' -or $env:RUST_RESULT -ne 'skipped' -or $env:BUILD_RESULT -ne 'success') {
+                throw "Expected skipped Rust/CLI jobs and a successful Nightly build contract for a Web-only change; CLI=$env:CLI_RESULT Rust=$env:RUST_RESULT Build=$env:BUILD_RESULT"
               }
             }
             'true' {
-              if ($env:CLI_RESULT -ne 'success' -or $env:RUST_RESULT -ne 'success') {
-                throw "Expected successful Rust and CLI jobs; CLI=$env:CLI_RESULT Rust=$env:RUST_RESULT"
+              if ($env:CLI_RESULT -ne 'success' -or $env:RUST_RESULT -ne 'success' -or $env:BUILD_RESULT -ne 'success') {
+                throw "Expected successful Rust, CLI, and Nightly build jobs; CLI=$env:CLI_RESULT Rust=$env:RUST_RESULT Build=$env:BUILD_RESULT"
               }
             }
             default {

@@ -99,12 +99,30 @@ edition = "2021"
     'src/apps/relay-server/Cargo.toml',
     'version = "1.0.0" # x-release-please-version\n',
   );
-  writeFixture(root, 'BitFun-Installer/src-tauri/Cargo.toml', 'version = "1.0.0"\n');
+  writeFixture(
+    root,
+    'BitFun-Installer/src-tauri/Cargo.toml',
+    `[package]
+name = "bitfun-installer-fixture"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+fixture-dependency = { path = "../../fixture-dependency" }
+`,
+  );
+  writeFixture(root, 'BitFun-Installer/src-tauri/src/lib.rs', 'pub fn installer_fixture() {}\n');
   const initialLock = spawnSync('cargo', ['generate-lockfile'], {
     cwd: root,
     encoding: 'utf8',
   });
   assert.equal(initialLock.status, 0, initialLock.stderr);
+  const initialInstallerLock = spawnSync(
+    'cargo',
+    ['generate-lockfile', '--manifest-path', 'BitFun-Installer/src-tauri/Cargo.toml'],
+    { cwd: root, encoding: 'utf8' },
+  );
+  assert.equal(initialInstallerLock.status, 0, initialInstallerLock.stderr);
 
   setBuildVersion(root, '1.1.0-beta.2');
 
@@ -121,11 +139,32 @@ edition = "2021"
   const lockfile = readFileSync(path.join(root, 'Cargo.lock'), 'utf8');
   assert.match(lockfile, /name = "build-version-fixture"\nversion = "1\.1\.0-beta\.2"/);
   assert.match(lockfile, /name = "fixture-dependency"\nversion = "1\.0\.0"/);
+  const installerLockfile = readFileSync(
+    path.join(root, 'BitFun-Installer/src-tauri/Cargo.lock'),
+    'utf8',
+  );
+  assert.match(
+    installerLockfile,
+    /name = "bitfun-installer-fixture"\nversion = "1\.1\.0-beta\.2"/,
+  );
+  assert.match(installerLockfile, /name = "fixture-dependency"\nversion = "1\.0\.0"/);
   const lockedMetadata = spawnSync('cargo', ['metadata', '--locked', '--no-deps'], {
     cwd: root,
     encoding: 'utf8',
   });
   assert.equal(lockedMetadata.status, 0, lockedMetadata.stderr);
+  const lockedInstallerMetadata = spawnSync(
+    'cargo',
+    [
+      'metadata',
+      '--locked',
+      '--no-deps',
+      '--manifest-path',
+      'BitFun-Installer/src-tauri/Cargo.toml',
+    ],
+    { cwd: root, encoding: 'utf8' },
+  );
+  assert.equal(lockedInstallerMetadata.status, 0, lockedInstallerMetadata.stderr);
 });
 
 function writeFixture(root, relative, content) {

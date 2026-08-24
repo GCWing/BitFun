@@ -1,11 +1,50 @@
 #![cfg(feature = "file-watch")]
 
 use bitfun_services_integrations::file_watch::{
-    FileWatchEventKind, FileWatchService, FileWatcherConfig,
+    FileWatchEvent, FileWatchEventKind, FileWatchService, FileWatcherConfig,
 };
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
+
+/// FSEvents may accept a watch before its run loop has become observable. Use a
+/// semantic probe instead of a sleep: once the backend reports this path, later
+/// assertions no longer race native watcher startup.
+async fn wait_until_watch_is_observable(
+    root: &Path,
+    events: &mut broadcast::Receiver<Vec<FileWatchEvent>>,
+) {
+    let probe = root.join("bitfun-watch-ready-probe");
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut attempt = 0_u32;
+
+    while std::time::Instant::now() < deadline {
+        attempt += 1;
+        fs::write(&probe, attempt.to_string()).expect("write file-watch readiness probe");
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        let observation_window = remaining.min(Duration::from_millis(200));
+        match tokio::time::timeout(observation_window, events.recv()).await {
+            Ok(Ok(batch))
+                if batch
+                    .iter()
+                    .any(|event| event.path == probe.to_string_lossy()) =>
+            {
+                return;
+            }
+            Ok(Ok(_)) | Ok(Err(broadcast::error::RecvError::Lagged(_))) | Err(_) => {}
+            Ok(Err(broadcast::error::RecvError::Closed)) => {
+                panic!("file-watch broadcast closed before readiness")
+            }
+        }
+    }
+
+    panic!(
+        "native file watcher did not observe readiness probe {}",
+        probe.display()
+    );
+}
 
 #[tokio::test]
 async fn file_watch_preserves_missing_path_error() {
@@ -71,6 +110,7 @@ async fn file_watch_publishes_debounced_batches_to_backend_subscribers() {
         .watch_path(temp.path().to_str().unwrap(), Some(config))
         .await
         .expect("watch temp directory");
+    wait_until_watch_is_observable(temp.path(), &mut events).await;
 
     let file = temp.path().join("command.md");
     fs::write(&file, "first").expect("create watched file");
@@ -100,6 +140,7 @@ async fn file_watch_can_include_build_named_directories_for_semantic_sources() {
         .watch_path(temp.path().to_str().unwrap(), Some(config))
         .await
         .expect("watch semantic source root");
+    wait_until_watch_is_observable(temp.path(), &mut events).await;
 
     let file = build_skill.join("SKILL.md");
     fs::write(
@@ -142,6 +183,7 @@ async fn a_narrow_duplicate_registration_does_not_downgrade_recursive_watch() {
         .watch_path(temp.path().to_str().unwrap(), Some(recursive))
         .await
         .expect("shared narrow watch");
+    wait_until_watch_is_observable(temp.path(), &mut events).await;
 
     let file = nested.join("command.md");
     fs::write(&file, "created").expect("nested file");
@@ -200,6 +242,7 @@ async fn re_registering_a_recreated_root_resumes_watching() {
         .watch_path(root.to_str().unwrap(), Some(config))
         .await
         .expect("re-registration of a recreated root");
+    wait_until_watch_is_observable(&root, &mut events).await;
 
     let file = root.join("command.md");
     fs::write(&file, "created").expect("file in recreated root");
@@ -231,6 +274,7 @@ async fn atomic_rename_keeps_the_non_temporary_destination_path() {
         .watch_path(temp.path().to_str().unwrap(), Some(config))
         .await
         .expect("watch temp directory");
+    wait_until_watch_is_observable(temp.path(), &mut events).await;
 
     let temporary = temp.path().join("command.md.tmp");
     let destination = temp.path().join("command.md");

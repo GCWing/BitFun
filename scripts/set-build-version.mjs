@@ -42,7 +42,15 @@ export function setBuildVersion(root, version) {
     `version = "${version}"`,
   );
 
-  syncCargoLock(root);
+  syncCargoLock(root, {
+    lockfile: 'Cargo.lock',
+    label: 'workspace',
+  });
+  syncCargoLock(root, {
+    lockfile: 'BitFun-Installer/src-tauri/Cargo.lock',
+    manifest: 'BitFun-Installer/src-tauri/Cargo.toml',
+    label: 'Installer',
+  });
 }
 
 // Workspace members inherit the root version, so the lockfile carries a copy of
@@ -53,21 +61,25 @@ export function setBuildVersion(root, version) {
 //
 // This cannot run with --offline: resolving the workspace walks every source,
 // and the git dependencies (tauri) are not in a cold CI cargo home yet.
-function syncCargoLock(root) {
-  if (!existsSync(path.join(root, 'Cargo.lock'))) {
+function syncCargoLock(root, { lockfile, manifest, label }) {
+  if (!existsSync(path.join(root, lockfile))) {
     return;
   }
 
-  const result = spawnSync('cargo', ['update', '--workspace'], {
+  const args = ['update', '--workspace'];
+  if (manifest) {
+    args.push('--manifest-path', manifest);
+  }
+  const result = spawnSync('cargo', args, {
     cwd: root,
     encoding: 'utf8',
   });
   if (result.error) {
-    throw new Error(`Failed to run cargo update: ${result.error.message}`);
+    throw new Error(`Failed to update the ${label} Cargo.lock: ${result.error.message}`);
   }
   if (result.status !== 0) {
     throw new Error(
-      `cargo update --workspace failed with exit code ${result.status}\n${result.stderr || ''}`,
+      `cargo update --workspace failed for ${label} with exit code ${result.status}\n${result.stderr || ''}`,
     );
   }
 }

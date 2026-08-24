@@ -252,6 +252,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   }
 
   const cliJob = workflow.jobs['cli-test'];
+  assert.equal(cliJob['timeout-minutes'], 30);
   assert.ok(
     cliJob.strategy.matrix.include.some((entry) => entry.os === 'windows-latest'),
     'Windows ConPTY contracts must run before Nightly',
@@ -314,24 +315,13 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   const commandByStep = new Map(
     rustJob.steps.map((step) => [step.name, step.run]),
   );
-  const projectVersion = rustJob.steps.find(
-    (step) => step.name === 'Project CI build version',
-  );
   const verifyMetadata = rustJob.steps.find(
-    (step) => step.name === 'Verify projected Cargo metadata',
-  );
-  assert.equal(
-    projectVersion?.run,
-    'node scripts/set-build-version.mjs --version 0.0.0-nightly.ci',
+    (step) => step.name === 'Verify committed Cargo metadata',
   );
   assert.equal(verifyMetadata?.run, 'cargo metadata --locked --no-deps');
   assert.ok(
-    rustJob.steps.indexOf(projectVersion) < rustJob.steps.indexOf(checkCompilation),
-    'CI must project the build version before the locked workspace check',
-  );
-  assert.ok(
-    rustJob.steps.indexOf(projectVersion) < rustJob.steps.indexOf(verifyMetadata),
-    'CI must validate Cargo.lock after projecting the build version',
+    rustJob.steps.indexOf(verifyMetadata) < rustJob.steps.indexOf(checkCompilation),
+    'CI must validate the committed Cargo.lock before the workspace check',
   );
   assert.equal(
     commandByStep.get('Run subscription authentication tests'),
@@ -343,7 +333,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   assert.equal(installerCheck?.if, "runner.os == 'Windows'");
   assert.equal(
     installerCheck?.run,
-    'cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml',
+    'cargo check --locked --manifest-path BitFun-Installer/src-tauri/Cargo.toml',
   );
   const fileWatchContracts = rustJob.steps.find(
     (step) => step.name === 'Run file watch contract tests',
@@ -363,7 +353,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
 });
 
-test('gates Rust and CLI validation behind one fail-closed impact decision', () => {
+test('gates Rust and CLI validation behind one fail-closed impact decision', (t) => {
   const workflow = yaml.parse(
     readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8'),
   );
@@ -377,6 +367,7 @@ test('gates Rust and CLI validation behind one fail-closed impact decision', () 
   const impactJob = workflow.jobs['rust-impact'];
   const cliJob = workflow.jobs['cli-test'];
   const rustJob = workflow.jobs['rust-build-check'];
+  const buildJob = workflow.jobs['nightly-build-contract'];
   const resultJob = workflow.jobs['rust-validation-result'];
   const frontendJob = workflow.jobs['frontend-build'];
 
@@ -420,20 +411,36 @@ test('gates Rust and CLI validation behind one fail-closed impact decision', () 
     assert.match(job.if, /rust_required != 'false'/);
   }
 
+  assert.equal(buildJob.name, 'Nightly Build Contract');
+  assert.equal(buildJob.needs, 'rust-impact');
+  assert.equal(buildJob.uses, './.github/workflows/nightly.yml');
+  assert.match(buildJob.if, /rust-impact\.result == 'success'/);
+  assert.doesNotMatch(buildJob.if, /rust_required/);
+  assert.deepEqual(buildJob.permissions, { contents: 'read' });
+  assert.deepEqual(buildJob.with, {
+    force_build: true,
+    build_only: true,
+    artifact_retention_days: 1,
+  });
+
   assert.equal(resultJob.name, 'Rust / CLI Validation');
   assert.equal(resultJob.if, '${{ always() }}');
   assert.deepEqual(
     [...resultJob.needs].sort(),
-    ['cli-test', 'rust-build-check', 'rust-impact'],
+    ['cli-test', 'nightly-build-contract', 'rust-build-check', 'rust-impact'],
   );
   const verify = resultJob.steps.find((step) => step.name === 'Verify Rust and CLI result');
   assert.equal(verify?.env?.RUST_REQUIRED, '${{ needs.rust-impact.outputs.rust_required }}');
   assert.equal(verify?.env?.IMPACT_RESULT, '${{ needs.rust-impact.result }}');
   assert.equal(verify?.env?.CLI_RESULT, '${{ needs.cli-test.result }}');
   assert.equal(verify?.env?.RUST_RESULT, '${{ needs.rust-build-check.result }}');
+  assert.equal(
+    verify?.env?.BUILD_RESULT,
+    '${{ needs.nightly-build-contract.result }}',
+  );
   assert.equal(verify?.shell, 'pwsh');
-  assert.match(verify?.run ?? '', /expected skipped Rust and CLI jobs/i);
-  assert.match(verify?.run ?? '', /expected successful Rust and CLI jobs/i);
+  assert.match(verify?.run ?? '', /successful Nightly build contract/i);
+  assert.match(verify?.run ?? '', /successful Rust, CLI, and Nightly build jobs/i);
 
   const statuses = ['success', 'skipped', 'failure', 'cancelled'];
   const cases = [];
@@ -443,21 +450,25 @@ test('gates Rust and CLI validation behind one fail-closed impact decision', () 
       impactResult,
       cliResult: 'success',
       rustResult: 'success',
+      buildResult: 'success',
       expectedSuccess: false,
     });
   }
   for (const rustRequired of ['false', 'true']) {
     for (const cliResult of statuses) {
       for (const rustResult of statuses) {
-        cases.push({
-          rustRequired,
-          impactResult: 'success',
-          cliResult,
-          rustResult,
-          expectedSuccess: rustRequired === 'false'
-            ? cliResult === 'skipped' && rustResult === 'skipped'
-            : cliResult === 'success' && rustResult === 'success',
-        });
+        for (const buildResult of statuses) {
+          cases.push({
+            rustRequired,
+            impactResult: 'success',
+            cliResult,
+            rustResult,
+            buildResult,
+            expectedSuccess: buildResult === 'success' && (rustRequired === 'false'
+              ? cliResult === 'skipped' && rustResult === 'skipped'
+              : cliResult === 'success' && rustResult === 'success'),
+          });
+        }
       }
     }
   }
@@ -466,6 +477,7 @@ test('gates Rust and CLI validation behind one fail-closed impact decision', () 
     impactResult: 'success',
     cliResult: 'skipped',
     rustResult: 'skipped',
+    buildResult: 'success',
     expectedSuccess: false,
   });
   const truthTable = spawnSync(
@@ -485,6 +497,7 @@ foreach ($case in $cases) {
   $env:IMPACT_RESULT = [string]$case.impactResult
   $env:CLI_RESULT = [string]$case.cliResult
   $env:RUST_RESULT = [string]$case.rustResult
+  $env:BUILD_RESULT = [string]$case.buildResult
   $succeeded = $true
   try { & $verify } catch { $succeeded = $false }
   if ($succeeded -ne [bool]$case.expectedSuccess) {
@@ -498,6 +511,10 @@ foreach ($case in $cases) {
       encoding: 'utf8',
     },
   );
+  if (truthTable.error?.code === 'ENOENT') {
+    t.skip('pwsh is not installed; GitHub-hosted runners execute this truth table');
+    return;
+  }
   assert.equal(truthTable.status, 0, `${truthTable.stdout}${truthTable.stderr}`);
 });
 
@@ -505,8 +522,12 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   const workflow = yaml.parse(
     readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
   );
+  const callInputs = workflow.on.workflow_call.inputs;
   const packageJob = workflow.jobs.package;
   const steps = packageJob.steps;
+  const committedMetadataIndex = steps.findIndex(
+    (step) => step.name === 'Verify committed Cargo metadata',
+  );
   const generationIndex = steps.findIndex(
     (step) => step.name === 'Generate web API bindings',
   );
@@ -523,6 +544,20 @@ test('nightly validates generated inputs and projected lockfiles before packagin
     (step) => step.name === 'Build desktop app',
   );
 
+  assert.equal(callInputs.force_build.default, true);
+  assert.equal(callInputs.build_only.default, true);
+  assert.equal(callInputs.artifact_retention_days.default, 1);
+  assert.equal(workflow.permissions.contents, 'read');
+  assert.match(
+    workflow.jobs['publish-nightly'].if,
+    /inputs\.build_only != true/,
+  );
+  assert.deepEqual(workflow.jobs['publish-nightly'].permissions, {
+    contents: 'write',
+    packages: 'write',
+  });
+
+  assert.notEqual(committedMetadataIndex, -1);
   assert.notEqual(generationIndex, -1);
   assert.notEqual(typeCheckIndex, -1);
   assert.equal(
@@ -534,10 +569,17 @@ test('nightly validates generated inputs and projected lockfiles before packagin
     'nightly must generate web API bindings before type-checking the web UI',
   );
   assert.ok(
-    typeCheckIndex < patchIndex && patchIndex < metadataIndex && metadataIndex < buildIndex,
+    committedMetadataIndex < patchIndex &&
+      typeCheckIndex < patchIndex &&
+      patchIndex < metadataIndex &&
+      metadataIndex < buildIndex,
     'nightly must verify the projected lockfile before nested locked build hooks run',
   );
-  assert.equal(steps[metadataIndex].run, 'cargo metadata --locked --no-deps');
+  const expectedMetadata =
+    'cargo metadata --locked --no-deps\n' +
+    'cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml\n';
+  assert.equal(steps[committedMetadataIndex].run, expectedMetadata);
+  assert.equal(steps[metadataIndex].run, expectedMetadata);
   assert.equal(
     steps.some((step) => step.run?.includes('cargo generate-lockfile')),
     false,
@@ -546,6 +588,49 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   assert.equal(
     steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
     'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
+  );
+});
+
+test('Linux binary packaging uses the shared locked version projection contract', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/linux-binaries.yml'), 'utf8'),
+  );
+  const inputs = workflow.on.workflow_call.inputs;
+  const steps = workflow.jobs.build.steps;
+  const nodeIndex = steps.findIndex(
+    (step) => step.name === 'Setup Node.js',
+  );
+  const committedIndex = steps.findIndex(
+    (step) => step.name === 'Verify committed Cargo metadata',
+  );
+  const patchIndex = steps.findIndex(
+    (step) => step.name === 'Patch build version',
+  );
+  const projectedIndex = steps.findIndex(
+    (step) => step.name === 'Verify projected Cargo metadata',
+  );
+  const buildIndex = steps.findIndex(
+    (step) => step.name === 'Build CLI and Relay Server',
+  );
+
+  assert.equal(inputs.artifact_retention_days.default, 7);
+  assert.equal(steps[nodeIndex].uses, 'actions/setup-node@v5');
+  assert.equal(steps[nodeIndex].with['node-version-file'], 'package.json');
+  assert.ok(
+    nodeIndex < patchIndex &&
+      committedIndex < patchIndex &&
+      patchIndex < projectedIndex &&
+      projectedIndex < buildIndex,
+  );
+  assert.match(steps[patchIndex].run, /node scripts\/set-build-version\.mjs/);
+  assert.doesNotMatch(steps[patchIndex].run, /sed -i/);
+  assert.equal(steps[committedIndex].run, 'cargo metadata --locked --no-deps');
+  assert.equal(steps[projectedIndex].run, 'cargo metadata --locked --no-deps');
+  assert.match(steps[buildIndex].run, /cargo build --locked --release/);
+  const upload = steps.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
+  assert.equal(
+    upload?.with?.['retention-days'],
+    '${{ inputs.artifact_retention_days }}',
   );
 });
 
@@ -696,10 +781,26 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   const patchIndex = packageJob.steps.findIndex(
     (step) => step.name === 'Project beta build version',
   );
+  const committedMetadataIndex = packageJob.steps.findIndex(
+    (step) => step.name === 'Verify committed Cargo metadata',
+  );
+  const buildMetadataIndex = packageJob.steps.findIndex(
+    (step) => step.name === 'Verify build Cargo metadata',
+  );
   const verifyIndex = packageJob.steps.findIndex(
     (step) => step.name === 'Verify release version metadata',
   );
-  assert.ok(patchIndex >= 0 && patchIndex < verifyIndex);
+  assert.ok(
+    committedMetadataIndex >= 0 &&
+      committedMetadataIndex < patchIndex &&
+      patchIndex < buildMetadataIndex &&
+      buildMetadataIndex < verifyIndex,
+  );
+  const expectedMetadata =
+    'cargo metadata --locked --no-deps\n' +
+    'cargo metadata --locked --no-deps --manifest-path BitFun-Installer/src-tauri/Cargo.toml\n';
+  assert.equal(packageJob.steps[committedMetadataIndex].run, expectedMetadata);
+  assert.equal(packageJob.steps[buildMetadataIndex].run, expectedMetadata);
   assert.equal(
     packageJob.steps[patchIndex].if,
     "needs.prepare.outputs.release_channel == 'beta'",
@@ -788,6 +889,24 @@ test('nightly and beta use the shared build-version projection', () => {
     (step) => step.name === 'Sign installer packages',
   );
   assert.match(signingStep.run, /write-minisign-public-key\.mjs/);
+});
+
+test('Installer packaging consumes its committed Cargo.lock', () => {
+  const installer = JSON.parse(
+    readFileSync(path.join(repoRoot, 'BitFun-Installer/package.json'), 'utf8'),
+  );
+  for (const scriptName of [
+    'tauri:build',
+    'tauri:build:fast',
+    'tauri:build:exe',
+    'tauri:build:exe:fast',
+  ]) {
+    assert.match(
+      installer.scripts[scriptName],
+      /tauri build(?: --no-bundle)? -- --locked(?: |$)/,
+      `${scriptName} must reject installer lockfile drift`,
+    );
+  }
 });
 
 test('Linux Rust workflows do not install an unused native OpenSSL toolchain', () => {
