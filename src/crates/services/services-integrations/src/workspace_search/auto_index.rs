@@ -1,6 +1,4 @@
 use std::path::{Path, PathBuf};
-#[cfg(test)]
-use std::process::Command;
 
 use bitfun_services_core::process_manager;
 use tokio::task::spawn_blocking;
@@ -181,7 +179,7 @@ mod tests {
     #[test]
     fn git_count_uses_visible_tracked_and_untracked_files_and_size_limit() {
         let repo = TempDir::new().expect("temp repo");
-        Command::new("git")
+        process_manager::create_command("git")
             .args(["init", "--quiet"])
             .current_dir(repo.path())
             .status()
@@ -189,12 +187,12 @@ mod tests {
         write(repo.path().join("tracked.txt"), "tracked").expect("write tracked");
         write(repo.path().join("untracked.txt"), "untracked").expect("write untracked");
         write(repo.path().join("large.bin"), vec![0_u8; 160]).expect("write large file");
-        Command::new("git")
+        process_manager::create_command("git")
             .args(["add", "tracked.txt"])
             .current_dir(repo.path())
             .status()
             .expect("git add should work");
-        Command::new("git")
+        process_manager::create_command("git")
             .args([
                 "-c",
                 "user.name=BitFun Test",
@@ -230,7 +228,7 @@ mod tests {
     #[test]
     fn git_workspaces_without_a_head_are_unsupported() {
         let repo = TempDir::new().expect("temp repo");
-        Command::new("git")
+        process_manager::create_command("git")
             .args(["init", "--quiet"])
             .current_dir(repo.path())
             .status()
