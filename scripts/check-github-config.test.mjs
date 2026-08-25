@@ -290,6 +290,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   }
 
   const cliJob = workflow.jobs['cli-test'];
+  assert.equal(cliJob['timeout-minutes'], 30);
   assert.ok(
     cliJob.strategy.matrix.include.some((entry) => entry.os === 'windows-latest'),
     'Windows ConPTY contracts must run before Nightly',
@@ -452,6 +453,14 @@ test('gates fast checks and PR packaging behind one fail-closed build decision',
   const resultJob = workflow.jobs['rust-validation-result'];
   const frontendJob = workflow.jobs['frontend-build'];
 
+  assert.equal(
+    frontendJob.steps.find((step) => step.name === 'Test core boundary contracts')?.run,
+    'pnpm run check:core-boundaries:test',
+  );
+  assert.equal(
+    frontendJob.steps.find((step) => step.name === 'Check core boundaries')?.run,
+    'pnpm run check:core-boundaries',
+  );
   assert.equal(frontendJob.needs, 'build-impact');
   const frontendNode = frontendJob.steps.find((step) =>
     step.uses?.startsWith('actions/setup-node@'));
@@ -460,6 +469,7 @@ test('gates fast checks and PR packaging behind one fail-closed build decision',
   const frontendGate = "needs.build-impact.outputs.frontend_required != 'false'";
   for (const stepName of [
     'Verify committed release metadata',
+    'Build plugin Host resources',
     'Generate web API bindings',
     'Build web UI',
     'Build mobile web',
@@ -559,6 +569,7 @@ test('gates fast checks and PR packaging behind one fail-closed build decision',
     upload_artifacts: false,
     cache_write: false,
   });
+
   assert.equal(resultJob.name, 'Rust / CLI Validation');
   assert.equal(resultJob.if, '${{ always() }}');
   assert.deepEqual(
@@ -645,9 +656,7 @@ test('gates fast checks and PR packaging behind one fail-closed build decision',
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      `$cases = ConvertFrom-Json @'
-${JSON.stringify(cases)}
-'@
+      `$cases = ConvertFrom-Json ([Console]::In.ReadToEnd())
 $verify = {
 ${verify.run}
 }
@@ -670,6 +679,7 @@ foreach ($case in $cases) {
       cwd: repoRoot,
       env: process.env,
       encoding: 'utf8',
+      input: JSON.stringify(cases),
     },
   );
   if (truthTable.error?.code === 'ENOENT') {
@@ -914,6 +924,15 @@ test('PR-capable release builds cannot save repository caches or upload CI packa
         assert.match(cache.with['save-if'], /github\.event_name != 'pull_request'/);
         assert.match(cache.with['cache-on-failure'], /github\.event_name != 'pull_request'/);
         assert.match(cache.with['shared-key'], /github\.base_ref \|\| github\.ref_name/);
+      }
+    }
+  }
+
+  for (const workflow of [ci, artifacts, linux]) {
+    for (const job of Object.values(workflow.jobs)) {
+      for (const bun of (job.steps ?? []).filter((step) =>
+        step.uses?.startsWith('oven-sh/setup-bun@'))) {
+        assert.equal(bun.with?.['no-cache'], true);
       }
     }
   }
@@ -1174,6 +1193,7 @@ test('nightly and beta use the shared build-version projection', () => {
   );
   assert.match(signingStep.run, /write-minisign-public-key\.mjs/);
 });
+
 
 test('Linux Rust workflows do not install an unused native OpenSSL toolchain', () => {
   for (const workflowPath of [

@@ -525,11 +525,21 @@ jobs:
       - name: Validate interactive capability contract
         run: pnpm run capabilities:check && pnpm run capabilities:test && pnpm run website:test && pnpm run website:build
 
+      - name: Test core boundary contracts
+        run: pnpm run check:core-boundaries:test
+
       - name: Check core boundaries
-        run: node --test scripts/check-core-boundaries.test.mjs
+        run: pnpm run check:core-boundaries
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Setup Bun for package resource preflight
+        if: needs.build-impact.outputs.frontend_required != 'false'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+          no-cache: true
 
       - name: Setup Rust for release projection preflight
         if: needs.build-impact.outputs.frontend_required != 'false'
@@ -538,6 +548,12 @@ jobs:
       - name: Verify committed release metadata
         if: needs.build-impact.outputs.frontend_required != 'false'
         run: cargo metadata --locked --no-deps
+
+      - name: Build plugin Host resources
+        if: needs.build-impact.outputs.frontend_required != 'false'
+        run: |
+          bun install --cwd src/apps/extension-host --frozen-lockfile
+          bun run --cwd src/apps/extension-host build
 
       - name: Generate web API bindings
         if: needs.build-impact.outputs.frontend_required != 'false'
