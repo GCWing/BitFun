@@ -1,5 +1,5 @@
 import {
-  computeFixedPopoverPositionInViewport,
+  computeFixedPopoverLeftInViewport,
   DEFAULT_POPOVER_VIEWPORT_PADDING,
   type FixedPopoverAlignment,
   type FixedPopoverPlacement,
@@ -24,8 +24,10 @@ interface ModelSelectorDropdownStyle {
   position: 'fixed';
   visibility: 'visible';
   left: string;
+  /** `auto` for a top-placed menu, which is held by its bottom edge instead. */
   top: string;
-  bottom: 'auto';
+  /** `auto` for a bottom-placed menu, which is held by its top edge instead. */
+  bottom: string;
   maxHeight: string;
 }
 
@@ -61,28 +63,35 @@ export function getModelSelectorDropdownLayout(
         ? preferredPlacement
         : alternatePlacement;
   const maxHeight = availableHeight(placement);
-  const renderedHeight = Math.min(dropdownSize.height, maxHeight);
-  const position = computeFixedPopoverPositionInViewport(
+  const left = computeFixedPopoverLeftInViewport(
     anchorRect,
     dropdownSize.width,
-    renderedHeight,
-    viewport,
-    {
-      preferredPlacement: placement,
-      alignment,
-      gap: MODEL_SELECTOR_DROPDOWN_GAP,
-      padding: DEFAULT_POPOVER_VIEWPORT_PADDING,
-    },
+    viewport.width,
+    { alignment, padding: DEFAULT_POPOVER_VIEWPORT_PADDING },
   );
+
+  // The edge next to the trigger is pinned to the trigger, and `maxHeight`
+  // already keeps the free edge inside the viewport. Deriving that pinned edge
+  // from the measured height instead would move the menu against the trigger
+  // for one frame every time its content changes height, and only snap back
+  // once a resize observation has been turned into a new position.
+  const verticalEdge = placement === 'top'
+    ? {
+      top: 'auto',
+      bottom: `${viewport.height - anchorRect.top + MODEL_SELECTOR_DROPDOWN_GAP}px`,
+    }
+    : {
+      top: `${anchorRect.bottom + MODEL_SELECTOR_DROPDOWN_GAP}px`,
+      bottom: 'auto',
+    };
 
   return {
     placement,
     style: {
       position: 'fixed',
       visibility: 'visible',
-      left: `${position.left}px`,
-      top: `${position.top}px`,
-      bottom: 'auto',
+      left: `${left}px`,
+      ...verticalEdge,
       maxHeight: `${maxHeight}px`,
     },
   };
