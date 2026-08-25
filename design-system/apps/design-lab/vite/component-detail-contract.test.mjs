@@ -3,16 +3,29 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const detailSource = new URL("../src/pages/ComponentDetailPage.tsx", import.meta.url);
+const stylesSource = new URL("../src/styles.css", import.meta.url);
 
-test("Button preview exposes only the two real presentation variants", async () => {
+test("Button preview exposes the three API variants", async () => {
   const source = await readFile(detailSource, "utf8");
-  const declaration = /const buttonVariants = \[([^\]]+)\] as const;/.exec(source);
+  const declaration = /const buttonVariants = \[([^\]]+)\] as const satisfies readonly ButtonVariant\[\];/.exec(source);
 
   assert.ok(declaration);
   assert.deepEqual(
     [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]),
-    ["fill", "outline"],
+    ["outline", "fill", "text"],
   );
+});
+
+test("Button matrix maps the four Figma presentations onto variant and tone", async () => {
+  const source = await readFile(detailSource, "utf8");
+  const styles = await readFile(stylesSource, "utf8");
+
+  assert.match(source, /label: "outline", tone: "neutral", variant: "outline"/);
+  assert.match(source, /label: "fill", tone: "neutral", variant: "fill"/);
+  assert.match(source, /label: "main", tone: "primary", variant: "fill"/);
+  assert.match(source, /label: "text", tone: "primary", variant: "text"/);
+  assert.match(styles, /grid-template-rows: 48px repeat\(4, 102px\)/);
+  assert.match(styles, /:not\(\[data-bf-variant="text"\]\)/);
 });
 
 test("Button preview opens on the filled variant used by the reference inspector", async () => {
@@ -20,7 +33,7 @@ test("Button preview opens on the filled variant used by the reference inspector
 
   assert.match(
     source,
-    /useState<\(typeof buttonVariants\)\[number\]>\("fill"\)/,
+    /useState<ButtonVariant>\("fill"\)/,
   );
 });
 
@@ -51,7 +64,7 @@ test("Button inspector wires the real disabled, loading, and icon controls", asy
   assert.match(source, /setInspectorLoading/);
   assert.match(source, /setPreviewIcon/);
   assert.match(source, /setPreviewIconPosition/);
-  assert.match(source, /renderPreview\(previewState, variant, true\)/);
+  assert.match(source, /renderPreview\(previewState, variant, tone, true\)/);
 });
 
 test("TabGroup preview carries the selected and outline reference composition", async () => {

@@ -1,6 +1,11 @@
 import "./styles/layers.css";
 
-export { Button, type ButtonProps } from "./components/Button";
+export {
+  Button,
+  type ButtonProps,
+  type ButtonTone,
+  type ButtonVariant,
+} from "./components/Button";
 export { Switch, type SwitchProps } from "./components/Switch";
 export {
   TabGroup,

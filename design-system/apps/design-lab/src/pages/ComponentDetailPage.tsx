@@ -10,6 +10,8 @@ import {
   Switch,
   TabGroup,
   ThemeRoot,
+  type ButtonTone,
+  type ButtonVariant,
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
@@ -38,7 +40,18 @@ type PreviewIcon = "chevron" | "none";
 type PreviewIconPosition = "left" | "right";
 type PreviewSize = "sm" | "md" | "lg";
 
-const buttonVariants = ["fill", "outline"] as const;
+const buttonVariants = ["outline", "fill", "text"] as const satisfies readonly ButtonVariant[];
+const buttonTones = ["neutral", "primary", "danger"] as const satisfies readonly ButtonTone[];
+const buttonPresentations = [
+  { label: "outline", tone: "neutral", variant: "outline" },
+  { label: "fill", tone: "neutral", variant: "fill" },
+  { label: "main", tone: "primary", variant: "fill" },
+  { label: "text", tone: "primary", variant: "text" },
+] as const satisfies readonly {
+  label: string;
+  tone: ButtonTone;
+  variant: ButtonVariant;
+}[];
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
@@ -52,14 +65,19 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   left: "detail.option.left",
   lg: "detail.option.lg",
   loading: "detail.option.loading",
+  main: "detail.option.main",
   md: "detail.option.md",
   none: "detail.option.none",
+  neutral: "detail.option.neutral",
   off: "detail.option.off",
   on: "detail.option.on",
   outline: "detail.option.outline",
+  primary: "detail.option.primary",
   right: "detail.option.right",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
+  text: "detail.option.text",
+  danger: "detail.option.danger",
   unselected: "detail.option.unselected",
 };
 
@@ -121,7 +139,8 @@ export function ComponentDetailPage({
   tokenOverrides,
 }: ComponentDetailPageProps) {
   const { t } = useI18n();
-  const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
+  const [variant, setVariant] = useState<ButtonVariant>("fill");
+  const [tone, setTone] = useState<ButtonTone>("neutral");
   const [size, setSize] = useState<PreviewSize>("md");
   const [previewState, setPreviewState] = useState(
     component.name === "Switch"
@@ -158,7 +177,7 @@ export function ComponentDetailPage({
       const iconProp = previewIcon === "chevron"
         ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
         : "";
-      return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
+      return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" tone="${tone}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
@@ -179,6 +198,7 @@ export function ComponentDetailPage({
     previewState,
     size,
     t,
+    tone,
     variant,
   ]);
 
@@ -195,6 +215,7 @@ export function ComponentDetailPage({
   function renderPreview(
     state = previewState,
     previewVariant = variant,
+    previewTone = tone,
     applyInspectorControls = false,
   ) {
     if (component.name === "Button") {
@@ -216,6 +237,7 @@ export function ComponentDetailPage({
           loading={state === "loading" || applyInspectorControls && inspectorLoading}
           size={size}
           trailingIcon={trailingIcon}
+          tone={previewTone}
           variant={previewVariant}
         >
           {t("components.preview.session")}
@@ -313,18 +335,18 @@ export function ComponentDetailPage({
                       {t(optionLabelKeys[state] ?? "detail.option.default")}
                     </span>
                   ))}
-                  {buttonVariants.map((matrixVariant) => (
-                    <Fragment key={matrixVariant}>
+                  {buttonPresentations.map((presentation) => (
+                    <Fragment key={presentation.label}>
                       <span className="component-preview-matrix__row-label">
-                        {t(optionLabelKeys[matrixVariant] ?? "detail.option.default")}
+                        {t(optionLabelKeys[presentation.label] ?? "detail.option.default")}
                       </span>
                       {states.map((state) => (
                         <div
                           className="component-preview-matrix__cell"
-                          data-active={matrixVariant === variant && state === previewState || undefined}
-                          key={`${matrixVariant}-${state}`}
+                          data-active={presentation.variant === variant && presentation.tone === tone && state === previewState || undefined}
+                          key={`${presentation.label}-${state}`}
                         >
-                          {renderPreview(state, matrixVariant)}
+                          {renderPreview(state, presentation.variant, presentation.tone)}
                         </div>
                       ))}
                     </Fragment>
@@ -425,6 +447,14 @@ export function ComponentDetailPage({
                   )}
                   {component.name === "Button" && (
                     <InspectorSelect
+                      label={t("detail.tone")}
+                      onChange={(value) => setTone(value as ButtonTone)}
+                      options={buttonTones}
+                      value={tone}
+                    />
+                  )}
+                  {component.name === "Button" && (
+                    <InspectorSelect
                       label={t("detail.size")}
                       onChange={(value) => setSize(value as PreviewSize)}
                       options={["sm", "md", "lg"]}
@@ -479,7 +509,7 @@ export function ComponentDetailPage({
                   density={density}
                   tokenOverrides={tokenOverrides}
                 >
-                  {renderPreview(previewState, variant, true)}
+                  {renderPreview(previewState, variant, tone, true)}
                 </ThemeRoot>
               </section>
 

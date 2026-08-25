@@ -2,13 +2,13 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const buttonMeta = {
   category: "action",
-  description: "A compact neutral pill action with outline and filled presentation variants.",
+  description: "A compact action with outline, filled, primary, and text presentations.",
   maturity: "stable",
   name: "Button",
   props: [
-    { defaultValue: "outline", name: "variant", type: "outline | fill" },
+    { defaultValue: "outline", name: "variant", type: "outline | fill | text" },
     { defaultValue: "md", name: "size", type: "sm | md | lg" },
-    { defaultValue: "neutral", name: "tone", type: "neutral | danger" },
+    { defaultValue: "neutral", name: "tone", type: "neutral | primary | danger" },
     { defaultValue: "false", name: "loading", type: "boolean" },
     { name: "leadingIcon", type: "ReactNode" },
     { name: "trailingIcon", type: "ReactNode" },
@@ -21,6 +21,11 @@ export const buttonMeta = {
     "color.action.neutral.surface",
     "color.action.neutral.surfaceHover",
     "color.action.neutral.surfacePressed",
+    "color.action.primary.background",
+    "color.action.primary.content",
+    "color.action.primary.hover",
+    "color.action.primary.pressed",
+    "color.accent.default",
     "color.focus.ring",
     "color.status.danger.border",
     "color.status.danger.content",

@@ -46,8 +46,9 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
     case "Button":
       return (
         <Stack align="center" direction="horizontal" gap="2" wrap>
-          <Button variant="fill">{t("components.preview.primary")}</Button>
+          <Button tone="primary" variant="fill">{t("components.preview.primary")}</Button>
           <Button>{t("components.preview.button")}</Button>
+          <Button variant="text">{t("components.preview.button")}</Button>
         </Stack>
       );
     case "Switch":

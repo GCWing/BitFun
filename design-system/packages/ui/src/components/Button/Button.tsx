@@ -6,14 +6,17 @@ import {
 import { classNames } from "../../internal/classNames";
 import styles from "./Button.module.css";
 
+export type ButtonTone = "danger" | "neutral" | "primary";
+export type ButtonVariant = "outline" | "fill" | "text";
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   leadingIcon?: ReactNode;
   loading?: boolean;
   size?: "sm" | "md" | "lg";
-  tone?: "danger" | "neutral";
+  tone?: ButtonTone;
   trailingIcon?: ReactNode;
-  variant?: "outline" | "fill";
+  variant?: ButtonVariant;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({

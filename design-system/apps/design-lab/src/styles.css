@@ -3140,7 +3140,7 @@ input.lab-force-focus {
 
 .component-preview-matrix[data-component="button"] {
   grid-template-columns: 96px repeat(4, minmax(124px, 1fr));
-  grid-template-rows: 48px repeat(2, 102px);
+  grid-template-rows: 48px repeat(4, 102px);
   min-width: 640px;
 }
 
@@ -3204,7 +3204,7 @@ input.lab-force-focus {
   box-shadow: none;
 }
 
-.component-preview-matrix[data-component="button"] [data-bf-component="button"] {
+.component-preview-matrix[data-component="button"] [data-bf-component="button"]:not([data-bf-variant="text"]) {
   min-width: 112px;
 }
 
@@ -3501,7 +3501,7 @@ input.lab-force-focus {
     gap: 52px;
   }
 
-  .component-preview-matrix[data-component="button"] [data-bf-component="button"] {
+  .component-preview-matrix[data-component="button"] [data-bf-component="button"]:not([data-bf-variant="text"]) {
     min-width: 112px;
   }
 }

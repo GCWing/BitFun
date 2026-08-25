@@ -30,6 +30,38 @@ test("danger tone preserves destructive semantics independently from presentatio
   assert.match(styles, /--bf-color-status-danger-border/);
 });
 
+test("primary filled presentation maps the Figma main button to semantic action tokens", async () => {
+  const markup = renderToStaticMarkup(
+    createElement(Button, { tone: "primary", variant: "fill" }, "Continue"),
+  );
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(markup, /data-bf-tone="primary"/);
+  assert.match(markup, /data-bf-variant="fill"/);
+  assert.match(styles, /--bf-color-action-primary-background/);
+  assert.match(styles, /--bf-color-action-primary-hover/);
+  assert.match(styles, /--bf-color-action-primary-pressed/);
+  assert.match(styles, /--bf-color-action-primary-content/);
+});
+
+test("text presentation keeps native button semantics and uses the accent contract", async () => {
+  const markup = renderToStaticMarkup(
+    createElement(Button, { variant: "text" }, "Details"),
+  );
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(markup, /data-bf-variant="text"/);
+  assert.match(markup, /type="button"/);
+  assert.match(styles, /\[data-bf-variant=text\]/);
+  assert.match(styles, /--bf-color-accent-default/);
+  assert.match(
+    styles,
+    /\[data-bf-tone=primary\]\[data-bf-variant=text\]\{[^}]*--_button-border:\s*transparent/,
+  );
+  assert.match(styles, /text-decoration:underline/);
+  assert.match(styles, /text-underline-position:from-font/);
+});
+
 test("Button renders decorative icon slots and native disabled state", () => {
   const markup = renderToStaticMarkup(
     createElement(
@@ -140,5 +172,4 @@ test("fill uses neutral semantic state colors and icons inherit content color", 
   assert.match(styles, /--_button-background-hover:\s*var\(--bf-color-action-neutral-surface-hover\)/);
   assert.match(styles, /--_button-background-active:\s*var\(--bf-color-action-neutral-surface-pressed\)/);
   assert.match(styles, /color:currentColor/);
-  assert.doesNotMatch(styles, /--bf-color-action-primary/);
 });

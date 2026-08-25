@@ -56,6 +56,10 @@
     cursor: not-allowed;
   }
 
+  .button[data-bf-variant="outline"]:disabled {
+    --_button-border: var(--bf-color-action-neutral-surface);
+  }
+
   .button[data-bf-variant="fill"] {
     --_button-background: var(--bf-color-action-neutral-surface);
     --_button-background-hover: var(--bf-color-action-neutral-surface-hover);
@@ -65,6 +69,52 @@
 
   .button[data-bf-variant="fill"]:disabled {
     background: var(--bf-color-action-neutral-surface);
+  }
+
+  .button[data-bf-variant="text"] {
+    --_button-background: transparent;
+    --_button-background-active: transparent;
+    --_button-background-hover: transparent;
+    --_button-border: transparent;
+    --_button-content: var(--bf-color-accent-default);
+    --_button-height: auto;
+    --_button-padding-block: 0;
+    --_button-padding-inline: 0;
+
+    border-radius: 0;
+  }
+
+  .button[data-bf-variant="text"]:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) .label,
+  .button[data-bf-variant="text"]:is(:active, [data-bf-preview-state="active"]):not(:disabled) .label {
+    text-decoration: underline;
+    text-decoration-thickness: from-font;
+    text-underline-position: from-font;
+  }
+
+  .button[data-bf-tone="primary"][data-bf-variant="outline"] {
+    --_button-border: var(--bf-color-accent-default);
+    --_button-content: var(--bf-color-accent-default);
+  }
+
+  .button[data-bf-tone="primary"][data-bf-variant="text"] {
+    --_button-border: transparent;
+    --_button-content: var(--bf-color-accent-default);
+  }
+
+  .button[data-bf-tone="primary"][data-bf-variant="fill"] {
+    --_button-background: var(--bf-color-action-primary-background);
+    --_button-background-hover: var(--bf-color-action-primary-hover);
+    --_button-background-active: var(--bf-color-action-primary-pressed);
+    --_button-border: transparent;
+    --_button-content: var(--bf-color-action-primary-content);
+  }
+
+  .button[data-bf-tone="primary"][data-bf-variant="fill"]:disabled {
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  .button[data-bf-tone="primary"][data-bf-variant="outline"]:disabled {
+    --_button-border: var(--bf-color-action-neutral-surface);
   }
 
   .button[data-bf-tone="danger"] {
@@ -81,6 +131,13 @@
 
   .button[data-bf-tone="danger"][data-bf-variant="fill"]:disabled {
     background: var(--bf-color-status-danger-surface);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="text"] {
+    --_button-background: transparent;
+    --_button-background-active: transparent;
+    --_button-background-hover: transparent;
+    --_button-border: transparent;
   }
 
   .button[data-size="sm"] {
