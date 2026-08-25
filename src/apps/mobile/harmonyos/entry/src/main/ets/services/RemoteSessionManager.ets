@@ -205,16 +205,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     const workspacePath = this.workspace?.path || '';
     const normalizedAgentType = RemoteSessionManager.normalizedSessionFilter(agentType);
     const trimmedQuery = query.trim();
-    if (!normalizedAgentType) {
-      const command = RemoteCommandFactory.listSessions(workspacePath, limit, offset, trimmedQuery);
-      const response = await this.send<SessionListResponse>(command);
-      return {
-        sessions: RemoteResponseMapper.sessions(response.sessions || []),
-        hasMore: response.has_more || false
-      };
-    }
-
-    const pageSize = Math.max(100, limit);
+    const pageSize = normalizedAgentType ? Math.max(100, limit) : Math.max(1, limit);
     const targetCount = offset + limit;
     const filteredSessions: RemoteSession[] = [];
     let pageOffset = 0;
@@ -222,14 +213,15 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     while (hasMore && filteredSessions.length < targetCount) {
       const command = RemoteCommandFactory.listSessions(workspacePath, pageSize, pageOffset, trimmedQuery);
       const response = await this.send<SessionListResponse>(command);
-      const sessions = RemoteResponseMapper.sessions(response.sessions || []);
+      const sessions = RemoteResponseMapper.allSessions(response.sessions || []);
       for (const session of sessions) {
-        if (RemoteSessionManager.agentMatchesFilter(session.agentType, normalizedAgentType)) {
+        if (RemoteResponseMapper.isVisibleSession(session) &&
+          (!normalizedAgentType || RemoteSessionManager.agentMatchesFilter(session.agentType, normalizedAgentType))) {
           filteredSessions.push(session);
         }
       }
       hasMore = response.has_more || false;
-      pageOffset += pageSize;
+      pageOffset += sessions.length;
       if (sessions.length === 0) {
         break;
       }

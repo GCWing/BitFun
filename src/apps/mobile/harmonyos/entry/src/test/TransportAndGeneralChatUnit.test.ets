@@ -131,6 +131,7 @@ import {
   ReadFileResult,
   RemoteSession,
   SelectedImageAttachment,
+  SessionItemResponse,
   SessionListResult,
   SessionMessagesResult,
   SessionSummary,
@@ -1552,6 +1553,29 @@ export default function transportAndGeneralChatUnitTest() {
       expect(sessions[0].agentType).assertEqual('agentic');
       expect(sessions[0].messageCount).assertEqual(4);
       expect(sessions[0].workspaceName).assertEqual('Repo');
+    });
+
+    it('hides ACP sessions while preserving raw pages for pagination', 0, () => {
+      const items: SessionItemResponse[] = [{
+        session_id: 'native-session',
+        name: 'Native',
+        agent_type: 'agentic'
+      }, {
+        session_id: 'acp-session',
+        name: 'ACP',
+        agent_type: 'acp:codex'
+      }, {
+        session_id: 'future-acp-session',
+        name: 'Future ACP',
+        agent_type: ' ACP:gemini '
+      }];
+
+      const visible = RemoteResponseMapper.sessions(items);
+      const raw = RemoteResponseMapper.allSessions(items);
+
+      expect(visible.length).assertEqual(1);
+      expect(visible[0].id).assertEqual('native-session');
+      expect(raw.length).assertEqual(3);
     });
 
     it('maps alternate session time fields', 0, () => {
