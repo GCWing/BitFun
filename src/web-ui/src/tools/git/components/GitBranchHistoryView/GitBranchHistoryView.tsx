@@ -3,11 +3,11 @@
  * Shows a branch's commits and supports cherry-pick when applicable.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, RefreshCw, ChevronDown, ChevronUp, GitBranch, Square, CheckSquare } from 'lucide-react';
-import { Search, IconButton, Select } from '@/component-library';
+import { Search, Select } from '@/component-library';
 import { gitAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
 import type { GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
@@ -385,10 +385,10 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
           )}
           
           <IconButton
-            size="xs"
-            variant="ghost"
+            size="sm"
             onClick={loadCommits}
             title={t('branchHistory.refresh')}
+            aria-label={t('branchHistory.refresh')}
           >
             <RefreshCw size={14} />
           </IconButton>
@@ -466,8 +466,8 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                     
                     <IconButton 
                       className="git-branch-history-view__expand-btn"
-                      size="xs"
-                      variant="ghost"
+                      size="sm"
+                      aria-label={isExpanded ? t('tooltips.collapseDetails') : t('tooltips.expandDetails')}
                     >
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </IconButton>

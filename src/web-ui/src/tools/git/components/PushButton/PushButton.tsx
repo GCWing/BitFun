@@ -1,9 +1,8 @@
 /** Push button with optional force-push dropdown. */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ArrowUp, AlertTriangle } from 'lucide-react';
-import { IconButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './PushButton.scss';
 
@@ -35,10 +34,12 @@ function buttonVariant(variant: PushButtonProps['variant']): React.ComponentProp
   return 'fill';
 }
 
-function iconButtonVariant(variant: PushButtonProps['variant']): React.ComponentProps<typeof IconButton>['variant'] {
-  if (variant === 'primary' || variant === 'accent') return 'primary';
-  if (variant === 'ghost') return 'ghost';
-  return 'default';
+function iconButtonSize(size: PushButtonProps['size']): React.ComponentProps<typeof IconButton>['size'] {
+  return size === 'small' ? 'md' : 'lg';
+}
+
+function iconButtonTone(variant: PushButtonProps['variant']): React.ComponentProps<typeof IconButton>['tone'] {
+  return variant === 'primary' || variant === 'accent' ? 'primary' : 'neutral';
 }
 
 export const PushButton: React.FC<PushButtonProps> = ({
@@ -103,13 +104,13 @@ export const PushButton: React.FC<PushButtonProps> = ({
       <div className="bitfun-push-button__wrapper" ref={wrapperRef}>
         {iconOnly ? (
           <IconButton
-            size={size}
-            variant={iconButtonVariant(variant)}
+            size={iconButtonSize(size)}
+            tone={iconButtonTone(variant)}
             onClick={() => handlePush(false)}
             disabled={disabled || loading}
-            isLoading={loading}
+            loading={loading}
             aria-label={t('actions.push')}
-            tooltip={t('actions.push')}
+            title={t('actions.push')}
           >
             <ArrowUp size={14} />
           </IconButton>
@@ -127,12 +128,12 @@ export const PushButton: React.FC<PushButtonProps> = ({
         )}
 
         <IconButton
-          size={size}
-          variant={iconButtonVariant(variant)}
+          size={iconButtonSize(size)}
+          tone={iconButtonTone(variant)}
           onClick={handleToggleDropdown}
           disabled={disabled || loading}
           aria-label={`${t('actions.push')} / ${t('actions.forcePush')}`}
-          tooltip={`${t('actions.push')} / ${t('actions.forcePush')}`}
+          title={`${t('actions.push')} / ${t('actions.forcePush')}`}
         >
           <ChevronDown
             size={14}

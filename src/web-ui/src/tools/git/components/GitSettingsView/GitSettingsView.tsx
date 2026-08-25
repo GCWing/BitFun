@@ -1,6 +1,6 @@
 /** Git settings view. */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { IconButton, Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
+import { Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -63,7 +63,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'user' | 'repository' | 'advanced'>('user');
-  const { t } = useI18n('panels/git');
+  const { t } = useI18n(['panels/git', 'common']);
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
@@ -353,7 +353,8 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
             onClick={loadConfig}
             disabled={loading}
             title={t('settingsView.refresh')}
-            size="small"
+            aria-label={t('settingsView.refresh')}
+            size="md"
           >
             <RefreshCw size={16} />
           </IconButton>
@@ -377,8 +378,8 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           <IconButton 
             onClick={() => setError(null)} 
             className="bitfun-git-settings-view__close-btn"
-            size="xs"
-            variant="ghost"
+            size="sm"
+            aria-label={t('common:actions.close')}
           >
             <X size={12} />
           </IconButton>
@@ -392,8 +393,8 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           <IconButton 
             onClick={() => setSuccess(null)} 
             className="bitfun-git-settings-view__close-btn"
-            size="xs"
-            variant="ghost"
+            size="sm"
+            aria-label={t('common:actions.close')}
           >
             <X size={12} />
           </IconButton>
