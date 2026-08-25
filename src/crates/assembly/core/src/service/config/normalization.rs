@@ -48,6 +48,9 @@ pub fn normalize_config_value(config: Value) -> ConfigNormalizationResult {
             diagnostics,
         };
     }
+
+    normalize_incompatible_telemetry_value(&mut value, &mut diagnostics);
+
     if previous_schema < u64::from(CURRENT_CONFIG_SCHEMA_VERSION) {
         if let Some(root) = value.as_object_mut() {
             root.insert(
@@ -71,6 +74,33 @@ pub fn normalize_config_value(config: Value) -> ConfigNormalizationResult {
         value,
         diagnostics,
     }
+}
+
+fn normalize_incompatible_telemetry_value(
+    config: &mut Value,
+    diagnostics: &mut Vec<ConfigDiagnostic>,
+) {
+    let Some(telemetry) = config
+        .get_mut("app")
+        .and_then(Value::as_object_mut)
+        .and_then(|app| app.get_mut("telemetry"))
+    else {
+        return;
+    };
+
+    if telemetry.is_boolean() {
+        return;
+    }
+
+    *telemetry = Value::Bool(false);
+    diagnostics.push(ConfigDiagnostic {
+        path: "app.telemetry".to_string(),
+        message: "Disabled an unsupported telemetry configuration during compatibility recovery"
+            .to_string(),
+        code: "CONFIG_TELEMETRY_DOWNGRADED".to_string(),
+        severity: ConfigDiagnosticSeverity::Warning,
+        recoverability: ConfigDiagnosticRecoverability::AutoFix,
+    });
 }
 
 pub fn reject_unsupported_schema(diagnostics: &[ConfigDiagnostic]) -> BitFunResult<()> {
