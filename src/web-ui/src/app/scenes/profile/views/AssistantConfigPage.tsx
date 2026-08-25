@@ -11,9 +11,9 @@ import {
   X,
 } from 'lucide-react';
 import {
-  IconButton,
   Input,
 } from '@/component-library';
+import { IconButton } from '@bitfun/ui';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -420,23 +420,23 @@ const AssistantConfigPage: React.FC = () => {
             <div className="acp-persona-editor__head" data-bf-component="assistant-config-page" data-bf-part="editorHeader">
               <IconButton
                 type="button"
-                size="xs"
+                size="sm"
                 className="acp-persona-editor__back"
                 onClick={closePersonaDoc}
                 aria-label={t('nursery.template.closeDetail')}
-                tooltip={t('nursery.template.closeDetail')}
+                title={t('nursery.template.closeDetail')}
               >
                 <ArrowLeft size={13} />
               </IconButton>
               <span className="acp-persona-editor__title">{t(`nursery.assistant.personaDocs.${docLabelKey}`)}</span>
               <IconButton
                 type="button"
-                size="xs"
-                variant="danger"
+                size="sm"
+                tone="danger"
                 className="acp-persona-editor__close"
                 onClick={closePersonaDoc}
                 aria-label={t('nursery.template.closeDetail')}
-                tooltip={t('nursery.template.closeDetail')}
+                title={t('nursery.template.closeDetail')}
               >
                 <X size={13} />
               </IconButton>
@@ -510,13 +510,13 @@ const AssistantConfigPage: React.FC = () => {
       <div className="nursery-page__bar acp-page__bar" data-bf-component="assistant-config-page" data-bf-part="toolbar">
         <IconButton
           type="button"
-          size="small"
+          size="md"
           className="nursery-page__back"
           data-bf-component="assistant-config-page"
           data-bf-part="back"
           onClick={openGallery}
           aria-label={t('nursery.backToGallery')}
-          tooltip={t('nursery.backToGallery')}
+          title={t('nursery.backToGallery')}
         >
           <ArrowLeft size={13} />
         </IconButton>

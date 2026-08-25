@@ -16,23 +16,6 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/component-library', () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  IconButton: ({
-    children,
-    isLoading,
-    size: _size,
-    tooltip: _tooltip,
-    variant: _variant,
-    ...props
-  }: React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement> & {
-    isLoading?: boolean;
-    size?: string;
-    tooltip?: React.ReactNode;
-    variant?: string;
-  }>) => (
-    <button {...props} aria-busy={isLoading || undefined}>
-      {children}
-    </button>
-  ),
 }));
 
 const workspace = {
@@ -87,8 +70,8 @@ describe('AssistantCard actions', () => {
     const newSession = container.querySelector(
       'button[data-bf-component="button"][data-bf-variant="fill"]',
     ) as HTMLButtonElement;
-    const remove = container.querySelector('[data-bf-part="delete"]') as HTMLButtonElement;
-    const setPrimary = container.querySelector('[data-bf-part="setPrimary"]') as HTMLButtonElement;
+    const remove = container.querySelector('[data-bf-slot="delete"]') as HTMLButtonElement;
+    const setPrimary = container.querySelector('[data-bf-slot="setPrimary"]') as HTMLButtonElement;
 
     expect(card?.tagName).toBe('ARTICLE');
     expect(configure.getAttribute('aria-label')).toContain('Mira');
@@ -130,8 +113,8 @@ describe('AssistantCard actions', () => {
     const newSession = container.querySelector(
       'button[data-bf-component="button"][data-bf-variant="fill"]',
     ) as HTMLButtonElement;
-    const setPrimary = container.querySelector('[data-bf-part="setPrimary"]') as HTMLButtonElement;
-    const remove = container.querySelector('[data-bf-part="delete"]') as HTMLButtonElement;
+    const setPrimary = container.querySelector('[data-bf-slot="setPrimary"]') as HTMLButtonElement;
+    const remove = container.querySelector('[data-bf-slot="delete"]') as HTMLButtonElement;
     expect(configure.disabled).toBe(true);
     expect(newSession.disabled).toBe(true);
     expect(setPrimary.disabled).toBe(true);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import {
   ChevronRight,
   MessageSquarePlus,
@@ -9,10 +9,9 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, IconButton } from '@/component-library';
+import { Badge } from '@/component-library';
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import type { WorkspaceInfo } from '@/shared/types';
-import { IconButton as UiIconButton } from '@bitfun/ui';
 
 interface AssistantCardProps {
   workspace: WorkspaceInfo;
@@ -58,7 +57,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
       role="listitem"
       style={style}
     >
-      <UiIconButton
+      <IconButton
         data-bf-component="assistant-card"
         data-bf-part="main"
         type="button"
@@ -108,7 +107,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             aria-hidden="true"
           />
         </span>
-      </UiIconButton>
+      </IconButton>
 
       <footer className="assistant-card__footer" data-bf-component="assistant-card" data-bf-part="footer">
         <Button
@@ -141,15 +140,13 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
           <span className="assistant-card__footer-actions">
             {onSetPrimary ? (
               <IconButton
-                data-bf-component="assistant-card"
-                data-bf-part="setPrimary"
-                variant="ghost"
-                size="small"
+                data-bf-slot="setPrimary"
+                size="md"
                 onClick={onSetPrimary}
                 aria-label={t('nursery.card.setPrimary')}
-                isLoading={isSettingPrimary}
+                loading={isSettingPrimary}
                 disabled={isDeleting || isStartingSession || isSettingPrimary}
-                tooltip={t('nursery.card.setPrimary')}
+                title={t('nursery.card.setPrimary')}
               >
                 <Pin size={14} strokeWidth={1.8} aria-hidden="true" />
               </IconButton>
@@ -157,15 +154,14 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
 
             {onDelete ? (
               <IconButton
-                data-bf-component="assistant-card"
-                data-bf-part="delete"
-                variant="danger"
-                size="small"
+                data-bf-slot="delete"
+                tone="danger"
+                size="md"
                 onClick={onDelete}
                 aria-label={t('nursery.card.delete')}
-                isLoading={isDeleting}
+                loading={isDeleting}
                 disabled={isDeleting || isStartingSession || isSettingPrimary}
-                tooltip={t('nursery.card.delete')}
+                title={t('nursery.card.delete')}
               >
                 <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />
               </IconButton>

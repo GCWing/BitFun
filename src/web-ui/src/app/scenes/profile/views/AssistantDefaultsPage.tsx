@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, IconButton, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -15,7 +15,6 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { IconButton } from '@/component-library';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
@@ -43,7 +42,6 @@ import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDevi
 import { canQueryToolCatalogOnSurface } from '@/infrastructure/peer-device/peerCapabilityResolution';
 import './NurseryView.scss';
 import './AssistantDefaultsPage.scss';
-import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('AssistantDefaultsPage');
 const ASSISTANT_MODE_ID = 'Claw';
@@ -644,14 +642,14 @@ const AssistantDefaultsPage: React.FC = () => {
             onChange={() => toggleCapability(row)}
             aria-label={t('nursery.template.toggleCapability', { name: row.name })}
           />
-          <UiIconButton
+          <IconButton
             type="button"
             className="assistant-defaults-row__detail"
             onClick={() => openDetail(row.detail)}
             aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
           >
             <ChevronRight size={17} />
-          </UiIconButton>
+          </IconButton>
         </div>
       </>
     );
@@ -774,14 +772,14 @@ const AssistantDefaultsPage: React.FC = () => {
                 <span className="assistant-defaults-group__count">
                   {t('nursery.template.enabledCount', { enabled: enabledCount, total: group.allRows.length })}
                 </span>
-                <UiIconButton
+                <IconButton
                   type="button"
                   className="assistant-defaults-group__detail"
                   onClick={() => openDetail({ type: 'mcpServer', serverId: group.id })}
                   aria-label={t('nursery.template.openServerDetail')}
                 >
                   <Info size={16} />
-                </UiIconButton>
+                </IconButton>
                 {allNames.length > 0 ? (
                   <Switch
                     checked={allEnabled}
@@ -848,7 +846,7 @@ const AssistantDefaultsPage: React.FC = () => {
               <span className="assistant-defaults-detail__eyebrow">MCP</span>
               <h3>{title}</h3>
             </div>
-            <UiIconButton type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></UiIconButton>
+            <IconButton type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></IconButton>
           </div>
           <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
             {server?.statusMessage ? <p className="assistant-defaults-detail__description">{server.statusMessage}</p> : null}
@@ -918,7 +916,7 @@ const AssistantDefaultsPage: React.FC = () => {
             <span className="assistant-defaults-detail__eyebrow">{kindLabel}</span>
             <h3>{row.name}</h3>
           </div>
-          <UiIconButton type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></UiIconButton>
+          <IconButton type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></IconButton>
         </div>
         <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
           <p className="assistant-defaults-detail__description">{row.description}</p>
@@ -1004,11 +1002,10 @@ const AssistantDefaultsPage: React.FC = () => {
         <header className="assistant-defaults__header" data-bf-component="assistant-defaults-page" data-bf-part="header">
           <div className="assistant-defaults__title-row" data-bf-component="assistant-defaults-page" data-bf-part="toolbar">
             <IconButton
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={openGallery}
               aria-label={t('nursery.backToGallery')}
-              tooltip={t('nursery.backToGallery')}
+              title={t('nursery.backToGallery')}
             >
               <ArrowLeft size={18} />
             </IconButton>
@@ -1093,7 +1090,7 @@ const AssistantDefaultsPage: React.FC = () => {
                     placeholder={t('nursery.template.searchPlaceholder')}
                   />
                   {searchQuery ? (
-                    <UiIconButton type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><X size={15} /></UiIconButton>
+                    <IconButton type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><X size={15} /></IconButton>
                   ) : null}
                 </label>
                 <div className="assistant-defaults-filters" role="group" aria-label={t('nursery.template.filterLabel')}>
