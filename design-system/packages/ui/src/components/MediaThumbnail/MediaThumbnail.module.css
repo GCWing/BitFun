@@ -1,0 +1,58 @@
+@layer bf.components {
+  .root {
+    position: relative;
+    flex: 0 0 auto;
+    inline-size: var(--bf-control-media-thumbnail-width);
+    block-size: var(--bf-control-media-thumbnail-height);
+    overflow: hidden;
+    background: var(--bf-color-surface-panel);
+  }
+
+  .root[data-bf-presentation="stacked"] {
+    background: var(--bf-color-status-success-surface);
+  }
+
+  .backdrop,
+  .image {
+    position: absolute;
+    display: block;
+  }
+
+  .root[data-bf-presentation="stacked"] .backdrop,
+  .root[data-bf-presentation="stacked"] .image {
+    inset-block-start: var(--bf-space-2);
+    inset-inline-start: 50%;
+    inline-size: var(--bf-control-media-thumbnail-stacked-width);
+    block-size: var(--bf-control-media-thumbnail-stacked-height);
+    border-radius: var(--bf-control-media-thumbnail-radius);
+    transform-origin: center;
+  }
+
+  .root[data-bf-presentation="stacked"] .backdrop {
+    background: var(--bf-color-surface-panel);
+    opacity: var(--bf-opacity-hover);
+    transform: translateX(-54%) rotate(4deg);
+  }
+
+  .root[data-bf-presentation="stacked"] .image {
+    object-fit: cover;
+    box-shadow: var(--bf-shadow-overlay);
+    transform: translateX(-50%) rotate(8deg);
+  }
+
+  .root[data-bf-presentation="contain"] .image {
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: var(--bf-control-media-thumbnail-contain-size);
+    block-size: var(--bf-control-media-thumbnail-contain-size);
+    object-fit: contain;
+    transform: translate(-50%, -50%);
+  }
+
+  .root[data-bf-presentation="placeholder"] .image {
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: fill;
+  }
+}

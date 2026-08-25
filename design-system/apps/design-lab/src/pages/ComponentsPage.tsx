@@ -1,15 +1,30 @@
 import {
   ArrowRight,
   Check,
+  Keyboard,
+  Image as ImageIcon,
   List,
   MessageCircle,
   MousePointerClick,
+  MessageSquareText,
   PanelTop,
+  PanelLeft,
+  Search,
   ToggleLeft,
+  Type,
+  User,
 } from "lucide-react";
 import {
   Button,
+  Heading,
   IconButton,
+  Input,
+  KeyHint,
+  ListItem,
+  MediaThumbnail,
+  NavigationList,
+  NavigationListSection,
+  PromptComposer,
   Stack,
   Switch,
   TabGroup,
@@ -20,6 +35,7 @@ import {
   type TokenOverrides,
 } from "@bitfun/ui";
 import { componentRegistry, type ComponentMeta } from "@bitfun/ui/registry";
+import figmaHomepageImage from "../assets/figma-homepage.png";
 import { useI18n } from "../i18n";
 import {
   getComponentCategoryLabel,
@@ -37,7 +53,14 @@ interface ComponentsPageProps {
 
 const componentIcons = {
   Button: MousePointerClick,
+  Heading: Type,
   IconButton: List,
+  Input: Search,
+  KeyHint: Keyboard,
+  ListItem: User,
+  MediaThumbnail: ImageIcon,
+  NavigationList: PanelLeft,
+  PromptComposer: MessageSquareText,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
 } as const;
@@ -59,6 +82,59 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <IconButton aria-label={t("components.preview.moreActions")}>
           <List aria-hidden="true" />
         </IconButton>
+      );
+    case "Heading":
+      return (
+        <Heading
+          description="Interface language and visual appearance"
+          title="Appearance"
+          variant="section"
+        />
+      );
+    case "Input":
+      return (
+        <Input
+          aria-label="Search"
+          leadingIcon={<Search aria-hidden="true" />}
+          placeholder="Search"
+          trailingContent={<KeyHint>⌘ K</KeyHint>}
+          variant="search"
+        />
+      );
+    case "KeyHint":
+      return <KeyHint leadingIcon={<Keyboard aria-hidden="true" />}>K</KeyHint>;
+    case "ListItem":
+      return (
+        <ListItem leadingIcon={<User aria-hidden="true" />} selected>
+          AI Assistant
+        </ListItem>
+      );
+    case "MediaThumbnail":
+      return (
+        <MediaThumbnail
+          alt="BitFun homepage"
+          presentation="stacked"
+          src={figmaHomepageImage}
+        />
+      );
+    case "NavigationList":
+      return (
+        <NavigationList aria-label="Settings" className="component-card-navigation-preview">
+          <NavigationListSection title="General">
+            <ListItem>About</ListItem>
+            <ListItem selected>Appearance</ListItem>
+          </NavigationListSection>
+        </NavigationList>
+      );
+    case "PromptComposer":
+      return (
+        <PromptComposer
+          aria-label="Prompt"
+          className="component-card-prompt-preview"
+          endControls={<span>Send</span>}
+          placeholder="How can I help you..."
+          startControls={<span>+</span>}
+        />
       );
     case "Switch":
       return (

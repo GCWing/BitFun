@@ -1,0 +1,94 @@
+@layer bf.components {
+  .root {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    min-inline-size: 0;
+    color: var(--bf-color-content-primary);
+    font-family: var(--bf-font-family-control);
+  }
+
+  .copy {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-inline-size: 0;
+    gap: var(--bf-space-1);
+  }
+
+  .title,
+  .description {
+    margin: 0;
+  }
+
+  .title {
+    color: inherit;
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
+  }
+
+  .description {
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-caption);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-body);
+  }
+
+  .root[data-variant="page"] .copy {
+    gap: var(--bf-space-2);
+  }
+
+  .root[data-variant="page"] .title {
+    font-size: var(--bf-font-size-page-title);
+  }
+
+  .root[data-variant="page"] .description {
+    font-size: var(--bf-font-size-lg);
+  }
+
+  .root[data-variant="section"] .title {
+    font-size: var(--bf-font-size-lg);
+  }
+
+  .root[data-variant="section"] .description {
+    color: var(--bf-color-content-primary);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .root[data-variant="subsection"] .title {
+    font-size: var(--bf-font-size-small);
+  }
+
+  .root[data-variant="subsection"] .description {
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-caption);
+  }
+
+  .root[data-variant="hero"] {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .root[data-variant="hero"] .copy {
+    align-items: center;
+    gap: var(--bf-space-3);
+  }
+
+  .root[data-variant="hero"] .title {
+    font-size: var(--bf-font-size-hero);
+  }
+
+  .root[data-variant="hero"] .description {
+    color: var(--bf-color-content-primary);
+    font-size: var(--bf-font-size-xl);
+    font-weight: var(--bf-font-weight-medium);
+  }
+
+  .action {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin-inline-start: var(--bf-space-2);
+  }
+}

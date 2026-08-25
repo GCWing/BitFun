@@ -848,6 +848,15 @@ body,
   background: var(--bf-color-surface-canvas);
 }
 
+.component-card-navigation-preview {
+  max-block-size: 120px;
+  overflow: hidden;
+}
+
+.component-card-prompt-preview {
+  max-inline-size: 260px;
+}
+
 .component-card__body {
   display: grid;
   align-content: start;
@@ -3148,6 +3157,68 @@ input.lab-force-focus {
   grid-template-columns: 96px repeat(4, minmax(112px, 1fr));
   grid-template-rows: 48px 102px;
   min-width: 592px;
+}
+
+.component-preview-matrix[data-component="heading"] {
+  grid-template-columns: 112px minmax(480px, 1fr);
+  grid-template-rows: 48px repeat(4, minmax(108px, auto));
+  min-width: 640px;
+}
+
+.component-preview-matrix[data-component="heading"] .component-preview-matrix__cell {
+  justify-items: stretch;
+}
+
+.component-preview-matrix[data-component="input"],
+.component-preview-matrix[data-component="list-item"] {
+  grid-template-columns: 96px repeat(4, minmax(168px, 1fr));
+  grid-template-rows: 48px 112px;
+  min-width: 768px;
+}
+
+.component-preview-matrix[data-component="input"] [data-bf-component="input"],
+.component-preview-matrix[data-component="list-item"] [data-bf-component="list-item"] {
+  width: 100%;
+  max-width: 208px;
+}
+
+.component-preview-matrix[data-component="key-hint"] {
+  grid-template-columns: 96px minmax(180px, 1fr);
+  grid-template-rows: 48px 112px;
+  min-width: 360px;
+}
+
+.component-preview-matrix[data-component="media-thumbnail"] {
+  grid-template-columns: 96px repeat(4, minmax(264px, 1fr));
+  grid-template-rows: 48px 184px;
+  min-width: 1160px;
+}
+
+.component-preview-matrix[data-component="navigation-list"] {
+  grid-template-columns: 112px repeat(2, minmax(264px, 1fr));
+  grid-template-rows: 48px 420px;
+  min-width: 680px;
+}
+
+.component-preview-matrix[data-component="prompt-composer"] {
+  grid-template-columns: 104px repeat(3, minmax(360px, 1fr));
+  grid-template-rows: 48px 184px;
+  min-width: 1220px;
+}
+
+.component-prompt-composer-preview {
+  max-inline-size: 440px;
+}
+
+.component-navigation-list-preview {
+  block-size: 376px;
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+}
+
+.component-navigation-list-preview__search {
+  display: flex;
+  align-items: center;
+  gap: var(--bf-space-2);
 }
 
 .component-preview-matrix[data-component="switch"] {

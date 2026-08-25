@@ -93,3 +93,36 @@ test("TabGroup preview carries the selected and outline reference composition", 
   assert.match(source, /data-component="tab-group"/);
   assert.match(source, /<TabGroup/);
 });
+
+test("new Figma foundations remain visible as state matrices in Design Lab", async () => {
+  const source = await readFile(detailSource, "utf8");
+  const styles = await readFile(stylesSource, "utf8");
+
+  for (const component of [
+    "heading",
+    "input",
+    "key-hint",
+    "list-item",
+    "media-thumbnail",
+    "navigation-list",
+    "prompt-composer",
+  ]) {
+    assert.match(source, new RegExp(`data-component="${component}"`));
+    assert.match(styles, new RegExp(`data-component="${component}"`));
+  }
+
+  assert.match(source, /figmaHomepageImage/);
+  assert.match(source, /figmaMacbookAirImage/);
+  assert.match(source, /figmaPlaceholderDevice/);
+  assert.match(source, /figmaPlaceholderServer/);
+});
+
+test("Figma chat input maps to PromptComposer instead of overloading native Input", async () => {
+  const source = await readFile(detailSource, "utf8");
+
+  assert.match(source, /component\.name === "PromptComposer"/);
+  assert.match(source, /<PromptComposer/);
+  assert.match(source, /startControls=/);
+  assert.match(source, /endControls=/);
+  assert.match(source, /How can I help you/);
+});

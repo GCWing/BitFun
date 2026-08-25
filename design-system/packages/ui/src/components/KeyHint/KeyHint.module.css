@@ -1,0 +1,31 @@
+@layer bf.components {
+  .keyHint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bf-control-key-hint-gap);
+    padding-block: var(--bf-control-key-hint-padding-block);
+    padding-inline: var(--bf-control-key-hint-padding-inline);
+    border: 0;
+    border-radius: var(--bf-control-key-hint-radius);
+    color: var(--bf-color-content-muted);
+    background: var(--bf-color-action-neutral-surface);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .icon {
+    display: inline-flex;
+    inline-size: var(--bf-control-key-hint-icon-size);
+    block-size: var(--bf-control-key-hint-icon-size);
+  }
+
+  .icon > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}

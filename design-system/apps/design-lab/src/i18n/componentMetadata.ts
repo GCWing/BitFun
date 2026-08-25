@@ -7,12 +7,21 @@ const categoryKeys: Readonly<Record<string, MessageKey>> = {
   action: "meta.category.action",
   feedback: "meta.category.feedback",
   form: "meta.category.form",
+  media: "meta.category.media",
   navigation: "meta.category.navigation",
+  primitive: "meta.category.primitive",
 };
 
 const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   Button: "component.Button.description",
+  Heading: "component.Heading.description",
   IconButton: "component.IconButton.description",
+  Input: "component.Input.description",
+  KeyHint: "component.KeyHint.description",
+  ListItem: "component.ListItem.description",
+  MediaThumbnail: "component.MediaThumbnail.description",
+  NavigationList: "component.NavigationList.description",
+  PromptComposer: "component.PromptComposer.description",
   Switch: "component.Switch.description",
   TabGroup: "component.TabGroup.description",
 };

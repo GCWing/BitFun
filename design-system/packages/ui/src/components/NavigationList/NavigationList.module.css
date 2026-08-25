@@ -1,0 +1,84 @@
+@layer bf.components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    inline-size: var(--bf-control-navigation-list-width);
+    padding: var(--bf-control-navigation-list-padding);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-surface-canvas);
+  }
+
+  .header {
+    flex: 0 0 auto;
+    margin-block-end: var(--bf-control-navigation-list-gap);
+  }
+
+  .content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-block-size: 0;
+    gap: var(--bf-control-navigation-list-gap);
+    overflow: auto;
+    scrollbar-color: var(--bf-color-border-default) transparent;
+    scrollbar-width: thin;
+  }
+
+  .section {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: var(--bf-control-navigation-list-section-gap);
+  }
+
+  .section + .section {
+    padding-block-start: var(--bf-control-navigation-list-gap);
+    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  }
+
+  .sectionHeading {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--bf-control-navigation-list-title-height);
+    gap: var(--bf-space-2);
+    padding-inline: var(--bf-control-navigation-list-title-padding-inline);
+  }
+
+  .sectionTitle {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-caption);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sectionActions,
+  .items {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .sectionActions {
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .items {
+    flex-direction: column;
+  }
+
+  .footer {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-block-size: var(--bf-control-navigation-list-footer-height);
+    margin-block-start: var(--bf-control-navigation-list-gap);
+    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  }
+}

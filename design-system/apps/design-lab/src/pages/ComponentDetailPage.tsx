@@ -1,14 +1,29 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  Keyboard,
+  Laptop,
   List,
   MessageCircle,
+  Mic,
+  Plus,
+  Search,
+  Send,
+  User,
 } from "lucide-react";
 import {
   Button,
+  Heading,
   IconButton,
+  Input,
+  KeyHint,
+  ListItem,
+  MediaThumbnail,
+  NavigationList,
+  NavigationListSection,
+  PromptComposer,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -21,6 +36,10 @@ import {
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
+import figmaHomepageImage from "../assets/figma-homepage.png";
+import figmaMacbookAirImage from "../assets/figma-macbook-air.png";
+import figmaPlaceholderDevice from "../assets/figma-placeholder-device.svg";
+import figmaPlaceholderServer from "../assets/figma-placeholder-server.svg";
 import { useI18n, type MessageKey } from "../i18n";
 import {
   getComponentCategoryLabel,
@@ -56,6 +75,7 @@ const buttonPresentations = [
   variant: ButtonVariant;
 }[];
 const buttonInspectorStates = ["default", "hover", "active"] as const;
+const headingPresentations = ["page", "section", "subsection", "hero"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
@@ -63,6 +83,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   default: "detail.option.default",
   disabled: "detail.option.disabled",
   fill: "detail.option.fill",
+  focus: "detail.option.focus-visible",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
   left: "detail.option.left",
@@ -103,7 +124,7 @@ function InspectorSelect({
       <select onChange={(event) => onChange(event.target.value)} value={value}>
         {options.map((option) => (
           <option key={option} value={option}>
-            {t(optionLabelKeys[option] ?? "detail.option.default")}
+            {optionLabelKeys[option] ? t(optionLabelKeys[option]) : option}
           </option>
         ))}
       </select>
@@ -142,16 +163,14 @@ export function ComponentDetailPage({
   tokenOverrides,
 }: ComponentDetailPageProps) {
   const { t } = useI18n();
+  const getOptionLabel = (option: string) => {
+    const key = optionLabelKeys[option];
+    return key ? t(key) : option;
+  };
   const [variant, setVariant] = useState<ButtonVariant>("fill");
   const [tone, setTone] = useState<ButtonTone>("neutral");
   const [size, setSize] = useState<PreviewSize>("md");
-  const [previewState, setPreviewState] = useState(
-    component.name === "Switch"
-      ? "off"
-      : component.name === "TabGroup"
-        ? "selected"
-        : "default",
-  );
+  const [previewState, setPreviewState] = useState(component.states[0] ?? "default");
   const [inspectorDisabled, setInspectorDisabled] = useState(false);
   const [inspectorLoading, setInspectorLoading] = useState(false);
   const [previewIcon, setPreviewIcon] = useState<PreviewIcon>("none");
@@ -159,15 +178,34 @@ export function ComponentDetailPage({
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
 
+  useEffect(() => {
+    setPreviewState(component.states[0] ?? "default");
+  }, [component.name, component.states]);
+
   const states = useMemo(() => {
     switch (component.name) {
       case "Button":
       case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
+      case "Heading":
+      case "KeyHint":
+        return ["default"] as const;
+      case "Input":
+        return ["default", "hover", "focus", "disabled"] as const;
+      case "ListItem":
+        return ["default", "hover", "active", "disabled"] as const;
+      case "MediaThumbnail":
+        return ["stacked", "contain", "placeholder-device", "placeholder-server"] as const;
+      case "NavigationList":
+        return ["homepage", "settings"] as const;
+      case "PromptComposer":
+        return ["default", "focus", "disabled"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
-      default:
+      case "Switch":
         return ["off", "on", "focus-visible", "disabled"] as const;
+      default:
+        return ["default"] as const;
     }
   }, [component.name]);
   const inspectorStates = component.name === "Button" || component.name === "IconButton"
@@ -188,6 +226,32 @@ export function ComponentDetailPage({
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
       return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.moreActions")}"\n  size="${size}"\n  tone="${tone}"${stateProps}\n>\n  <List />\n</IconButton>`;
+    }
+    if (component.name === "Heading") {
+      return `import { Heading } from "@bitfun/ui";\n\n<Heading\n  description="Interface language and visual appearance"\n  title="Appearance"\n  variant="section"\n/>`;
+    }
+    if (component.name === "Input") {
+      return `import { Input, KeyHint } from "@bitfun/ui";\nimport { Search } from "lucide-react";\n\n<Input\n  aria-label="Search"\n  leadingIcon={<Search />}\n  placeholder="Search"\n  trailingContent={<KeyHint>⌘ K</KeyHint>}\n  variant="search"\n/>`;
+    }
+    if (component.name === "KeyHint") {
+      return `import { KeyHint } from "@bitfun/ui";\nimport { Keyboard } from "lucide-react";\n\n<KeyHint leadingIcon={<Keyboard />}>K</KeyHint>`;
+    }
+    if (component.name === "ListItem") {
+      const stateProps = previewState === "active"
+        ? " selected"
+        : previewState === "disabled"
+          ? " disabled"
+          : "";
+      return `import { ListItem } from "@bitfun/ui";\nimport { User } from "lucide-react";\n\n<ListItem leadingIcon={<User />}${stateProps}>\n  AI Assistant\n</ListItem>`;
+    }
+    if (component.name === "MediaThumbnail") {
+      return `import { MediaThumbnail } from "@bitfun/ui";\nimport homepageImage from "./homepage.png";\n\n<MediaThumbnail\n  alt="BitFun homepage"\n  presentation="stacked"\n  src={homepageImage}\n/>`;
+    }
+    if (component.name === "NavigationList") {
+      return `import { ListItem, NavigationList, NavigationListSection } from "@bitfun/ui";\n\n<NavigationList aria-label="Settings">\n  <NavigationListSection title="General">\n    <ListItem>About</ListItem>\n    <ListItem selected>Appearance</ListItem>\n  </NavigationListSection>\n</NavigationList>`;
+    }
+    if (component.name === "PromptComposer") {
+      return `import { Button, IconButton, PromptComposer } from "@bitfun/ui";\nimport { Mic, Plus, Send } from "lucide-react";\n\n<PromptComposer\n  aria-label="Prompt"\n  endControls={<>\n    <Button variant="text">deepseek-v4-pro</Button>\n    <IconButton aria-label="Voice input"><Mic /></IconButton>\n    <IconButton aria-label="Send"><Send /></IconButton>\n  </>}\n  placeholder="How can I help you..."\n  startControls={<IconButton aria-label="Add"><Plus /></IconButton>}\n/>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
@@ -268,6 +332,133 @@ export function ComponentDetailPage({
         >
           <List aria-hidden="true" />
         </IconButton>
+      );
+    }
+
+    if (component.name === "Heading") {
+      return (
+        <Heading
+          description="Interface language and visual appearance"
+          title="Appearance"
+          variant="section"
+        />
+      );
+    }
+
+    if (component.name === "Input") {
+      return (
+        <Input
+          aria-label="Search"
+          data-bf-preview-state={state === "hover" || state === "focus" ? state : undefined}
+          disabled={state === "disabled"}
+          leadingIcon={<Search aria-hidden="true" />}
+          placeholder="Search"
+          trailingContent={<KeyHint>⌘ K</KeyHint>}
+          variant="search"
+        />
+      );
+    }
+
+    if (component.name === "KeyHint") {
+      return <KeyHint leadingIcon={<Keyboard aria-hidden="true" />}>K</KeyHint>;
+    }
+
+    if (component.name === "ListItem") {
+      return (
+        <ListItem
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          disabled={state === "disabled"}
+          leadingIcon={<User aria-hidden="true" />}
+          selected={state === "active"}
+        >
+          AI Assistant
+        </ListItem>
+      );
+    }
+
+    if (component.name === "MediaThumbnail") {
+      const media = state === "stacked"
+        ? { alt: "BitFun homepage", presentation: "stacked" as const, src: figmaHomepageImage }
+        : state === "contain"
+          ? { alt: "MacBook Air", presentation: "contain" as const, src: figmaMacbookAirImage }
+          : state === "placeholder-server"
+            ? { alt: "", presentation: "placeholder" as const, src: figmaPlaceholderServer }
+            : { alt: "", presentation: "placeholder" as const, src: figmaPlaceholderDevice };
+      return <MediaThumbnail {...media} />;
+    }
+
+    if (component.name === "NavigationList") {
+      const homepage = state === "homepage";
+      return (
+        <NavigationList
+          aria-label={homepage ? "Workspace" : "Settings"}
+          className="component-navigation-list-preview"
+          footer={homepage ? (
+            <ListItem leadingIcon={<Laptop aria-hidden="true" />}>MacBook-Air</ListItem>
+          ) : undefined}
+          header={homepage ? (
+            <div className="component-navigation-list-preview__search">
+              <Input
+                aria-label="Search"
+                leadingIcon={<Search aria-hidden="true" />}
+                placeholder="Search"
+                trailingContent={<KeyHint>⌘ K</KeyHint>}
+                variant="search"
+              />
+              <IconButton aria-label="New session"><Plus aria-hidden="true" /></IconButton>
+            </div>
+          ) : undefined}
+        >
+          {homepage ? (
+            <>
+              <NavigationListSection>
+                <ListItem leadingIcon={<User aria-hidden="true" />}>AI Assistant</ListItem>
+                <ListItem leadingIcon={<List aria-hidden="true" />}>Task Board</ListItem>
+              </NavigationListSection>
+              <NavigationListSection title="Sessions">
+                <ListItem>Claw</ListItem>
+                <ListItem selected>Welcome</ListItem>
+              </NavigationListSection>
+            </>
+          ) : (
+            <>
+              <NavigationListSection title="General">
+                <ListItem>About</ListItem>
+                <ListItem selected>Appearance</ListItem>
+                <ListItem>Input &amp; Shortcuts</ListItem>
+              </NavigationListSection>
+              <NavigationListSection title="AI & Models">
+                <ListItem>Models</ListItem>
+                <ListItem>Memory</ListItem>
+              </NavigationListSection>
+            </>
+          )}
+        </NavigationList>
+      );
+    }
+
+    if (component.name === "PromptComposer") {
+      return (
+        <PromptComposer
+          aria-label="Prompt"
+          className="component-prompt-composer-preview"
+          data-bf-preview-state={state === "focus" ? "focus" : undefined}
+          disabled={state === "disabled"}
+          endControls={(
+            <>
+              <Button size="sm" variant="text">deepseek-v4-pro</Button>
+              <IconButton aria-label="Voice input"><Mic aria-hidden="true" /></IconButton>
+              <IconButton aria-label="Send" tone="primary"><Send aria-hidden="true" /></IconButton>
+            </>
+          )}
+          placeholder="How can I help you..."
+          startControls={(
+            <>
+              <IconButton aria-label="Add"><Plus aria-hidden="true" /></IconButton>
+              <Button size="sm" variant="text">Standard</Button>
+            </>
+          )}
+        />
       );
     }
 
@@ -358,13 +549,13 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {getOptionLabel(state)}
                     </span>
                   ))}
                   {buttonPresentations.map((presentation) => (
                     <Fragment key={presentation.label}>
                       <span className="component-preview-matrix__row-label">
-                        {t(optionLabelKeys[presentation.label] ?? "detail.option.default")}
+                        {getOptionLabel(presentation.label)}
                       </span>
                       {states.map((state) => (
                         <div
@@ -378,6 +569,27 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
+              ) : component.name === "Heading" ? (
+                <div className="component-preview-matrix" data-component="heading">
+                  <span className="component-preview-matrix__corner" />
+                  <span className="component-preview-matrix__column-label">
+                    {t("detail.option.default")}
+                  </span>
+                  {headingPresentations.map((presentation) => (
+                    <Fragment key={presentation}>
+                      <span className="component-preview-matrix__row-label">
+                        {presentation}
+                      </span>
+                      <div className="component-preview-matrix__cell">
+                        <Heading
+                          description="Interface language and visual appearance"
+                          title="Appearance"
+                          variant={presentation}
+                        />
+                      </div>
+                    </Fragment>
+                  ))}
+                </div>
               ) : component.name === "IconButton" ? (
                 <div className="component-preview-matrix" data-component="icon-button">
                   <span className="component-preview-matrix__corner" />
@@ -387,7 +599,7 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {getOptionLabel(state)}
                     </span>
                   ))}
                   <span className="component-preview-matrix__row-label">IconButton</span>
@@ -410,7 +622,7 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {getOptionLabel(state)}
                     </span>
                   ))}
                   <span className="component-preview-matrix__row-label">TabGroup</span>
@@ -424,6 +636,112 @@ export function ComponentDetailPage({
                     </div>
                   ))}
                 </div>
+              ) : component.name === "MediaThumbnail" ? (
+                <div className="component-preview-matrix" data-component="media-thumbnail">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {getOptionLabel(state)}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">Media</span>
+                  {states.map((state) => (
+                    <div className="component-preview-matrix__cell" key={state}>
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              ) : component.name === "NavigationList" ? (
+                <div className="component-preview-matrix" data-component="navigation-list">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {getOptionLabel(state)}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">Navigation</span>
+                  {states.map((state) => (
+                    <div className="component-preview-matrix__cell" key={state}>
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              ) : component.name === "PromptComposer" ? (
+                <div className="component-preview-matrix" data-component="prompt-composer">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {getOptionLabel(state)}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">Composer</span>
+                  {states.map((state) => (
+                    <div className="component-preview-matrix__cell" key={state}>
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              ) : component.name === "Input" ? (
+                <div className="component-preview-matrix" data-component="input">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {getOptionLabel(state)}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">Input</span>
+                  {states.map((state) => (
+                    <div className="component-preview-matrix__cell" key={state}>
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              ) : component.name === "ListItem" ? (
+                <div className="component-preview-matrix" data-component="list-item">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {getOptionLabel(state)}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">ListItem</span>
+                  {states.map((state) => (
+                    <div className="component-preview-matrix__cell" key={state}>
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              ) : component.name === "KeyHint" ? (
+                <div className="component-preview-matrix" data-component="key-hint">
+                  <span className="component-preview-matrix__corner" />
+                  <span className="component-preview-matrix__column-label">
+                    {t("detail.option.default")}
+                  </span>
+                  <span className="component-preview-matrix__row-label">KeyHint</span>
+                  <div className="component-preview-matrix__cell">
+                    {renderPreview("default")}
+                  </div>
+                </div>
               ) : (
                 <div className="component-preview-matrix" data-component="switch">
                   <span className="component-preview-matrix__corner" />
@@ -433,7 +751,7 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {getOptionLabel(state)}
                     </span>
                   ))}
                   <span className="component-preview-matrix__row-label">Switch</span>

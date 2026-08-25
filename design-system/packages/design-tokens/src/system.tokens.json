@@ -35,6 +35,7 @@
     },
     "size": {
       "$type": "dimension",
+      "micro": { "$value": "10px" },
       "xs": { "$value": "12px" },
       "sm": { "$value": "13px" },
       "base": { "$value": "14px" },
@@ -48,7 +49,9 @@
       "body": { "$value": "{font.size.base}" },
       "label": { "$value": "{font.size.base}" },
       "title": { "$value": "{font.size.2xl}" },
-      "display": { "$value": "{font.size.4xl}" }
+      "display": { "$value": "{font.size.4xl}" },
+      "pageTitle": { "$value": "24px" },
+      "hero": { "$value": "32px" }
     },
     "weight": {
       "$type": "fontWeight",
@@ -90,6 +93,58 @@
         "lg": { "$value": "16px" }
       },
       "radius": { "$type": "dimension", "$value": "4px" }
+    },
+    "input": {
+      "$type": "dimension",
+      "searchHeight": { "$value": "30px" },
+      "iconSize": { "$value": "14px" },
+      "gap": { "$value": "{space.1}" },
+      "paddingInline": { "$value": "{space.2}" },
+      "radius": { "$value": "{radius.pill}" }
+    },
+    "keyHint": {
+      "$type": "dimension",
+      "iconSize": { "$value": "10px" },
+      "gap": { "$value": "2px" },
+      "paddingBlock": { "$value": "2px" },
+      "paddingInline": { "$value": "4px" },
+      "radius": { "$value": "4px" }
+    },
+    "listItem": {
+      "$type": "dimension",
+      "height": { "$value": "30px" },
+      "gap": { "$value": "{space.2}" },
+      "outerGap": { "$value": "10px" },
+      "padding": { "$value": "{space.2}" },
+      "iconSize": { "$value": "14px" },
+      "radius": { "$value": "{radius.base}" }
+    },
+    "mediaThumbnail": {
+      "$type": "dimension",
+      "width": { "$value": "240px" },
+      "height": { "$value": "120px" },
+      "stackedWidth": { "$value": "187px" },
+      "stackedHeight": { "$value": "122px" },
+      "containSize": { "$value": "202px" },
+      "radius": { "$value": "2px" }
+    },
+    "navigationList": {
+      "$type": "dimension",
+      "width": { "$value": "216px" },
+      "padding": { "$value": "{space.2}" },
+      "gap": { "$value": "{space.4}" },
+      "sectionGap": { "$value": "{space.1}" },
+      "titleHeight": { "$value": "22px" },
+      "titlePaddingInline": { "$value": "{space.2}" },
+      "footerHeight": { "$value": "40px" }
+    },
+    "promptComposer": {
+      "$type": "dimension",
+      "height": { "$value": "120px" },
+      "gap": { "$value": "{space.3}" },
+      "padding": { "$value": "{space.2}" },
+      "inputPadding": { "$value": "{space.1}" },
+      "radius": { "$value": "{radius.xl}" }
     },
     "switch": {
       "$type": "dimension",
