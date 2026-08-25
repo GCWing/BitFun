@@ -37,6 +37,7 @@ import {
 } from '../main/ets/pages/policy/RemoteSurfaceEntryPolicy';
 import { RemoteCompactHomePolicy } from '../main/ets/pages/policy/RemoteCompactHomePolicy';
 import { AccountDeviceSelectionPolicy } from '../main/ets/pages/policy/AccountDeviceSelectionPolicy';
+import { SidebarConnectionActionPolicy } from '../main/ets/pages/policy/SidebarConnectionActionPolicy';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 import {
   ConnectScanDecisionPolicy,
@@ -376,6 +377,11 @@ export default function conversationPresentationUnitTest() {
       // call. The button opens the connect sheet, so that is what it says.
       expect(RemoteI18n.t('sidebar.addConnection')).assertEqual('添加连接');
       expect(RemoteI18n.t('sidebar.addWorkspace')).assertEqual('sidebar.addWorkspace');
+    });
+
+    it('hides the redundant scan action after a QR connection succeeds', 0, () => {
+      expect(SidebarConnectionActionPolicy.shouldShowScan('disconnected')).assertTrue();
+      expect(SidebarConnectionActionPolicy.shouldShowScan('connected')).assertFalse();
     });
 
     it('does not keep leftover pending-copy keys that claim general chat is unavailable', 0, () => {
