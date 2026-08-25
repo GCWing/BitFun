@@ -10,16 +10,16 @@ function readSource(relativePath: string): string {
 }
 
 describe('VoiceInputDiagnostics responsive layout', () => {
-  it('gives diagnostic controls enough room without allowing the test label to wrap', () => {
+  it('gives diagnostic controls enough room and delegates label layout to the shared button', () => {
     const source = readSource('./VoiceInputDiagnostics.tsx');
     const styles = readSource('./VoiceInputConfig.scss');
     const rowRule = styles.match(/&__diagnostic-row\s*{([^}]*)}/)?.[1] ?? '';
     const buttonRule = styles.match(/&__diagnostic-button\s*{([^}]*)}/)?.[1] ?? '';
 
     expect(source.match(/className="voice-input-config__diagnostic-row"/g)).toHaveLength(2);
+    expect(source).toContain("import { Button } from '@bitfun/ui';");
     expect(source).toContain('className="voice-input-config__diagnostic-button"');
     expect(rowRule).toContain('--row-grid-cols: minmax(0, 2fr) minmax(0, 3fr)');
     expect(buttonRule).toContain('flex: 0 0 auto');
-    expect(buttonRule).toContain('white-space: nowrap');
   });
 });

@@ -119,7 +119,7 @@ describe('SessionUsageModal', () => {
   it('hands over to the panel rather than competing with it', async () => {
     showReport();
     const details = document.querySelector<HTMLButtonElement>(
-      '.session-usage-report-card__details-button',
+      'button[aria-label="usage.actions.openDetails"]',
     );
     expect(details).not.toBeNull();
 

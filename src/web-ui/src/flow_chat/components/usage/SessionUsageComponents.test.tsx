@@ -544,7 +544,8 @@ describe('Session usage report UI components', () => {
 
     const openButton = container.querySelector('button[aria-label="Open details"]');
     expect(openButton?.textContent).toBe('Details');
-    expect(openButton?.className).toContain('session-usage-report-card__details-button');
+    expect(openButton?.getAttribute('data-bf-component')).toBe('button');
+    expect(openButton?.getAttribute('data-bf-variant')).toBe('outline');
     expect(container.querySelector('.session-usage-report-card__action-group')).toBeNull();
     act(() => {
       openButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));

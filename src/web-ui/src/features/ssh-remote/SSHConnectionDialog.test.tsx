@@ -79,11 +79,13 @@ vi.mock('@/component-library', () => ({
     onClick,
     disabled,
     className,
+    title,
     'aria-label': ariaLabel,
   }: React.PropsWithChildren<{
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
     className?: string;
+    title?: string;
     'aria-label'?: string;
   }>) => (
     <button
@@ -91,6 +93,7 @@ vi.mock('@/component-library', () => ({
       onClick={onClick}
       disabled={disabled}
       className={className}
+      title={title}
       aria-label={ariaLabel}
     >
       {children}

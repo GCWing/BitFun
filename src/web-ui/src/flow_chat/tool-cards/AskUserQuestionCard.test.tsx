@@ -265,7 +265,7 @@ describe('AskUserQuestionCard', () => {
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(false);
     expect(container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.checked).toBe(true);
 
-    const submitButton = container.querySelector<HTMLButtonElement>('.submit-button');
+    const submitButton = container.querySelector<HTMLButtonElement>('.footer-actions button');
     expect(submitButton?.disabled).toBe(false);
     await act(async () => submitButton?.click());
 

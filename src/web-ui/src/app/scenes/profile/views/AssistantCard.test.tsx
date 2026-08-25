@@ -16,7 +16,23 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/component-library', () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  IconButton: ({
+    children,
+    isLoading,
+    size: _size,
+    tooltip: _tooltip,
+    variant: _variant,
+    ...props
+  }: React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    isLoading?: boolean;
+    size?: string;
+    tooltip?: React.ReactNode;
+    variant?: string;
+  }>) => (
+    <button {...props} aria-busy={isLoading || undefined}>
+      {children}
+    </button>
+  ),
 }));
 
 const workspace = {
@@ -68,9 +84,11 @@ describe('AssistantCard actions', () => {
 
     const card = container.querySelector('[role="listitem"]');
     const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
-    const newSession = container.querySelector('.assistant-card__new-session-btn') as HTMLButtonElement;
-    const remove = container.querySelector('.assistant-card__delete-btn') as HTMLButtonElement;
-    const setPrimary = container.querySelector('.assistant-card__set-primary-btn') as HTMLButtonElement;
+    const newSession = container.querySelector(
+      'button[data-bf-component="button"][data-bf-variant="fill"]',
+    ) as HTMLButtonElement;
+    const remove = container.querySelector('[data-bf-part="delete"]') as HTMLButtonElement;
+    const setPrimary = container.querySelector('[data-bf-part="setPrimary"]') as HTMLButtonElement;
 
     expect(card?.tagName).toBe('ARTICLE');
     expect(configure.getAttribute('aria-label')).toContain('Mira');
@@ -109,9 +127,11 @@ describe('AssistantCard actions', () => {
     });
 
     const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
-    const newSession = container.querySelector('.assistant-card__new-session-btn') as HTMLButtonElement;
-    const setPrimary = container.querySelector('.assistant-card__set-primary-btn') as HTMLButtonElement;
-    const remove = container.querySelector('.assistant-card__delete-btn') as HTMLButtonElement;
+    const newSession = container.querySelector(
+      'button[data-bf-component="button"][data-bf-variant="fill"]',
+    ) as HTMLButtonElement;
+    const setPrimary = container.querySelector('[data-bf-part="setPrimary"]') as HTMLButtonElement;
+    const remove = container.querySelector('[data-bf-part="delete"]') as HTMLButtonElement;
     expect(configure.disabled).toBe(true);
     expect(newSession.disabled).toBe(true);
     expect(setPrimary.disabled).toBe(true);
@@ -133,7 +153,9 @@ describe('AssistantCard actions', () => {
       );
     });
 
-    const newSession = container.querySelector('.assistant-card__new-session-btn') as HTMLButtonElement;
+    const newSession = container.querySelector(
+      'button[data-bf-component="button"][data-bf-variant="fill"]',
+    ) as HTMLButtonElement;
     expect(newSession.disabled).toBe(true);
     expect(newSession.getAttribute('aria-busy')).toBe('true');
     expect(newSession.textContent).toContain('nursery.card.startingSession');

@@ -12,6 +12,7 @@
     "prebuild": "pnpm run prepare:design-system:build",
     "prebuild:desktop": "pnpm run prepare:design-system:build",
     "prebuild:web": "pnpm run prepare:design-system:build",
+    "pretest:run": "pnpm run prepare:design-system:build",
     "pretype-check": "pnpm run prepare:design-system:build",
     "dev": "vite",
     "dev:force": "vite --force",
