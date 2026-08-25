@@ -955,11 +955,17 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
     }
 }
 
-#[async_trait::async_trait]
-impl AgentSessionClosePort for ScheduledSessionManagementPort {
-    async fn discard_transient_session(
+#[derive(Clone, Copy)]
+enum SessionReleaseKind {
+    DiscardTransient,
+    UnloadPersisted,
+}
+
+impl ScheduledSessionManagementPort {
+    async fn release_session(
         &self,
-        request: bitfun_runtime_ports::AgentTransientSessionDiscardRequest,
+        request: bitfun_runtime_ports::AgentSessionReleaseRequest,
+        kind: SessionReleaseKind,
     ) -> bitfun_runtime_ports::PortResult<bool> {
         bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
             bitfun_runtime_ports::PortError::new(
@@ -994,26 +1000,55 @@ impl AgentSessionClosePort for ScheduledSessionManagementPort {
         if cleanup_budget.is_zero() {
             return Err(bitfun_runtime_ports::PortError::new(
                 bitfun_runtime_ports::PortErrorKind::Timeout,
-                "Session close deadline was exhausted before transient resource cleanup",
+                "Session close deadline was exhausted before resource release",
             ));
         }
-        tokio::time::timeout(
-            cleanup_budget,
-            self.coordinator.discard_transient_session(
-                std::path::Path::new(&request.workspace_path),
-                request.remote_connection_id.as_deref(),
-                request.remote_ssh_host.as_deref(),
-                &request.session_id,
-            ),
-        )
+        tokio::time::timeout(cleanup_budget, async {
+            match kind {
+                SessionReleaseKind::DiscardTransient => {
+                    self.coordinator
+                        .discard_transient_session(
+                            std::path::Path::new(&request.workspace_path),
+                            request.remote_connection_id.as_deref(),
+                            request.remote_ssh_host.as_deref(),
+                            &request.session_id,
+                        )
+                        .await
+                }
+                SessionReleaseKind::UnloadPersisted => {
+                    session_manager
+                        .unload_session_from_memory(&request.session_id)
+                        .await
+                }
+            }
+        })
         .await
         .map_err(|_| {
             bitfun_runtime_ports::PortError::new(
                 bitfun_runtime_ports::PortErrorKind::Timeout,
-                "Transient Session resource cleanup exceeded the Session close deadline",
+                "Session resource release exceeded the Session close deadline",
             )
         })?
         .map_err(map_session_close_error)
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentSessionClosePort for ScheduledSessionManagementPort {
+    async fn discard_transient_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionReleaseRequest,
+    ) -> bitfun_runtime_ports::PortResult<bool> {
+        self.release_session(request, SessionReleaseKind::DiscardTransient)
+            .await
+    }
+
+    async fn unload_persisted_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionReleaseRequest,
+    ) -> bitfun_runtime_ports::PortResult<bool> {
+        self.release_session(request, SessionReleaseKind::UnloadPersisted)
+            .await
     }
 }
 

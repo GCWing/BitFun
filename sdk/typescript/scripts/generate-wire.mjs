@@ -61,6 +61,7 @@ const requiredTypes = [
   "SessionCloseResult",
   "SessionCreateParams",
   "SessionCreateResult",
+  "SessionResumeParams",
   "ShutdownResult",
   "TemporaryModelConfig",
   "TemporaryModelProvider",

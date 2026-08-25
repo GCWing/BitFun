@@ -9,8 +9,9 @@ The slice validates the intended public object model:
 - one application-level `AgentClient` owns one managed native
   `bitfun-sdk-host` process and one Host connection;
 - `client.query()` uses a Host-managed transient Session;
-- `client.sessions.create()` creates an explicit Session whose Turns reuse the
-  same connection and existing Agent Runtime owner;
+- `client.sessions.create()` creates a durable Session whose Turns reuse the
+  same connection, while `client.sessions.resume(id)` attaches it to a later
+  Host process;
 - `Query` is an ordered async stream with idempotent cancellation, cached final
   `Result`, and explicit close semantics;
 - the same stream reports safe Tool lifecycle facts and permission requests;
@@ -21,6 +22,12 @@ Lifecycle cleanup is bounded. The Windows Host contains descendants in a
 kill-on-close Job Object, while Unix managed Hosts run in an isolated process
 group. A cleanup result whose outcome is unknown makes the connection
 unusable and triggers Host reclamation.
+
+Durable Sessions are persisted by the existing Agent Runtime. Closing a
+Session or its client unloads it without deleting its history, so a later
+client using the same workspace can resume it by ID. Existing OS-level Session
+locks reject a second writer while another Host process owns that same Session;
+different Sessions remain independent.
 
 It does not start the CLI or the Node/Bun Plugin Host, and it does not implement
 another Agent Runtime. The managed native Host adapts this package to the
@@ -75,6 +82,23 @@ for await (const item of query) {
 const result = await query.result();
 ```
 
+Use an explicit Session when the application needs continuity across client or
+Host restarts. Here `options` is the same trusted `AgentClientOptions` value
+shown above:
+
+```typescript
+const firstClient = await AgentClient.start(options);
+const session = await firstClient.sessions.create({ sessionName: "review" });
+const sessionId = session.id;
+await (await session.startTurn({ prompt: "Inspect the current changes" })).result();
+await firstClient.close(); // unloads the Session and exits its managed Host
+
+const nextClient = await AgentClient.start(options);
+const resumed = await nextClient.sessions.resume(sessionId);
+await (await resumed.startTurn({ prompt: "Now summarize the risks" })).result();
+await nextClient.close();
+```
+
 An explicit absolute `hostPath` remains available as a development override.
 The SDK never searches `PATH` or an environment variable for the Host.
 
@@ -88,8 +112,8 @@ separately. This PR does not publish the package. A future registry release
 still needs platform packages, signing, and release verification.
 
 Browser and mobile runtimes cannot launch the local native Host. Custom
-functions, general user-input callbacks, structured output, usage, Session
-resume, Python support, platform package publication, signing, and downloads
+functions, general user-input callbacks, structured output, usage, Python
+support, platform package publication, signing, and downloads
 remain deferred.
 
 ## Development

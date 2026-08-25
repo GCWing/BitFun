@@ -55,7 +55,7 @@ test("a Query streams tool and permission events before the terminal Result", as
   assert.ok(client instanceof AgentClient);
   assert.equal(initializeRequests.length, 1);
   assert.deepEqual(initializeRequests[0], {
-    protocolVersion: 3,
+    protocolVersion: 4,
     clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
     capabilities: {
       serverNotifications: true,
@@ -187,6 +187,7 @@ test("an explicit Session starts Turns on the existing client connection", async
   } as SessionCreateInput);
   assert.equal(session.id, "session-explicit");
   assert.equal(session.agent, "agentic");
+  assert.equal(session.lifetime, "durable");
 
   const query = await session.startTurn({ prompt: "continue" });
   assert.equal((await query.result()).outputText, "continued");
@@ -198,6 +199,37 @@ test("an explicit Session starts Turns on the existing client connection", async
     "initialize",
     "session/create",
     "query/start",
+    "session/close",
+    "shutdown",
+  ]);
+});
+
+test("a durable Session resumes on a new client connection", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  const methods: string[] = [];
+  const host = runResumeFixtureHost(clientToHost, hostToClient, methods);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    clientOptions,
+  );
+
+  const session = await client.sessions.resume("session-persisted");
+  assert.equal(session.id, "session-persisted");
+  assert.equal(session.lifetime, "durable");
+  await session.close();
+  await client.close();
+
+  assert.deepEqual(methods, [
+    "initialize",
+    "session/resume",
     "session/close",
     "shutdown",
   ]);
@@ -530,12 +562,13 @@ async function runFixtureHost(
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          protocolVersion: 3,
+          protocolVersion: 4,
           runtimeVersion: "0.2.17",
           stability: "not_delivered",
           capabilities: {
             sessionCreate: true,
-            sessionCreateLifetime: "connection",
+            sessionCreateLifetime: "durable",
+            sessionResume: true,
             query: true,
             queryCancel: true,
             sessionClose: true,
@@ -725,7 +758,7 @@ async function runSessionFixtureHost(
           sessionId: "session-explicit",
           sessionName: "Explicit",
           agent: "agentic",
-          lifetime: "connection",
+          lifetime: "durable",
         },
       });
       continue;
@@ -770,6 +803,59 @@ async function runSessionFixtureHost(
         jsonrpc: "2.0",
         id: request.id,
         result: { sessionId: "session-explicit", unloaded: true },
+      });
+      continue;
+    }
+    if (request.method === "shutdown") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { accepted: true },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runResumeFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+  methods: string[],
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as {
+      id: number;
+      method: string;
+      params: Record<string, unknown>;
+    };
+    methods.push(request.method);
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "session/resume") {
+      assert.deepEqual(request.params, { sessionId: "session-persisted" });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-persisted",
+          sessionName: "Persisted",
+          agent: "agentic",
+          lifetime: "durable",
+          workspacePath: "D:/workspace/project",
+        },
+      });
+      continue;
+    }
+    if (request.method === "session/close") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { sessionId: "session-persisted", unloaded: true },
       });
       continue;
     }
@@ -1227,12 +1313,13 @@ function initializeResponse(id: number): unknown {
     jsonrpc: "2.0",
     id,
     result: {
-      protocolVersion: 3,
+      protocolVersion: 4,
       runtimeVersion: "0.2.17",
       stability: "not_delivered",
       capabilities: {
         sessionCreate: true,
-        sessionCreateLifetime: "connection",
+        sessionCreateLifetime: "durable",
+        sessionResume: true,
         query: true,
         queryCancel: true,
         sessionClose: true,

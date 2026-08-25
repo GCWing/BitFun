@@ -4,7 +4,7 @@ import { JsonRpcConnection } from "./json-rpc.js";
 import type { HostTransport } from "./transport.js";
 import type { InitializeParams, InitializeResult } from "./wire/index.js";
 
-const PROTOCOL_VERSION = 3;
+const PROTOCOL_VERSION = 4;
 const DEFAULT_INITIALIZE_TIMEOUT_MS = 30_000;
 
 export async function createAgentClient(

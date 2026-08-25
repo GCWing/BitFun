@@ -8,12 +8,14 @@ use bitfun_agent_runtime::sdk::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentEventSource, AgentRuntimeBuilder,
     AgentSessionClosePort, AgentSessionCreateRequest, AgentSessionCreateResult,
     AgentSessionDeleteRequest, AgentSessionListRequest, AgentSessionManagementPort,
-    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult,
-    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    DialogSubmitOutcome, PermissionRequest, PermissionRequestManager, PermissionRequestSource,
-    PermissionRequestSourceKind, PortError, PortErrorKind, PortResult,
+    AgentSessionModelPort, AgentSessionModelSelectionUpdateRequest, AgentSessionRestorePort,
+    AgentSessionRestoreRequest, AgentSessionRestoreResult, AgentSessionSummary,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+    AgentSubmissionRequest, AgentSubmissionResult, AgentTransientSessionDiscardRequest,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, DialogSubmitOutcome, PermissionRequest,
+    PermissionRequestManager, PermissionRequestSource, PermissionRequestSourceKind, PortError,
+    PortErrorKind, PortResult, SessionState,
 };
 use bitfun_core_types::ErrorCategory;
 use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
@@ -36,6 +38,10 @@ struct FakeOwner {
     created_model_ids: Mutex<Vec<Option<String>>>,
     cancel_requests: Mutex<Vec<AgentTurnCancellationRequest>>,
     discard_requests: Mutex<Vec<AgentTransientSessionDiscardRequest>>,
+    unload_requests: Mutex<Vec<AgentTransientSessionDiscardRequest>>,
+    delete_requests: Mutex<Vec<AgentSessionDeleteRequest>>,
+    restored_session_ids: Mutex<Vec<String>>,
+    updated_models: Mutex<Vec<(String, String)>>,
     settlement_requests: Mutex<Vec<AgentTurnSettlementRequest>>,
     dialog_metadata: Mutex<Vec<serde_json::Map<String, serde_json::Value>>>,
     emit_terminal: bool,
@@ -51,7 +57,9 @@ struct FakeOwner {
     block_first_cancel: bool,
     block_delete: bool,
     block_session_create: bool,
+    block_first_session_restore: AtomicBool,
     panic_after_session_create: bool,
+    fail_model_update: bool,
     dialog_submit_started: Notify,
     release_dialog_submit: Notify,
     agent_resolution_started: Notify,
@@ -62,6 +70,8 @@ struct FakeOwner {
     release_delete: Notify,
     session_create_started: Notify,
     release_session_create: Notify,
+    session_restore_started: Notify,
+    release_session_restore: Notify,
 }
 
 impl FakeOwner {
@@ -74,6 +84,12 @@ impl FakeOwner {
                 .unwrap()
                 .iter()
                 .any(|created| created == session_id)
+            || self
+                .restored_session_ids
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|restored| restored == session_id)
     }
 
     fn last_created_session_id(&self) -> String {
@@ -196,6 +212,25 @@ impl FakeOwner {
         }
     }
 
+    fn blocking_first_session_restore(queue: Arc<EventQueue>) -> Self {
+        Self {
+            queue: Mutex::new(Some(queue)),
+            emit_terminal: true,
+            block_first_session_restore: AtomicBool::new(true),
+            ..Self::default()
+        }
+    }
+
+    fn failing_resume_preparation_and_unload(queue: Arc<EventQueue>) -> Self {
+        Self {
+            queue: Mutex::new(Some(queue)),
+            emit_terminal: true,
+            fail_delete: true,
+            fail_model_update: true,
+            ..Self::default()
+        }
+    }
+
     fn panicking_session_create(queue: Arc<EventQueue>, fail_delete: bool) -> Self {
         Self {
             queue: Mutex::new(Some(queue)),
@@ -310,7 +345,7 @@ impl AgentSubmissionPort for FakeOwner {
             .unwrap()
             .push(request.model_id.clone());
         if self.panic_after_session_create {
-            panic!("fixture panics after creating the transient Session");
+            panic!("fixture panics after creating the Session");
         }
         Ok(AgentSessionCreateResult::new(
             session_id,
@@ -520,7 +555,8 @@ impl AgentSessionManagementPort for FakeOwner {
         Ok(Vec::new())
     }
 
-    async fn delete_session(&self, _request: AgentSessionDeleteRequest) -> PortResult<()> {
+    async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()> {
+        self.delete_requests.lock().unwrap().push(request);
         if self.fail_delete {
             return Err(PortError::new(
                 PortErrorKind::CleanupRequired,
@@ -545,6 +581,61 @@ impl AgentSessionManagementPort for FakeOwner {
             remote_connection_id: None,
             remote_ssh_host: None,
         }))
+    }
+}
+
+#[async_trait]
+impl AgentSessionRestorePort for FakeOwner {
+    async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> PortResult<AgentSessionRestoreResult> {
+        if self
+            .block_first_session_restore
+            .swap(false, Ordering::AcqRel)
+        {
+            self.session_restore_started.notify_one();
+            self.release_session_restore.notified().await;
+        }
+        self.restored_session_ids
+            .lock()
+            .unwrap()
+            .push(request.session_id.clone());
+        Ok(AgentSessionRestoreResult {
+            session: AgentSessionSummary {
+                session_id: request.session_id,
+                session_name: "Persisted".to_string(),
+                agent_type: "agentic".to_string(),
+                model_id: Some("sdk:openai:previous".to_string()),
+                reasoning_preset: None,
+                last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
+                turn_count: 1,
+                created_at_ms: 1,
+                last_active_at_ms: 2,
+            },
+            state: SessionState::Idle,
+        })
+    }
+}
+
+#[async_trait]
+impl AgentSessionModelPort for FakeOwner {
+    async fn update_session_model_selection(
+        &self,
+        request: AgentSessionModelSelectionUpdateRequest,
+    ) -> PortResult<()> {
+        self.updated_models
+            .lock()
+            .unwrap()
+            .push((request.session_id, request.selection.model_id));
+        if self.fail_model_update {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                "model update failed",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -779,14 +870,8 @@ struct BlockingSessionCreateOutput {
 #[async_trait]
 impl HostOutput for BlockingSessionCreateOutput {
     async fn send(&self, value: serde_json::Value) -> Result<(), ()> {
-        let is_session_create = value
-            .get("result")
-            .and_then(|result| result.get("sessionId"))
-            .is_some()
-            && value
-                .get("result")
-                .and_then(|result| result.get("queryId"))
-                .is_none();
+        let is_session_create =
+            value.get("id").and_then(serde_json::Value::as_str) == Some("visible-create");
         self.output.send(value).await.map_err(|_| ())?;
         if is_session_create {
             self.response_visible.notify_one();
@@ -814,6 +899,14 @@ impl AgentSessionClosePort for FakeOwner {
             ));
         }
         Ok(true)
+    }
+
+    async fn unload_persisted_session(
+        &self,
+        request: AgentTransientSessionDiscardRequest,
+    ) -> PortResult<bool> {
+        self.unload_requests.lock().unwrap().push(request.clone());
+        self.discard_transient_session(request).await
     }
 }
 
@@ -845,6 +938,8 @@ async fn host_with_temporary_model_installer(
         .with_turn_settlement_port(owner.clone())
         .with_session_management_port(owner.clone())
         .with_session_close_port(owner.clone())
+        .with_session_model_port(owner.clone())
+        .with_session_restore_port(owner.clone())
         .with_permission_request_manager(permission_manager())
         .with_event_source(AgentEventSource::new(queue))
         .build()
@@ -1125,7 +1220,7 @@ async fn resource_lifecycle_notifications_do_not_create_unaddressable_sessions()
     .await;
     let created = output.recv().await.unwrap();
     assert_eq!(created["id"], "create-after-notifications");
-    assert_eq!(created["result"]["lifetime"], "connection");
+    assert_eq!(created["result"]["lifetime"], "durable");
 
     host.shutdown_connection().await;
 }
@@ -1418,7 +1513,7 @@ async fn cancellation_timeout_reports_unknown_outcome_for_the_exact_operation() 
 }
 
 #[tokio::test]
-async fn query_on_created_transient_session_preserves_connection_lifetime() {
+async fn query_on_created_session_preserves_durable_lifetime() {
     let (host, _, mut output) = host().await;
     initialize(&host, &mut output).await;
 
@@ -1430,7 +1525,7 @@ async fn query_on_created_transient_session_preserves_connection_lifetime() {
     })))
     .await;
     let created = output.recv().await.unwrap();
-    assert_eq!(created["result"]["lifetime"], "connection");
+    assert_eq!(created["result"]["lifetime"], "durable");
     let session_id = created["result"]["sessionId"].as_str().unwrap();
 
     host.handle_request(request(serde_json::json!({
@@ -1447,9 +1542,160 @@ async fn query_on_created_transient_session_preserves_connection_lifetime() {
     let accepted = output.recv().await.unwrap();
     assert_eq!(accepted["id"], "query-1");
     assert_eq!(accepted["result"]["createdSession"], false);
-    assert_eq!(accepted["result"]["sessionLifetime"], "connection");
+    assert_eq!(accepted["result"]["sessionLifetime"], "durable");
 
     host.shutdown_connection().await;
+}
+
+#[tokio::test]
+async fn persisted_session_resume_rebinds_the_connection_model_and_unloads_on_close() {
+    let (host, owner, mut output) = host().await;
+    initialize(&host, &mut output).await;
+    let session_id = "00000000-0000-4000-8000-000000000001";
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "resume-1",
+        "method": "session/resume",
+        "params": { "sessionId": session_id }
+    })))
+    .await;
+    let resumed = output.recv().await.unwrap();
+    assert_eq!(resumed["result"]["sessionId"], session_id);
+    assert_eq!(resumed["result"]["lifetime"], "durable");
+    assert_eq!(
+        owner.updated_models.lock().unwrap().as_slice(),
+        &[(session_id.to_string(), "sdk:openai:resolved".to_string())]
+    );
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "close-resumed",
+        "method": "session/close",
+        "params": { "sessionId": session_id }
+    })))
+    .await;
+    assert_eq!(output.recv().await.unwrap()["result"]["unloaded"], true);
+    assert_eq!(owner.unload_requests.lock().unwrap().len(), 1);
+
+    host.shutdown_connection().await;
+}
+
+#[tokio::test]
+async fn concurrent_resume_of_the_same_session_is_rejected_while_attach_is_in_flight() {
+    let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    let owner = Arc::new(FakeOwner::blocking_first_session_restore(queue.clone()));
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(owner.clone())
+        .with_dialog_turn_port(owner.clone())
+        .with_cancellation_port(owner.clone())
+        .with_turn_settlement_port(owner.clone())
+        .with_session_management_port(owner.clone())
+        .with_session_close_port(owner.clone())
+        .with_session_model_port(owner.clone())
+        .with_session_restore_port(owner.clone())
+        .with_permission_request_manager(permission_manager())
+        .with_event_source(AgentEventSource::new(queue))
+        .build()
+        .unwrap();
+    let (sender, mut output) = mpsc::channel(16);
+    let host = SdkHostConnection::new(
+        runtime,
+        "D:/workspace/project",
+        sender,
+        SdkHostConfig::default(),
+        fake_installer(),
+    );
+    initialize(&host, &mut output).await;
+    let session_id = "00000000-0000-4000-8000-000000000002";
+
+    let first_host = host.clone();
+    let first = tokio::spawn(async move {
+        first_host
+            .handle_request(request(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "resume-first",
+                "method": "session/resume",
+                "params": { "sessionId": session_id }
+            })))
+            .await
+    });
+    owner.session_restore_started.notified().await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "resume-second",
+        "method": "session/resume",
+        "params": { "sessionId": session_id }
+    })))
+    .await;
+    let rejected = output.recv().await.unwrap();
+    assert_eq!(rejected["id"], "resume-second");
+    assert_eq!(rejected["error"]["data"]["code"], "invalid_request");
+
+    owner.release_session_restore.notify_one();
+    assert_eq!(first.await.unwrap(), ConnectionControl::Continue);
+    let resumed = output.recv().await.unwrap();
+    assert_eq!(resumed["id"], "resume-first");
+    assert_eq!(resumed["result"]["sessionId"], session_id);
+    assert_eq!(owner.restored_session_ids.lock().unwrap().len(), 1);
+
+    host.shutdown_connection().await;
+}
+
+#[tokio::test]
+async fn failed_resume_compensation_blocks_new_work_and_retries_unload_on_shutdown() {
+    let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    let owner = Arc::new(FakeOwner::failing_resume_preparation_and_unload(
+        queue.clone(),
+    ));
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(owner.clone())
+        .with_dialog_turn_port(owner.clone())
+        .with_cancellation_port(owner.clone())
+        .with_turn_settlement_port(owner.clone())
+        .with_session_management_port(owner.clone())
+        .with_session_close_port(owner.clone())
+        .with_session_model_port(owner.clone())
+        .with_session_restore_port(owner.clone())
+        .with_permission_request_manager(permission_manager())
+        .with_event_source(AgentEventSource::new(queue))
+        .build()
+        .unwrap();
+    let (sender, mut output) = mpsc::channel(16);
+    let host = SdkHostConnection::new(
+        runtime,
+        "D:/workspace/project",
+        sender,
+        SdkHostConfig::default(),
+        fake_installer(),
+    );
+    initialize(&host, &mut output).await;
+    let session_id = "00000000-0000-4000-8000-000000000003";
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "resume-failed-cleanup",
+        "method": "session/resume",
+        "params": { "sessionId": session_id }
+    })))
+    .await;
+    let resume_error = output.recv().await.unwrap();
+    assert_eq!(resume_error["error"]["data"]["code"], "cleanup_required");
+    assert_eq!(owner.unload_requests.lock().unwrap().len(), 1);
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "blocked-after-failed-cleanup",
+        "method": "session/create",
+        "params": {}
+    })))
+    .await;
+    let blocked = output.recv().await.unwrap();
+    assert_eq!(blocked["error"]["data"]["code"], "cleanup_required");
+
+    host.shutdown_connection().await;
+    assert_eq!(owner.unload_requests.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -1729,7 +1975,7 @@ async fn cancellation_remains_available_when_data_request_capacity_is_exhausted(
 }
 
 #[tokio::test]
-async fn connection_loss_discards_owned_transient_sessions_through_core_port() {
+async fn connection_loss_unloads_owned_durable_sessions_through_core_port() {
     let (host, owner, mut output) = host().await;
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
@@ -1741,18 +1987,18 @@ async fn connection_loss_discards_owned_transient_sessions_through_core_port() {
     .await;
     let created = output.recv().await.unwrap();
     assert_eq!(created["id"], "create-1");
-    assert_eq!(created["result"]["lifetime"], "connection");
+    assert_eq!(created["result"]["lifetime"], "durable");
     let session_id = created["result"]["sessionId"].as_str().unwrap();
 
     host.shutdown_connection().await;
 
-    let requests = owner.discard_requests.lock().unwrap();
+    let requests = owner.unload_requests.lock().unwrap();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].session_id, session_id);
 }
 
 #[tokio::test]
-async fn existing_durable_session_is_not_adopted_without_cross_process_fencing() {
+async fn query_start_does_not_implicitly_resume_a_durable_session() {
     let (host, owner, mut output) = host().await;
     initialize(&host, &mut output).await;
     host.handle_request(request(serde_json::json!({
@@ -1776,7 +2022,7 @@ async fn existing_durable_session_is_not_adopted_without_cross_process_fencing()
 }
 
 #[tokio::test]
-async fn visible_session_create_response_is_exposed_before_shutdown_cleanup() {
+async fn visible_session_create_response_commits_before_immediate_close() {
     let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     let owner = Arc::new(FakeOwner::with_queue(queue.clone()));
     let runtime = AgentRuntimeBuilder::new()
@@ -1818,21 +2064,37 @@ async fn visible_session_create_response_is_exposed_before_shutdown_cleanup() {
             .await
     });
     response_visible.notified().await;
-    assert_eq!(output.recv().await.unwrap()["id"], "visible-create");
+    let visible = output.recv().await.unwrap();
+    assert_eq!(visible["id"], "visible-create");
+    let session_id = visible["result"]["sessionId"].as_str().unwrap().to_string();
 
-    let shutdown_host = host.clone();
-    let mut shutdown = tokio::spawn(async move { shutdown_host.shutdown_connection().await });
+    let close_host = host.clone();
+    let close = tokio::spawn(async move {
+        close_host
+            .handle_request(request(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "close-before-create-delivery-commits",
+                "method": "session/close",
+                "params": { "sessionId": session_id }
+            })))
+            .await
+    });
     assert!(
-        tokio::time::timeout(Duration::from_millis(50), &mut shutdown)
+        tokio::time::timeout(Duration::from_millis(50), output.recv())
             .await
             .is_err(),
-        "shutdown must wait until response visibility is committed"
+        "close must wait until response visibility is committed"
     );
     release_response.notify_one();
 
     assert_eq!(create.await.unwrap(), ConnectionControl::Continue);
-    shutdown.await.unwrap();
-    assert_eq!(owner.discard_requests.lock().unwrap().len(), 1);
+    assert_eq!(close.await.unwrap(), ConnectionControl::Continue);
+    let closed = output.recv().await.unwrap();
+    assert_eq!(closed["result"]["unloaded"], true);
+    assert_eq!(owner.unload_requests.lock().unwrap().len(), 1);
+    assert!(owner.delete_requests.lock().unwrap().is_empty());
+
+    host.shutdown_connection().await;
 }
 
 #[tokio::test]
@@ -1885,7 +2147,7 @@ async fn shutdown_waits_for_in_flight_session_creation_then_cleans_it() {
 
     assert_eq!(create.await.unwrap(), ConnectionControl::Continue);
     shutdown.await.unwrap();
-    let deleted = owner.discard_requests.lock().unwrap();
+    let deleted = owner.delete_requests.lock().unwrap();
     assert_eq!(deleted.len(), 1);
     assert_eq!(deleted[0].session_id, owner.last_created_session_id());
 }
@@ -1928,9 +2190,9 @@ async fn shutdown_compensates_a_session_creation_task_that_panics_after_creation
         host.shutdown_connection_bounded(Duration::from_secs(1))
             .await
     );
-    let discarded = owner.discard_requests.lock().unwrap();
-    assert_eq!(discarded.len(), 1);
-    assert_eq!(discarded[0].session_id, owner.last_created_session_id());
+    let deleted = owner.delete_requests.lock().unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0].session_id, owner.last_created_session_id());
 }
 
 #[tokio::test]
@@ -1972,7 +2234,7 @@ async fn shutdown_reports_failure_when_post_panic_session_compensation_fails() {
             .shutdown_connection_bounded(Duration::from_secs(1))
             .await
     );
-    assert_eq!(owner.discard_requests.lock().unwrap().len(), 1);
+    assert_eq!(owner.delete_requests.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -2022,15 +2284,15 @@ async fn a_later_request_registers_panicked_session_cleanup_for_shutdown() {
         cleanup_required["error"]["data"]["code"],
         "cleanup_required"
     );
-    assert!(owner.discard_requests.lock().unwrap().is_empty());
+    assert!(owner.delete_requests.lock().unwrap().is_empty());
 
     assert!(
         host.shutdown_connection_bounded(Duration::from_secs(1))
             .await
     );
-    let discarded = owner.discard_requests.lock().unwrap();
-    assert_eq!(discarded.len(), 1);
-    assert_eq!(discarded[0].session_id, owner.last_created_session_id());
+    let deleted = owner.delete_requests.lock().unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0].session_id, owner.last_created_session_id());
 }
 
 #[tokio::test]
@@ -2085,9 +2347,9 @@ async fn shutdown_does_not_forget_cleanup_registered_by_a_later_request() {
             .shutdown_connection_bounded(Duration::from_secs(1))
             .await
     );
-    let discarded = owner.discard_requests.lock().unwrap();
-    assert_eq!(discarded.len(), 1);
-    assert_eq!(discarded[0].session_id, owner.last_created_session_id());
+    let deleted = owner.delete_requests.lock().unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0].session_id, owner.last_created_session_id());
 }
 
 #[tokio::test]
@@ -2133,7 +2395,7 @@ async fn existing_transient_session_cannot_be_adopted_as_durable() {
     assert_eq!(error["error"]["data"]["code"], "capability_unavailable");
     assert!(error["error"]["message"]
         .as_str()
-        .is_some_and(|message| message.contains("same SDK Host connection")));
+        .is_some_and(|message| message.contains("created or resumed")));
 }
 
 #[tokio::test]
@@ -2498,7 +2760,7 @@ async fn queued_query_is_accepted_and_tracked_by_its_exact_turn() {
     })))
     .await;
     let created = output.recv().await.unwrap();
-    assert_eq!(created["result"]["lifetime"], "connection");
+    assert_eq!(created["result"]["lifetime"], "durable");
     let session_id = created["result"]["sessionId"]
         .as_str()
         .expect("created Session id")
