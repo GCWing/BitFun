@@ -724,6 +724,29 @@ export default function transportAndGeneralChatUnitTest() {
       expect(messages[0].status).assertEqual('sent');
     });
 
+    it('removes only the latest matching failed user message for retry', 0, async () => {
+      const localStore = new FakeGeneralChatLocalStore();
+      const session = remoteSession('chat-retry-repeat', '重复失败');
+      session.agentType = 'chat';
+      const first = chatMessage('failed-user-1', 'user', '再试一次', 'failed');
+      const second = chatMessage('failed-user-2', 'user', '再试一次', 'failed');
+      localStore.sessions = [session];
+      localStore.messagesBySession.set(session.id, [
+        first,
+        chatMessage('assistant-between', 'assistant', '中间回复'),
+        second
+      ]);
+      const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);
+      await repository.restoreFromLocal();
+
+      await repository.removeFailedUserMessage(session.id, '再试一次');
+
+      const messages = await repository.messages(session.id);
+      expect(messages.length).assertEqual(2);
+      expect(messages[0].id).assertEqual('failed-user-1');
+      expect(messages[1].id).assertEqual('assistant-between');
+    });
+
     it('does not persist assistant retry detail after an interrupted turn', 0, async () => {
       const localStore = new FakeGeneralChatLocalStore();
       const repository = new GeneralChatRepository(new MockGeneralChatAdapter(), localStore);

@@ -66,14 +66,7 @@ export class RemoteUiState {
       if (existingIndex >= 0) {
         merged[existingIndex] = RemoteUiState.mergeMessageSnapshot(merged[existingIndex], item);
       } else {
-        const optimisticIndex = merged.findIndex((existing: ChatMessage) => {
-          return RemoteUiState.isOptimisticDuplicate(existing, item);
-        });
-        if (optimisticIndex >= 0) {
-          merged[optimisticIndex] = item;
-        } else {
-          merged.push(item);
-        }
+        merged.push(item);
       }
     });
     return merged;
@@ -81,14 +74,17 @@ export class RemoteUiState {
 
   static mergeRemoteWithLocalOptimistic(remoteMessages: ChatMessage[], currentMessages: ChatMessage[]): ChatMessage[] {
     const merged = remoteMessages.slice();
+    const acknowledgedRemoteIndexes = new Set<number>();
     currentMessages.forEach((item: ChatMessage) => {
       if (!RemoteUiState.isLocalOptimisticMessage(item)) {
         return;
       }
-      const alreadySynced = merged.some((remote: ChatMessage) => {
-        return RemoteUiState.isOptimisticDuplicate(item, remote);
+      const acknowledgedIndex = merged.findIndex((remote: ChatMessage, index: number) => {
+        return !acknowledgedRemoteIndexes.has(index) && RemoteUiState.isOptimisticDuplicate(item, remote);
       });
-      if (!alreadySynced) {
+      if (acknowledgedIndex >= 0) {
+        acknowledgedRemoteIndexes.add(acknowledgedIndex);
+      } else {
         merged.push(item);
       }
     });
@@ -158,10 +154,11 @@ export class RemoteUiState {
 
   static localUserMessage(text: string, images?: ImageAttachment[]): ChatMessage {
     return {
-      id: `msg-${Date.now()}`,
+      id: `optimistic-user-${Date.now()}`,
       role: 'user',
       text,
       status: 'sent',
+      timestamp: new Date().toISOString(),
       images: images || []
     };
   }
@@ -210,14 +207,21 @@ export class RemoteUiState {
   }
 
   private static isLocalOptimisticMessage(item: ChatMessage): boolean {
-    return item.role === 'user' && item.id.indexOf('msg-') === 0;
+    return item.role === 'user' && item.id.indexOf('optimistic-user-') === 0;
   }
 
   private static isOptimisticDuplicate(local: ChatMessage, remote: ChatMessage): boolean {
     return RemoteUiState.isLocalOptimisticMessage(local) &&
       local.role === remote.role &&
       local.text.trim() === remote.text.trim() &&
-      local.text.trim().length > 0;
+      local.text.trim().length > 0 &&
+      RemoteUiState.imageSignature(local.images || []) === RemoteUiState.imageSignature(remote.images || []);
+  }
+
+  private static imageSignature(images: ImageAttachment[]): string {
+    return images.map((image: ImageAttachment) => {
+      return `${image.name || ''}:${image.data_url || ''}`;
+    }).sort().join('|');
   }
 
   private static mergeMessageSnapshot(previous: ChatMessage, incoming: ChatMessage): ChatMessage {

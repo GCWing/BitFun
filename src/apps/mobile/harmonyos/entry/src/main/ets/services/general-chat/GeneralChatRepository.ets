@@ -265,13 +265,23 @@ export class GeneralChatRepository {
 
   async removeFailedUserMessage(sessionId: string, text: string): Promise<void> {
     const normalizedText = text.trim();
-    const messages = (await this.messages(sessionId)).filter((message: ChatMessage) => {
-      return !(message.role === 'user' && message.status === 'failed' &&
-        message.text.trim() === normalizedText);
-    });
-    this.messagesBySession.set(sessionId, messages);
-    await this.localStore.replaceMessages(sessionId, messages);
-    await this.bumpSession(sessionId, messages.length);
+    const messages = await this.messages(sessionId);
+    let removeIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index];
+      if (message.role === 'user' && message.status === 'failed' &&
+        message.text.trim() === normalizedText) {
+        removeIndex = index;
+        break;
+      }
+    }
+    if (removeIndex < 0) {
+      return;
+    }
+    const remaining = messages.slice(0, removeIndex).concat(messages.slice(removeIndex + 1));
+    this.messagesBySession.set(sessionId, remaining);
+    await this.localStore.replaceMessages(sessionId, remaining);
+    await this.bumpSession(sessionId, remaining.length);
   }
 
   private async replaceMessage(sessionId: string, message: ChatMessage): Promise<void> {
