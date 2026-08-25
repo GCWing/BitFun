@@ -101,12 +101,13 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
         tool_pipeline.clone(),
     ));
 
+    let execution_config = execution::execution_engine_config_from_global_config().await;
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        execution::ExecutionEngineConfig::default(),
+        execution_config,
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(

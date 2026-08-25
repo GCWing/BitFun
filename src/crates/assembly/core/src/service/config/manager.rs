@@ -149,6 +149,7 @@ fn config_value_for_persistence(config: &GlobalConfig) -> BitFunResult<Value> {
     let mut value = serde_json::to_value(config)
         .map_err(|e| BitFunError::config(format!("Failed to serialize config: {}", e)))?;
     prune_default_ai_tool_argument_json_repair(&mut value);
+    prune_default_ai_max_rounds(&mut value);
     prune_default_memories_config(&mut value)?;
     Ok(value)
 }
@@ -160,6 +161,18 @@ fn prune_default_ai_tool_argument_json_repair(config_value: &mut Value) {
 
     if ai_config.get("allow_tool_json_repair") == Some(&Value::Bool(true)) {
         ai_config.remove("allow_tool_json_repair");
+    }
+}
+
+fn prune_default_ai_max_rounds(config_value: &mut Value) {
+    let Some(ai_config) = config_value.get_mut("ai").and_then(Value::as_object_mut) else {
+        return;
+    };
+
+    if ai_config.get("max_rounds").and_then(Value::as_u64)
+        == Some(crate::service::config::types::DEFAULT_MAX_ROUNDS as u64)
+    {
+        ai_config.remove("max_rounds");
     }
 }
 
@@ -1176,7 +1189,19 @@ mod tests {
         assert!(value.get("memories").is_none());
         assert!(value["ai"].get("agent_models").is_none());
         assert!(value["ai"].get("allow_tool_json_repair").is_none());
+        assert!(value["ai"].get("max_rounds").is_none());
         assert!(value["ai"].get("task_models").is_none());
+    }
+
+    #[test]
+    fn persistence_keeps_explicit_max_rounds() {
+        let mut config = GlobalConfig::default();
+        config.ai.max_rounds = 37;
+
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        assert_eq!(value["ai"].get("max_rounds"), Some(&serde_json::json!(37)));
     }
 
     #[test]

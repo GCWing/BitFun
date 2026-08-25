@@ -939,6 +939,7 @@ pub struct AIConfig {
     pub browser_control_auto_connect_on_startup: bool,
 
     /// Maximum number of rounds per dialog turn before soft-pausing.
+    /// Zero disables the fixed round limit.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
 }
@@ -1211,7 +1212,7 @@ fn default_subagent_batch_execution_policy() -> SubagentBatchExecutionPolicy {
     SubagentBatchExecutionPolicy::ForceParallel
 }
 
-pub const DEFAULT_MAX_ROUNDS: usize = 200;
+pub const DEFAULT_MAX_ROUNDS: usize = 0;
 
 fn default_max_rounds() -> usize {
     DEFAULT_MAX_ROUNDS
@@ -2371,6 +2372,19 @@ mod tests {
             .expect("legacy config should deserialize with permission defaults");
 
         assert_eq!(config.tool_permissions, ToolPermissionConfig::default());
+    }
+
+    #[test]
+    fn missing_max_rounds_defaults_to_unlimited_and_explicit_limits_survive() {
+        let defaulted: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(defaulted.ai.max_rounds, 0);
+
+        let limited: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "ai": { "max_rounds": 37 }
+        }))
+        .expect("explicit max rounds should deserialize");
+        assert_eq!(limited.ai.max_rounds, 37);
     }
 
     #[test]
