@@ -132,6 +132,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['sidebar.searchPlaceholder', '搜索对话'],
   ['sidebar.noSearchResult', '没有匹配的会话'],
   ['sidebar.signedOutNewChat', '新聊天'],
+  ['sidebar.scanToConnect', '扫码连接电脑'],
   ['sidebar.signInBitFunAccount', '登录BitFun账号'],
   ['sidebar.collapse', '收起侧边栏'],
   ['sidebar.restore', '展开侧边栏'],

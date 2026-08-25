@@ -132,6 +132,7 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['sidebar.searchPlaceholder', 'Search chats'],
   ['sidebar.noSearchResult', 'No matching sessions'],
   ['sidebar.signedOutNewChat', 'New chat'],
+  ['sidebar.scanToConnect', 'Scan to connect a computer'],
   ['sidebar.signInBitFunAccount', 'Sign in to BitFun'],
   ['sidebar.collapse', 'Collapse sidebar'],
   ['sidebar.restore', 'Expand sidebar'],
