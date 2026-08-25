@@ -6,11 +6,12 @@ import { ConversationViewState } from '../main/ets/pages/state/ConversationViewS
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
-import { ChatMessage } from '../main/ets/model/RemoteModels';
+import { ChatMessage, RemoteSession } from '../main/ets/model/RemoteModels';
 import { AppShellViewModel } from '../main/ets/pages/viewmodel/AppShellViewModel';
 import { AppNavigationBackAction } from '../main/ets/pages/navigation/AppRouteContract';
 import { WideLayoutGeometry } from '../main/ets/pages/layout/WideLayoutGeometry';
 import { SidebarDirectoryPreviewPolicy } from '../main/ets/pages/policy/SidebarDirectoryPreviewPolicy';
+import { SidebarAgentProjectionPolicy } from '../main/ets/pages/policy/SidebarAgentProjectionPolicy';
 import { AdaptiveLayoutInput } from '../main/ets/pages/policy/AdaptiveLayoutInput';
 import {
   ConversationLayoutCrease,
@@ -177,8 +178,22 @@ export default function architectureUnitTest() {
       expect(SidebarDirectoryPreviewPolicy.nextVisibleCount(6, 8)).assertEqual(8);
       expect(SidebarDirectoryPreviewPolicy.nextVisibleCount(8, 8)).assertEqual(8);
       expect(SidebarDirectoryPreviewPolicy.hiddenCount(2, 3)).assertEqual(0);
-      expect(SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(true)).assertFalse();
-      expect(SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(false)).assertTrue();
+    });
+
+    it('projects only running and selected sessions as active Agents', 0, () => {
+      const sessions: RemoteSession[] = [
+        { id: 'one', title: 'One', agentType: 'code', status: 'idle', updatedAt: '', createdAt: '', messageCount: 1 },
+        { id: 'two', title: 'Two', agentType: 'code', status: 'idle', updatedAt: '', createdAt: '', messageCount: 1 },
+        { id: 'three', title: 'Three', agentType: 'code', status: 'idle', updatedAt: '', createdAt: '', messageCount: 1 },
+        { id: 'four', title: 'Four', agentType: 'code', status: 'idle', updatedAt: '', createdAt: '', messageCount: 1 }
+      ];
+      const agents = SidebarAgentProjectionPolicy.activeAgents(sessions, 'two', 'three');
+      expect(agents.map((item: RemoteSession): string => item.id).join(','))
+        .assertEqual('three,two');
+      expect(SidebarAgentProjectionPolicy.activeAgents(sessions, 'two', 'two').length)
+        .assertEqual(1);
+      expect(SidebarAgentProjectionPolicy.activeAgents(sessions, '', '').length)
+        .assertEqual(0);
     });
   });
 

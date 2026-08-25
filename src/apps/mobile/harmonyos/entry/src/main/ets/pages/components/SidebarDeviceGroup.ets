@@ -4,21 +4,17 @@ import { DeviceDirectoryEntry } from '../state/DeviceDirectoryState';
 import {
   SessionListInputs,
   SessionListProjection,
-  SessionListProjectionCache,
-  SessionListProjector
+  SessionListProjectionCache
 } from '../policy/SessionListProjection';
-import {
-  SidebarDirectoryPreviewPolicy,
-  SidebarPreviewCursor
-} from '../policy/SidebarDirectoryPreviewPolicy';
+import { SidebarAgentProjectionPolicy } from '../policy/SidebarAgentProjectionPolicy';
 import { GREEN, INK, MUTED, SOFT, SUBTLE } from './Theme';
 
 /**
- * One desktop's workspaces and sessions.
+ * One desktop and its user-facing Agent instances.
  *
- * The projection cache is a single slot whose key includes the current
- * workspace path, so one instance cannot serve two devices without missing
- * every rebuild. This component exists so each desktop keeps its own cache.
+ * Workspaces are execution context, not another permanent navigation level.
+ * Tapping the desktop opens the workspace picker; persisted RemoteSession
+ * records stay on the wire but project here as Agent instances.
  */
 @ComponentV2
 export struct SidebarDeviceGroup {
@@ -33,16 +29,11 @@ export struct SidebarDeviceGroup {
   @Param query: string = '';
   @Param showHeader: boolean = false;
   @Param isActive: boolean = false;
-  @Event onToggle: () => void = () => {};
   @Event onRetry: () => void = () => {};
+  @Event onChooseWorkspace: () => void = () => {};
   @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onSessionActions: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onCreateInWorkspace: (path: string) => void = (_path: string) => {};
-  @Event onOpenWorkspace: (path: string) => void = (_path: string) => {};
-  @Local collapsedPaths: string[] = [];
-  @Local expandedWorkspacePaths: string[] = [];
-  @Local visibleWorkspaceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
-  @Local sessionCursors: SidebarPreviewCursor[] = [];
   private readonly projectionCache: SessionListProjectionCache = new SessionListProjectionCache();
 
   build() {
@@ -50,33 +41,19 @@ export struct SidebarDeviceGroup {
       if (this.showHeader) {
         this.DeviceHeader()
       }
-      if (this.shouldShowBody()) {
+      if (this.shouldShowAgents()) {
         if (this.device.status === 'failed') {
           this.FailedRow()
-        } else if (this.workspaceEntries().length === 0) {
-          if (this.device.status === 'ready') {
-            this.EmptyWorkspaces()
-          } else if (this.device.status === 'cached') {
-            this.EmptyWorkspaces()
-          } else {
-            this.LoadingRow()
-          }
+        } else if (this.device.status === 'loading' && this.agentSessions().length === 0) {
+          this.LoadingRow()
         } else {
-          ForEach(this.visibleWorkspaceEntries(), (entry: RecentWorkspaceEntry) => {
-            this.WorkspaceGroup(entry)
-          }, (entry: RecentWorkspaceEntry): string => `${this.device.deviceId}:${entry.path}`)
-          if (this.hiddenWorkspaceCount() > 0) {
-            this.MoreWorkspacesRow()
-          }
-          if (this.device.status === 'loading') {
-            this.LoadingRow()
-          }
+          this.AgentSection()
         }
       }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-    .margin({ bottom: this.showHeader ? 8 : 0 })
+    .margin({ bottom: this.showHeader ? 10 : 0 })
   }
 
   @Builder
@@ -88,14 +65,23 @@ export struct SidebarDeviceGroup {
         .width(21)
         .height(21)
         .hitTestBehavior(HitTestMode.None)
-      Text(this.device.deviceName)
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.device.online ? INK : SUBTLE)
-        .layoutWeight(1)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .hitTestBehavior(HitTestMode.None)
+      Column({ space: 2 }) {
+        Text(this.device.deviceName)
+          .width('100%')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.device.online ? INK : SUBTLE)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(this.deviceContextLabel())
+          .width('100%')
+          .fontSize(12)
+          .fontColor(SUBTLE)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
       if (!this.device.online) {
         Text(RemoteI18n.t('sidebar.deviceOffline'))
           .fontSize(12)
@@ -110,8 +96,7 @@ export struct SidebarDeviceGroup {
           .hitTestBehavior(HitTestMode.None)
       }
       Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph(this.device.expanded ?
-          $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
+        SymbolGlyph($r('sys.symbol.chevron_right'))
           .fontSize(13)
           .fontColor([MUTED])
           .hitTestBehavior(HitTestMode.None)
@@ -121,28 +106,113 @@ export struct SidebarDeviceGroup {
       .hitTestBehavior(HitTestMode.None)
     }
     .width('100%')
-    .height(46)
+    .height(54)
     .padding({ left: 10, right: 6 })
     .alignItems(VerticalAlign.Center)
-    .opacity(this.device.online ? 1 : 0.7)
-    .onClick(() => {
-      this.onToggle();
-    })
+    .opacity(this.device.online ? 1 : 0.72)
+    .onClick(() => this.openWorkspacePicker())
+  }
+
+  @Builder
+  private AgentSection() {
+    Column() {
+      Row() {
+        Text(RemoteI18n.t('sidebar.agents'))
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(MUTED)
+        if (this.agentSessions().length > 0) {
+          Text(`${this.agentSessions().length}`)
+            .fontSize(12)
+            .fontColor(SUBTLE)
+            .margin({ left: 7 })
+        }
+        Blank()
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.plus'))
+            .fontSize(16)
+            .fontColor([MUTED])
+        }
+        .width(34)
+        .height(34)
+        .accessibilityText(RemoteI18n.t('sidebar.newAgent'))
+        .onClick(() => this.createAgent())
+      }
+      .width('100%')
+      .height(38)
+      .padding({ left: this.bodyIndent(), right: 6 })
+      .alignItems(VerticalAlign.Center)
+
+      if (this.agentSessions().length === 0) {
+        this.EmptyAgents()
+      } else {
+        ForEach(this.agentSessions(), (item: RemoteSession) => {
+          this.AgentRow(item)
+        }, (item: RemoteSession): string => `${this.device.deviceId}:${item.id}`)
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private AgentRow(item: RemoteSession) {
+    Row({ space: 10 }) {
+      Stack({ alignContent: Alignment.BottomStart }) {
+        SymbolGlyph(this.agentGlyph(item))
+          .fontSize(18)
+          .fontColor([MUTED])
+        if (item.id === this.runningSessionId) {
+          Text('')
+            .width(7)
+            .height(7)
+            .backgroundColor(GREEN)
+            .borderRadius(4)
+        }
+      }
+      .width(21)
+      .height(21)
+      Column({ space: 2 }) {
+        Text(item.title || RemoteI18n.t('sidebar.untitledAgent'))
+          .width('100%')
+          .fontSize(15)
+          .fontWeight(item.id === this.selectedSessionId ? FontWeight.Medium : FontWeight.Regular)
+          .fontColor(INK)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(this.agentWorkspaceLabel(item))
+          .width('100%')
+          .fontSize(12)
+          .fontColor(SUBTLE)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+      if (item.id === this.runningSessionId) {
+        Text(RemoteI18n.t('sidebar.agentRunning'))
+          .fontSize(11)
+          .fontColor(GREEN)
+      }
+    }
+    .width('100%')
+    .height(54)
+    .padding({ left: this.bodyIndent(), right: 10 })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(item.id === this.selectedSessionId ? SOFT : '#00000000')
+    .borderRadius(10)
+    .onClick(() => this.onOpenSession(item))
+    .gesture(LongPressGesture({ repeat: false }).onAction(() => this.onSessionActions(item)))
   }
 
   @Builder
   private LoadingRow() {
     Row({ space: 8 }) {
-      LoadingProgress()
-        .width(14)
-        .height(14)
-        .color(MUTED)
-      Text(RemoteI18n.t('common.loading'))
-        .fontSize(13)
-        .fontColor(MUTED)
+      LoadingProgress().width(14).height(14).color(MUTED)
+      Text(RemoteI18n.t('common.loading')).fontSize(13).fontColor(MUTED)
     }
     .width('100%')
-    .height(40)
+    .height(42)
     .padding({ left: this.bodyIndent(), right: 10 })
     .alignItems(VerticalAlign.Center)
   }
@@ -158,181 +228,41 @@ export struct SidebarDeviceGroup {
       Text(RemoteI18n.t('common.retry'))
         .fontSize(13)
         .fontColor(INK)
-        .onClick(() => {
-          this.onRetry();
-        })
+        .onClick(() => this.onRetry())
     }
     .width('100%')
-    .height(40)
+    .height(42)
     .padding({ left: this.bodyIndent(), right: 10 })
     .alignItems(VerticalAlign.Center)
   }
 
   @Builder
-  private EmptyWorkspaces() {
-    Text(RemoteI18n.t('sidebar.emptyWorkspaces'))
-      .fontSize(14)
+  private EmptyAgents() {
+    Text(this.query.trim().length > 0 ?
+      RemoteI18n.t('sidebar.noMatchingAgents') : RemoteI18n.t('sidebar.emptyAgents'))
+      .fontSize(13)
       .fontColor(MUTED)
       .width('100%')
-      .padding({ left: this.bodyIndent(), top: 6, bottom: 6 })
+      .padding({ left: this.bodyIndent(), top: 6, bottom: 10 })
   }
 
-  @Builder
-  private WorkspaceGroup(entry: RecentWorkspaceEntry) {
-    Column() {
-      this.WorkspaceRow(entry)
-      if (this.isWorkspaceExpanded(entry.path)) {
-        ForEach(this.visibleSessionsFor(entry.path), (item: RemoteSession) => {
-          this.SessionRow(item)
-        }, (item: RemoteSession): string => `${item.deviceId || this.device.deviceId}:${item.id}`)
-        if (this.hiddenSessionCount(entry.path) > 0) {
-          this.MoreSessionsRow(entry.path)
-        }
-      }
+  private openWorkspacePicker(): void {
+    this.onChooseWorkspace();
+  }
+
+  private createAgent(): void {
+    if (this.isActive && this.workspacePath.length > 0 && this.device.online) {
+      this.onCreateInWorkspace(this.workspacePath);
+      return;
     }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .margin({ bottom: 6 })
+    this.onChooseWorkspace();
   }
 
-  @Builder
-  private WorkspaceRow(entry: RecentWorkspaceEntry) {
-    Row({ space: 10 }) {
-      SymbolGlyph($r('sys.symbol.folder'))
-        .fontSize(19)
-        .fontColor([this.isCurrentWorkspace(entry.path) ? INK : MUTED])
-        .width(21)
-        .height(21)
-      Text(entry.name || this.basename(entry.path))
-        .fontSize(15)
-        .fontWeight(this.isCurrentWorkspace(entry.path) ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(INK)
-        .layoutWeight(1)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.square_and_pencil'))
-          .fontSize(16)
-          .fontColor([MUTED])
-      }
-      .width(30)
-      .height(40)
-      .opacity(0.6)
-      .accessibilityText(RemoteI18n.t('sidebar.newInWorkspace'))
-      .onClick(() => {
-        this.onCreateInWorkspace(entry.path);
-      })
-      SymbolGlyph(this.isWorkspaceExpanded(entry.path) ?
-        $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
-        .fontSize(13)
-        .fontColor([MUTED])
-        .width(16)
-        .height(16)
-    }
-    .width('100%')
-    .height(46)
-    .padding({ left: this.bodyIndent(), right: 6 })
-    .alignItems(VerticalAlign.Center)
-    .borderRadius(10)
-    .onClick(() => {
-      this.toggleWorkspace(entry.path);
-    })
-    .gesture(LongPressGesture({ repeat: false }).onAction(() => {
-      this.onOpenWorkspace(entry.path);
-    }))
-  }
-
-  @Builder
-  private SessionRow(item: RemoteSession) {
-    Row({ space: 8 }) {
-      Stack({ alignContent: Alignment.BottomStart }) {
-        SymbolGlyph(this.sessionGlyph(item))
-          .fontSize(17)
-          .fontColor([MUTED])
-          .width(19)
-          .height(19)
-        if (this.isActive && item.id === this.runningSessionId) {
-          Text('')
-            .width(7)
-            .height(7)
-            .backgroundColor(GREEN)
-            .borderRadius(4)
-        }
-      }
-      .width(19)
-      .height(19)
-      Text(item.title || RemoteI18n.t('sidebar.untitled'))
-        .fontSize(15)
-        .fontWeight(item.id === this.selectedSessionId ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(INK)
-        .layoutWeight(1)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-    }
-    .width('100%')
-    .height(44)
-    .padding({ left: this.bodyIndent() + 16, right: 10 })
-    .alignItems(VerticalAlign.Center)
-    .backgroundColor(item.id === this.selectedSessionId ? SOFT : '#00000000')
-    .borderRadius(10)
-    .onClick(() => {
-      this.onOpenSession(item);
-    })
-    .gesture(LongPressGesture({ repeat: false }).onAction(() => {
-      this.onSessionActions(item);
-    }))
-  }
-
-  @Builder
-  private MoreWorkspacesRow() {
-    Row({ space: 8 }) {
-      Text('···')
-        .fontSize(13)
-        .fontColor(MUTED)
-      Text(RemoteI18n.f('sidebar.moreWorkspaces', String(this.hiddenWorkspaceCount())))
-        .fontSize(13)
-        .fontColor(MUTED)
-    }
-    .width('100%')
-    .height(40)
-    .padding({ left: this.bodyIndent() })
-    .alignItems(VerticalAlign.Center)
-    .onClick(() => {
-      this.visibleWorkspaceCount = SidebarDirectoryPreviewPolicy.nextVisibleCount(
-        this.visibleWorkspaceCount,
-        this.workspaceEntries().length
-      );
-    })
-  }
-
-  @Builder
-  private MoreSessionsRow(path: string) {
-    Row({ space: 8 }) {
-      Text('···')
-        .fontSize(13)
-        .fontColor(MUTED)
-      Text(RemoteI18n.f('sidebar.moreSessions', String(this.hiddenSessionCount(path))))
-        .fontSize(13)
-        .fontColor(MUTED)
-    }
-    .width('100%')
-    .height(40)
-    .padding({ left: this.bodyIndent() + 16 })
-    .alignItems(VerticalAlign.Center)
-    .onClick(() => {
-      this.revealMoreSessions(path);
-    })
-  }
-
-  private shouldShowBody(): boolean {
+  private shouldShowAgents(): boolean {
     if (!this.showHeader) {
       return true;
     }
-    if (!this.device.online && this.device.workspaces.length === 0 &&
-      this.recentWorkspaces.length === 0) {
-      return false;
-    }
-    return this.device.expanded;
+    return this.device.expanded || this.isActive;
   }
 
   private bodyIndent(): number {
@@ -358,74 +288,37 @@ export struct SidebarDeviceGroup {
     return this.projectionCache.get(inputs);
   }
 
-  private workspaceEntries(): RecentWorkspaceEntry[] {
-    return this.projection().projects.filter((entry: RecentWorkspaceEntry) => entry.path.length > 0);
-  }
-
-  private visibleWorkspaceEntries(): RecentWorkspaceEntry[] {
-    return SidebarDirectoryPreviewPolicy.visibleSlice(
-      this.workspaceEntries(),
-      this.visibleWorkspaceCount
+  private agentSessions(): RemoteSession[] {
+    return SidebarAgentProjectionPolicy.activeAgents(
+      this.projection().filtered,
+      this.selectedSessionId,
+      this.runningSessionId
     );
   }
 
-  private hiddenWorkspaceCount(): number {
-    return SidebarDirectoryPreviewPolicy.hiddenCount(
-      this.workspaceEntries().length,
-      this.visibleWorkspaceCount
-    );
-  }
-
-  private sessionsFor(path: string): RemoteSession[] {
-    return SessionListProjector.sessionsForProject(this.projection(), path);
-  }
-
-  private sessionVisibleCount(path: string): number {
-    for (let index = 0; index < this.sessionCursors.length; index += 1) {
-      if (this.sessionCursors[index].path === path) {
-        return this.sessionCursors[index].visibleCount;
-      }
+  private deviceContextLabel(): string {
+    if (!this.device.online) {
+      return RemoteI18n.t('sidebar.selectWorkspace');
     }
-    return SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
-  }
-
-  private visibleSessionsFor(path: string): RemoteSession[] {
-    return SidebarDirectoryPreviewPolicy.visibleSlice(
-      this.sessionsFor(path),
-      this.sessionVisibleCount(path)
-    );
-  }
-
-  private hiddenSessionCount(path: string): number {
-    return SidebarDirectoryPreviewPolicy.hiddenCount(
-      this.sessionsFor(path).length,
-      this.sessionVisibleCount(path)
-    );
-  }
-
-  private revealMoreSessions(path: string): void {
-    const next = SidebarDirectoryPreviewPolicy.nextVisibleCount(
-      this.sessionVisibleCount(path),
-      this.sessionsFor(path).length
-    );
-    const nextCursors: SidebarPreviewCursor[] = [];
-    let replaced = false;
-    for (let index = 0; index < this.sessionCursors.length; index += 1) {
-      const cursor = this.sessionCursors[index];
-      if (cursor.path === path) {
-        nextCursors.push(new SidebarPreviewCursor(path, next));
-        replaced = true;
-      } else {
-        nextCursors.push(cursor);
-      }
+    if (this.isActive && this.workspacePath.length > 0) {
+      return this.workspaceName || this.basename(this.workspacePath);
     }
-    if (!replaced) {
-      nextCursors.push(new SidebarPreviewCursor(path, next));
-    }
-    this.sessionCursors = nextCursors;
+    return RemoteI18n.t('sidebar.selectWorkspace');
   }
 
-  private sessionGlyph(item: RemoteSession): Resource {
+  private agentWorkspaceLabel(item: RemoteSession): string {
+    if (item.workspaceName && item.workspaceName.length > 0) {
+      return item.workspaceName;
+    }
+    const path = item.workspacePath || '';
+    if (path.length > 0) {
+      const workspace = this.recentWorkspaces.find((entry: RecentWorkspaceEntry): boolean => entry.path === path);
+      return workspace ? workspace.name : this.basename(path);
+    }
+    return RemoteI18n.t('sidebar.agentChatWorkspace');
+  }
+
+  private agentGlyph(item: RemoteSession): Resource {
     const agentType = (item.agentType ? item.agentType : '').toLowerCase();
     if (agentType === 'code') {
       return $r('sys.symbol.code_square');
@@ -434,33 +327,6 @@ export struct SidebarDeviceGroup {
       return $r('sys.symbol.message');
     }
     return $r('sys.symbol.doc_text');
-  }
-
-  private isWorkspaceExpanded(path: string): boolean {
-    if (SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(this.showHeader)) {
-      return this.collapsedPaths.indexOf(path) < 0;
-    }
-    return this.expandedWorkspacePaths.indexOf(path) >= 0;
-  }
-
-  private toggleWorkspace(path: string): void {
-    if (SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(this.showHeader)) {
-      if (this.collapsedPaths.indexOf(path) >= 0) {
-        this.collapsedPaths = this.collapsedPaths.filter((item: string) => item !== path);
-        return;
-      }
-      this.collapsedPaths = this.collapsedPaths.concat([path]);
-      return;
-    }
-    if (this.expandedWorkspacePaths.indexOf(path) >= 0) {
-      this.expandedWorkspacePaths = this.expandedWorkspacePaths.filter((item: string) => item !== path);
-      return;
-    }
-    this.expandedWorkspacePaths = this.expandedWorkspacePaths.concat([path]);
-  }
-
-  private isCurrentWorkspace(path: string): boolean {
-    return this.isActive && path.length > 0 && path === this.workspacePath;
   }
 
   private basename(path: string): string {
