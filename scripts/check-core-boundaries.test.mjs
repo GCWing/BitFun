@@ -1586,6 +1586,16 @@ const APP_SERVER_REVIEWED_CORE_FEATURES = [
   'remote-connect',
 ];
 
+test('OpenCode Plugin Host keeps retired LSP outside its feature closure', () => {
+  const rule = coreClosedFeatureProfileRules.find(
+    (candidate) => candidate.manifestPath === 'src/crates/assembly/core/Cargo.toml'
+      && candidate.featureName === 'opencode-plugin-host',
+  );
+
+  assert.ok(rule, 'opencode-plugin-host feature closure rule');
+  assert.equal(rule.requiredFeatureRefs.includes('lsp'), false);
+});
+
 test('SDK Host Core capability closure keeps every reviewed owner', () => {
   const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
   const sdkHost = packageAt(

@@ -999,10 +999,8 @@ async fn mcp_status() -> RouteResult {
     Ok(Value::Object(statuses))
 }
 
-async fn lsp_status(context: &PluginHostInstance) -> RouteResult {
-    let manager = crate::service::lsp::get_workspace_manager(context.directory.clone())
-        .await
-        .map_err(|error| Failure::unavailable(error.to_string()))?;
-    let states = manager.get_all_server_states().await;
-    Ok(Value::Array(states.into_iter().map(|(id, state)| json!({"id": id, "name": state.language, "root": context.directory, "status": if matches!(state.status, crate::service::lsp::ServerStatus::Running) {"connected"} else {"error"}})).collect()))
+async fn lsp_status(_context: &PluginHostInstance) -> RouteResult {
+    Err(Failure::unsupported(
+        "LSP runtime is retired in the 1.0.0-explore product line",
+    ))
 }

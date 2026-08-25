@@ -3,7 +3,7 @@ use crate::plugin_host::PluginHostInstance;
 //
 // The adapter owns OpenCode path/method matching, wire DTOs, framing, and
 // transport errors. This module only invokes the existing BitFun session,
-// filesystem, terminal, MCP, LSP, Git, and model owners and projects their
+// filesystem, terminal, MCP, Git, and model owners and projects their
 // results into the adapter's route contract. The logical instance and PTY
 // maps in `plugin_host` scope those calls; they are not physical process
 // supervision (that remains in the adapter/services process-tree boundary).
@@ -534,7 +534,7 @@ async fn command_list(context: &PluginHostInstance) -> RouteResult {
     ))
 }
 
-// Session, PTY, filesystem, MCP, and LSP route implementations follow below.
+// Session, PTY, filesystem, and MCP route implementations follow below.
 
 include!("plugin_host_http_routes_impl.rs");
 
@@ -542,7 +542,7 @@ include!("plugin_host_http_routes_impl.rs");
 mod tests {
     use super::{
         app_log, assistant_parts, file_list, file_read, find_files, find_text, parse_pty_shell,
-        project_list, project_value, provider_projection, pty_create, pty_value,
+        lsp_status, project_list, project_value, provider_projection, pty_create, pty_value,
         resolve_scoped_path, search_line_offsets, session_create, session_update, tool_list,
     };
     use crate::plugin_host::PluginHostInstance;
@@ -576,6 +576,20 @@ mod tests {
 
         assert_eq!(value.as_array().map(Vec::len), Some(1));
         assert_eq!(value[0]["id"], "project-a");
+    }
+
+    #[tokio::test]
+    async fn lsp_route_reports_retired_capability_without_restoring_runtime() {
+        let directory = tempfile::tempdir().expect("temporary workspace");
+        let context = instance(directory.path().to_path_buf(), "instance-a", "project-a");
+
+        let failure = lsp_status(&context)
+            .await
+            .expect_err("explore keeps LSP retired");
+
+        assert_eq!(failure.status, 501);
+        assert_eq!(failure.code, "unsupported_capability");
+        assert!(failure.message.contains("retired"));
     }
 
     #[test]

@@ -1000,7 +1000,6 @@ export const coreClosedFeatureProfileRules = [
       'plugin-runtime',
       'remote-connect',
       'git',
-      'lsp',
       'dep:bitfun-opencode-plugin-host',
     ],
     allowedTransitiveFeatureRefs: [
@@ -1028,7 +1027,7 @@ export const coreClosedFeatureProfileRules = [
     ],
     exact: true,
     reason:
-      'the managed OpenCode Host must keep its product-shaped route dependencies separate from the portable plugin runtime client boundary',
+      'the managed OpenCode Host must keep its product-shaped route dependencies separate from the portable plugin runtime client boundary without restoring the retired LSP runtime',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',

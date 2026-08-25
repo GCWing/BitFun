@@ -38,9 +38,9 @@ impl Drop for ActiveRequest<'_> {
 
 #[derive(Debug)]
 pub(crate) struct RouteFailure {
-    status: u16,
-    code: &'static str,
-    message: String,
+    pub(crate) status: u16,
+    pub(crate) code: &'static str,
+    pub(crate) message: String,
 }
 
 impl RouteFailure {
@@ -54,6 +54,10 @@ impl RouteFailure {
 
     pub(crate) fn not_found(message: impl Into<String>) -> Self {
         Self::new(404, "not_found", message)
+    }
+
+    pub(crate) fn unsupported(message: impl Into<String>) -> Self {
+        Self::new(501, "unsupported_capability", message)
     }
 
     pub(crate) fn backend(message: impl Into<String>) -> Self {
