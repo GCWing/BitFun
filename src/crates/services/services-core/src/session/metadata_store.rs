@@ -553,7 +553,13 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let ready_path = dir.path().join("child-ready");
         let release_path = dir.path().join("child-release");
-        let mut child = Command::new(std::env::current_exe().expect("test executable"))
+        let mut command = Command::new(std::env::current_exe().expect("test executable"));
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+        let mut child = command
             .arg("--exact")
             .arg("session::metadata_store::tests::index_lock_child_holds_the_cross_process_guard")
             .arg("--nocapture")

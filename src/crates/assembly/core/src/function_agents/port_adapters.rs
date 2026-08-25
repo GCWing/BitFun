@@ -142,7 +142,6 @@ mod tests {
     use bitfun_product_domains::function_agents::ports::FunctionAgentGitPort;
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::process::Command;
     use std::sync::Arc;
 
     use crate::function_agents::common::AgentErrorType;
@@ -301,7 +300,7 @@ mod tests {
     }
 
     fn git(repo: &std::path::Path, args: &[&str]) {
-        let output = Command::new("git")
+        let output = crate::util::create_test_command("git")
             .args(args)
             .current_dir(repo)
             .output()

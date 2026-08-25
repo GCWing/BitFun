@@ -659,16 +659,18 @@ mod tests {
 
     #[tokio::test]
     async fn local_catalog_and_execution_timeouts_remove_pending_requests() {
-        let mut child = tokio::process::Command::new(std::env::current_exe().unwrap())
-            .arg("--exact")
-            .arg("mcp::server::connection::tests::mcp_connection_timeout_child")
-            .arg("--nocapture")
-            .env("BITFUN_MCP_CONNECTION_TIMEOUT_CHILD", "1")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .expect("spawn silent test child");
+        let mut child = bitfun_services_core::process_manager::create_tokio_command(
+            std::env::current_exe().unwrap(),
+        )
+        .arg("--exact")
+        .arg("mcp::server::connection::tests::mcp_connection_timeout_child")
+        .arg("--nocapture")
+        .env("BITFUN_MCP_CONNECTION_TIMEOUT_CHILD", "1")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn silent test child");
         let stdin = child.stdin.take().expect("capture child stdin");
         let (_tx, rx) = mpsc::unbounded_channel();
         let connection = MCPConnection::new_local_with_timeouts(

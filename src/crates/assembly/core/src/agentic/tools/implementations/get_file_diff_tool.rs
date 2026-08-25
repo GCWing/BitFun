@@ -1836,7 +1836,7 @@ Usage:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{process::Command, sync::Mutex};
+    use std::sync::Mutex;
 
     #[derive(Default)]
     struct RecordingProviderDiffService {
@@ -1870,7 +1870,7 @@ mod tests {
     }
 
     fn git(root: &Path, args: &[&str]) {
-        let output = Command::new("git")
+        let output = crate::util::create_test_command("git")
             .current_dir(root)
             .args(args)
             .output()
@@ -1884,7 +1884,7 @@ mod tests {
     }
 
     fn git_stdout(root: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
+        let output = crate::util::create_test_command("git")
             .current_dir(root)
             .args(args)
             .output()

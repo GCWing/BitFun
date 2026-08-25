@@ -36,6 +36,21 @@ pub fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> &str {
 }
 
 #[cfg(test)]
+pub(crate) fn create_test_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let command = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        let mut command = command;
+        command.creation_flags(0x0800_0000);
+        command
+    }
+    #[cfg(not(windows))]
+    command
+}
+
+#[cfg(test)]
 mod tests {
     use super::truncate_at_char_boundary;
 

@@ -1,14 +1,14 @@
 #[path = "../support/mod.rs"]
 mod support;
 
-use std::process::{Command, Output};
+use std::process::Output;
 use support::{
     command_output_with_timeout, CliTestEnvironment, MockOpenAiServer, STREAM_COMPLETED_MARKER,
     STREAM_START_MARKER,
 };
 
 fn run_cli(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_bitfun"))
+    bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
         .args(args)
         .output()
         .expect("run bitfun")
@@ -43,13 +43,13 @@ fn is_terminal_event(value: &serde_json::Value) -> bool {
 fn command_timeout_helper_returns_within_its_failure_budget() {
     #[cfg(windows)]
     let mut command = {
-        let mut command = Command::new("powershell.exe");
+        let mut command = bitfun_services_core::process_manager::create_command("powershell.exe");
         command.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 30"]);
         command
     };
     #[cfg(not(windows))]
     let mut command = {
-        let mut command = Command::new("sh");
+        let mut command = bitfun_services_core::process_manager::create_command("sh");
         command.args(["-c", "exec sleep 30"]);
         command
     };
