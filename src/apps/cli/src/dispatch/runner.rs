@@ -214,6 +214,15 @@ fn process_group_alive(process_group: i32) -> bool {
     )
 }
 
+#[cfg(any(test, target_os = "macos"))]
+fn macos_process_state_allows_escalation(stat: &str) -> bool {
+    let Some(stat) = stat.split_whitespace().next() else {
+        return false;
+    };
+    matches!(stat.chars().next(), Some('I' | 'R' | 'S' | 'T' | 'U'))
+        && !stat.chars().skip(1).any(|modifier| modifier == 'E')
+}
+
 #[cfg(unix)]
 pub(crate) fn process_alive(pid: u32) -> bool {
     let Ok(pid) = i32::try_from(pid) else {
@@ -246,9 +255,10 @@ pub(crate) fn process_alive(pid: u32) -> bool {
 
     #[cfg(target_os = "macos")]
     {
-        // macOS also reports zombies as present to kill(0). Query the process
-        // state before using a leader PID to authenticate SIGKILL escalation;
-        // a failed/empty query means the process disappeared during the check.
+        // macOS reports zombies as present to kill(0), and ps marks a process
+        // that is trying to exit with the E modifier. Require a known live
+        // state with no exit modifier before authenticating SIGKILL escalation;
+        // a failed or unrecognized query must fail closed.
         let output = Command::new("ps")
             .args(["-p", &pid.to_string(), "-o", "stat="])
             .output();
@@ -258,11 +268,7 @@ pub(crate) fn process_alive(pid: u32) -> bool {
         if !output.status.success() {
             return false;
         }
-        return String::from_utf8_lossy(&output.stdout)
-            .trim_start()
-            .chars()
-            .next()
-            .is_some_and(|state| state != 'Z');
+        return macos_process_state_allows_escalation(&String::from_utf8_lossy(&output.stdout));
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -388,6 +394,36 @@ mod tests {
             "__workspace_sync_run",
             "job-2"
         ));
+    }
+
+    #[test]
+    fn macos_live_process_states_can_authenticate_sigkill_escalation() {
+        for stat in ["I", "R+", "Ss", "T", "U"] {
+            assert!(
+                macos_process_state_allows_escalation(stat),
+                "live state {stat} should authenticate escalation"
+            );
+        }
+    }
+
+    #[test]
+    fn macos_dead_or_unknown_process_states_cannot_authenticate_sigkill_escalation() {
+        for stat in ["", "Z", "Z+", "?"] {
+            assert!(
+                !macos_process_state_allows_escalation(stat),
+                "dead state {stat:?} must not authenticate escalation"
+            );
+        }
+    }
+
+    #[test]
+    fn macos_exiting_process_states_cannot_authenticate_sigkill_escalation() {
+        for stat in ["SE", "UEs"] {
+            assert!(
+                !macos_process_state_allows_escalation(stat),
+                "exiting state {stat} must not authenticate escalation"
+            );
+        }
     }
 
     #[cfg(unix)]
