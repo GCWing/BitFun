@@ -94,9 +94,6 @@ export struct AppSidebarSurface {
   }
 
   private remoteSelectedSessionId(): string {
-    if (AppRouteContract.isGeneralComposerRoute(this.shellState.activeRoute)) {
-      return '';
-    }
     if (this.remotePageState.pendingSessionId.length > 0) {
       return this.remotePageState.pendingSessionId;
     }

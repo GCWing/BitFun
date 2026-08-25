@@ -340,8 +340,7 @@ export struct WideConversationHost {
     if (this.remotePageState.pendingSessionId.length > 0) {
       return this.remotePageState.pendingSessionId;
     }
-    return AppRouteContract.isRemoteRoute(this.route) ?
-      this.remotePageState.activeSession.sessionId : '';
+    return this.remotePageState.activeSession.sessionId;
   }
 
   private showsRemoteConversation(): boolean {

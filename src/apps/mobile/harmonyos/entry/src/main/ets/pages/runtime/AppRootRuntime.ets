@@ -230,7 +230,25 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async selectWorkspaceOnDevice(path: string, deviceId?: string): Promise<void> {
     await this.conversationController.ensureRemoteControlTarget(deviceId);
-    await this.selectWorkspace(path);
+    this.filePreviewController.close();
+    const selected = await this.remoteWorkspaceViewModel.selectWorkspace(path);
+    if (!selected) {
+      return;
+    }
+    // A session belongs to the workspace it was created in. Keeping the old
+    // active summary after this device-scoped switch can reopen that session
+    // under the newly selected workspace and makes the sidebar lie about the
+    // Agent's execution context.
+    this.remotePageState.clearActiveSession();
+    if (this.appShellState.wideLayout) {
+      await this.enterRemoteSurfaceWide();
+    } else {
+      await this.enterRemoteSurfaceCompact();
+    }
+    // enterRemoteSurface* deliberately no-ops when the current route is
+    // already remote. A workspace switch is different: its destination is
+    // always the new workspace's landing surface, never the old RemoteChat.
+    this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
   }
 
   async selectAssistant(path: string): Promise<void> {
