@@ -8,14 +8,82 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolDefinition;
 use bitfun_agent_tools::{
     resolve_contextual_tool_manifest, resolve_contextual_visible_tools, ContextualToolManifest,
-    ContextualVisibleTools, GetToolSpecCatalogProvider, GetToolSpecDeferredToolSummary,
+    ContextualVisibleTools, DynamicMcpToolInfo, DynamicToolInfo,
+    GetToolSpecCatalogProvider, GetToolSpecDeferredToolSummary,
     GetToolSpecExecutionError, GetToolSpecRuntime, ToolCatalogRuntime, ToolCatalogSnapshotProvider,
     ToolManifestDefinition, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
 };
+use serde::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
 
 const DEFERRED_TOOL_LOADING_CONTEXT_KEY: &str = "enable_deferred_tool_loading";
+
+/// Read-only tool catalog DTO returned by `get_all_tools_info`.
+///
+/// Owned by Core so both the Desktop Tauri command and the CLI Peer Host
+/// `get_all_tools_info` handler return the same shape — a controller cannot
+/// tell "CLI Host doesn't support catalog query" from "the runtime really has
+/// no tools", and a Peer must not answer with a different DTO than Desktop.
+/// Field names are snake_case to match the existing Web UI `ToolInfo` contract.
+#[derive(Debug, Clone, Serialize)]
+pub struct ToolInfoDto {
+    pub name: String,
+    pub description: String,
+    pub input_schema: Value,
+    pub is_readonly: bool,
+    pub is_concurrency_safe: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dynamic_info: Option<DynamicToolInfo>,
+}
+
+/// Build the catalog DTO for one tool.
+///
+/// Mirrors the former Desktop `build_tool_info` exactly: same description
+/// fallback, same `input_schema_for_model`, same `is_concurrency_safe(None)`,
+/// same `dynamic_tool_info`. Desktop now delegates here; CLI reuses the same
+/// path so the two hosts never drift.
+pub async fn build_tool_info(tool: &Arc<dyn Tool>) -> ToolInfoDto {
+    let description = tool
+        .description()
+        .await
+        .unwrap_or_else(|_| "No description available".to_string());
+    ToolInfoDto {
+        name: tool.name().to_string(),
+        description,
+        input_schema: tool.input_schema_for_model().await,
+        is_readonly: tool.is_readonly(),
+        is_concurrency_safe: tool.is_concurrency_safe(None),
+        dynamic_info: tool.dynamic_tool_info(),
+    }
+}
+
+/// Build the catalog DTO for every tool in the global registry, in registry
+/// order. This is the Core-owned implementation behind the
+/// `get_all_tools_info` HostInvoke command on both Desktop and CLI Peer Hosts.
+pub async fn build_all_tools_info() -> Vec<ToolInfoDto> {
+    let tools = get_global_tool_registry().read().await.get_all_tools();
+    let mut infos = Vec::with_capacity(tools.len());
+    for tool in &tools {
+        infos.push(build_tool_info(tool).await);
+    }
+    infos
+}
+
+/// Map a core dynamic tool descriptor to the shared `DynamicToolInfo` DTO.
+///
+/// Kept as the single conversion so Desktop and any future host share one
+/// shape; Core's `Tool::dynamic_tool_info` already returns `DynamicToolInfo`,
+/// so this is currently identity, but it pins the boundary in one place.
+#[allow(dead_code)]
+pub fn to_dynamic_tool_info(info: DynamicToolInfo) -> DynamicToolInfo {
+    info
+}
+
+#[allow(dead_code)]
+pub fn to_dynamic_mcp_tool_info(info: DynamicMcpToolInfo) -> DynamicMcpToolInfo {
+    info
+}
 
 #[derive(Debug, Clone)]
 pub struct ResolvedToolManifest {

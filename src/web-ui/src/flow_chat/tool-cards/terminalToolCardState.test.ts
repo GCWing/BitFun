@@ -11,6 +11,7 @@ describe('terminalToolCardState', () => {
       interruptRequested: false,
       showConfirmButtons: false,
       wasInterrupted: false,
+      canCancelTool: true,
     });
 
     expect(state.displayPhase).toBe('receiving_params');
@@ -25,6 +26,7 @@ describe('terminalToolCardState', () => {
       interruptRequested: false,
       showConfirmButtons: false,
       wasInterrupted: false,
+      canCancelTool: true,
     });
 
     expect(state.displayPhase).toBe('executing');
@@ -39,6 +41,7 @@ describe('terminalToolCardState', () => {
       interruptRequested: false,
       showConfirmButtons: false,
       wasInterrupted: false,
+      canCancelTool: true,
     });
 
     expect(state.displayPhase).toBe('live_output');
@@ -53,9 +56,36 @@ describe('terminalToolCardState', () => {
       interruptRequested: false,
       showConfirmButtons: false,
       wasInterrupted: false,
+      canCancelTool: true,
     });
 
     expect(state.displayPhase).toBe('completed');
     expect(state.showCompletedResult).toBe(true);
+  });
+
+  it('hides the interrupt button when the host cannot cancel tools', () => {
+    // A peer host that does not advertise `cancel_tool` must not offer an
+    // interrupt that would be a no-op — the target command would keep running.
+    const withoutCapability = getTerminalViewState({
+      status: 'running',
+      liveOutput: '',
+      isParamsStreaming: false,
+      interruptRequested: false,
+      showConfirmButtons: false,
+      wasInterrupted: false,
+      canCancelTool: false,
+    });
+    expect(withoutCapability.showInterruptButton).toBe(false);
+
+    const withCapability = getTerminalViewState({
+      status: 'running',
+      liveOutput: '',
+      isParamsStreaming: false,
+      interruptRequested: false,
+      showConfirmButtons: false,
+      wasInterrupted: false,
+      canCancelTool: true,
+    });
+    expect(withCapability.showInterruptButton).toBe(true);
   });
 });

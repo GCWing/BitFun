@@ -30,6 +30,7 @@ import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActio
 import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import './TerminalToolCard.scss';
 
 const log = createLogger('TerminalToolCard');
@@ -246,6 +247,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const peerDevice = usePeerDeviceModeOptional();
   const toolCall = toolItem.toolCall;
   const toolResult = toolItem.toolResult;
   const command = toolCall?.input?.command;
@@ -391,6 +393,20 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     [command],
   );
 
+  // The Interrupt button is only meaningful if the current host can actually
+  // cancel a running tool. Local always can; a peer must advertise the
+  // `cancel_tool` capability. While the peer's capabilities are still being
+  // probed (null), stay optimistic so the button doesn't flicker off then on
+  // once the handshake resolves — a CLI Peer Host now implements cancel_tool,
+  // so the optimistic default is correct in the common case.
+  const canCancelTool = (() => {
+    if (!peerDevice || !peerDevice.peerMode.active) {
+      return true;
+    }
+    const capabilities = peerDevice.currentPeerCapabilities;
+    return capabilities === null ? true : capabilities.cancelTool;
+  })();
+
   const viewState = useMemo(() => {
     return getTerminalViewState({
       status,
@@ -399,8 +415,10 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       interruptRequested,
       showConfirmButtons,
       wasInterrupted: parsedResult.wasInterrupted,
+      canCancelTool,
     });
   }, [
+    canCancelTool,
     isParamsStreaming,
     interruptRequested,
     liveOutput,

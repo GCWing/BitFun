@@ -47,6 +47,10 @@ export interface PeerHostCapabilities {
   readonly productControlV1?: boolean;
   readonly productControlNativeV1?: boolean;
   readonly productControlPresentationV1?: boolean;
+  /** Host implements `cancel_tool` (per-tool interrupt). Gates the Terminal Interrupt button. */
+  readonly cancelTool: boolean;
+  /** Host implements `get_all_tools_info` (read-only tool catalog). Gates the Agents/Assistant tool list. */
+  readonly toolCatalog: boolean;
 }
 
 /** Immutable view of one connection; safe to hold in component state. */
@@ -111,6 +115,8 @@ interface PeerModePingResult {
     product_control_v1?: boolean;
     product_control_native_v1?: boolean;
     product_control_presentation_v1?: boolean;
+    cancel_tool?: boolean;
+    tool_catalog?: boolean;
   };
 }
 
@@ -121,6 +127,8 @@ const NO_CAPABILITIES: PeerHostCapabilities = {
   productControlV1: false,
   productControlNativeV1: false,
   productControlPresentationV1: false,
+  cancelTool: false,
+  toolCatalog: false,
 };
 
 interface ConnectionEntry {
@@ -374,6 +382,8 @@ export class PeerConnectionManager {
       productControlNativeV1: result?.capabilities?.product_control_native_v1 === true,
       productControlPresentationV1:
         result?.capabilities?.product_control_presentation_v1 === true,
+      cancelTool: result?.capabilities?.cancel_tool === true,
+      toolCatalog: result?.capabilities?.tool_catalog === true,
     };
   }
 

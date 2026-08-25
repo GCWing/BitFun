@@ -22,6 +22,10 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { isRemoteWorkspace } from '@/shared/types';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { createLogger } from '@/shared/utils/logger';
+
+const toolLog = createLogger('useAgentsList');
 
 export type FilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
 export type FilterType = 'all' | 'mode' | 'subagent';
@@ -165,6 +169,19 @@ export function useAgentsList({
 }: UseAgentsListOptions) {
   const notification = useNotification();
   const { workspace, workspacePath } = useCurrentWorkspace();
+  const peerDevice = usePeerDeviceModeOptional();
+  // True on this machine; on a peer, true only after the host advertises the
+  // `tool_catalog` capability (null while probing = optimistic, since a CLI
+  // Peer Host now implements it). When a peer does not support the catalog we
+  // skip the invoke instead of swallowing the unsupported error as an empty
+  // list — the UI can then show "no tools" without masking a transport failure.
+  const canQueryToolCatalog = (() => {
+    if (!peerDevice || !peerDevice.peerMode.active) {
+      return true;
+    }
+    const capabilities = peerDevice.currentPeerCapabilities;
+    return capabilities === null ? true : capabilities.toolCatalog;
+  })();
   const [allAgents, setAllAgents] = useState<AgentWithCapabilities[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
@@ -183,9 +200,14 @@ export function useAgentsList({
     setLoading(true);
 
     const fetchTools = async (): Promise<ToolInfo[]> => {
+      if (!canQueryToolCatalog) {
+        toolLog.info('Tool catalog unsupported on the current peer host; leaving the list empty');
+        return [];
+      }
       try {
         return await api.invoke<ToolInfo[]>('get_all_tools_info');
-      } catch {
+      } catch (error) {
+        toolLog.error('Failed to load tool catalog', { error });
         return [];
       }
     };
@@ -304,7 +326,7 @@ export function useAgentsList({
         setLoading(false);
       }
     }
-  }, [workspacePath]);
+  }, [canQueryToolCatalog, workspacePath]);
 
   useEffect(() => {
     void loadAgents();
