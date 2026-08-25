@@ -475,8 +475,22 @@
   opacity: 0.75;
 }
 
-.markdown-renderer .markdown-image--error {
-  outline: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-error) 35%, transparent);
+.markdown-renderer .markdown-image-fallback {
+  display: inline-flex;
+  align-items: center;
+  min-width: 1.25em;
+  min-height: 1.25em;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0.35rem 0.25rem;
+  padding: 0 0.3em;
+  border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 35%, transparent);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--markdown-font-size-sm);
+  line-height: var(--markdown-support-line-height);
+  overflow-wrap: anywhere;
+  vertical-align: middle;
 }
 
 .markdown-renderer .katex-display {

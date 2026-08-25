@@ -500,6 +500,8 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
   className,
   basePath,
   remoteConnectionId,
+  onLoad,
+  onError,
   ...imgProps
 }) => {
   const rawSrc = typeof src === 'string' ? normalizeExternalImageSrc(src) : '';
@@ -514,31 +516,37 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
     ? getLocalImageCacheKey(localPath, remoteConnectionId)
     : null;
   const [resolvedSrc, setResolvedSrc] = useState(() => {
+    if (!rawSrc) {
+      return '';
+    }
+
     if (!localPath || !cacheKey) {
       return rawSrc;
     }
 
     return localImageDataUrlCache.get(cacheKey) || LOCAL_IMAGE_PLACEHOLDER;
   });
-  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(() => {
-    if (!localPath || !cacheKey) {
-      return 'loaded';
-    }
-
-    return localImageDataUrlCache.has(cacheKey) ? 'loaded' : 'idle';
-  });
+  const [loadState, setLoadState] = useState<'loading' | 'loaded' | 'error'>(
+    rawSrc ? 'loading' : 'error',
+  );
 
   useEffect(() => {
+    if (!rawSrc) {
+      setResolvedSrc('');
+      setLoadState('error');
+      return;
+    }
+
     if (!localPath || !cacheKey) {
       setResolvedSrc(rawSrc);
-      setLoadState('loaded');
+      setLoadState('loading');
       return;
     }
 
     const cachedDataUrl = localImageDataUrlCache.get(cacheKey);
     if (cachedDataUrl) {
       setResolvedSrc(cachedDataUrl);
-      setLoadState('loaded');
+      setLoadState('loading');
       return;
     }
 
@@ -553,7 +561,10 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
         }
 
         setResolvedSrc(dataUrl);
-        setLoadState('loaded');
+        // Wait for the browser's load event before considering the decoded
+        // image ready. A successful filesystem read does not prove the bytes
+        // are a displayable image.
+        setLoadState('loading');
       })
       .catch((error) => {
         if (cancelled) {
@@ -565,7 +576,10 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
           remoteConnectionId,
           error,
         });
-        setResolvedSrc(rawSrc);
+        // Never hand a failed local path back to the browser. That produces a
+        // native broken-image glyph and retries the invalid source whenever
+        // the surrounding Markdown is reconciled.
+        setResolvedSrc('');
         setLoadState('error');
       });
 
@@ -574,6 +588,19 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
     };
   }, [cacheKey, localPath, rawSrc, remoteConnectionId]);
 
+  if (loadState === 'error') {
+    return (
+      <span
+        className="markdown-image-fallback"
+        data-bf-component="markdown"
+        data-bf-part="imageFallback"
+        title={typeof alt === 'string' && alt ? alt : undefined}
+      >
+        {typeof alt === 'string' ? alt : null}
+      </span>
+    );
+  }
+
   return (
     <img
       {...imgProps}
@@ -581,10 +608,19 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
       className={[
         className,
         loadState === 'loading' ? 'markdown-image markdown-image--loading' : '',
-        loadState === 'error' ? 'markdown-image markdown-image--error' : '',
       ].filter(Boolean).join(' ')}
       loading="lazy"
       src={resolvedSrc}
+      onLoad={(event) => {
+        if (resolvedSrc !== LOCAL_IMAGE_PLACEHOLDER) {
+          setLoadState('loaded');
+        }
+        onLoad?.(event);
+      }}
+      onError={(event) => {
+        setLoadState('error');
+        onError?.(event);
+      }}
     />
   );
 };
@@ -786,6 +822,12 @@ export interface MarkdownProps {
   traceContext?: MarkdownTraceContext;
 }
 
+function useLiveValueRef<T>(value: T): React.MutableRefObject<T> {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
 export const Markdown = React.memo<MarkdownProps>(({ 
   content, 
   basePath,
@@ -807,8 +849,19 @@ export const Markdown = React.memo<MarkdownProps>(({
   // looked like the chat pane refreshed when a turn finished).
   const isStreamingRef = useRef(isStreaming);
   isStreamingRef.current = isStreaming;
+  const basePathRef = useLiveValueRef(basePath);
+  const remoteConnectionIdRef = useLiveValueRef(remoteConnectionId);
+  const currentWorkspacePathRef = useLiveValueRef(currentWorkspacePath);
+  const expandDetailsByDefaultRef = useLiveValueRef(expandDetailsByDefault);
+  const onOpenVisualizationRef = useLiveValueRef(onOpenVisualization);
+  const onFileViewRequestRef = useLiveValueRef(onFileViewRequest);
+  const onTabOpenRef = useLiveValueRef(onTabOpen);
+  const onHttpLinkClickRef = useLiveValueRef(onHttpLinkClick);
+  const traceContextRef = useLiveValueRef(traceContext);
   
   const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
+  const syntaxThemeRef = useLiveValueRef(syntaxTheme);
+  const isLightRef = useLiveValueRef(isLight);
   
   const contentStr = typeof content === 'string' ? content : String(content || '');
   const renderTraceEnabled = isStartupRenderTraceEnabled();
@@ -833,6 +886,7 @@ export const Markdown = React.memo<MarkdownProps>(({
 
     return body;
   }, [contentStr, isStreaming]);
+  const markdownContentRef = useLiveValueRef(markdownContent);
 
   const needsWorkspacePathForLinks = useMemo(
     () => mayNeedWorkspacePathForMarkdownLinks(markdownContent),
@@ -893,30 +947,36 @@ export const Markdown = React.memo<MarkdownProps>(({
   }, []);
 
   const handleFileViewRequest = useCallback((filePath: string, fileName: string, lineRange?: LineRange) => {
-    onFileViewRequest?.(filePath, fileName, lineRange);
-  }, [onFileViewRequest]);
+    onFileViewRequestRef.current?.(filePath, fileName, lineRange);
+  }, [onFileViewRequestRef]);
 
   const handleOpenVisualization = useCallback((visualization: any) => {
-    onOpenVisualization?.(visualization);
-  }, [onOpenVisualization]);
+    onOpenVisualizationRef.current?.(visualization);
+  }, [onOpenVisualizationRef]);
 
   const handleTabOpen = useCallback((tabInfo: any) => {
-    onTabOpen?.(tabInfo);
-  }, [onTabOpen]);
+    onTabOpenRef.current?.(tabInfo);
+  }, [onTabOpenRef]);
 
   const handleRevealInExplorer = useCallback(async (filePath: string) => {
-    let targetPath = resolveDisplayFilePath(filePath, basePath, currentWorkspacePath);
+    const latestBasePath = basePathRef.current;
+    const latestWorkspacePath = currentWorkspacePathRef.current;
+    let targetPath = resolveDisplayFilePath(filePath, latestBasePath, latestWorkspacePath);
     try {
       if (!isAbsoluteFilesystemPath(targetPath)) {
         const workspacePath = await globalAPI.getCurrentWorkspacePath();
-        targetPath = resolveDisplayFilePath(filePath, basePath, workspacePath || currentWorkspacePath);
+        targetPath = resolveDisplayFilePath(
+          filePath,
+          latestBasePath,
+          workspacePath || latestWorkspacePath,
+        );
       }
 
       await workspaceAPI.revealInExplorer(targetPath);
     } catch (error) {
       log.error('Failed to reveal file in explorer', { filePath: targetPath, error });
     }
-  }, [basePath, currentWorkspacePath]);
+  }, [basePathRef, currentWorkspacePathRef]);
 
   const showLinkContextMenu = useCallback((
     event: React.MouseEvent<HTMLElement>,
@@ -1050,6 +1110,14 @@ export const Markdown = React.memo<MarkdownProps>(({
     showLinkContextMenu,
   ]);
   
+  /**
+   * Keep renderer component identities stable while Markdown content streams.
+   *
+   * React treats each function in this map as a component type. Rebuilding the
+   * map for every chunk remounts all existing custom-rendered nodes, including
+   * images and every paragraph below them. Values that must stay current are
+   * read from live refs when react-markdown invokes the stable renderers.
+   */
   const components = useMemo(() => ({
     code({ node: _node, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
@@ -1088,7 +1156,7 @@ export const Markdown = React.memo<MarkdownProps>(({
       const codeTagStyle: React.CSSProperties = {
         fontFamily: 'var(--bf-appearance-token-font-family-mono)',
       };
-      const gutterColor = isLight
+      const gutterColor = isLightRef.current
         ? 'color-mix(in srgb, var(--bf-appearance-token-color-static-black) 40%, var(--bf-appearance-token-color-static-white))'
         : 'color-mix(in srgb, var(--bf-appearance-token-color-static-white) 40%, var(--bf-appearance-token-color-static-black))';
 
@@ -1107,7 +1175,7 @@ export const Markdown = React.memo<MarkdownProps>(({
             */}
             <AsyncPrismSyntaxHighlighter
               language={normalizedLang}
-              style={syntaxTheme}
+              style={syntaxThemeRef.current}
               showLineNumbers={true}
               customStyle={codeBodyStyle}
               codeTagProps={{ style: codeTagStyle }}
@@ -1127,7 +1195,7 @@ export const Markdown = React.memo<MarkdownProps>(({
                 codeTagStyle,
                 gutterColor,
               }}
-              traceContext={traceContext}
+              traceContext={traceContextRef.current}
             >
               {code}
             </AsyncPrismSyntaxHighlighter>
@@ -1138,7 +1206,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     
     a({ node, href, children, ...props }: any) {
       const hrefValue = href || node?.properties?.href || extractMarkdownLinkHrefFromSource(
-        markdownContent,
+        markdownContentRef.current,
         node?.position,
       );
       const isHashLink = typeof hrefValue === 'string' && hrefValue.startsWith('#');
@@ -1175,8 +1243,12 @@ export const Markdown = React.memo<MarkdownProps>(({
           }
         }
 
-        filePath = resolveBaseRelativePath(filePath, basePath);
-        const displayFilePath = resolveDisplayFilePath(filePath, undefined, currentWorkspacePath);
+        filePath = resolveBaseRelativePath(filePath, basePathRef.current);
+        const displayFilePath = resolveDisplayFilePath(
+          filePath,
+          undefined,
+          currentWorkspacePathRef.current,
+        );
 
         const fileName = filePath.split(/[\\/]/).pop() || filePath;
 
@@ -1289,7 +1361,7 @@ export const Markdown = React.memo<MarkdownProps>(({
             onClick={async (e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (onHttpLinkClick?.(hrefValue, e)) {
+              if (onHttpLinkClickRef.current?.(hrefValue, e)) {
                 return;
               }
               const hasExternalOpenModifier = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
@@ -1343,7 +1415,7 @@ export const Markdown = React.memo<MarkdownProps>(({
 
     details({ children, open, ...props }: any) {
       return (
-        <details {...props} open={open ?? expandDetailsByDefault}>
+        <details {...props} open={open ?? expandDetailsByDefaultRef.current}>
           {children}
         </details>
       );
@@ -1353,8 +1425,8 @@ export const Markdown = React.memo<MarkdownProps>(({
       return (
         <MarkdownImage
           {...props}
-          basePath={basePath || currentWorkspacePath}
-          remoteConnectionId={remoteConnectionId}
+          basePath={basePathRef.current || currentWorkspacePathRef.current}
+          remoteConnectionId={remoteConnectionIdRef.current}
         />
       );
     },
@@ -1386,10 +1458,6 @@ export const Markdown = React.memo<MarkdownProps>(({
       );
     }
   }), [
-    basePath,
-    remoteConnectionId,
-    expandDetailsByDefault,
-    markdownContent,
     handleFileViewRequest,
     handleRevealInExplorer,
     handleLocalFileContextMenu,
@@ -1398,12 +1466,16 @@ export const Markdown = React.memo<MarkdownProps>(({
     handleOpenBuiltInBrowserLink,
     handleOpenVisualization,
     handleTabOpen,
-    onHttpLinkClick,
     parseLineRange,
-    syntaxTheme,
-    isLight,
-    currentWorkspacePath,
-    traceContext,
+    basePathRef,
+    currentWorkspacePathRef,
+    expandDetailsByDefaultRef,
+    isLightRef,
+    markdownContentRef,
+    onHttpLinkClickRef,
+    remoteConnectionIdRef,
+    syntaxThemeRef,
+    traceContextRef,
   ]);
   
   const wrapperClassName = `markdown-renderer ${className}`.trim();
