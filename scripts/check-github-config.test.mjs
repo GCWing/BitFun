@@ -852,6 +852,9 @@ test('Linux binary packaging uses the shared locked version projection contract'
   );
   const inputs = workflow.on.workflow_call.inputs;
   const steps = workflow.jobs.build.steps;
+  const nodeSteps = steps.filter(
+    (step) => step.name === 'Setup Node.js',
+  );
   const nodeIndex = steps.findIndex(
     (step) => step.name === 'Setup Node.js',
   );
@@ -872,6 +875,7 @@ test('Linux binary packaging uses the shared locked version projection contract'
   assert.equal(inputs.upload_artifacts.default, true);
   assert.equal(inputs.cache_write.default, false);
   assert.equal(inputs.validate_relay_image.default, true);
+  assert.equal(nodeSteps.length, 1);
   assert.equal(steps[nodeIndex].uses, 'actions/setup-node@v5');
   assert.equal(steps[nodeIndex].with['node-version-file'], 'package.json');
   assert.ok(

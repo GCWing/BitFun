@@ -91,12 +91,6 @@ jobs:
           node-version-file: package.json
           package-manager-cache: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version-file: package.json
-          package-manager-cache: false
-
       - name: Build plugin Host resources
         run: |
           bun install --cwd src/apps/extension-host --frozen-lockfile
