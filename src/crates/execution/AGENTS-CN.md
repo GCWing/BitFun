@@ -2,7 +2,7 @@
 
 # 执行原语层
 
-本层负责可复用的 agent、命名工作流、harness、stream、插件运行时客户端、typed-service 和 tool 执行原语。它不是完整 Agent Runtime SDK，也不是组装后的产品 runtime。由产品组装决定某个交付形态启用哪些 execution primitive、tool provider group、工作流能力、harness provider、adapter 和 service。
+本层负责可复用的 agent、命名工作流、stream、插件运行时客户端、typed-service 和 tool 执行原语。它不是完整 Agent Runtime SDK，也不是组装后的产品 runtime。由产品组装决定某个交付形态启用哪些 execution primitive、tool provider group、工作流能力、adapter 和 service。
 
 ## 模块
 
@@ -12,7 +12,6 @@
 | `agent-workflows` | 与 UI、协议和具体 I/O 无关的命名产品工作流策略；当前承载 DeepResearch 报告后处理 | [AGENTS.md](agent-workflows/AGENTS.md) |
 | `agent-stream` | Provider-neutral stream DTO、tool-call 累积和 replay 契约 | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool 契约、execution gate、input validation 和 result presentation 契约；Cargo package 仍为 `bitfun-agent-tools` | [AGENTS.md](tool-contracts/AGENTS.md) |
-| `harness` | 为 SDK 注入保留的通用 Harness 工作流契约和 registry primitive；产品工作流归属仍在 `agent-workflows` 或当前产品 owner | [AGENTS.md](harness/AGENTS.md) |
 | `plugin-runtime-client` | `PluginRuntimeClient` 的默认实现，负责派发、重复请求结果和故障诊断；JS/TS Plugin Host 是经服务端口管理的子进程 | [AGENTS.md](plugin-runtime-client/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly 和 service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
 | `tool-provider-groups` | Tool provider group facts 和 product-full tool group composition；Cargo package 仍为 `bitfun-tool-packs` | [AGENTS.md](tool-provider-groups/AGENTS.md) |

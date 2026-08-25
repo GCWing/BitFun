@@ -92,7 +92,6 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - `src/crates/execution/agent-runtime/AGENTS.md`
 - `src/crates/execution/tool-contracts/AGENTS.md`
 - `src/crates/execution/agent-workflows/AGENTS.md`
-- `src/crates/execution/harness/AGENTS.md`
 - `src/crates/contracts/product-domains/AGENTS.md`
 - `src/crates/contracts/runtime-ports/` 与 `src/crates/execution/runtime-services/` 源码说明
 - `src/crates/services/services-core/AGENTS.md`

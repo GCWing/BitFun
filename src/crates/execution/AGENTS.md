@@ -2,10 +2,10 @@
 
 # Execution Primitives Layer
 
-This layer owns reusable agent, named-workflow, harness, stream, plugin runtime client, typed-service, and tool
+This layer owns reusable agent, named-workflow, stream, plugin runtime client, typed-service, and tool
 execution primitives. It is not the complete Agent Runtime SDK and not the
 assembled product runtime. Product assembly decides which primitives, tool
-provider groups, workflow capabilities, harness providers, adapters, and services are active for a
+provider groups, workflow capabilities, adapters, and services are active for a
 delivery form.
 
 ## Modules
@@ -16,7 +16,6 @@ delivery form.
 | `agent-workflows` | Named product workflow policy that is independent of UI, protocol, and concrete I/O; currently DeepResearch report post-processing | [AGENTS.md](agent-workflows/AGENTS.md) |
 | `agent-stream` | Provider-neutral stream DTOs, tool-call accumulation, and replay contracts | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool contracts, execution gates, input validation, and result presentation contracts. Cargo package remains `bitfun-agent-tools`. | [AGENTS.md](tool-contracts/AGENTS.md) |
-| `harness` | Generic Harness workflow contracts and registry primitives retained for SDK injection; product workflow ownership remains in `agent-workflows` or the current product owner | [AGENTS.md](harness/AGENTS.md) |
 | `plugin-runtime-client` | Default `PluginRuntimeClient` implementation for dispatch, duplicate-request results, and fault diagnostics; the JS/TS Plugin Host remains a child process managed through service ports | [AGENTS.md](plugin-runtime-client/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly and service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
 | `tool-provider-groups` | Tool provider group facts and product-full tool group composition. Cargo package remains `bitfun-tool-packs`. | [AGENTS.md](tool-provider-groups/AGENTS.md) |

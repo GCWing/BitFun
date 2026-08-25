@@ -24,13 +24,13 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 - Do not depend on `bitfun-core`, app crates, Tauri, ACP protocol, web UI,
   concrete service crates, or product-domain implementations.
 - The `sdk` module may re-export only stable runtime request/response types,
-  runtime-port contracts, and the service/tool/harness/agent/hook registry types needed
+  runtime-port contracts, and the service/tool/agent/hook registry types needed
   for dependency injection. It must not re-export raw PluginRuntimeClient types
   such as plugin runtime bindings, dispatch/read request types, status snapshots,
   plugin fault diagnostics, or host clients; Product Assembly uses the internal runtime
   builder when it needs to inject a plugin runtime.
 - `AgentRuntime` may depend on stable ports plus injected `RuntimeServices`,
-  tool registry, harness registry, agent registry, and hook registry. Product assembly owns
+  tool registry, agent registry, and hook registry. Product assembly owns
   concrete registration; this crate must not create concrete managers, app
   state, filesystem, terminal, MCP, remote, or AI clients.
 - The `runtime` module is internal / Product Assembly facing. Do not route

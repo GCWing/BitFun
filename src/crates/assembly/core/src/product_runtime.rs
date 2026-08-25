@@ -22,7 +22,6 @@ use bitfun_agent_runtime::sdk::{
     AgentTurnSettlementPort, AgentTurnSettlementRequest, SessionTranscript,
 };
 use bitfun_core_types::{SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
-use bitfun_harness::HarnessRegistry;
 #[cfg(feature = "product-search")]
 use bitfun_product_domains::product_search::{
     SessionContentSearchRequest, SessionContentSearchResponse, SessionSearchDiagnostic,
@@ -724,7 +723,6 @@ impl CoreProductAgentRuntime {
         scheduler: Arc<DialogScheduler>,
         token_usage_service: Arc<TokenUsageService>,
         services: RuntimeServices,
-        harness_registry: HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         Self::build_with_optional_event_source(
             coordinator,
@@ -732,7 +730,6 @@ impl CoreProductAgentRuntime {
             token_usage_service,
             None,
             services,
-            harness_registry,
         )
     }
 
@@ -742,7 +739,6 @@ impl CoreProductAgentRuntime {
         token_usage_service: Arc<TokenUsageService>,
         event_source: AgentEventSource,
         services: RuntimeServices,
-        harness_registry: HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         Self::build_with_optional_event_source(
             coordinator,
@@ -750,7 +746,6 @@ impl CoreProductAgentRuntime {
             token_usage_service,
             Some(event_source),
             services,
-            harness_registry,
         )
     }
 
@@ -760,7 +755,6 @@ impl CoreProductAgentRuntime {
         token_usage_service: Arc<TokenUsageService>,
         event_source: Option<AgentEventSource>,
         services: RuntimeServices,
-        harness_registry: HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         let session_operations = Arc::new(CoreSessionOperationsPort::new(
             coordinator.clone(),
@@ -776,7 +770,6 @@ impl CoreProductAgentRuntime {
             session_operations.clone(),
             session_operations,
             services,
-            harness_registry,
         )
     }
 
@@ -787,14 +780,12 @@ impl CoreProductAgentRuntime {
         scheduler: Arc<DialogScheduler>,
         event_source: AgentEventSource,
         services: RuntimeServices,
-        harness_registry: HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         CoreServiceAgentRuntime::acp_product_agent_runtime(
             coordinator,
             scheduler,
             event_source,
             services,
-            harness_registry,
         )
     }
 
@@ -809,7 +800,6 @@ impl CoreProductAgentRuntime {
         token_usage_service: Arc<TokenUsageService>,
         event_source: AgentEventSource,
         services: RuntimeServices,
-        harness_registry: HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         let session_operations = Arc::new(CoreSessionOperationsPort::new(
             coordinator.clone(),
@@ -824,7 +814,6 @@ impl CoreProductAgentRuntime {
             session_operations.clone(),
             session_operations,
             services,
-            harness_registry,
         )
     }
 }
@@ -2311,7 +2300,6 @@ mod tests {
 
     use crate::service::session::SessionTranscriptExportOptions;
     use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
-    use bitfun_harness::HarnessRegistry;
     use bitfun_runtime_ports::{
         AgentContextReloadRequest, AgentContextReloadTarget, LocalWorkspaceSnapshotSessionRequest,
         LocalWorkspaceSnapshotTurnRequest,
@@ -2623,15 +2611,8 @@ mod tests {
             scheduler: Arc<DialogScheduler>,
             token_usage_service: Arc<TokenUsageService>,
             services: RuntimeServices,
-            harness_registry: HarnessRegistry,
         ) -> Result<AgentRuntime, String> {
-            CoreProductAgentRuntime::build(
-                coordinator,
-                scheduler,
-                token_usage_service,
-                services,
-                harness_registry,
-            )
+            CoreProductAgentRuntime::build(coordinator, scheduler, token_usage_service, services)
         }
 
         fn build_with_event_source(
@@ -2640,7 +2621,6 @@ mod tests {
             token_usage_service: Arc<TokenUsageService>,
             event_source: AgentEventSource,
             services: RuntimeServices,
-            harness_registry: HarnessRegistry,
         ) -> Result<AgentRuntime, String> {
             CoreProductAgentRuntime::build_with_event_source(
                 coordinator,
@@ -2648,7 +2628,6 @@ mod tests {
                 token_usage_service,
                 event_source,
                 services,
-                harness_registry,
             )
         }
 

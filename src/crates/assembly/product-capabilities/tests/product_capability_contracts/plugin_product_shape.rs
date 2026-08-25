@@ -134,11 +134,10 @@ fn executable_plugin_runtime_client_builds_agent_runtime_parts() {
         )
         .expect("CLI should accept an explicit executable plugin client");
 
-    let (services, harness_registry, plugin_runtime) = parts.into_runtime_parts();
+    let (services, plugin_runtime) = parts.into_runtime_parts();
     let runtime = AgentRuntimeBuilder::new()
         .with_submission_port(Arc::new(ProductShapeSubmissionPort::default()))
         .with_services(services)
-        .with_harness_registry(Arc::new(harness_registry))
         .with_plugin_runtime(plugin_runtime)
         .build()
         .expect("P0 plugin-capable assembly parts should build an agent runtime");

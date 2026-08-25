@@ -28,7 +28,6 @@ server = [
     "bitfun-core/agent-runtime",
     "bitfun-core/document-read",
     "bitfun-core/subscription-auth",
-    "bitfun-core/deep-research",
     "bitfun-core/external-sources",
     "bitfun-core/tools-basic",
     "bitfun-core/tools-git",

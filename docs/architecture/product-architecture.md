@@ -158,8 +158,8 @@ block-beta
   end
 
   block:ExecutionLayer
-    columns 11
-    ExecutionTitle["5 · Execution"] AgentRuntime["Agent<br/>Runtime"] AgentWorkflows["Agent<br/>Workflows"] AgentStream["Agent<br/>Stream"] Harness["Harness"] PluginClient["Plugin<br/>Client"] RuntimeServices["Runtime<br/>Services"] ToolContracts["Tool<br/>Contracts"] ToolGroups["Tool<br/>Groups"] ToolExecution["Tool<br/>Execution"] JSONRepair["JSON<br/>Repair"]
+    columns 10
+    ExecutionTitle["5 · Execution"] AgentRuntime["Agent<br/>Runtime"] AgentWorkflows["Agent<br/>Workflows"] AgentStream["Agent<br/>Stream"] PluginClient["Plugin<br/>Client"] RuntimeServices["Runtime<br/>Services"] ToolContracts["Tool<br/>Contracts"] ToolGroups["Tool<br/>Groups"] ToolExecution["Tool<br/>Execution"] JSONRepair["JSON<br/>Repair"]
   end
 
   block:ContractsLayer
@@ -175,7 +175,7 @@ block-beta
 
   classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717
   classDef sectionTitle fill:transparent,stroke:transparent,color:#171717,font-size:12px,font-weight:600
-  class ProductApps,WebUI,MobileUI,Interfaces,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,AIAdapters,SourceAdapters,HookSupport,Transport,WebDriver,CoreServices,Integrations,RelayService,PageRuntime,Terminal,AgentRuntime,AgentWorkflows,AgentStream,Harness,PluginClient,RuntimeServices,ToolContracts,ToolGroups,ToolExecution,JSONRepair,CoreTypes,Events,RuntimePorts,ProductDomains module
+  class ProductApps,WebUI,MobileUI,Interfaces,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,AIAdapters,SourceAdapters,HookSupport,Transport,WebDriver,CoreServices,Integrations,RelayService,PageRuntime,Terminal,AgentRuntime,AgentWorkflows,AgentStream,PluginClient,RuntimeServices,ToolContracts,ToolGroups,ToolExecution,JSONRepair,CoreTypes,Events,RuntimePorts,ProductDomains module
   class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle sectionTitle
 
   style AppsLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
@@ -198,7 +198,7 @@ block-beta
 | Assembly | `src/crates/assembly/*` | `agent-content`、`core`、`external-sources`、`product-capabilities` |
 | Adapters | `src/crates/adapters/*` | `agent-runtime-ipc`、`ai-adapters`、`claude-code-adapter`、`codex-adapter`、`dsh-adapter`、`opencode-adapter`、`static-hook-support`、`transport`、`webdriver` |
 | Services | `src/crates/services/*` | `services-core`、`services-integrations`、`miniapp-market-service`、`skin-market-service`、`relay-service`、`page-function-runtime`、`terminal` |
-| Execution | `src/crates/execution/*` | `agent-runtime`、`agent-workflows`、`agent-stream`、`harness`、`plugin-runtime-client`、`runtime-services`、`tool-contracts`、`tool-provider-groups`、`tool-execution`、`tool-call-jsonrepair` |
+| Execution | `src/crates/execution/*` | `agent-runtime`、`agent-workflows`、`agent-stream`、`plugin-runtime-client`、`runtime-services`、`tool-contracts`、`tool-provider-groups`、`tool-execution`、`tool-call-jsonrepair` |
 | Contracts | `src/crates/contracts/*` | `core-types`、`events`、`runtime-ports`、`product-domains` |
 
 Installer、E2E 以及 MiniApp/Skin market server 和对应 service 在 Level 0 图中分别归入交付入口、测试范围或 Services 家族，不作为独立架构模块。
@@ -835,7 +835,7 @@ flowchart LR
 | Desktop | 使用 `product-full`；Settings 从现有来源目录和 integration policy 生成简短应用概览，具体审批与冲突仍进入 Tool、Agent、MCP 或 Hook owner | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
 | CLI / TUI | 使用 `DeliveryProfile::Cli` 和显式 Core owner closure；Runtime 只注册 Code Agent 清单及 `basic / agent / session / git / web / mcp / computer-use` 七个原子工具组，外部来源、插件和 Remote/SSH 仍由各自 owner 按入口需要装配 | 不注册 DeepReview、DeepResearch、MiniApp 或 Canvas Agent / Tool；非交互不等待权限输入，远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts、Code Agent 清单与同一组七个原子工具组，不选择 CLI 的 plugin runtime 和 Remote Connect owner | load 成功后才发布活动状态；完整历史和兼容配置仍由 Core/ACP 管理；未选择的产品工作流不得借 Cargo feature union 偶然注册 |
-| SDK Host（preview） | 使用 `DeliveryProfile::Sdk`、Runtime Parts、Code Agent 清单和七个原子工具组；TLS provider 由 Host 进程入口安装；通用 Harness registry 注入和查询 API 保持兼容 | 不自动注册 DeepReview、DeepResearch、MiniApp 或 Canvas 的产品 Harness provider；当前协议也不暴露远程 workspace/SSH，未来远程 SDK 必须复用 Server/Remote 的认证和执行域 |
+| SDK Host（preview） | 使用 `DeliveryProfile::Sdk`、Runtime Parts、Code Agent 清单和七个原子工具组；TLS provider 由 Host 进程入口安装 | 不注册 DeepReview、DeepResearch、MiniApp 或 Canvas；当前协议也不暴露远程 workspace/SSH，未来远程 SDK 必须复用 Server/Remote 的认证和执行域 |
 | Peer / Server | Peer Host 执行真实工作区操作；通用 HTTP Server 未绑定可信 workspace owner 时明确返回不支持 | 控制端不替远端发现或执行；loopback 单用户边界不扩展到远程/多用户；SSH Remote 未接入时返回不支持 |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |

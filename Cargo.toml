@@ -37,7 +37,6 @@ members = [
     "src/crates/execution/agent-runtime",
     "src/crates/execution/agent-workflows",
     "src/crates/execution/agent-stream",
-    "src/crates/execution/harness",
     "src/crates/execution/tool-call-jsonrepair",
     "src/crates/execution/tool-contracts",
     "src/crates/execution/plugin-runtime-client",

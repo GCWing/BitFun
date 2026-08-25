@@ -587,10 +587,6 @@ export const requiredContentRules = [
         message: 'missing SDK tool registry builder hook',
       },
       {
-        regex: /\bpub fn with_harness_registry\b/,
-        message: 'missing SDK harness registry builder hook',
-      },
-      {
         regex: /\bpub fn with_hook_registry\b/,
         message: 'missing SDK hook registry builder hook',
       },
@@ -631,7 +627,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/agent-runtime/tests/agent_session_contracts/sdk_smoke.rs',
     reason:
-      'agent-runtime SDK smoke tests must prove the facade works with injected fake provider, services, tools, harnesses, and hooks without core',
+      'agent-runtime SDK smoke tests must prove the facade works with injected fake provider, services, tools, and hooks without core',
     patterns: [
       {
         regex: /\bsdk_facade_exposes_versioned_preview_compatibility_contract\b/,
@@ -642,8 +638,8 @@ export const requiredContentRules = [
         message: 'missing SDK fake-provider event-stream smoke',
       },
       {
-        regex: /\bsdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core\b/,
-        message: 'missing SDK services/tools/harnesses/hooks injection smoke',
+        regex: /\bsdk_facade_accepts_fake_services_tools_and_hooks_without_core\b/,
+        message: 'missing SDK services/tools/hooks injection smoke',
       },
     ],
   },
@@ -679,10 +675,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub use bitfun_agent_tools::\{/,
         message: 'missing SDK tool registry re-exports',
-      },
-      {
-        regex: /\bpub use bitfun_harness::\{/,
-        message: 'missing SDK harness registry re-exports',
       },
       {
         regex: /\bpub use bitfun_runtime_services::\{/,
@@ -1311,37 +1303,10 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/harness/src/lib.rs',
-    reason:
-      'harness must own provider-neutral harness descriptors and descriptor registry wiring without concrete execution',
-    patterns: [
-      {
-        regex: /\bpub struct HarnessProviderDescriptor\b/,
-        message: 'missing provider-neutral harness provider descriptor',
-      },
-      {
-        regex: /\bpub fn build_descriptor_harness_registry\b/,
-        message: 'missing descriptor harness registry builder',
-      },
-      {
-        regex: /\bDescriptorHarnessProvider::legacy_facade\b/,
-        message: 'missing legacy-facade descriptor adapter',
-      },
-    ],
-  },
-  {
     path: 'src/crates/assembly/product-capabilities/src/lib.rs',
     reason:
-      'product-capabilities must select harness descriptors from the harness owner instead of owning descriptor construction',
+      'product-capabilities must own product capability selection without concrete runtime implementations',
     patterns: [
-      {
-        regex: /\bHarnessProviderDescriptor\b/,
-        message: 'missing harness descriptor selection in product capability packs',
-      },
-      {
-        regex: /\bbuild_descriptor_harness_registry\b/,
-        message: 'missing harness-owned descriptor registry assembly delegation',
-      },
       {
         regex: /\bProductCapabilityAssembly\b/,
         message: 'missing product capability assembly owner',
@@ -1395,7 +1360,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_capabilities.rs',
     reason:
-      'product-capabilities tests must protect product shape facts, runtime service gap reporting, and legacy harness routing',
+      'product-capabilities tests must protect product shape facts and runtime service gap reporting',
     patterns: [
       {
         regex: /\bproduct_assembly_plan_exposes_build_feature_groups_explicitly\b/,
@@ -1416,10 +1381,6 @@ export const requiredContentRules = [
       {
         regex: /\bproduct_assembler_builds_runtime_parts_from_explicit_profile_input\b/,
         message: 'missing typed product assembler regression',
-      },
-      {
-        regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
-        message: 'missing legacy harness route non-execution regression',
       },
     ],
   },
