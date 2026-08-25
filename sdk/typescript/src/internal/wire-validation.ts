@@ -36,6 +36,7 @@ export function validateResponseResult<T>(method: string, value: unknown): T {
     case "initialize":
       return validateInitializeResult(value) as T;
     case "session/create":
+    case "session/resume":
       return validateSessionCreateResult(value) as T;
     case "query/start":
       return validateQueryStartResult(value) as T;

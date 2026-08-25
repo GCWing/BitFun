@@ -48,6 +48,7 @@ struct FakeSdkRuntimeEventSink;
 #[derive(Debug, Default)]
 struct FakeSessionClosePort {
     requests: Mutex<Vec<AgentTransientSessionDiscardRequest>>,
+    persisted_requests: Mutex<Vec<AgentTransientSessionDiscardRequest>>,
 }
 
 #[derive(Debug, Default)]
@@ -75,7 +76,7 @@ impl AgentModeCatalogPort for FakeModeCatalog {
 fn sdk_facade_exposes_versioned_preview_compatibility_contract() {
     let compatibility = AgentRuntimeSdkCompatibility::current();
 
-    assert_eq!(compatibility.api_version, 6);
+    assert_eq!(compatibility.api_version, 7);
     assert_eq!(compatibility.crate_version, env!("CARGO_PKG_VERSION"));
     assert_eq!(compatibility.stability, AgentRuntimeSdkStability::Preview);
 }
@@ -140,6 +141,17 @@ impl AgentSessionClosePort for FakeSessionClosePort {
         request: AgentTransientSessionDiscardRequest,
     ) -> PortResult<bool> {
         self.requests.lock().unwrap().push(request.clone());
+        Ok(true)
+    }
+
+    async fn unload_persisted_session(
+        &self,
+        request: AgentTransientSessionDiscardRequest,
+    ) -> PortResult<bool> {
+        self.persisted_requests
+            .lock()
+            .unwrap()
+            .push(request.clone());
         Ok(true)
     }
 }
@@ -456,6 +468,35 @@ async fn sdk_facade_delegates_connection_scoped_session_discard() {
         .expect("discard transient session through SDK facade");
 
     assert_eq!(close_port.requests.lock().unwrap().as_slice(), &[request]);
+    assert!(result);
+}
+
+#[tokio::test]
+async fn sdk_facade_delegates_persisted_session_unload() {
+    let provider = Arc::new(FakeSdkAgentProvider::default());
+    let close_port = Arc::new(FakeSessionClosePort::default());
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(provider)
+        .with_session_close_port(close_port.clone())
+        .build()
+        .expect("sdk runtime");
+    let request = AgentTransientSessionDiscardRequest {
+        workspace_path: "/workspace/project".to_string(),
+        session_id: "sdk-session-1".to_string(),
+        remote_connection_id: None,
+        remote_ssh_host: None,
+        wait_timeout_ms: 5_000,
+    };
+
+    let result = runtime
+        .unload_persisted_session(request.clone())
+        .await
+        .expect("unload persisted session through SDK facade");
+
+    assert_eq!(
+        close_port.persisted_requests.lock().unwrap().as_slice(),
+        &[request]
+    );
     assert!(result);
 }
 
