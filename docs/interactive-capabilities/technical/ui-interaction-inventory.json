@@ -5,14 +5,14 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "d511650db87877fceee0d9af349434cd0143a271b1f35526afc9b122bfd576d7",
-  "fileCount": 367,
-  "interactionCount": 4433,
+  "digest": "e94ff7da7ba104f8bce70a0d11c8e3137ef9ec87dfea22b40b4e1c0cc038c7fd",
+  "fileCount": 364,
+  "interactionCount": 4402,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
       "interactionCount": 10,
-      "digest": "72e44da48b02f264c9b9c24633e7b9f07659afba9a0bbf0837b98c586a906580"
+      "digest": "79f520b3799e9b13132c6ca6fcdc7112608c6f370d4c5095c4051ad69aa829ad"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx",
@@ -22,7 +22,7 @@
     {
       "sourceFile": "src/web-ui/src/app/components/AppErrorBoundary.tsx",
       "interactionCount": 2,
-      "digest": "442bf5d5a960b17305bd93834d5edc964d6d16d2e112267122f10b1f93c2384b"
+      "digest": "d29cc161d2106930512948e912acbc0ea825864e11c215f0a829641c77e6d4ae"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/MCPInteractionDialog/MCPInteractionDialog.tsx",
@@ -51,8 +51,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/components/NavPanel/components/DeviceStatusControl.tsx",
-      "interactionCount": 12,
-      "digest": "4d0f4055d7093d6ff4e43ef6f337176396fc9922dcc2f1aa3bc0e993cb3b7752"
+      "interactionCount": 9,
+      "digest": "b3bc4418f66400c97fa611e08c4e175e9a525b9c1518483cffd22bf344e33966"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/NavPanel/components/GithubStarButton.tsx",
@@ -91,8 +91,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/components/NavPanel/sections/sessions/SessionsSection.tsx",
-      "interactionCount": 51,
-      "digest": "5e3b44c6b62a2bdbc9b367812980cc66189488190237febd2122f18bb716baf2"
+      "interactionCount": 49,
+      "digest": "517f2224745c6300f11b6bf78a5e1b43080df6d839113e5d305d673e359b67fc"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx",
@@ -107,7 +107,7 @@
     {
       "sourceFile": "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceProjectPermissionsDialog.tsx",
       "interactionCount": 26,
-      "digest": "a0dc155d5850422abcec799ddbbcdef7034a50ca45a9b94149594d21254da758"
+      "digest": "4a6ba3b6d65073256a14458bcbc433e27a913f69655cd55e0e5222674a105a6c"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceRelatedPathsDialog.tsx",
@@ -117,7 +117,7 @@
     {
       "sourceFile": "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceSessionBatchModal.tsx",
       "interactionCount": 15,
-      "digest": "dd7903a23495d51d9cecb7f8e9809d2c3cd4cfc7d54d1f89dcf58d9b8c170b3a"
+      "digest": "e8b76d7f948dc7a4bc85aa458c0c3b568d1cd98366ee7537d6606c8a7fe91b7c"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/NewProjectDialog/NewProjectDialog.tsx",
@@ -126,28 +126,28 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/components/RemoteConnectDialog/AccountPanel.tsx",
-      "interactionCount": 35,
-      "digest": "256fede5b7ef94cf1d4c95e6b2866e94de5b9e2e1826a0696afbbe30860e1b56"
+      "interactionCount": 36,
+      "digest": "87f4fb6403cda53eb678def002714fd769ab919150da0afcf5b0893d5ba77408"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/RemoteConnectDialog/RemoteConnectDialog.tsx",
-      "interactionCount": 85,
-      "digest": "c7bb68d0dfbff4dad1bd505e33f613b47fe5b3281ae874bbfae31947c9a54ad5"
+      "interactionCount": 78,
+      "digest": "09abb0dbf16dacac21d4b739599ee4d57866292d34371df902d3c1767dd771b3"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/RemoteConnectDialog/RemoteConnectDisclaimer.tsx",
-      "interactionCount": 6,
-      "digest": "5fb2452d947b95f7a2da23d91770e8146270bc1864534b9998170d29d415b270"
+      "interactionCount": 4,
+      "digest": "49a8b038995a97dfe3848068c08d21461004433ba30ef047242c3dc82f9091c6"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/SceneBar/SceneBar.tsx",
-      "interactionCount": 2,
-      "digest": "9ee30a73f2ad51c5d60b8ecf98c31a508e255097c0762eb160ad5aa5f7c50cf9"
+      "interactionCount": 12,
+      "digest": "ebf091544288b0654cd940503aa5f8c2404fdfccb0c265aa3568728d99c3b2e0"
     },
     {
-      "sourceFile": "src/web-ui/src/app/components/SceneBar/SceneTab.tsx",
-      "interactionCount": 8,
-      "digest": "e828b26cb3cc2137160225d9a89f629cd1df7660b1277e40e30a99020185aa53"
+      "sourceFile": "src/web-ui/src/app/components/SceneBar/useSceneTabNavigation.ts",
+      "interactionCount": 1,
+      "digest": "493da28b1558566c11075d3148cbf0b9f75c2103c7c45d6b65846593246ea7f5"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/TitleBar/NotificationButton.tsx",
@@ -162,17 +162,17 @@
     {
       "sourceFile": "src/web-ui/src/app/components/panels/DiffFullscreenViewer.tsx",
       "interactionCount": 7,
-      "digest": "0a06427596059af7b545b5e6240e44414c83108ac16865bc25d01b603f21f8da"
+      "digest": "5b1f3b8b7470c9f05a169b530fa4cdb1f504f35711b7451076e5fc8ff4b09d2f"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/panels/FilesPanel.tsx",
-      "interactionCount": 24,
-      "digest": "c5e6ae8fd39b89e1f51abaed1674cb16e74f425d636a404fbad0356887ef55fc"
+      "interactionCount": 25,
+      "digest": "6193af60b85d57266411dc694b6250a446789632901d1109c3c9fc73793638b5"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/panels/TerminalEditModal.tsx",
       "interactionCount": 11,
-      "digest": "2203bb38233ef96178a45d432f6f7ec0d8df40bce50e1c19a612c2ef0f976369"
+      "digest": "222f0396cb5eda15ebbce3c745c150a46b506ef43d290a573c046e69b16be4e7"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/panels/base/FlexiblePanel.tsx",
@@ -212,7 +212,7 @@
     {
       "sourceFile": "src/web-ui/src/app/components/panels/content-canvas/mission-control/MissionControl.tsx",
       "interactionCount": 10,
-      "digest": "3f881b99976da45e1d397f22df2e160814cbb9adc57f95a7470a73fbe62937c6"
+      "digest": "9197043860221bf8de75a22abd5df6045940a01571f59972867770b2d11023d7"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/panels/content-canvas/mission-control/SearchFilter.tsx",
@@ -247,12 +247,12 @@
     {
       "sourceFile": "src/web-ui/src/app/components/panels/review-platform/ReviewPlatformPanel.tsx",
       "interactionCount": 76,
-      "digest": "b97d73bf33a952b576411d18e77baf917ba26e6136ccc08b8a602d5d8f888208"
+      "digest": "d691f516f0377df2c9298c76c25d0f91b1288d7488ea0e5ec945d0dda6841666"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/scheduled-jobs/DateTimePickerPopover.tsx",
       "interactionCount": 11,
-      "digest": "876bcdc3917aee329a026a416ff3d159820b3d7e7ebb31a2a4cc71fb8c25615d"
+      "digest": "3424d411dc67c9d05dcaacd0e8eb70ebeb245f1bb6164747b239f83ddfc713d0"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/scheduled-jobs/LocalizedDateTimeField.tsx",
@@ -311,8 +311,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/agents/AgentsScene.tsx",
-      "interactionCount": 37,
-      "digest": "00e237e1b5bb46d0b2a1d5808a53e21c839bfaef823a9f5951fb1796459fd856"
+      "interactionCount": 36,
+      "digest": "2079ebbc8433d4c3244d7fe38e571ac5593d465c0f6f0b87380ad5f780a29589"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/agents/components/AgentCard.tsx",
@@ -326,18 +326,18 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/agents/components/CreateAgentPage.tsx",
-      "interactionCount": 39,
-      "digest": "69d923ae22f2551ae91f13ecdb14bc653d317c88a1c2f3f98ba3f2a91a10ef74"
+      "interactionCount": 41,
+      "digest": "32229544a9e399fceb0ee99f9a206dfccc4eb149154dc459882f035f799ebe7c"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/agents/components/SkillGroupPicker.tsx",
       "interactionCount": 29,
-      "digest": "b413f483a2eeb1a196a985fa9027f355d13a54cc29bd6a8a6105ee6fd394a61f"
+      "digest": "19c35bba0efcaaf275eec23c861c48cb1bb0906d0e311dfe1faa1dfb1d79f5bb"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/agents/components/ToolGroupPicker.tsx",
       "interactionCount": 29,
-      "digest": "cf8174689b86225ec7b6a39bdb8452c33812ab7dc94ee44ff3f0626e60eaa452"
+      "digest": "5d65f4a54c68e3c84c09bab5e899b897658d9da9297a339daff82164b50c3b24"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/browser/BrowserPanel.tsx",
@@ -352,7 +352,7 @@
     {
       "sourceFile": "src/web-ui/src/app/scenes/ecosystem-compatibility/EcosystemCompatibilityScene.tsx",
       "interactionCount": 28,
-      "digest": "b43da9979def9cd2b3a98244425002f511e885e62e8287bde0af9d97c0ec2bba"
+      "digest": "777a97bafadc293162bc5ffb668b10b03771a735cea284b4b35de18cf11f53b3"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/file-viewer/FileViewerNav.tsx",
@@ -366,8 +366,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/git/GitScene.tsx",
-      "interactionCount": 3,
-      "digest": "db71de0865bec4d8fa770b04e2b6530881da9d032ba231beffe5100763c0ff8d"
+      "interactionCount": 5,
+      "digest": "a4eaf8269b3cb5fca171c29118a5dad980a3c753199736a94d5943b23b4e5417"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/git/views/BranchesView.tsx",
@@ -387,12 +387,12 @@
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/MiniAppScene.tsx",
       "interactionCount": 5,
-      "digest": "5066f0ac612f46405d8a55f6bcf07cef12baeee3162b0b487c3a46fc679ef484"
+      "digest": "37be68d62cbca73b88205b412edffdf3ce677791ce07938ca8759a3a7017544b"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/components/MiniAppCard.tsx",
       "interactionCount": 10,
-      "digest": "68f7e131bb93b6e87fe2310ecc773f15c9f90302bff41475a2fb3bef0728a416"
+      "digest": "0f823bf1dc1ea58b8a23ed2d191c69803fab55b93db7d3ef5a0fa0a7c34a55f9"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/components/MiniAppDetailModal.tsx",
@@ -412,7 +412,7 @@
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/customization/MiniAppPermissionDiffDialog.tsx",
       "interactionCount": 2,
-      "digest": "ab2d7fbab5224c4b95d74a5900b003bbbfbc7b9bdafdc4d7dd06c3d8e6e4f4de"
+      "digest": "cacc0bdabe3d309ab061d0167afbede33c79965d72621f277b62f125b9c4e4e2"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/miniAppActivity.ts",
@@ -421,23 +421,23 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppGalleryView.tsx",
-      "interactionCount": 19,
-      "digest": "4967764e43f6674286d7351d144c45b6f9e5f6a306f709288e48fde6c4dba5cc"
+      "interactionCount": 17,
+      "digest": "37da7fdf734fb71132373a26574fbee519fb0fa96788f68f834741810feb654e"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppMarketView.tsx",
       "interactionCount": 23,
-      "digest": "3747b29e7f3cc26c32147264da178541b4beb39b7617abd6c08022cc9556ad10"
+      "digest": "bf5b59997c6a073f7b98f2aacda98857ba03cfa3a1d8771a61b603c62879dfa7"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppSubmissionsView.tsx",
       "interactionCount": 41,
-      "digest": "fe57e0acd70a7998ee1336c1c1e7abcb59a2d38d9652adb14747f6ee191310a7"
+      "digest": "d95ba806a11794c84775ff914e5674d30ec3afd0db886603425edaaf8d9506f9"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/my-agent/InsightsScene.tsx",
-      "interactionCount": 16,
-      "digest": "8340ed769d01c59681b5b878264434982a5ab9ffd62001a26041b45f32bf3589"
+      "interactionCount": 20,
+      "digest": "ad7e4de0b06cae0bb1bd436700344b912b1d95ce94d6ea8e897ba97187a14f66"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/nav-registry.ts",
@@ -447,7 +447,7 @@
     {
       "sourceFile": "src/web-ui/src/app/scenes/pages/PagesScene.tsx",
       "interactionCount": 34,
-      "digest": "6a15c79d533d3ace991d9860368d76735945d78735ec6e1bf57acc01ca45b0d8"
+      "digest": "62889b3579c6039093aa7d1fc7e9c3acf913db00e8aac2fb6597836e97741bf6"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/profile/views/AssistantAvatarPicker.tsx",
@@ -456,18 +456,18 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/profile/views/AssistantCard.tsx",
-      "interactionCount": 15,
-      "digest": "09f9205d3e6da251a6efb0ddacfc0b0916565d8b908a8e8e3cd75945888b8ab1"
+      "interactionCount": 11,
+      "digest": "00555f8e82be88ba92b2afde21b02f6bd729934c500400ac8d0c52a01be5d5c4"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/profile/views/AssistantConfigPage.tsx",
       "interactionCount": 41,
-      "digest": "ed71a621f323d9cfabdfade37850d6ba2bcdbcb4224785e3f0e319f08b8ba43b"
+      "digest": "25d1b92e9fd280eb09a4e5ea65c425f1f9e23fa7de0446cad5174ba8c8ce87fb"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/profile/views/AssistantDefaultsPage.tsx",
       "interactionCount": 41,
-      "digest": "9e1e4d0ffa3be745251cd3fba74eb8c1791439142b415f3ffe82997465eee1ee"
+      "digest": "a493d6668cd3184410f0dac98a846d438e8421267f2e96f8b343ec7389f90962"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/profile/views/AssistantQuickInput.tsx",
@@ -496,8 +496,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/settings/components/ArchivedSessionsConfig.tsx",
-      "interactionCount": 11,
-      "digest": "711291c1a1d8c0e0511f2d6a0f177ba7b669677fac686360bb8f675af994f143"
+      "interactionCount": 12,
+      "digest": "ba6285a47f548ec202c6424163f8a4690fa18f1ddab9708609c8ecefb02c0dcd"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx",
@@ -531,8 +531,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/skills/SkillsScene.tsx",
-      "interactionCount": 62,
-      "digest": "564597ef8a29e696dce830a5bb7f8f1cfcc536bc5559485aa063598ad6f921f5"
+      "interactionCount": 58,
+      "digest": "8985540d8cb1b6275ca639bd11f5654a34332a862801039df52df7c451e3cc0a"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/skills/components/SkillCard.tsx",
@@ -542,7 +542,7 @@
     {
       "sourceFile": "src/web-ui/src/app/scenes/skills/components/SkillsSuiteView.tsx",
       "interactionCount": 18,
-      "digest": "5a0e313c53a07c79fa750e3dfea2f2d79177e54838523b34650546f4ed4355ad"
+      "digest": "d69d28326e5e34f736d0b5d77259e6a7a3f5b6fe289fad90222c315ca2625e1d"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/todos/TodosScene.tsx",
@@ -565,11 +565,6 @@
       "digest": "f8edb85ff21e005753441a11b1b24932eccd4523ddf3b9cb488c7dd37a4ed94d"
     },
     {
-      "sourceFile": "src/web-ui/src/app/scenes/welcome/WelcomeScene.tsx",
-      "interactionCount": 10,
-      "digest": "69a3737dc237c1a33c0ecddfa8c433d16be18a1ce6bee50b49110e599e60eee8"
-    },
-    {
       "sourceFile": "src/web-ui/src/app/stores/sceneStore.ts",
       "interactionCount": 3,
       "digest": "58298bea669690eb5524f43038cacc0c08ae621bcf9fb97df8392539f2f4d530"
@@ -578,11 +573,6 @@
       "sourceFile": "src/web-ui/src/component-library/components/Alert/Alert.tsx",
       "interactionCount": 2,
       "digest": "800c24c7082600bd8240deb5c3579a8211d051f2cdc5c1e731e16a80c80384ff"
-    },
-    {
-      "sourceFile": "src/web-ui/src/component-library/components/Button/Button.tsx",
-      "interactionCount": 1,
-      "digest": "596a703135d03aefdc877c8db21f35e8f46d043d078e73e45df3e65b7bffd8f0"
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/Checkbox/Checkbox.tsx",
@@ -612,7 +602,7 @@
     {
       "sourceFile": "src/web-ui/src/component-library/components/FlowChatCards/BaseToolCard/BaseToolCard.tsx",
       "interactionCount": 6,
-      "digest": "cace0b2bf846ce4c94ce596f0ebaa9ce1a6a02836cd23d96416aa2927903bab6"
+      "digest": "4e19d771055dc905b5319a1d8700a2da45c73fe0b271527260c7a4cd12a0d474"
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/FlowChatCards/SearchCard/SearchCard.tsx",
@@ -621,8 +611,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/FlowChatCards/SnapshotCard/SnapshotCard.tsx",
-      "interactionCount": 14,
-      "digest": "ee993168da4eb9f22f7368bd59e9eedfc142a8395b190eea42f74550891f5916"
+      "interactionCount": 17,
+      "digest": "e5d703f3ef2ee247bca94c34b042f9452078fa6414ecd3270fb861f1a7d3fbe4"
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/FlowChatCards/TaskCard/TaskCard.tsx",
@@ -685,11 +675,6 @@
       "digest": "59929103e1e8ee3f9db42c06250e695d37e1ea29d2e86b0532bf41aa1e6878f7"
     },
     {
-      "sourceFile": "src/web-ui/src/component-library/components/Switch/Switch.tsx",
-      "interactionCount": 2,
-      "digest": "dcce382aa2d381ebe9b6e66f08d1282649b8e023bc93f32e541513c650ae4adb"
-    },
-    {
       "sourceFile": "src/web-ui/src/component-library/components/Tabs/Tabs.tsx",
       "interactionCount": 8,
       "digest": "1c200ebcd62529c34392698c288320de0a8efda8e91ef90759c9f9e821d0d66d"
@@ -711,8 +696,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/registry.tsx",
-      "interactionCount": 83,
-      "digest": "d44260be8de787f2032f053a6b9cfd0f3079482dc330d200d1a4dd362ced4902"
+      "interactionCount": 67,
+      "digest": "f0c04827acbc395c56442a6a9f56976199ff7e74944c4acf92e5e687c8f5bb71"
     },
     {
       "sourceFile": "src/web-ui/src/component-library/preview/MarkdownPreview.tsx",
@@ -752,7 +737,7 @@
     {
       "sourceFile": "src/web-ui/src/features/dispatch/DispatchResultDialog.tsx",
       "interactionCount": 3,
-      "digest": "a843d51e9de9c1bb85f4aedfc4a316807c07474660ec83884334a19f46fbcf0c"
+      "digest": "33896289e2c661eeed96859ed858c6326eec7b51de4a0fe4dfbce44d48519d89"
     },
     {
       "sourceFile": "src/web-ui/src/features/dispatch/DispatchTargetPicker.tsx",
@@ -762,17 +747,17 @@
     {
       "sourceFile": "src/web-ui/src/features/market-account/MarketAccountControls.tsx",
       "interactionCount": 12,
-      "digest": "5f3462acbd4f7ebb652624e6ffe9bef20c00fc143429b4a28b665782001b9d0d"
+      "digest": "da75ee5291309c838f18920b28937b0bd8dcb6a031132180ca1b7eb20fe4546e"
     },
     {
       "sourceFile": "src/web-ui/src/features/relay-deploy/RelayDeployWizard.tsx",
       "interactionCount": 63,
-      "digest": "47225dd360eea7224b51eaf010255ba4237f4149fbf41f3ce65d3934756146f1"
+      "digest": "d480f91ba94d12d7ec863c504f6cf1e054371e5e7d91cd89b7072f3aef308a64"
     },
     {
       "sourceFile": "src/web-ui/src/features/ssh-remote/ConfirmDialog.tsx",
       "interactionCount": 3,
-      "digest": "9a2fc2713cfba555bec0c4c6a7294c56a12c27ac501e910a4a32642f1d5d342b"
+      "digest": "eaaf7860c6f9795696011e8c44cded9c7ac5abfb69f7fc320c5dca8ca5689e64"
     },
     {
       "sourceFile": "src/web-ui/src/features/ssh-remote/PortForwardDialog.tsx",
@@ -782,17 +767,17 @@
     {
       "sourceFile": "src/web-ui/src/features/ssh-remote/RemoteFileBrowser.tsx",
       "interactionCount": 43,
-      "digest": "078cfe9221f9960346945d8c552f35945efb1254bc2b1b1c9ecb9a035ac20b2f"
+      "digest": "b002ce773766f680a68b532d91710a4a1361241d03f13085bc86be3a6caa3da7"
     },
     {
       "sourceFile": "src/web-ui/src/features/ssh-remote/SSHAuthPromptDialog.tsx",
       "interactionCount": 26,
-      "digest": "5cbe2a8f80e3059f1db1a0ddb721a11021cef9fbc4d5c28693f929cb0f3c0af1"
+      "digest": "517f36003eb59f313d7bb2ec26b955d6286b2fbc44a89f2decebfc3ad2a99402"
     },
     {
       "sourceFile": "src/web-ui/src/features/ssh-remote/SSHConnectionDialog.tsx",
-      "interactionCount": 88,
-      "digest": "965b441cf23ffe36a08b9a57334b826ed59e60c7cd481bfcf7ec08e8cfc57d47"
+      "interactionCount": 91,
+      "digest": "5921d31e205fe8c7f72bfe76744cd593fa223334685709f909b0242bd717406e"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInput.tsx",
@@ -802,7 +787,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInputApprovalBand.tsx",
       "interactionCount": 16,
-      "digest": "cc1904f2af94cc64544f97e88876a0cddbc3c538f8213539c932c48b6b460305"
+      "digest": "46e07a82ebde8defdf8b13582a633b868cdd13d27de3198c2ed95836576714a0"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInputWorkspaceStrip.tsx",
@@ -816,8 +801,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/CopyOutputButton.tsx",
-      "interactionCount": 4,
-      "digest": "23d321c7fb61ae064401ec41e4cc420ca6d41895df3e0a378a9faf0cb00fc932"
+      "interactionCount": 6,
+      "digest": "66ad766d2cd08e0cb2e8fcfa29d22d475ca246124550c42f4480865796b46c2d"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/CopyableTextPreview.tsx",
@@ -847,7 +832,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/FlowToolCardErrorBoundary.tsx",
       "interactionCount": 3,
-      "digest": "7a197aaa471a1c3d4e579bd59ce2301774e7835076e414ce77ecf1718c71d331"
+      "digest": "fd6f96f2bc837d307a58a5f8ee10caf041bcbd0326603d0038c7ccd01a59d569"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/HarnessProfileSelector.tsx",
@@ -857,7 +842,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ImageAnalysisCard.tsx",
       "interactionCount": 3,
-      "digest": "72c71c8b75354f4d869144a796feb46e71992e11903a6be98667d94638146c4b"
+      "digest": "5345787d614eb309a5e019a789666814d6dea19e8b18a791a0325680ccf89f08"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/InlineDiffPreview.tsx",
@@ -921,8 +906,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.tsx",
-      "interactionCount": 11,
-      "digest": "728781e6f319761696c70d66829d05e7e964376f6cc50142412a17a167a30647"
+      "interactionCount": 10,
+      "digest": "779422c35fe594adc6f55b40d5439e1e63c1c39afee7f8ee459e0bb9ccbe07e7"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/modern/ExploreGroupRenderer.tsx",
@@ -951,8 +936,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/modern/HistorySessionPlaceholder.tsx",
-      "interactionCount": 3,
-      "digest": "19479a97c3793ba8bfaab7c3d9e30253fa8bd947ac7e87e152d41b13063e3d16"
+      "interactionCount": 2,
+      "digest": "538e4c41c81f02b55d19d67dead94d5a8b942902ccac27a7605ba686d29cec49"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/modern/ModelRoundItem.tsx",
@@ -1002,17 +987,17 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/smart-recommendations/SmartRecommendations.tsx",
       "interactionCount": 4,
-      "digest": "7972f5d0bc2d74d5876c136eda12451b674959eb39f8329cff779855540f6977"
+      "digest": "eda375550c789f1433d3c68d75c2cc73f39df50141f2a96a452c7f26b3eb6970"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/subagent/SubagentProjectionView.tsx",
       "interactionCount": 3,
-      "digest": "a5023e05d0fc4d3ec1c7442cd53bb692691c6523345d9713e34ab62677f0448e"
+      "digest": "4184416d1deca2e9ad24f98a6b530c9b177fd3750bcecbc2ea62f6085d45e393"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/thread-goal/ThreadGoalDialogs.tsx",
       "interactionCount": 18,
-      "digest": "61d4eb7622aaaacd046ccc0cc430cbdecc72549ff1ceee1253f0aa095a6b95f5"
+      "digest": "4a4db254b77c6112c02b2a621fca01c571696eda49501056d8c23b1fa2b4f3f8"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/toolbar-mode/ToolbarMode.tsx",
@@ -1032,7 +1017,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/usage/SessionUsageReportCard.tsx",
       "interactionCount": 21,
-      "digest": "27eeee24f33ba9a06cc740252c9094a7c5d8e363aa687a08df97c610bcab1c5e"
+      "digest": "1a3e66a4c5ee7604f6912d67ccc6d012617ec76272897b3bc1786d95f10a0dcf"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/voice/ComposerVoiceInputButton.tsx",
@@ -1097,7 +1082,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/AcpPermissionActions.tsx",
       "interactionCount": 5,
-      "digest": "63b1a4021843d657ff5861199a947fc776bfcfcff1253c726eeaac9e94f334f4"
+      "digest": "7d26363dba5c7fedae5d477fefca660b93711f1d90e385753d7863e3f56d75d4"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/AskUserQuestionCard.tsx",
@@ -1132,12 +1117,12 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/ComputerUseToolCard.tsx",
       "interactionCount": 4,
-      "digest": "cc74419def0013e9c698ee7869e1f2ab90510a131e578ec1e65a5775bf05feeb"
+      "digest": "ca383a7b210bfb27680edb4a5eb66c2ee14ac6a8dba6176198d7d5efae00d253"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/CreatePlanDisplay.tsx",
-      "interactionCount": 15,
-      "digest": "75d184756c8b11b85bbca7d69d775356bd8721c670aab497e3cb3b5a3212bb01"
+      "interactionCount": 16,
+      "digest": "d52084dfca5373c4e17b9a4dd5e107d43a9c5f6d9c86dd993af108f651623159"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/DefaultToolCard.tsx",
@@ -1192,7 +1177,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/MiniAppToolDisplay.tsx",
       "interactionCount": 4,
-      "digest": "332aec436e34d04b0dee932ec792b02ecb992f1368bd0e1c5691e3a23dbba97d"
+      "digest": "ac02c8d28b1aa0933bfce6a83d2c2a8c09afb639c79555232e2b3313fd6b3bc5"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/ModelThinkingDisplay.tsx",
@@ -1202,12 +1187,12 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/PageDeployToolDisplay.tsx",
       "interactionCount": 4,
-      "digest": "cbea2b453c161d4ae7df7e70f800d5d7264f45d4116936305915e6a798dd9817"
+      "digest": "9ec31fed3ed8fa0c5c4e6dc7bcd919700d1418a63e96a25df58082c2b58fcf47"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/PagePublishToolDisplay.tsx",
       "interactionCount": 7,
-      "digest": "0a39d59f714161b10b52f249341688120e84079fc224fe017c5451b971d502b4"
+      "digest": "268813adfcca088c1f99c7f5d9df3cec62dafac46b2ffceef1c8a451f607aa2d"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/ReadFileDisplay.tsx",
@@ -1217,7 +1202,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/ReviewSessionSummaryCard.tsx",
       "interactionCount": 5,
-      "digest": "79574e65638dd8f7bfdc50b23aff228485a6e5593051fba12ef82a073be4d1a9"
+      "digest": "00a976cff4e9a22ddabd18ebac5cf9c0e9e0d232c214b5336bbbf42669bf0b42"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/RunCodeToolCard.tsx",
@@ -1236,8 +1221,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/SnapshotFullscreenDiffViewer.tsx",
-      "interactionCount": 17,
-      "digest": "12369bf685d3a2d640e5034cd1492d34e1143a99a47691a80538d2314de9a026"
+      "interactionCount": 24,
+      "digest": "2bc087a39980bb4fe57dd688603265f62b9b2e073e0d10fa68c83c5a65959d68"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/TaskToolDisplay.tsx",
@@ -1306,28 +1291,28 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/AcpAgentsConfig.tsx",
-      "interactionCount": 50,
-      "digest": "85c9019dcd019026bfc5c3556d2182667111ba9b5af0244236804d08ddffe1b8"
+      "interactionCount": 51,
+      "digest": "efd496a2a4a7d260e121e9dbded9a1943e12d50077ba9dafbf93ed0651515c26"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/AppearanceMarketDialog.tsx",
       "interactionCount": 25,
-      "digest": "df7513e26d2c633380d27546c3263af139d9cb2a4c91b97aa8f2b81b24eb1124"
+      "digest": "3634980a019236143cf7f5399bb3ddcdd5c46823d6c65f74ebb0e849ea25e766"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/AppearanceMarketWorkflows.tsx",
       "interactionCount": 36,
-      "digest": "c6aaa9cd48b97389765e0ca2dc9a0d332dece4ed6cccca3c30eea06fcf5c6500"
+      "digest": "3d3268b8edd512fa528827502bd81371dad8d5f195e2c78b3fa087d4f2751a6e"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/AppearancePackageConfigSection.tsx",
-      "interactionCount": 15,
-      "digest": "2d5ef58f587a800f4531e75cea6269c578ed8afec691803f230d41c8a3210af8"
+      "interactionCount": 13,
+      "digest": "162c15bae8074dd877f71225265ea7ab080bb0fd894621c4b37dc73398cb94b0"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/AppearanceSettingsPage.tsx",
-      "interactionCount": 6,
-      "digest": "25031f404d44559835a0f5be95862a1261e8c44ed0faa80fef4263f91a70dfc0"
+      "interactionCount": 8,
+      "digest": "be90167c0065e131117b518b94ea5811e98e46f2ab860794b68270ac0f62c529"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ApplicationSettingsPages.tsx",
@@ -1347,12 +1332,12 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ExternalMcpOverview.tsx",
       "interactionCount": 10,
-      "digest": "6528b24dc28ce3d18f5d1e871d6a629ddd45325e549d59df78f494f7682401e7"
+      "digest": "8cf54c95233ee6985929e0cfed7d898f288fea7dd3bf63de1f421ef4194b22a0"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ExternalSourcesConfig.tsx",
       "interactionCount": 97,
-      "digest": "9c8722ecf069d8421640858fa61e4b09bc227a07cfcc9530b598fdbbb9b5c979"
+      "digest": "03ba4aa9e8836bbe99b6beca2074929e89b724521d2995c9341479458b19d8d7"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/GlobalPermissionRulesDialog.tsx",
@@ -1362,7 +1347,7 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/HooksConfig.tsx",
       "interactionCount": 21,
-      "digest": "e253a2b2db557e534e7c69f2e6108aedc9a4bb54bde002de77f21d90e5782a06"
+      "digest": "a5d3d48654584f55cd6947621ff18fd2e7fb05e2cfa1b271d250fc487a453b57"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/LocalVoiceModelsConfig.tsx",
@@ -1377,7 +1362,7 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/McpToolsConfig.tsx",
       "interactionCount": 30,
-      "digest": "c6ff3769f4cbeb67f8429bd598eb2d4ddc5d8c305e03a09f656a98fb01aa5a94"
+      "digest": "6728ba5178dff73a4720f161cdbe9c765dc1868e286bcddfc4d7b8d631bf359d"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/MemorySettingsPage.tsx",
@@ -1392,27 +1377,27 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx",
       "interactionCount": 148,
-      "digest": "36a620becf185087ba0758004c7e9b4a0bc26a64a4fe744b6e08fac7b8f6c524"
+      "digest": "c2201029f5275b1c4ea023f57d2c32ec0f8b12bcf8e0d0d6cd4a1d625bbb760d"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/QuickActionsConfig.tsx",
       "interactionCount": 21,
-      "digest": "ddeedc033984f20229d762d2f66a054c47716503eb2d9817a923cf588a5d49d8"
+      "digest": "3da9520ef9b3c6f5a25b5b527bd3683a26f45a6d24682bf2bfb99951498d1aec"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ReasoningConfigPanel.tsx",
       "interactionCount": 4,
-      "digest": "ae273486dc30b0ffdaa154e52bff34482a3dfe5077c7d914fde2dd5f9f86d6f6"
+      "digest": "9c9ad1a646fd18d7f488cce65dded1c340ec245a84ae46665ae73622af3440b5"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ReasoningPresetEditor.tsx",
       "interactionCount": 47,
-      "digest": "16e28ca81dd36dd03825ba9fa98c9e3a3b7f9609b10eef8c48756b35a3662c98"
+      "digest": "50b2c9e8543391a316c5eefe5e5ae231d88c8b51907fc32f10baed1f4d610f9f"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ReviewCapacitySection.tsx",
       "interactionCount": 3,
-      "digest": "7ed57719f518829216b02649cbe308a546a5ddc0e744c2afe96c867aadef97be"
+      "digest": "64988d1ff5df7be84e768029aa4d92e2762a43bce0e263e36f9257307e3c8dab"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/RuntimeSettingsPages.tsx",
@@ -1427,7 +1412,7 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/SkillsConfig.tsx",
       "interactionCount": 26,
-      "digest": "bc89b1feb9ea9742bbee8baf6a94594327a87abf3cae2c8d0edcfe40514c2f52"
+      "digest": "0f5a33fa12ec57bf5a558eca74401abc16c885e04deefe5df9f8b672f1d063c4"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ToolJsonRepairSection.tsx",
@@ -1442,7 +1427,7 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/VoiceInputConfig.tsx",
       "interactionCount": 11,
-      "digest": "3d78ff50acf0dc20a11d3602d06452db0feed896633eb9b07c6a8a2f54b6de4b"
+      "digest": "4c3a90d20a6643614baeead2cc770b05b5a6b3d4345a74ffbfa4f66e77fc7c6e"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/VoiceInputDiagnostics.tsx",
@@ -1501,8 +1486,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/form-controls/ConfigStatus.tsx",
-      "interactionCount": 2,
-      "digest": "2c9b70c5a389779f6a41ab0f2439fbd2feca590229c5cca960fd2ef180d360e4"
+      "interactionCount": 3,
+      "digest": "3c7a969f9700863cef9ff126741f41cecf4d86a6e232b6cd07e7913d68a9b84c"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/form-controls/ConfigTextarea.tsx",
@@ -1511,8 +1496,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/font-preference/components/FontPreferencePanel.tsx",
-      "interactionCount": 21,
-      "digest": "78505138644521f6c4222856343360abf5d8fe7f59c4eb1eda24ccf7521ddfe7"
+      "interactionCount": 20,
+      "digest": "cbdff0f36f0ebf59097ef353143a5c502e59dcf784dd9f6020295306855d03e4"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/i18n/components/LanguageSelector.tsx",
@@ -1522,12 +1507,12 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/peer-device/DeviceSurfaceSwitcher.tsx",
       "interactionCount": 11,
-      "digest": "5619cfff8371c84bf77615c8a587bfd1fbd21296642dd3af429cfc7358beb3e4"
+      "digest": "d186260767b94eab4bbf4bbc6dcb12e5dfc0f69606cd56c052c5638f7a80b119"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/peer-device/PeerDirectoryBrowser.tsx",
       "interactionCount": 25,
-      "digest": "ba7ba8343e2259c0ee54439a13c147cb1534bba4e1f007f5cbdfa4abb171ee34"
+      "digest": "04c3e8e003f6d7e79e29613b29f45c4d722eea6e162c2c85ae1be66931f91070"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/peer-device/PeerDirectoryPickerHost.tsx",
@@ -1542,17 +1527,17 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/providers/CoreProvider.tsx",
       "interactionCount": 2,
-      "digest": "8ea0dae2a8416c7d073f3ef574ae1af40d5e093ac503f889509c3e71c77dc972"
+      "digest": "35dc131a9f36551ca480997171cba3644200f8a290667e1c0fa2dc6392648e65"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/update/UpdateAvailableDialog.tsx",
       "interactionCount": 5,
-      "digest": "8040f108b897b87b8a544a54c322d61cba13320f3f0eb7c15049c386703300d4"
+      "digest": "990801d98dcd93832296403f676c4be1ccecb85154d826a51d6bc9930ba7f17b"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/update/UpdateInstallProgressModal.tsx",
       "interactionCount": 2,
-      "digest": "5dfdfb847ee8c285f1ef0aab7df64324c79970aad2060c81defe1f9ffb7e8ff9"
+      "digest": "1341961a5e2e44aa48012c3de7956c9785cb84295331c53b0befa51208e98a02"
     },
     {
       "sourceFile": "src/web-ui/src/shared/ai-errors/aiErrorActions.ts",
@@ -1561,13 +1546,13 @@
     },
     {
       "sourceFile": "src/web-ui/src/shared/announcement-system/components/AnnouncementToastItem.tsx",
-      "interactionCount": 6,
-      "digest": "f6cd8c778d1ebc36eef53e7497262686b11a45b2babff93fe33d32aa949f46d5"
+      "interactionCount": 5,
+      "digest": "37d4ae8ac0e14fca6317498102cce9c1dbf26c164f1af2973ec07c990432fb04"
     },
     {
       "sourceFile": "src/web-ui/src/shared/announcement-system/components/FeatureModal.tsx",
-      "interactionCount": 17,
-      "digest": "64873cd0d52d6695a1bc0f9714616e7c1810014db2875c105c1a315661d3a7e1"
+      "interactionCount": 13,
+      "digest": "0bb915c50258a27b0998aa3c770fd4d678ad74afcf2a5a28411449cc9a6647eb"
     },
     {
       "sourceFile": "src/web-ui/src/shared/context-menu-system/components/ui/ContextMenu.tsx",
@@ -1631,8 +1616,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/shared/context-system/components/ContextList/ContextList.tsx",
-      "interactionCount": 3,
-      "digest": "8dbeb63ae835bfc050bac7b8061ce9897b47b1abe8b6ea6c2b62119977e9cc64"
+      "interactionCount": 4,
+      "digest": "a37fab682b2bd7dbbe49d5d16be955caab00b37eaf7eec95cab88802af2aa295"
     },
     {
       "sourceFile": "src/web-ui/src/shared/context-system/core/types/CodeSnippetContextImpl.tsx",
@@ -1651,8 +1636,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/shared/notification-system/components/LoadingNotification.tsx",
-      "interactionCount": 2,
-      "digest": "1786afbe5ae70fbb7aad1ccb96981e45c119ab7357d18071e20edcc1ccf6ae9e"
+      "interactionCount": 3,
+      "digest": "025d17320455c89bfccff3a485c7e589622358034ab1e6a6bc3bd33dcb40ee3b"
     },
     {
       "sourceFile": "src/web-ui/src/shared/notification-system/components/NotificationCenter.tsx",
@@ -1662,12 +1647,12 @@
     {
       "sourceFile": "src/web-ui/src/shared/notification-system/components/NotificationItem.tsx",
       "interactionCount": 4,
-      "digest": "96f8ff7986424877d2562ded3fbe5384c2bdfb9ecd29119bc25df19e0624103d"
+      "digest": "618fb2af12d7e0ad0a6811d7c6d85252751cabdbeebd7e5871a9fd89cc2a1747"
     },
     {
       "sourceFile": "src/web-ui/src/shared/notification-system/components/ProgressNotification.tsx",
-      "interactionCount": 2,
-      "digest": "1786afbe5ae70fbb7aad1ccb96981e45c119ab7357d18071e20edcc1ccf6ae9e"
+      "interactionCount": 3,
+      "digest": "025d17320455c89bfccff3a485c7e589622358034ab1e6a6bc3bd33dcb40ee3b"
     },
     {
       "sourceFile": "src/web-ui/src/shared/services/ide-control/api.ts",
@@ -1701,8 +1686,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/CodeEditor.tsx",
-      "interactionCount": 5,
-      "digest": "e769ac327279aa6cef25bc8b6860c1cdcc1a5868f1aba3d981e10c1f984c87ce"
+      "interactionCount": 4,
+      "digest": "26d6853ea5ab4ab2412e0587ba415e5db51a5b8caf89319706319acdfd28a8ed"
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/DiffEditor.tsx",
@@ -1727,12 +1712,12 @@
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/MarkdownEditor.tsx",
       "interactionCount": 21,
-      "digest": "d42b30d8e5afd1e440ee2e17430ea955d03b879f796eba878c7cc5f0fe3dd5d9"
+      "digest": "2dcd45c1d584d23b4aae5d83b36f8513812061effbeb0dae2ce776f07302a0f4"
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/PlanViewer.tsx",
-      "interactionCount": 30,
-      "digest": "6db25c91d12f6914d1c1c7a54e27880b6ae6546991563a5a374899ec3df57cf9"
+      "interactionCount": 31,
+      "digest": "57147c5ba441e95904437a6261347313e9263ea5e46c0c39db598bc82c7c8ce6"
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/ReadOnlyCodeBlock/ReadOnlyCodeBlock.tsx",
@@ -1742,7 +1727,7 @@
     {
       "sourceFile": "src/web-ui/src/tools/editor/components/StatusBarPopovers/StatusBarPopovers.tsx",
       "interactionCount": 17,
-      "digest": "650e6c96d639f5d1d404211a2ecb00a934836154171da4cc8c89ec6875c948e8"
+      "digest": "b78a30027934ab508b3a41eefa814016aea9f2f79ea81ae4aff5b97bab45058c"
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/meditor/components/EditArea.tsx",
@@ -1762,7 +1747,7 @@
     {
       "sourceFile": "src/web-ui/src/tools/editor/meditor/components/TiptapEditor.tsx",
       "interactionCount": 18,
-      "digest": "14371ce420ec4dfe14fa3ad1878679a9576be5fd0997a05cdc57a00f838ee31d"
+      "digest": "c55d7045d943ca4e71e39a352064a63dba15d6e8c8f04a1304650163706f28e6"
     },
     {
       "sourceFile": "src/web-ui/src/tools/editor/services/ActiveEditTargetService.ts",
@@ -1801,8 +1786,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/tools/generative-widget/GenerativeWidgetPanel.tsx",
-      "interactionCount": 8,
-      "digest": "dc26d9a28d6272c6a0c0c62324fda9807da67a9f3fabddcb9d4bef3c556e2157"
+      "interactionCount": 6,
+      "digest": "bd4da5299425daecff1005ce048654ddb3c97d8b4aa8b3acefdefa8dca33a529"
     },
     {
       "sourceFile": "src/web-ui/src/tools/git/components/CreateBranchDialog/CreateBranchDialog.tsx",
@@ -1812,37 +1797,37 @@
     {
       "sourceFile": "src/web-ui/src/tools/git/components/GitBranchHistoryView/GitBranchHistoryView.tsx",
       "interactionCount": 13,
-      "digest": "c07b23dea843bec1b456da9b627738a78bb057f939daae6a73f77d0e4cb3b891"
+      "digest": "0240f42ab1434329cf3ba7a4a532858ab78476fe3461605354b2261b7bfdce1d"
     },
     {
       "sourceFile": "src/web-ui/src/tools/git/components/GitDiffView/GitDiffView.tsx",
       "interactionCount": 11,
-      "digest": "eda3fd3fe05382dceed82ed188991b49e99c8cfb4ee8c4fb270a8a8ef627122e"
+      "digest": "8f8bb14bcb13a6306e6d1082643ba4b453af3e8622b7ec14826ff62755296855"
     },
     {
       "sourceFile": "src/web-ui/src/tools/git/components/GitGraphView/GitGraphView.tsx",
       "interactionCount": 9,
-      "digest": "dafd26be87896a2fd6107c5a41c37e463c2dc65745deaae07dd94be910f03c0c"
+      "digest": "9900037a1d3afd35c5e7123e3bc509f84f44287d86772042f8672080eadb3b0e"
     },
     {
       "sourceFile": "src/web-ui/src/tools/git/components/GitSettingsView/GitSettingsView.tsx",
       "interactionCount": 25,
-      "digest": "def315fbe8f3babb50978509bb54f34310947f1d51daa65887576dc379e6d90d"
+      "digest": "2e98b16ceaa97c906869368bbd4a1181509465b0076ed0a26b6b2ad54f28adfc"
     },
     {
       "sourceFile": "src/web-ui/src/tools/git/components/PushButton/PushButton.tsx",
-      "interactionCount": 12,
-      "digest": "7a83675c6693beb49f8b41f8209175830b7637ff54442a706766469cd5088bae"
+      "interactionCount": 10,
+      "digest": "02fdea0ed3b10efa05960da560f4d1c274aece715eff1c13f0cd046fce472a49"
     },
     {
       "sourceFile": "src/web-ui/src/tools/terminal/components/ConnectedTerminal.tsx",
       "interactionCount": 6,
-      "digest": "f150df201ad5d57ec8e80220384889749f70b2fe1090e71b994ebff77053efbf"
+      "digest": "7a755fb12480ff4a50dc4573fba17f1f9ad792539ed87e054e74f58890fd857f"
     },
     {
       "sourceFile": "src/web-ui/src/tools/workspace/components/WorkspaceManager.tsx",
       "interactionCount": 10,
-      "digest": "ce40c43c7f377eba85f32535f29d478680269689dd4fc46f57918aeb378de58d"
+      "digest": "d42c26f6c9ef0ddc82ea99e42aa4bfdbd514617048846234c9ef9f61bf1fbca8"
     }
   ]
 }
