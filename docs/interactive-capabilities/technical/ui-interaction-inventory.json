@@ -5,9 +5,9 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "154fb37d1f29ab10e8f342c0de543258a8ca07584c08cfa659f4a161346eac58",
-  "fileCount": 365,
-  "interactionCount": 4408,
+  "digest": "b1e086d2457b5a3f9a2ac616be1a56f8108ce2c6f18906cff488cb388dcf2e14",
+  "fileCount": 366,
+  "interactionCount": 4412,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -1088,6 +1088,11 @@
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/AcpPermissionActions.tsx",
       "interactionCount": 5,
       "digest": "7d26363dba5c7fedae5d477fefca660b93711f1d90e385753d7863e3f56d75d4"
+    },
+    {
+      "sourceFile": "src/web-ui/src/flow_chat/tool-cards/AgentControlToolCard.tsx",
+      "interactionCount": 4,
+      "digest": "0bfe02356ccc8a7ebbcf4ee243859b40e7d6e9d986e405841ba87d4c61319245"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/AskUserQuestionCard.tsx",

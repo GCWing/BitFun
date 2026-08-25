@@ -48,6 +48,7 @@ import { codeReviewToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/C
 import { createAgentPageAppearanceDescriptor } from '@/app/scenes/agents/components/CreateAgentPage.appearance';
 import { keyboardShortcutsAppearanceDescriptor } from '@/app/scenes/settings/components/KeyboardShortcutsTab.appearance';
 import { taskToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/TaskToolDisplay.appearance';
+import { agentControlToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/AgentControlToolCard.appearance';
 import { applicationSettingsAppearanceDescriptor } from '@/infrastructure/config/components/ApplicationSettingsPages.appearance';
 import { markdownEditorAppearanceDescriptor } from '@/tools/editor/components/MarkdownEditor.appearance';
 import { planViewerAppearanceDescriptor } from '@/tools/editor/components/PlanViewer.appearance';
@@ -343,6 +344,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(createAgentPageAppearanceDescriptor)
     .registerComponent(keyboardShortcutsAppearanceDescriptor)
     .registerComponent(taskToolDisplayAppearanceDescriptor)
+    .registerComponent(agentControlToolCardAppearanceDescriptor)
     .registerComponent(applicationSettingsAppearanceDescriptor)
     .registerComponent(markdownEditorAppearanceDescriptor)
     .registerComponent(planViewerAppearanceDescriptor)
