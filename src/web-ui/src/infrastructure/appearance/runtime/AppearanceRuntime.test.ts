@@ -225,10 +225,10 @@ describe('AppearanceRuntime', () => {
   });
 
   it('applies normal cascade after legacy styles and reserves important for explicit overrides', async () => {
-    document.head.innerHTML = '<style>.legacy-button { color: rgb(255, 0, 0); }</style>';
-    document.body.innerHTML = '<button class="legacy-button" data-bf-component="button" data-bf-part="root">Run</button>';
+    document.head.innerHTML = '<style>.legacy-card { color: rgb(255, 0, 0); }</style>';
+    document.body.innerHTML = '<div class="legacy-card" data-bf-component="card" data-bf-part="root">Run</div>';
     const registry = new AppearanceRegistry()
-      .registerComponent({ id: 'button', parts: [{ id: 'root' }] })
+      .registerComponent({ id: 'card', parts: [{ id: 'root' }] })
       .freeze();
     const runtime = new AppearanceRuntime(registry);
     const basePackage: AppearancePackage = {
@@ -239,7 +239,7 @@ describe('AppearanceRuntime', () => {
       version: '1.0.0',
       mode: 'dark',
       components: {
-        button: {
+        card: {
           parts: {
             root: { base: { color: { kind: 'hex', value: '#00ff00' } } },
           },
@@ -248,14 +248,14 @@ describe('AppearanceRuntime', () => {
     };
 
     await runtime.initialize(basePackage);
-    const button = document.querySelector('button') as HTMLButtonElement;
-    expect(window.getComputedStyle(button).color).toBe('rgb(0, 255, 0)');
+    const card = document.querySelector('[data-bf-component="card"]') as HTMLDivElement;
+    expect(window.getComputedStyle(card).color).toBe('rgb(0, 255, 0)');
 
-    button.style.color = 'rgb(255, 0, 0)';
+    card.style.color = 'rgb(255, 0, 0)';
     await runtime.applyPackage({
       ...basePackage,
       components: {
-        button: {
+        card: {
           parts: {
             root: {
               cascade: 'override',
@@ -265,6 +265,6 @@ describe('AppearanceRuntime', () => {
         },
       },
     });
-    expect(window.getComputedStyle(button).color).toBe('rgb(0, 0, 255)');
+    expect(window.getComputedStyle(card).color).toBe('rgb(0, 0, 255)');
   });
 });

@@ -4,6 +4,7 @@ export const markdownAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'markdown',
   parts: [
     { id: 'root', visualRole: 'content' }, { id: 'fallback', visualRole: 'content' },
+    { id: 'imageFallback', visualRole: 'content' },
     { id: 'codeBlock', visualRole: 'card' },
     { id: 'codeToolbar', propertyProfile: 'control', visualRole: 'toolbar' },
     { id: 'codeBody', visualRole: 'content' },

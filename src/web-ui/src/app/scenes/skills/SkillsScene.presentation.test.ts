@@ -42,10 +42,10 @@ describe('Skills scene presentation', () => {
     const source = readSibling('./SkillsScene.tsx');
     const stylesheet = readSibling('./SkillsScene.scss');
 
-    expect(source).toContain('className="skills-card__details"');
-    expect(source).toContain('className="skills-card__delete"');
+    expect(source).toContain('className="skills-card__actions"');
     expect(source).toContain('data-bf-part="installedCardDetails"');
+    expect(source).toContain('data-bf-part="installedCardDelete"');
     expect(stylesheet).toContain('64px 64px;');
-    expect(stylesheet).toContain('.skills-card__details,\n.skills-card__delete {');
+    expect(stylesheet).toContain('.skills-card__actions {');
   });
 });
