@@ -796,7 +796,6 @@ dependencies = [
  "bitfun-agent-tools",
  "bitfun-core-types",
  "bitfun-events",
- "bitfun-harness",
  "bitfun-runtime-ports",
  "bitfun-runtime-services",
  "dashmap",
@@ -1071,7 +1070,6 @@ dependencies = [
  "bitfun-dsh-adapter",
  "bitfun-events",
  "bitfun-external-sources",
- "bitfun-harness",
  "bitfun-opencode-adapter",
  "bitfun-opencode-plugin-host",
  "bitfun-plugin-runtime-client",
@@ -1257,15 +1255,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitfun-harness"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "thiserror 2.0.19",
- "tokio",
-]
-
-[[package]]
 name = "bitfun-miniapp-market-server"
 version = "0.2.19"
 dependencies = [
@@ -1377,7 +1366,6 @@ version = "0.2.19"
 dependencies = [
  "async-trait",
  "bitfun-agent-runtime",
- "bitfun-harness",
  "bitfun-runtime-ports",
  "bitfun-runtime-services",
  "bitfun-tool-packs",

@@ -18,12 +18,6 @@ fn headless_agent_hosts_select_only_the_code_agent_product_capability() {
             &[ProductCapabilityId::CodeAgent],
             "{profile} must not assemble desktop product workflows"
         );
-        assert!(
-            plan.capability_assembly()
-                .harness_provider_descriptors()
-                .is_empty(),
-            "{profile} must not register excluded product workflow Harness providers"
-        );
     }
 }
 
@@ -57,7 +51,6 @@ fn code_agent_tools_are_selected_from_atomic_provider_groups() {
         .flat_map(|provider| provider.tool_names())
         .copied()
         .collect::<Vec<_>>();
-
     for explore_tool in [
         "AgentSpawn",
         "AgentSendInput",
@@ -73,7 +66,6 @@ fn code_agent_tools_are_selected_from_atomic_provider_groups() {
             DeliveryProfile::Sdk,
         );
     }
-
     for product_tool in [
         "LaunchReviewAgent",
         "submit_code_review",

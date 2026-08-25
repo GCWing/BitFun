@@ -1325,7 +1325,6 @@ export function findProductEntrypointCoreFeatureViolations(
     'agent-runtime',
     'document-read',
     'subscription-auth',
-    'deep-research',
     'external-sources',
     'tools-basic',
     'tools-git',

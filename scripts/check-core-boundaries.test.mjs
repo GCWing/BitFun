@@ -1560,7 +1560,6 @@ const SDK_HOST_REVIEWED_CORE_FEATURES = [
   'agent-runtime',
   'document-read',
   'subscription-auth',
-  'deep-research',
   'external-sources',
   'tools-basic',
   'tools-git',

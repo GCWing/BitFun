@@ -18,7 +18,6 @@ path = "tests/product_capability_contracts.rs"
 default = []
 
 [dependencies]
-bitfun-harness = { path = "../../execution/harness" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["plugin-runtime"] }
 bitfun-runtime-services = { path = "../../execution/runtime-services" }
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups" }

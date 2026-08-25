@@ -621,7 +621,6 @@ export function runManifestParserSelfTest({
         'bitfun-core/agent-runtime',
         'bitfun-core/document-read',
         'bitfun-core/subscription-auth',
-        'bitfun-core/deep-research',
         'bitfun-core/external-sources',
         'bitfun-core/tools-basic',
         'bitfun-core/tools-git',
@@ -750,6 +749,10 @@ export function runManifestParserSelfTest({
   }
 
   const cliBoundaryDeps = ['bitfun-cli', 'ratatui', 'crossterm', 'arboard', 'syntect-tui'];
+  const lightweightBoundaryCrateNames = lightweightBoundaryRules.map((rule) => rule.crateName);
+  if (new Set(lightweightBoundaryCrateNames).size !== lightweightBoundaryCrateNames.length) {
+    throw new Error('lightweight boundary rules must not duplicate crate names');
+  }
   for (const rule of lightweightBoundaryRules) {
     for (const dep of cliBoundaryDeps) {
       if (!rule.forbiddenDeps.includes(dep)) {
@@ -2658,7 +2661,6 @@ export function runManifestParserSelfTest({
         'AgentRuntimeSdkCompatibility',
         'impl AgentRuntimeSdkCompatibility',
         'bitfun_agent_tools',
-        'bitfun_harness',
         'bitfun_runtime_services',
         'PortResult',
         'RuntimeServicePort',
@@ -2720,7 +2722,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'sdk_facade_exposes_versioned_preview_compatibility_contract',
         'sdk_facade_runs_with_fake_provider_and_local_event_stream',
-        'sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core',
+        'sdk_facade_accepts_fake_services_tools_and_hooks_without_core',
       ],
     },
     {
@@ -3373,8 +3375,6 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/product-capabilities/src/lib.rs',
       contracts: [
-        'HarnessProviderDescriptor',
-        'build_descriptor_harness_registry',
         'ProductCapabilityAssembly',
         'ProductFeatureGroup',
         'ProductRuntimeAssembly',
@@ -3388,7 +3388,6 @@ export function runManifestParserSelfTest({
       contracts: [
         'product_assembly_plan_exposes_build_feature_groups_explicitly',
         'product_runtime_assembly_reports_runtime_service_capability_gaps',
-        'product_harness_provider_plans_legacy_facade_without_execution',
       ],
     },
     {

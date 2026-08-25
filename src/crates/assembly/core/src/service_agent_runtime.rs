@@ -1694,7 +1694,6 @@ impl CoreServiceAgentRuntime {
         turn_settlement: Arc<dyn AgentTurnSettlementPort>,
         session_lineage: Arc<dyn AgentSessionLineagePort>,
         services: bitfun_runtime_services::RuntimeServices,
-        harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         Self::product_agent_runtime_with_dialog_turn(
@@ -1707,7 +1706,6 @@ impl CoreServiceAgentRuntime {
             Some(turn_settlement),
             Some(session_lineage),
             services,
-            harness_registry,
         )
     }
 
@@ -1716,7 +1714,6 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
         event_source: AgentEventSource,
         services: bitfun_runtime_services::RuntimeServices,
-        harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         let dialog_turn: Arc<dyn AgentDialogTurnPort> =
             Arc::new(RejectBusyAgentDialogTurnPort(scheduler.clone()));
@@ -1730,7 +1727,6 @@ impl CoreServiceAgentRuntime {
             None,
             None,
             services,
-            harness_registry,
         )
     }
 
@@ -1742,7 +1738,6 @@ impl CoreServiceAgentRuntime {
         session_usage: Arc<dyn AgentSessionUsagePort>,
         turn_settlement: Arc<dyn AgentTurnSettlementPort>,
         services: bitfun_runtime_services::RuntimeServices,
-        harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         Self::product_agent_runtime_with_dialog_turn(
@@ -1755,7 +1750,6 @@ impl CoreServiceAgentRuntime {
             Some(turn_settlement),
             None,
             services,
-            harness_registry,
         )
     }
 
@@ -1769,7 +1763,6 @@ impl CoreServiceAgentRuntime {
         turn_settlement: Option<Arc<dyn AgentTurnSettlementPort>>,
         session_lineage: Option<Arc<dyn AgentSessionLineagePort>>,
         services: bitfun_runtime_services::RuntimeServices,
-        harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
@@ -1831,7 +1824,6 @@ impl CoreServiceAgentRuntime {
         };
         builder
             .with_services(services)
-            .with_harness_registry(Arc::new(harness_registry))
             .build()
             .map_err(|error| error.to_string())
     }

@@ -40,7 +40,6 @@ bitfun-core = { path = "../../crates/assembly/core", features = [
     "document-read",
     "subscription-auth",
     "remote-connect",
-    "deep-research",
     "external-sources",
     "plugin-runtime",
     "opencode-plugin-host",

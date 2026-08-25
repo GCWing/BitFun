@@ -939,10 +939,9 @@ async fn initialize_core_services_for_deployment(
                 .has_capability(entry.requirement().service_capability())
         }));
     tracing::info!(
-        "CLI product runtime assembled: profile={}, services={}, harnesses={}, plugin_runtime={:?}",
+        "CLI product runtime assembled: profile={}, services={}, plugin_runtime={:?}",
         runtime.product().plan().profile().id(),
         runtime.product().service_availability().len(),
-        runtime.product().harness_provider_ids().len(),
         runtime.product().plugin_runtime(),
     );
 
@@ -1093,10 +1092,8 @@ async fn run_interactive(
     } else {
         default_agent.clone()
     };
-    let effective_agent = agent_type_with_harness_profile(
-        effective_agent,
-        harness_profile.as_deref(),
-    );
+    let effective_agent =
+        agent_type_with_harness_profile(effective_agent, harness_profile.as_deref());
 
     // If --continue or --session was given, skip the startup page and go directly
     // to chat with the resolved session.
@@ -1150,7 +1147,9 @@ async fn run_interactive(
 
     let agent_type = harness_profile
         .as_deref()
-        .map(|profile| agent_type_with_harness_profile(startup_page.agent_type().to_string(), Some(profile)))
+        .map(|profile| {
+            agent_type_with_harness_profile(startup_page.agent_type().to_string(), Some(profile))
+        })
         .unwrap_or_else(|| startup_page.agent_type().to_string());
     if matches!(startup_result, StartupResult::NewSession { .. }) {
         let selected_model_id = startup_page.selected_model_id().map(str::to_string);
@@ -1362,11 +1361,8 @@ async fn run_cli() -> Result<()> {
                     message,
                     agent: agent_type_with_harness_profile(
                         agent,
-                        resolved_command_harness_profile(
-                            &cli.harness_profile,
-                            harness_profile,
-                        )
-                        .as_deref(),
+                        resolved_command_harness_profile(&cli.harness_profile, harness_profile)
+                            .as_deref(),
                     ),
                     continue_last,
                     resume,

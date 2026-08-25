@@ -3,20 +3,18 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    build_descriptor_harness_registry, AgentEventStream, AgentModeCatalogEntry,
-    AgentModeCatalogPort, AgentModeCatalogQuery, AgentRunRequest, AgentRuntimeBuilder,
-    AgentRuntimeSdkCompatibility, AgentRuntimeSdkStability, AgentSessionClosePort,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
-    AgentTransientSessionDiscardRequest, ClockPort, FileSystemPort, GitPort, HarnessCapability,
-    HarnessProviderDescriptor, HarnessWorkflow, PortErrorKind, PortResult, RuntimeAgentRegistry,
-    RuntimeAgentRegistryQuery, RuntimeError, RuntimeEventEnvelope, RuntimeEventSink,
-    RuntimeEventType, RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan,
-    RuntimeHookRegistry, RuntimeServiceCapability, RuntimeServicePort, RuntimeServices,
-    RuntimeServicesBuilder, SessionSelector, SessionStorageKind, SessionStoragePathRequest,
-    SessionStoragePathResolution, SessionStorePort, ToolRegistry, ToolRegistryItem,
-    WorkspaceDiffContent, WorkspaceDiffFile, WorkspaceDiffFileStatus, WorkspaceDiffSnapshot,
-    WorkspacePort,
+    AgentEventStream, AgentModeCatalogEntry, AgentModeCatalogPort, AgentModeCatalogQuery,
+    AgentRunRequest, AgentRuntimeBuilder, AgentRuntimeSdkCompatibility, AgentRuntimeSdkStability,
+    AgentSessionClosePort, AgentSessionCreateRequest, AgentSessionCreateResult,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentTransientSessionDiscardRequest, ClockPort, FileSystemPort, GitPort, PortErrorKind,
+    PortResult, RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeError,
+    RuntimeEventEnvelope, RuntimeEventSink, RuntimeEventType, RuntimeHookErrorPolicy,
+    RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry, RuntimeServiceCapability,
+    RuntimeServicePort, RuntimeServices, RuntimeServicesBuilder, SessionSelector,
+    SessionStorageKind, SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort,
+    ToolRegistry, ToolRegistryItem, WorkspaceDiffContent, WorkspaceDiffFile,
+    WorkspaceDiffFileStatus, WorkspaceDiffSnapshot, WorkspacePort,
 };
 use serde_json::{json, Value};
 
@@ -76,7 +74,7 @@ impl AgentModeCatalogPort for FakeModeCatalog {
 fn sdk_facade_exposes_versioned_preview_compatibility_contract() {
     let compatibility = AgentRuntimeSdkCompatibility::current();
 
-    assert_eq!(compatibility.api_version, 8);
+    assert_eq!(compatibility.api_version, 9);
     assert_eq!(compatibility.crate_version, env!("CARGO_PKG_VERSION"));
     assert_eq!(compatibility.stability, AgentRuntimeSdkStability::Preview);
 }
@@ -370,18 +368,11 @@ async fn sdk_facade_fails_closed_without_a_mode_catalog_owner() {
 }
 
 #[tokio::test]
-async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core() {
+async fn sdk_facade_accepts_fake_services_tools_and_hooks_without_core() {
     let provider = Arc::new(FakeSdkAgentProvider::default());
     let services = fake_sdk_services();
     let mut tools = ToolRegistry::new();
     tools.register_tool(Arc::new(FakeSdkTool));
-    let harnesses = build_descriptor_harness_registry([HarnessProviderDescriptor::legacy_facade(
-        "sdk.fake_harness",
-        HarnessWorkflow::Sdd,
-        &[HarnessCapability::Plan],
-        "external-sdk-harness",
-    )])
-    .expect("fake harness registry should build");
     let hooks = RuntimeHookRegistry::builder()
         .register(
             RuntimeHookPlan::new("sdk.post_call", RuntimeHookKind::SuccessfulToolPostCall)
@@ -395,7 +386,6 @@ async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core
         .with_submission_port(provider)
         .with_services(services)
         .with_tool_registry(Arc::new(tools))
-        .with_harness_registry(Arc::new(harnesses))
         .with_hook_registry(hooks)
         .with_agent_registry(Arc::new(FakeSdkAgentRegistry {
             agent_ids: vec!["agentic".to_string(), "Explore".to_string()],
@@ -409,7 +399,6 @@ async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core
         .expect("sdk runtime");
 
     assert_eq!(runtime.registered_tool_names(), vec!["sdk_echo"]);
-    assert_eq!(runtime.harness_provider_ids(), vec!["sdk.fake_harness"]);
     assert_eq!(runtime.hook_registry().hooks()[0].id(), "sdk.post_call");
     assert_eq!(
         runtime.registered_agent_ids(RuntimeAgentRegistryQuery::default()),
