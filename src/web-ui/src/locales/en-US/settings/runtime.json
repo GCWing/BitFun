@@ -128,6 +128,7 @@
     "openSettings": "System settings",
     "refreshStatus": "Refresh status",
     "desktopOnly": "Desktop control is only available in the BitFun desktop app.",
+    "peerUnsupported": "Desktop control runs on the connected peer host. This peer host (CLI) does not support it, so it cannot be configured here.",
     "platformNote": "Note",
     "platformNotes": {
       "macos": "This build still needs Accessibility permission in System Settings.",
@@ -140,6 +141,7 @@
     "sectionTitle": "Browser control",
     "sectionDescription": "Choose the browser BitFun uses and how it connects.",
     "desktopOnly": "Browser control is only available in the BitFun desktop app.",
+    "peerUnsupported": "Browser control runs on the connected peer host. This peer host (CLI) does not support it, so it cannot be configured here.",
     "preferredBrowser": "Browser",
     "preferredBrowserDesc": "The default option follows your system browser.",
     "notInstalled": "not installed",

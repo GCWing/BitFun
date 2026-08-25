@@ -30,6 +30,18 @@ const toolLog = createLogger('useAgentsList');
 export type FilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
 export type FilterType = 'all' | 'mode' | 'subagent';
 
+/**
+ * State of the tool catalog load, so the UI can distinguish "host doesn't expose
+ * a catalog", "the read failed (retryable)", and "the runtime really has no
+ * tools" — collapsing all three into `[]` masked transport failures as an
+ * empty list. See PR #2428 #5.
+ */
+export type ToolCatalogStatus =
+  | 'available'
+  | 'unsupported'
+  | 'failed'
+  | 'empty';
+
 export interface ToolInfo {
   name: string;
   description: string;
@@ -170,6 +182,14 @@ export function useAgentsList({
   const notification = useNotification();
   const { workspace, workspacePath } = useCurrentWorkspace();
   const peerDevice = usePeerDeviceModeOptional();
+  // Identity of the rendered surface: null on the controller, otherwise the
+  // peer device id. Part of the catalog-load deps so A→B (same workspacePath,
+  // same capability) still reloads — otherwise the UI keeps A's catalog while
+  // config mutations route to B. The loadRequestIdRef guard drops A's in-flight
+  // result once B's load starts. See PR #2428 #3.
+  const renderedPeerDeviceId = peerDevice?.peerMode.active
+    ? peerDevice.peerMode.deviceId
+    : null;
   // True on this machine; on a peer, true only after the host advertises the
   // `tool_catalog` capability (null while probing = optimistic, since a CLI
   // Peer Host now implements it). When a peer does not support the catalog we
@@ -180,11 +200,19 @@ export function useAgentsList({
       return true;
     }
     const capabilities = peerDevice.currentPeerCapabilities;
-    return capabilities === null ? true : capabilities.toolCatalog;
+    // null capabilities = host not yet probed → optimistic. A probed host may
+    // also report `null` for this field (older host that didn't advertise it):
+    // stay optimistic so an older Desktop that does implement get_all_tools_info
+    // keeps its list. An older CLI that lacks it returns unsupported on invoke,
+    // which the catch path surfaces. See PR #2428 #4.
+    return capabilities === null || capabilities.toolCatalog === null
+      ? true
+      : capabilities.toolCatalog;
   })();
   const [allAgents, setAllAgents] = useState<AgentWithCapabilities[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+  const [toolCatalogStatus, setToolCatalogStatus] = useState<ToolCatalogStatus>('available');
   const [configuredModels, setConfiguredModels] = useState<AIModelConfig[]>([]);
   const [modeProfiles, setModeProfiles] = useState<Record<string, ModeProfileEntry>>({});
   const [agentSkills, setAgentSkills] = useState<Record<string, ModeSkillInfo[]>>({});
@@ -198,16 +226,25 @@ export function useAgentsList({
   const loadAgents = useCallback(async () => {
     const requestId = ++loadRequestIdRef.current;
     setLoading(true);
+    // `renderedPeerDeviceId` is read here so a surface switch (A→B) recreates
+    // this callback even when canQueryToolCatalog/workspacePath are unchanged;
+    // the requestId guard then drops the previous surface's in-flight result.
+    // See PR #2428 #3.
+    const surfaceTag = renderedPeerDeviceId ?? 'controller';
 
     const fetchTools = async (): Promise<ToolInfo[]> => {
       if (!canQueryToolCatalog) {
-        toolLog.info('Tool catalog unsupported on the current peer host; leaving the list empty');
+        toolLog.info('Tool catalog unsupported on the current peer host; leaving the list empty', { surface: surfaceTag });
+        setToolCatalogStatus('unsupported');
         return [];
       }
       try {
-        return await api.invoke<ToolInfo[]>('get_all_tools_info');
+        const tools = await api.invoke<ToolInfo[]>('get_all_tools_info');
+        setToolCatalogStatus(tools.length > 0 ? 'available' : 'empty');
+        return tools;
       } catch (error) {
         toolLog.error('Failed to load tool catalog', { error });
+        setToolCatalogStatus('failed');
         return [];
       }
     };
@@ -326,7 +363,7 @@ export function useAgentsList({
         setLoading(false);
       }
     }
-  }, [canQueryToolCatalog, workspacePath]);
+  }, [canQueryToolCatalog, workspacePath, renderedPeerDeviceId]);
 
   useEffect(() => {
     void loadAgents();
@@ -608,6 +645,7 @@ export function useAgentsList({
     filteredAgents,
     loading,
     availableTools,
+    toolCatalogStatus,
     configuredModels,
     getModeProfile,
     getAgentSkills,

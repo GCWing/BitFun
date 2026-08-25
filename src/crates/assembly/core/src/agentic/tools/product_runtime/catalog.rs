@@ -8,7 +8,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolDefinition;
 use bitfun_agent_tools::{
     resolve_contextual_tool_manifest, resolve_contextual_visible_tools, ContextualToolManifest,
-    ContextualVisibleTools, DynamicMcpToolInfo, DynamicToolInfo,
+    ContextualVisibleTools, DynamicToolInfo,
     GetToolSpecCatalogProvider, GetToolSpecDeferredToolSummary,
     GetToolSpecExecutionError, GetToolSpecRuntime, ToolCatalogRuntime, ToolCatalogSnapshotProvider,
     ToolManifestDefinition, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
@@ -68,21 +68,6 @@ pub async fn build_all_tools_info() -> Vec<ToolInfoDto> {
         infos.push(build_tool_info(tool).await);
     }
     infos
-}
-
-/// Map a core dynamic tool descriptor to the shared `DynamicToolInfo` DTO.
-///
-/// Kept as the single conversion so Desktop and any future host share one
-/// shape; Core's `Tool::dynamic_tool_info` already returns `DynamicToolInfo`,
-/// so this is currently identity, but it pins the boundary in one place.
-#[allow(dead_code)]
-pub fn to_dynamic_tool_info(info: DynamicToolInfo) -> DynamicToolInfo {
-    info
-}
-
-#[allow(dead_code)]
-pub fn to_dynamic_mcp_tool_info(info: DynamicMcpToolInfo) -> DynamicMcpToolInfo {
-    info
 }
 
 #[derive(Debug, Clone)]
