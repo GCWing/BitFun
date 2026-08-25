@@ -1487,10 +1487,10 @@ mod tests {
 
     use super::{git_operation_needs_light_checkpoint, CheckoutPlan, GitTool, ParsedDiffArgs};
     use serde_json::json;
-    use std::{fs, path::Path, process::Command};
+    use std::{fs, path::Path};
 
     fn git(root: &Path, args: &[&str], commit_date: Option<&str>) {
-        let mut command = Command::new("git");
+        let mut command = crate::util::create_test_command("git");
         command.current_dir(root).args(args);
         if let Some(commit_date) = commit_date {
             command

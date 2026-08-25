@@ -72,7 +72,8 @@ function renderToSvg(dotContent) {
     return execSync('dot -Tsvg', {
       input: dotContent,
       encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024
+      maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true
     });
   } catch (err) {
     console.error('Error running dot:', err.message);

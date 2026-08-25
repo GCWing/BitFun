@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use super::lifecycle::{
     completed_turn_failure, drain_interrupted_turn_events, effective_event_invocation,
     event_belongs_to_exec_turn, event_turn_id, is_exec_terminal,
@@ -103,7 +101,7 @@ fn git_patch_includes_staged_and_untracked_files_from_a_repo_subdirectory() {
     let temp = tempfile::tempdir().expect("tempdir");
     let repo = temp.path();
     let run_git = |args: &[&str]| {
-        let output = Command::new("git")
+        let output = bitfun_core::util::process_manager::create_command("git")
             .args(args)
             .current_dir(repo)
             .output()
@@ -141,7 +139,7 @@ fn git_patch_excludes_a_preexisting_output_artifact_inside_the_repository() {
     let temp = tempfile::tempdir().expect("tempdir");
     let repo = temp.path();
     let run_git = |args: &[&str]| {
-        let output = Command::new("git")
+        let output = bitfun_core::util::process_manager::create_command("git")
             .args(args)
             .current_dir(repo)
             .output()
@@ -181,7 +179,7 @@ fn git_patch_excludes_a_tracked_output_artifact_inside_the_repository() {
     let temp = tempfile::tempdir().expect("tempdir");
     let repo = temp.path();
     let run_git = |args: &[&str]| {
-        let output = Command::new("git")
+        let output = bitfun_core::util::process_manager::create_command("git")
             .args(args)
             .current_dir(repo)
             .output()
@@ -702,7 +700,7 @@ fn deferred_exec_event_projects_effective_name_and_input() {
 }
 
 fn run_git(workspace: &std::path::Path, args: &[&str]) {
-    let output = Command::new("git")
+    let output = bitfun_core::util::process_manager::create_command("git")
         .args(args)
         .current_dir(workspace)
         .output()

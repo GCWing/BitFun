@@ -254,10 +254,9 @@ fn hash_metadata_path(path: &Path, hasher: &mut DefaultHasher, remaining_depth: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Command;
 
     fn git(root: &Path, args: &[&str]) {
-        let output = Command::new("git")
+        let output = crate::util::create_test_command("git")
             .current_dir(root)
             .args(args)
             .output()

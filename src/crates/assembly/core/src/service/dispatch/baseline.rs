@@ -564,7 +564,7 @@ mod tests {
     use super::*;
 
     fn git(path: &Path, args: &[&str]) -> String {
-        let output = std::process::Command::new("git")
+        let output = crate::util::create_test_command("git")
             .arg("-C")
             .arg(path)
             .args(args)

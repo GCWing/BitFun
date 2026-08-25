@@ -1,9 +1,9 @@
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 
 fn run_cli(workspace: &Path, user_root: &Path, home_root: &Path, args: &[&str]) -> Output {
     let config_root = user_root.join("host-config");
-    Command::new(env!("CARGO_BIN_EXE_bitfun"))
+    bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
         .args(args)
         .current_dir(workspace)
         .env_remove("BITFUN_USER_ROOT")

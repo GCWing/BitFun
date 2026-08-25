@@ -22,11 +22,13 @@ fn sdk_host_process_job_reclaims_descendants_when_host_exits() {
         Ok("owner") => {
             bitfun_sdk_host_app::initialize_process_runtime()
                 .expect("initialize owned SDK Host process");
-            let descendant = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", TEST_NAME, "--nocapture"])
-                .env(MODE_ENV, "descendant")
-                .spawn()
-                .expect("spawn owned descendant");
+            let descendant = bitfun_services_core::process_manager::create_command(
+                std::env::current_exe().unwrap(),
+            )
+            .args(["--exact", TEST_NAME, "--nocapture"])
+            .env(MODE_ENV, "descendant")
+            .spawn()
+            .expect("spawn owned descendant");
             std::fs::write(
                 std::env::var(PID_FILE_ENV).expect("PID file path"),
                 descendant.id().to_string(),
@@ -40,12 +42,13 @@ fn sdk_host_process_job_reclaims_descendants_when_host_exits() {
 
     let directory = tempfile::tempdir().expect("create job test directory");
     let pid_file = directory.path().join("descendant.pid");
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", TEST_NAME, "--nocapture"])
-        .env(MODE_ENV, "owner")
-        .env(PID_FILE_ENV, &pid_file)
-        .status()
-        .expect("run process-tree owner fixture");
+    let status =
+        bitfun_services_core::process_manager::create_command(std::env::current_exe().unwrap())
+            .args(["--exact", TEST_NAME, "--nocapture"])
+            .env(MODE_ENV, "owner")
+            .env(PID_FILE_ENV, &pid_file)
+            .status()
+            .expect("run process-tree owner fixture");
     assert!(status.success(), "process-tree owner fixture failed");
     let descendant_pid = std::fs::read_to_string(pid_file)
         .expect("read descendant PID")
@@ -53,7 +56,7 @@ fn sdk_host_process_job_reclaims_descendants_when_host_exits() {
         .to_string();
     std::thread::sleep(std::time::Duration::from_millis(200));
 
-    let cleanup = std::process::Command::new("taskkill.exe")
+    let cleanup = bitfun_services_core::process_manager::create_command("taskkill.exe")
         .args(["/pid", &descendant_pid, "/t", "/f"])
         .output()
         .expect("probe descendant process");

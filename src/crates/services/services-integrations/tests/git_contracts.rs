@@ -8,7 +8,6 @@ use bitfun_services_integrations::git::{
     GitService, GitStatus, GitWorkspaceDiffPort, GitWorktreeInfo, GraphNode, GraphRef,
 };
 use std::fs;
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -737,7 +736,7 @@ impl Drop for TempRepoDir {
 }
 
 fn run_git(repo_dir: &std::path::Path, args: &[&str]) {
-    let output = Command::new("git")
+    let output = bitfun_services_core::process_manager::create_command("git")
         .current_dir(repo_dir)
         .args(args)
         .output()
@@ -752,7 +751,7 @@ fn run_git(repo_dir: &std::path::Path, args: &[&str]) {
 }
 
 fn run_git_expect_failure(repo_dir: &std::path::Path, args: &[&str]) {
-    let output = Command::new("git")
+    let output = bitfun_services_core::process_manager::create_command("git")
         .current_dir(repo_dir)
         .args(args)
         .output()

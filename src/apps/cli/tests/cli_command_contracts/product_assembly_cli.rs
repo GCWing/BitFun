@@ -1,5 +1,3 @@
-use std::process::Command;
-
 #[test]
 fn doctor_reports_the_validated_cli_runtime_assembly() {
     let temp = tempfile::tempdir().expect("tempdir");
@@ -9,19 +7,20 @@ fn doctor_reports_the_validated_cli_runtime_assembly() {
     let config_root = temp.path().join("host-config");
     std::fs::create_dir_all(&workspace).expect("create workspace");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_bitfun"))
-        .arg("doctor")
-        .current_dir(&workspace)
-        .env_remove("BITFUN_USER_ROOT")
-        .env_remove("BITFUN_HOME")
-        .env("BITFUN_E2E_STORAGE_GUARD", "1")
-        .env("BITFUN_E2E_USER_ROOT", &user_root)
-        .env("BITFUN_E2E_HOME", &home_root)
-        .env("APPDATA", &config_root)
-        .env("XDG_CONFIG_HOME", &config_root)
-        .env("HOME", &home_root)
-        .output()
-        .expect("run bitfun doctor");
+    let output =
+        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+            .arg("doctor")
+            .current_dir(&workspace)
+            .env_remove("BITFUN_USER_ROOT")
+            .env_remove("BITFUN_HOME")
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env("BITFUN_E2E_USER_ROOT", &user_root)
+            .env("BITFUN_E2E_HOME", &home_root)
+            .env("APPDATA", &config_root)
+            .env("XDG_CONFIG_HOME", &config_root)
+            .env("HOME", &home_root)
+            .output()
+            .expect("run bitfun doctor");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -57,19 +56,20 @@ fn health_reports_assembly_and_compatibility_boundaries() {
     let config_root = temp.path().join("host-config");
     std::fs::create_dir_all(&workspace).expect("create workspace");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_bitfun"))
-        .arg("health")
-        .current_dir(&workspace)
-        .env_remove("BITFUN_USER_ROOT")
-        .env_remove("BITFUN_HOME")
-        .env("BITFUN_E2E_STORAGE_GUARD", "1")
-        .env("BITFUN_E2E_USER_ROOT", &user_root)
-        .env("BITFUN_E2E_HOME", &home_root)
-        .env("APPDATA", &config_root)
-        .env("XDG_CONFIG_HOME", &config_root)
-        .env("HOME", &home_root)
-        .output()
-        .expect("run bitfun health");
+    let output =
+        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+            .arg("health")
+            .current_dir(&workspace)
+            .env_remove("BITFUN_USER_ROOT")
+            .env_remove("BITFUN_HOME")
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env("BITFUN_E2E_USER_ROOT", &user_root)
+            .env("BITFUN_E2E_HOME", &home_root)
+            .env("APPDATA", &config_root)
+            .env("XDG_CONFIG_HOME", &config_root)
+            .env("HOME", &home_root)
+            .output()
+            .expect("run bitfun health");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -104,7 +104,8 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
         let config_root = temp.path().join("host-config");
         std::fs::create_dir_all(&workspace).expect("create workspace");
 
-        let mut command = Command::new(env!("CARGO_BIN_EXE_bitfun"));
+        let mut command =
+            bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"));
         command
             .arg("doctor")
             .current_dir(&workspace)

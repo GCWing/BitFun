@@ -16,7 +16,9 @@ struct AcpProcess {
 
 impl AcpProcess {
     async fn spawn(environment: &CliTestEnvironment) -> Self {
-        let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_bitfun"));
+        let mut command = bitfun_services_core::process_manager::create_tokio_command(env!(
+            "CARGO_BIN_EXE_bitfun"
+        ));
         command
             .arg("acp")
             .stdin(Stdio::piped())
