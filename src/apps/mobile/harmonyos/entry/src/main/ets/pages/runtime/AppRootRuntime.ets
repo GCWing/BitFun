@@ -233,6 +233,42 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     await this.selectWorkspace(path);
   }
 
+  async selectDirectoryDevice(deviceId: string): Promise<void> {
+    await this.deviceDirectoryViewModel.selectDevice(deviceId);
+    const entry = this.deviceDirectoryState.find(deviceId);
+    if (entry && !entry.online && !this.isConnectedDirectoryTarget(deviceId)) {
+      return;
+    }
+    try {
+      await this.conversationController.ensureRemoteControlTarget(deviceId);
+      this.filePreviewController.close();
+      if (this.appShellState.wideLayout) {
+        await this.enterRemoteSurfaceWide();
+      } else {
+        await this.enterRemoteSurfaceCompact();
+      }
+      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
+    } catch (err) {
+      RemoteLogger.warn(`device directory switch failed device=${deviceId}: ${String(err)}`);
+    }
+  }
+
+  async openWorkspacePickerOnDevice(deviceId: string): Promise<void> {
+    await this.deviceDirectoryViewModel.selectDevice(deviceId);
+    const entry = this.deviceDirectoryState.find(deviceId);
+    if (entry && !entry.online && !this.isConnectedDirectoryTarget(deviceId)) {
+      return;
+    }
+    if (this.isConnectedDirectoryTarget(deviceId)) {
+      await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
+    }
+  }
+
+  private isConnectedDirectoryTarget(deviceId: string): boolean {
+    return deviceId === this.remotePageState.controlTargetDeviceId &&
+      RemoteUiState.canUseRemote((this.remotePageState.connectionState as ConnectionState));
+  }
+
   async selectAssistant(path: string): Promise<void> {
     this.filePreviewController.close();
     await this.remoteWorkspaceViewModel.selectAssistant(path);

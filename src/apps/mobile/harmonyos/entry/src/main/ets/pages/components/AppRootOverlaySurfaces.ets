@@ -42,6 +42,7 @@ export struct AppSidebarSurface {
       accountUserId: this.remotePageState.accountUserId,
       showViewSettingsButton: false,
       showWorkspaceSection: true,
+      showConversationSection: false,
       contentSlot: () => {
         this.WorkspaceContent()
       },
@@ -78,6 +79,7 @@ export struct AppSidebarSurface {
         this.remotePageState.desktopName,
       selectedSessionId: this.remoteSelectedSessionId(),
       runningSessionId: this.remoteRunningSessionId(),
+      workspacePickerPlacement: this.sessionDetailsPlacement,
       onOpenSession: this.actions.onSidebar.openSession,
       onCreateInWorkspace: (deviceId: string, path: string) => {
         this.actions.onSidebar.close();
@@ -86,9 +88,9 @@ export struct AppSidebarSurface {
       onOpenWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.selectWorkspace(path, deviceId);
       },
-      onToggleDevice: this.actions.onRemoteHome.toggleDirectoryDevice,
+      onSelectDevice: this.actions.onRemoteHome.selectDirectoryDevice,
       onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
-      onAdd: this.actions.onSidebar.addDesktop
+      onAddWorkspace: this.actions.onRemoteHome.addDirectoryWorkspace
     })
   }
 

@@ -134,11 +134,13 @@ export abstract class AppRootRuntimeComposition {
   abstract openAddConnectionFromSettings(): void;
   abstract openAppSidebar(): void;
   abstract openRemoteControlSettings(): void;
+  abstract openWorkspacePickerOnDevice(deviceId: string): Promise<void>;
   abstract pickImages(): Promise<void>;
   abstract publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void;
   abstract reconcileCreatedRemoteSession(session: SessionSummary): Promise<void>;
   abstract reconnect(): Promise<void>;
   abstract reconnectActiveRemote(): Promise<void>;
+  abstract selectDirectoryDevice(deviceId: string): Promise<void>;
   abstract selectAssistant(path: string): Promise<void>;
   abstract selectWorkspace(path: string): Promise<void>;
   abstract selectWorkspaceOnDevice(path: string, deviceId?: string): Promise<void>;
@@ -867,8 +869,11 @@ export abstract class AppRootRuntimeComposition {
       createInWorkspaceInPlace: (path: string, agentType: string, deviceId?: string): void => {
         this.conversationController.createRemoteSessionInWorkspace(path, agentType, true, deviceId);
       },
-      toggleDirectoryDevice: (deviceId: string): void => {
-        void this.deviceDirectoryViewModel.toggleDevice(deviceId);
+      selectDirectoryDevice: (deviceId: string): void => {
+        void this.selectDirectoryDevice(deviceId);
+      },
+      addDirectoryWorkspace: (deviceId: string): void => {
+        void this.openWorkspacePickerOnDevice(deviceId);
       },
       retryDirectoryDevice: (deviceId: string): void => {
         void this.deviceDirectoryViewModel.retryDevice(deviceId);

@@ -23,6 +23,8 @@ export class DeviceDirectoryEntry {
 @ObservedV2
 export class DeviceDirectoryState {
   @Trace devices: DeviceDirectoryEntry[] = [];
+  /** Device whose workspaces are projected below the flat device list. */
+  @Trace selectedDeviceId: string = '';
 
   replace(devices: DeviceDirectoryEntry[]): void {
     this.devices = devices;
@@ -30,6 +32,11 @@ export class DeviceDirectoryState {
 
   clear(): void {
     this.devices = [];
+    this.selectedDeviceId = '';
+  }
+
+  select(deviceId: string): void {
+    this.selectedDeviceId = deviceId.trim();
   }
 
   find(deviceId: string): DeviceDirectoryEntry | undefined {
