@@ -210,6 +210,20 @@ describe('peerInvokePriorityFor', () => {
     expect(isPeerRetryableReadCommand('get_announcement_tips')).toBe(false);
   });
 
+  it('retries Browser Control / Computer Use status reads but not their mutations', () => {
+    // The pure reads start with `browser_`/`computer_`, not `get_`/`read_`/
+    // `list_`, so they are listed explicitly; the side-effecting commands in
+    // the same family stay non-retryable mutations. See PR #2428 round 5 #3.
+    expect(isPeerRetryableReadCommand('browser_control_get_status')).toBe(true);
+    expect(isPeerRetryableReadCommand('browser_control_list_browsers')).toBe(true);
+    expect(isPeerRetryableReadCommand('computer_use_get_status')).toBe(true);
+    expect(isPeerRetryableReadCommand('browser_control_launch')).toBe(false);
+    expect(isPeerRetryableReadCommand('browser_control_restart_with_cdp')).toBe(false);
+    expect(isPeerRetryableReadCommand('browser_control_enable_default_cdp')).toBe(false);
+    expect(isPeerRetryableReadCommand('computer_use_request_permissions')).toBe(false);
+    expect(isPeerRetryableReadCommand('computer_use_open_system_settings')).toBe(false);
+  });
+
   it('retries only mutations with an explicit host idempotency identity', () => {
     expect(isPeerRetryableIdempotentMutation('start_dialog_turn', {
       request: { sessionId: 'session-1', turnId: 'turn-1' },

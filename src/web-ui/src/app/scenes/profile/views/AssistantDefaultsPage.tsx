@@ -40,6 +40,7 @@ import {
   type AssistantDefaultsStatusFilter,
 } from './assistantDefaultsPresentation';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { canQueryToolCatalogOnSurface } from '@/infrastructure/peer-device/peerCapabilityResolution';
 import './NurseryView.scss';
 import './AssistantDefaultsPage.scss';
 
@@ -117,25 +118,12 @@ const AssistantDefaultsPage: React.FC = () => {
   const { t } = useI18n('scenes/profile');
   const { openGallery } = useNurseryStore();
   const peerDevice = usePeerDeviceModeOptional();
-  // Whether the current host advertises the `tool_catalog` capability. Local
-  // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
-  // While the capability is still being probed (null) we stay optimistic so the
-  // tool list doesn't disappear then reappear — a CLI Peer Host now implements
-  // get_all_tools_info, so the optimistic default is correct in the common case.
-  const canQueryToolCatalog = (() => {
-    if (!peerDevice || !peerDevice.peerMode.active) {
-      return true;
-    }
-    const capabilities = peerDevice.currentPeerCapabilities;
-    // null capabilities = host not yet probed → optimistic. A probed host may
-    // also report `null` for this field (older host that didn't advertise it):
-    // stay optimistic so an older Desktop that does implement get_all_tools_info
-    // keeps its list. An older CLI that lacks it returns unsupported on invoke.
-    // See PR #2428 #4.
-    return capabilities === null || capabilities.toolCatalog === null
-      ? true
-      : capabilities.toolCatalog;
-  })();
+  // Identity of the rendered surface, so A→B (same capability, same workspace)
+  // still reloads the catalog from B instead of keeping A's stale list while
+  // config mutations route to B. See PR #2428 #3.
+  const renderedPeerDeviceId = peerDevice?.peerMode.active
+    ? peerDevice.peerMode.deviceId
+    : null;
 
   const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
@@ -153,6 +141,34 @@ const AssistantDefaultsPage: React.FC = () => {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
 
+  // Distinguish "host doesn't expose a catalog" / "read failed" / "really no
+  // tools" so the UI doesn't collapse all three into an empty list. See #2428 #5.
+  const [toolCatalogStatus, setToolCatalogStatus] = useState<
+    'available' | 'unsupported' | 'failed' | 'empty'
+  >('available');
+
+  // Whether the current host advertises the `tool_catalog` capability. Local
+  // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
+  // While the capability is still being probed (null) we stay optimistic so the
+  // tool list doesn't disappear then reappear — a CLI Peer Host now implements
+  // get_all_tools_info, so the optimistic default is correct in the common case.
+  // An older CLI that didn't advertise the field is resolved via `hostKind`
+  // (cli → unsupported) by the shared helper, so the UI shows the unsupported
+  // state instead of masking a "not supported" error as an empty list. See PR
+  // #2428 round 5 #1.
+  const canQueryToolCatalog = canQueryToolCatalogOnSurface(
+    Boolean(peerDevice?.peerMode.active),
+    peerDevice?.currentPeerCapabilities ?? null,
+  );
+
+  // Writes (tool toggle, group toggle-all, reset) only make sense when the
+  // catalog loaded from this host. An unsupported or failed read would let the
+  // user toggle entries that don't reflect the runtime and save a config that
+  // the host can't act on. `empty` (catalog available, just no tools) keeps
+  // writes enabled because there is nothing to toggle anyway. See PR #2428
+  // round 5 #2.
+  const toolCatalogWritable = toolCatalogStatus === 'available' || toolCatalogStatus === 'empty';
+
   const loadDefaults = useCallback(async () => {
     setLoading(true);
     setLoadWarning(false);
@@ -161,12 +177,22 @@ const AssistantDefaultsPage: React.FC = () => {
       // instead of swallowing the unsupported error as an empty list. The
       // empty list then means "this host doesn't expose a catalog", not
       // "the runtime has no tools".
-      const toolsPromise = canQueryToolCatalog
-        ? toolAPI.getAllToolsInfo().catch((error) => {
-            log.error('Failed to load assistant tools', error);
-            return [];
+      let toolsPromise: Promise<ToolInfo[]>;
+      if (canQueryToolCatalog) {
+        toolsPromise = toolAPI.getAllToolsInfo()
+          .then((tools) => {
+            setToolCatalogStatus(tools.length > 0 ? 'available' : 'empty');
+            return tools;
           })
-        : Promise.resolve([] as ToolInfo[]);
+          .catch((error) => {
+            log.error('Failed to load assistant tools', error);
+            setToolCatalogStatus('failed');
+            return [] as ToolInfo[];
+          });
+      } else {
+        setToolCatalogStatus('unsupported');
+        toolsPromise = Promise.resolve([] as ToolInfo[]);
+      }
       const [modeConf, tools, skillList, servers] = await Promise.all([
         configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch((error) => {
           log.error('Failed to load assistant profile config', error);
@@ -199,7 +225,7 @@ const AssistantDefaultsPage: React.FC = () => {
 
   useEffect(() => {
     void loadDefaults();
-  }, [loadDefaults]);
+  }, [loadDefaults, renderedPeerDeviceId]);
 
   useEffect(() => {
     if (!detail) return;
@@ -726,7 +752,8 @@ const AssistantDefaultsPage: React.FC = () => {
                 {allNames.length > 0 ? (
                   <Switch
                     checked={allEnabled}
-                    disabled={assistantModeConfig === null
+                    disabled={!toolCatalogWritable
+                      || assistantModeConfig === null
                       || allNames.some((name) => toolsLoading[name])}
                     aria-busy={allNames.some((name) => toolsLoading[name])}
                     onChange={() => void handleGroupToggleAll(allNames)}

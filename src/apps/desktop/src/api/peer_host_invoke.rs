@@ -434,6 +434,15 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
         "peer": true,
         "device_id": current_device_id_for_peer()
             .unwrap_or_else(|_| "unknown".to_string()),
+        // Declares which kind of host answered so the controller can resolve
+        // capabilities that an older host did not advertise. An older Desktop
+        // (pre-`50b76516`) omits `cancel_tool`/`tool_catalog` but still reports
+        // `host_type: "desktop"` — and Desktop has always implemented both — so
+        // the controller keeps the Interrupt button / tool list. An older CLI
+        // reports `host_type: "cli"` and never implemented them, so the
+        // controller gates them off instead of showing an action that silently
+        // fails. See PR #2428 round 5 #1.
+        "host_type": "desktop",
         "capabilities": {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
@@ -557,6 +566,10 @@ mod tests {
     #[tokio::test]
     async fn peer_ping_advertises_mutation_capabilities() {
         let value = peer_mode_ping().await.expect("peer ping");
+        assert_eq!(
+            value.get("host_type").and_then(Value::as_str),
+            Some("desktop")
+        );
         assert_eq!(
             value
                 .pointer("/capabilities/idempotent_dialog_submit")

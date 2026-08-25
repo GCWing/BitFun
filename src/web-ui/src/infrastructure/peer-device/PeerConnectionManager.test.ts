@@ -71,6 +71,41 @@ describe('PeerConnectionManager attach', () => {
     expect(caps.toolCatalog).toBe(true);
   });
 
+  it('parses host_type into hostKind for desktop and cli', async () => {
+    // host_type lets a controller resolve capabilities an older host did not
+    // advertise: an old Desktop always implemented cancel_tool/tool_catalog,
+    // an old CLI never did. See PR #2428 round 5 #1.
+    const makeManager = (hostType: string | undefined) => {
+      const value: Record<string, unknown> = {
+        ok: true,
+        peer: true,
+        device_id: 'd',
+        capabilities: {},
+      };
+      if (hostType !== undefined) value.host_type = hostType;
+      return new PeerConnectionManager({
+        deviceRpc: async () => JSON.stringify({
+          resp: 'host_invoke_result',
+          ok: true,
+          value,
+        }),
+        getControllerDeviceId: async () => 'controller-1',
+      });
+    };
+
+    const desktop = await makeManager('desktop').connect('peer-1', 'Studio');
+    expect(desktop.getState().capabilities.hostKind).toBe('desktop');
+
+    const cli = await makeManager('cli').connect('peer-2', 'Studio');
+    expect(cli.getState().capabilities.hostKind).toBe('cli');
+
+    const unknown = await makeManager(undefined).connect('peer-3', 'Studio');
+    expect(unknown.getState().capabilities.hostKind).toBeNull();
+
+    const garbage = await makeManager('relay').connect('peer-4', 'Studio');
+    expect(garbage.getState().capabilities.hostKind).toBeNull();
+  });
+
   it('leaves nothing attached when the handshake fails', async () => {
     const rpc = createRpc({ failCommands: new Set(['peer_control_attach']) });
     const manager = createManager(rpc.deviceRpc);

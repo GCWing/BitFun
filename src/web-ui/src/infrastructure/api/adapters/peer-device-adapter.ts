@@ -301,6 +301,16 @@ const RETRYABLE_READ_COMMANDS = new Set([
   'list_files',
   'check_path_exists',
   'get_system_info',
+  // Browser Control / Computer Use status reads. These are pure reads with no
+  // side effects (the launch / restart / CDP-enable / permission-prompt /
+  // open-settings commands stay mutation below). They start with `browser_`
+  // / `computer_`, not `get_`/`read_`/`list_`, so the prefix rules in
+  // isPeerRetryableReadCommand miss them — list them explicitly so a Desktop
+  // Peer settings page survives a brief relay blip with a read retry instead of
+  // a 30 s mutation timeout. See PR #2428 round 5 #3.
+  'browser_control_get_status',
+  'browser_control_list_browsers',
+  'computer_use_get_status',
 ]);
 
 const RETRYABLE_IDEMPOTENT_MUTATION_COMMANDS = new Set([

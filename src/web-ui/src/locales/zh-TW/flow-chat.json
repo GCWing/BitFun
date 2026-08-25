@@ -1753,7 +1753,8 @@
       "workingDirectory": "工作目錄:",
       "exitCode": "退出碼: {{code}}",
       "commandInterrupted": "命令已被中斷",
-      "executionFailed": "命令執行失敗"
+      "executionFailed": "命令執行失敗",
+      "interruptFailed": "無法中斷命令。遠端主機可能不支援逐工具取消，或請求失敗。"
     },
     "runCode": {
       "title": "執行程式碼",
