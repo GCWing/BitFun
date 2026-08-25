@@ -239,10 +239,7 @@ mod windows {
 
     fn request_automatic_restart(app: &tauri::AppHandle) {
         log::warn!("Requesting controlled application restart for WebView2 recovery");
-        crate::crash_diagnostics::mark_clean_shutdown("webview_recovery_restart");
-        crate::save_main_window_state(app, "webview_recovery_restart");
-        crate::perform_process_exit_cleanup();
-        app.request_restart();
+        request_controlled_restart(app, "webview_recovery_restart");
     }
 
     fn show_escape_dialog(app: tauri::AppHandle) {
@@ -265,19 +262,27 @@ mod windows {
                     request_user_restart(&app)
                 }
                 _ => {
-                    crate::crash_diagnostics::mark_clean_shutdown("webview_recovery_exit");
-                    crate::save_main_window_state(&app, "webview_recovery_exit_dialog");
-                    crate::perform_process_exit_cleanup();
-                    app.exit(1);
+                    crate::request_desktop_exit(&app, 1, "webview_recovery_exit");
                 }
             });
     }
 
     fn request_user_restart(app: &tauri::AppHandle) {
-        crate::crash_diagnostics::mark_clean_shutdown("webview_recovery_user_restart");
-        crate::save_main_window_state(app, "webview_recovery_user_restart");
-        crate::perform_process_exit_cleanup();
-        app.request_restart();
+        request_controlled_restart(app, "webview_recovery_user_restart");
+    }
+
+    fn request_controlled_restart(app: &tauri::AppHandle, reason: &'static str) {
+        crate::save_main_window_state(app, reason);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            crate::perform_process_exit_cleanup().await;
+            crate::crash_diagnostics::mark_clean_shutdown(reason);
+            log::info!(
+                "Desktop restart authorized after graceful shutdown: reason={}",
+                reason
+            );
+            app.request_restart();
+        });
     }
 
     fn map_failure_kind(kind: COREWEBVIEW2_PROCESS_FAILED_KIND) -> FailureKind {
