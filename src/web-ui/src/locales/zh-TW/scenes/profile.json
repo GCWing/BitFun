@@ -97,6 +97,8 @@
     "rules":     "暫無守則",
     "memory":    "暫無記憶",
     "tools":     "暫無工具資訊",
+    "toolsUnsupported": "所連接的 Peer 主機未提供工具目錄。",
+    "toolsFailed":     "無法載入工具目錄，請嘗試重新整理。",
     "skills":    "暫無技能"
   },
 

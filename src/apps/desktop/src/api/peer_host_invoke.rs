@@ -100,9 +100,10 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "remote_connect_weixin_qr_poll",
     "remote_connect_get_bot_verbose_mode",
     "remote_connect_set_bot_verbose_mode",
-    // This-machine computer-use / OS permission prompts
-    "computer_use_request_permissions",
-    "computer_use_open_system_settings",
+    // Computer-use OS permission prompts + system-settings are intentionally NOT
+    // local-only: under Desktop Peer Mode they must run on the peer host B (B
+    // surfaces B's own OS permission prompts / settings), reached via
+    // bridge_via_webview. CLI Peer refuses them in deny.rs. See SessionConfig.
     // Detached dispatch uses controller-owned SSH credentials and observers.
     "dispatch_list_targets",
     "dispatch_probe_target",
@@ -181,19 +182,20 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // IDE control events drive the controller window's panels; the result
     // report must settle on the controller's transport, not here.
     "report_ide_control_result",
-    // Controller app-shell / local-device commands (browser/webview/DevTools/
-    // desktop-pet/diagnostics) operate on the controller's own surfaces.
-    "browser_control_launch",
-    "browser_control_list_browsers",
-    "browser_control_get_status",
-    "browser_control_restart_with_cdp",
-    "browser_control_enable_default_cdp",
+    // Controller app-shell / local-device commands (embedded webview/DevTools/
+    // desktop-pet/diagnostics) operate on the controller's OWN surfaces and a
+    // peer host has no implementation for them, so they stay local-only.
+    //
+    // NOTE: the runtime-owning Browser Control and Computer Use commands are
+    // NOT local-only — they run the agent Tool, so under Desktop Peer Mode they
+    // route to the peer host B via bridge_via_webview (reads B's own browser
+    // and OS). CLI Peer refuses them in deny.rs and the UI gates the section on
+    // host type. See SessionConfig + cli deny.rs.
     "browser_webview_create",
     "browser_webview_eval",
     "browser_webview_navigate",
     "browser_webview_reload",
     "browser_webview_set_bounds",
-    "computer_use_get_status",
     "debug_devtools_available",
     "debug_open_devtools",
     "resize_agent_companion_desktop_pet",

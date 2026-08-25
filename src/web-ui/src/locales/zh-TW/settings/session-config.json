@@ -136,6 +136,7 @@
     "openSettings": "系統設置",
     "refreshStatus": "重新整理狀態",
     "desktopOnly": "桌面控制僅在 BitFun 桌面應用程式中可用。",
+    "peerUnsupported": "桌面控制執行於所連接的 Peer 主機。該 Peer 主機（CLI）不支援此功能，無法在此設定。",
     "platformNote": "說明",
     "platformNotes": {
       "macos": "目前版本仍需在系統設定中授予輔助功能權限。",
@@ -148,6 +149,7 @@
     "sectionTitle": "瀏覽器控制",
     "sectionDescription": "選擇 BitFun 使用的瀏覽器和連線方式。",
     "desktopOnly": "瀏覽器控制僅在 BitFun 桌面應用中可用。",
+    "peerUnsupported": "瀏覽器控制執行於所連接的 Peer 主機。該 Peer 主機（CLI）不支援此功能，無法在此設定。",
     "status": "連接狀態",
     "statusDesc": "",
     "notConnected": "未連接",

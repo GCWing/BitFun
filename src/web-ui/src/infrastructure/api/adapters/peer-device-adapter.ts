@@ -72,8 +72,11 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'peer_control_detach',
   'peer_mode_ping',
   'peer_controller_set_active',
-  'computer_use_request_permissions',
-  'computer_use_open_system_settings',
+  // `computer_use_request_permissions` / `computer_use_open_system_settings`
+  // are intentionally NOT local-only: they run on the host that runs the
+  // Computer Use Tool, so Desktop Peer B surfaces B's own OS permission prompts
+  // and settings panes. CLI Peer refuses them in deny.rs and the UI gates the
+  // section on host type. See SessionConfig + peer_host_invoke + cli deny.rs.
   // Detached dispatch uses this controller's SSH credentials and observer index.
   'dispatch_list_targets',
   'dispatch_probe_target',
@@ -173,23 +176,22 @@ const LOCAL_ONLY_COMMANDS = new Set([
   // returns unsupported. See PR #2428.
   'report_ide_control_result',
   // Controller app-shell / local-device commands reached by migrating dynamic
-  // invoke() sites behind the adapter fence. These previously hit the local
-  // Tauri host directly; routing them to a peer would be a regression (the peer
-  // host does not implement them, and they operate on the controller's own
-  // browser/webview/DevTools/desktop-pet/diagnostics). Declared LOCAL_ONLY so
-  // api.invoke keeps them on the controller. See PR #2428 (lint fence + dynamic
-  // import migration).
-  'browser_control_launch',
-  'browser_control_list_browsers',
-  'browser_control_get_status',
-  'browser_control_restart_with_cdp',
-  'browser_control_enable_default_cdp',
+  // invoke() sites behind the adapter fence. These operate on the controller's
+  // OWN surfaces (embedded webview, DevTools, desktop pet, diagnostics) and a
+  // peer host has no implementation for them, so routing to a peer would be a
+  // regression. Declared LOCAL_ONLY so api.invoke keeps them on the controller.
+  // See PR #2428 (lint fence + dynamic import migration).
+  //
+  // NOTE: the runtime-owning Browser Control and Computer Use commands are NOT
+  // here — they run the agent Tool, so they route to the host that runs the
+  // Tool: Desktop Peer bridges them to its own webview (reads the peer's own
+  // browser/OS), and CLI Peer refuses them in deny.rs (the UI gates the section
+  // on host type). See SessionConfig + peer_host_invoke + cli deny.rs.
   'browser_webview_create',
   'browser_webview_eval',
   'browser_webview_navigate',
   'browser_webview_reload',
   'browser_webview_set_bounds',
-  'computer_use_get_status',
   'debug_devtools_available',
   'debug_open_devtools',
   'resize_agent_companion_desktop_pet',
@@ -235,6 +237,11 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'get_agent_profile_config',
   'start_dialog_turn',
   'cancel_dialog_turn',
+  // Per-tool interrupt (Terminal cards) is interactive and time-sensitive: a
+  // long-running shell command keeps producing side effects until the cancel
+  // reaches the host. It must take the reserved high-priority slot, not queue
+  // behind normal reads/mutations. See PR #2428 review #4.
+  'cancel_tool',
   'rollback_session_to_turn',
   'list_pending_permission_requests',
   'subscribe_permission_requests',
