@@ -1,6 +1,7 @@
+import { Button } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, RefreshCw, Square } from 'lucide-react';
-import { Button, IconButton, Select, type SelectOption } from '@/component-library';
+import { IconButton, Select, type SelectOption } from '@/component-library';
 import {
   DEFAULT_SPEECH_SAMPLE_RATE,
   speechAPI,
@@ -280,9 +281,9 @@ export function VoiceInputDiagnostics({
             </div>
             <Button
               className="voice-input-config__diagnostic-button"
-              variant={phase === 'recording' ? 'secondary' : 'primary'}
-              size="small"
-              isLoading={phase === 'preparing' || phase === 'transcribing'}
+              variant={phase === 'recording' ? 'outline' : 'fill'}
+              size="sm"
+              loading={phase === 'preparing' || phase === 'transcribing'}
               disabled={!modelInstalled && phase === 'idle'}
               onClick={() => {
                 if (phase === 'recording') void finishRecognitionTest();

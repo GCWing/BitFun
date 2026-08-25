@@ -1,7 +1,8 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal, PopupCloseButton } from '@/component-library';
+import { Modal, PopupCloseButton } from '@/component-library';
 import type {
   ReviewStrategyLevel,
   ReviewTeamRunManifest,
@@ -228,15 +229,15 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
         <div data-bf-component="deep-review-consent-dialog" data-bf-part="footer" className="deep-review-consent__footer">
           <div data-bf-component="deep-review-consent-dialog" data-bf-part="actions" className="deep-review-consent__actions">
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => void settleConsent(false)}
             >
               {t('deepReviewConsent.cancel')}
             </Button>
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={() => void settleConsent(true)}
             >
               {t('deepReviewConsent.confirm')}

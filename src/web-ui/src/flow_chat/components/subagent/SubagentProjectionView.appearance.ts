@@ -3,7 +3,7 @@ export const subagentProjectionAppearanceDescriptor: AppearanceSurfaceDescriptor
   id: 'subagent-projection',
   parts: [
     { id: 'root' }, { id: 'truncated' }, { id: 'hint' }, { id: 'message' },
-    { id: 'expandAction' }, { id: 'item' }, { id: 'collapse' },
+    { id: 'item' }, { id: 'collapse' },
     { id: 'container' }, { id: 'content' },
   ],
   states: [

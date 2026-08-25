@@ -4,6 +4,6 @@ export const reviewSessionSummaryCardAppearanceDescriptor: AppearanceSurfaceDesc
   id: 'review-session-summary-card',
   parts: [
     { id: 'fileCount' }, { id: 'details' }, { id: 'summary' },
-    { id: 'files' }, { id: 'open' },
+    { id: 'files' },
   ],
 };

@@ -1,3 +1,4 @@
+import { Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
@@ -7,7 +8,6 @@ import {
   IconButton,
   NumberInput,
   Select,
-  Switch,
   type SelectOption,
 } from '@/component-library';
 import { useNotification } from '@/shared/notification-system';
@@ -313,7 +313,6 @@ const MemorySettingsPage: React.FC = () => {
               checked={memoryEnabled}
               onChange={(event) => void updateMemoryEnabled(event.target.checked)}
               disabled={savingKey === 'generate_memories' || savingKey === 'use_memories'}
-              size="small"
             />
           </ConfigPageRow>
 
@@ -326,7 +325,6 @@ const MemorySettingsPage: React.FC = () => {
               checked={config.generate_for_btw_sessions}
               onChange={(event) => void updateConfig('generate_for_btw_sessions', event.target.checked)}
               disabled={savingKey === 'generate_for_btw_sessions' || memoryWorkDisabled}
-              size="small"
             />
           </ConfigPageRow>
 

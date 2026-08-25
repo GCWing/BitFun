@@ -2,6 +2,7 @@
  * New Project Dialog Component
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useCallback, useMemo } from 'react';
 import { 
   FolderPlus, 
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
-import { Modal, Button, Input } from '@/component-library';
+import { Modal, Input } from '@/component-library';
 import './NewProjectDialog.scss';
 
 const log = createLogger('NewProjectDialog');
@@ -145,12 +146,12 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
               <Button
                 type="button"
                 className="new-project-dialog__select-btn"
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
+                leadingIcon={<FolderOpen size={14} />}
                 onClick={handleSelectParentPath}
               >
-                <FolderOpen size={14} />
-                <span>{t('newProject.select')}</span>
+                {t('newProject.select')}
               </Button>
             </div>
           </div>
@@ -199,23 +200,22 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
         <div data-bf-component="new-project-dialog" data-bf-part="footer" className="new-project-dialog__footer">
           <Button
             type="button"
-            className="new-project-dialog__btn new-project-dialog__btn--cancel"
-            variant="ghost"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={handleCancel}
             disabled={isCreating}
+            leadingIcon={<X size={14} />}
           >
-            <X size={14} />
+
             {t('newProject.cancel')}
           </Button>
           <Button
             type="button"
-            className="new-project-dialog__btn new-project-dialog__btn--confirm"
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             onClick={handleConfirm}
             disabled={isCreating}
-            isLoading={isCreating}
+            loading={isCreating}
           >
             {isCreating ? (
               t('newProject.creating')

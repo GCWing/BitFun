@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -12,12 +13,10 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
-  Button,
   IconButton,
   Input,
   NumberInput,
   Select,
-  Switch,
   Textarea,
   Tooltip,
   type SelectOption,
@@ -639,8 +638,8 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
               </span>
             </Tooltip>
           </div>
-          <Button variant="secondary" size="small" disabled={disabled} onClick={addPreset}>
-            <Plus size={14} aria-hidden="true" />
+          <Button variant="outline" size="sm" disabled={disabled} onClick={addPreset} leadingIcon={<Plus size={14} aria-hidden="true" />}>
+
             {t('reasoningPresets.add')}
           </Button>
         </div>
@@ -718,7 +717,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         </span>
                       )}
                       <Switch
-                        size="small"
                         checked={!preset.disabled}
                         disabled={disabled}
                         aria-label={t('reasoningPresets.enabled')}
@@ -832,7 +830,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           </div>
                         )}
                         {action.type === 'toggle' && (
-                          <Switch size="small" checked={action.enabled} disabled={disabled} onChange={(event) => updateAction(presetIndex, actionIndex, { type: 'toggle', enabled: event.target.checked })} />
+                          <Switch checked={action.enabled} disabled={disabled} onChange={(event) => updateAction(presetIndex, actionIndex, { type: 'toggle', enabled: event.target.checked })} />
                         )}
                         {action.type === 'budget_tokens' && (
                           <NumberInput size="small" value={action.value} min={1} max={2_000_000_000} step={1024} disabled={disabled} disableWheel onChange={(next) => updateAction(presetIndex, actionIndex, { type: 'budget_tokens', value: next })} />
@@ -879,8 +877,8 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     );
                   })}
                   <Button
-                    variant="secondary"
-                    size="small"
+                    variant="outline"
+                    size="sm"
                     disabled={disabled}
                     onClick={() => updatePreset(presetIndex, {
                       actions: [
@@ -891,8 +889,9 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         ),
                       ],
                     })}
+                    leadingIcon={<Plus size={14} aria-hidden="true" />}
                   >
-                    <Plus size={14} aria-hidden="true" />
+
                     {t('reasoningPresets.addAction')}
                   </Button>
                       </div>

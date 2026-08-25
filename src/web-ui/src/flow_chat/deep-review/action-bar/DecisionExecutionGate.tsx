@@ -1,7 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
-import { Button } from '@/component-library';
 import type { ReviewRemediationItem } from '../../utils/codeReviewRemediation';
 
 interface DecisionExecutionGateProps {
@@ -117,16 +117,16 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
 
       <div className="deep-review-action-bar__decision-gate-actions">
         <Button
-          variant="primary"
-          size="small"
+          variant="fill"
+          size="sm"
           disabled={confirmDisabled}
           onClick={() => void onConfirm()}
         >
           {t('deepReviewActionBar.decisionGate.confirmFix')}
         </Button>
         <Button
-          variant="secondary"
-          size="small"
+          variant="outline"
+          size="sm"
           onClick={onCancel}
         >
           {t('deepReviewActionBar.decisionGate.cancel')}

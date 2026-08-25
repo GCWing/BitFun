@@ -2,6 +2,7 @@
  * PagePublish tool card — shows publish slug / version / URLs.
  */
 import React, { useCallback, useMemo, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, Rocket } from 'lucide-react';
 import { CubeLoading } from '../../component-library';
@@ -134,28 +135,32 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
       )}
       <div className="page-publish-action-buttons">
         {deployed && urlPath && (
-          <button
+          <Button
             type="button"
+            variant="fill"
+            size="sm"
+            leadingIcon={<ExternalLink size={12} />}
             data-testid="chat-page-publish-open-prod-btn"
             onClick={() => void openPage(slug, generation).catch(() => {
               notificationService.error(t('toolCards.pagePublish.openFailed'));
             })}
           >
-            <ExternalLink size={12} />
-            <span>{t('toolCards.pagePublish.openProduction')}</span>
-          </button>
+            {t('toolCards.pagePublish.openProduction')}
+          </Button>
         )}
         {previewPath && (
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
+            leadingIcon={<ExternalLink size={12} />}
             data-testid="chat-page-publish-open-preview-btn"
             onClick={() => void openPage(slug, generation, versionId).catch(() => {
               notificationService.error(t('toolCards.pagePublish.openFailed'));
             })}
           >
-            <ExternalLink size={12} />
-            <span>{t('toolCards.pagePublish.openPreview')}</span>
-          </button>
+            {t('toolCards.pagePublish.openPreview')}
+          </Button>
         )}
       </div>
     </div>

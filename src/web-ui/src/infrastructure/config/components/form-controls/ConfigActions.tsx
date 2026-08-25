@@ -1,7 +1,6 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/component-library';
-
 export interface ConfigActionsProps {
    
   children: React.ReactNode;
@@ -88,7 +87,7 @@ export const ConfigActionButtons: React.FC<ConfigActionButtonsProps> = ({
       {showCancel && onCancel && (
         <Button
           onClick={onCancel}
-          variant="secondary"
+          variant="outline"
           disabled={isSaving}
         >
           {resolvedCancelText}
@@ -98,7 +97,7 @@ export const ConfigActionButtons: React.FC<ConfigActionButtonsProps> = ({
       {showReset && onReset && (
         <Button
           onClick={onReset}
-          variant="secondary"
+          variant="outline"
           disabled={!hasChanges || isSaving}
         >
           {resolvedResetText}
@@ -108,9 +107,9 @@ export const ConfigActionButtons: React.FC<ConfigActionButtonsProps> = ({
       {showSave && onSave && (
         <Button
           onClick={onSave}
-          variant="primary"
+          variant="fill"
           disabled={!hasChanges || isSaving}
-          isLoading={isSaving}
+          loading={isSaving}
         >
           {isSaving ? savingText : resolvedSaveText}
         </Button>

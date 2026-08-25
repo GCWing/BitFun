@@ -2,6 +2,7 @@
  * WorkingCopyView — Git working copy: commit bar + file list + diff area (ContentCanvas mode=git).
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +19,7 @@ import {
   Sparkles,
   FileCode2,
 } from 'lucide-react';
-import { Button, Tooltip, IconButton, Textarea, Search as SearchComponent } from '@/component-library';
+import { Tooltip, IconButton, Textarea, Search as SearchComponent } from '@/component-library';
 import { ContentCanvas } from '@/app/components/panels/content-canvas';
 import { CanvasStoreModeContext } from '@/app/components/panels/content-canvas/stores';
 import { useGitState, useGitOperations, useGitAgent } from '@/tools/git/hooks';
@@ -443,8 +444,8 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
         </div>
         <div className="bitfun-git-scene-working-copy__commit-actions" data-bf-component="working-copy-view" data-bf-part="commitActions">
           <Button
-            size="small"
-            variant={quickCommitMessage.trim() && status?.staged?.length ? 'primary' : 'secondary'}
+            size="sm"
+            variant={quickCommitMessage.trim() && status?.staged?.length ? 'fill' : 'outline'}
             onClick={handleQuickCommit}
             disabled={!status?.staged?.length || !quickCommitMessage.trim() || isOperating || isGeneratingCommit}
           >

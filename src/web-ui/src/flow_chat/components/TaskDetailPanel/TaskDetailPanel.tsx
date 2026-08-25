@@ -3,6 +3,7 @@
  * Minimal layout to match the FlowChat background.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -13,7 +14,7 @@ import {
 import type { FlowToolItem, FlowItem, FlowChatState } from '../../types/flow-chat';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { ToolTimeoutIndicator } from '../../tool-cards/ToolTimeoutIndicator';
-import { Button, DotMatrixLoader } from '@/component-library';
+import { DotMatrixLoader } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
@@ -585,12 +586,12 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         {canStopSubagent && (
           <div className="task-detail-panel__actions" data-bf-component="task-detail-panel" data-bf-part="actions">
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
+              leadingIcon={<Square />}
               onClick={() => void handleStopSubagent()}
               disabled={stoppingSubagent}
             >
-              <Square size={12} style={{ marginRight: 6 }} />
               {stoppingSubagent
                 ? t('toolCards.taskDetailPanel.stoppingSubagent')
                 : taskInput?.isReviewCoverageTask

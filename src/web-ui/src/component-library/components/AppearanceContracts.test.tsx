@@ -4,7 +4,6 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Button } from './Button/Button';
 import { Card, CardBody, CardFooter, CardHeader } from './Card/Card';
 import { Input } from './Input/Input';
 import { Modal } from './Modal/Modal';
@@ -31,13 +30,6 @@ describe('component appearance contracts', () => {
   });
 
   it('exposes stable part, facet, and state attributes for base components', () => {
-    const button = renderToStaticMarkup(<Button variant="danger" size="small" isLoading>Run</Button>);
-    expect(button).toContain('data-bf-component="button"');
-    expect(button).toContain('data-bf-part="root"');
-    expect(button).toContain('data-bf-variant="danger"');
-    expect(button).toContain('data-bf-state="loading"');
-    expect(button).toContain('data-bf-part="loadingIcon"');
-
     const card = renderToStaticMarkup(
       <Card variant="accent" padding="large" interactive>
         <CardHeader title="Title" subtitle="Subtitle" />

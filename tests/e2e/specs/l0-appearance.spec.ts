@@ -88,7 +88,6 @@ async function openAppearanceSettings(): Promise<void> {
   await themeConfiguration.click();
 
   await waitForDisplayed('[data-testid="settings-scene"]');
-  await waitForDisplayed('[data-testid="appearance-config"]');
   await waitForDisplayed('[data-testid="appearance-palette-select"]');
 }
 
@@ -851,6 +850,39 @@ describe('L0 Appearance', () => {
     const picker = await $('[data-testid="appearance-palette-select"]');
     expect(await section.isDisplayed()).toBe(true);
     expect(await picker.isDisplayed()).toBe(true);
+  });
+
+  it('should preserve design-system inline spacing on Appearance action buttons', async () => {
+    await openAppearanceSettings();
+    await waitForDisplayed('[data-bf-part="packageActions"] [data-bf-component="button"]');
+
+    const buttonSpacing = await browser.execute(() => {
+      return Array.from(document.querySelectorAll<HTMLElement>(
+        '[data-bf-part="packageActions"] [data-bf-component="button"]',
+      )).map((button) => {
+        const styles = window.getComputedStyle(button);
+
+        return {
+          text: button.textContent?.trim() ?? '',
+          paddingLeft: styles.paddingLeft,
+          paddingRight: styles.paddingRight,
+          paddingToken: styles.getPropertyValue('--_button-padding-inline').trim(),
+          width: button.getBoundingClientRect().width,
+        };
+      });
+    });
+
+    console.log('[L0] Appearance action button spacing:', JSON.stringify(buttonSpacing, null, 2));
+    expect(buttonSpacing).toHaveLength(2);
+    for (const button of buttonSpacing) {
+      expect(button.paddingLeft).toBe('20px');
+      expect(button.paddingRight).toBe('20px');
+      expect(button.paddingToken).toBe('20px');
+    }
+    await saveElementScreenshot(
+      '[data-bf-part="packageActions"]',
+      'l0-appearance-button-inline-spacing',
+    );
   });
 
   it('should switch to another built-in Appearance', async () => {

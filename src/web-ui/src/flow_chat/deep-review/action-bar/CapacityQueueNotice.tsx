@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -6,7 +7,6 @@ import {
   Play,
   SkipForward,
 } from 'lucide-react';
-import { Button } from '@/component-library';
 import type {
   DeepReviewCapacityQueueReason,
   DeepReviewCapacityQueueState,
@@ -198,36 +198,39 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
           <>
             {capacityQueueState.status === 'paused_by_user' ? (
               <Button
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={() => void onContinueQueue()}
+                leadingIcon={<Play size={13} />}
               >
-                <Play size={13} />
+
                 {t('deepReviewActionBar.capacityQueue.continueQueue')}
               </Button>
             ) : (
               <Button
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={() => void onPauseQueue()}
+                leadingIcon={<Pause size={13} />}
               >
-                <Pause size={13} />
+
                 {t('deepReviewActionBar.capacityQueue.pauseQueue')}
               </Button>
             )}
             {(capacityQueueState.optionalReviewerCount ?? 0) > 0 && (
               <Button
-                variant="ghost"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={() => void onSkipOptionalQueuedReviewers()}
+                leadingIcon={<SkipForward size={13} />}
               >
-                <SkipForward size={13} />
+
                 {t('deepReviewActionBar.capacityQueue.skipOptionalQueued')}
               </Button>
             )}
             <Button
-              variant="ghost"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => void onCancelQueuedReviewers()}
             >
               {t('deepReviewActionBar.capacityQueue.cancelQueued')}
@@ -235,8 +238,8 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
           </>
         )}
         <Button
-          variant="ghost"
-          size="small"
+          variant="outline"
+          size="sm"
           onClick={() => void onOpenReviewSettings()}
         >
           {t('deepReviewActionBar.capacityQueue.openReviewSettings')}

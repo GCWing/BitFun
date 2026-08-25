@@ -182,16 +182,6 @@
     }
   }
 
-  &__delete-btn {
-    color: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.7;
-
-    &:hover {
-      color: var(--bf-appearance-token-color-error);
-      opacity: 1;
-    }
-  }
-
   &__divider {
     display: flex;
     align-items: center;
@@ -420,18 +410,6 @@
     padding: 8px 16px;
     background: var(--bf-appearance-token-color-bg-primary);
 
-    .btn.btn-sm {
-      height: 28px;
-      min-height: 28px;
-      min-width: 0;
-      padding: 0 10px;
-      font-size: 11px;
-    }
-
-    .btn-loading-icon {
-      width: 13px;
-      height: 13px;
-    }
   }
 
   &__spinner {
@@ -473,7 +451,7 @@
     &__actions {
       padding-inline: 12px;
 
-      .btn {
+      [data-bf-component='button'] {
         flex: 1 1 auto;
       }
     }

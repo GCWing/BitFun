@@ -2,7 +2,7 @@
  * NavPanel styles — categorized sidebar navigation.
  *
  * Root class: .bitfun-nav-panel
- * Fixed width 240px, always visible.
+ * Width is owned by WorkspaceBody and remains resizable.
  * Sessions supports inline accordion expansion.
  */
 
@@ -10,12 +10,11 @@
 @use '../../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../../styles/chrome-token-scope' as chrome;
+@use '../../styles/workspace-shell-surfaces' as shell-surfaces;
 @use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
-$_nav-width: 240px;
-
-$_item-height: 32px;
-$_section-header-height: 24px;
+$_item-height: 30px;
+$_section-header-height: 22px;
 
 // ──────────────────────────────────────────────
 // Root
@@ -24,6 +23,7 @@ $_section-header-height: 24px;
 .bitfun-nav-panel {
   @include chrome.apply;
   @include nav-font.nav-panel-font-token-scope;
+  @include shell-surfaces.sidebar-background;
 
   width: 100%;
   flex: 1;
@@ -32,7 +32,6 @@ $_section-header-height: 24px;
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bf-appearance-token-color-bg-primary);
   overflow: visible;
   user-select: none;
 
@@ -79,6 +78,8 @@ $_section-header-height: 24px;
 
     // ── SceneNav overlay ──
     &--scene {
+      @include shell-surfaces.sidebar-background;
+
       clip-path: inset(0 0 0 0);
       position: absolute;
       inset: 0;
@@ -86,7 +87,6 @@ $_section-header-height: 24px;
       pointer-events: none;
       opacity: 0;
       transform: translate3d(6px, 0, 0);
-      background: var(--bf-appearance-token-color-bg-primary);
       transition: none;
 
       &.is-active {
@@ -587,13 +587,14 @@ $_section-header-height: 24px;
   }
 
   &__sticky-section-header {
+    @include shell-surfaces.sidebar-background;
+
     position: sticky;
     top: 0;
     z-index: 2;
     isolation: isolate;
     width: 100%;
     min-width: 0;
-    background: var(--bf-appearance-token-color-bg-primary);
 
     &::after {
       content: '';
@@ -602,7 +603,8 @@ $_section-header-height: 24px;
       bottom: 0;
       left: 6px;
       height: 0;
-      border-bottom: 1px dashed var(--bf-appearance-token-border-subtle);
+      border-bottom: 1px solid;
+      @include shell-surfaces.sidebar-hairline-color;
       opacity: 0;
       pointer-events: none;
     }
@@ -1678,7 +1680,8 @@ $_section-header-height: 24px;
   justify-content: space-between;
   flex-shrink: 0;
   padding: $size-gap-1 $size-gap-2 0;
-  border-top: 1px dashed var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid;
+  @include shell-surfaces.sidebar-hairline-color;
   gap: $size-gap-1;
 }
 
@@ -2198,8 +2201,7 @@ $_section-header-height: 24px;
   white-space: nowrap;
 }
 
-.bitfun-device-overview__backup,
-.bitfun-device-overview__notice {
+.bitfun-device-overview__backup {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -2219,17 +2221,14 @@ $_section-header-height: 24px;
   animation: bitfun-device-overview-spin 1s linear infinite;
 }
 
-.bitfun-device-overview__backup.is-failed,
-.bitfun-device-overview__notice {
+.bitfun-device-overview__backup.is-failed {
   color: var(--bf-appearance-token-color-warning);
 }
 
 .bitfun-device-overview__notice {
+  width: 100%;
+  margin-top: 20px;
   justify-content: flex-start;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
   text-align: left;
 }
 
@@ -2239,31 +2238,9 @@ $_section-header-height: 24px;
   gap: $size-gap-1;
   margin-top: 16px;
   padding: 0 $size-gap-1;
-}
 
-.bitfun-device-overview__action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 11px;
-  width: 100%;
-  min-height: 32px;
-  box-sizing: border-box;
-  padding: 0 $size-gap-1;
-  border: 0;
-  border-radius: $size-radius-sm;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-  cursor: pointer;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  text-align: center;
-  transition: color $motion-fast $easing-standard,
-              background $motion-fast $easing-standard;
-
-  &:hover,
-  &:focus-visible {
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
+  > [data-bf-component='button'] {
+    width: 100%;
   }
 
   &:focus-visible {
@@ -2437,10 +2414,6 @@ $_section-header-height: 24px;
 .bitfun-device-overview__actions {
   margin-top: 14px;
   padding: 0 4px;
-}
-
-.bitfun-device-overview__action {
-  min-height: 34px;
 }
 
 .bitfun-nav-panel__footer-menu-divider {
@@ -2663,13 +2636,14 @@ $_section-header-height: 24px;
 // ── Nav workspace search ─────────────────────────
 
 .bitfun-nav-panel__brand-header {
+  @include shell-surfaces.sidebar-background;
+
   position: relative;
   z-index: 3;
   display: flex;
   flex-direction: column;
   padding: 0 $size-gap-2 $size-gap-1;
   flex-shrink: 0;
-  background: var(--bf-appearance-token-color-bg-primary);
 }
 
 .bitfun-nav-panel__brand-search {
@@ -2695,7 +2669,8 @@ $_section-header-height: 24px;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid;
+  @include shell-surfaces.sidebar-hairline-color;
   border-radius: $size-radius-full;
   background: var(--bf-appearance-token-color-bg-scene);
   color: var(--bf-appearance-token-color-text-secondary);
@@ -2756,7 +2731,8 @@ $_section-header-height: 24px;
     left: 0;
     bottom: 0;
     width: 100vw;
-    border-bottom: 1px dashed var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid;
+    @include shell-surfaces.sidebar-hairline-color;
     pointer-events: none;
   }
 }
@@ -2943,7 +2919,6 @@ $_section-header-height: 24px;
 
 .bitfun-nav-panel {
   border-radius: $size-radius-base;
-  background: var(--bf-appearance-token-color-bg-primary);
 
   &__content {
     overflow: visible;
@@ -2955,7 +2930,6 @@ $_section-header-height: 24px;
 
   &__layer--scene {
     clip-path: inset(0);
-    background: var(--bf-appearance-token-color-bg-primary);
     transition: none;
 
     .is-split-open &,
@@ -3129,19 +3103,19 @@ $_section-header-height: 24px;
   }
 
   &__top-action-expand {
-    gap: 2px;
+    gap: 0;
   }
 
   &__top-action-sublist {
-    gap: 2px;
+    gap: 0;
     transition: none;
   }
 
   &__top-action-btn {
-    height: 32px;
+    height: 30px;
     padding-inline: $size-gap-2;
-    border-radius: $size-radius-sm;
-    font-weight: 400;
+    border-radius: $size-radius-base;
+    @include nav-font.nav-panel-text-row;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -3153,9 +3127,8 @@ $_section-header-height: 24px;
     }
 
     &.is-active {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
-      font-weight: 600;
+      @include nav-font.nav-panel-text-row-active;
+      @include shell-surfaces.navigation-feedback;
     }
 
     &:not(.bitfun-nav-panel__top-action-btn--sub):hover .bitfun-nav-panel__top-action-icon-slot {
@@ -3205,7 +3178,7 @@ $_section-header-height: 24px;
   }
 
   &__section-header {
-    height: 26px;
+    height: 22px;
     margin: 0 6px;
     padding: 0 $size-gap-2;
     border-radius: $size-radius-sm;
@@ -3220,8 +3193,8 @@ $_section-header-height: 24px;
   }
 
   &__section-label {
-    color: var(--bf-appearance-token-color-text-muted);
-    letter-spacing: 0.045em;
+    @include nav-font.nav-panel-text-group;
+
     transition: color 120ms ease;
   }
 
@@ -3254,14 +3227,15 @@ $_section-header-height: 24px;
   }
 
   &__items {
-    gap: 2px;
+    gap: 0;
     padding: 2px 6px;
   }
 
   &__item {
-    height: 32px;
+    height: 30px;
     padding: 0 $size-gap-2;
-    border-radius: $size-radius-sm;
+    border-radius: $size-radius-base;
+    @include nav-font.nav-panel-text-row;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -3273,8 +3247,8 @@ $_section-header-height: 24px;
     }
 
     &.is-active {
-      background: var(--bf-appearance-token-element-bg-soft);
-      font-weight: 600;
+      @include nav-font.nav-panel-text-row-active;
+      @include shell-surfaces.navigation-feedback;
 
       &::before {
         left: 3px;
@@ -3295,15 +3269,19 @@ $_section-header-height: 24px;
     flex-direction: column;
     gap: $size-gap-1;
     padding: 4px 6px;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid;
+    @include shell-surfaces.sidebar-hairline-color;
   }
 
   &__pages-entry,
   &__assistant-entry,
   &__miniapp-entry {
-    min-height: 36px;
+    min-height: 30px;
+    gap: $size-gap-2;
+    padding-inline: $size-gap-2;
     padding-block: 0;
     border-radius: $size-radius-base;
+    @include nav-font.nav-panel-text-row;
     box-shadow: none;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -3325,9 +3303,8 @@ $_section-header-height: 24px;
   &__assistant-entry.is-active,
   &__miniapp-entry.is-active {
     border-color: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
-    font-weight: 600;
+    @include nav-font.nav-panel-text-row-active;
+    @include shell-surfaces.navigation-feedback;
   }
 
   &__miniapp-bubble {
@@ -3491,7 +3468,7 @@ $_section-header-height: 24px;
   .bitfun-nav-panel__top-action-btn:hover,
   .bitfun-nav-panel__item:hover,
   .bitfun-nav-panel__footer-btn--icon:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
+    @include shell-surfaces.navigation-feedback;
   }
 
   .bitfun-nav-panel__section-header--interactive:hover,
@@ -3539,9 +3516,9 @@ $_section-header-height: 24px;
     padding: 0 $size-gap-2;
     border: 0;
     font-family: inherit;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: 13px;
     font-weight: 400;
-    line-height: 1.25;
+    line-height: 16px;
     text-align: left;
   }
 
@@ -3562,7 +3539,8 @@ $_section-header-height: 24px;
     flex: 0 0 auto;
     min-height: 18px;
     padding: 0 5px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid;
+    @include shell-surfaces.sidebar-hairline-color;
     border-radius: $size-radius-sm;
     background: var(--bf-appearance-token-element-bg-subtle);
     font-family: inherit;
@@ -3582,23 +3560,15 @@ $_section-header-height: 24px;
   }
 
   &__section-header {
-    height: 28px;
+    height: 22px;
   }
 
   &__section-label {
-    @include nav-font.nav-panel-text-meta;
-
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 500;
-    letter-spacing: 0.015em;
-    line-height: 1.25;
+    @include nav-font.nav-panel-text-group;
   }
 
   &__section-header--bf-appearance-token-scene-entry &__section-label {
-    @include nav-font.nav-panel-text-heading;
-
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 600;
+    @include nav-font.nav-panel-text-row-active;
   }
 
   &__top-action-btn,
@@ -3606,34 +3576,38 @@ $_section-header-height: 24px;
   &__pages-entry,
   &__assistant-entry,
   &__miniapp-entry {
-    @include nav-font.nav-panel-text-body;
-
-    font-family: inherit;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 400;
-    line-height: 1.25;
+    @include nav-font.nav-panel-text-row;
   }
 
   &__top-action-btn:hover,
   &__top-action-btn:focus-visible,
-  &__top-action-btn.is-active,
   &__item:hover,
   &__item:focus-visible,
-  &__item.is-active,
   &__pages-entry:hover,
-  &__pages-entry.is-active,
   &__assistant-entry:hover,
-  &__assistant-entry.is-active,
-  &__miniapp-entry:hover,
-  &__miniapp-entry.is-active {
+  &__miniapp-entry:hover {
     @include nav-font.nav-panel-text-heading;
+  }
+
+  &__top-action-btn.is-active,
+  &__item.is-active,
+  &__pages-entry.is-active,
+  &__assistant-entry.is-active,
+  &__miniapp-entry.is-active {
+    @include nav-font.nav-panel-text-row-active;
+  }
+
+  &__pages-entry:hover,
+  &__assistant-entry:hover,
+  &__miniapp-entry:hover {
+    @include shell-surfaces.navigation-feedback;
   }
 
   &__assistant-entry-label,
   &__miniapp-entry-title {
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: inherit;
     font-weight: inherit;
-    line-height: 1.25;
+    line-height: inherit;
   }
 
   &__count-badge,

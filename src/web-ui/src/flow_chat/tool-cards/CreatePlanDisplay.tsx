@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ClipboardList, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp, FolderOpen, Save, Check } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
@@ -15,7 +16,7 @@ import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
 import yaml from 'yaml';
-import { Tooltip } from '@/component-library';
+import { IconButton, Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -430,28 +431,30 @@ ${JSON.stringify(simpleTodos, null, 2)}
         <div className="create-plan-header-actions">
           <Tooltip content={savePlanTooltip}>
             <span className="create-plan-header-folder-btn-wrapper">
-              <button
-                className={`create-plan-header-folder-btn${hasSavedToProject ? ' create-plan-header-folder-btn--success' : ''}`}
+              <IconButton
                 type="button"
+                size="small"
+                variant={hasSavedToProject ? 'success' : 'default'}
+                isLoading={isSavingToProject}
                 onClick={handleSavePlanToProject}
                 disabled={!planFilePath || !currentWorkspace || isSavingToProject || hasSavedToProject}
                 aria-label={savePlanTooltip}
               >
-                {isSavingToProject ? <Loader2 size={14} className="animate-spin" /> : hasSavedToProject ? <Check size={14} /> : <Save size={14} />}
-              </button>
+                {hasSavedToProject ? <Check size={14} /> : <Save size={14} />}
+              </IconButton>
             </span>
           </Tooltip>
           <Tooltip content={revealPlanTooltip}>
             <span className="create-plan-header-folder-btn-wrapper">
-              <button
-                className="create-plan-header-folder-btn"
+              <IconButton
                 type="button"
+                size="small"
                 onClick={handleRevealPlanInExplorer}
                 disabled={isRevealPlanDisabled}
                 aria-label={revealPlanTooltip}
               >
                 <FolderOpen size={14} />
-              </button>
+              </IconButton>
             </span>
           </Tooltip>
         </div>
@@ -463,13 +466,15 @@ ${JSON.stringify(simpleTodos, null, 2)}
           <p className="plan-overview">{planData.overview}</p>
         </div>
         {planData.todos && planData.todos.length > 0 && (
-          <button
-            className="todos-toggle-btn"
+          <IconButton
             type="button"
+            size="small"
             onClick={handleToggleTodos}
+            tooltip={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
+            aria-label={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
           >
             {isTodosExpanded ? <ChevronsDownUp size={22} /> : <ChevronsUpDown size={22} />}
-          </button>
+          </IconButton>
         )}
       </div>
 
@@ -504,34 +509,32 @@ ${JSON.stringify(simpleTodos, null, 2)}
 
       <div className={`create-plan-footer${isLoading ? ' create-plan-footer--generating-only' : ''}`} data-bf-component="create-plan-display" data-bf-part="footer">
         {!isLoading && (
-          <button className="view-plan-btn" type="button" onClick={handleViewPlan}>
+          <Button variant="outline" size="sm" type="button" onClick={handleViewPlan}>
             {t('toolCards.plan.viewPlan')}
-          </button>
+          </Button>
         )}
-        <button 
-          className={`build-btn build-btn--${buildStatus}`}
+        <Button
+          type="button"
+          variant="fill"
+          size="sm"
+          leadingIcon={
+            buildStatus === 'building' || isLoading
+              ? <Loader2 size={14} className="animate-spin" />
+              : buildStatus === 'built'
+                ? <CheckCircle size={14} />
+                : undefined
+          }
           onClick={handleBuild}
           disabled={buildStatus !== 'build' || isLoading}
         >
-          {buildStatus === 'building' ? (
-            <>
-              <Loader2 size={14} className="animate-spin" />
-              <span>{t('toolCards.plan.building')}</span>
-            </>
-          ) : buildStatus === 'built' ? (
-            <>
-              <CheckCircle size={14} />
-              <span>{t('toolCards.plan.built')}</span>
-            </>
-          ) : isLoading ? (
-            <>
-              <Loader2 size={14} className="animate-spin" />
-              <span>{t('toolCards.plan.generating')}</span>
-            </>
-          ) : (
-            <span>{t('toolCards.plan.build')}</span>
-          )}
-        </button>
+          {buildStatus === 'building'
+            ? t('toolCards.plan.building')
+            : buildStatus === 'built'
+              ? t('toolCards.plan.built')
+              : isLoading
+                ? t('toolCards.plan.generating')
+                : t('toolCards.plan.build')}
+        </Button>
       </div>
     </div>
   );

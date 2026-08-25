@@ -1,5 +1,6 @@
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Modal, Textarea } from '@/component-library';
+import { Checkbox, Modal, Textarea } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import type { FlowChatHeaderCommandSummary } from '../modern/FlowChatHeader';
 import './BackgroundCommandInputDialog.scss';
@@ -106,8 +107,8 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
         <div data-bf-component="background-command-input-dialog" data-bf-part="actions" className="background-command-input-dialog__actions">
           <Button
             type="button"
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={onClose}
             disabled={isSending}
           >
@@ -115,9 +116,9 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
           </Button>
           <Button
             type="submit"
-            variant="primary"
-            size="small"
-            isLoading={isSending}
+            variant="fill"
+            size="sm"
+            loading={isSending}
             disabled={!canSend}
           >
             {t('backgroundCommandInput.send')}

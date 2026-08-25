@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge as BitFunBadge } from '@/component-library/components/Badge';
-import { Button as BitFunButton } from '@/component-library/components/Button';
+import { Button as BitFunButton } from '@bitfun/ui';
 import {
   Card as BitFunCard,
   CardBody as BitFunCardBody,
@@ -59,19 +59,27 @@ export function CardBody(props: CanvasCardBodyProps) {
 }
 
 function buttonSize(size: CanvasButtonProps['size']): React.ComponentProps<typeof BitFunButton>['size'] {
-  if (size === 'sm') return 'small';
-  if (size === 'md') return 'medium';
-  if (size === 'lg') return 'large';
-  return size ?? 'medium';
+  if (size === 'sm' || size === 'small') return 'sm';
+  if (size === 'lg' || size === 'large') return 'lg';
+  return 'md';
 }
 
-export function Button({ variant = 'secondary', size, ...props }: CanvasButtonProps) {
+function buttonVariant(
+  variant: CanvasButtonProps['variant'],
+): React.ComponentProps<typeof BitFunButton>['variant'] {
+  if (variant === 'secondary' || variant === 'ghost') return 'outline';
+  return 'fill';
+}
+
+export function Button({ children, variant = 'secondary', size, ...props }: CanvasButtonProps) {
   return (
     <BitFunButton
       {...props}
-      variant={variant}
+      variant={buttonVariant(variant)}
       size={buttonSize(size)}
-    />
+    >
+      {children}
+    </BitFunButton>
   );
 }
 

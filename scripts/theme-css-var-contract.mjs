@@ -1,3 +1,46 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  mergeTokenDocuments,
+  resolveTokens,
+  tokenNameToCssVariable,
+} from '../design-system/tooling/token-engine/src/index.mjs';
+
+const contractDirectory = path.dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = path.resolve(contractDirectory, '..');
+
+function readDesignSystemTokenDocument(relativePath) {
+  return JSON.parse(fs.readFileSync(path.join(repositoryRoot, relativePath), 'utf8'));
+}
+
+const designSystemTokens = resolveTokens(readDesignSystemTokenDocument(
+  'design-system/packages/design-tokens/src/system.tokens.json',
+));
+const bitfunThemeTokens = resolveTokens(mergeTokenDocuments(
+  readDesignSystemTokenDocument('design-system/packages/theme-bitfun/src/reference.tokens.json'),
+  readDesignSystemTokenDocument('design-system/packages/theme-bitfun/src/light.tokens.json'),
+));
+const publicThemePrefixes = ['color.', 'effect.', 'opacity.', 'shadow.'];
+
+export const PACKAGE_CSS_VAR_DEFINITION_CONTRACTS = Object.freeze([
+  Object.freeze({
+    owner: 'design-system/packages/design-tokens/src/system.tokens.json',
+    packageName: '@bitfun/design-tokens',
+    variables: Object.freeze(Object.keys(designSystemTokens).map(name => tokenNameToCssVariable(name))),
+  }),
+  Object.freeze({
+    owner: 'design-system/packages/theme-bitfun/src/light.tokens.json',
+    packageName: '@bitfun/theme-bitfun',
+    variables: Object.freeze(
+      Object.keys(bitfunThemeTokens)
+        .filter(name => publicThemePrefixes.some(prefix => name.startsWith(prefix)))
+        .map(name => tokenNameToCssVariable(name)),
+    ),
+  }),
+]);
+
 export const DEFAULT_ROOT = 'src/web-ui/src';
 export const DEFAULT_BASELINE_PATH = 'scripts/theme-color-governance-baseline.json';
 

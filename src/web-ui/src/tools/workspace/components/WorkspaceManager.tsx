@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useState } from 'react';
 import { FolderOpen, Clock, FileText, Code, Folder } from 'lucide-react';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
@@ -220,20 +221,22 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
               </div>
               
               <div className="workspace-actions">
-                <button
-                  className="btn btn-secondary btn-small"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  loading={scanning}
                   onClick={handleScanWorkspace}
-                  disabled={scanning}
                 >
                   {scanning ? 'Scanning...' : 'Rescan'}
-                </button>
-                <button
-                  className="btn btn-danger btn-small"
+                </Button>
+                <Button
+                  variant="fill"
+                  size="sm"
+                  loading={loading}
                   onClick={handleCloseWorkspace}
-                  disabled={loading}
                 >
                   Close Workspace
-                </button>
+                </Button>
               </div>
 
               {currentWorkspace.statistics && (

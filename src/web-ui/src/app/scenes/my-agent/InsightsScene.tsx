@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
+import { Button } from '@bitfun/ui';
 import {
   ExternalLink, Copy, Check, ArrowLeft, Loader2, AlertTriangle,
   BarChart3, MessageSquare, Calendar, Clock, X, Target, Zap, Trophy,
@@ -8,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
-import { Select, type SelectOption } from '@/component-library';
+import { IconButton, Select, type SelectOption } from '@/component-library';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import type { AIModelConfig } from '@/infrastructure/config/types';
@@ -284,15 +285,23 @@ const InsightsScene: React.FC = () => {
             </div>
           </div>
           {generating ? (
-            <button className="insights-scene__cancel-btn" onClick={cancelGeneration}>
-              <X size={14} />
-              <span>{t('insights.cancelBtn')}</span>
-            </button>
+            <Button
+              variant="outline"
+              size="sm"
+              leadingIcon={<X />}
+              onClick={cancelGeneration}
+            >
+              {t('insights.cancelBtn')}
+            </Button>
           ) : (
-            <button className="insights-scene__generate-btn" onClick={generateReport}>
-              <BarChart3 size={14} />
-              <span>{t('insights.generateBtn')}</span>
-            </button>
+            <Button
+              variant="fill"
+              size="sm"
+              leadingIcon={<BarChart3 />}
+              onClick={generateReport}
+            >
+              {t('insights.generateBtn')}
+            </Button>
           )}
         </div>
       </div>
@@ -301,7 +310,14 @@ const InsightsScene: React.FC = () => {
         <div className="insights-scene__error" data-bf-scene="insights" data-bf-part="error">
           <AlertTriangle size={14} />
           <span>{error}</span>
-          <button onClick={clearError} aria-label={t('insights.dismissError')}>&times;</button>
+          <IconButton
+            variant="ghost"
+            size="xs"
+            onClick={clearError}
+            aria-label={t('insights.dismissError')}
+          >
+            <X size={14} />
+          </IconButton>
         </div>
       )}
 
@@ -568,24 +584,29 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
   return (
     <div className="insights-scene insights-scene--report" data-bf-scene="insights" data-bf-part="root" data-bf-view="report">
       <div className="insights-report-header" data-bf-scene="insights" data-bf-part="header">
-        <button className="insights-report-header__back" onClick={onBack}>
-          <ArrowLeft size={14} />
-          <span>{t('insights.backToList')}</span>
-        </button>
+        <Button
+          variant="outline"
+          size="sm"
+          leadingIcon={<ArrowLeft />}
+          onClick={onBack}
+        >
+          {t('insights.backToList')}
+        </Button>
         <div className="insights-report-header__meta">
           <span><MessageSquare size={11} /> {report.total_messages} {t('insights.messages')}</span>
           <span><BarChart3 size={11} /> {report.total_sessions} {t('insights.sessions')}</span>
           <span><Calendar size={11} /> {dateStart} ~ {dateEnd}</span>
         </div>
         <div className="insights-report-header__actions">
-          <button
-            className="insights-report-header__html-btn"
+          <Button
+            variant="outline"
+            size="sm"
+            leadingIcon={<ExternalLink />}
             onClick={handleOpenHtml}
             disabled={!report.html_report_path}
           >
-            <ExternalLink size={12} />
-            <span>{t('insights.openHtml')}</span>
-          </button>
+            {t('insights.openHtml')}
+          </Button>
         </div>
       </div>
 

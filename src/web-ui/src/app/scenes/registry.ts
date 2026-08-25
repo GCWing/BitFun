@@ -2,11 +2,12 @@
  * SCENE_TAB_REGISTRY — static definitions for all scene tab types.
  *
  * Rules:
- *  - Max MAX_OPEN_SCENES visible tabs total.
- *  - pinned = true: protected from auto-eviction and manual close.
- *  - pinned = false: can be auto-evicted and manually closed.
+ *  - Every explicitly opened scene remains open until the user closes it.
+ *  - pinned = true: protected from manual close.
+ *  - Scene ids are unique, while Mini Apps use one id per app instance.
  */
 
+import { SessionIcon } from '@bitfun/ui';
 import {
   MessageSquare,
   Terminal,
@@ -27,14 +28,12 @@ import {
 } from 'lucide-react';
 import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
 
-/** Upper bound for visible scene tabs in the top bar. */
-export const MAX_OPEN_SCENES = 3;
-
 export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   {
     id: 'welcome' as SceneTabId,
     label: 'Welcome',
     labelKey: 'welcomeScene.tabLabel',
+    Icon: MessageSquare,
     pinned: false,
     singleton: true,
     defaultOpen: true,
@@ -43,9 +42,8 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'session' as SceneTabId,
     label: 'Session',
     labelKey: 'scenes.aiAgent',
-    Icon: MessageSquare,
+    Icon: SessionIcon,
     pinned: true,
-    fixed: true,
     closable: false,
     singleton: true,
     defaultOpen: false,
@@ -186,7 +184,6 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     labelKey: 'scenes.panelView',
     Icon: ExternalLink,
     pinned: false,
-    fixed: false,
     closable: true,
     singleton: true,
     defaultOpen: false,
@@ -208,9 +205,7 @@ export function getMiniAppSceneDef(appId: string, appName?: string): SceneTabDef
     label: appName ?? appId,
     Icon: Puzzle,
     pinned: false,
-    fixed: false,
     closable: true,
-    retainOnAutoEvict: true,
     singleton: false,
     defaultOpen: false,
   };

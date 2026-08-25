@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import path from 'path-browserify';
@@ -1117,13 +1118,13 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                 <span key={state}>{t(key, { label: childBadgeLabel })}</span>
               ))}
               {canRetryReviewDetailLoad && (
-                <button
-                  type="button"
-                  className="btw-session-panel__empty-retry"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={loadChildHistory}
                 >
                   {t('childSession.reviewDetail.retryLoad')}
-                </button>
+                </Button>
               )}
             </div>
           )}

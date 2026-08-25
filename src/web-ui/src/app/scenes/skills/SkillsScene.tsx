@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -19,7 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, ConfirmDialog, Input, Modal, Search, Select, Switch } from '@/component-library';
+import { Badge, ConfirmDialog, IconButton, Input, Modal, Search, Select } from '@/component-library';
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import {
@@ -339,16 +340,15 @@ const SkillsScene: React.FC = () => {
                       <Filter size={13} />
                       <span>{t('toolbar.hideDuplicates')}</span>
                     </button>
-                    <button
-                      type="button"
-                      className="skills-main__add-btn"
+                    <Button
+                      variant="fill"
+                      size="sm"
+                      leadingIcon={<Plus size={13} />}
                       onClick={toggleAddForm}
-                      data-bf-scene="skills"
-                      data-bf-part="addAction"
+                      data-testid="skills-add-skill-btn"
                     >
-                      <Plus size={13} />
-                      <span>{t('toolbar.addTooltip')}</span>
-                    </button>
+                      {t('toolbar.addTooltip')}
+                    </Button>
                   </div>
 
                   <div className="skills-main__list-shell">
@@ -402,8 +402,8 @@ const SkillsScene: React.FC = () => {
                         <Package size={28} strokeWidth={1.2} />
                         <span>{t('list.loadFailed')}</span>
                         <Button
-                          variant="ghost"
-                          size="small"
+                          variant="outline"
+                          size="sm"
                           onClick={() => void installed.loadSkills(true)}
                         >
                           {t('list.retry')}
@@ -545,10 +545,9 @@ const SkillsScene: React.FC = () => {
                             >
                               {skill.level === 'user' ? (
                                 <Switch
-                                  size="small"
                                   checked={!installed.globallyDisabledSkillKeys.has(skill.key)}
-                                  loading={installed.savingGlobalSkillKey === skill.key}
                                   disabled={installed.savingGlobalSkillKey !== null}
+                                  aria-busy={installed.savingGlobalSkillKey === skill.key}
                                   aria-label={t('list.item.globalToggleLabel', { name: skill.name })}
                                   onChange={(event) => {
                                     void installed.handleGlobalSkillToggle(skill, event.target.checked);
@@ -566,9 +565,8 @@ const SkillsScene: React.FC = () => {
                               data-bf-scene="skills"
                               data-bf-part="installedCardActions"
                             >
-                              <button
-                                type="button"
-                                className="skills-card__details"
+                              <IconButton
+                                size="small"
                                 onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
                                 aria-label={t('list.item.detail')}
                                 title={t('list.item.detail')}
@@ -576,11 +574,11 @@ const SkillsScene: React.FC = () => {
                                 data-bf-part="installedCardDetails"
                               >
                                 <ArrowRight size={14} strokeWidth={1.7} />
-                              </button>
+                              </IconButton>
                               {canDeleteSkill(skill) && (
-                                <button
-                                  type="button"
-                                  className="skills-card__delete"
+                                <IconButton
+                                  size="small"
+                                  variant="danger"
                                   onClick={() => setDeleteTarget(skill)}
                                   aria-label={t('list.item.deleteTooltip')}
                                   title={t('list.item.deleteTooltip')}
@@ -588,7 +586,7 @@ const SkillsScene: React.FC = () => {
                                   data-bf-part="installedCardDelete"
                                 >
                                   <Trash2 size={13} />
-                                </button>
+                                </IconButton>
                               )}
                             </div>
                           </div>
@@ -829,28 +827,30 @@ const SkillsScene: React.FC = () => {
         ) : null}
         actions={selectedInstalledSkill && canDeleteSkill(selectedInstalledSkill) ? (
           <Button
-            variant="danger"
-            size="small"
+            variant="fill"
+            tone="danger"
+            size="sm"
             onClick={() => {
               setDeleteTarget(selectedInstalledSkill);
               setSelectedDetail(null);
             }}
+            leadingIcon={<Trash2 size={14} />}
           >
-            <Trash2 size={14} />
+
             {t('deleteModal.delete')}
           </Button>
         ) : selectedMarketSkill ? (
           <>
             {installedSkillNames.has(selectedMarketSkill.name) ? (
-              <Button variant="secondary" size="small" disabled>
+              <Button variant="outline" size="sm" disabled>
                 {t('market.item.installed')}
               </Button>
             ) : (
               <>
                 {!market.isRemoteWorkspace && (
                   <Button
-                    variant="primary"
-                    size="small"
+                    variant="fill"
+                    size="sm"
                     onClick={() => void market.handleDownload(selectedMarketSkill, 'project')}
                     disabled={market.downloadingPackage === selectedMarketSkill.installId || !market.hasWorkspace}
                   >
@@ -858,8 +858,8 @@ const SkillsScene: React.FC = () => {
                   </Button>
                 )}
                 <Button
-                  variant={market.isRemoteWorkspace ? 'primary' : 'secondary'}
-                  size="small"
+                  variant={market.isRemoteWorkspace ? 'fill' : 'outline'}
+                  size="sm"
                   onClick={() => void market.handleDownload(selectedMarketSkill, 'user')}
                   disabled={market.downloadingPackage === selectedMarketSkill.installId}
                 >
@@ -977,14 +977,14 @@ const SkillsScene: React.FC = () => {
               onChange={(e) => installed.setFormPath(e.target.value)}
               variant="outlined"
             />
-            <button
-              type="button"
-              className="gallery-action-btn"
+            <IconButton
+              size="medium"
               onClick={installed.handleBrowse}
               aria-label={t('form.path.browseTooltip')}
+              title={t('form.path.browseTooltip')}
             >
               <FolderOpen size={15} />
-            </button>
+            </IconButton>
           </div>
           <div className="bitfun-skills-scene__path-hint">
             {t('form.path.hint')}
@@ -1020,8 +1020,8 @@ const SkillsScene: React.FC = () => {
 
           <div className="bitfun-skills-scene__modal-form-actions">
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => {
                 installed.resetForm();
                 setAddFormOpen(false);
@@ -1030,8 +1030,8 @@ const SkillsScene: React.FC = () => {
               {t('form.actions.cancel')}
             </Button>
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={handleAddSkill}
               disabled={!installed.validationResult?.valid || installed.isAdding}
             >

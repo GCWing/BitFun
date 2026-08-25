@@ -1,5 +1,6 @@
 /** Git diff view. */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -13,7 +14,7 @@ import {
   EyeOff,
   AlertCircle
 } from 'lucide-react';
-import { Button, IconButton } from '@/component-library';
+import { IconButton } from '@/component-library';
 import { gitService } from '../../services';
 import { createLogger } from '@/shared/utils/logger';
 import './GitDiffView.scss';
@@ -258,7 +259,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
           <FileText size={48} />
           <h3>{t('diffView.loadFailedTitle')}</h3>
           <p>{error}</p>
-          <Button onClick={loadDiff} variant="primary" size="small">
+          <Button onClick={loadDiff} variant="fill" size="sm">
             {t('common.retry')}
           </Button>
         </div>
@@ -336,8 +337,8 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             </div>
             <h3>{t('diffView.loadFailedTitle')}</h3>
             <p>{error}</p>
-            <Button onClick={loadDiff} variant="primary" size="small">
-              <RefreshCw size={16} />
+            <Button onClick={loadDiff} variant="fill" size="sm" leadingIcon={<RefreshCw size={16} />}>
+
               {t('common.retry')}
             </Button>
           </div>

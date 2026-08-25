@@ -1,0 +1,51 @@
+@layer bf.base {
+  .stack {
+    display: flex;
+    min-inline-size: 0;
+    gap: var(--_stack-gap);
+  }
+
+  .stack[data-direction="horizontal"] {
+    flex-direction: row;
+  }
+
+  .stack[data-direction="vertical"] {
+    flex-direction: column;
+  }
+
+  .stack[data-align="start"] {
+    align-items: flex-start;
+  }
+
+  .stack[data-align="center"] {
+    align-items: center;
+  }
+
+  .stack[data-align="end"] {
+    align-items: flex-end;
+  }
+
+  .stack[data-align="stretch"] {
+    align-items: stretch;
+  }
+
+  .stack[data-justify="start"] {
+    justify-content: flex-start;
+  }
+
+  .stack[data-justify="center"] {
+    justify-content: center;
+  }
+
+  .stack[data-justify="end"] {
+    justify-content: flex-end;
+  }
+
+  .stack[data-justify="between"] {
+    justify-content: space-between;
+  }
+
+  .stack[data-wrap="true"] {
+    flex-wrap: wrap;
+  }
+}

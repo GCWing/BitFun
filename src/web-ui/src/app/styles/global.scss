@@ -11,17 +11,14 @@
   @include apply-design-tokens;
 }
 
-/* ========== Global reset and base styles ========== */
+/* ========== Global base styles ========== */
 
-/* Ensure a unified box model for all elements */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
+/*
+ * Generic document styles belong below component-owned rules. Keeping them in
+ * bf.base prevents selectors such as :focus-visible, :disabled, and img from
+ * overriding independently packaged component anatomy.
+ */
+@layer bf.base {
 /* Root element styles */
 html {
   font-size: 16px;
@@ -68,6 +65,7 @@ a:hover {
   outline-offset: 2px;
   border-radius: $size-radius-sm;
 }
+}
 
 /* Font preference: compact number stepper — avoid stacking global accent ring on the input */
 .font-pref-panel__number-input:focus,
@@ -82,6 +80,7 @@ a:hover {
   outline-offset: 0;
 }
 
+@layer bf.base {
 /* Disabled state */
 :disabled {
   opacity: $opacity-disabled;
@@ -166,6 +165,7 @@ ol {
 
 li {
   margin-bottom: $size-gap-1;
+}
 }
 
 /* Hide scrollbar while keeping functionality */

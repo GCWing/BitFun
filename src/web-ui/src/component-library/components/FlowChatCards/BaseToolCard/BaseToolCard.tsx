@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { Button } from '@bitfun/ui';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { ToolProcessingDots } from '../ToolProcessingDots';
@@ -167,20 +168,22 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
 
       {requiresConfirmation && !userConfirmed && currentStatus !== 'completed' && (
         <div className="base-tool-card__actions" data-bf-component="flow-chat-card" data-bf-part="actions">
-          <button 
-            className="base-tool-card__button base-tool-card__button--confirm"
+          <Button
+            variant="fill"
+            size="sm"
             onClick={handleConfirm}
             disabled={status === 'streaming'}
           >
             {t('flowChatCards.baseToolCard.confirm')}
-          </button>
-          <button 
-            className="base-tool-card__button base-tool-card__button--reject"
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleReject}
             disabled={status === 'streaming'}
           >
             {t('flowChatCards.baseToolCard.cancel')}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -191,12 +194,13 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
             <pre>{JSON.stringify(result, null, 2)}</pre>
           </div>
           {displayMode === 'standard' && onExpand && (
-            <button 
-              className="base-tool-card__button base-tool-card__button--expand"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onExpand}
             >
               {t('flowChatCards.baseToolCard.viewDetails')}
-            </button>
+            </Button>
           )}
         </div>
       )}

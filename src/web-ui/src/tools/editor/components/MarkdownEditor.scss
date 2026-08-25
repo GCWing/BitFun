@@ -38,22 +38,6 @@
   margin-left: auto;
 }
 
-.bitfun-markdown-editor__toolbar-button.btn-sm,
-.bitfun-markdown-editor__toolbar-button {
-  min-height: 26px;
-  height: 26px;
-  padding: 0 8px;
-  border-radius: 5px;
-  font-size: var(--bf-appearance-token-font-size-xs);
-  line-height: 1;
-}
-
-.bitfun-markdown-editor__copy-button.btn-icon-only,
-.bitfun-markdown-editor__copy-button {
-  width: 26px;
-  padding: 0;
-}
-
 .bitfun-markdown-editor__body,
 .bitfun-markdown-editor__unsafe-body {
   min-height: 0;
@@ -103,35 +87,6 @@
       color: var(--bf-appearance-token-color-text-secondary);
     }
 
-    .retry-button {
-      padding: $size-gap-2 $size-gap-4;
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-secondary);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-base;
-      cursor: pointer;
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-medium;
-      transition:
-        transform $motion-fast $easing-standard,
-        background-color $motion-fast $easing-standard,
-        border-color $motion-fast $easing-standard,
-        color $motion-fast $easing-standard,
-        box-shadow $motion-fast $easing-standard;
-      backdrop-filter: blur(8px);
-
-      &:hover {
-        background: $button-bg-hover;
-        border-color: var(--bf-appearance-token-border-accent);
-        color: var(--bf-appearance-token-color-text-primary);
-        transform: translateY(-1px);
-        box-shadow: $shadow-sm;
-      }
-
-      &:active {
-        transform: translateY(0);
-      }
-    }
   }
 }
 

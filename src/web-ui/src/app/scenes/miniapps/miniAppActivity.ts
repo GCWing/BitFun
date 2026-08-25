@@ -5,7 +5,7 @@ const MINIAPP_SCENE_PREFIX = 'miniapp:';
 
 export interface MiniAppActivity {
   app: MiniAppMeta;
-  /** The installed app has a foreground or retained Runner mounted. */
+  /** The installed app has an open Runner scene mounted. */
   runnerMounted: boolean;
   /** The app owns a live background JavaScript worker. */
   workerRunning: boolean;

@@ -41,12 +41,6 @@
     width: min(280px, 34vw);
   }
 
-  &__create-button {
-    flex: none;
-    padding-inline: $size-gap-3;
-    white-space: nowrap;
-  }
-
   &__agent-filters {
     display: flex;
     align-items: center;

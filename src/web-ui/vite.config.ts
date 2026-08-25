@@ -5,6 +5,36 @@ import { versionInjectionPlugin } from "./vite.config.version-plugin";
 import { bitfunCanvasRuntimeBundlePlugin } from "./vite.config.canvas-runtime-plugin";
 
 const host = process.env.TAURI_DEV_HOST;
+const designSystemUiSourceDirectory = path.resolve(
+  __dirname,
+  '../../design-system/packages/ui/src',
+);
+
+/**
+ * Product development consumes the design-system source so Vite can preserve
+ * React Fast Refresh and CSS-module HMR. Production builds deliberately return
+ * no aliases and resolve the package's published `dist` exports instead.
+ */
+export function createDesignSystemSourceAliases(command: 'serve' | 'build') {
+  if (command !== 'serve') {
+    return [];
+  }
+
+  return [
+    {
+      find: /^@bitfun\/ui\/registry$/,
+      replacement: path.join(designSystemUiSourceDirectory, 'registry.ts'),
+    },
+    {
+      find: /^@bitfun\/ui\/styles\.css$/,
+      replacement: path.join(designSystemUiSourceDirectory, 'styles/layers.css'),
+    },
+    {
+      find: /^@bitfun\/ui$/,
+      replacement: path.join(designSystemUiSourceDirectory, 'index.ts'),
+    },
+  ];
+}
 
 /**
  * Native fs events do not work reliably on UNC network shares (\\server\...,
@@ -44,17 +74,18 @@ export default defineConfig(({ mode, command }) => {
     // Path resolution
     resolve: {
       dedupe: ['react', 'react-dom'],
-      alias: {
-        "@": path.resolve(__dirname, "./src"),
-        "@/shared": path.resolve(__dirname, "./src/shared"),
-        "@/core": path.resolve(__dirname, "./src/core"),
-        "@/tools": path.resolve(__dirname, "./src/tools"),
-        "@/hooks": path.resolve(__dirname, "./src/hooks"),
-        "@/styles": path.resolve(__dirname, "./src/component-library/styles"),
-        "@/types": path.resolve(__dirname, "./src/shared/types"),
-        "@/utils": path.resolve(__dirname, "./src/shared/utils"),
-        "@components": path.resolve(__dirname, "./src/component-library/components"),
-      },
+      alias: [
+        ...createDesignSystemSourceAliases(command),
+        { find: "@/shared", replacement: path.resolve(__dirname, "./src/shared") },
+        { find: "@/core", replacement: path.resolve(__dirname, "./src/core") },
+        { find: "@/tools", replacement: path.resolve(__dirname, "./src/tools") },
+        { find: "@/hooks", replacement: path.resolve(__dirname, "./src/hooks") },
+        { find: "@/styles", replacement: path.resolve(__dirname, "./src/component-library/styles") },
+        { find: "@/types", replacement: path.resolve(__dirname, "./src/shared/types") },
+        { find: "@/utils", replacement: path.resolve(__dirname, "./src/shared/utils") },
+        { find: "@components", replacement: path.resolve(__dirname, "./src/component-library/components") },
+        { find: "@", replacement: path.resolve(__dirname, "./src") },
+      ],
     },
 
   css: {
@@ -104,7 +135,11 @@ export default defineConfig(({ mode, command }) => {
   // Optimize dependency pre-building
   optimizeDeps: {
     // Exclude dependencies that need to be dynamically loaded
-    exclude: [],
+    exclude: [
+      '@bitfun/design-tokens',
+      '@bitfun/theme-bitfun',
+      '@bitfun/ui',
+    ],
     // Force pre-building dependencies
     // Resolve Vite 7 and React 18 compatibility issues
     include: [

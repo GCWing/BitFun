@@ -1,0 +1,37 @@
+import type { ComponentMeta } from "../../registry.types";
+
+export const tabGroupMeta = {
+  category: "navigation",
+  description: "A compact single-selection tab list with optional leading icons, end actions, and automatic keyboard activation.",
+  maturity: "stable",
+  name: "TabGroup",
+  props: [
+    { name: "items", type: "readonly TabGroupItem[]" },
+    { name: "value", type: "string" },
+    { name: "defaultValue", type: "string" },
+    { name: "onValueChange", type: "(value: string) => void" },
+  ],
+  states: ["selected", "unselected", "hover", "disabled"],
+  tokens: [
+    "color.action.neutral.border",
+    "color.action.neutral.content",
+    "color.action.neutral.contentDisabled",
+    "color.action.neutral.surface",
+    "color.action.neutral.surfaceHover",
+    "color.action.neutral.surfacePressed",
+    "color.focus.ring",
+    "control.tabGroup.gap",
+    "control.tabGroup.itemGap",
+    "control.tabGroup.itemHeight",
+    "control.tabGroup.itemIconSize",
+    "control.tabGroup.itemPaddingInline",
+    "control.tabGroup.itemActionSize",
+    "control.tabGroup.itemActionInset",
+    "control.tabGroup.itemRadius",
+    "font.family.control",
+    "font.size.small",
+    "font.weight.regular",
+    "font.weight.semibold",
+    "radius.pill",
+  ],
+} as const satisfies ComponentMeta;

@@ -1416,6 +1416,12 @@
     "shell": "Shell",
     "panelView": "Panel View"
   },
+  "sceneBar": {
+    "tabsLabel": "Scene tabs",
+    "scrollPrevious": "Scroll tabs left",
+    "scrollNext": "Scroll tabs right",
+    "closeTab": "Close {{label}}"
+  },
   "loading": {
     "app": "Starting BitFun...",
     "scenes": "Loading scene",
@@ -1425,6 +1431,12 @@
     "tabLabel": "Welcome",
     "welcomeBack": "Welcome back to",
     "welcomeTabTitle": "Welcome",
+    "greeting": {
+      "morning": "Good morning, coding partner",
+      "afternoon": "Good afternoon, coding partner",
+      "evening": "Good evening, coding partner",
+      "subtitle": "Let’s create something together."
+    },
     "quickStart": "Start",
     "heroBadge": "BitFun Workspace",
     "heroTitle": "A real workspace, not just a chat box",

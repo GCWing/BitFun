@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -14,7 +15,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, IconButton, Search, Select, confirmDanger } from '@/component-library';
+import { Badge, IconButton, Search, Select, confirmDanger } from '@/component-library';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
   GalleryDetailModal,
@@ -669,15 +670,15 @@ const AgentsHomeView: React.FC = () => {
               clearable
               data-testid="agents-search"
             />
-            <button
-              type="button"
-              className="gallery-action-btn gallery-action-btn--primary bitfun-agents-scene__create-button"
+            <Button
+              variant="fill"
+              size="sm"
+              leadingIcon={<Plus size={15} />}
               onClick={openCreateAgent}
               data-testid="agents-create-agent-btn"
             >
-              <Plus size={15} />
-              <span>{t('page.newAgent')}</span>
-            </button>
+              {t('page.newAgent')}
+            </Button>
           </>
         )}
       />
@@ -902,15 +903,15 @@ const AgentsHomeView: React.FC = () => {
         heroActions={selectedAgent && canManageCustomAgent ? (
           <>
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
+              leadingIcon={<Pencil />}
               onClick={() => {
                 const id = selectedAgent.id;
                 closeAgentDetails();
                 openEditAgent(id);
               }}
             >
-              <Pencil size={12} style={{ marginRight: 6 }} />
               {t('agentsOverview.editAgent')}
             </Button>
             <IconButton
@@ -925,14 +926,14 @@ const AgentsHomeView: React.FC = () => {
           </>
         ) : selectedAgent && selectedAgentIsExternal ? (
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
+            leadingIcon={<Puzzle />}
             onClick={() => {
               closeAgentDetails();
               openEcosystemCompatibility({ ownerSurface: 'external-sources' });
             }}
           >
-            <Puzzle size={12} style={{ marginRight: 6 }} />
             {t('agentsOverview.manageExternalAgent')}
           </Button>
         ) : null}
@@ -1151,8 +1152,8 @@ const AgentsHomeView: React.FC = () => {
                             <RotateCcw size={12} />
                           </IconButton>
                           <Button
-                            variant="ghost"
-                            size="small"
+                            variant="outline"
+                            size="sm"
                             onClick={() => {
                               if (currentCapabilityTab === 'tools') {
                                 setToolsEditing(false);
@@ -1171,9 +1172,9 @@ const AgentsHomeView: React.FC = () => {
                             {t('agentsOverview.cancel')}
                           </Button>
                           <Button
-                            variant="primary"
-                            size="small"
-                            isLoading={
+                            variant="fill"
+                            size="sm"
+                            loading={
                               currentCapabilityTab === 'tools'
                                 ? savingTools
                                 : currentCapabilityTab === 'skills'
@@ -1245,8 +1246,8 @@ const AgentsHomeView: React.FC = () => {
                         </>
                       ) : (
                         <Button
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             if (currentCapabilityTab === 'tools') {
                               setPendingTools([...selectedAgentTools]);

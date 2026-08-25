@@ -1,12 +1,13 @@
 /** Optimized viewer/editor for `.plan.md` files (frontmatter + markdown body). */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Circle, ArrowRight, Check, XCircle, Loader2, CheckCircle, AlertCircle, FileText, Pencil, X, ChevronDown, Trash2, Plus } from 'lucide-react';
 import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
 import { createLogger } from '@/shared/utils/logger';
-import { CubeLoading, Button, Tooltip } from '@/component-library';
+import { CubeLoading, IconButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -537,65 +538,66 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       >
         <div className={toolbarClassName}>
           {isYamlEditingInPanel ? (
-            <Tooltip content={t('editor.planViewer.toggleYamlEditOff')} placement="top">
-              <button
-                type="button"
-                className="edit-btn"
-                onClick={closeYamlEditor}
-              >
-                <X size={14} />
-              </button>
-            </Tooltip>
+            <IconButton
+              type="button"
+              size="xs"
+              onClick={closeYamlEditor}
+              tooltip={t('editor.planViewer.toggleYamlEditOff')}
+              aria-label={t('editor.planViewer.toggleYamlEditOff')}
+            >
+              <X size={14} />
+            </IconButton>
           ) : isPanelEditing ? (
             <>
-              <Tooltip content={t('editor.common.add')} placement="top">
-                <button
-                  type="button"
-                  className="edit-btn"
-                  onClick={addTodo}
-                >
-                  <Plus size={14} />
-                </button>
-              </Tooltip>
-              <Tooltip content={t('editor.common.save')} placement="top">
-                <button
-                  type="button"
-                  className="edit-btn edit-btn--confirm"
-                  onClick={saveEdit}
-                >
-                  <Check size={14} />
-                </button>
-              </Tooltip>
-              <Tooltip content={t('editor.common.cancel')} placement="top">
-                <button
-                  type="button"
-                  className="edit-btn"
-                  onClick={cancelEdit}
-                >
-                  <X size={14} />
-                </button>
-              </Tooltip>
+              <IconButton
+                type="button"
+                size="xs"
+                onClick={addTodo}
+                tooltip={t('editor.common.add')}
+                aria-label={t('editor.common.add')}
+              >
+                <Plus size={14} />
+              </IconButton>
+              <IconButton
+                type="button"
+                size="xs"
+                variant="success"
+                onClick={saveEdit}
+                tooltip={t('editor.common.save')}
+                aria-label={t('editor.common.save')}
+              >
+                <Check size={14} />
+              </IconButton>
+              <IconButton
+                type="button"
+                size="xs"
+                onClick={cancelEdit}
+                tooltip={t('editor.common.cancel')}
+                aria-label={t('editor.common.cancel')}
+              >
+                <X size={14} />
+              </IconButton>
             </>
           ) : (
             <>
-              <Tooltip content={t('editor.planViewer.toggleYamlEditOn')} placement="top">
-                <button
-                  type="button"
-                  className="edit-btn"
-                  onClick={() => openYamlEditor(placement)}
-                >
-                  <FileText size={14} />
-                </button>
-              </Tooltip>
-              <Tooltip content={t('editor.common.edit')} placement="top">
-                <button
-                  type="button"
-                  className="edit-btn"
-                  onClick={startEdit}
-                >
-                  <Pencil size={14} />
-                </button>
-              </Tooltip>
+              <IconButton
+                type="button"
+                size="xs"
+                onClick={() => openYamlEditor(placement)}
+                tooltip={t('editor.planViewer.toggleYamlEditOn')}
+                aria-label={t('editor.planViewer.toggleYamlEditOn')}
+              >
+                <FileText size={14} />
+              </IconButton>
+              <IconButton
+                type="button"
+                size="xs"
+                onClick={startEdit}
+                tooltip={t('editor.common.edit')}
+                aria-label={t('editor.common.edit')}
+              >
+                <Pencil size={14} />
+              </IconButton>
             </>
           )}
         </div>
@@ -642,15 +644,16 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                         }
                       }}
                     />
-                    <Tooltip content={t('editor.common.delete')} placement="top">
-                      <button
-                        type="button"
-                        className="todo-delete-btn"
-                        onClick={() => deleteTodo(todo.id || String(index))}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </Tooltip>
+                    <IconButton
+                      type="button"
+                      size="xs"
+                      variant="danger"
+                      onClick={() => deleteTodo(todo.id || String(index))}
+                      tooltip={t('editor.common.delete')}
+                      aria-label={t('editor.common.delete')}
+                    >
+                      <Trash2 size={13} />
+                    </IconButton>
                   </>
                 ) : (
                   <span className="todo-content">{todo.content}</span>
@@ -755,7 +758,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
         <div className="error-content">
           <AlertCircle className="error-icon" />
           <p>{error}</p>
-          <Button variant="secondary" size="small" onClick={loadFileContent}>
+          <Button variant="outline" size="sm" onClick={loadFileContent}>
             {t('editor.common.retry')}
           </Button>
         </div>
@@ -797,25 +800,26 @@ ${JSON.stringify(simpleTodos, null, 2)}
             <>
               <span className="todos-count">{t('editor.planViewer.remainingTodos', { count: remainingTodos })}</span>
 
-              <button
-                className={`build-btn build-btn--${buildStatus}`}
+              <Button
+                type="button"
+                variant="fill"
+                size="sm"
+                leadingIcon={
+                  buildStatus === 'building'
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : buildStatus === 'built'
+                      ? <CheckCircle size={14} />
+                      : undefined
+                }
                 onClick={handleBuild}
                 disabled={buildStatus !== 'build'}
               >
-                {buildStatus === 'building' ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>{t('editor.planViewer.building')}</span>
-                  </>
-                ) : buildStatus === 'built' ? (
-                  <>
-                    <CheckCircle size={14} />
-                    <span>{t('editor.planViewer.built')}</span>
-                  </>
-                ) : (
-                  <span>{t('editor.planViewer.build')}</span>
-                )}
-              </button>
+                {buildStatus === 'building'
+                  ? t('editor.planViewer.building')
+                  : buildStatus === 'built'
+                    ? t('editor.planViewer.built')
+                    : t('editor.planViewer.build')}
+              </Button>
             </>
           )}
         </div>

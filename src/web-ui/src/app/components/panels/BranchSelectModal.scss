@@ -276,51 +276,6 @@
   min-width: 0;
 }
 
-.branch-select-dialog__btn {
-  padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
-
-  &--cancel {
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-secondary);
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-    
-    &:active {
-      transform: scale(0.97);
-    }
-  }
-
-  &--confirm {
-    background: var(--bf-appearance-token-color-accent-500);
-    color: white;
-
-    &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-color-accent-600);
-    }
-    
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .branch-select-dialog {
     animation: none;

@@ -23,6 +23,29 @@ const RETIRED_APPEARANCE_SETTINGS_PARTS = new Set([
   'packageEmpty',
 ]);
 
+const RETIRED_COMPONENT_SURFACE_IDS = new Set(['button', 'switch']);
+
+const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
+  'assistant-card': new Set(['configure', 'newSession']),
+  'computer-use-tool-card': new Set(['settingsButton']),
+  'context-list': new Set(['clear']),
+  'copy-output-button': new Set(['action', 'icon', 'text']),
+  'create-agent-page': new Set(['back']),
+  'font-preference': new Set(['resetButton']),
+  'image-analysis-card': new Set(['expand']),
+  'mini-app-tool-display': new Set(['open']),
+  'peer-device': new Set(['switcherDisconnect']),
+  'review-session-summary-card': new Set(['open']),
+  'sessions-section': new Set(['retry', 'aggregateRetry']),
+  'smart-recommendations': new Set(['action', 'label', 'loading']),
+  'subagent-projection': new Set(['expandAction']),
+  'tiptap-editor': new Set(['quickAction']),
+};
+
+const RETIRED_SCENE_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
+  skills: new Set(['addAction']),
+};
+
 function migrateRuntimePartRule(value: unknown): unknown {
   if (!isRecord(value)) return value;
   let changed = false;
@@ -89,37 +112,91 @@ function migrateAppearanceSettingsSurface(value: unknown): unknown {
     : { ...value, parts };
 }
 
+function dropRetiredSurfaceParts(value: unknown, retiredParts: ReadonlySet<string>): unknown {
+  if (!isRecord(value) || !isRecord(value.parts)) return value;
+  const parts = Object.fromEntries(
+    Object.entries(value.parts).filter(([partId]) => !retiredParts.has(partId)),
+  );
+  return Object.keys(parts).length === Object.keys(value.parts).length
+    ? value
+    : { ...value, parts };
+}
+
+function migrateRetiredSurfaceParts(
+  surfaces: Record<string, unknown>,
+  retiredPartsBySurface: Readonly<Record<string, ReadonlySet<string>>>,
+): { changed: boolean; surfaces: Record<string, unknown> } {
+  let changed = false;
+  const migrated = { ...surfaces };
+  for (const [surfaceId, retiredParts] of Object.entries(retiredPartsBySurface)) {
+    if (!(surfaceId in migrated)) continue;
+    const nextSurface = dropRetiredSurfaceParts(migrated[surfaceId], retiredParts);
+    if (nextSurface === migrated[surfaceId]) continue;
+    migrated[surfaceId] = nextSurface;
+    changed = true;
+  }
+  return { changed, surfaces: changed ? migrated : surfaces };
+}
+
 /**
  * Read-only upgrade boundary for Appearance packages authored against settings
  * surface ids that predate the Settings information architecture.
  */
 export function migrateAppearancePackage(input: Record<string, unknown>): Record<string, unknown> {
-  if (!isRecord(input.components)) return input;
-
-  const components = { ...input.components };
+  let components = isRecord(input.components) ? { ...input.components } : null;
+  let scenes = isRecord(input.scenes) ? { ...input.scenes } : null;
   let changed = false;
-  for (const [legacyId, canonicalId] of Object.entries(LEGACY_COMPONENT_SURFACE_IDS)) {
-    if (!(legacyId in components)) continue;
-    if (!(canonicalId in components)) {
-      components[canonicalId] = legacyId === 'session-config'
-        ? migrateRuntimeSurface(components[legacyId])
-        : legacyId === 'appearance-config'
-          ? migrateAppearanceSettingsSurface(components[legacyId])
-          : components[legacyId];
+
+  if (components) {
+    for (const [legacyId, canonicalId] of Object.entries(LEGACY_COMPONENT_SURFACE_IDS)) {
+      if (!(legacyId in components)) continue;
+      if (!(canonicalId in components)) {
+        components[canonicalId] = legacyId === 'session-config'
+          ? migrateRuntimeSurface(components[legacyId])
+          : legacyId === 'appearance-config'
+            ? migrateAppearanceSettingsSurface(components[legacyId])
+            : components[legacyId];
+      }
+      delete components[legacyId];
+      changed = true;
     }
-    delete components[legacyId];
-    changed = true;
+
+    for (const retiredSurfaceId of RETIRED_COMPONENT_SURFACE_IDS) {
+      if (!(retiredSurfaceId in components)) continue;
+      delete components[retiredSurfaceId];
+      changed = true;
+    }
+
+    const retiredComponents = migrateRetiredSurfaceParts(components, RETIRED_COMPONENT_PARTS);
+    components = retiredComponents.surfaces;
+    changed = changed || retiredComponents.changed;
+  }
+
+  if (scenes) {
+    const retiredScenes = migrateRetiredSurfaceParts(scenes, RETIRED_SCENE_PARTS);
+    scenes = retiredScenes.surfaces;
+    changed = changed || retiredScenes.changed;
   }
 
   if (!changed) return input;
 
   const migrated = Object.create(Object.getPrototypeOf(input)) as Record<string, unknown>;
   Object.defineProperties(migrated, Object.getOwnPropertyDescriptors(input));
-  Object.defineProperty(migrated, 'components', {
-    value: components,
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  });
+  if (components) {
+    Object.defineProperty(migrated, 'components', {
+      value: components,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  if (scenes) {
+    Object.defineProperty(migrated, 'scenes', {
+      value: scenes,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
   return migrated;
 }

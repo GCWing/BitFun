@@ -1,6 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AlertTriangle, Check, Eye, EyeOff, Loader2, RefreshCw, Send, Trash2, X } from 'lucide-react';
-import { Button, IconButton } from '@/component-library';
+import { IconButton } from '@/component-library';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { MiniApp, MiniAppCustomizationMetadata, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -437,13 +438,14 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
             {builtinUpdateNotice.sourceHash && (
               <div className="miniapp-customize-panel__notice-actions" data-bf-component="miniapp-customize-panel" data-bf-part="noticeActions">
                 <Button
-                  variant="secondary"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={() => void handleDismissBuiltinUpdate()}
                   disabled={dismissingBuiltinUpdate}
-                  isLoading={dismissingBuiltinUpdate}
+                  loading={dismissingBuiltinUpdate}
+                  leadingIcon={<X size={14} />}
                 >
-                  <X size={14} />
+
                   {t('customize.dismissBuiltinUpdate')}
                 </Button>
               </div>
@@ -472,31 +474,33 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
 
       <div className="miniapp-customize-panel__actions" data-bf-component="miniapp-customize-panel" data-bf-part="actions">
         <Button
-          variant="primary"
-          size="small"
+          variant="fill"
+          size="sm"
           onClick={() => void handleStart()}
           disabled={!trimmedRequest || busy}
-          isLoading={state.stage === 'drafting'}
+          loading={state.stage === 'drafting'}
+          leadingIcon={<Send size={14} />}
         >
-          <Send size={14} />
+
           {state.draft ? t('customize.retryEditor') : t('customize.start')}
         </Button>
         {state.draft && (
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={() => void handleRefreshPreview()}
             disabled={busy}
-            isLoading={refreshing}
+            loading={refreshing}
+            leadingIcon={<RefreshCw size={14} />}
           >
-            <RefreshCw size={14} />
+
             {t('customize.refreshPreview')}
           </Button>
         )}
         {state.draft && (
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={handleTogglePreview}
             disabled={busy}
           >
@@ -539,21 +543,22 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
 
       <div className="miniapp-customize-panel__footer" data-bf-component="miniapp-customize-panel" data-bf-part="footer">
         <Button
-          variant="secondary"
-          size="small"
+          variant="outline"
+          size="sm"
           onClick={() => void handleDiscard()}
           disabled={busy}
-          isLoading={discarding}
+          loading={discarding}
+          leadingIcon={<Trash2 size={14} />}
         >
-          <Trash2 size={14} />
+
           {t('customize.discard')}
         </Button>
         <Button
-          variant="success"
-          size="small"
+          variant="fill"
+          size="sm"
           onClick={() => void handleApply()}
           disabled={!hasPreview || busy}
-          isLoading={state.stage === 'applying'}
+          loading={state.stage === 'applying'}
         >
           {t('customize.apply')}
         </Button>

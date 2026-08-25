@@ -1,0 +1,126 @@
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  assertRequiredTokens,
+  createTokenCatalog,
+  createTokenArtifacts,
+  diffResolvedTokens,
+  mergeTokenDocuments,
+  renderCss,
+  resolveTokens,
+} from "@bitfun/token-engine";
+
+const packageDirectory = fileURLToPath(new URL("../", import.meta.url));
+const sourceDirectory = path.join(packageDirectory, "src");
+const outputDirectory = path.join(packageDirectory, "dist");
+
+async function readJson(fileName) {
+  return JSON.parse(await readFile(path.join(sourceDirectory, fileName), "utf8"));
+}
+
+const [systemDocument, compactDocument, touchDocument] = await Promise.all([
+  readJson("system.tokens.json"),
+  readJson("density-compact.tokens.json"),
+  readJson("density-touch.tokens.json"),
+]);
+
+const systemTokens = resolveTokens(systemDocument);
+const compactTokens = resolveTokens(mergeTokenDocuments(systemDocument, compactDocument));
+const touchTokens = resolveTokens(mergeTokenDocuments(systemDocument, touchDocument));
+
+assertRequiredTokens(systemTokens, [
+  "space.2",
+  "space.component.inline",
+  "space.component.block",
+  "font.family.control",
+  "font.family.sans",
+  "font.size.body",
+  "control.height.sm",
+  "control.height.md",
+  "control.height.lg",
+  "control.hitTarget",
+  "control.switch.trackWidth",
+  "control.switch.trackHeight",
+  "control.switch.thumbSize",
+  "control.switch.thumbInset",
+  "control.switch.thumbTravel",
+  "control.switch.thumbTravelReverse",
+  "control.tabGroup.gap",
+  "control.tabGroup.itemGap",
+  "control.tabGroup.itemHeight",
+  "control.tabGroup.itemIconSize",
+  "control.tabGroup.itemPaddingInline",
+  "control.tabGroup.itemActionSize",
+  "control.tabGroup.itemActionInset",
+  "control.tabGroup.itemRadius",
+  "layout.splitView.contentPanelRadius",
+  "radius.md",
+  "radius.3xl",
+  "motion.duration.fast",
+  "focus.width",
+]);
+
+const artifacts = createTokenArtifacts(systemTokens);
+const tokenModes = ["comfortable", "compact", "touch"];
+const tokenCatalog = createTokenCatalog(
+  {
+    comfortable: systemTokens,
+    compact: compactTokens,
+    touch: touchTokens,
+  },
+  { defaultMode: "comfortable" },
+);
+const javascript = [
+  artifacts.javascript.trimEnd(),
+  `export const tokenModes = Object.freeze(${JSON.stringify(tokenModes)});`,
+  `export const tokenCatalog = Object.freeze(${JSON.stringify(tokenCatalog, null, 2)});`,
+  "",
+].join("\n");
+const typescript = [
+  artifacts.typescript.trimEnd(),
+  `export type SystemTokenMode = ${tokenModes.map((mode) => JSON.stringify(mode)).join(" | ")};`,
+  "export interface SystemTokenCatalogEntry {",
+  "  readonly category: string;",
+  "  readonly cssVariable: `--bf-${string}`;",
+  "  readonly description?: string;",
+  "  readonly name: TokenName;",
+  "  readonly type: string;",
+  "  readonly values: Readonly<Record<SystemTokenMode, string>>;",
+  "}",
+  "export declare const tokenModes: readonly SystemTokenMode[];",
+  "export declare const tokenCatalog: readonly SystemTokenCatalogEntry[];",
+  "",
+].join("\n");
+const css = [
+  "@layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;\n",
+  renderCss(systemTokens, {
+    layer: "bf.tokens.system",
+    selector: ":where([data-bf-design-system-root])",
+  }),
+  renderCss(diffResolvedTokens(systemTokens, compactTokens), {
+    layer: "bf.tokens.system",
+    selector: ':where([data-bf-design-system-root][data-density="compact"])',
+  }),
+  renderCss(diffResolvedTokens(systemTokens, touchTokens), {
+    layer: "bf.tokens.system",
+    selector: ':where([data-bf-design-system-root][data-density="touch"])',
+  }),
+  "@media (prefers-reduced-motion: reduce) {\n",
+  "  :where([data-bf-design-system-root]) {\n",
+  "    --bf-motion-duration-fast: 0ms;\n",
+  "    --bf-motion-duration-normal: 0ms;\n",
+  "    --bf-motion-duration-slow: 0ms;\n",
+  "    --bf-motion-duration-loop: 0ms;\n",
+  "  }\n",
+  "}\n",
+].join("\n");
+
+await mkdir(outputDirectory, { recursive: true });
+await Promise.all([
+  writeFile(path.join(outputDirectory, "tokens.css"), css),
+  writeFile(path.join(outputDirectory, "tokens.json"), artifacts.json),
+  writeFile(path.join(outputDirectory, "index.js"), javascript),
+  writeFile(path.join(outputDirectory, "index.d.ts"), typescript),
+  copyFile(path.resolve(packageDirectory, "..", "..", "LICENSE"), path.join(outputDirectory, "LICENSE")),
+]);

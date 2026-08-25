@@ -1,7 +1,7 @@
 import { Checkbox as BitFunCheckbox } from '@/component-library/components/Checkbox/Checkbox';
 import { IconButton as BitFunIconButton } from '@/component-library/components/IconButton/IconButton';
 import { Input as BitFunInput } from '@/component-library/components/Input/Input';
-import { Switch as BitFunSwitch } from '@/component-library/components/Switch/Switch';
+import { Switch as BitFunSwitch } from '@bitfun/ui';
 import { Textarea as BitFunTextarea } from '@/component-library/components/Textarea/Textarea';
 import type {
   CanvasCheckboxProps,
@@ -31,13 +31,45 @@ function normalizeOption(option: string | number | CanvasSelectOption): CanvasSe
   return option;
 }
 
-export function Toggle({ onChange, size, ...props }: CanvasToggleProps) {
-  return (
+export function Toggle({
+  onChange,
+  size: _size,
+  label,
+  description,
+  loading = false,
+  checkedText,
+  uncheckedText,
+  disabled,
+  checked,
+  ...props
+}: CanvasToggleProps) {
+  const statusText = checked ? checkedText : uncheckedText;
+  const control = (
     <BitFunSwitch
       {...props}
-      size={controlSize(size)}
+      checked={checked}
+      disabled={disabled || loading}
+      aria-busy={loading || props['aria-busy']}
+      aria-label={props['aria-label'] ?? label}
       onChange={event => onChange?.(event.target.checked)}
     />
+  );
+
+  if (!label && !description && !statusText) {
+    return control;
+  }
+
+  return (
+    <label className="bf-canvas-toggle">
+      {control}
+      <span className="bf-canvas-toggle__copy">
+        {label ? <span className="bf-canvas-toggle__label">{label}</span> : null}
+        {description ? (
+          <span className="bf-canvas-toggle__description">{description}</span>
+        ) : null}
+        {statusText ? <span className="bf-canvas-toggle__status">{statusText}</span> : null}
+      </span>
+    </label>
   );
 }
 

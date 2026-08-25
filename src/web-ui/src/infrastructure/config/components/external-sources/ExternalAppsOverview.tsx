@@ -1,7 +1,8 @@
+import { Switch } from '@bitfun/ui';
 import React from 'react';
 import { CircleAlert } from 'lucide-react';
 import type { TFunction } from 'i18next';
-import { Switch, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { ConfigPageSection } from '../common';
 import type { ExternalApplicationView } from './applicationModel';
 
@@ -83,10 +84,9 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
               : undefined}
           >
             <Switch
-              size="small"
               checked={application.enabled}
               disabled={!canMutate || busy || !policiesEnabled}
-              loading={busy}
+              aria-busy={busy}
               aria-label={t('applications.toggleLabel', { name: application.displayName })}
               onChange={(event) => onToggle(application, event.currentTarget.checked)}
             />

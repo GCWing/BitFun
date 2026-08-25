@@ -2,6 +2,7 @@
  * BranchesView — Left: branch list (switch/create/delete). Right: commit history for selected branch.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,7 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { Button, IconButton, Tooltip, Search as SearchComponent } from '@/component-library';
+import { IconButton, Tooltip, Search as SearchComponent } from '@/component-library';
 import { gitService } from '@/tools/git/services';
 import { useGitOperations } from '@/tools/git/hooks';
 import { useNotification } from '@/shared/notification-system';
@@ -226,14 +227,13 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
           </div>
           <div data-bf-component="branches-view" data-bf-part="actions" className="bitfun-git-scene-branches__toolbar-actions">
             <Button
-              size="small"
-              variant="primary"
+              size="sm"
+              variant="fill"
+              leadingIcon={<Plus size={14} />}
               onClick={() => handleCreateFrom(branches.find(b => b.current)?.name ?? selectedBranchName ?? '')}
               title={t('dialog.createNewBranch.title')}
-              className="bitfun-git-scene-branches__create-btn"
             >
-              <Plus size={14} />
-              <span>{t('dialog.createNewBranch.confirm')}</span>
+              {t('dialog.createNewBranch.confirm')}
             </Button>
           </div>
         </div>

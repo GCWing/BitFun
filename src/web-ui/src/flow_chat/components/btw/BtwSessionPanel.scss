@@ -212,21 +212,6 @@
     animation: btw-session-panel-stop-spin 0.9s linear infinite;
   }
 
-  &__empty-retry {
-    padding: 5px 10px;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: 6px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    color: var(--bf-appearance-token-color-text-secondary);
-    font: inherit;
-    cursor: pointer;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-  }
-
   &__scroll-to-bottom {
     bottom: 18px;
     right: 18px;

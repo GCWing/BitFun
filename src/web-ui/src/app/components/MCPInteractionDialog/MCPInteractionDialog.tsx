@@ -1,5 +1,6 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Modal } from '@/component-library';
+import { Modal } from '@/component-library';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { notificationService } from '@/shared/notification-system';
@@ -171,18 +172,18 @@ export const MCPInteractionDialog: React.FC = () => {
 
           <div className="mcp-interaction-dialog__actions" data-bf-component="mcp-interaction-dialog" data-bf-part="actions">
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => void handleReject()}
               disabled={isSubmitting}
             >
               Reject
             </Button>
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={() => void handleApprove()}
-              isLoading={isSubmitting}
+              loading={isSubmitting}
               disabled={isSubmitting}
             >
               Approve

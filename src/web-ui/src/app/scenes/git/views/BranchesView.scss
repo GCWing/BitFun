@@ -41,13 +41,6 @@
     white-space: nowrap;
   }
 
-  &__create-btn {
-    min-width: 120px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
   &__list {
     flex: 1;
     overflow-y: auto;

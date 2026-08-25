@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Button } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal } from '../Modal/Modal';
 import { Input } from '../Input/Input';
-import { Button } from '../Button/Button';
 import './InputDialog.scss';
 
 export interface InputDialogProps {
@@ -134,15 +134,15 @@ export const InputDialog: React.FC<InputDialogProps> = ({
 
         <div className="input-dialog__actions" data-bf-component="input-dialog" data-bf-part="actions">
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={handleCancel}
           >
             {resolvedCancelText}
           </Button>
           <Button
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             onClick={handleConfirm}
           >
             {resolvedConfirmText}

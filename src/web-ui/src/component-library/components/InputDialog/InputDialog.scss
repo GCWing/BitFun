@@ -24,14 +24,8 @@
     padding: 10px 20px 12px;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
 
-    // Give buttons explicit borders for visual consistency with the input field
-    .btn {
+    [data-bf-component='button'] {
       min-width: 68px;
-      border: 1px solid var(--bf-appearance-token-border-base);
-
-      &-primary {
-        border-color: var(--bf-appearance-token-color-accent-400);
-      }
     }
   }
 }

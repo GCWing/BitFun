@@ -1,6 +1,7 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Select, type SelectOption, Switch } from '@/component-library';
+import { Select, type SelectOption } from '@/component-library';
 import { ConfigPageRow, ConfigPageSection } from '@/infrastructure/config/components/common';
 import { useFontPreference } from '../hooks/useFontPreference';
 import { FontSizeLevel, PRESET_UI_BASE_PX, UI_FONT_SIZE_PRESETS } from '../types';
@@ -293,13 +294,15 @@ export function FontPreferencePanel() {
       >
         <div className="font-pref-panel__flow-chat">
           <div className="font-pref-panel__flow-chat-line">
-            <Switch
-              size="small"
-              checked={fcIndependent}
-              onChange={(e) => handleFlowChatCustomToggle(e.target.checked)}
-              label={t('appearance.fontSize.flowChatCustomToggle')}
-              data-testid="appearance-flowchat-font-toggle"
-            />
+            <label className="font-pref-panel__flow-chat-toggle">
+              <span>{t('appearance.fontSize.flowChatCustomToggle')}</span>
+              <Switch
+                checked={fcIndependent}
+                onChange={(e) => handleFlowChatCustomToggle(e.target.checked)}
+                aria-label={t('appearance.fontSize.flowChatCustomToggle')}
+                data-testid="appearance-flowchat-font-toggle"
+              />
+            </label>
           </div>
           {fcIndependent && (
             <div
@@ -322,16 +325,15 @@ export function FontPreferencePanel() {
 
       {/* Reset */}
       <ConfigPageRow label="" align="center">
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           className="font-pref-panel__reset-btn"
           onClick={() => void handleReset()}
           data-testid="appearance-font-reset-btn"
-          data-bf-component="font-preference"
-          data-bf-part="resetButton"
         >
           {t('appearance.fontSize.resetButton')}
-        </button>
+        </Button>
       </ConfigPageRow>
       </ConfigPageSection>
     </div>

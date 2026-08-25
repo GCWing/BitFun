@@ -4,10 +4,12 @@
  */
 
 import React from 'react';
+import { Button } from '@bitfun/ui';
 import { CheckCircle, XCircle, Maximize2, FileText, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import { ToolProcessingDots } from '../ToolProcessingDots';
+import { IconButton } from '../../IconButton';
 import './SnapshotCard.scss';
 
 export interface SnapshotCardProps extends Omit<BaseToolCardProps, 'toolName' | 'displayName'> {
@@ -109,29 +111,37 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
         <span className="snapshot-card__status">{getStatusIcon()}</span>
         
         <div className="snapshot-card__actions" onClick={(e) => e.stopPropagation()} data-bf-component="flow-chat-card" data-bf-part="actions">
-          <button
-            className="snapshot-card__action-btn snapshot-card__action-btn--accept"
+          <IconButton
+            type="button"
+            size="xs"
+            variant="success"
             onClick={onAccept}
             title={t('flowChatCards.snapshotCard.accept')}
+            aria-label={t('flowChatCards.snapshotCard.accept')}
             disabled={loading || status !== 'completed'}
           >
             <CheckCircle size={12} />
-          </button>
-          <button
-            className="snapshot-card__action-btn snapshot-card__action-btn--reject"
+          </IconButton>
+          <IconButton
+            type="button"
+            size="xs"
+            variant="danger"
             onClick={onReject}
             title={t('flowChatCards.snapshotCard.reject')}
+            aria-label={t('flowChatCards.snapshotCard.reject')}
             disabled={loading || status !== 'completed'}
           >
             <XCircle size={12} />
-          </button>
-          <button
-            className="snapshot-card__action-btn snapshot-card__action-btn--fullscreen"
+          </IconButton>
+          <IconButton
+            type="button"
+            size="xs"
             onClick={onViewDetails}
             title={t('flowChatCards.snapshotCard.viewDetails')}
+            aria-label={t('flowChatCards.snapshotCard.viewDetails')}
           >
             <Maximize2 size={12} />
-          </button>
+          </IconButton>
         </div>
       </div>
     );
@@ -179,30 +189,36 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
 
       {status === 'completed' && (
         <div className="snapshot-card__button-group">
-          <button
-            className="snapshot-card__button snapshot-card__button--accept"
+          <Button
+            className="snapshot-card__button"
+            variant="fill"
+            size="sm"
+            leadingIcon={<CheckCircle size={14} />}
             onClick={onAccept}
             disabled={loading}
           >
-            <CheckCircle size={14} />
-            <span>{t('flowChatCards.snapshotCard.accept')}</span>
-          </button>
-          <button
-            className="snapshot-card__button snapshot-card__button--reject"
+            {t('flowChatCards.snapshotCard.accept')}
+          </Button>
+          <Button
+            className="snapshot-card__button"
+            variant="outline"
+            size="sm"
+            leadingIcon={<XCircle size={14} />}
             onClick={onReject}
             disabled={loading}
           >
-            <XCircle size={14} />
-            <span>{t('flowChatCards.snapshotCard.reject')}</span>
-          </button>
+            {t('flowChatCards.snapshotCard.reject')}
+          </Button>
           {onViewDetails && (
-            <button
-              className="snapshot-card__button snapshot-card__button--view"
+            <Button
+              className="snapshot-card__button"
+              variant="outline"
+              size="sm"
+              leadingIcon={<Maximize2 size={14} />}
               onClick={onViewDetails}
             >
-              <Maximize2 size={14} />
-              <span>{t('flowChatCards.snapshotCard.viewFullDiff')}</span>
-            </button>
+              {t('flowChatCards.snapshotCard.viewFullDiff')}
+            </Button>
           )}
         </div>
       )}

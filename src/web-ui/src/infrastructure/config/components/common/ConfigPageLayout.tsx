@@ -82,7 +82,7 @@ export interface ConfigPageSectionProps extends Omit<React.HTMLAttributes<HTMLEl
   extra?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-  /** Disable when the section body removes its standard bordered surface chrome. */
+  /** Disable when children own the surface and the standard body background/radius should be removed. */
   mouseGlowSurface?: boolean;
 }
 

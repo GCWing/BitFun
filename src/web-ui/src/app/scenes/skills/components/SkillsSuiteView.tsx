@@ -1,7 +1,8 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Package, RefreshCw, RotateCcw, Settings2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button } from '@/component-library';
+import { Badge, IconButton } from '@/component-library';
 import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
 import { configAPI } from '@/infrastructure/api';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
@@ -414,24 +415,24 @@ const SkillsSuiteView: React.FC = () => {
         </div>
         <div className="skills-suite__hero-actions" data-bf-scene="skills" data-bf-part="suiteHeroActions">
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
+            leadingIcon={<Settings2 size={13} />}
             onClick={() => setIsGroupManagerOpen(true)}
             disabled={isSaving}
           >
-            <Settings2 size={13} />
-            <span>{t('suite.manageGroups')}</span>
+            {t('suite.manageGroups')}
           </Button>
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
+            leadingIcon={<RefreshCw size={13} />}
             onClick={() => void refresh()}
             title={t('suite.refreshTooltip')}
             aria-label={t('suite.refreshTooltip')}
             disabled={loading || isSaving || hasUnsavedChanges}
           >
-            <RefreshCw size={13} />
-            <span>{t('suite.refreshAction')}</span>
+            {t('suite.refreshAction')}
           </Button>
         </div>
       </div>
@@ -459,11 +460,9 @@ const SkillsSuiteView: React.FC = () => {
             </button>
         ))}
         </div>
-        <Button
-          variant="secondary"
+        <IconButton
           size="small"
           className="skills-suite__mode-reset"
-          iconOnly
           isLoading={resettingModeId === suiteModeId}
           disabled={isSaving}
           onClick={() => { void resetMode(currentMode); }}
@@ -471,7 +470,7 @@ const SkillsSuiteView: React.FC = () => {
           aria-label={t('suite.modeActions.reset', { mode: t(currentMode.labelKey) })}
         >
           <RotateCcw size={13} />
-        </Button>
+        </IconButton>
       </div>
 
       {loading && (
@@ -546,9 +545,9 @@ const SkillsSuiteView: React.FC = () => {
                         <div className="skills-suite__group-actions" data-bf-scene="skills" data-bf-part="suiteGroupActions">
                           {showSaveButton ? (
                             <Button
-                              variant="primary"
-                              size="small"
-                              isLoading={savingAction?.groupKey === group.id && savingAction.kind === 'save'}
+                              variant="fill"
+                              size="sm"
+                              loading={savingAction?.groupKey === group.id && savingAction.kind === 'save'}
                               disabled={isSaving}
                               onClick={() => void saveGroup(group)}
                             >
@@ -556,9 +555,9 @@ const SkillsSuiteView: React.FC = () => {
                             </Button>
                           ) : null}
                           <Button
-                            variant={allEnabled ? 'secondary' : 'primary'}
-                            size="small"
-                            isLoading={savingAction?.groupKey === group.id && savingAction.kind === 'toggle'}
+                            variant={allEnabled ? 'outline' : 'fill'}
+                            size="sm"
+                            loading={savingAction?.groupKey === group.id && savingAction.kind === 'toggle'}
                             disabled={isSaving}
                             onClick={() => void saveGroupVisibility(group, !allEnabled)}
                           >

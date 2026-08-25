@@ -90,36 +90,6 @@ $_editor-padding-desktop: 32px;
     font-family: $font-family-mono;
   }
   
-  &__error-retry-btn {
-    padding: $size-gap-1 $size-gap-3;
-    background: transparent;
-    border: 1px dashed var(--bf-appearance-token-color-text-muted);
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-family: $font-family-mono;
-    cursor: pointer;
-    transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-    
-    &:hover {
-      color: var(--bf-appearance-token-color-text-secondary);
-      background: var(--bf-appearance-token-color-bg-secondary);
-    }
-    
-    &:active {
-      background: var(--bf-appearance-token-color-bg-tertiary);
-    }
-    
-    &:focus-visible {
-      outline: 1px solid var(--bf-appearance-token-color-text-muted);
-      outline-offset: 1px;
-    }
-  }
-  
   // Editor Content Area
   &__content {
     flex: 1;
@@ -302,9 +272,6 @@ $_editor-padding-desktop: 32px;
       height: 16px;
     }
     
-    &__error-retry-btn {
-      padding: $size-gap-1 $size-gap-2;
-    }
   }
 }
 
@@ -320,9 +287,6 @@ $_editor-padding-desktop: 32px;
       opacity: 1;
     }
     
-    &__error-retry-btn {
-      text-decoration: underline;
-    }
   }
 }
 

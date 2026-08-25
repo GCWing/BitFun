@@ -2,9 +2,16 @@
  * SceneBar type definitions.
  */
 
-import type { LucideIcon } from 'lucide-react';
+import type { ReactNode, SVGProps } from 'react';
 
-/** Scene tab identifier — visible tab count is capped by MAX_OPEN_SCENES (see scene registry). */
+export type SceneTabIconProps = Omit<SVGProps<SVGSVGElement>, 'ref'> & {
+  size?: number | string;
+};
+
+/** SVG icon contract shared by design-system and third-party icon components. */
+export type SceneTabIcon = (props: SceneTabIconProps) => ReactNode;
+
+/** Scene tab identifier. Open scenes are kept until the user closes them. */
 export type SceneTabId =
   | 'welcome'
   | 'session'
@@ -32,29 +39,20 @@ export interface SceneTabDef {
   label: string;
   /** i18n key resolved through the common namespace, or an explicit namespace key such as shared:features.settings. */
   labelKey?: string;
-  Icon?: LucideIcon;
-  /** @deprecated Prefer fixed + closable. Pinned tabs cannot be closed and were protected from eviction. */
+  Icon?: SceneTabIcon;
+  /** Pinned tabs cannot be closed. */
   pinned: boolean;
-  /** If true, tab is always kept and never evicted by capacity policy (e.g. agent/session). */
-  fixed?: boolean;
-  /** If false, user cannot close the tab. Default true for non-fixed scenes. */
+  /** If false, user cannot close the tab. Default true for non-pinned scenes. */
   closable?: boolean;
-  /**
-   * Keep the scene mounted in the background when the visible tab capacity
-   * automatically evicts it. Explicit close still unmounts it.
-   */
-  retainOnAutoEvict?: boolean;
   /** Only one instance allowed */
   singleton: boolean;
   /** Open on app start */
   defaultOpen: boolean;
 }
 
-/** Runtime instance of a visible or retained scene. */
+/** Runtime instance of an open scene. */
 export interface SceneTab {
   id: SceneTabId;
-  /** First-open timestamp for FIFO eviction (oldest replaceable tab is evicted). */
-  openedAt: number;
   /** Last-used timestamp for activate/close fallback (e.g. which tab to activate after close). */
   lastUsed: number;
 }

@@ -343,6 +343,31 @@ html[data-bitfun-canvas-design-mode] body {
   overflow: visible;
 }
 
+.bf-canvas-toggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.bf-canvas-toggle__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bf-canvas-toggle__label {
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+}
+
+.bf-canvas-toggle__description,
+.bf-canvas-toggle__status {
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
+}
+
 .bf-input,
 .bf-textarea,
 .bf-select {

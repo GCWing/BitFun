@@ -1,0 +1,51 @@
+{
+  "$description": "High-contrast overrides for the dark scheme.",
+  "color": {
+    "surface": {
+      "canvas": { "$type": "color", "$value": "{ref.color.gray.1000}" },
+      "panel": { "$type": "color", "$value": "{ref.color.gray.900}" }
+    },
+    "content": {
+      "primary": { "$type": "color", "$value": "{ref.color.gray.0}" },
+      "secondary": { "$type": "color", "$value": "{ref.color.gray.50}" },
+      "muted": { "$type": "color", "$value": "{ref.color.gray.150}" }
+    },
+    "border": {
+      "subtle": { "$type": "color", "$value": "{ref.color.gray.400}" },
+      "default": { "$type": "color", "$value": "{ref.color.gray.250}" },
+      "strong": { "$type": "color", "$value": "{ref.color.gray.0}" }
+    },
+    "action": {
+      "neutral": {
+        "border": { "$type": "color", "$value": "{ref.color.gray.0}" },
+        "content": { "$type": "color", "$value": "{ref.color.gray.0}" },
+        "contentDisabled": { "$type": "color", "$value": "{ref.color.gray.150}" },
+        "fillBorder": { "$type": "color", "$value": "{ref.color.gray.0}" },
+        "surface": { "$type": "color", "$value": "{ref.color.gray.700}" },
+        "surfaceHover": { "$type": "color", "$value": "{ref.color.gray.600}" },
+        "surfacePressed": { "$type": "color", "$value": "{ref.color.gray.550}" }
+      },
+      "primary": {
+        "background": { "$type": "color", "$value": "{ref.color.gray.0}" },
+        "hover": { "$type": "color", "$value": "{ref.color.gray.100}" },
+        "pressed": { "$type": "color", "$value": "{ref.color.gray.0}" },
+        "content": { "$type": "color", "$value": "{ref.color.gray.1000}" }
+      }
+    },
+    "field": {
+      "border": { "$type": "color", "$value": "{ref.color.gray.250}" },
+      "borderHover": { "$type": "color", "$value": "{ref.color.gray.0}" },
+      "borderFocus": { "$type": "color", "$value": "{ref.color.amber.400}" }
+    },
+    "control": {
+      "switch": {
+        "track": { "$type": "color", "$value": "{ref.color.gray.250}" },
+        "trackChecked": { "$type": "color", "$value": "{ref.color.amber.400}" },
+        "thumb": { "$type": "color", "$value": "{ref.color.gray.1000}" }
+      }
+    },
+    "focus": {
+      "ring": { "$type": "color", "$value": "{ref.color.amber.400}" }
+    }
+  }
+}

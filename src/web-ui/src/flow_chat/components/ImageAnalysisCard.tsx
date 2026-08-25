@@ -3,6 +3,7 @@
  * Displays analysis progress and results.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState } from 'react';
 import {
   Loader, 
@@ -14,7 +15,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import type { FlowImageAnalysisItem } from '../types/flow-chat';
-import { Button } from '@/component-library';
 import './ImageAnalysisCard.scss';
 
 export interface ImageAnalysisCardProps {
@@ -77,7 +77,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
               <AlertCircle className="icon" size={14} />
               <span>Analysis failed</span>
               {onRetry && (
-                <Button variant="secondary" size="small" className="retry-btn" onClick={onRetry}>
+                <Button variant="outline" size="sm" onClick={onRetry}>
                   Retry
                 </Button>
               )}
@@ -93,23 +93,13 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
             <span>{result.summary}</span>
           </div>
           
-          <Button 
-            data-bf-component="image-analysis-card"
-            data-bf-part="expand"
-            variant="ghost"
-            size="small"
-            className="image-analysis-card__expand-btn"
+          <Button
+            variant="outline"
+            size="sm"
+            leadingIcon={expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             onClick={() => setExpanded(!expanded)}
           >
-            {expanded ? (
-              <>
-                <ChevronUp size={14} /> Collapse details
-              </>
-            ) : (
-              <>
-                <ChevronDown size={14} /> View detailed analysis
-              </>
-            )}
+            {expanded ? 'Collapse details' : 'View detailed analysis'}
           </Button>
           
           {expanded && (

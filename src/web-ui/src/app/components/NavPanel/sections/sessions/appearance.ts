@@ -5,9 +5,7 @@ export const sessionsSectionAppearanceDescriptor: AppearanceSurfaceDescriptor = 
   parts: [
     { id: 'root' },
     { id: 'loading' },
-    { id: 'retry' },
     { id: 'aggregateLoading' },
-    { id: 'aggregateRetry' },
     { id: 'row' },
     { id: 'rowMain' },
     { id: 'assistantAvatar' },

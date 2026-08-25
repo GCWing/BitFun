@@ -198,22 +198,6 @@
   &__item-disconnect {
     flex-shrink: 0;
     margin-right: $size-gap-1;
-    border: none;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-    font-size: 11px;
-    padding: 0 2px;
-    text-decoration: underline;
-
-    &:hover {
-      color: var(--bf-appearance-token-color-warning);
-    }
-
-    &:disabled {
-      cursor: default;
-      opacity: 0.5;
-    }
   }
 
   &__empty,

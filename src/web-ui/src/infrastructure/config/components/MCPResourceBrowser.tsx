@@ -1,10 +1,10 @@
  
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { FileText, FileImage, FileJson, FileCode, File, Search as SearchIcon, ArrowLeft } from 'lucide-react';
 import MCPAPI, { MCPResource } from '../../api/service-api/MCPAPI';
-import { Button } from '../../../component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './MCPResourceBrowser.scss';
 
@@ -130,16 +130,16 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
         <h2>{t('resourceBrowser.title')}</h2>
         <div data-bf-component="mcp-resource-browser" data-bf-part="headerActions" className="header-actions">
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={loadResources}
           >
             {t('resourceBrowser.actions.refresh')}
           </Button>
           {onClose && (
             <Button
-              variant="ghost"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={onClose}
             >
               {t('resourceBrowser.actions.close')}

@@ -1,11 +1,10 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, CloudOff, Download, HardDrive } from 'lucide-react';
 import {
   Badge,
-  Button,
   Select,
-  Switch,
   type BadgeVariant,
   type SelectOption,
 } from '@/component-library';
@@ -290,7 +289,6 @@ const VoiceInputConfig: React.FC = () => {
             <Switch
               checked={voiceInput.enabled}
               onChange={(event) => void updateVoiceInput({ enabled: event.target.checked })}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('status.label')} multiline>
@@ -319,37 +317,39 @@ const VoiceInputConfig: React.FC = () => {
                 </div>
                 <div className="voice-input-config__status-actions" data-bf-component="voice-input-config" data-bf-part="statusActions">
                   {status === 'unavailable' ? (
-                    <Button variant="primary" size="small" onClick={() => void handleUseLocal()}>
+                    <Button variant="fill" size="sm" onClick={() => void handleUseLocal()}>
                       {t('status.useLocal')}
                     </Button>
                   ) : null}
                   {status === 'setup' && selectedModel ? (
                     <Button
-                      variant="primary"
-                      size="small"
+                      variant="fill"
+                      size="sm"
                       onClick={() => handleDownload(selectedModel)}
-                      isLoading={busyAction === `download:${selectedModel.modelId}`}
+                      loading={busyAction === `download:${selectedModel.modelId}`}
+                      leadingIcon={<Download size={14} />}
                     >
-                      <Download size={14} />
+
                       {t('status.downloadAndEnable')}
                     </Button>
                   ) : null}
                   {status === 'downloading' && selectedModel?.state === 'downloading' ? (
                     <Button
-                      variant="secondary"
-                      size="small"
+                      variant="outline"
+                      size="sm"
                       onClick={() => void handleCancelDownload(selectedModel)}
-                      isLoading={busyAction === `cancel:${selectedModel.modelId}`}
+                      loading={busyAction === `cancel:${selectedModel.modelId}`}
                     >
                       {t('model.cancel')}
                     </Button>
                   ) : null}
                   <Button
-                    variant={status === 'error' ? 'secondary' : 'ghost'}
-                    size="small"
+                    variant={status === 'error' ? 'outline' : 'outline'}
+                    size="sm"
                     onClick={() => setLocalModelsOpen(true)}
+                    leadingIcon={<HardDrive size={14} />}
                   >
-                    <HardDrive size={14} />
+
                     {status === 'error' ? t('status.repair') : t('status.manageModels')}
                   </Button>
                 </div>

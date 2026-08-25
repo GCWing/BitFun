@@ -4,7 +4,7 @@ export const computerUseToolCardAppearanceDescriptor: AppearanceSurfaceDescripto
   id: 'computer-use-tool-card',
   parts: [
     { id: 'root' }, { id: 'content' }, { id: 'permissionDenied' },
-    { id: 'settingsButton' }, { id: 'expanded' }, { id: 'row' },
+    { id: 'expanded' }, { id: 'row' },
     { id: 'loopWarning' }, { id: 'actionCode' },
   ],
   states: [

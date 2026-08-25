@@ -10,8 +10,9 @@
  * - Reset button restores all defaults
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button, Search, Tooltip } from '@/component-library';
+import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { ConfigPageLayout, ConfigPageHeader, ConfigPageContent, ConfigPageSection } from '@/infrastructure/config/components/common';
 import {
@@ -571,8 +572,8 @@ const KeyboardShortcutsTab: React.FC = () => {
           <div className="kb-shortcuts__actions" data-bf-component="keyboard-shortcuts" data-bf-part="actions">
             {hasPendingChanges && (
               <Button
-                variant="primary"
-              size="small"
+                variant="fill"
+              size="sm"
               onClick={handleApply}
               disabled={saving}
             >
@@ -580,8 +581,8 @@ const KeyboardShortcutsTab: React.FC = () => {
             </Button>
           )}
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={handleReset}
               disabled={saving}
             >

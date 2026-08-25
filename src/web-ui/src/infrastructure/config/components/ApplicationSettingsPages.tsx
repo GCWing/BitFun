@@ -1,11 +1,10 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
 import {
   Alert,
-  Button,
   Select,
-  Switch,
   Tooltip,
   type SelectOption,
   ConfigPageLoading,
@@ -549,15 +548,16 @@ function LoggingSection() {
           >
             <Button
               type="button"
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="md"
+              leadingIcon={<Archive />}
+              data-testid="diagnostics-export-button"
               onClick={() => {
                 void handleExportDiagnostics();
               }}
-              isLoading={exportingDiagnostics}
+              loading={exportingDiagnostics}
               disabled={exportingDiagnostics}
             >
-              <Archive size={14} />
               {t('logging.actions.exportDiagnostics')}
             </Button>
           </ConfigPageRow>

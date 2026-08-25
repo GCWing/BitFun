@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import {
   Cloud,
@@ -346,41 +347,40 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             )}
 
             {overview.topologyUnavailable && (
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="sm"
+                leadingIcon={<RefreshCw />}
                 className="bitfun-device-overview__notice"
                 onClick={() => { void refresh(); }}
               >
-                <RefreshCw size={14} aria-hidden="true" />
-                <span>{t('deviceOverview.statusUnavailable')}</span>
-              </button>
+                {t('deviceOverview.statusUnavailable')}
+              </Button>
             )}
 
             <div className="bitfun-device-overview__actions">
-              <button
-                type="button"
-                className="bitfun-device-overview__action"
+              <Button
+                variant="fill"
+                size="sm"
+                leadingIcon={<Link2 />}
                 onClick={handleManageDevices}
                 data-testid="nav-device-status-manage"
               >
-                <Link2 size={16} aria-hidden="true" />
-                <span>{t('deviceOverview.connectNewDevice')}</span>
-              </button>
+                {t('deviceOverview.connectNewDevice')}
+              </Button>
               {overview.peerActive && (
-                <button
-                  type="button"
-                  className="bitfun-device-overview__action"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leadingIcon={<Undo2 />}
                   onClick={() => { void handleReturnLocal(); }}
                   disabled={returningLocal}
                   data-testid="nav-device-status-return-local"
                 >
-                  <Undo2 size={16} aria-hidden="true" />
-                  <span>
-                    {returningLocal
-                      ? t('deviceOverview.returningToThisDevice')
-                      : t('deviceOverview.backToThisDevice')}
-                  </span>
-                </button>
+                  {returningLocal
+                    ? t('deviceOverview.returningToThisDevice')
+                    : t('deviceOverview.backToThisDevice')}
+                </Button>
               )}
             </div>
           </div>

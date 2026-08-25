@@ -11,7 +11,7 @@ import {
 } from './controls';
 
 describe('BitFun Canvas control adapters', () => {
-  it('renders toggle and checkbox through component-library controls', () => {
+  it('renders toggle through the design system and checkbox through the legacy controls', () => {
     const markup = renderToStaticMarkup(
       <>
         <Toggle checked label="Enabled" />
@@ -19,7 +19,7 @@ describe('BitFun Canvas control adapters', () => {
       </>,
     );
 
-    expect(markup).toContain('bitfun-switch');
+    expect(markup).toContain('data-bf-component="switch"');
     expect(markup).toContain('bitfun-checkbox');
     expect(markup).toContain('Enabled');
     expect(markup).toContain('Reviewed');

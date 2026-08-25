@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,11 +11,9 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
-  Button,
   IconButton,
   Input,
   Modal,
-  Switch,
   confirmDanger,
 } from '@/component-library';
 import type { UserSkillGroup } from '@/infrastructure/config/types';
@@ -344,10 +343,10 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
               </div>
             </div>
             <div className="skill-group-manager__footer">
-              <Button variant="ghost" size="small" onClick={closeEditor} disabled={saving}>
+              <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
                 {t('agentsOverview.cancel')}
               </Button>
-              <Button variant="primary" size="small" onClick={() => void saveEditor()} isLoading={saving}>
+              <Button variant="fill" size="sm" onClick={() => void saveEditor()} loading={saving}>
                 {isEditing && editingGroup
                   ? t('agentsOverview.skillGroupPicker.saveGroup')
                   : t('agentsOverview.skillGroupPicker.createGroup')}
@@ -358,8 +357,8 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
           <>
             <div className="skill-group-manager__head">
               <span>{t('agentsOverview.skillGroupPicker.manageSubtitle')}</span>
-              <Button variant="secondary" size="small" onClick={startCreate} disabled={saving}>
-                <Plus size={14} />
+              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Plus size={14} />}>
+
                 {t('agentsOverview.skillGroupPicker.createGroup')}
               </Button>
             </div>
@@ -474,12 +473,13 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
           {t('agentsOverview.skillGroupPicker.selectedCount', { count: selectedCount })}
         </span>
         <Button
-          variant="ghost"
-          size="small"
+          variant="outline"
+          size="sm"
           onClick={() => setIsManagerOpen(true)}
           disabled={disabled}
+          leadingIcon={<Settings2 size={14} />}
         >
-          <Settings2 size={14} />
+
           {t('agentsOverview.skillGroupPicker.manageGroups')}
         </Button>
       </div>
@@ -502,8 +502,8 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
                     <div className="skill-group-picker__group-actions" data-bf-component="skill-group-picker" data-bf-part="groupActions">
                       {selectedInGroup > 0 && !allSelected ? (
                         <Button
-                          variant="ghost"
-                          size="small"
+                          variant="outline"
+                          size="sm"
                           onClick={() => onSelectionChange(
                             setSkillGroupSelection(selectedSkillKeys, skillGroupKeys(group), false),
                           )}
@@ -513,7 +513,6 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
                         </Button>
                       ) : null}
                       <Switch
-                        size="small"
                         checked={allSelected}
                         onChange={(event) => onSelectionChange(
                           setSkillGroupSelection(

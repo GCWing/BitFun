@@ -225,7 +225,6 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-opacity-disabled': String(effects.opacity.disabled),
     '--bf-appearance-token-opacity-hover': String(effects.opacity.hover),
     '--bf-appearance-token-badge-padding-y': '2px',
-    '--bf-appearance-token-button-bg-hover': `linear-gradient(135deg, color-mix(in srgb, ${colors.accent[600]} 15%, transparent) 0%, color-mix(in srgb, ${colors.accent[500]} 12%, transparent) 30%, color-mix(in srgb, ${colors.accent[600]} 8%, transparent) 60%, color-mix(in srgb, ${colors.accent[600]} 18%, transparent) 100%)`,
     '--bf-appearance-token-glow-shadow-blue': `0 12px 32px color-mix(in srgb, ${colors.accent[600]} 25%, transparent), 0 6px 16px color-mix(in srgb, ${colors.accent[500]} 18%, transparent), 0 3px 8px rgba(0, 0, 0, 0.12)`,
     '--bf-appearance-token-inner-glow-top': 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
     '--bf-appearance-token-inner-glow-top-hover': 'inset 0 1px 0 rgba(255, 255, 255, 0.24)',
@@ -442,8 +441,6 @@ function createWidgetAppearanceVars(
 
 export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePackage {
   const cssTokens = createCssTokens(palette);
-  const primaryButton = palette.components?.button?.primary;
-  const ghostButton = palette.components?.button?.ghost;
   const purple = palette.colors.purple ?? {
     100: palette.colors.element.subtle,
     200: palette.colors.element.soft,
@@ -472,17 +469,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
     'success-bg': color(palette.colors.semantic.successBg),
     'purple': color(purple[500]),
     'purple-bg': color(purple[100]),
-    'button-primary-bg': color(primaryButton?.default.background ?? palette.colors.element.base),
-    'button-primary-fg': color(primaryButton?.default.color ?? palette.colors.text.primary),
-    'button-primary-border': color(primaryButton?.default.border ?? palette.colors.border.base),
-    'button-primary-hover-bg': color(primaryButton?.hover.background ?? palette.colors.element.medium),
-    'button-primary-hover-fg': color(primaryButton?.hover.color ?? palette.colors.text.primary),
-    'button-primary-hover-border': color(primaryButton?.hover.border ?? palette.colors.border.medium),
-    'button-primary-active-bg': color(primaryButton?.active.background ?? palette.colors.element.soft),
-    'button-primary-active-fg': color(primaryButton?.active.color ?? palette.colors.text.primary),
-    'button-primary-active-border': color(primaryButton?.active.border ?? palette.colors.border.strong),
-    'button-ghost-hover-bg': color(ghostButton?.hover.background ?? palette.colors.element.soft),
-    'button-ghost-hover-fg': color(ghostButton?.hover.color ?? palette.colors.text.primary),
   };
   const monaco = palette.monaco;
   const xtermAnsi = palette.type === 'dark' ? {
@@ -585,85 +571,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
       },
     },
     components: {
-      button: {
-        parts: {
-          root: {
-            materials: ['control'],
-            base: {
-              borderStyle: 'solid',
-              borderWidth: { kind: 'zero' },
-              fontWeight: numberRef('weight-medium'),
-              gap: lengthRef('gap-2'),
-              cursor: 'pointer',
-            },
-            facets: {
-              variant: {
-                primary: {
-                  backgroundColor: colorRef('button-primary-bg'),
-                  color: colorRef('button-primary-fg'),
-                  borderColor: colorRef('button-primary-border'),
-                  borderWidth: lengthRef('border-one'),
-                },
-                accent: {
-                  backgroundColor: colorRef('button-primary-bg'),
-                  color: colorRef('button-primary-fg'),
-                  borderColor: colorRef('button-primary-border'),
-                  borderWidth: lengthRef('border-one'),
-                },
-                inverse: {
-                  backgroundColor: colorRef('text-primary'),
-                  color: colorRef('bg-primary'),
-                  borderColor: colorRef('text-primary'),
-                  borderWidth: lengthRef('border-one'),
-                  borderRadius: { kind: 'px', value: 999 },
-                },
-                secondary: { backgroundColor: colorRef('element-base') },
-                ghost: { backgroundColor: { kind: 'transparent' } },
-                dashed: {
-                  backgroundColor: { kind: 'transparent' },
-                  borderColor: colorRef('border-base'),
-                  borderStyle: 'dashed',
-                  borderWidth: lengthRef('border-one'),
-                },
-                danger: { backgroundColor: colorRef('error-bg'), color: colorRef('error') },
-                success: { backgroundColor: colorRef('success-bg'), color: colorRef('success') },
-                ai: { backgroundColor: colorRef('purple-bg'), color: colorRef('purple') },
-              },
-              size: {
-                small: { height: { kind: 'px', value: 32 }, paddingInline: lengthRef('gap-3'), fontSize: lengthRef('font-sm') },
-                medium: { height: { kind: 'px', value: 40 }, paddingInline: lengthRef('gap-4'), fontSize: lengthRef('font-base') },
-                large: { height: { kind: 'px', value: 48 }, paddingInline: lengthRef('gap-6'), fontSize: lengthRef('font-lg') },
-              },
-              iconOnly: {
-                true: { paddingInline: { kind: 'zero' } },
-              },
-            },
-            states: {
-              hover: { backgroundColor: colorRef('element-medium'), color: colorRef('text-primary') },
-              active: { backgroundColor: colorRef('element-soft') },
-              focusVisible: { outlineColor: colorRef('accent'), outlineWidth: { kind: 'px', value: 2 }, outlineOffset: { kind: 'px', value: 1 } },
-              disabled: { opacity: numberRef('opacity-disabled'), cursor: 'default' },
-              loading: { cursor: 'wait' },
-            },
-            contexts: [
-              { when: { facets: { variant: 'primary' }, states: ['hover'] }, style: { backgroundColor: colorRef('button-primary-hover-bg'), color: colorRef('button-primary-hover-fg'), borderColor: colorRef('button-primary-hover-border') } },
-              { when: { facets: { variant: 'accent' }, states: ['hover'] }, style: { backgroundColor: colorRef('button-primary-hover-bg'), color: colorRef('button-primary-hover-fg'), borderColor: colorRef('button-primary-hover-border') } },
-              { when: { facets: { variant: 'primary' }, states: ['active'] }, style: { backgroundColor: colorRef('button-primary-active-bg'), color: colorRef('button-primary-active-fg'), borderColor: colorRef('button-primary-active-border') } },
-              { when: { facets: { variant: 'accent' }, states: ['active'] }, style: { backgroundColor: colorRef('button-primary-active-bg'), color: colorRef('button-primary-active-fg'), borderColor: colorRef('button-primary-active-border') } },
-              { when: { facets: { variant: 'inverse' }, states: ['hover'] }, style: { backgroundColor: colorRef('text-secondary'), color: colorRef('bg-primary'), borderColor: colorRef('text-secondary') } },
-              { when: { facets: { variant: 'inverse' }, states: ['active'] }, style: { backgroundColor: colorRef('text-primary'), color: colorRef('bg-primary'), borderColor: colorRef('text-primary') } },
-              { when: { facets: { variant: 'ghost' }, states: ['hover'] }, style: { backgroundColor: colorRef('button-ghost-hover-bg'), color: colorRef('button-ghost-hover-fg') } },
-              { when: { facets: { size: 'small', iconOnly: 'true' } }, style: { width: { kind: 'px', value: 32 } } },
-              { when: { facets: { size: 'medium', iconOnly: 'true' } }, style: { width: { kind: 'px', value: 40 } } },
-              { when: { facets: { size: 'large', iconOnly: 'true' } }, style: { width: { kind: 'px', value: 48 } } },
-            ],
-          },
-          loadingIcon: {
-            base: { width: { kind: 'px', value: 16 }, height: { kind: 'px', value: 16 }, borderRadius: { kind: 'percent', value: 50 } },
-          },
-          loadingText: { base: { color: colorRef('text-primary') } },
-        },
-      },
       card: {
         parts: {
           root: {

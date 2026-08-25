@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
@@ -117,8 +118,15 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
     return null;
   }
 
+  const hasLoadingAction = actions.some(action => actionLoading[action.id] || action.loading);
+
   return (
-    <div data-bf-component="smart-recommendations" data-bf-part="root" className={`bitfun-smart-recommendations ${className}`}>
+    <div
+      data-bf-component="smart-recommendations"
+      data-bf-part="root"
+      data-bf-state={hasLoadingAction ? 'loading' : undefined}
+      className={`bitfun-smart-recommendations ${className}`}
+    >
       <div data-bf-component="smart-recommendations" data-bf-part="header" className="bitfun-smart-recommendations__header">
         <span data-bf-component="smart-recommendations" data-bf-part="title" className="bitfun-smart-recommendations__title">{t('smartRecommendations.title')}</span>
         <PopupCloseButton
@@ -140,17 +148,18 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
           const isLoading = actionLoading[action.id] || action.loading;
           
           return (
-            <button data-bf-component="smart-recommendations" data-bf-part="action" data-bf-state={isLoading ? 'loading' : ''}
+            <Button
               key={action.id}
-              className={`bitfun-smart-recommendations__action bitfun-smart-recommendations__action--${action.type || 'secondary'}`}
+              variant={action.type === 'primary' ? 'fill' : 'outline'}
+              size="sm"
+              leadingIcon={IconComponent ? <IconComponent size={16} /> : undefined}
               onClick={() => handleActionClick(action)}
               disabled={action.disabled || isLoading}
+              loading={isLoading}
               title={action.description}
             >
-              {IconComponent && <IconComponent size={16} />}
-              <span data-bf-component="smart-recommendations" data-bf-part="label">{action.label}</span>
-              {isLoading && <span data-bf-component="smart-recommendations" data-bf-part="loading" className="bitfun-smart-recommendations__loading">...</span>}
-            </button>
+              {action.label}
+            </Button>
           );
         })}
       </div>

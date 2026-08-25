@@ -120,69 +120,13 @@
     }
   }
 
-  &__btn {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    gap: 4px;
-    min-height: 26px;
-    padding: 3px 10px;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: 7px;
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-color-bg-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    cursor: pointer;
-    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-color-bg-primary));
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-warning);
-      outline-offset: 2px;
-    }
-
-    &:disabled {
-      cursor: wait;
-      opacity: 0.6;
-    }
-
-    &--reject,
-    &--reject-reason {
-      color: var(--bf-appearance-token-color-error);
-    }
-
-    // Rejecting with the composer's text is a distinct answer, so it looks
-    // like one instead of like a second copy of the reject button.
-    &--reject-reason {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 55%, var(--bf-appearance-token-border-base));
-      border-style: dashed;
-    }
-
-    &--allow {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 60%, var(--bf-appearance-token-border-base));
-    }
-  }
 }
 
-// A narrow composer drops the tool's identity and then the answer labels, but
-// never an answer: every way out of the block stays reachable, and the two
-// that could be confused for each other keep their icons.
+// A narrow composer drops secondary identity information while the shared
+// buttons wrap as complete, readable actions.
 @media (max-width: 560px) {
   .bitfun-chat-input-approval {
     &__owner {
-      display: none;
-    }
-
-    &__btn--reject span,
-    &__btn--reject-reason span,
-    &__btn--allow span {
       display: none;
     }
   }
@@ -202,9 +146,5 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-chat-input-approval {
     animation: none;
-
-    &__btn {
-      transition-duration: 0ms;
-    }
   }
 }

@@ -68,19 +68,5 @@
 }
 
 .computer-use-tool-card__settings-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   align-self: flex-start;
-  padding: 4px 10px;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 35%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 8%, transparent);
-  color: var(--bf-appearance-token-color-accent-600);
-  font-size: 12px;
-  cursor: pointer;
-
-  &:hover {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 14%, transparent);
-  }
 }

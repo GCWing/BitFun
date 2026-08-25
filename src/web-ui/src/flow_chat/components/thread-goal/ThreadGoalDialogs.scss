@@ -184,10 +184,9 @@
   gap: $size-gap-2;
   justify-content: stretch;
 
-  .btn {
+  [data-bf-component='button'] {
     flex: 1 1 0;
     min-width: 72px;
-    justify-content: center;
   }
 }
 
@@ -212,7 +211,7 @@
 }
 
 .bitfun-thread-goal-menu--empty .bitfun-thread-goal-menu__actions {
-  .btn {
+  [data-bf-component='button'] {
     width: 100%;
     flex: none;
   }

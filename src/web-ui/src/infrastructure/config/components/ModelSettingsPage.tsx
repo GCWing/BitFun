@@ -1,7 +1,8 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
-import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Select, IconButton, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -2048,7 +2049,7 @@ const ModelSettingsPage: React.FC = () => {
 
 
             <div className="bitfun-model-settings__selection-actions" data-bf-component="model-settings" data-bf-part="selectionActions">
-              <Button variant="secondary" onClick={() => setCreationMode(null)}>
+              <Button variant="outline" onClick={() => setCreationMode(null)}>
                 {t('actions.cancel')}
               </Button>
             </div>
@@ -2626,7 +2627,7 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         inputSize="small"
                       />
-                      <Button data-testid="settings-model-add-custom-btn" variant="secondary" size="small" onClick={addManualModelDraft}>
+                      <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -2738,7 +2739,7 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         inputSize="small"
                       />
-                      <Button data-testid="settings-model-add-custom-btn" variant="secondary" size="small" onClick={addManualModelDraft}>
+                      <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -2759,7 +2760,7 @@ const ModelSettingsPage: React.FC = () => {
             className="bitfun-model-settings__edit-section"
           >
             <ConfigPageRow label={t('advancedSettings.title')} align="center">
-              <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} size="small" />
+              <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} />
             </ConfigPageRow>
 
             {showAdvancedSettings && (
@@ -2774,7 +2775,6 @@ const ModelSettingsPage: React.FC = () => {
                     <Switch
                       checked={editingConfig.inline_think_in_text ?? true}
                       onChange={(e) => setEditingConfig(prev => ({ ...prev, inline_think_in_text: e.target.checked }))}
-                      size="small"
                     />
                   </ConfigPageRow>
                 )}
@@ -2792,7 +2792,6 @@ const ModelSettingsPage: React.FC = () => {
                   <Switch
                     checked={editingConfig.skip_ssl_verify || false}
                     onChange={(e) => setEditingConfig(prev => ({ ...prev, skip_ssl_verify: e.target.checked }))}
-                    size="small"
                   />
                 </ConfigPageRow>
                 <ConfigPageRow
@@ -2827,8 +2826,8 @@ const ModelSettingsPage: React.FC = () => {
                         <Tooltip content={t('advancedSettings.customHeaders.modeMergeHint')} placement="top">
                           <Button
                             type="button"
-                            variant={(editingConfig.custom_headers_mode || 'merge') === 'merge' ? 'primary' : 'ghost'}
-                            size="small"
+                            variant={(editingConfig.custom_headers_mode || 'merge') === 'merge' ? 'fill' : 'outline'}
+                            size="sm"
                             className="bitfun-model-settings__mode-button"
                             onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'merge' }))}
                           >
@@ -2838,8 +2837,8 @@ const ModelSettingsPage: React.FC = () => {
                         <Tooltip content={t('advancedSettings.customHeaders.modeReplaceHint')} placement="top">
                           <Button
                             type="button"
-                            variant={editingConfig.custom_headers_mode === 'replace' ? 'primary' : 'ghost'}
-                            size="small"
+                            variant={editingConfig.custom_headers_mode === 'replace' ? 'fill' : 'outline'}
+                            size="sm"
                             className="bitfun-model-settings__mode-button"
                             onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'replace' }))}
                           >
@@ -2861,7 +2860,7 @@ const ModelSettingsPage: React.FC = () => {
                           <IconButton variant="ghost" size="small" onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }} tooltip={t('actions.delete')}><X size={14} /></IconButton>
                         </div>
                       ))}
-                      <Button type="button" variant="secondary" size="small" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-model-settings__add-header-btn"><Plus size={14} />{t('advancedSettings.customHeaders.addHeader')}</Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-model-settings__add-header-btn" leadingIcon={<Plus size={14} />}>{t('advancedSettings.customHeaders.addHeader')}</Button>
                     </div>
                   </div>
                 </ConfigPageRow>
@@ -2893,8 +2892,8 @@ const ModelSettingsPage: React.FC = () => {
                         <Tooltip content={t('advancedSettings.customRequestBody.modeMergeHint')} placement="top">
                           <Button
                             type="button"
-                            variant={(editingConfig.custom_request_body_mode || 'merge') === 'merge' ? 'primary' : 'ghost'}
-                            size="small"
+                            variant={(editingConfig.custom_request_body_mode || 'merge') === 'merge' ? 'fill' : 'outline'}
+                            size="sm"
                             className="bitfun-model-settings__mode-button"
                             onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'merge' }))}
                           >
@@ -2904,8 +2903,8 @@ const ModelSettingsPage: React.FC = () => {
                         <Tooltip content={getCustomRequestBodyTrimHint(editingConfig.provider)} placement="top">
                           <Button
                             type="button"
-                            variant={editingConfig.custom_request_body_mode === 'trim' ? 'primary' : 'ghost'}
-                            size="small"
+                            variant={editingConfig.custom_request_body_mode === 'trim' ? 'fill' : 'outline'}
+                            size="sm"
                             className="bitfun-model-settings__mode-button"
                             onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'trim' }))}
                           >
@@ -2932,8 +2931,8 @@ const ModelSettingsPage: React.FC = () => {
           </div>
 
           <div className="bitfun-model-settings__form-actions bitfun-model-settings__form-actions--sticky" data-bf-component="model-settings" data-bf-part="formActions">
-            <Button variant="secondary" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
-            <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>{t('actions.save')}</Button>
+            <Button variant="outline" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
+            <Button data-testid="settings-model-save-btn" variant="fill" onClick={handleSave}>{t('actions.save')}</Button>
           </div>
         </div>
       </>
@@ -3036,7 +3035,6 @@ const ModelSettingsPage: React.FC = () => {
           onChange={(e) => {
             void handleToggleEnabled(config, e.target.checked);
           }}
-          size="small"
         />
         <IconButton
           variant="ghost"
@@ -3181,8 +3179,8 @@ const ModelSettingsPage: React.FC = () => {
                 <Info size={16} aria-hidden="true" />
                 <span>{t('subscriptionAuth.secureStoreMigrationNotice')}</span>
                 <Button
-                  size="small"
-                  variant="ghost"
+                  size="sm"
+                  variant="outline"
                   onClick={dismissSubscriptionMigrationNotice}
                 >
                   {t('subscriptionAuth.dismissMigrationNotice')}
@@ -3256,16 +3254,16 @@ const ModelSettingsPage: React.FC = () => {
                       {account.connected ? (
                         <>
                           <Button
-                            size="small"
-                            variant="secondary"
+                            size="sm"
+                            variant="outline"
                             disabled={anyLoginInProgress}
                             onClick={() => void handleSubscriptionRefresh(account.provider)}
                           >
                             {t('subscriptionAuth.refresh')}
                           </Button>
                           <Button
-                            size="small"
-                            variant="secondary"
+                            size="sm"
+                            variant="outline"
                             disabled={anyLoginInProgress}
                             onClick={() => requestSubscriptionLogout(account)}
                           >
@@ -3273,8 +3271,8 @@ const ModelSettingsPage: React.FC = () => {
                           </Button>
                           {(account.provider !== 'opencode' || !hasOpenCodeOfferings) && (
                             <Button
-                              size="small"
-                              variant="primary"
+                              size="sm"
+                              variant="fill"
                               disabled={anyLoginInProgress}
                               onClick={() => handleImportFromSubscription(account)}
                             >
@@ -3284,8 +3282,8 @@ const ModelSettingsPage: React.FC = () => {
                         </>
                       ) : account.vault_unavailable ? (
                         <Button
-                          size="small"
-                          variant="secondary"
+                          size="sm"
+                          variant="outline"
                           disabled={anyLoginInProgress}
                           onClick={() => void handleSubscriptionRefresh(account.provider)}
                         >
@@ -3295,9 +3293,9 @@ const ModelSettingsPage: React.FC = () => {
                         availableLoginMethods.map((method) => (
                           <Button
                             key={method}
-                            size="small"
-                            variant="primary"
-                            isLoading={isLoggingIn && loginPanel?.method === method}
+                            size="sm"
+                            variant="fill"
+                            loading={isLoggingIn && loginPanel?.method === method}
                             disabled={anyLoginInProgress}
                             onClick={() => void handleSubscriptionLogin(account.provider, method)}
                           >
@@ -3309,8 +3307,8 @@ const ModelSettingsPage: React.FC = () => {
                       )}
                       {isLoggingIn && (
                         <Button
-                          size="small"
-                          variant="secondary"
+                          size="sm"
+                          variant="outline"
                           disabled={loginPanel?.status === 'cancelling'}
                           onClick={() => void handleCancelSubscriptionLogin(account.provider)}
                         >
@@ -3340,8 +3338,8 @@ const ModelSettingsPage: React.FC = () => {
                           return (
                             <Button
                               key={`${offering.plan}:${offering.format}`}
-                              size="small"
-                              variant="secondary"
+                              size="sm"
+                              variant="outline"
                               disabled={anyLoginInProgress}
                               onClick={() => handleImportFromSubscription(account, offering)}
                             >
@@ -3395,8 +3393,8 @@ const ModelSettingsPage: React.FC = () => {
                         <div className="bitfun-model-settings__subscription-login-actions" data-bf-component="model-settings" data-bf-part="subscriptionActions">
                           {loginPanel.status === 'pending' && loginPanel.userCode && (
                             <Button
-                              size="small"
-                              variant="secondary"
+                              size="sm"
+                              variant="outline"
                               onClick={() => void handleCopySubscriptionCode(loginPanel.userCode!)}
                             >
                               {t('subscriptionAuth.copyCode')}
@@ -3404,18 +3402,19 @@ const ModelSettingsPage: React.FC = () => {
                           )}
                           {loginPanel.status === 'pending' && loginPanel.authorizationUrl && (
                             <Button
-                              size="small"
-                              variant="primary"
+                              size="sm"
+                              variant="outline"
                               onClick={() => void handleOpenSubscriptionAuthorization(loginPanel.authorizationUrl)}
+                              leadingIcon={<ExternalLink size={14} aria-hidden="true" />}
                             >
-                              <ExternalLink size={14} aria-hidden="true" />
+
                               {t('subscriptionAuth.openAuthorization')}
                             </Button>
                           )}
                           {loginPanel.status === 'failed' && (
                             <Button
-                              size="small"
-                              variant="primary"
+                              size="sm"
+                              variant="fill"
                               onClick={() => void handleSubscriptionLogin(account.provider, loginPanel.method)}
                             >
                               {t('subscriptionAuth.retryLogin')}
@@ -3451,8 +3450,8 @@ const ModelSettingsPage: React.FC = () => {
             <div className="bitfun-model-settings__empty" data-bf-component="model-settings" data-bf-part="empty">
               <Wifi size={36} />
               <p>{t('empty.noModels')}</p>
-              <Button data-testid="settings-model-create-first-config-btn" variant="primary" size="small" onClick={handleCreateNew}>
-                <Plus size={14} />
+              <Button data-testid="settings-model-create-first-config-btn" variant="fill" size="sm" onClick={handleCreateNew} leadingIcon={<Plus size={14} />}>
+
                 {t('actions.createFirst')}
               </Button>
             </div>
@@ -3527,8 +3526,8 @@ const ModelSettingsPage: React.FC = () => {
           description={t('streamIdleTimeout.effectiveNextRound')}
           extra={(
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={handleSaveStreamTimeouts}
               disabled={isStreamTimeoutSaving || isStreamTimeoutInvalid}
             >
@@ -3569,8 +3568,8 @@ const ModelSettingsPage: React.FC = () => {
           description={t('proxy.enableHint')}
           extra={(
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={handleSaveProxy}
               disabled={isProxySaving || (proxyConfig.enabled && !proxyConfig.url)}
             >
@@ -3582,7 +3581,6 @@ const ModelSettingsPage: React.FC = () => {
             <Switch
               checked={proxyConfig.enabled}
               onChange={(e) => setProxyConfig(prev => ({ ...prev, enabled: e.target.checked }))}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('proxy.url')} description={t('proxy.urlHint')} align="center">
@@ -3669,24 +3667,26 @@ const ModelSettingsPage: React.FC = () => {
               <p>{t('modelsDevCatalog.offlineDescription')}</p>
               <div className="bitfun-model-settings__catalog-offline-actions">
                 <Button
-                  variant="ghost"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={() => void systemAPI.openExternal(MODELS_DEV_DOWNLOAD_URL)}
+                  leadingIcon={<ExternalLink size={14} aria-hidden="true" />}
                 >
-                  <ExternalLink size={14} aria-hidden="true" />
+
                   {t('modelsDevCatalog.downloadOriginal')}
                 </Button>
                 <Button
-                  variant="ghost"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     void aiApi.revealModelsDevCacheDirectory().catch((error) => {
                       log.warn('Failed to reveal models.dev cache directory', { error });
                       notification.error(t('modelsDevCatalog.revealFailed'));
                     });
                   }}
+                  leadingIcon={<FolderOpen size={14} aria-hidden="true" />}
                 >
-                  <FolderOpen size={14} aria-hidden="true" />
+
                   {t('modelsDevCatalog.openCacheDirectory')}
                 </Button>
               </div>
@@ -3720,15 +3720,16 @@ const ModelSettingsPage: React.FC = () => {
           <p>{t('subscriptionAuth.logoutConsequence')}</p>
           <div className="bitfun-model-settings__subscription-logout-actions" data-bf-component="model-settings" data-bf-part="logoutActions">
             <Button
-              size="small"
-              variant="secondary"
+              size="sm"
+              variant="outline"
               onClick={() => setSubscriptionLogoutRequest(null)}
             >
               {t('subscriptionAuth.cancel')}
             </Button>
             <Button
-              size="small"
-              variant="danger"
+              size="sm"
+              variant="fill"
+              tone="danger"
               onClick={() => void confirmSubscriptionLogout()}
             >
               {t('subscriptionAuth.confirmLogout')}

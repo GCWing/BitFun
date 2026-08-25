@@ -2,6 +2,7 @@
  * PageDeploy tool card — shows deploy slug / version result.
  */
 import React, { useCallback, useMemo, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, Rocket } from 'lucide-react';
 import { CubeLoading } from '../../component-library';
@@ -131,16 +132,18 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
       )}
       {urlPath && (
         <div className="page-deploy-action-buttons">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
+            leadingIcon={<ExternalLink size={12} />}
             data-testid="chat-page-deploy-open-btn"
             onClick={() => void openPage(slug, generation).catch(() => {
               notificationService.error(t('toolCards.pageDeploy.openFailed'));
             })}
           >
-            <ExternalLink size={12} />
-            <span>{t('toolCards.pageDeploy.openProduction')}</span>
-          </button>
+            {t('toolCards.pageDeploy.openProduction')}
+          </Button>
         </div>
       )}
     </div>

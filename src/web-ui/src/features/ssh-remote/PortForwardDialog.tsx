@@ -15,8 +15,9 @@
  * the local port is an allocation that moves when the number is taken.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Button, IconButton, Input, Checkbox } from '@/component-library';
+import { Modal, IconButton, Input, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
@@ -486,8 +487,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
               </label>
 
               <Button
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
                 disabled={!canSubmit}
                 onClick={() => void handleAdd()}
                 data-testid="ssh-port-forward-add"

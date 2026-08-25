@@ -95,24 +95,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     }
   }
 
-  &__create-button.btn {
-    height: 38px;
-    padding: 0 $size-gap-4;
-    border: 1px solid var(--bf-appearance-token-color-overlay-black-80);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-static-black);
-    color: var(--bf-appearance-token-color-static-white);
-    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-12);
-    white-space: nowrap;
-
-    &:hover:not(:disabled),
-    &:active:not(:disabled) {
-      border-color: var(--bf-appearance-token-color-static-black);
-      background: var(--bf-appearance-token-color-overlay-black-80);
-      color: var(--bf-appearance-token-color-static-white);
-    }
-  }
-
   &__assistant-grid {
     align-items: stretch;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -432,11 +414,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 // ── Assistant card ─────────────────────────────────────────────────────────
 
 .assistant-card {
-  --assistant-card-action-bg: var(--bf-appearance-token-color-bg-elevated);
-  --assistant-card-start-bg: var(--bf-appearance-token-element-bg-base);
-  --assistant-card-inverse-bg: var(--bf-appearance-token-btn-primary-bg);
-  --assistant-card-inverse-color: var(--bf-appearance-token-btn-primary-color);
-
   display: flex;
   width: 100%;
   min-width: 0;
@@ -587,72 +564,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__configure {
-    display: inline-flex;
     min-width: 0;
-    height: 34px;
     flex: 1;
-    align-items: center;
-    gap: $size-gap-2;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--bf-appearance-token-color-static-black);
-    font-family: $font-family-sans;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
-    text-align: left;
-    cursor: pointer;
-    transition: color $motion-fast $easing-standard;
-
-    &:focus-visible {
-      border-radius: $size-radius-sm;
-      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 58%, transparent);
-      outline-offset: 2px;
-    }
-
-    &:disabled {
-      opacity: 0.56;
-      cursor: wait;
-    }
-  }
-
-  &__configure-icon {
-    display: inline-flex;
-    width: 28px;
-    height: 28px;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: var(--bf-appearance-token-color-overlay-black-08);
-    transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-  }
-
-  &__configure:hover:not(:disabled) &__configure-icon,
-  &__configure:focus-visible:not(:disabled) &__configure-icon,
-  &__configure:active:not(:disabled) &__configure-icon {
-    background: var(--assistant-card-inverse-bg);
-    color: var(--assistant-card-inverse-color);
-  }
-
-  &__configure > span:not(.assistant-card__configure-icon),
-  &__new-session-btn > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__configure-chevron {
-    margin-left: auto;
-    color: var(--bf-appearance-token-color-overlay-black-50);
-    transition: transform $motion-fast $easing-standard;
-  }
-
-  &__configure:hover:not(:disabled) &__configure-chevron {
-    transform: translateX(2px);
   }
 
   &__primary-badge {
@@ -680,45 +593,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     background: var(--bf-appearance-token-color-static-white);
   }
 
-  &__new-session-btn {
-    display: inline-flex;
-    min-width: 0;
-    height: 34px;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: $size-radius-full;
-    background: var(--assistant-card-start-bg);
-    color: var(--bf-appearance-token-color-text-primary);
-    font-family: $font-family-sans;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-    transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      transform $motion-fast $easing-standard;
-
-    &:hover:not(:disabled),
-    &:focus-visible:not(:disabled),
-    &:active:not(:disabled) {
-      background: var(--assistant-card-inverse-bg);
-      color: var(--assistant-card-inverse-color);
-    }
-
-    &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 58%, transparent);
-      outline-offset: 1px;
-    }
-
-    &:disabled {
-      opacity: 0.56;
-      cursor: wait;
-    }
-  }
-
   &__session-actions {
     display: inline-flex;
     min-width: 0;
@@ -729,88 +603,12 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     border-left: 1px solid var(--bf-appearance-token-color-overlay-black-12);
   }
 
-  &__delete-btn {
-    display: flex;
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: var(--assistant-card-action-bg);
-    color: var(--bf-appearance-token-color-static-black);
-    cursor: pointer;
-    transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-
-    &:hover:not(:disabled),
-    &:focus-visible:not(:disabled),
-    &:active:not(:disabled) {
-      background: var(--assistant-card-inverse-bg);
-      color: var(--assistant-card-inverse-color);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-error);
-      outline-offset: 1px;
-      opacity: 1;
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: wait;
-    }
-  }
-
   &__footer-actions {
     display: inline-flex;
     align-items: center;
     gap: $size-gap-1;
   }
 
-  &__set-primary-btn {
-    display: flex;
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: var(--assistant-card-action-bg);
-    color: var(--bf-appearance-token-color-static-black);
-    cursor: pointer;
-    transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-
-    &:hover:not(:disabled),
-    &:focus-visible:not(:disabled),
-    &:active:not(:disabled) {
-      background: var(--assistant-card-inverse-bg);
-      color: var(--assistant-card-inverse-color);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: 1px;
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: wait;
-    }
-  }
-}
-
-:root[data-bf-appearance='bitfun-light'] .assistant-card,
-:root[data-bf-appearance='bitfun-monochrome'] .assistant-card {
-  --assistant-card-inverse-bg: var(--bf-appearance-token-color-static-black);
-  --assistant-card-inverse-color: var(--bf-appearance-token-color-static-white);
 }
 
 // ── Sub-page chrome (shared by AssistantDefaultsPage / AssistantConfigPage) ───
@@ -1411,7 +1209,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   .assistant-card__chevron,
-  .assistant-card__configure-chevron,
   .nursery-defaults__action-icon,
   .nursery-defaults__action-chevron {
     transition: none;
@@ -1556,7 +1353,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
       flex-direction: column;
 
       &__actions,
-      &__actions > .btn {
+      &__actions > [data-bf-component='button'] {
         width: 100%;
       }
     }
@@ -2189,7 +1986,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     white-space: nowrap;
   }
 
-  .bitfun-switch {
+  [data-bf-component='switch'] {
     flex-shrink: 0;
     margin-right: $size-gap-2;
   }
@@ -2395,7 +2192,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
-  .bitfun-switch {
+  [data-bf-component='switch'] {
     flex-shrink: 0;
     margin-right: $size-gap-2;
   }
@@ -2895,7 +2692,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   // Ensure Switch never shrinks and never pushes text off
-  .bitfun-switch {
+  [data-bf-component='switch'] {
     flex-shrink: 0;
     margin-left: auto;
   }
@@ -2983,7 +2780,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   // Switch stays vertically centered (card is already align-items: center)
-  .bitfun-switch {
+  [data-bf-component='switch'] {
     flex-shrink: 0;
     align-self: center;
   }
@@ -3417,12 +3214,6 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     font-size: var(--bf-appearance-token-font-size-sm);
   }
 
-  .bitfun-nav-panel__inline-action {
-    min-height: 32px;
-    padding: $size-gap-2 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    border-radius: $size-radius-lg;
-  }
 }
 
 // ── Right: info panel ────────────────────────────────────────────────────────
@@ -3718,19 +3509,6 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   transition:
     background $motion-fast $easing-standard,
     color $motion-fast $easing-standard;
-
-  &.btn {
-    justify-content: flex-start;
-    border-radius: $size-radius-base;
-    height: auto;
-    min-height: 44px;
-    font-weight: $font-weight-medium;
-    box-shadow: none;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-  }
 
   &:hover {
     background: var(--bf-appearance-token-element-bg-soft);

@@ -24,7 +24,7 @@ import type { ShellInfo } from '@/tools/terminal/types/session';
 import { useShellEntries } from './hooks';
 import type { ShellEntry } from './hooks/shellEntryTypes';
 import { useShellNavMenuState } from './hooks/useShellNavMenuState';
-import { Button } from '@/component-library/components/Button';
+import { Button } from '@bitfun/ui';
 import { Tooltip } from '@/component-library/components/Tooltip';
 import ShellNavEntryItem from './components/ShellNavEntryItem';
 import ShellNavWorkspaceSwitcher from './components/ShellNavWorkspaceSwitcher';
@@ -366,11 +366,12 @@ const ShellNav: React.FC = () => {
             </p>
             <Button
               type="button"
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => { void handleCreateManualTerminal(); }}
+              leadingIcon={<Plus size={14} aria-hidden />}
             >
-              <Plus size={14} aria-hidden />
+
               {t('nav.shell.empty.quickNew')}
             </Button>
           </div>

@@ -16,9 +16,9 @@ BitFun 组件库目录，承载可复用 UI 组件与可预览的演示注册。
 
 当前组件目录主要包括：
 
-- **操作与窗口控件**：`Button`、`IconButton`、`WindowControls`
+- **操作与窗口控件**：`IconButton`、`WindowControls`
 - **弹窗与浮层**：`Modal`、`InputDialog`、`ConfirmDialog`、`Tooltip`
-- **表单输入**：`Input`、`NumberInput`、`Search`、`Select`、`Checkbox`、`Switch`、`Textarea`
+- **表单输入**：`Input`、`NumberInput`、`Search`、`Select`、`Checkbox`、`Textarea`
 - **展示与内容**：`Alert`、`Badge`、`Tag`、`Avatar`、`Card`、`Empty`、`Markdown`、`Tabs`
 - **编辑与文本**：`CodeEditor`、`StreamText`
 - **视觉辅助**：`CubeLoading`、`CubeLogo`、`DotMatrixLoader`、`TextStrokeEffect`
@@ -33,13 +33,14 @@ BitFun 组件库目录，承载可复用 UI 组件与可预览的演示注册。
 ## 使用方式
 
 ```tsx
-import { Button, Card, Input, Markdown } from '@components';
+import { Button } from '@bitfun/ui';
+import { Card, Input, Markdown } from '@components';
 
 function Example() {
   return (
     <Card>
       <Input placeholder="搜索项目文件" />
-      <Button variant="primary">运行</Button>
+      <Button variant="fill">运行</Button>
       <Markdown># 预览</Markdown>
     </Card>
   );

@@ -5,17 +5,18 @@
 
 @use '../../../component-library/styles/tokens.scss' as *;
 @use '../../styles/chrome-token-scope' as chrome;
+@use '../../styles/workspace-shell-surfaces' as shell-surfaces;
 
 .bitfun-nav-bar {
   @include chrome.apply;
+  @include shell-surfaces.sidebar-background;
 
   display: flex;
   align-items: center;
-  height: 38px;
+  height: 35px;
   flex-shrink: 0;
   padding: 0 $size-gap-2;
   gap: $size-gap-1;
-  background: var(--bf-appearance-token-color-bg-primary);
   user-select: none;
 
   &--collapsed {

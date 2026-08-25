@@ -11,10 +11,11 @@
  * and the text field already accepts it.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { IconButton, Button } from '@/component-library';
+import { IconButton } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
@@ -200,10 +201,10 @@ const DateTimePickerPopover: React.FC<DateTimePickerPopoverProps> = ({
       </div>
 
       <footer className="bf-datetime-picker__foot" data-bf-component="datetime-picker" data-bf-part="foot">
-        <Button size="small" variant="ghost" onClick={() => onSelect(new Date())}>
+        <Button size="sm" variant="outline" onClick={() => onSelect(new Date())}>
           {t('dateTimeField.now')}
         </Button>
-        <Button size="small" variant="ghost" onClick={onClose}>
+        <Button size="sm" variant="outline" onClick={onClose}>
           {t('dateTimeField.close')}
         </Button>
       </footer>

@@ -24,7 +24,6 @@
   /** Computer use permission row: keep label short, avoid squashing action buttons (nowrap). */
   &__row-action-btn {
     flex-shrink: 0;
-    white-space: nowrap;
   }
 
   &__appearance-host {

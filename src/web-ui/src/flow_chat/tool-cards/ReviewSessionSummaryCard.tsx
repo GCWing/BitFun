@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { FileText, Loader2, SearchCheck, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
@@ -145,11 +146,11 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
               </ul>
             </div>
           ) : null}
-          <button
+          <Button
             type="button"
+            variant="fill"
+            size="sm"
             className="review-session-summary-card__open"
-            data-bf-component="review-session-summary-card"
-            data-bf-part="open"
             onClick={async () => {
               if (!childSessionId || !parentSessionId) return;
               await openMainSession(parentSessionId);
@@ -160,7 +161,7 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
             }}
           >
             {t('toolCards.reviewSessionSummary.openReview')}
-          </button>
+          </Button>
         </div>
       )}
     />

@@ -8,7 +8,7 @@ export const skillsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'sidebarTitle' }, { id: 'sidebarNav' }, { id: 'sidebarItem' },
     { id: 'sidebarItemIcon' }, { id: 'sidebarItemLabel' }, { id: 'sidebarItemCount' },
     { id: 'sidebarFooter' }, { id: 'sidebarHint' }, { id: 'main' }, { id: 'toolbar' },
-    { id: 'filterAction' }, { id: 'addAction' },
+    { id: 'filterAction' },
     { id: 'installedListHeader' }, { id: 'installedListTitle' }, { id: 'installedListCount' },
     { id: 'loading' }, { id: 'error' }, { id: 'empty' }, { id: 'list' }, { id: 'skeleton' },
     { id: 'installedCard' }, { id: 'installedCardTop' }, { id: 'installedCardIcon' },

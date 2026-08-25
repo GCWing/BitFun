@@ -4,9 +4,9 @@
  */
 
 import React, { useEffect, useId, useRef } from 'react';
+import { Button } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal } from '../Modal/Modal';
-import { Button } from '../Button/Button';
 import { AlertTriangle, Info, AlertCircle, CheckCircle } from 'lucide-react';
 import './ConfirmDialog.scss';
 
@@ -141,8 +141,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <div className="confirm-dialog__actions" data-bf-component="confirm-dialog" data-bf-part="actions">
           {showCancel && (
             <Button
-              variant="secondary"
-              size="medium"
+              variant="outline"
+              size="md"
               onClick={handleCancel}
             >
               {resolvedCancelText}
@@ -150,8 +150,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           )}
           {secondaryText && (
             <Button
-              variant="secondary"
-              size="medium"
+              variant="outline"
+              size="md"
               onClick={handleSecondary}
             >
               {secondaryText}
@@ -159,8 +159,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           )}
           <Button
             ref={confirmButtonRef}
-            variant={confirmDanger ? 'danger' : 'primary'}
-            size="medium"
+            variant="fill"
+            tone={confirmDanger ? 'danger' : 'neutral'}
+            size="md"
             onClick={handleConfirm}
           >
             {resolvedConfirmText}

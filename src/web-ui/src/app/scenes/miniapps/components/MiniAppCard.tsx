@@ -1,5 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { Play, Square, Trash2 } from 'lucide-react';
+import { IconButton } from '@/component-library';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
 import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
@@ -152,33 +154,35 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
                 </div>
               ) : null}
               <div className="miniapp-card__actions" data-bf-component="mini-app-card" data-bf-part="actions" onClick={(e) => e.stopPropagation()}>
-                <button
-                  className="miniapp-card__action-btn miniapp-card__action-btn--primary"
+                <Button
+                  variant="fill"
+                  size="sm"
+                  leadingIcon={<Play size={14} fill="currentColor" strokeWidth={0} />}
                   onClick={handleOpenClick}
                   aria-label={t('card.start')}
                   title={t('card.start')}
                 >
-                  <Play size={14} fill="currentColor" strokeWidth={0} />
-                  <span>{t('card.start')}</span>
-                </button>
+                  {t('card.start')}
+                </Button>
                 {isRunning && onStop ? (
-                  <button
-                    className="miniapp-card__action-btn miniapp-card__action-btn--stop"
+                  <IconButton
+                    size="small"
                     onClick={handleStopClick}
                     aria-label={t('card.stop')}
                     title={t('card.stop')}
                   >
                     <Square size={13} />
-                  </button>
+                  </IconButton>
                 ) : (
-                  <button
-                    className="miniapp-card__action-btn miniapp-card__action-btn--danger"
+                  <IconButton
+                    size="small"
+                    variant="danger"
                     onClick={handleDeleteClick}
                     aria-label={t('card.delete')}
                     title={t('card.delete')}
                   >
                     <Trash2 size={14} />
-                  </button>
+                  </IconButton>
                 )}
               </div>
             </div>

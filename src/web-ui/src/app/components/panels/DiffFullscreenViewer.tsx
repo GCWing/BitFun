@@ -1,8 +1,9 @@
 import React, { useEffect, useCallback, useRef } from 'react';
+import { Button } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle } from 'lucide-react';
-import { PresenceBoundary, Tooltip } from '@/component-library';
+import { IconButton, PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { DiffEditor } from '../../../tools/editor';
 import './DiffFullscreenViewer.css';
@@ -106,36 +107,39 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
 
           <div className="header-actions" data-bf-component="diff-fullscreen-viewer" data-bf-part="actions">
             <Tooltip content={t('diffFullscreen.acceptFileTooltip')}>
-              <button
-                className="header-btn accept-btn"
+              <Button
+                variant="fill"
+                size="sm"
+                leadingIcon={<CheckCircle />}
                 onClick={onAcceptFile}
                 disabled={retainedContent.loading}
               >
-                <CheckCircle size={16} />
-                <span>{t('diffFullscreen.acceptFile')}</span>
-              </button>
+                {t('diffFullscreen.acceptFile')}
+              </Button>
             </Tooltip>
             
             <Tooltip content={t('diffFullscreen.rejectFileTooltip')}>
-              <button
-                className="header-btn reject-btn"
+              <Button
+                variant="outline"
+                size="sm"
+                leadingIcon={<XCircle />}
                 onClick={onRejectFile}
                 disabled={retainedContent.loading}
               >
-                <XCircle size={16} />
-                <span>{t('diffFullscreen.rejectFile')}</span>
-              </button>
+                {t('diffFullscreen.rejectFile')}
+              </Button>
             </Tooltip>
 
             <div className="header-divider" />
 
             <Tooltip content={t('tooltip.close')}>
-              <button
-                className="header-btn close-btn"
+              <IconButton
+                variant="ghost"
+                size="small"
                 onClick={onClose}
               >
                 <X size={16} />
-              </button>
+              </IconButton>
             </Tooltip>
           </div>
         </div>

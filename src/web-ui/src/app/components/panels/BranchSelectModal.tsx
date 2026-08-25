@@ -3,13 +3,13 @@
  * Supports selecting existing branches or creating new branches
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { GitBranch, Plus } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import {
-  Button,
   Input,
   Checkbox,
   PopupCloseButton,
@@ -323,15 +323,13 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
             </div>
           ) : null}
           <Button
-            className="branch-select-dialog__btn branch-select-dialog__btn--cancel"
-            variant="ghost"
+            variant="outline"
             onClick={onClose}
           >
             {tCommon('actions.cancel')}
           </Button>
           <Button
-            className="branch-select-dialog__btn branch-select-dialog__btn--confirm"
-            variant="primary"
+            variant="fill"
             onClick={handleConfirm}
             disabled={!selectedBranch}
           >

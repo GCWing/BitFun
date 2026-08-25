@@ -31,30 +31,6 @@
       text-align: center;
     }
 
-    button {
-      padding: 8px 20px;
-      background: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-static-white);
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      transition:
-        transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-        background-color 140ms ease,
-        color 140ms ease,
-        opacity 140ms ease;
-
-      &:hover {
-        opacity: 0.9;
-        transform: translateY(-1px);
-      }
-
-      &:active {
-        transform: translateY(0);
-      }
-    }
   }
 
   &__spinner {
@@ -394,24 +370,6 @@
     }
   }
 
-  &__cherry-pick-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    white-space: nowrap;
-    
-    svg {
-      flex-shrink: 0;
-    }
-  }
-
-  &__spinner--small {
-    width: 14px;
-    height: 14px;
-    border-width: 2px;
-    flex-shrink: 0;
-  }
 }
 
 @keyframes git-branch-history-spin {
@@ -455,20 +413,6 @@
 
     &__search {
       min-width: 80px;
-    }
-
-    &__cherry-pick-btn {
-      padding: 6px !important;
-      min-width: auto !important;
-      font-size: 0;
-      gap: 0;
-      
-      svg,
-      .git-branch-history-view__spinner--small {
-        font-size: 14px;
-        width: 14px;
-        height: 14px;
-      }
     }
 
     &__commit-main {

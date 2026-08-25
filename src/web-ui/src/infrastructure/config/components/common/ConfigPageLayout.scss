@@ -17,7 +17,7 @@
   /* Shared layout contract for settings pages in wide scenes. */
   --config-page-content-bottom-padding: 48px;
   /* Vertical gap between top-level sections (ConfigPageSection blocks) inside ConfigPageContent. */
-  --config-page-section-gap: 32px;
+  --config-page-section-gap: 36px;
   /* Keep supporting copy readable and aligned across settings sections and rows. */
   --config-page-description-max-width: 60ch;
   container-type: inline-size;
@@ -90,35 +90,37 @@
 
 .bitfun-config-page-section__title {
   margin: 0;
-  font-size: var(--bf-appearance-token-font-size-base);
+  font-size: var(--bf-appearance-token-font-size-lg);
   font-weight: var(--bf-appearance-token-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: var(--bf-appearance-token-line-height-tight);
+  line-height: 1.25;
 }
 
 .bitfun-config-page-section__description {
   margin: var(--bf-appearance-token-size-gap-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  color: var(--bf-appearance-token-color-text-secondary);
-  line-height: var(--bf-appearance-token-line-height-relaxed);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
+  line-height: 1.35;
   text-wrap: pretty;
 }
 
 .bitfun-config-page-section__extra {
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--bf-appearance-token-size-gap-2);
+  justify-content: flex-end;
+  gap: var(--bf-appearance-token-size-gap-3);
 }
 
 .bitfun-config-page-section__body {
   min-width: 0;
   background: var(--bf-appearance-token-config-page-section-bg);
-  border: var(--bf-appearance-token-config-page-section-border-width) solid var(--bf-appearance-token-config-page-section-border);
+  border: 0;
   border-radius: var(--bf-appearance-token-size-radius-md);
   overflow: visible;
-  box-shadow: var(--bf-appearance-token-config-page-section-shadow);
+  box-shadow: none;
 }
 
 // Sections whose children own their own cards. Every visual boundary has to go,
@@ -131,11 +133,11 @@
 }
 
 .bitfun-config-page-row {
-  --row-grid-cols: minmax(0, 7fr) minmax(0, 3fr);
+  --row-grid-cols: minmax(0, 1fr) minmax(0, 150px);
   display: grid;
   grid-template-columns: var(--row-grid-cols);
-  gap: var(--bf-appearance-token-size-gap-4);
-  padding: var(--bf-appearance-token-size-gap-4);
+  gap: 40px;
+  padding: var(--bf-appearance-token-size-gap-4) var(--bf-appearance-token-size-gap-5);
 }
 
 .bitfun-config-page-row + .bitfun-config-page-row {
@@ -182,22 +184,23 @@
 
 .bitfun-config-page-row__meta {
   min-width: 0;
+  max-width: 450px;
 }
 
 .bitfun-config-page-row__label {
   margin: 0;
   font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: var(--bf-appearance-token-font-weight-medium);
+  font-weight: var(--bf-appearance-token-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: var(--bf-appearance-token-line-height-base);
+  line-height: 1.25;
 }
 
 .bitfun-config-page-row__description {
   margin: var(--bf-appearance-token-size-gap-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: 11px;
   color: var(--bf-appearance-token-color-text-secondary);
-  line-height: var(--bf-appearance-token-line-height-relaxed);
+  line-height: 1.3;
   text-wrap: pretty;
 }
 
@@ -247,12 +250,14 @@
   }
 
   .bitfun-config-page-content {
-    --config-page-section-gap: var(--bf-appearance-token-size-gap-8);
-    padding-inline: var(--bf-appearance-token-size-gap-4);
+    --config-page-section-gap: 36px;
   }
 
   .bitfun-config-page-content__inner {
-    width: calc(100% - (2 * var(--bf-appearance-token-size-gap-4)));
+    width: min(
+      calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
+      #{configLayout.$config-page-content-max-width}
+    );
   }
 }
 
@@ -274,7 +279,11 @@
   .bitfun-config-page-row {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--bf-appearance-token-size-gap-2);
-    padding: var(--bf-appearance-token-size-gap-3);
+    padding: var(--bf-appearance-token-size-gap-4);
+  }
+
+  .bitfun-config-page-row__meta {
+    max-width: none;
   }
 
   .bitfun-config-page-row__control {

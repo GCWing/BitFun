@@ -32,10 +32,12 @@ vi.mock('@/component-library', () => ({
 
 vi.mock('@/infrastructure/appearance', () => ({
   SYSTEM_APPEARANCE_ID: 'system',
+  getAppearancePackageValidationError: () => null,
   useAppearance: () => ({
     selectedAppearanceId: 'system',
     appearances: [],
     select: vi.fn(),
+    activate: vi.fn(),
     initialized: true,
     status: 'ready',
   }),
@@ -54,27 +56,34 @@ vi.mock('@/infrastructure/mouse-glow', () => ({
   useMouseGlowPreference: () => ({ enabled: true, setEnabled: vi.fn() }),
 }));
 
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: { error: vi.fn() },
+}));
+
 vi.mock('@/infrastructure/font-preference', () => ({
   FontPreferencePanel: () => <div data-testid="appearance-font-section" />,
 }));
 
 vi.mock('./AppearancePackageConfigSection', () => ({
   AppearancePackageConfigSection: () => <div data-testid="appearance-package-config" />,
+  AppearancePackageFailurePanel: () => <div data-testid="appearance-package-failure" />,
 }));
 
 describe('AppearanceSettingsPage', () => {
-  it('keeps motion and appearance package management inside the appearance section', () => {
+  it('keeps appearance controls in the option panel and package management in its own section', () => {
     document.body.innerHTML = renderToStaticMarkup(<AppearanceSettingsPage />);
 
     const appearanceSection = document.querySelector(
       '[data-testid="appearance-settings-section"] .bitfun-config-page-section',
     );
     const motionControl = document.querySelector('[data-testid="appearance-mouse-glow-switch"]');
+    const packageSelect = document.querySelector('[data-testid="appearance-package-select"]');
     const packageManagement = document.querySelector('[data-testid="appearance-package-config"]');
 
     expect(appearanceSection).not.toBeNull();
     expect(motionControl?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
-    expect(packageManagement?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
-    expect(packageManagement?.closest('.appearance-settings__package-row')).not.toBeNull();
+    expect(packageSelect?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
+    expect(packageSelect?.closest('.appearance-settings__package-row')).not.toBeNull();
+    expect(packageManagement?.closest('.bitfun-config-page-section')).toBeNull();
   });
 });

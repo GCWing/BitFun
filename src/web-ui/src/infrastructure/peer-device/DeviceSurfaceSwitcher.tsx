@@ -8,6 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { Check, ChevronUp, Monitor, MonitorSmartphone, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -272,17 +273,17 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                     {isCurrent && <Check size={13} aria-hidden="true" />}
                   </button>
                   {attached && (
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="sm"
                       className="bitfun-device-switcher__item-disconnect"
-                      data-bf-component="peer-device"
-                      data-bf-part="switcherDisconnect"
                       disabled={switching}
                       title={t('accountLogin.deviceSwitcher.disconnectHint')}
                       onClick={(event) => { void handleDisconnect(event, device); }}
                     >
                       {t('accountLogin.disconnectPeer')}
-                    </button>
+                    </Button>
                   )}
                 </div>
               );

@@ -29,7 +29,7 @@
     "empty": "尚未匯入外觀包。",
     "missingSelection": "共用選擇的外觀 {{id}} 尚未安裝在目前裝置。請從 Skin 市場安裝它以恢復選擇。",
     "market": {
-      "open": "瀏覽 Skin 市場",
+      "open": "瀏覽市場",
       "title": "Skin 市場",
       "search": "搜尋外觀包",
       "modeFilter": "依外觀模式篩選",

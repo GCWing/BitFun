@@ -23,8 +23,8 @@ function app(id: string): MiniAppMeta {
   };
 }
 
-function tab(id: SceneTab['id'], openedAt: number): SceneTab {
-  return { id, openedAt, lastUsed: openedAt };
+function tab(id: SceneTab['id'], lastUsed: number): SceneTab {
+  return { id, lastUsed };
 }
 
 describe('MiniApp activity projection', () => {

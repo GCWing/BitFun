@@ -1,6 +1,6 @@
+import { Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Switch } from '@/component-library';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { configManager } from '../services/ConfigManager';
@@ -62,7 +62,6 @@ const ToolJsonRepairSection: React.FC = () => {
           checked={enabled}
           onChange={(event) => void handleChange(event.target.checked)}
           disabled={saving}
-          size="small"
         />
       </ConfigPageRow>
     </ConfigPageSection>

@@ -1,8 +1,9 @@
 /** Push button with optional force-push dropdown. */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ArrowUp, AlertTriangle } from 'lucide-react';
-import { Button, IconButton } from '@/component-library';
+import { IconButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './PushButton.scss';
 
@@ -21,6 +22,23 @@ export interface PushButtonProps {
   className?: string;
   /** Render as icon-only buttons */
   iconOnly?: boolean;
+}
+
+function buttonSize(size: PushButtonProps['size']): React.ComponentProps<typeof Button>['size'] {
+  if (size === 'small') return 'sm';
+  if (size === 'large') return 'lg';
+  return 'md';
+}
+
+function buttonVariant(variant: PushButtonProps['variant']): React.ComponentProps<typeof Button>['variant'] {
+  if (variant === 'secondary' || variant === 'ghost') return 'outline';
+  return 'fill';
+}
+
+function iconButtonVariant(variant: PushButtonProps['variant']): React.ComponentProps<typeof IconButton>['variant'] {
+  if (variant === 'primary' || variant === 'accent') return 'primary';
+  if (variant === 'ghost') return 'ghost';
+  return 'default';
 }
 
 export const PushButton: React.FC<PushButtonProps> = ({
@@ -86,51 +104,41 @@ export const PushButton: React.FC<PushButtonProps> = ({
         {iconOnly ? (
           <IconButton
             size={size}
+            variant={iconButtonVariant(variant)}
             onClick={() => handlePush(false)}
             disabled={disabled || loading}
-            className="bitfun-push-button__main"
+            isLoading={loading}
+            aria-label={t('actions.push')}
+            tooltip={t('actions.push')}
           >
             <ArrowUp size={14} />
           </IconButton>
         ) : (
           <Button
-            variant={variant}
-            size={size}
+            variant={buttonVariant(variant)}
+            size={buttonSize(size)}
             onClick={() => handlePush(false)}
             disabled={disabled || loading}
-            className="bitfun-push-button__main"
+            loading={loading}
+            leadingIcon={<ArrowUp />}
           >
-            <ArrowUp size={14} />
-            <span>{t('actions.push')}</span>
+            {t('actions.push')}
           </Button>
         )}
 
-        {iconOnly ? (
-          <IconButton
-            size={size}
-            onClick={handleToggleDropdown}
-            disabled={disabled || loading}
-            className="bitfun-push-button__dropdown-trigger"
-          >
-            <ChevronDown 
-              size={14} 
-              className={`bitfun-push-button__arrow ${showDropdown ? 'bitfun-push-button__arrow--open' : ''}`}
-            />
-          </IconButton>
-        ) : (
-          <Button
-            variant={variant}
-            size={size}
-            onClick={handleToggleDropdown}
-            disabled={disabled || loading}
-            className="bitfun-push-button__dropdown-trigger"
-          >
-            <ChevronDown 
-              size={14} 
-              className={`bitfun-push-button__arrow ${showDropdown ? 'bitfun-push-button__arrow--open' : ''}`}
-            />
-          </Button>
-        )}
+        <IconButton
+          size={size}
+          variant={iconButtonVariant(variant)}
+          onClick={handleToggleDropdown}
+          disabled={disabled || loading}
+          aria-label={`${t('actions.push')} / ${t('actions.forcePush')}`}
+          tooltip={`${t('actions.push')} / ${t('actions.forcePush')}`}
+        >
+          <ChevronDown
+            size={14}
+            className={`bitfun-push-button__arrow ${showDropdown ? 'bitfun-push-button__arrow--open' : ''}`}
+          />
+        </IconButton>
       </div>
 
       {showDropdown && (

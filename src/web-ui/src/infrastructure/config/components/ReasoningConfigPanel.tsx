@@ -1,7 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/component-library';
 import type { ReasoningCatalogBinding, ReasoningCatalogProjection, ReasoningConfig } from '../types';
 import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api/AIApi';
 import { aiApi } from '@/infrastructure/api';
@@ -137,11 +137,11 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
           data-bf-component="reasoning-config-panel"
           data-bf-part="actions"
         >
-          <Button variant="secondary" onClick={onCancel}>
+          <Button variant="outline" onClick={onCancel}>
             {t('actions.cancel')}
           </Button>
           <Button
-            variant="primary"
+            variant="fill"
             disabled={invalid}
             onClick={() => onApply({
               reasoning: draft,

@@ -1,7 +1,7 @@
 /**
  * NavBar — navigation history controls + window chrome.
  *
- * Sits at the top of the left column, same height as SceneBar (38px).
+ * Sits at the top of the left column as compact workbench chrome (35px).
  * Layout: [←][→]  <drag-region>  [_][□][×]
  *
  * - Back/Forward buttons mirror IDE navigation history.

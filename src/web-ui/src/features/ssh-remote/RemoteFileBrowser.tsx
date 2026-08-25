@@ -3,11 +3,12 @@
  * Used to browse and select remote directory as workspace
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
-import { Button, PopupCloseButton } from '@/component-library';
+import { PopupCloseButton } from '@/component-library';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
@@ -643,12 +644,12 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                 }}
               />
               <div className="remote-file-browser__dialog-actions">
-                <Button variant="secondary" size="small" onClick={() => setRenameEntry(null)}>
+                <Button variant="outline" size="sm" onClick={() => setRenameEntry(null)}>
                   {t('actions.cancel')}
                 </Button>
                 <Button
-                  variant="primary"
-                  size="small"
+                  variant="fill"
+                  size="sm"
                   onClick={handleRename}
                   disabled={!renameValue.trim() || renameValue.trim() === renameEntry.name}
                 >
@@ -689,12 +690,12 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             )}
           </div>
           <div className="remote-file-browser__footer-actions">
-            <Button variant="secondary" size="small" onClick={onCancel}>
+            <Button variant="outline" size="sm" onClick={onCancel}>
               {t('actions.cancel')}
             </Button>
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={openSelectedWorkspace}
               disabled={false}
             >

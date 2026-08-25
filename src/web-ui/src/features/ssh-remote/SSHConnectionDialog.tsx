@@ -3,13 +3,12 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
-import { Modal } from '@/component-library';
-import { Button } from '@/component-library';
-import { Input } from '@/component-library';
+import { Input, Modal } from '@/component-library';
 import { Select } from '@/component-library';
 import { Alert } from '@/component-library';
 import { IconButton } from '@/component-library';
@@ -778,26 +777,29 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       </span>
                     </div>
                     <div className="ssh-connection-dialog__saved-actions">
-                      <Button
+                      <IconButton
+                        type="button"
                         size="small"
-                        variant="ghost"
                         onClick={(e) => handleEditConnection(e, conn)}
                         disabled={isConnecting}
                         title={t('actions.edit') || 'Edit'}
+                        aria-label={t('actions.edit') || 'Edit'}
                       >
                         <Pencil size={13} />
-                      </Button>
-                      <Button
+                      </IconButton>
+                      <IconButton
+                        type="button"
                         size="small"
-                        variant="ghost"
+                        variant="danger"
                         onClick={(e) => handleDeleteConnection(e, conn.id)}
                         disabled={isConnecting}
-                        className="ssh-connection-dialog__delete-btn"
                         title={t('actions.delete') || 'Delete'}
+                        aria-label={t('actions.delete') || 'Delete'}
                       >
                         <Trash2 size={13} />
-                      </Button>
-                      <Button
+                      </IconButton>
+                      <IconButton
+                        type="button"
                         size="small"
                         variant="primary"
                         onClick={(e) => {
@@ -805,9 +807,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                           handleQuickConnect(conn);
                         }}
                         disabled={isConnecting || status === 'connecting'}
+                        title={t('ssh.remote.connect')}
+                        aria-label={t('ssh.remote.connect')}
                       >
                         <Play size={12} />
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
                 ))}
@@ -854,16 +858,17 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     </div>
                     <div className="ssh-connection-dialog__saved-actions">
                       <Button
-                        size="small"
-                        variant="ghost"
+                        size="sm"
+                        variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleFillFromConfig(configHost);
                         }}
                         disabled={isConnecting || status === 'connecting'}
                         title={t('ssh.remote.fillForm')}
+                        leadingIcon={<ArrowDownToLine size={12} />}
                       >
-                        <ArrowDownToLine size={12} />
+
                         {t('ssh.remote.fillForm')}
                       </Button>
                     </div>
@@ -951,8 +956,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     </label>
                     {formData.targetType !== 'containerSshd' && (
                       <Button
-                        variant="ghost"
-                        size="small"
+                        variant="outline"
+                        size="sm"
                         onClick={() => void handleListContainers()}
                         disabled={isListingContainers || isConnecting || status === 'connecting'}
                       >
@@ -1334,8 +1339,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           {/* Actions */}
           <div className="ssh-connection-dialog__actions" data-bf-component="ssh-remote" data-bf-part="connectionActions">
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => void handleTestConnection()}
               disabled={isTesting || isConnecting || status === 'connecting'}
             >
@@ -1343,16 +1348,16 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               {t('ssh.remote.testConnection')}
             </Button>
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={onClose}
               disabled={isConnecting || status === 'connecting'}
             >
               {t('actions.cancel')}
             </Button>
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={handleConnect}
               disabled={
                 isConnecting

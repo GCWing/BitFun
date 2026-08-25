@@ -214,22 +214,6 @@
     z-index: 2;
   }
 
-  &__button {
-    @include shared.liquid-button('default');
-
-    &--confirm {
-      @include shared.liquid-button('success');
-    }
-
-    &--reject {
-      @include shared.liquid-button('error');
-    }
-
-    &--expand {
-      @include shared.liquid-button('primary');
-    }
-  }
-
 
   &__result {
     margin-top: tokens.$size-gap-4;

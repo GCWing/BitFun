@@ -1,0 +1,33 @@
+{
+  "name": "@bitfun/design-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone authoring and preview application for the BitFun design system",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4178 --strictPort",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "test": "node --test vite/*.test.mjs && pnpm run type-check",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@bitfun/design-tokens": "workspace:^",
+    "@bitfun/theme-bitfun": "workspace:^",
+    "@bitfun/ui": "workspace:^",
+    "lucide-react": "^0.541.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@bitfun/token-engine": "workspace:*",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

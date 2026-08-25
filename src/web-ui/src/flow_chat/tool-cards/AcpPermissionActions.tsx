@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { Button } from '@bitfun/ui';
 import { Check, ShieldCheck, ShieldX, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -19,7 +20,6 @@ interface AcpPermissionActionsProps {
   disabled?: boolean;
   presentation?: 'icon' | 'text';
   className?: string;
-  buttonClassName?: string;
   onConfirm?: (permissionOptionId?: string, approve?: boolean) => void;
   onReject?: (options?: ToolRejectOptions) => void;
 }
@@ -66,7 +66,6 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
   disabled = false,
   presentation = 'icon',
   className = '',
-  buttonClassName = '',
   onConfirm,
   onReject,
 }) => {
@@ -100,17 +99,20 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
 
         if (presentation === 'text') {
           return (
-            <button data-bf-component="acp-permission-actions" data-bf-part="action" data-bf-decision={approve ? 'allow' : 'reject'}
+            <Button
               key={option.optionId}
               type="button"
-              className={`acp-permission-actions__text-button acp-permission-actions__text-button--${approve ? 'allow' : 'reject'} ${buttonClassName}`}
+              variant={approve ? 'fill' : 'outline'}
+              size="sm"
+              leadingIcon={optionIcon(option.kind)}
+              data-bf-decision={approve ? 'allow' : 'reject'}
               onClick={handleClick}
               disabled={disabled}
               title={tooltip}
               aria-label={tooltip}
             >
               {label}
-            </button>
+            </Button>
           );
         }
 
@@ -120,7 +122,7 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
             data-bf-component="acp-permission-actions"
             data-bf-part="action"
             data-bf-decision={approve ? 'allow' : 'reject'}
-            className={`tool-card-header-action acp-permission-actions__icon-button acp-permission-actions__icon-button--${option.kind} ${buttonClassName}`}
+            className={`tool-card-header-action acp-permission-actions__icon-button acp-permission-actions__icon-button--${option.kind}`}
             variant={buttonVariant(option.kind)}
             size="xs"
             onClick={handleClick}

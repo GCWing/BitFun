@@ -3,7 +3,6 @@
  * Export all previewable components here
  */
 
-export * from './Button';
 export * from './IconButton';
 export * from './PopupCloseButton';
 export * from './WindowControls';
@@ -21,7 +20,6 @@ export * from './NumberInput';
 export * from './Search';
 export * from './Select';
 export * from './Checkbox';
-export * from './Switch';
 export * from './Textarea';
 
 export * from './Tooltip';

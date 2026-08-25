@@ -1,4 +1,3 @@
-import { buttonAppearanceDescriptor } from '@/component-library/components/Button/appearance';
 import { cardAppearanceDescriptor } from '@/component-library/components/Card/appearance';
 import { inputAppearanceDescriptor } from '@/component-library/components/Input/appearance';
 import { modalAppearanceDescriptor } from '@/component-library/components/Modal/appearance';
@@ -6,7 +5,6 @@ import { tooltipAppearanceDescriptor } from '@/component-library/components/Tool
 import { iconButtonAppearanceDescriptor } from '@/component-library/components/IconButton/appearance';
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
 import { checkboxAppearanceDescriptor } from '@/component-library/components/Checkbox/appearance';
-import { switchAppearanceDescriptor } from '@/component-library/components/Switch/appearance';
 import { textareaAppearanceDescriptor } from '@/component-library/components/Textarea/appearance';
 import { numberInputAppearanceDescriptor } from '@/component-library/components/NumberInput/appearance';
 import { searchAppearanceDescriptor } from '@/component-library/components/Search/appearance';
@@ -293,7 +291,6 @@ import { AppearanceRegistry } from './AppearanceRegistry';
 
 export function createDefaultAppearanceRegistry(): AppearanceRegistry {
   return new AppearanceRegistry()
-    .registerComponent(buttonAppearanceDescriptor)
     .registerComponent(cardAppearanceDescriptor)
     .registerComponent(inputAppearanceDescriptor)
     .registerComponent(modalAppearanceDescriptor)
@@ -301,7 +298,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(iconButtonAppearanceDescriptor)
     .registerComponent(popupCloseButtonAppearanceDescriptor)
     .registerComponent(checkboxAppearanceDescriptor)
-    .registerComponent(switchAppearanceDescriptor)
     .registerComponent(textareaAppearanceDescriptor)
     .registerComponent(numberInputAppearanceDescriptor)
     .registerComponent(searchAppearanceDescriptor)

@@ -2,11 +2,8 @@
  * sceneStore — SceneBar tab lifecycle + scene navigation history.
  *
  * Tab rules:
- *   - Max MAX_OPEN_SCENES visible tabs total (including fixed agent).
- *   - Fixed tabs (e.g. session/agent) are never auto-evicted; closable controls manual close.
- *   - When over capacity, the oldest replaceable tab (by openedAt, FIFO) is evicted.
- *   - Scenes with retainOnAutoEvict stay mounted in the background until an
- *     explicit close. MiniApp Runners use this so tab capacity cannot stop an app.
+ *   - Every explicitly opened scene stays in openTabs until the user closes it.
+ *   - Pinned tabs (e.g. session/agent) cannot be manually closed.
  *   - 'welcome' tab is the default initial tab; it auto-closes the first time
  *     any other scene is explicitly opened.
  *
@@ -19,7 +16,7 @@
  */
 
 import { create } from 'zustand';
-import { SCENE_TAB_REGISTRY, MAX_OPEN_SCENES, getSceneDef, getMiniAppSceneDef } from '../scenes/registry';
+import { SCENE_TAB_REGISTRY, getSceneDef, getMiniAppSceneDef } from '../scenes/registry';
 import { getSceneNav } from '../scenes/nav-registry';
 import { useNavSceneStore } from './navSceneStore';
 import {
@@ -41,29 +38,13 @@ function getSceneDefOrMiniapp(id: SceneTabId) {
   return undefined;
 }
 
-function isFixedScene(id: SceneTabId): boolean {
-  return getSceneDefOrMiniapp(id)?.fixed === true;
-}
-
 function isClosableScene(id: SceneTabId): boolean {
   const def = getSceneDefOrMiniapp(id);
   return (def?.closable ?? !def?.pinned) !== false;
 }
 
-function shouldRetainOnAutoEvict(id: SceneTabId): boolean {
-  return getSceneDefOrMiniapp(id)?.retainOnAutoEvict === true;
-}
-
-/** Pick the oldest replaceable tab by openedAt (FIFO). Fixed tabs are never replaceable. */
-function selectOldestReplaceableTab(tabs: SceneTab[]): SceneTab | undefined {
-  const replaceable = tabs
-    .filter(t => !isFixedScene(t.id))
-    .sort((a, b) => a.openedAt - b.openedAt);
-  return replaceable[0];
-}
-
 function buildSceneTab(id: SceneTabId, now: number): SceneTab {
-  return { id, openedAt: now, lastUsed: now };
+  return { id, lastUsed: now };
 }
 
 function resolveNavSceneId(sceneId: SceneTabId): SceneTabId | null {
@@ -72,8 +53,6 @@ function resolveNavSceneId(sceneId: SceneTabId): SceneTabId | null {
 
 interface SceneState {
   openTabs: SceneTab[];
-  /** Mounted scenes hidden by automatic visible-tab eviction. */
-  retainedScenes: SceneTab[];
   activeTabId: SceneTabId;
   /** Ordered history of activeTabId values. */
   navHistory: SceneTabId[];
@@ -137,7 +116,6 @@ const initialActiveId: SceneTabId = initialTabs[0]?.id ?? WELCOME_SCENE_ID;
 
 export const useSceneStore = create<SceneState>((set, get) => ({
   openTabs:    initialTabs,
-  retainedScenes: [],
   activeTabId: initialActiveId,
   navHistory:  [initialActiveId],
   navCursor:   0,
@@ -160,13 +138,11 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     }
 
     const isAlreadyOpen = state.openTabs.some(tab => tab.id === id);
-    const retainedScene = state.retainedScenes.find(scene => scene.id === id);
     const def = getSceneDef(id);
     const isMiniappTab = typeof id === 'string' && id.startsWith('miniapp:');
-    if (!isAlreadyOpen && !retainedScene && !def && !isMiniappTab) return;
+    if (!isAlreadyOpen && !def && !isMiniappTab) return;
 
     let openTabs = state.openTabs;
-    let retainedScenes = state.retainedScenes;
     let navHistory = state.navHistory;
     let navCursor = state.navCursor;
 
@@ -201,37 +177,9 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       return;
     }
 
-    let next = [...openTabs];
-
-    // Eviction: over capacity → remove oldest replaceable tab (FIFO); fixed (e.g. agent) never evicted
-    if (next.length >= MAX_OPEN_SCENES) {
-      const victim = selectOldestReplaceableTab(next);
-      if (!victim) return;
-      const evictedId = victim.id;
-      next = next.filter(tab => tab.id !== evictedId);
-      if (
-        shouldRetainOnAutoEvict(evictedId)
-        && !retainedScenes.some(scene => scene.id === evictedId)
-      ) {
-        retainedScenes = [...retainedScenes, victim];
-      }
-      const afterEvict = removeFromHistory(
-        histUpdate.navHistory,
-        histUpdate.navCursor,
-        evictedId,
-        id,
-      );
-      Object.assign(histUpdate, afterEvict);
-    }
-
-    const openedAt = Date.now();
-    if (retainedScene) {
-      retainedScenes = retainedScenes.filter(scene => scene.id !== id);
-    }
-    next.push(buildSceneTab(id, openedAt));
+    const next = [...openTabs, buildSceneTab(id, Date.now())];
     set({
       openTabs: ensureAgentFirst(next),
-      retainedScenes,
       activeTabId: id,
       navigationMotion,
       navigationSequence: state.navigationSequence + 1,
@@ -245,18 +193,16 @@ export const useSceneStore = create<SceneState>((set, get) => ({
 
   closeScene: (id) => {
     const state = get();
-    const { openTabs, retainedScenes, activeTabId, navHistory, navCursor } = state;
+    const { openTabs, activeTabId, navHistory, navCursor } = state;
     if (!isClosableScene(id)) return;
 
     const nextTabs = openTabs.filter(t => t.id !== id);
-    const nextRetainedScenes = retainedScenes.filter(scene => scene.id !== id);
 
     let newActiveId = activeTabId;
     if (id === activeTabId) {
       if (nextTabs.length === 0) {
         set({
           openTabs: [],
-          retainedScenes: nextRetainedScenes,
           activeTabId: '' as SceneTabId,
           navHistory: [],
           navCursor: -1,
@@ -271,7 +217,6 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     const histUpdate = removeFromHistory(navHistory, navCursor, id, newActiveId);
     set({
       openTabs: ensureAgentFirst(nextTabs),
-      retainedScenes: nextRetainedScenes,
       activeTabId: newActiveId,
       navigationMotion: getInteractionMotion(),
       navigationSequence: state.navigationSequence + 1,
@@ -325,7 +270,6 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     const activeTabId: SceneTabId = tabs[0]?.id ?? WELCOME_SCENE_ID;
     set({
       openTabs: tabs,
-      retainedScenes: [],
       activeTabId,
       navHistory: [activeTabId],
       navCursor: 0,

@@ -150,9 +150,8 @@
     justify-content: stretch;
     gap: 8px;
 
-    .btn {
+    [data-bf-component='button'] {
       width: 100%;
-      justify-content: center;
     }
   }
 }

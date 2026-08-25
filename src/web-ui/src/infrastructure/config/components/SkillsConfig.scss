@@ -297,7 +297,7 @@
     gap: $size-gap-2;
     flex-shrink: 0;
 
-    .btn {
+    [data-bf-component='button'] {
       min-width: 128px;
     }
   }
@@ -380,7 +380,7 @@
       justify-content: flex-start;
       flex-wrap: wrap;
 
-      .btn {
+      [data-bf-component='button'] {
         width: 100%;
       }
     }

@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -21,7 +22,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import {
-  Button,
   Input,
   PresenceBoundary,
   Select,
@@ -695,12 +695,13 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
 
   const refreshButton = (
     <Button
-      variant="secondary"
-      size="small"
+      variant="outline"
+      size="sm"
       onClick={() => void loadPages()}
       disabled={loading || Object.keys(pendingBySlug).length > 0}
+      leadingIcon={<RefreshCw size={14} className={loading ? 'pages-scene__spinning' : undefined} />}
     >
-      <RefreshCw size={14} className={loading ? 'pages-scene__spinning' : undefined} />
+
       {t('actions.refresh')}
     </Button>
   );
@@ -734,7 +735,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           <div className="pages-scene__refresh-error" role="alert" data-testid="pages-refresh-error" data-bf-scene="pages" data-bf-part="error">
             <span>{t('loadFailed')}</span>
             <small>{loadError}</small>
-            <Button variant="secondary" size="small" onClick={() => void loadPages()}>
+            <Button variant="outline" size="sm" onClick={() => void loadPages()}>
               {t('actions.retry')}
             </Button>
           </div>
@@ -772,7 +773,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
             icon={<PanelsTopLeft size={36} />}
             message={<>{t('signInRequired')}<small>{t('signInHint')}</small></>}
             action={(
-              <Button variant="primary" size="small" onClick={() => setShowAccountDialog(true)}>
+              <Button variant="fill" size="sm" onClick={() => setShowAccountDialog(true)}>
                 {t('actions.signIn')}
               </Button>
             )}
@@ -785,7 +786,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
             icon={<PanelsTopLeft size={36} />}
             message={<>{t('loadFailed')}<small>{loadError}</small></>}
             isError
-            action={<Button variant="secondary" size="small" onClick={() => void loadPages()}>{t('actions.retry')}</Button>}
+            action={<Button variant="outline" size="sm" onClick={() => void loadPages()}>{t('actions.retry')}</Button>}
             testId="pages-error"
           />
         ) : pages.length === 0 ? (
@@ -852,36 +853,39 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                 <footer className="pages-scene__actions">
                   {deployed && (
                     <Button
-                      variant="primary"
-                      size="small"
+                      variant="fill"
+                      size="sm"
                       onClick={() => void openPage(page, pageOwnerEpoch)}
                       disabled={pageBusy}
-                      isLoading={pendingAction === `open:${page.slug}:production`}
+                      loading={pendingAction === `open:${page.slug}:production`}
+                      leadingIcon={<ExternalLink size={13} />}
                     >
-                      <ExternalLink size={13} /> {t('actions.openProduction')}
+                       {t('actions.openProduction')}
                     </Button>
                   )}
                   {deployed && (
                     <Button
-                      variant="ghost"
-                      size="small"
+                      variant="outline"
+                      size="sm"
                       onClick={() => void copyPageLink(page, pageOwnerEpoch)}
                       disabled={pageBusy}
-                      isLoading={pendingAction === `copy:${page.slug}:production`}
+                      loading={pendingAction === `copy:${page.slug}:production`}
+                      leadingIcon={<Copy size={13} />}
                     >
-                      <Copy size={13} /> {t('actions.copyLink')}
+                       {t('actions.copyLink')}
                     </Button>
                   )}
                   <Button
-                    variant="ghost"
-                    size="small"
+                    variant="outline"
+                    size="sm"
                     onClick={() => void toggleVersions(page, pageOwnerEpoch)}
                     disabled={pageBusy}
-                    isLoading={pendingAction === `versions:${page.slug}`}
+                    loading={pendingAction === `versions:${page.slug}`}
                     aria-expanded={expanded}
                     aria-controls={versionsId}
+                    leadingIcon={<FileClock size={13} />}
                   >
-                    <FileClock size={13} /> {t('actions.versions')}
+                     {t('actions.versions')}
                     {versions.length > 0 && (
                       <span className="pages-scene__count-badge">{formatNumber(versions.length)}</span>
                     )}
@@ -889,14 +893,15 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                   </Button>
                   <span className="pages-scene__actions-spacer" />
                   <Button
-                    variant="secondary"
-                    size="small"
+                    variant="outline"
+                    size="sm"
                     onClick={() => toggleManagement(page.slug)}
                     disabled={pageBusy}
                     aria-expanded={managing}
                     aria-controls={managementId}
+                    leadingIcon={<Settings2 size={13} />}
                   >
-                    <Settings2 size={13} /> {t('actions.manage')}
+                     {t('actions.manage')}
                     {managing ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </Button>
                 </footer>
@@ -935,13 +940,14 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                         />
                         {(titleDirty || titleSaving) && (
                           <Button
-                            variant="secondary"
-                            size="small"
+                            variant="outline"
+                            size="sm"
                             disabled={pageBusy || !titleDirty}
-                            isLoading={titleSaving}
+                            loading={titleSaving}
                             onClick={() => void saveTitle(page, pageOwnerEpoch)}
+                            leadingIcon={<Save size={13} />}
                           >
-                            <Save size={13} /> {t('actions.saveTitle')}
+                             {t('actions.saveTitle')}
                           </Button>
                         )}
                       </div>
@@ -978,23 +984,26 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     <div className="pages-scene__management-actions">
                       {deployed && (
                         <Button
-                          variant="ghost"
-                          size="small"
+                          variant="outline"
+                          size="sm"
                           onClick={() => void unpublishPage(page, pageOwnerEpoch)}
                           disabled={pageBusy}
-                          isLoading={pendingAction === `unpublish:${page.slug}`}
+                          loading={pendingAction === `unpublish:${page.slug}`}
+                          leadingIcon={<CircleStop size={13} />}
                         >
-                          <CircleStop size={13} /> {t('actions.unpublish')}
+                           {t('actions.unpublish')}
                         </Button>
                       )}
                       <Button
-                        variant="danger"
-                        size="small"
+                        variant="fill"
+                        tone="danger"
+                        size="sm"
                         onClick={() => void deletePage(page, pageOwnerEpoch)}
                         disabled={pageBusy}
-                        isLoading={pendingAction === `delete-page:${page.slug}`}
+                        loading={pendingAction === `delete-page:${page.slug}`}
+                        leadingIcon={<Trash2 size={13} />}
                       >
-                        <Trash2 size={13} /> {t('actions.deletePage')}
+                         {t('actions.deletePage')}
                       </Button>
                     </div>
                   </div>
@@ -1012,12 +1021,13 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                         {t('versions.title')}
                       </span>
                       <Button
-                        variant="ghost"
-                        size="small"
+                        variant="outline"
+                        size="sm"
                         disabled={pageBusy}
                         onClick={() => void loadVersions(page, pageOwnerEpoch)}
+                        leadingIcon={<RefreshCw size={12} />}
                       >
-                        <RefreshCw size={12} /> {t('actions.refresh')}
+                         {t('actions.refresh')}
                       </Button>
                     </div>
                     {versions.length === 0 ? (
@@ -1044,43 +1054,45 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                             </div>
                             <div className="pages-scene__version-actions">
                               <Button
-                                variant="ghost"
-                                size="small"
+                                variant="outline"
+                                size="sm"
                                 onClick={() => void openPage(page, pageOwnerEpoch, version.version_id)}
                                 disabled={pageBusy}
-                                isLoading={pendingAction === `open:${page.slug}:${version.version_id}`}
+                                loading={pendingAction === `open:${page.slug}:${version.version_id}`}
                                 aria-label={t('actions.openVersionAria', { version: version.version_id })}
                               >
                                 <ExternalLink size={13} />
                               </Button>
                               <Button
-                                variant="ghost"
-                                size="small"
+                                variant="outline"
+                                size="sm"
                                 onClick={() => void copyPageLink(page, pageOwnerEpoch, version)}
                                 disabled={pageBusy}
-                                isLoading={pendingAction === `copy:${page.slug}:${version.version_id}`}
+                                loading={pendingAction === `copy:${page.slug}:${version.version_id}`}
                                 aria-label={t('actions.copyVersionAria', { version: version.version_id })}
                               >
                                 <Copy size={13} />
                               </Button>
                               {!version.deployed && (
                                 <Button
-                                  variant="secondary"
-                                  size="small"
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => void deployVersion(page, pageOwnerEpoch, version)}
                                   disabled={pageBusy}
-                                  isLoading={pendingAction === `deploy:${page.slug}:${version.version_id}`}
+                                  loading={pendingAction === `deploy:${page.slug}:${version.version_id}`}
+                                  leadingIcon={<Rocket size={13} />}
                                 >
-                                  <Rocket size={13} /> {t('actions.deploy')}
+                                   {t('actions.deploy')}
                                 </Button>
                               )}
                               {!version.deployed && (
                                 <Button
-                                  variant="danger"
-                                  size="small"
+                                  variant="fill"
+                                  tone="danger"
+                                  size="sm"
                                   onClick={() => void deleteVersion(page, pageOwnerEpoch, version)}
                                   disabled={pageBusy}
-                                  isLoading={pendingAction === `delete-version:${page.slug}:${version.version_id}`}
+                                  loading={pendingAction === `delete-version:${page.slug}:${version.version_id}`}
                                   aria-label={t('actions.deleteVersionAria', { version: version.version_id })}
                                 >
                                   <Trash2 size={13} />

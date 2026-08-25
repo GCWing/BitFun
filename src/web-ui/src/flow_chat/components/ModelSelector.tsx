@@ -8,6 +8,7 @@
  * - Supports 'auto' | 'primary' | 'fast' | specific model IDs
  */
 
+import { Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useId, useRef, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -24,7 +25,7 @@ import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/servi
 import { getProviderDisplayName, getProviderGroupKey } from '@/infrastructure/config/services/modelConfigs';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import { Switch, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
 import { notificationService } from '@/shared/notification-system';
 import { FlowChatStore } from '../store/FlowChatStore';
@@ -1598,9 +1599,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     </span>
                   </div>
                   <Switch
-                    size="small"
                     checked={acpFastMode.enabled}
-                    loading={loading}
+                    disabled={loading}
+                    aria-busy={loading}
                     aria-label={t('modelSelector.fastMode')}
                     onChange={event => { void handleSetAcpFastMode(event.target.checked); }}
                   />

@@ -1,0 +1,52 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+import { createTokenAuthoringPlugin } from "./vite/token-authoring-plugin.mjs";
+
+const labDirectory = path.dirname(fileURLToPath(import.meta.url));
+const designSystemDirectory = path.resolve(labDirectory, "../..");
+const uiSourceDirectory = path.join(designSystemDirectory, "packages/ui/src");
+
+export default defineConfig(({ command }) => ({
+  plugins: [react(), createTokenAuthoringPlugin({ designSystemDirectory })],
+  resolve: {
+    dedupe: ["react", "react-dom"],
+    alias:
+      command === "serve"
+        ? [
+            {
+              find: /^@bitfun\/ui\/registry$/,
+              replacement: path.join(uiSourceDirectory, "registry.ts"),
+            },
+            {
+              find: /^@bitfun\/ui\/styles\.css$/,
+              replacement: path.join(uiSourceDirectory, "styles/layers.css"),
+            },
+            {
+              find: /^@bitfun\/ui$/,
+              replacement: path.join(uiSourceDirectory, "index.ts"),
+            },
+          ]
+        : [],
+  },
+  optimizeDeps: {
+    exclude: [
+      "@bitfun/design-tokens",
+      "@bitfun/theme-bitfun",
+      "@bitfun/ui",
+    ],
+  },
+  server: {
+    fs: {
+      allow: [designSystemDirectory],
+    },
+    host: "127.0.0.1",
+    port: 4178,
+    strictPort: true,
+  },
+  build: {
+    outDir: "dist",
+    sourcemap: true,
+  },
+}));

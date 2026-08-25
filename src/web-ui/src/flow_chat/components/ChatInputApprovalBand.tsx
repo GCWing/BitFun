@@ -10,6 +10,7 @@
  */
 
 import React, { useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { Check, ShieldAlert, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
@@ -279,58 +280,62 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
 
         {/* Rejecting is the safe answer, so it leads and never depends on
             anything else being in the right state. */}
-        <button
+        <Button
           type="button"
-          className="bitfun-chat-input-approval__btn bitfun-chat-input-approval__btn--reject"
+          variant="outline"
+          size="sm"
+          leadingIcon={<X size={13} strokeWidth={2.2} />}
           disabled={responding}
           data-testid="chat-input-approval-reject"
           onClick={() => void answer('reject', false)}
         >
-          <X size={13} strokeWidth={2.2} aria-hidden />
-          <span>{rejectLabel}</span>
-        </button>
+          {rejectLabel}
+        </Button>
         {/* The composer is the reason field. It is offered rather than assumed,
             so a half-typed next message cannot become a rejection reason and
             typing one cannot block the allow buttons. */}
         {reason ? (
           <Tooltip content={t('permission.rejectWithReasonTooltip')} placement="top">
-            <button
+            <Button
               type="button"
-              className="bitfun-chat-input-approval__btn bitfun-chat-input-approval__btn--reject-reason"
+              variant="outline"
+              size="sm"
+              leadingIcon={<X size={13} strokeWidth={2.2} />}
               disabled={responding}
               data-testid="chat-input-approval-reject-with-reason"
               onClick={() => void answer('reject', true)}
             >
-              <X size={13} strokeWidth={2.2} aria-hidden />
-              <span>{t('permission.rejectWithReason')}</span>
-            </button>
+              {t('permission.rejectWithReason')}
+            </Button>
           </Tooltip>
         ) : null}
-        <button
+        <Button
           type="button"
-          className="bitfun-chat-input-approval__btn bitfun-chat-input-approval__btn--allow"
+          variant="fill"
+          size="sm"
+          leadingIcon={<Check size={13} strokeWidth={2.2} />}
           disabled={responding}
           data-testid="chat-input-approval-allow"
           onClick={() => void answer('once', false)}
         >
-          <Check size={13} strokeWidth={2.2} aria-hidden />
-          <span>{allowLabel}</span>
-        </button>
+          {allowLabel}
+        </Button>
         {/* "Always" writes a saved grant, so it is only offered when this
             request has a scope to save, and only for the request in front of
             the reader — a saved grant is not something to apply in bulk to
             requests they have not read. */}
         {request.saveResources?.length && !answersAll ? (
           <Tooltip content={alwaysAllowTooltip} placement="top">
-            <button
+            <Button
               type="button"
-              className="bitfun-chat-input-approval__btn bitfun-chat-input-approval__btn--always"
+              variant="outline"
+              size="sm"
               disabled={responding}
               data-testid="chat-input-approval-allow-always"
               onClick={() => void answer('always', false)}
             >
               {t('permission.allowAlways')}
-            </button>
+            </Button>
           </Tooltip>
         ) : null}
       </div>

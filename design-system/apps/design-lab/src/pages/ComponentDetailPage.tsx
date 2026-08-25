@@ -1,0 +1,538 @@
+import { Fragment, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Clipboard,
+  MessageCircle,
+} from "lucide-react";
+import {
+  Button,
+  Switch,
+  TabGroup,
+  ThemeRoot,
+  type ColorScheme,
+  type ContrastMode,
+  type DensityMode,
+  type TokenOverrides,
+} from "@bitfun/ui";
+import type { ComponentMeta } from "@bitfun/ui/registry";
+import { useI18n, type MessageKey } from "../i18n";
+import {
+  getComponentCategoryLabel,
+  getComponentDescription,
+} from "../i18n/componentMetadata";
+
+interface ComponentDetailPageProps {
+  colorScheme: ColorScheme;
+  component: ComponentMeta;
+  contrast: ContrastMode;
+  density: DensityMode;
+  onBack: () => void;
+  onInspectTokens: (name: string) => void;
+  tokenOverrides: TokenOverrides;
+}
+
+type CopyStatus = "idle" | "copied" | "unavailable";
+type InspectorTab = "properties" | "styles" | "tokens";
+type PreviewIcon = "chevron" | "none";
+type PreviewIconPosition = "left" | "right";
+type PreviewSize = "sm" | "md" | "lg";
+
+const buttonVariants = ["fill", "outline"] as const;
+const buttonInspectorStates = ["default", "hover", "active"] as const;
+
+const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
+  active: "detail.option.active",
+  chevron: "detail.option.chevron",
+  default: "detail.option.default",
+  disabled: "detail.option.disabled",
+  fill: "detail.option.fill",
+  "focus-visible": "detail.option.focus-visible",
+  hover: "detail.option.hover",
+  left: "detail.option.left",
+  lg: "detail.option.lg",
+  loading: "detail.option.loading",
+  md: "detail.option.md",
+  none: "detail.option.none",
+  off: "detail.option.off",
+  on: "detail.option.on",
+  outline: "detail.option.outline",
+  right: "detail.option.right",
+  selected: "detail.option.selected",
+  sm: "detail.option.sm",
+  unselected: "detail.option.unselected",
+};
+
+function InspectorSelect({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: readonly string[];
+  value: string;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <label className="component-inspector-select">
+      <span>{label}</span>
+      <select onChange={(event) => onChange(event.target.value)} value={value}>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {t(optionLabelKeys[option] ?? "detail.option.default")}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function InspectorToggle({
+  checked,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  label: string;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="component-inspector-toggle">
+      <span>{label}</span>
+      <Switch
+        aria-label={label}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+      />
+    </label>
+  );
+}
+
+export function ComponentDetailPage({
+  colorScheme,
+  component,
+  contrast,
+  density,
+  onBack,
+  onInspectTokens,
+  tokenOverrides,
+}: ComponentDetailPageProps) {
+  const { t } = useI18n();
+  const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
+  const [size, setSize] = useState<PreviewSize>("md");
+  const [previewState, setPreviewState] = useState(
+    component.name === "Switch"
+      ? "off"
+      : component.name === "TabGroup"
+        ? "selected"
+        : "default",
+  );
+  const [inspectorDisabled, setInspectorDisabled] = useState(false);
+  const [inspectorLoading, setInspectorLoading] = useState(false);
+  const [previewIcon, setPreviewIcon] = useState<PreviewIcon>("none");
+  const [previewIconPosition, setPreviewIconPosition] = useState<PreviewIconPosition>("left");
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
+
+  const states = useMemo(() => {
+    switch (component.name) {
+      case "Button":
+        return ["default", "hover", "active", "disabled"] as const;
+      case "TabGroup":
+        return ["selected", "unselected", "hover", "disabled"] as const;
+      default:
+        return ["off", "on", "focus-visible", "disabled"] as const;
+    }
+  }, [component.name]);
+  const inspectorStates = component.name === "Button" ? buttonInspectorStates : states;
+
+  const codeSample = useMemo(() => {
+    if (component.name === "Button") {
+      const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
+      const iconImport = previewIcon === "chevron"
+        ? "\nimport { ChevronRight } from \"lucide-react\";"
+        : "";
+      const iconProp = previewIcon === "chevron"
+        ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
+        : "";
+      return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
+    }
+    if (component.name === "TabGroup") {
+      const defaultTab = previewState === "unselected" ? "settings" : "welcome";
+      return `import { TabGroup } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\nconst items = [\n  { icon: <MessageCircle />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <MessageCircle />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n/>`;
+    }
+    const stateProps = previewState === "on"
+      ? " defaultChecked"
+      : previewState === "disabled"
+        ? " disabled"
+        : "";
+    return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
+  }, [
+    component.name,
+    inspectorDisabled,
+    inspectorLoading,
+    previewIcon,
+    previewIconPosition,
+    previewState,
+    size,
+    t,
+    variant,
+  ]);
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(codeSample);
+      setCopyStatus("copied");
+      window.setTimeout(() => setCopyStatus("idle"), 1400);
+    } catch {
+      setCopyStatus("unavailable");
+    }
+  }
+
+  function renderPreview(
+    state = previewState,
+    previewVariant = variant,
+    applyInspectorControls = false,
+  ) {
+    if (component.name === "Button") {
+      const inspectorIcon = applyInspectorControls && previewIcon === "chevron"
+        ? <ChevronRight aria-hidden="true" size={14} />
+        : undefined;
+      const leadingIcon = applyInspectorControls
+        ? previewIconPosition === "left" ? inspectorIcon : undefined
+        : <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />;
+      const trailingIcon = applyInspectorControls
+        ? previewIconPosition === "right" ? inspectorIcon : undefined
+        : <ChevronDown aria-hidden="true" size={12} strokeWidth={1.75} />;
+      return (
+        <Button
+          className={state === "focus-visible" ? "lab-force-focus" : undefined}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          disabled={state === "disabled" || applyInspectorControls && inspectorDisabled}
+          leadingIcon={leadingIcon}
+          loading={state === "loading" || applyInspectorControls && inspectorLoading}
+          size={size}
+          trailingIcon={trailingIcon}
+          variant={previewVariant}
+        >
+          {t("components.preview.session")}
+        </Button>
+      );
+    }
+
+    if (component.name === "TabGroup") {
+      const defaultTab = state === "unselected" ? "settings" : "welcome";
+      return (
+        <TabGroup
+          aria-label={t("components.preview.tabGroupLabel")}
+          data-bf-preview-state={state === "hover" ? "hover" : undefined}
+          defaultValue={defaultTab}
+          items={[
+            {
+              icon: <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />,
+              label: t("components.preview.welcome"),
+              value: "welcome",
+            },
+            {
+              disabled: state === "disabled",
+              icon: <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />,
+              label: t("components.preview.settings"),
+              value: "settings",
+            },
+          ]}
+          key={state}
+        />
+      );
+    }
+
+    return (
+      <Switch
+        aria-label={t("components.preview.notifications")}
+        className={state === "focus-visible" ? "lab-force-focus" : undefined}
+        defaultChecked={state === "on"}
+        disabled={state === "disabled"}
+        key={state}
+      />
+    );
+  }
+
+  const copyLabel = copyStatus === "copied"
+    ? t("detail.copied")
+    : copyStatus === "unavailable"
+      ? t("detail.copyUnavailable")
+      : t("detail.copy");
+  const schemeLabel = colorScheme === "dark" ? t("settings.dark") : t("settings.light");
+  const contrastLabel = contrast === "high" ? t("settings.highContrast") : t("settings.standard");
+  const densityLabel = density === "compact"
+    ? t("settings.compact")
+    : density === "touch"
+      ? t("settings.touch")
+      : t("settings.comfortable");
+
+  return (
+    <main className="lab-page lab-page--component-detail">
+      <nav className="component-breadcrumb" aria-label={t("detail.breadcrumbLabel")}>
+        <button onClick={onBack} type="button">{t("detail.back")}</button>
+        <ChevronRight aria-hidden="true" size={13} />
+        <span aria-current="page">{component.name}</span>
+      </nav>
+
+      <div className="component-preview-layout">
+        <div className="component-preview-main">
+          <header className="component-detail-heading">
+            <div>
+              <h1>{component.name}</h1>
+              <p>{getComponentDescription(component.name, component.description, t)}</p>
+            </div>
+          </header>
+
+          <section className="component-preview-panel" id="component-workbench">
+            <header className="component-panel-heading">
+              <h2>{t("detail.preview")}</h2>
+            </header>
+
+            <ThemeRoot
+              className="component-preview-canvas"
+              colorScheme={colorScheme}
+              contrast={contrast}
+              density={density}
+              tokenOverrides={tokenOverrides}
+            >
+              {component.name === "Button" ? (
+                <div className="component-preview-matrix" data-component="button">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  {buttonVariants.map((matrixVariant) => (
+                    <Fragment key={matrixVariant}>
+                      <span className="component-preview-matrix__row-label">
+                        {t(optionLabelKeys[matrixVariant] ?? "detail.option.default")}
+                      </span>
+                      {states.map((state) => (
+                        <div
+                          className="component-preview-matrix__cell"
+                          data-active={matrixVariant === variant && state === previewState || undefined}
+                          key={`${matrixVariant}-${state}`}
+                        >
+                          {renderPreview(state, matrixVariant)}
+                        </div>
+                      ))}
+                    </Fragment>
+                  ))}
+                </div>
+              ) : component.name === "TabGroup" ? (
+                <div className="component-preview-matrix" data-component="tab-group">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">TabGroup</span>
+                  {states.map((state) => (
+                    <div
+                      className="component-preview-matrix__cell"
+                      data-active={state === previewState || undefined}
+                      key={state}
+                    >
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="component-preview-matrix" data-component="switch">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">Switch</span>
+                  {states.map((state) => (
+                    <div
+                      className="component-preview-matrix__cell"
+                      data-active={state === previewState || undefined}
+                      key={state}
+                    >
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ThemeRoot>
+          </section>
+
+          <section className="component-code-panel component-code-panel--standalone">
+            <header className="component-panel-heading component-code-heading">
+              <h2>{t("detail.code")}</h2>
+              <div>
+                <span>React · TypeScript</span>
+                <button onClick={copyCode} type="button">
+                  <Clipboard aria-hidden="true" size={14} />
+                  {copyLabel}
+                </button>
+              </div>
+            </header>
+            <pre><code>{codeSample}</code></pre>
+          </section>
+        </div>
+
+        <aside className="component-inspector">
+          <div className="component-inspector-tabs" role="tablist" aria-label={t("detail.inspector.label")}>
+            {(["properties", "styles", "tokens"] as const).map((tab) => (
+              <button
+                aria-selected={inspectorTab === tab}
+                key={tab}
+                onClick={() => setInspectorTab(tab)}
+                role="tab"
+                type="button"
+              >
+                {t(`detail.inspector.${tab}` as MessageKey)}
+              </button>
+            ))}
+          </div>
+
+          {inspectorTab === "properties" && (
+            <div className="component-inspector-content" role="tabpanel">
+              <section>
+                <h2>{t("detail.inspector.basicProperties")}</h2>
+                <div className="component-inspector-controls">
+                  {component.name === "Button" && (
+                    <InspectorSelect
+                      label={t("detail.variant")}
+                      onChange={(value) => setVariant(value as (typeof buttonVariants)[number])}
+                      options={buttonVariants}
+                      value={variant}
+                    />
+                  )}
+                  {component.name === "Button" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setSize(value as PreviewSize)}
+                      options={["sm", "md", "lg"]}
+                      value={size}
+                    />
+                  )}
+                  <InspectorSelect
+                    label={t("detail.state")}
+                    onChange={setPreviewState}
+                    options={inspectorStates}
+                    value={previewState}
+                  />
+                  {component.name === "Button" && (
+                    <InspectorToggle
+                      checked={inspectorDisabled}
+                      label={t("detail.disabled")}
+                      onCheckedChange={setInspectorDisabled}
+                    />
+                  )}
+                  {component.name === "Button" && (
+                    <InspectorToggle
+                      checked={inspectorLoading}
+                      label={t("detail.loading")}
+                      onCheckedChange={setInspectorLoading}
+                    />
+                  )}
+                  {component.name === "Button" && (
+                    <InspectorSelect
+                      label={t("detail.icon")}
+                      onChange={(value) => setPreviewIcon(value as PreviewIcon)}
+                      options={["none", "chevron"]}
+                      value={previewIcon}
+                    />
+                  )}
+                  {component.name === "Button" && (
+                    <InspectorSelect
+                      label={t("detail.iconPosition")}
+                      onChange={(value) => setPreviewIconPosition(value as PreviewIconPosition)}
+                      options={["left", "right"]}
+                      value={previewIconPosition}
+                    />
+                  )}
+                </div>
+              </section>
+
+              <section>
+                <h2>{t("detail.inspector.selectedPreview")}</h2>
+                <ThemeRoot
+                  className="component-inspector-preview"
+                  colorScheme={colorScheme}
+                  contrast={contrast}
+                  density={density}
+                  tokenOverrides={tokenOverrides}
+                >
+                  {renderPreview(previewState, variant, true)}
+                </ThemeRoot>
+              </section>
+
+              <section>
+                <h2>{t("detail.inspector.publicApi")}</h2>
+                <div className="component-inspector-props">
+                  {component.props.map((prop) => (
+                    <div key={prop.name}>
+                      <code>{prop.name}</code>
+                      <span>{prop.type}</span>
+                      <small>{prop.defaultValue ?? "—"}</small>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {inspectorTab === "styles" && (
+            <div className="component-inspector-content" role="tabpanel">
+              <section>
+                <h2>{t("detail.inspector.themeContext")}</h2>
+                <dl className="component-inspector-facts">
+                  <div><dt>{t("settings.scheme")}</dt><dd>{schemeLabel}</dd></div>
+                  <div><dt>{t("settings.contrast")}</dt><dd>{contrastLabel}</dd></div>
+                  <div><dt>{t("settings.density")}</dt><dd>{densityLabel}</dd></div>
+                  <div><dt>{t("detail.inspector.category")}</dt><dd>{getComponentCategoryLabel(component.category, t)}</dd></div>
+                </dl>
+              </section>
+              <section>
+                <h2>{t("detail.inspector.supportedStates")}</h2>
+                <div className="component-inspector-chip-list">
+                  {component.states.map((state) => <span key={state}>{state}</span>)}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {inspectorTab === "tokens" && (
+            <div className="component-inspector-content" role="tabpanel">
+              <section>
+                <h2>{t("detail.ownedTokens")}</h2>
+                <div className="component-inspector-token-list">
+                  {component.tokens.map((token) => <code key={token}>{token}</code>)}
+                </div>
+                <button className="component-inspector-action" onClick={() => onInspectTokens(component.name)} type="button">
+                  {t("detail.openWorkbench")}
+                </button>
+              </section>
+            </div>
+          )}
+        </aside>
+      </div>
+    </main>
+  );
+}

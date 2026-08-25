@@ -2,6 +2,7 @@
 /** Git commit graph view (branch graph). */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { GitBranch, ChevronUp, ChevronDown } from 'lucide-react';
 import { Search } from '@/component-library';
@@ -261,7 +262,9 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
       <div className={`git-graph-view git-graph-view--error ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot" data-bf-state="error">
         <div className="git-graph-view__error" data-bf-component="git-tool" data-bf-part="graphStatus">
           <p>{t('graph.loadFailedWithMessage', { error })}</p>
-          <button onClick={loadGraphData}>{t('common.retry')}</button>
+          <Button variant="fill" size="sm" onClick={loadGraphData}>
+            {t('common.retry')}
+          </Button>
         </div>
       </div>
     );

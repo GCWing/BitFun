@@ -1,9 +1,10 @@
  
 
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Image as ImageIcon, Eye } from 'lucide-react';
-import { Modal, Button } from '@/component-library';
+import { Modal } from '@/component-library';
 import type { ImageContext, ValidationResult, RenderOptions } from '../../../types/context';
 import type { 
   ContextTransformer, 
@@ -193,11 +194,12 @@ export class ImageCardRenderer implements ContextCardRenderer<'image'> {
             {interactive && (
               <div className="image-context-card__actions">
                 <Button 
-                  variant="ghost"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowFullImage(true)}
+                  leadingIcon={<Eye size={14} />}
                 >
-                  <Eye size={14} />
+
                   <span>{i18nService.t('components:contextSystem.contextCard.viewLargeImage')}</span>
                 </Button>
               </div>

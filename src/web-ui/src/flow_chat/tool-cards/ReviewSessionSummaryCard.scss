@@ -60,16 +60,4 @@
 
 .review-session-summary-card__open {
   align-self: flex-start;
-  padding: 5px 10px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 8px;
-  background: var(--bf-appearance-token-element-bg-soft);
-  color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
-  cursor: pointer;
-
-  &:hover {
-    border-color: var(--bf-appearance-token-border-medium);
-    background: var(--bf-appearance-token-element-bg-base);
-  }
 }

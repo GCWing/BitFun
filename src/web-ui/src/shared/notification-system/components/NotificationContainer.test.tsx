@@ -111,7 +111,7 @@ describe('NotificationContainer', () => {
     }]);
 
     act(() => root.render(<NotificationContainer />));
-    const action = container.querySelector('.notification-item__action') as HTMLButtonElement;
+    const action = container.querySelector('.notification-item__actions [data-bf-component="button"]') as HTMLButtonElement;
     action.focus();
     expect(document.activeElement).toBe(action);
 

@@ -14,43 +14,9 @@
 
   &__wrapper {
     display: inline-flex;
-    gap: 0;
-    align-items: stretch;
+    gap: $size-gap-1;
+    align-items: center;
     width: 100%;
-  }
-
-  &__main {
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    border-right: 1px solid var(--bf-appearance-token-color-overlay-white-12) !important;
-    padding-right: 8px !important;
-    
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    
-    &.icon-btn {
-      padding-right: 0 !important;
-      width: 20px !important;
-      padding-left: 0 !important;
-    }
-  }
-
-  &__dropdown-trigger {
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    padding: 0 6px !important;
-    min-width: 26px !important;
-    
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    
-    &.icon-btn {
-      padding: 0 4px !important;
-      width: 20px !important;
-      min-width: 20px !important;
-    }
   }
 
   &__arrow {

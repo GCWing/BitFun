@@ -76,39 +76,8 @@
   margin-top: 6px;
   padding-top: 10px;
   border-top: 1px solid var(--bf-appearance-token-border-subtle);
-}
 
-.bitfun-remote-disclaimer__btn {
-  border-radius: 6px;
-  border: 1px solid transparent;
-  min-width: 112px;
-  padding: 7px 16px;
-  font-size: 12px;
-  cursor: pointer;
-  transition:
-    transform $motion-fast $easing-standard,
-    background-color $motion-fast $easing-standard,
-    border-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
-}
-
-.bitfun-remote-disclaimer__btn--secondary {
-  background: var(--bf-appearance-token-element-bg-subtle);
-  color: var(--bf-appearance-token-color-text-secondary);
-  border-color: var(--bf-appearance-token-border-subtle);
-
-  &:hover:not(:disabled) {
-    color: var(--bf-appearance-token-color-text-primary);
-    border-color: var(--bf-appearance-token-border-medium);
-  }
-}
-
-.bitfun-remote-disclaimer__btn--primary {
-  background: var(--bf-appearance-token-color-accent-600);
-  color: var(--bf-appearance-token-color-static-white);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-700) 35%, transparent);
-
-  &:hover:not(:disabled) {
-    background: var(--bf-appearance-token-color-accent-700);
+  [data-bf-component='button'] {
+    min-width: 112px;
   }
 }

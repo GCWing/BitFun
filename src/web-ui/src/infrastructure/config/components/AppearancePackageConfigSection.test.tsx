@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppearancePackageValidationError } from '@/infrastructure/appearance';
 import {
   AppearancePackageConfigSection,
@@ -11,6 +11,9 @@ import {
 } from './AppearancePackageConfigSection';
 
 const getPreviewAssetMock = vi.hoisted(() => vi.fn());
+const appearanceStateMock = vi.hoisted(() => ({
+  selectedAppearanceId: 'sample.appearance',
+}));
 
 vi.mock('react-i18next', async importOriginal => ({
   ...await importOriginal<typeof import('react-i18next')>(),
@@ -30,7 +33,7 @@ vi.mock('@/infrastructure/appearance', async importOriginal => ({
       source: 'imported',
       importedAt: '2026-07-28T00:00:00.000Z',
     }],
-    selectedAppearanceId: 'sample.appearance',
+    selectedAppearanceId: appearanceStateMock.selectedAppearanceId,
     getPreviewAsset: getPreviewAssetMock,
     importPackage: vi.fn(),
     exportPackage: vi.fn(),
@@ -40,22 +43,38 @@ vi.mock('@/infrastructure/appearance', async importOriginal => ({
 }));
 
 describe('AppearancePackageConfigSection', () => {
-  it('renders a compact package selector with thumbnail and management actions', () => {
+  afterEach(() => {
+    appearanceStateMock.selectedAppearanceId = 'sample.appearance';
+    getPreviewAssetMock.mockReset();
+  });
+
+  it('renders the selected package card and component-library management actions', () => {
     const html = renderToStaticMarkup(<AppearancePackageConfigSection />);
     expect(html).toContain('Sample Appearance');
-    expect(html).toContain('data-testid="appearance-package-select"');
-    expect(html).toContain('data-testid="appearance-package-preview-thumbnail"');
-    expect(html).toContain('aria-label="package.market.open"');
-    expect(html).toContain('aria-label="package.import"');
+    expect(html).toContain('data-testid="appearance-package-card"');
+    expect(html).toContain('package.market.open');
+    expect(html).toContain('package.import');
     expect(html).toContain('aria-label="package.export"');
     expect(html).toContain('aria-label="package.delete"');
     expect(html).toContain('accept=".bitfun-appearance,.zip,application/zip"');
     expect(html).toContain('data-bf-part="packageSection"');
-    expect(html).toContain('data-bf-part="packageSelect"');
-    expect(html).not.toContain('data-bf-part="packageGrid"');
-    expect(html).not.toContain('data-bf-part="packageCard"');
-    expect(html).not.toContain('bitfun-config-page-section');
+    expect(html).toContain('data-bf-part="packageActions"');
+    expect(html).toContain('data-bf-component="button"');
+    expect(html.match(/data-bf-variant="fill"/g)).toHaveLength(2);
+    expect(html.match(/data-size="md"/g)).toHaveLength(2);
+    expect(html).toContain('bitfun-config-page-section');
+    expect(html).not.toContain('appearance-package-config__action-button');
     expect(html).not.toContain('.bitfun-skin');
+  });
+
+  it('uses the supplied BitFun default artwork for the built-in package card', () => {
+    appearanceStateMock.selectedAppearanceId = 'system';
+
+    const html = renderToStaticMarkup(<AppearancePackageConfigSection />);
+
+    expect(html).toContain('src="/assets/appearance/bitfun-default-preview.png"');
+    expect(html).toContain('package.nativeName');
+    expect(html).toContain('package.nativeDescription');
   });
 
   it('renders stored preview assets and releases their object URLs', async () => {
@@ -77,10 +96,10 @@ describe('AppearancePackageConfigSection', () => {
       await Promise.resolve();
     });
 
-    const preview = container.querySelector<HTMLImageElement>('.appearance-package-config__preview img');
+    const preview = container.querySelector<HTMLImageElement>('.appearance-package-config__card-preview img');
     expect(preview?.src).toBe('blob:appearance-preview');
     expect(preview?.alt).toBe('');
-    expect(preview?.closest('[role="img"]')?.getAttribute('aria-label')).toBe('Sample Appearance');
+    expect(preview?.closest('article')?.getAttribute('aria-label')).toBe('Sample Appearance');
     expect(createObjectURL).toHaveBeenCalledOnce();
 
     await act(async () => {

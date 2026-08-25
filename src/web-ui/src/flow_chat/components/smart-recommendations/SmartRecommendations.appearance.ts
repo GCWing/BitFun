@@ -4,7 +4,7 @@ export const smartRecommendationsAppearanceDescriptor: AppearanceSurfaceDescript
   id: 'smart-recommendations',
   parts: [
     { id: 'root' }, { id: 'header' }, { id: 'title' }, { id: 'close' },
-    { id: 'actions' }, { id: 'action' }, { id: 'label' }, { id: 'loading' },
+    { id: 'actions' },
   ],
   states: [{ id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } }],
 };

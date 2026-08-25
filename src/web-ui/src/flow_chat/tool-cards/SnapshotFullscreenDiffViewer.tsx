@@ -3,11 +3,12 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Button } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { IconButton, Tooltip } from '@/component-library';
 import { DiffEditor } from '../../tools/editor';
 import type { SnapshotFile } from '../../tools/snapshot_system/core/SnapshotStateManager';
 import { createLogger } from '@/shared/utils/logger';
@@ -165,51 +166,57 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
 
           <div data-bf-component="snapshot-fullscreen-diff-viewer" data-bf-part="headerActions" className="header-actions">
             <Tooltip content={t('toolCards.snapshot.acceptAllTooltip')}>
-              <button
-                className="header-btn batch-accept-btn"
+              <Button
+                type="button"
+                variant="fill"
+                size="sm"
+                leadingIcon={<CheckCircle size={16} />}
                 onClick={() => handleBatchAction('accept')}
                 disabled={loading}
               >
-                <CheckCircle size={16} />
-                <span>{t('toolCards.snapshot.acceptAll')}</span>
-              </button>
+                {t('toolCards.snapshot.acceptAll')}
+              </Button>
             </Tooltip>
             
             <Tooltip content={t('toolCards.snapshot.rejectAllTooltip')}>
-              <button
-                className="header-btn batch-reject-btn"
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leadingIcon={<XCircle size={16} />}
                 onClick={() => handleBatchAction('reject')}
                 disabled={loading}
               >
-                <XCircle size={16} />
-                <span>{t('toolCards.snapshot.rejectAll')}</span>
-              </button>
+                {t('toolCards.snapshot.rejectAll')}
+              </Button>
             </Tooltip>
 
             <div className="header-divider" />
 
-            <Tooltip content={t('toolCards.snapshot.close')}>
-              <button
-                className="header-btn close-btn"
-                onClick={onClose}
-              >
-                <X size={16} />
-              </button>
-            </Tooltip>
+            <IconButton
+              type="button"
+              size="small"
+              onClick={onClose}
+              tooltip={t('toolCards.snapshot.close')}
+              aria-label={t('toolCards.snapshot.close')}
+            >
+              <X size={16} />
+            </IconButton>
           </div>
         </div>
 
         {files.length > 1 && (
           <div data-bf-component="snapshot-fullscreen-diff-viewer" data-bf-part="navigation" className="file-navigation">
-            <Tooltip content={t('toolCards.snapshot.prevFile')}>
-              <button
-                className="nav-btn prev-btn"
-                onClick={() => setSelectedFileIndex(prev => prev > 0 ? prev - 1 : files.length - 1)}
-                disabled={loading}
-              >
-                <ChevronLeft size={16} />
-              </button>
-            </Tooltip>
+            <IconButton
+              type="button"
+              size="small"
+              onClick={() => setSelectedFileIndex(prev => prev > 0 ? prev - 1 : files.length - 1)}
+              disabled={loading}
+              tooltip={t('toolCards.snapshot.prevFile')}
+              aria-label={t('toolCards.snapshot.prevFile')}
+            >
+              <ChevronLeft size={16} />
+            </IconButton>
 
             <div data-bf-component="snapshot-fullscreen-diff-viewer" data-bf-part="tabs" className="file-tabs">
               {files.map((file, index) => {
@@ -232,15 +239,16 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
               })}
             </div>
 
-            <Tooltip content={t('toolCards.snapshot.nextFile')}>
-              <button
-                className="nav-btn next-btn"
-                onClick={() => setSelectedFileIndex(prev => prev < files.length - 1 ? prev + 1 : 0)}
-                disabled={loading}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </Tooltip>
+            <IconButton
+              type="button"
+              size="small"
+              onClick={() => setSelectedFileIndex(prev => prev < files.length - 1 ? prev + 1 : 0)}
+              disabled={loading}
+              tooltip={t('toolCards.snapshot.nextFile')}
+              aria-label={t('toolCards.snapshot.nextFile')}
+            >
+              <ChevronRight size={16} />
+            </IconButton>
           </div>
         )}
 
@@ -260,25 +268,29 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
 
           <div data-bf-component="snapshot-fullscreen-diff-viewer" data-bf-part="fileActions" className="current-file-actions">
             <Tooltip content={t('toolCards.snapshot.acceptFileTooltip')}>
-              <button
-                className="file-action-btn accept-btn"
+              <Button
+                type="button"
+                variant="fill"
+                size="sm"
+                leadingIcon={<CheckCircle size={16} />}
                 onClick={() => handleFileAction('accept')}
                 disabled={loading}
               >
-                <CheckCircle size={16} />
-                <span>{t('toolCards.snapshot.acceptFile')}</span>
-              </button>
+                {t('toolCards.snapshot.acceptFile')}
+              </Button>
             </Tooltip>
             
             <Tooltip content={t('toolCards.snapshot.rejectFileTooltip')}>
-              <button
-                className="file-action-btn reject-btn"
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leadingIcon={<XCircle size={16} />}
                 onClick={() => handleFileAction('reject')}
                 disabled={loading}
               >
-                <XCircle size={16} />
-                <span>{t('toolCards.snapshot.rejectFile')}</span>
-              </button>
+                {t('toolCards.snapshot.rejectFile')}
+              </Button>
             </Tooltip>
           </div>
         </div>

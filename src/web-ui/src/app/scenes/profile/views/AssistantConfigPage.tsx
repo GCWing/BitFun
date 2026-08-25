@@ -11,7 +11,6 @@ import {
   X,
 } from 'lucide-react';
 import {
-  Button,
   IconButton,
   Input,
 } from '@/component-library';
@@ -355,21 +354,20 @@ const AssistantConfigPage: React.FC = () => {
               const selected = personaDoc?.fileName === fileName && rightView === 'personaDoc';
               const labelKey = fileName.replace(/\.md$/i, '') as 'SOUL' | 'USER' | 'IDENTITY';
               return (
-                <Button
+                <button
                   key={fileName}
                   type="button"
-                  variant="ghost"
-                  size="small"
                   className={`acp-persona-doc-row${selected ? ' acp-persona-doc-row--selected' : ''}`}
                   data-bf-component="assistant-config-page"
                   data-bf-part="persona"
                   data-bf-state={selected ? 'selected' : undefined}
+                  aria-pressed={selected}
                   onClick={() => openPersonaDoc(fileName)}
                 >
                   <span className="acp-persona-doc-row__icon"><FileText size={12} /></span>
                   <span className="acp-persona-doc-row__label">{t(`nursery.assistant.personaDocs.${labelKey}`)}</span>
                   <span className="acp-persona-doc-row__file">{fileName}</span>
-                </Button>
+                </button>
               );
             })}
           </div>

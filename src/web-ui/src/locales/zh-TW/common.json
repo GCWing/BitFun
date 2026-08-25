@@ -1416,6 +1416,12 @@
     "shell": "Shell",
     "panelView": "面板視圖"
   },
+  "sceneBar": {
+    "tabsLabel": "場景標籤頁",
+    "scrollPrevious": "向左捲動標籤頁",
+    "scrollNext": "向右捲動標籤頁",
+    "closeTab": "關閉{{label}}"
+  },
   "loading": {
     "app": "正在啟動 BitFun...",
     "scenes": "正在載入場景",
@@ -1425,6 +1431,12 @@
     "tabLabel": "歡迎使用",
     "welcomeBack": "歡迎回到",
     "welcomeTabTitle": "歡迎使用",
+    "greeting": {
+      "morning": "早安，程式搭檔",
+      "afternoon": "午安，程式搭檔",
+      "evening": "晚上好，程式搭檔",
+      "subtitle": "一起創造點新東西吧。"
+    },
     "quickStart": "開始",
     "heroBadge": "BitFun Workspace",
     "heroTitle": "真實工作臺，而不只是一個聊天框",

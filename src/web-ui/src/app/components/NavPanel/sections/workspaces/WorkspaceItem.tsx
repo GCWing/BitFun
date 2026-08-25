@@ -1,9 +1,9 @@
+import { Button } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
-  Button,
   ConfirmDialog,
   InputDialog,
   Modal,
@@ -1313,8 +1313,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       {canRebuildSearchIndex ? (
                         <div className="bitfun-nav-panel__workspace-index-tooltip-actions">
                           <Button
-                            size="small"
-                            variant="secondary"
+                            size="sm"
+                            variant="outline"
                             onClick={() => {
                               void handleSearchIndexAction();
                             }}

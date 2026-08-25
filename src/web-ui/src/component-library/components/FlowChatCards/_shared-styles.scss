@@ -16,7 +16,6 @@
     transform tokens.$motion-base tokens.$easing-standard;
   position: relative;
 }
-
 @mixin status-indicator($r, $g, $b, $opacity: 0.8) {
   border-color: rgba($r, $g, $b, 0.5);
 }
@@ -69,64 +68,5 @@
     svg {
       color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 95%, transparent);
     }
-  }
-}
-
-
-@mixin liquid-button($variant: 'default') {
-  padding: tokens.$size-gap-2 tokens.$size-gap-4;
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: tokens.$size-radius-base;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: tokens.$font-weight-medium;
-  cursor: pointer;
-  transition:
-    background-color tokens.$motion-base tokens.$easing-standard,
-    border-color tokens.$motion-base tokens.$easing-standard,
-    color tokens.$motion-base tokens.$easing-standard,
-    opacity tokens.$motion-base tokens.$easing-standard;
-
-  @if $variant == 'success' {
-    background: var(--bf-appearance-token-color-success-bg);
-    color: var(--bf-appearance-token-color-success);
-    border-color: var(--bf-appearance-token-color-success-border);
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 40%, transparent);
-    }
-  } @else if $variant == 'error' {
-    background: var(--bf-appearance-token-color-error-bg);
-    color: var(--bf-appearance-token-color-error);
-    border-color: var(--bf-appearance-token-color-error-border);
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 18%, transparent);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 40%, transparent);
-    }
-  } @else if $variant == 'primary' {
-    background: var(--bf-appearance-token-color-accent-100);
-    color: var(--bf-appearance-token-color-accent-500);
-    border-color: var(--bf-appearance-token-color-info-border);
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent);
-      border-color: var(--bf-appearance-token-color-accent-400);
-    }
-  } @else {
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-secondary);
-    border-color: var(--bf-appearance-token-border-base);
-
-    &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-soft);
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-  }
-
-  &:disabled {
-    opacity: tokens.$opacity-disabled;
-    cursor: default;
   }
 }

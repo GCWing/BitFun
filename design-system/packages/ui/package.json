@@ -1,0 +1,55 @@
+{
+  "name": "@bitfun/ui",
+  "version": "0.1.0",
+  "description": "Theme-independent React components for BitFun product surfaces",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./registry": {
+      "types": "./dist/types/registry.d.ts",
+      "import": "./dist/registry.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run build && node --test tests/*.test.mjs",
+    "prepack": "pnpm run build"
+  },
+  "dependencies": {
+    "@bitfun/design-tokens": "workspace:^"
+  },
+  "peerDependencies": {
+    "react": ">=18.3.0 <20",
+    "react-dom": ">=18.3.0 <20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -14,7 +15,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { Switch } from '@/component-library';
+import { IconButton } from '@/component-library';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
@@ -563,10 +564,9 @@ const AssistantDefaultsPage: React.FC = () => {
         <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__access" title={row.accessHint}>{row.accessLabel}</div>
         <div role="cell" className="assistant-defaults-row__actions">
           <Switch
-            size="small"
             checked={row.enabled}
-            loading={Boolean(loadingRow)}
-            disabled={row.switchDisabled}
+            disabled={row.switchDisabled || Boolean(loadingRow)}
+            aria-busy={Boolean(loadingRow)}
             onChange={() => toggleCapability(row)}
             aria-label={t('nursery.template.toggleCapability', { name: row.name })}
           />
@@ -628,15 +628,16 @@ const AssistantDefaultsPage: React.FC = () => {
       <Search size={22} />
       <p>{message}</p>
       {(searchQuery || statusFilter !== 'all') ? (
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => {
             setSearchQuery('');
             setStatusFilter('all');
           }}
         >
           {t('nursery.template.clearFilters')}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -696,10 +697,10 @@ const AssistantDefaultsPage: React.FC = () => {
                 </button>
                 {allNames.length > 0 ? (
                   <Switch
-                    size="small"
                     checked={allEnabled}
-                    disabled={assistantModeConfig === null}
-                    loading={allNames.some((name) => toolsLoading[name])}
+                    disabled={assistantModeConfig === null
+                      || allNames.some((name) => toolsLoading[name])}
+                    aria-busy={allNames.some((name) => toolsLoading[name])}
                     onChange={() => void handleGroupToggleAll(allNames)}
                     aria-label={t('nursery.template.toggleServerTools', { name: serverName })}
                   />
@@ -798,10 +799,10 @@ const AssistantDefaultsPage: React.FC = () => {
                     <span>{t('nursery.template.enableAllServerToolsHint')}</span>
                   </div>
                   <Switch
-                    size="small"
                     checked={allEnabled}
-                    disabled={assistantModeConfig === null}
-                    loading={allNames.some((name) => toolsLoading[name])}
+                    disabled={assistantModeConfig === null
+                      || allNames.some((name) => toolsLoading[name])}
+                    aria-busy={allNames.some((name) => toolsLoading[name])}
                     onChange={() => void handleGroupToggleAll(allNames)}
                     aria-label={t('nursery.template.toggleServerTools', { name: title })}
                   />
@@ -880,10 +881,14 @@ const AssistantDefaultsPage: React.FC = () => {
                 <span>{t('nursery.template.useByDefaultHint')}</span>
               </div>
               <Switch
-                size="small"
                 checked={row.enabled}
-                disabled={row.switchDisabled}
-                loading={detail.type === 'skill' ? skillsLoading[detail.skill.key] : toolsLoading[detail.tool.name]}
+                disabled={row.switchDisabled
+                  || (detail.type === 'skill'
+                    ? skillsLoading[detail.skill.key]
+                    : toolsLoading[detail.tool.name])}
+                aria-busy={detail.type === 'skill'
+                  ? skillsLoading[detail.skill.key]
+                  : toolsLoading[detail.tool.name]}
                 onChange={() => toggleCapability(row)}
                 aria-label={t('nursery.template.toggleCapability', { name: row.name })}
               />
@@ -910,9 +915,15 @@ const AssistantDefaultsPage: React.FC = () => {
       <div className="assistant-defaults" data-bf-component="assistant-defaults-page" data-bf-part="content">
         <header className="assistant-defaults__header" data-bf-component="assistant-defaults-page" data-bf-part="header">
           <div className="assistant-defaults__title-row" data-bf-component="assistant-defaults-page" data-bf-part="toolbar">
-            <button type="button" className="assistant-defaults__back" onClick={openGallery} aria-label={t('nursery.backToGallery')}>
+            <IconButton
+              variant="ghost"
+              size="small"
+              onClick={openGallery}
+              aria-label={t('nursery.backToGallery')}
+              tooltip={t('nursery.backToGallery')}
+            >
               <ArrowLeft size={18} />
-            </button>
+            </IconButton>
             <h2>{t('nursery.template.title')}</h2>
             <span className="assistant-defaults__scope">{t('nursery.template.scopeLabel')}</span>
             <div className="assistant-defaults__header-actions">
@@ -924,15 +935,17 @@ const AssistantDefaultsPage: React.FC = () => {
                     : <CheckCircle2 size={15} />}
                 {saveLabel}
               </span>
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="sm"
+                leadingIcon={<RotateCcw />}
+                loading={resetting}
                 className="assistant-defaults__reset"
                 onClick={() => void handleResetDefaults()}
                 disabled={resetting || assistantModeConfig === null}
               >
-                <RotateCcw size={15} className={resetting ? 'nursery-spinning' : undefined} />
                 {t('nursery.template.restoreProductDefaults')}
-              </button>
+              </Button>
             </div>
           </div>
           <p>{t('nursery.template.pageDescription')}</p>
@@ -950,7 +963,14 @@ const AssistantDefaultsPage: React.FC = () => {
                 <div className="assistant-defaults__warning" role="status">
                   <CircleAlert size={17} />
                   <span>{t('nursery.template.configurationUnavailable')}</span>
-                  <button type="button" onClick={() => void loadDefaults()}>{t('nursery.template.retry')}</button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leadingIcon={<RefreshCw size={14} />}
+                    onClick={() => void loadDefaults()}
+                  >
+                    {t('nursery.template.retry')}
+                  </Button>
                 </div>
               ) : null}
 

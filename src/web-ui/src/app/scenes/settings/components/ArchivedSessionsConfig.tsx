@@ -7,6 +7,7 @@
  * confirmation dialog.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2, RotateCcw, Inbox, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -16,11 +17,11 @@ import {
   ConfigPageContent,
   ConfigPageSection,
 } from '@/infrastructure/config/components/common';
-import { Button } from '@/component-library';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning, confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
 import { notificationService } from '@/shared/notification-system';
+import { IconButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type { SessionMetadata } from '@/shared/types/session-history';
@@ -81,23 +82,22 @@ const ArchivedRow: React.FC<ArchivedRowProps> = ({ entry, onRestore, onDelete, t
       </div>
       <div data-bf-component="archived-sessions-config" data-bf-part="rowActions" className="archived-sessions-config__row-actions">
         <Button
-          size="small"
-          variant="ghost"
+          size="sm"
+          variant="outline"
+          leadingIcon={<RotateCcw size={13} />}
           onClick={() => onRestore(entry)}
           aria-label={t('nav.sessions.restore')}
         >
-          <RotateCcw size={13} />
-          <span>{t('nav.sessions.restore')}</span>
+          {t('nav.sessions.restore')}
         </Button>
         <Button
-          size="small"
-          variant="ghost"
+          size="sm"
+          variant="outline"
+          leadingIcon={<Trash2 size={13} />}
           onClick={() => onDelete(entry)}
           aria-label={t('nav.sessions.deleteArchived')}
-          className="archived-sessions-config__delete-btn"
         >
-          <Trash2 size={13} />
-          <span>{t('nav.sessions.deleteArchived')}</span>
+          {t('nav.sessions.deleteArchived')}
         </Button>
       </div>
     </div>
@@ -303,23 +303,22 @@ const ArchivedSessionsConfig: React.FC = () => {
 
   const headerExtra = (
     <div data-bf-component="archived-sessions-config" data-bf-part="headerActions" className="archived-sessions-config__header-actions">
-      <Button
+      <IconButton
+        type="button"
         size="small"
-        variant="ghost"
         onClick={() => { void loadArchived(); }}
-        aria-label="Refresh"
+        aria-label={t('actions.refresh')}
       >
         <RefreshCw size={13} />
-      </Button>
+      </IconButton>
       {hasEntries && (
         <Button
-          size="small"
-          variant="ghost"
+          size="sm"
+          variant="outline"
+          leadingIcon={<Trash2 size={13} />}
           onClick={() => { void handleDeleteAll(); }}
-          className="archived-sessions-config__delete-all-btn"
         >
-          <Trash2 size={13} />
-          <span>{t('nav.sessions.deleteAllArchived')}</span>
+          {t('nav.sessions.deleteAllArchived')}
         </Button>
       )}
     </div>
