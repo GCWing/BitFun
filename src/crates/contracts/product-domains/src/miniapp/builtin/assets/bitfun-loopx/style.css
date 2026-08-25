@@ -168,6 +168,17 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   font-size: 11px;
 }
 .model-field__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-field__select {
+  min-width: 0;
+  max-width: 150px;
+  border: 0;
+  background: transparent;
+  color: var(--lx-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+}
 
 .icon-button {
   display: inline-grid;

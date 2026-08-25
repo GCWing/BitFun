@@ -45,6 +45,7 @@ const COPY = {
     intakePlaceholder: '粘贴 GitHub Issue、PR、仓库或 Issues 列表链接',
     model: '模型',
     modelAuto: '自动模型',
+    modelPrimaryTag: '主模型',
     resolve: '分析链接',
     resolving: '正在实时复核链接',
     refresh: '刷新状态',
@@ -214,6 +215,7 @@ const COPY = {
     intakePlaceholder: 'Paste a GitHub issue, PR, repository, or issues-list URL',
     model: 'Model',
     modelAuto: 'Automatic model',
+    modelPrimaryTag: 'Primary',
     resolve: 'Analyze URL',
     resolving: 'Verifying URL against the live source',
     refresh: 'Refresh status',
@@ -1227,6 +1229,33 @@ function updateCreateButton() {
     : text('createTasks');
 }
 
+async function loadModelCatalog() {
+  const select = view.modelSelect;
+  if (!select || select.tagName !== 'SELECT') return;
+  if (!app || !app.ai || typeof app.ai.getModels !== 'function') return;
+  try {
+    const models = await app.ai.getModels();
+    const current = select.value || 'auto';
+    select.replaceChildren();
+    const auto = document.createElement('option');
+    auto.value = 'auto';
+    auto.textContent = text('modelAuto');
+    auto.selected = current === 'auto';
+    select.appendChild(auto);
+    for (const model of Array.isArray(models) ? models : []) {
+      if (!model || !model.id) continue;
+      const option = document.createElement('option');
+      option.value = model.id;
+      const tag = model.isDefault === true ? ` · ${text('modelPrimaryTag')}` : '';
+      option.textContent = `${model.name || model.modelName || model.id}${tag}`;
+      option.selected = current === model.id;
+      select.appendChild(option);
+    }
+  } catch (error) {
+    // The seeded "auto" option remains a safe fallback when the catalog is unavailable.
+  }
+}
+
 async function resolveIntake() {
   const input = view.intakeInput.value.trim();
   if (!input) {
@@ -1546,6 +1575,7 @@ function updateLivenessClock() {
 async function start() {
   bindEvents();
   applyLocale();
+  void loadModelCatalog();
   if (!app || !app.loopx) {
     showBridgeUnavailable();
     return;

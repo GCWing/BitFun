@@ -55,9 +55,25 @@ impl GithubLoopxIntakeMetadataProvider {
             .for_operation(operation_id));
         }
         if !status.is_success() {
+            let message = if status == StatusCode::FORBIDDEN {
+                if response
+                    .headers()
+                    .get("x-ratelimit-remaining")
+                    .and_then(|value| value.to_str().ok())
+                    == Some("0")
+                {
+                    "GitHub API rate limit exceeded; authenticate with GitHub to raise the limit"
+                        .to_string()
+                } else {
+                    "GitHub intake request was forbidden (403); the repository may be private or access is blocked"
+                        .to_string()
+                }
+            } else {
+                format!("GitHub intake request returned HTTP {status}")
+            };
             return Err(loopx_contract::LoopxCliError::new(
                 loopx_contract::LoopxCliErrorKind::Backend,
-                format!("GitHub intake request returned HTTP {status}"),
+                message,
             )
             .for_operation(operation_id)
             .retryable(status == StatusCode::FORBIDDEN || status.is_server_error()));
@@ -147,6 +163,72 @@ impl LoopxIntakeMetadataProvider for GithubLoopxIntakeMetadataProvider {
             resolved_at: now_ms(),
         })
     }
+
+    async fn probe_auth(
+        &self,
+        deadline: Duration,
+    ) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxGithubAuthProbe> {
+        const OPERATION_ID: &str = "github-auth-probe";
+        let response = self
+            .client
+            .get(format!("{GITHUB_API_ROOT}/rate_limit"))
+            .timeout(deadline)
+            .send()
+            .await
+            .map_err(|error| {
+                loopx_contract::LoopxCliError::new(
+                    if error.is_timeout() {
+                        loopx_contract::LoopxCliErrorKind::Timeout
+                    } else {
+                        loopx_contract::LoopxCliErrorKind::Backend
+                    },
+                    format!("GitHub auth probe failed: {error}"),
+                )
+                .for_operation(OPERATION_ID)
+                .retryable(true)
+            })?;
+        let status = response.status();
+        if !status.is_success() {
+            let detail = match status {
+                StatusCode::FORBIDDEN => {
+                    "GitHub API returned 403; the request may be rate-limited or blocked"
+                }
+                StatusCode::UNAUTHORIZED => "GitHub API requires authentication for this request",
+                _ => "GitHub API is unreachable for LoopX intake",
+            };
+            return Ok(loopx_contract::LoopxGithubAuthProbe {
+                authenticated: false,
+                detail: Some(detail.to_string()),
+                ..loopx_contract::LoopxGithubAuthProbe::default()
+            });
+        }
+
+        let parsed = response.json::<Value>().await.ok();
+        let limit = parsed
+            .as_ref()
+            .and_then(|value| value.pointer("/rate/limit"))
+            .and_then(Value::as_u64);
+        let remaining = parsed
+            .as_ref()
+            .and_then(|value| value.pointer("/rate/remaining"))
+            .and_then(Value::as_u64);
+        let authenticated = limit.is_some_and(|value| value >= 1000);
+        let detail = if remaining == Some(0) {
+            Some(
+                "GitHub API rate limit is exhausted; authenticate with GitHub to raise it"
+                    .to_string(),
+            )
+        } else if authenticated {
+            Some("Authenticated GitHub access".to_string())
+        } else {
+            Some("Unauthenticated GitHub access (60 requests/hour)".to_string())
+        };
+        Ok(loopx_contract::LoopxGithubAuthProbe {
+            authenticated,
+            rate_limit_remaining: remaining,
+            detail,
+        })
+    }
 }
 
 fn candidate_from_value(
@@ -164,7 +246,10 @@ fn candidate_from_value(
             _ => loopx_contract::LoopxRemoteItemState::Unknown,
         }
     };
-    let body = value.get("body").and_then(Value::as_str).unwrap_or_default();
+    let body = value
+        .get("body")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     loopx_contract::LoopxIntakeCandidate {
         url: key.canonical_url(),
         title: value

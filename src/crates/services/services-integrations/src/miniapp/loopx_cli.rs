@@ -334,6 +334,13 @@ pub trait LoopxIntakeMetadataProvider: Send + Sync {
         request: &loopx_contract::LoopxCliResolveIntakeRequest,
         deadline: Duration,
     ) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxCliResolveIntakeResult>;
+
+    /// Pre-flight GitHub access probe used to populate the `github_auth`
+    /// environment fact before any intake is submitted.
+    async fn probe_auth(
+        &self,
+        deadline: Duration,
+    ) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxGithubAuthProbe>;
 }
 
 #[derive(Debug, Default)]
@@ -352,6 +359,17 @@ impl LoopxIntakeMetadataProvider for UnsupportedLoopxIntakeMetadataProvider {
         )
         .for_operation(&request.call.operation_id)
         .retryable(true))
+    }
+
+    async fn probe_auth(
+        &self,
+        _deadline: Duration,
+    ) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxGithubAuthProbe> {
+        Ok(loopx_contract::LoopxGithubAuthProbe {
+            authenticated: false,
+            detail: Some("GitHub intake metadata provider is not configured".to_string()),
+            ..loopx_contract::LoopxGithubAuthProbe::default()
+        })
     }
 }
 
@@ -846,6 +864,21 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
         })
     }
 
+    fn probe_github_auth<'a>(
+        &'a self,
+        request: loopx_contract::LoopxGithubAuthProbeRequest,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxGithubAuthProbe> {
+        Box::pin(async move {
+            validate_operation_id(&request.call.operation_id)?;
+            let deadline = effective_deadline(
+                request.call.deadline_at,
+                self.config.command_deadline,
+                &request.call.operation_id,
+            )?;
+            self.intake_metadata.probe_auth(deadline).await
+        })
+    }
+
     fn plan_item<'a>(
         &'a self,
         request: loopx_contract::LoopxCliPlanItemRequest,
@@ -1287,15 +1320,10 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             .await?;
             require_payload_ok(&inspection.payload, operation_id)?;
             require_schema(&inspection.payload, "loopx_turn_plan_v0", operation_id)?;
-            let snapshot = project_goal_snapshot(
-                &request.goal_id,
-                &inspection.payload,
-                operation_id,
-            )?;
-            let receipt = matching_settlement_receipt(
-                &inspection.payload,
-                &request.settlement_token,
-            );
+            let snapshot =
+                project_goal_snapshot(&request.goal_id, &inspection.payload, operation_id)?;
+            let receipt =
+                matching_settlement_receipt(&inspection.payload, &request.settlement_token);
             let Some(receipt) = receipt else {
                 let status = if matches!(
                     request.agent_status,
@@ -1333,7 +1361,11 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             let validation_succeeded = receipt
                 .get("validation_succeeded")
                 .and_then(Value::as_bool)
-                .or_else(|| receipt.pointer("/validation/succeeded").and_then(Value::as_bool))
+                .or_else(|| {
+                    receipt
+                        .pointer("/validation/succeeded")
+                        .and_then(Value::as_bool)
+                })
                 .unwrap_or(false);
             if !validation_succeeded {
                 return Ok(loopx_contract::LoopxCliSettleTurnResult {

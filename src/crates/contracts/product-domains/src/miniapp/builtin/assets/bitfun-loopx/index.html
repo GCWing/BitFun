@@ -36,8 +36,10 @@
           data-i18n-placeholder="intakePlaceholder"
         />
         <span class="model-field" title="模型" data-i18n-title="model">
-          <span class="model-field__label" data-i18n="modelAuto">自动模型</span>
-          <input id="model-select" name="model" type="hidden" value="auto" />
+          <span class="model-field__label" data-i18n="model">模型</span>
+          <select id="model-select" name="model" class="model-field__select">
+            <option value="auto" data-i18n="modelAuto">自动模型</option>
+          </select>
         </span>
         <button id="resolve-button" class="icon-button icon-button--accent" type="submit" title="分析链接" data-i18n-title="resolve">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 14-7-7 14-2-7-5-2Z"/></svg>

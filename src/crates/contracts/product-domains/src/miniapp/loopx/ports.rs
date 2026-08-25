@@ -203,6 +203,26 @@ pub struct LoopxCliResolveIntakeResult {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct LoopxGithubAuthProbeRequest {
+    #[serde(flatten)]
+    pub call: LoopxCliCallContext,
+}
+
+/// Result of the pre-flight GitHub access probe. The host surfaces this as the
+/// `github_auth` environment fact so an auth/rate-limit failure is visible
+/// before the user submits an intake, instead of surfacing as a 403 later.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxGithubAuthProbe {
+    /// Whether an authenticated GitHub identity is available.
+    pub authenticated: bool,
+    /// Remaining core API rate limit, when the endpoint reports one.
+    pub rate_limit_remaining: Option<u64>,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LoopxCliPlanItemRequest {
     #[serde(flatten)]
     pub context: LoopxCliGoalContext,
@@ -411,6 +431,11 @@ pub trait LoopxCliPort: Send + Sync {
         request: LoopxCliResolveIntakeRequest,
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliResolveIntakeResult>;
+
+    fn probe_github_auth<'a>(
+        &'a self,
+        request: LoopxGithubAuthProbeRequest,
+    ) -> LoopxCliFuture<'a, LoopxGithubAuthProbe>;
 
     fn plan_item<'a>(
         &'a self,
