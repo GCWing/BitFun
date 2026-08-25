@@ -148,6 +148,19 @@ impl Default for ExecutionEngineConfig {
     }
 }
 
+impl ExecutionEngineConfig {
+    pub fn from_ai_config(ai_config: &crate::service::config::types::AIConfig) -> Self {
+        Self {
+            max_rounds: ai_config.max_rounds,
+            ..Self::default()
+        }
+    }
+}
+
+fn reached_fixed_model_round_limit(max_rounds: usize, completed_rounds: usize) -> bool {
+    max_rounds > 0 && completed_rounds >= max_rounds
+}
+
 #[derive(Debug, Clone)]
 pub struct ContextCompactionOutcome {
     pub compression_id: String,
@@ -3743,7 +3756,7 @@ impl ExecutionEngine {
 
         // Loop to execute model rounds
         loop {
-            if completed_rounds >= self.config.max_rounds {
+            if reached_fixed_model_round_limit(self.config.max_rounds, completed_rounds) {
                 warn!(
                     "Reached max rounds limit: {}, stopping execution",
                     self.config.max_rounds
@@ -5112,8 +5125,9 @@ impl ExecutionEngine {
 mod tests {
     use super::{
         activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
-        manual_compaction_terminal_error, resolve_round_permission_mode, ContextHealthSnapshot,
-        ExecutionEngine, RoundResult, TurnPromptScaffold,
+        manual_compaction_terminal_error, reached_fixed_model_round_limit,
+        resolve_round_permission_mode, ContextHealthSnapshot, ExecutionEngine,
+        ExecutionEngineConfig, RoundResult, TurnPromptScaffold,
     };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
@@ -5144,6 +5158,30 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+
+    #[test]
+    fn zero_max_rounds_disables_the_fixed_round_limit() {
+        assert!(!reached_fixed_model_round_limit(0, 0));
+        assert!(!reached_fixed_model_round_limit(0, 10_000));
+    }
+
+    #[test]
+    fn positive_max_rounds_stops_at_the_configured_limit() {
+        assert!(!reached_fixed_model_round_limit(200, 199));
+        assert!(reached_fixed_model_round_limit(200, 200));
+        assert!(reached_fixed_model_round_limit(200, 201));
+    }
+
+    #[test]
+    fn max_rounds_execution_config_projects_the_global_ai_limit() {
+        let mut ai_config = AIConfig::default();
+        ai_config.max_rounds = 37;
+
+        assert_eq!(
+            ExecutionEngineConfig::from_ai_config(&ai_config).max_rounds,
+            37
+        );
+    }
 
     #[test]
     fn recovered_execution_starts_after_existing_model_rounds() {
