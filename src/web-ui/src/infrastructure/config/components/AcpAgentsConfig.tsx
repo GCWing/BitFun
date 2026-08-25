@@ -1,4 +1,4 @@
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -17,7 +17,7 @@ import {
   Server,
   Terminal,
 } from 'lucide-react';
-import { Select, Textarea } from '@/component-library';
+import { Input, Select, Textarea } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -1087,12 +1087,13 @@ const AcpAgentsConfig: React.FC = () => {
             data-bf-part="toolbar"
           >
             <Input
-              containerClassName="bitfun-acp-agents__search"
+              className="bitfun-acp-agents__search"
               value={registrySearch}
               onChange={(event) => setRegistrySearch(event.target.value)}
               placeholder={t('registry.searchPlaceholder')}
-              leadingIcon={<Search size={15} />}
-              variant="search"
+              prefix={<Search size={15} />}
+              size="medium"
+              variant="outlined"
             />
             <div className="bitfun-acp-agents__toolbar-actions">
               <Select

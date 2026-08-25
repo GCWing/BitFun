@@ -1,4 +1,4 @@
-import { Button, Switch, Input } from '@bitfun/ui';
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Textarea, Tooltip } from '@/component-library';
+import { Input, Textarea, Tooltip } from '@/component-library';
 import {
   CustomAgentAPI,
   type CustomAgentKind,
@@ -640,7 +640,8 @@ const CreateAgentPage: React.FC = () => {
                         }}
                         onBlur={() => setAgentIdError(validateAgentId(agentId))}
                         placeholder={t('agentsOverview.form.idPlaceholder')}
-                        aria-invalid={!!agentIdError}
+                        inputSize="small"
+                        error={!!agentIdError}
                         disabled={isEdit}
                       />
                       {agentIdError ? (
@@ -657,6 +658,7 @@ const CreateAgentPage: React.FC = () => {
                         value={name}
                         onChange={(event) => setName(event.target.value)}
                         placeholder={t('agentsOverview.form.namePlaceholder')}
+                        inputSize="small"
                       />
                     </div>
                   </div>
@@ -670,6 +672,7 @@ const CreateAgentPage: React.FC = () => {
                       value={description}
                       onChange={(event) => setDescription(event.target.value)}
                       placeholder={t('agentsOverview.form.descPlaceholder')}
+                      inputSize="small"
                     />
                   </div>
 

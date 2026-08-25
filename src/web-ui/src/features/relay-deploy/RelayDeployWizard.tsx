@@ -10,7 +10,7 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button, IconButton, Input as UiInput } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal, Input, Select, Alert } from '@/component-library';
@@ -735,13 +735,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <div className="relay-deploy-wizard__section">
           <div className="relay-deploy-wizard__section-header">
             <h3 className="relay-deploy-wizard__section-title">{t('ssh.remote.savedConnections')}</h3>
-            <UiInput
-              containerClassName="relay-deploy-wizard__search"
-              variant="search"
+            <Input
+              className="relay-deploy-wizard__search"
               value={savedSearch}
               onChange={(e) => setSavedSearch(e.target.value)}
               placeholder={t('actions.search')}
-              leadingIcon={<Search size={14} />}
+              prefix={<Search size={14} />}
+              size="small"
             />
           </div>
           <div className="relay-deploy-wizard__server-list">
@@ -779,13 +779,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <div className="relay-deploy-wizard__section">
           <div className="relay-deploy-wizard__section-header">
             <h3 className="relay-deploy-wizard__section-title">{t('ssh.remote.sshConfigHosts')}</h3>
-            <UiInput
-              containerClassName="relay-deploy-wizard__search"
-              variant="search"
+            <Input
+              className="relay-deploy-wizard__search"
               value={configSearch}
               onChange={(e) => setConfigSearch(e.target.value)}
               placeholder={t('actions.search')}
-              leadingIcon={<Search size={14} />}
+              prefix={<Search size={14} />}
+              size="small"
             />
           </div>
           <div className="relay-deploy-wizard__server-list">

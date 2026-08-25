@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input as UiInput } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -423,8 +423,8 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     ref={modelsDevSearchAnchorRef}
                     className="bitfun-reasoning-preset-editor__models-dev-search-control"
                   >
-                    <UiInput
-                      variant="search"
+                    <Input
+                      size="small"
                       value={modelsDevSearch}
                       disabled={disabled}
                       placeholder={t('reasoningPresets.catalogSearchPlaceholder')}

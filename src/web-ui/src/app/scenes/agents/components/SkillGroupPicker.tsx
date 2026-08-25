@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Modal, confirmDanger } from '@/component-library';
+import { Input, Modal, confirmDanger } from '@/component-library';
 import type { UserSkillGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
 import {
@@ -296,7 +296,8 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                   }
                 }}
                 placeholder={t('agentsOverview.skillGroupPicker.groupNamePlaceholder')}
-                aria-invalid={nameError}
+                inputSize="small"
+                error={nameError}
                 disabled={saving}
               />
             </div>

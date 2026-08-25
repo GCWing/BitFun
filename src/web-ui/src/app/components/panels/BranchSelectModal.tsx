@@ -3,13 +3,19 @@
  * Supports selecting existing branches or creating new branches
  */
 
-import { Button, Input } from '@bitfun/ui';
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { GitBranch, Plus } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
-import { Checkbox, PopupCloseButton, PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
+import {
+  Input,
+  Checkbox,
+  PopupCloseButton,
+  PresenceBoundary,
+  PRESENCE_BOUNDARY_MIN_EXIT_MS,
+} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitAPI, type GitBranch as GitBranchType } from '../../../infrastructure/api/service-api/GitAPI';
 import './BranchSelectModal.scss';
@@ -222,7 +228,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
               placeholder={t('branchSelect.inputPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              variant="search"
+              className="branch-select-dialog__input"
             />
           </div>
 

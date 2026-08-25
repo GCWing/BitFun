@@ -133,6 +133,20 @@
   &__search-field {
     flex: 1;
     min-width: 0;
+
+    &.bitfun-input-wrapper {
+      gap: 0;
+    }
+
+    .bitfun-input-container {
+      padding-right: 2px;
+    }
+
+    .bitfun-input-suffix {
+      display: flex;
+      align-items: center;
+      padding: 0;
+    }
   }
 
   &__search-prefix-icon {
