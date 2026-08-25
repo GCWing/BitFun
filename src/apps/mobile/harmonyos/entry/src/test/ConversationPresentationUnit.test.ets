@@ -37,6 +37,8 @@ import {
 } from '../main/ets/pages/policy/RemoteSurfaceEntryPolicy';
 import { RemoteCompactHomePolicy } from '../main/ets/pages/policy/RemoteCompactHomePolicy';
 import { AccountDeviceSelectionPolicy } from '../main/ets/pages/policy/AccountDeviceSelectionPolicy';
+import { SidebarConnectionActionPolicy } from '../main/ets/pages/policy/SidebarConnectionActionPolicy';
+import { SidebarDeviceProjectionPolicy } from '../main/ets/pages/policy/SidebarDeviceProjectionPolicy';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 import {
   ConnectScanDecisionPolicy,
@@ -363,6 +365,9 @@ export default function conversationPresentationUnitTest() {
       expect(RemoteI18n.t('sidebar.conversations')).assertEqual('最近对话');
       expect(RemoteI18n.t('sidebar.devices')).assertEqual('设备');
       expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
+      expect(RemoteI18n.t('sidebar.scanToConnect')).assertEqual('扫码连接电脑');
+      expect(RemoteI18n.t('sidebar.signInBitFunAccount')).assertEqual('登录 BitFun 账号');
+      expect(RemoteI18n.t('connect.chooseConnectionTitle')).assertEqual('连接电脑');
       expect(RemoteI18n.t('sidebar.local')).assertEqual('sidebar.local');
       expect(RemoteI18n.t('sidebar.code')).assertEqual('sidebar.code');
       expect(RemoteI18n.t('sidebar.recent')).assertEqual('sidebar.recent');
@@ -373,6 +378,26 @@ export default function conversationPresentationUnitTest() {
       // call. The button opens the connect sheet, so that is what it says.
       expect(RemoteI18n.t('sidebar.addConnection')).assertEqual('添加连接');
       expect(RemoteI18n.t('sidebar.addWorkspace')).assertEqual('sidebar.addWorkspace');
+    });
+
+    it('hides the redundant scan action after a QR connection succeeds', 0, () => {
+      expect(SidebarConnectionActionPolicy.shouldShowScan('disconnected')).assertTrue();
+      expect(SidebarConnectionActionPolicy.shouldShowScan('connected')).assertFalse();
+    });
+
+    it('merges matching QR targets and keeps unmatched QR targets beside account devices', 0, () => {
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        [], 'room', 'desk-qr', true, false
+      )).assertTrue();
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        ['desk-qr'], 'room', 'desk-qr', true, false
+      )).assertFalse();
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        ['desk-account'], 'room', 'desk-qr', true, false
+      )).assertTrue();
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        ['desk-account'], 'none', '', false, false
+      )).assertFalse();
     });
 
     it('does not keep leftover pending-copy keys that claim general chat is unavailable', 0, () => {

@@ -14,6 +14,7 @@ export struct BitFunAccountLoginPage {
   @Local password: string = '';
   @Local errorText: string = '';
   @Local isBusy: boolean = false;
+  @Local showAdvanced: boolean = false;
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -55,21 +56,47 @@ export struct BitFunAccountLoginPage {
             .type(InputType.Password)
             .onChange((value: string) => { this.password = value; })
 
-          Text(RemoteI18n.t('remote.settings.loginServer'))
-            .fontSize(13)
-            .fontColor(MUTED)
-            .width('100%')
-            .margin({ left: 4, top: 26, bottom: 8 })
+          Row() {
+            Text(RemoteI18n.t('sheet.advancedOptions'))
+              .fontSize(13)
+              .fontColor(MUTED)
+            Blank()
+            if (this.showAdvanced) {
+              SymbolGlyph($r('sys.symbol.chevron_up'))
+                .fontSize(12)
+                .fontColor([MUTED])
+            } else {
+              SymbolGlyph($r('sys.symbol.chevron_down'))
+                .fontSize(12)
+                .fontColor([MUTED])
+            }
+          }
+          .width('100%')
+          .height(44)
+          .padding({ left: 4, right: 4 })
+          .margin({ top: 12 })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showAdvanced = !this.showAdvanced;
+          })
 
-          TextInput({ placeholder: RemoteI18n.t('remote.settings.relayUrlPlaceholder'), text: this.relayUrl })
-            .height(52)
-            .fontSize(14)
-            .fontColor(INK)
-            .placeholderColor(SUBTLE)
-            .backgroundColor(CARD)
-            .borderRadius(16)
-            .padding({ left: 18, right: 18 })
-            .onChange((value: string) => { this.relayUrl = value; })
+          if (this.showAdvanced) {
+            Text(RemoteI18n.t('remote.settings.loginServer'))
+              .fontSize(13)
+              .fontColor(MUTED)
+              .width('100%')
+              .margin({ left: 4, top: 8, bottom: 8 })
+
+            TextInput({ placeholder: RemoteI18n.t('remote.settings.relayUrlPlaceholder'), text: this.relayUrl })
+              .height(52)
+              .fontSize(14)
+              .fontColor(INK)
+              .placeholderColor(SUBTLE)
+              .backgroundColor(CARD)
+              .borderRadius(16)
+              .padding({ left: 18, right: 18 })
+              .onChange((value: string) => { this.relayUrl = value; })
+          }
 
           if (this.errorText.length > 0) {
             Text(this.errorText)

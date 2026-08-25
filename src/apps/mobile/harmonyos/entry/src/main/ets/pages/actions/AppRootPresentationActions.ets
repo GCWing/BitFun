@@ -72,12 +72,10 @@ export interface SidebarPresentationActions {
   readonly close: () => void;
   readonly newChat: () => void;
   readonly enterCode: () => void;
-  /**
-   * Pair with or pick a desktop. Distinct from `enterCode`, which only moves
-   * the visible surface to Remote: a row labelled "connect a desktop" has to
-   * open the connect sheet, or it navigates to a placeholder and stops there.
-   */
-  readonly connectDesktop: () => void;
+  /** Opens the QR scanner directly from sidebar device actions. */
+  readonly scanDesktop: () => void;
+  /** Opens the QR scanner from the device-section add button. */
+  readonly addDesktop: () => void;
   readonly settings: () => void;
   readonly openAccount: () => void;
   readonly openSession: (session: RemoteSession) => void;
@@ -106,6 +104,7 @@ export interface SettingsPresentationActions {
 
 export interface ConnectPresentationActions {
   readonly back: () => void;
+  readonly openAccount: () => void;
   readonly connect: (password?: string) => void;
   readonly clearPairing: () => void;
   readonly urlChanged: (url: string) => void;
@@ -139,7 +138,7 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {}, send: () => {}
     },
     onSidebar: {
-      close: () => {}, newChat: () => {}, enterCode: () => {}, connectDesktop: () => {},
+      close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {}, addDesktop: () => {},
       settings: () => {}, openAccount: () => {},
       openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
     },
@@ -154,7 +153,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       setLanguage: async () => {}
     },
     onConnect: {
-      back: () => {}, connect: () => {}, clearPairing: () => {}, urlChanged: () => {}, userChanged: () => {},
+      back: () => {}, openAccount: () => {}, connect: () => {}, clearPairing: () => {},
+      urlChanged: () => {}, userChanged: () => {},
       detected: () => DetectedUrlAction.INVALID, inputVisible: () => {}, paste: () => {}, scan: () => {},
       cloudListDevices: async () => [], cloudSelectDevice: async () => {}
     },
