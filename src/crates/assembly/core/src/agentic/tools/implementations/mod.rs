@@ -56,7 +56,7 @@ pub mod page_deploy_tool;
 pub mod page_publish_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod playbook_tool;
-#[cfg(feature = "tools-git")]
+#[cfg(feature = "tools-agent-control")]
 pub mod port_forward_tool;
 #[cfg(feature = "tools-git")]
 pub mod review_platform_tool;
@@ -130,7 +130,7 @@ pub use page_deploy_tool::PageDeployTool;
 pub use page_publish_tool::PagePublishTool;
 #[cfg(feature = "tools-miniapp")]
 pub use playbook_tool::PlaybookTool;
-#[cfg(feature = "tools-git")]
+#[cfg(feature = "tools-agent-control")]
 pub use port_forward_tool::PortForwardTool;
 #[cfg(feature = "tools-git")]
 pub use review_platform_tool::ReviewPlatformTool;
