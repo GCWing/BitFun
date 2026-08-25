@@ -242,6 +242,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 .submit_dialog_turn(AgentDialogTurnRequest {
                     session_id: job.request.session_id.clone(),
                     message: prompt,
+                    output_schema: None,
                     original_message: None,
                     turn_id: Some(turn_id.clone()),
                     execution: Default::default(),

@@ -4,7 +4,9 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_gemini_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ReasoningPresetAction, ReasoningPresetDescriptor, ToolDefinition};
+use crate::types::{
+    Message, ModelRequestContext, ReasoningPresetAction, ReasoningPresetDescriptor, ToolDefinition,
+};
 use anyhow::{anyhow, Result};
 use log::debug;
 use reqwest::RequestBuilder;
@@ -265,12 +267,13 @@ fn translate_extra_body(
     }
 }
 
-pub(crate) fn try_build_request_body(
+fn try_build_request_body_with_context(
     client: &AIClient,
     system_instruction: Option<serde_json::Value>,
     contents: Vec<serde_json::Value>,
     gemini_tools: Option<Vec<serde_json::Value>>,
     extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
 ) -> Result<serde_json::Value> {
     let mut request_body = serde_json::json!({
         "contents": contents,
@@ -398,6 +401,18 @@ pub(crate) fn try_build_request_body(
             },
         )?;
     }
+    if let Some(schema) = request_context.and_then(|context| context.output_schema.as_ref()) {
+        insert_generation_field(
+            &mut request_body,
+            "responseMimeType",
+            serde_json::json!("application/json"),
+        );
+        insert_generation_field(
+            &mut request_body,
+            "responseJsonSchema",
+            GeminiMessageConverter::sanitize_schema(schema.clone()),
+        );
+    }
 
     shared::log_request_body(
         "ai::gemini_stream_request",
@@ -406,6 +421,23 @@ pub(crate) fn try_build_request_body(
     );
 
     Ok(request_body)
+}
+
+pub(crate) fn try_build_request_body(
+    client: &AIClient,
+    system_instruction: Option<serde_json::Value>,
+    contents: Vec<serde_json::Value>,
+    gemini_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+) -> Result<serde_json::Value> {
+    try_build_request_body_with_context(
+        client,
+        system_instruction,
+        contents,
+        gemini_tools,
+        extra_body,
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -426,6 +458,26 @@ pub(crate) fn build_request_body(
     .expect("request body should compile")
 }
 
+#[cfg(test)]
+pub(crate) fn build_request_body_with_context(
+    client: &AIClient,
+    system_instruction: Option<serde_json::Value>,
+    contents: Vec<serde_json::Value>,
+    gemini_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
+) -> serde_json::Value {
+    try_build_request_body_with_context(
+        client,
+        system_instruction,
+        contents,
+        gemini_tools,
+        extra_body,
+        request_context,
+    )
+    .expect("request body should compile")
+}
+
 pub(crate) async fn send_stream(
     client: &AIClient,
     messages: Vec<Message>,
@@ -433,6 +485,7 @@ pub(crate) async fn send_stream(
     extra_body: Option<serde_json::Value>,
     max_tries: usize,
     trace: Option<ModelExchangeTraceConfig>,
+    request_context: Option<ModelRequestContext>,
 ) -> Result<StreamResponse> {
     let url = resolve_request_url(&client.config.request_url, &client.config.model);
     debug!(
@@ -443,12 +496,13 @@ pub(crate) async fn send_stream(
     let (system_instruction, contents) =
         GeminiMessageConverter::convert_messages(messages, &client.config.model);
     let gemini_tools = GeminiMessageConverter::convert_tools(tools);
-    let request_body = try_build_request_body(
+    let request_body = try_build_request_body_with_context(
         client,
         system_instruction,
         contents,
         gemini_tools,
         extra_body,
+        request_context.as_ref(),
     )?;
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;

@@ -5,7 +5,7 @@ for await (const line of lines) {
   const request = JSON.parse(line);
   if (request.method === "initialize") {
     if (
-      request.params?.protocolVersion !== 5 ||
+      request.params?.protocolVersion !== 6 ||
       request.params?.model?.apiKey !== "fixture-secret"
     ) {
       throw new Error("Invalid initialize request");
@@ -14,7 +14,7 @@ for await (const line of lines) {
       jsonrpc: "2.0",
       id: request.id,
       result: {
-        protocolVersion: 5,
+        protocolVersion: 6,
         runtimeVersion: "fixture",
         stability: "not_delivered",
         capabilities: {
@@ -27,7 +27,7 @@ for await (const line of lines) {
           eventStream: true,
           toolEvents: true,
           imageInput: true,
-          structuredOutput: false,
+          structuredOutput: true,
           usage: true,
           customTools: false,
           permissionResponses: true,

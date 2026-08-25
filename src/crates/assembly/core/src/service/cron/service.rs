@@ -564,6 +564,7 @@ impl CronService {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: resolved.session_id,
                 message: enqueue_input.user_input.clone(),
+                output_schema: None,
                 original_message: Some(enqueue_input.user_input.clone()),
                 turn_id: Some(enqueue_input.turn_id.clone()),
                 execution: Default::default(),

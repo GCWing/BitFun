@@ -63,7 +63,7 @@ test("a Query streams tool and permission events before the terminal Result", as
   assert.ok(client instanceof AgentClient);
   assert.equal(initializeRequests.length, 1);
   assert.deepEqual(initializeRequests[0], {
-    protocolVersion: 5,
+    protocolVersion: 6,
     clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
     capabilities: {
       serverNotifications: true,
@@ -82,6 +82,11 @@ test("a Query streams tool and permission events before the terminal Result", as
       { type: "local_image", path: "screenshots/fixture.png" },
       { type: "text", text: "focus on the layout" },
     ],
+    outputSchema: {
+      type: "object",
+      properties: { summary: { type: "string" } },
+      required: ["summary"],
+    },
     model: "attempted-override",
   } as QueryInput);
   assert.equal(query.id, "query-1");
@@ -95,7 +100,7 @@ test("a Query streams tool and permission events before the terminal Result", as
     toolEvents: true,
     imageInput: true,
     permissionResponses: true,
-    structuredOutput: false,
+    structuredOutput: true,
     usage: true,
     customTools: false,
     hooks: false,
@@ -168,6 +173,7 @@ test("a Query streams tool and permission events before the terminal Result", as
       operationId: "operation-1",
       status: "completed",
       outputText: "fixture result",
+      structuredOutput: { summary: "fixture result" },
       usage: {
         inputTokens: 100,
         outputTokens: 25,
@@ -210,6 +216,7 @@ test("an explicit Session starts Turns on the existing client connection", async
 
   const query = await session.startTurn({
     prompt: [{ type: "local_image", path: "screenshots/continued.webp" }],
+    outputSchema: { type: "object" },
   });
   assert.equal((await query.result()).outputText, "continued");
   await session.close();
@@ -583,7 +590,7 @@ async function runFixtureHost(
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          protocolVersion: 5,
+          protocolVersion: 6,
           runtimeVersion: "0.2.17",
           stability: "not_delivered",
           capabilities: {
@@ -596,7 +603,7 @@ async function runFixtureHost(
             eventStream: true,
             toolEvents: true,
             imageInput: true,
-            structuredOutput: false,
+            structuredOutput: true,
             usage: true,
             customTools: false,
             permissionResponses: true,
@@ -613,6 +620,11 @@ async function runFixtureHost(
       assert.deepEqual(request.params, {
         prompt: "hello\n\nfocus on the layout",
         images: ["screenshots/fixture.png"],
+        outputSchema: {
+          type: "object",
+          properties: { summary: { type: "string" } },
+          required: ["summary"],
+        },
         sessionId: null,
         sessionName: null,
         agent: null,
@@ -724,7 +736,10 @@ async function runFixtureHost(
           turnId: "turn-1",
           operationId: "operation-1",
           status: "completed",
-          output: { text: "fixture result" },
+          output: {
+            text: "fixture result",
+            structured: { summary: "fixture result" },
+          },
           usage: {
             inputTokens: 100,
             outputTokens: 25,
@@ -796,6 +811,7 @@ async function runSessionFixtureHost(
       assert.deepEqual(request.params, {
         prompt: "",
         images: ["screenshots/continued.webp"],
+        outputSchema: { type: "object" },
         sessionId: "session-explicit",
       });
       write(responses, {
@@ -1343,7 +1359,7 @@ function initializeResponse(id: number): unknown {
     jsonrpc: "2.0",
     id,
     result: {
-      protocolVersion: 5,
+      protocolVersion: 6,
       runtimeVersion: "0.2.17",
       stability: "not_delivered",
       capabilities: {
@@ -1356,7 +1372,7 @@ function initializeResponse(id: number): unknown {
         eventStream: true,
         toolEvents: true,
         imageInput: true,
-        structuredOutput: false,
+        structuredOutput: true,
         usage: true,
         customTools: false,
         permissionResponses: true,

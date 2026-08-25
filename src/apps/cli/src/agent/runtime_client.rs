@@ -1635,6 +1635,7 @@ impl CliAgentRuntimeClient {
         let request = AgentDialogTurnRequest {
             session_id: session_id.clone(),
             message: message.clone(),
+            output_schema: None,
             original_message,
             turn_id: Some(turn_id.clone()),
             execution,

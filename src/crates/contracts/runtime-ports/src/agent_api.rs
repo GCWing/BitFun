@@ -1,5 +1,9 @@
 use super::*;
 
+/// Reserved turn metadata/context key used to carry a provider-neutral JSON
+/// output schema through persistence and interrupted-turn recovery.
+pub const OUTPUT_SCHEMA_CONTEXT_KEY: &str = "bitfun_output_schema";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
@@ -585,6 +589,8 @@ impl Default for AgentDialogTurnExecution {
 pub struct AgentDialogTurnRequest {
     pub session_id: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2957,6 +2963,7 @@ mod tests {
         let request = AgentDialogTurnRequest {
             session_id: "session_1".to_string(),
             message: "hello".to_string(),
+            output_schema: Some(serde_json::json!({ "type": "object" })),
             original_message: Some("raw hello".to_string()),
             turn_id: Some("turn_1".to_string()),
             execution: Default::default(),
@@ -2990,6 +2997,7 @@ mod tests {
 
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["message"], "hello");
+        assert_eq!(json["outputSchema"]["type"], "object");
         assert_eq!(json["originalMessage"], "raw hello");
         assert_eq!(json["turnId"], "turn_1");
         assert_eq!(json["agentType"], "agentic");

@@ -695,6 +695,7 @@ Allowed agent types when creating a session:
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: target_session_id.clone(),
                 message: forwarded_message,
+                output_schema: None,
                 original_message: Some(params.message.clone()),
                 turn_id: None,
                 execution: Default::default(),

@@ -134,6 +134,7 @@ export class Session {
     const params: QueryStartParams = {
       prompt: normalized.prompt,
       images: normalized.images,
+      outputSchema: input.outputSchema,
       sessionId: this.id,
     };
     const started = await this.#connection.request<QueryStartResult>(
