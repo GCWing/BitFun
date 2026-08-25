@@ -7,13 +7,16 @@ import {
 } from '../state/DeviceDirectoryState';
 import { MUTED } from './Theme';
 import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
+import { SidebarDeviceProjectionPolicy } from '../policy/SidebarDeviceProjectionPolicy';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
 
 /**
  * The workspace half of the unified sidebar.
  *
- * Account desktops always render a device header so the row keeps a real
- * name. A QR pairing with no account device list still flattens.
+ * Account desktops and QR-paired desktops share the same hierarchy:
+ * device -> workspace -> session. A QR target already present in the account
+ * directory merges by device id; otherwise it is prepended as a transient
+ * device without hiding the account's other desktops.
  */
 @ComponentV2
 export struct SidebarWorkspaceSection {
@@ -40,7 +43,7 @@ export struct SidebarWorkspaceSection {
   @Event onRetryDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onAdd: () => void = () => {};
   @Local visibleDeviceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
-  private readonly unpairedEntry: DeviceDirectoryEntry = emptyDeviceDirectoryEntry('', '', false);
+  private readonly transientEntry: DeviceDirectoryEntry = emptyDeviceDirectoryEntry('', '', false);
 
   build() {
     Column() {
@@ -57,13 +60,15 @@ export struct SidebarWorkspaceSection {
             selectedSessionId: this.selectedSessionIdFor(entry),
             runningSessionId: this.isActiveDevice(entry.deviceId) ? this.runningSessionId : '',
             query: this.query,
-            showHeader: this.showsDeviceHeader(),
+            showHeader: true,
             isActive: this.isActiveDevice(entry.deviceId),
             onToggle: () => {
-              this.onToggleDevice(entry.deviceId);
+              this.toggleEntry(entry);
             },
             onRetry: () => {
-              this.onRetryDevice(entry.deviceId);
+              if (this.isDirectoryEntry(entry)) {
+                this.onRetryDevice(entry.deviceId);
+              }
             },
             onOpenSession: this.onOpenSession,
             onSessionActions: this.onSessionActions,
@@ -132,23 +137,18 @@ export struct SidebarWorkspaceSection {
   }
 
   private deviceEntries(): DeviceDirectoryEntry[] {
-    if (this.directoryState.devices.length > 0) {
-      return this.directoryState.devices;
+    const directoryEntries = this.directoryState.devices;
+    if (!SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+      directoryEntries.map((entry: DeviceDirectoryEntry): string => entry.deviceId),
+      this.controlTargetType,
+      this.controlTargetDeviceId,
+      this.isConnected(),
+      this.recentWorkspaces.length > 0 || this.sessions.length > 0
+    )) {
+      return directoryEntries;
     }
-    if (!this.isConnected() && this.controlTargetType === 'none') {
-      return [];
-    }
-    if (!this.isConnected() && this.recentWorkspaces.length === 0 && this.sessions.length === 0) {
-      return [];
-    }
-    this.unpairedEntry.deviceId = this.controlTargetDeviceId;
-    this.unpairedEntry.deviceName = this.controlTargetDeviceName;
-    this.unpairedEntry.online = this.isConnected();
-    this.unpairedEntry.expanded = this.isConnected();
-    this.unpairedEntry.status = 'ready';
-    this.unpairedEntry.workspaces = this.recentWorkspaces;
-    this.unpairedEntry.sessions = this.sessions;
-    return [this.unpairedEntry];
+    this.updateTransientEntry();
+    return [this.transientEntry].concat(directoryEntries);
   }
 
   private visibleDeviceEntries(): DeviceDirectoryEntry[] {
@@ -161,20 +161,41 @@ export struct SidebarWorkspaceSection {
   }
 
   /**
-   * ForEach binds a child to the item it was created with and only re-reads
-   * that item when the key changes. The unpaired placeholder carries the
-   * control target's own deviceId, so an unprefixed key collides with the real
-   * row for that same desktop: the child built during the flatten phase keeps
-   * rendering the frozen placeholder after the account device list lands —
-   * greyed out and unresponsive to its own toggle, because every field it
-   * paints belongs to an object nothing updates any more.
+   * The transient row deliberately uses a different key. When the same device
+   * later appears in the account directory, ForEach must rebuild the child
+   * against the account-owned observable entry instead of retaining the
+   * temporary object.
    */
   private deviceKey(entry: DeviceDirectoryEntry): string {
-    return this.directoryState.devices.length > 0 ? entry.deviceId : `unpaired:${entry.deviceId}`;
+    return this.isDirectoryEntry(entry) ? entry.deviceId : `transient:${entry.deviceId}`;
   }
 
-  private showsDeviceHeader(): boolean {
-    return this.directoryState.devices.length > 0;
+  private updateTransientEntry(): void {
+    const targetId = this.controlTargetDeviceId.trim();
+    const connected = this.isConnected();
+    if (this.transientEntry.deviceId !== targetId) {
+      this.transientEntry.deviceId = targetId;
+      this.transientEntry.expanded = connected;
+    } else if (this.transientEntry.online !== connected) {
+      this.transientEntry.expanded = connected;
+    }
+    this.transientEntry.deviceName = this.controlTargetDeviceName.trim() || targetId;
+    this.transientEntry.online = connected;
+    this.transientEntry.status = 'ready';
+    this.transientEntry.workspaces = this.recentWorkspaces;
+    this.transientEntry.sessions = this.sessions;
+  }
+
+  private toggleEntry(entry: DeviceDirectoryEntry): void {
+    if (this.isDirectoryEntry(entry)) {
+      this.onToggleDevice(entry.deviceId);
+      return;
+    }
+    this.transientEntry.expanded = !this.transientEntry.expanded;
+  }
+
+  private isDirectoryEntry(entry: DeviceDirectoryEntry): boolean {
+    return this.directoryState.find(entry.deviceId) === entry;
   }
 
   private usesLiveDirectory(entry: DeviceDirectoryEntry): boolean {
