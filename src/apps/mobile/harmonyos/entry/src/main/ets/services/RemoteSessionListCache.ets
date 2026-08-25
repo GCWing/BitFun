@@ -1,5 +1,6 @@
 import { RecentWorkspaceEntry, RemoteSession } from '../model/RemoteModels';
 import { RemoteLogger } from './RemoteLogger';
+import { RemoteResponseMapper } from './RemoteResponseMapper';
 
 /** A device's session list as it was last shown. */
 export interface RemoteSessionListSlice {
@@ -76,7 +77,7 @@ export class RemoteSessionListCache {
       return RemoteSessionListCache.empty();
     }
     try {
-      return await this.store.loadLastList();
+      return RemoteSessionListCache.visible(await this.store.loadLastList());
     } catch (err) {
       RemoteLogger.error(`remote session list cache read failed: ${RemoteSessionListCache.reason(err)}`);
       return RemoteSessionListCache.empty();
@@ -90,7 +91,7 @@ export class RemoteSessionListCache {
       return RemoteSessionListCache.empty();
     }
     try {
-      return await this.store.loadList(deviceKey);
+      return RemoteSessionListCache.visible(await this.store.loadList(deviceKey));
     } catch (err) {
       RemoteLogger.error(`remote session list cache read failed: ${RemoteSessionListCache.reason(err)}`);
       return RemoteSessionListCache.empty();
@@ -106,11 +107,12 @@ export class RemoteSessionListCache {
    */
   async save(sessions: RemoteSession[], hasMore: boolean): Promise<void> {
     const deviceKey = this.scope();
-    if (deviceKey.length === 0 || sessions.length === 0) {
+    const visibleSessions = RemoteResponseMapper.visibleSessions(sessions);
+    if (deviceKey.length === 0 || visibleSessions.length === 0) {
       return;
     }
-    const kept = sessions.slice(0, CACHED_SESSIONS_PER_DEVICE);
-    const keptHasMore = hasMore || kept.length < sessions.length;
+    const kept = visibleSessions.slice(0, CACHED_SESSIONS_PER_DEVICE);
+    const keptHasMore = hasMore || kept.length < visibleSessions.length;
     const signature = RemoteSessionListCache.signature(kept, keptHasMore);
     if (this.writtenScope === deviceKey && this.writtenSignature === signature) {
       return;
@@ -165,6 +167,13 @@ export class RemoteSessionListCache {
 
   private static empty(): RemoteSessionListSlice {
     return { sessions: [], hasMore: false };
+  }
+
+  private static visible(slice: RemoteSessionListSlice): RemoteSessionListSlice {
+    return {
+      sessions: RemoteResponseMapper.visibleSessions(slice.sessions),
+      hasMore: slice.hasMore
+    };
   }
 
   private static reason(err: Object): string {

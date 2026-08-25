@@ -58,6 +58,11 @@ export class RemoteResponseMapper {
   }
 
   static sessions(items: SessionItemResponse[]): RemoteSession[] {
+    return RemoteResponseMapper.visibleSessions(RemoteResponseMapper.allSessions(items));
+  }
+
+  /** Maps a server page before mobile-only visibility rules are applied. */
+  static allSessions(items: SessionItemResponse[]): RemoteSession[] {
     return items.map((item: SessionItemResponse) => {
       const id = item.id || item.session_id || '';
       const session: RemoteSession = {
@@ -97,6 +102,15 @@ export class RemoteResponseMapper {
       };
       return session;
     });
+  }
+
+  /** ACP sessions are created on Desktop and are not controllable on HarmonyOS. */
+  static visibleSessions(sessions: RemoteSession[]): RemoteSession[] {
+    return sessions.filter((session: RemoteSession) => RemoteResponseMapper.isVisibleSession(session));
+  }
+
+  static isVisibleSession(session: RemoteSession): boolean {
+    return !(session.agentType || '').trim().toLowerCase().startsWith('acp:');
   }
 
   static chatMessage(item: ChatMessageResponse): ChatMessage {

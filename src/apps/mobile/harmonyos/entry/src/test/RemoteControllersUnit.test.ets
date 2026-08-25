@@ -1436,6 +1436,24 @@ export default function remoteControllersUnitTest() {
       expect(fromSecond.sessions[0].id).assertEqual('session-2');
     });
 
+    it('does not restore or persist ACP sessions', 0, async () => {
+      const store = new FakeRemoteSessionListStore();
+      const cache = await readyRemoteSessionListCache(store, 'desktop-a');
+      const acp = remoteSession('acp-session', 'ACP');
+      acp.agentType = 'acp:codex';
+      const native = remoteSession('native-session', 'Native');
+      await store.saveList('desktop-a', [acp, native], false);
+
+      const restored = await cache.restoreLast();
+      expect(restored.sessions.length).assertEqual(1);
+      expect(restored.sessions[0].id).assertEqual('native-session');
+
+      await cache.save([acp, native], false);
+      const saved = await store.loadList('desktop-a');
+      expect(saved.sessions.length).assertEqual(1);
+      expect(saved.sessions[0].id).assertEqual('native-session');
+    });
+
     it('writes once for a list that has not changed', 0, async () => {
       const store = new FakeRemoteSessionListStore();
       const cache = await readyRemoteSessionListCache(store);
