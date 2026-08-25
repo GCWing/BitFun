@@ -162,8 +162,6 @@ export default function architectureUnitTest() {
       expect(WideLayoutGeometry.detailOffset(false, 24, 8)).assertEqual(24);
       expect(WideLayoutGeometry.detailOffset(true, 24, 8)).assertEqual(8);
       expect(WideLayoutGeometry.detailWidth(true, 900, 1200)).assertEqual(1200);
-      expect(WideLayoutGeometry.collapsedVisualBias(true, 0, 1100, 920, 72)).assertEqual(72);
-      expect(WideLayoutGeometry.collapsedVisualBias(false, 0, 1100, 920, 72)).assertEqual(0);
       expect(WideLayoutGeometry.areaLength('1080')).assertEqual(1080);
       expect(WideLayoutGeometry.areaLength('invalid')).assertEqual(0);
     });

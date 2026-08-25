@@ -60,7 +60,6 @@ export struct ConversationView {
   @Param showSidebarRestoreButton: boolean = false;
   @Param composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
   @Param composerInputId: string = 'conversation-composer-input';
-  @Param contentHorizontalOffset: number = 0;
   @Param hoverOperateMode: boolean = false;
   @BuilderParam aboveComposer: () => void = this.EmptyBuilder;
   @Event onOpenSidebar: () => void = () => {};
@@ -130,8 +129,6 @@ export struct ConversationView {
     }
     .layoutWeight(1)
     .width('100%')
-    .translate({ x: this.contentHorizontalOffset, y: 0 })
-    .animation({ duration: 220, curve: Curve.EaseInOut })
   }
 
   @Builder

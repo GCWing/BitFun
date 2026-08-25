@@ -296,14 +296,6 @@ export struct WideConversationHost {
           }
         }
         .width('100%').height('100%').justifyContent(FlexAlign.Start).backgroundColor(PAGE_BG)
-
-        if (this.wideMasterPaneCollapsed) {
-          SidebarToggleButton({ restore: true, controlSize: 44, onToggle: this.onRestoreMasterPane })
-            .position({ x: 12, y: 12 }).zIndex(2)
-            .hitTestBehavior(HitTestMode.Default)
-            .transition(TransitionEffect.scale({ x: 0.9, y: 0.9 }).combine(TransitionEffect.opacity(0))
-              .animation({ duration: 180, curve: Curve.EaseOut }))
-        }
       }
       .layoutWeight(1).height('100%').backgroundColor(PAGE_BG)
     }
@@ -321,8 +313,8 @@ export struct WideConversationHost {
       actions: this.actions,
       showSidebarButton: false,
       showBackButton,
+      showSidebarRestoreButton: this.wideMasterPaneCollapsed,
       useWidePresentation: true,
-      contentHorizontalOffset: this.collapsedDetailVisualBias(),
       onRestoreSidebar: this.onRestoreMasterPane
     })
   }
@@ -368,16 +360,6 @@ export struct WideConversationHost {
       this.wideMasterPaneCollapsed,
       this.wideDetailContentWidth,
       this.wideCollapsedDetailContentWidth
-    );
-  }
-
-  private collapsedDetailVisualBias(): number {
-    return WideLayoutGeometry.collapsedVisualBias(
-      this.wideMasterPaneCollapsed,
-      this.wideCollapsedDetailContentOffset,
-      this.wideCollapsedDetailContentWidth,
-      WIDE_DETAIL_CONTENT_MAX_WIDTH,
-      72
     );
   }
 }

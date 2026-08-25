@@ -14,20 +14,6 @@ export class WideLayoutGeometry {
     return collapsed ? collapsedWidth : expandedWidth;
   }
 
-  static collapsedVisualBias(
-    collapsed: boolean,
-    collapsedOffset: number,
-    collapsedWidth: number,
-    maxContentWidth: number,
-    maximumBias: number
-  ): number {
-    if (!collapsed || collapsedOffset > 0) {
-      return 0;
-    }
-    const availableMargin = (collapsedWidth - maxContentWidth) / 2;
-    return Math.min(maximumBias, Math.max(0, availableMargin));
-  }
-
   static areaLength(value: Object): number {
     const parsed = Number.parseFloat(`${value}`);
     return Number.isNaN(parsed) ? 0 : parsed;
