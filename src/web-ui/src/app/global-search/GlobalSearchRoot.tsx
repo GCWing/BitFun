@@ -65,7 +65,7 @@ import {
   type GlobalSearchSnapshot,
 } from './types';
 import './GlobalSearchRoot.scss';
-import { IconButton as UiIconButton } from '@bitfun/ui';
+import { IconButton as UiIconButton, KeyHint } from '@bitfun/ui';
 
 const log = createLogger('GlobalSearch');
 const SEARCH_DEBOUNCE_MS = 90;
@@ -378,7 +378,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                 <X size={14} aria-hidden="true" />
               </UiIconButton>
             ) : variant === 'modal' ? (
-              <kbd className="global-search__shortcut" aria-hidden="true">{searchShortcutLabel}</kbd>
+              <KeyHint className="global-search__shortcut" aria-hidden="true">{searchShortcutLabel}</KeyHint>
             ) : null}
           </div>
 
@@ -554,11 +554,11 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
             </span>
           ) : null}
           <span className="global-search__footer-keys" aria-hidden="true">
-            <kbd>↑↓</kbd> {tCommon('nav.search.footer.navigate')}
-            <kbd>↵</kbd> {tCommon('nav.search.footer.open')}
+            <KeyHint>↑↓</KeyHint> {tCommon('nav.search.footer.navigate')}
+            <KeyHint>↵</KeyHint> {tCommon('nav.search.footer.open')}
             {variant === 'modal' || drilldownGroup ? (
               <>
-                <kbd>Esc</kbd>{' '}
+                <KeyHint>Esc</KeyHint>{' '}
                 {tCommon(drilldownGroup ? 'nav.search.footer.back' : 'nav.search.footer.close')}
               </>
             ) : null}

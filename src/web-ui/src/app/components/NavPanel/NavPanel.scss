@@ -3530,26 +3530,6 @@ $_section-header-height: 22px;
     white-space: nowrap;
   }
 
-  &__search-trigger__shortcut {
-    @include nav-font.nav-panel-text-meta;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    min-height: 18px;
-    padding: 0 5px;
-    border: 1px solid;
-    @include shell-surfaces.sidebar-hairline-color;
-    border-radius: $size-radius-sm;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    font-family: inherit;
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: 500;
-    line-height: 1;
-    white-space: nowrap;
-  }
-
   &__search-trigger__icon,
   &__utility-action,
   &__section-indicator,

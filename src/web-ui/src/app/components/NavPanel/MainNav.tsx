@@ -48,7 +48,7 @@ import {
 import { useExternalAppAwareness } from '@/infrastructure/config/components/external-sources/useExternalAppAwareness';
 
 import './NavPanel.scss';
-import { IconButton as UiIconButton } from '@bitfun/ui';
+import { IconButton as UiIconButton, KeyHint } from '@bitfun/ui';
 
 const log = createLogger('MainNav');
 
@@ -414,13 +414,13 @@ const MainNav: React.FC<MainNavProps> = ({
                 <span className="bitfun-nav-panel__search-trigger__label">
                   {t('nav.search.triggerPlaceholder')}
                 </span>
-                <kbd
+                <KeyHint
                   className="bitfun-nav-panel__search-trigger__shortcut"
                   data-testid="nav-search-shortcut"
                   aria-hidden="true"
                 >
                   {searchShortcutLabel}
-                </kbd>
+                </KeyHint>
               </button>
             </Tooltip>
           </div>
