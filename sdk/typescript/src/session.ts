@@ -7,6 +7,7 @@ import type {
   SessionResumeParams,
 } from "./internal/wire/index.js";
 import type { JsonRpcConnection } from "./internal/json-rpc.js";
+import { normalizeInput } from "./internal/input.js";
 import { withTimeout } from "./internal/deadline.js";
 import { isConnectionUnusableError, SdkError } from "./errors.js";
 import { Query } from "./query.js";
@@ -129,8 +130,10 @@ export class Session {
 
   async startTurn(input: TurnInput): Promise<Query> {
     this.#ensureOpen();
+    const normalized = normalizeInput(input.prompt);
     const params: QueryStartParams = {
-      prompt: input.prompt,
+      prompt: normalized.prompt,
+      images: normalized.images,
       sessionId: this.id,
     };
     const started = await this.#connection.request<QueryStartResult>(

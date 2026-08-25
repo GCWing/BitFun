@@ -17,6 +17,7 @@ import type {
   Result,
   ResultError,
   Turn,
+  Usage,
 } from "./types.js";
 import { isConnectionUnusableError, SdkError } from "./errors.js";
 
@@ -312,6 +313,7 @@ export class Query implements AsyncIterable<QueryStreamItem> {
       operationId: params.operationId,
       status: params.status,
       outputText: params.output.text,
+      ...(params.usage === undefined ? {} : { usage: mapUsage(params.usage) }),
       ...(params.error === undefined ? {} : { error: mapResultError(params.error) }),
     };
     if (!this.#push(result)) {
@@ -411,6 +413,19 @@ export class Query implements AsyncIterable<QueryStreamItem> {
     }
     this.#closedHandlers.clear();
   }
+}
+
+function mapUsage(usage: NonNullable<QueryResultParams["usage"]>): Usage {
+  return {
+    inputTokens: usage.inputTokens,
+    ...(usage.outputTokens === undefined
+      ? {}
+      : { outputTokens: usage.outputTokens }),
+    totalTokens: usage.totalTokens,
+    ...(usage.cachedTokens === undefined
+      ? {}
+      : { cachedTokens: usage.cachedTokens }),
+  };
 }
 
 function bufferedItemBytes(item: QueryStreamItem): number {

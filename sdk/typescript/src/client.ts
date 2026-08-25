@@ -1,6 +1,7 @@
 import type { InitializeResult, QueryStartParams, QueryStartResult } from "./internal/wire/index.js";
 import type { JsonRpcConnection } from "./internal/json-rpc.js";
 import { resolveHostPath } from "./internal/host-path.js";
+import { normalizeInput } from "./internal/input.js";
 import { SdkError } from "./errors.js";
 import { Query } from "./query.js";
 import { Session, Sessions } from "./session.js";
@@ -62,6 +63,7 @@ export class AgentClient {
       cancellation: initialized.capabilities.queryCancel,
       eventStream: initialized.capabilities.eventStream,
       toolEvents: initialized.capabilities.toolEvents,
+      imageInput: initialized.capabilities.imageInput,
       permissionResponses: initialized.capabilities.permissionResponses,
       structuredOutput: initialized.capabilities.structuredOutput,
       usage: initialized.capabilities.usage,
@@ -90,8 +92,10 @@ export class AgentClient {
 
   async query(input: QueryInput): Promise<Query> {
     this.#ensureOpen();
+    const normalized = normalizeInput(input.prompt);
     const params: QueryStartParams = {
-      prompt: input.prompt,
+      prompt: normalized.prompt,
+      images: normalized.images,
       sessionId: null,
       sessionName: null,
       agent: input.agent ?? null,
