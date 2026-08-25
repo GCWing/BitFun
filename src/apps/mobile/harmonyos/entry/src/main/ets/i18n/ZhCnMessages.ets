@@ -110,8 +110,6 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['sidebar.generalChat', '普通对话'],
   ['sidebar.conversations', '最近对话'],
   ['sidebar.devices', '设备'],
-  ['sidebar.noConnectedDevice', '尚未连接电脑'],
-  ['sidebar.scanConnectHint', '临时连接，或电脑端未登录时使用。'],
   ['sidebar.workspacesOffline', '未连接'],
   ['sidebar.connectDesktop', '连接电脑'],
   ['sidebar.addConnection', '添加连接'],
@@ -136,7 +134,6 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['sidebar.signedOutNewChat', '新聊天'],
   ['sidebar.scanToConnect', '扫码连接电脑'],
   ['sidebar.signInBitFunAccount', '登录 BitFun 账号'],
-  ['sidebar.signInHint', '登录后同步设备、会话和远程控制状态'],
   ['sidebar.collapse', '收起侧边栏'],
   ['sidebar.restore', '展开侧边栏'],
 
@@ -288,6 +285,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['remote.permissions.confirmFullAccess', '开启完全访问'],
 
   ['connect.localTitle', '连接本地工作区'],
+  ['connect.chooseConnectionTitle', '连接电脑'],
   ['connect.subtitle', '连接桌面端后，BitFun 可以访问代码仓库、运行命令和处理本地开发任务。'],
   ['connect.obtainPairCode', '获取配对码'],
   ['connect.obtainPairCodeBody', '在电脑端打开 BitFun 的远程控制，获取二维码或配对码。'],

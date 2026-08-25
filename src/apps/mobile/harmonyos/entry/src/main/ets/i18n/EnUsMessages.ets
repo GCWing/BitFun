@@ -110,8 +110,6 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['sidebar.generalChat', 'General chat'],
   ['sidebar.conversations', 'Recent chats'],
   ['sidebar.devices', 'Devices'],
-  ['sidebar.noConnectedDevice', 'No computer connected'],
-  ['sidebar.scanConnectHint', 'Use a temporary connection, or connect a computer that is signed out.'],
   ['sidebar.workspacesOffline', 'Disconnected'],
   ['sidebar.connectDesktop', 'Connect a computer'],
   ['sidebar.addConnection', 'Add connection'],
@@ -136,7 +134,6 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['sidebar.signedOutNewChat', 'New chat'],
   ['sidebar.scanToConnect', 'Scan to connect a computer'],
   ['sidebar.signInBitFunAccount', 'Sign in to BitFun'],
-  ['sidebar.signInHint', 'Sign in to sync devices, sessions, and remote control state'],
   ['sidebar.collapse', 'Collapse sidebar'],
   ['sidebar.restore', 'Expand sidebar'],
 
@@ -288,6 +285,7 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['remote.permissions.confirmFullAccess', 'Turn on full access'],
 
   ['connect.localTitle', 'Connect a local workspace'],
+  ['connect.chooseConnectionTitle', 'Connect a computer'],
   ['connect.subtitle', 'After connecting the desktop, BitFun can access repositories, run commands, and handle local development tasks.'],
   ['connect.obtainPairCode', 'Get a pairing code'],
   ['connect.obtainPairCodeBody', 'Open Remote Control in BitFun Desktop to get a QR code or pairing code.'],

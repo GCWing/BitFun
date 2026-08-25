@@ -895,6 +895,11 @@ export abstract class AppRootRuntimeComposition {
       newChat: (): void => { this.closeAppSidebar(); this.conversationController.prepareNewGeneralChat(); },
       enterCode: (): void => { this.closeAppSidebar(); this.enterCodeEntry(); },
       scanDesktop: (): void => { this.closeAppSidebar(); this.openConnectSheet(CONNECT_INTENT_SCAN); },
+      addDesktop: (): void => {
+        this.closeAppSidebar();
+        this.openConnectSheet(this.remotePageState.accountUserId.length > 0 ?
+          CONNECT_INTENT_SCAN : CONNECT_INTENT_AUTO);
+      },
       settings: (): void => { this.closeAppSidebar(); this.appShellState.openSettings('general'); },
       openAccount: (): void => {
         this.closeAppSidebar();
@@ -937,6 +942,10 @@ export abstract class AppRootRuntimeComposition {
     },
     onConnect: {
       back: (): void => this.appShellState.setConnectSheetVisible(false),
+      openAccount: (): void => {
+        this.appShellState.setConnectSheetVisible(false);
+        setTimeout(() => this.appShellState.openSettings('account'), 180);
+      },
       connect: (password?: string): void => {
         this.connect(false, password || '');
       },
