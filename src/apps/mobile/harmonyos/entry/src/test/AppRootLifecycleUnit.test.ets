@@ -4,7 +4,7 @@ import { AppRootHostPort } from '../main/ets/pages/host/AppRootHostAdapter';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
 import { AppRootRuntime } from '../main/ets/pages/runtime/AppRootRuntime';
 import { FilePreviewRequest, FilePreviewTarget } from '../main/ets/model/FilePreviewTarget';
-import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
+import { CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 
 class FakeAppRootHost implements AppRootHostPort {
   externalLinks: string[] = [];
@@ -108,15 +108,9 @@ export default function appRootLifecycleUnitTest() {
       expect(runtime.appShellState.showConnectSheet).assertFalse();
     });
 
-    it('offers both connection paths from add while signed out and scans directly when signed in', 0, () => {
+    it('opens the scanner directly when adding a desktop', 0, () => {
       const runtime = new TestAppRootRuntime();
 
-      runtime.presentationActions.onSidebar.addDesktop();
-      expect(runtime.appShellState.showConnectSheet).assertTrue();
-      expect(runtime.appShellState.connectSheetIntent).assertEqual(CONNECT_INTENT_AUTO);
-
-      runtime.appShellState.setConnectSheetVisible(false);
-      runtime.remotePageState.setAccountUserId('account-user');
       runtime.presentationActions.onSidebar.addDesktop();
       expect(runtime.appShellState.showConnectSheet).assertTrue();
       expect(runtime.appShellState.connectSheetIntent).assertEqual(CONNECT_INTENT_SCAN);
