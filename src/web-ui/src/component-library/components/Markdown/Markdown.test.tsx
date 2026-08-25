@@ -357,6 +357,144 @@ describe('Markdown file links', () => {
     expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
   });
 
+  it('preserves existing markdown nodes while streaming content is appended', async () => {
+    const initialContent = [
+      'Before image',
+      '',
+      '![Stable diagram](stream-stable.png)',
+      '',
+      'After image',
+    ].join('\n');
+
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={initialContent}
+          basePath={EXAMPLE_WORKSPACE}
+          isStreaming
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const imageBefore = container.querySelector<HTMLImageElement>('img[alt="Stable diagram"]');
+    const paragraphsBefore = Array.from(container.querySelectorAll('p'));
+    expect(imageBefore).not.toBeNull();
+    expect(paragraphsBefore).toHaveLength(3);
+    expect(mocks.readFileContent).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={`${initialContent}\n\nNew streamed paragraph`}
+          basePath={EXAMPLE_WORKSPACE}
+          isStreaming
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const imageAfter = container.querySelector<HTMLImageElement>('img[alt="Stable diagram"]');
+    const paragraphsAfter = Array.from(container.querySelectorAll('p'));
+    expect(imageAfter).toBe(imageBefore);
+    expect(paragraphsAfter).toHaveLength(4);
+    expect(paragraphsAfter.slice(0, 3)).toEqual(paragraphsBefore);
+    expect(mocks.readFileContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders alt text instead of a broken image when a local image read fails', async () => {
+    mocks.readFileContent.mockRejectedValueOnce(new Error('missing image'));
+
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={'![Missing diagram](missing-stream-image.png)'}
+          basePath={EXAMPLE_WORKSPACE}
+          isStreaming
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('img[alt="Missing diagram"]')).toBeNull();
+    const fallback = container.querySelector('[data-bf-part="imageFallback"]');
+    expect(fallback?.textContent).toBe('Missing diagram');
+
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={'![Missing diagram](missing-stream-image.png)\n\nLater streamed text'}
+          basePath={EXAMPLE_WORKSPACE}
+          isStreaming
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-bf-part="imageFallback"]')).toBe(fallback);
+    expect(mocks.readFileContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces an externally hosted image after the browser reports an error', async () => {
+    await act(async () => {
+      root.render(<Markdown content={'![Unavailable chart](https://example.invalid/chart.png)'} />);
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="Unavailable chart"]');
+    expect(image).not.toBeNull();
+
+    act(() => {
+      image?.dispatchEvent(new Event('error'));
+    });
+
+    expect(container.querySelector('img[alt="Unavailable chart"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="imageFallback"]')?.textContent)
+      .toBe('Unavailable chart');
+  });
+
+  it('uses the latest source text and callback without remounting a file link', async () => {
+    const firstHandler = vi.fn();
+    const secondHandler = vi.fn();
+    const firstPath = 'D:\\First\\README.md';
+    const secondPath = 'E:\\Second\\README.md';
+
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={`[README.md](${firstPath})`}
+          onFileViewRequest={firstHandler}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const linkBefore = container.querySelector<HTMLButtonElement>('button.file-link');
+    expect(linkBefore).not.toBeNull();
+
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={`[README.md](${secondPath})`}
+          onFileViewRequest={secondHandler}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const linkAfter = container.querySelector<HTMLButtonElement>('button.file-link');
+    expect(linkAfter).toBe(linkBefore);
+    act(() => linkAfter?.click());
+    expect(firstHandler).not.toHaveBeenCalled();
+    expect(secondHandler).toHaveBeenCalledWith(secondPath, 'README.md', undefined);
+  });
+
   it('routes remote markdown image reads through the session connection', async () => {
     await act(async () => {
       root.render(
