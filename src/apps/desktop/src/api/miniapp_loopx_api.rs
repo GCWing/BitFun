@@ -1,10 +1,8 @@
 use super::app_state::AppState;
 use bitfun_core::miniapp::{
-    builtin_content_hash,
-    loopx::LoopxController,
-    MiniAppCustomizationOriginKind,
-    BUILTIN_APPS,
+    loopx::LoopxController, MiniAppCustomizationOriginKind, BUILTIN_APPS,
 };
+use bitfun_product_domains::miniapp::builtin::builtin_source_matches;
 use bitfun_product_domains::miniapp::loopx::{
     LoopxActionRequest, LoopxActionResponse, LoopxAttachRequest, LoopxAttachResponse,
     LoopxCreateTaskRequest, LoopxCreateTaskResponse, LoopxEventsSinceRequest,
@@ -74,8 +72,7 @@ async fn authorize_builtin(state: &AppState, app_id: &str) -> Result<(), String>
         .get(app_id)
         .await
         .map_err(|error| format!("Failed to load built-in LoopX MiniApp: {error}"))?;
-    let expected_hash = builtin_content_hash(builtin);
-    if app.runtime.content_hash != expected_hash {
+    if !builtin_source_matches(&app.source, builtin) {
         return Err("LoopX controller is disabled for modified MiniApp content".to_string());
     }
     if let Some(metadata) = state

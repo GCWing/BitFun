@@ -8,7 +8,7 @@ use crate::miniapp::ports::{MiniAppPortFuture, MiniAppPortResult};
 use crate::miniapp::storage::{
     build_package_json, ESM_DEPS_JSON, INDEX_HTML, STYLE_CSS, UI_JS, WORKER_JS,
 };
-use crate::miniapp::types::MiniAppMeta;
+use crate::miniapp::types::{EsmDep, MiniAppMeta, MiniAppSource};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -186,6 +186,23 @@ pub fn builtin_content_hash(app: &BuiltinMiniAppBundle) -> String {
     format!("sha256:{}", hex_encode(&hasher.finalize()))
 }
 
+/// Whether installed source files still match the bundled built-in assets
+/// verbatim. Privileged host bridges use this to refuse driving from locally
+/// modified built-in content. The meta.json identity/timestamp rewrite performed
+/// at seed time is intentionally excluded.
+pub fn builtin_source_matches(source: &MiniAppSource, bundle: &BuiltinMiniAppBundle) -> bool {
+    let Ok(bundled_esm_deps) = serde_json::from_str::<Vec<EsmDep>>(bundle.esm_dependencies_json)
+    else {
+        return false;
+    };
+    source.html == bundle.html
+        && source.css == bundle.css
+        && source.ui_js == bundle.ui_js
+        && source.worker_js == bundle.worker_js
+        && source.esm_dependencies == bundled_esm_deps
+        && source.npm_dependencies.is_empty()
+}
+
 pub fn build_builtin_install_marker(
     app: &BuiltinMiniAppBundle,
     content_hash: &str,
@@ -359,9 +376,9 @@ mod tests {
     // Version bumps should only touch bundle registration and seed runtime, not tests.
 
     use super::{
-        build_builtin_seed_artifacts, builtin_content_hash, seed_builtin_miniapp_with_host,
-        BuiltinInstallMarker, BuiltinMiniAppSeedBundleRequest, BuiltinMiniAppSeedHost,
-        BuiltinMiniAppSeedOutcome, BuiltinSeedArtifacts, BUILTIN_APPS,
+        build_builtin_seed_artifacts, builtin_content_hash, builtin_source_matches,
+        seed_builtin_miniapp_with_host, BuiltinInstallMarker, BuiltinMiniAppSeedBundleRequest,
+        BuiltinMiniAppSeedHost, BuiltinMiniAppSeedOutcome, BuiltinSeedArtifacts, BUILTIN_APPS,
     };
     use crate::miniapp::ports::{MiniAppPortFuture, MiniAppPortResult};
     use std::sync::{Arc, Mutex};
@@ -694,5 +711,33 @@ mod tests {
         assert!(!app.html.contains("src=\"./ui.js\""));
         assert!(!app.html.contains("href=\"./style.css\""));
         assert!(app.css.contains("--bitfun-bg"));
+    }
+
+    #[test]
+    fn builtin_source_matches_detects_modified_source() {
+        use crate::miniapp::types::{EsmDep, MiniAppSource};
+
+        let app = &BUILTIN_APPS[0];
+        let pristine = MiniAppSource {
+            html: app.html.to_string(),
+            css: app.css.to_string(),
+            ui_js: app.ui_js.to_string(),
+            worker_js: app.worker_js.to_string(),
+            esm_dependencies: serde_json::from_str(app.esm_dependencies_json).unwrap(),
+            npm_dependencies: Vec::new(),
+        };
+        assert!(builtin_source_matches(&pristine, app));
+
+        let mut modified_ui = pristine.clone();
+        modified_ui.ui_js.push_str("\n// tampered");
+        assert!(!builtin_source_matches(&modified_ui, app));
+
+        let mut modified_deps = pristine;
+        modified_deps.esm_dependencies.push(EsmDep {
+            name: "extra".to_string(),
+            version: None,
+            url: None,
+        });
+        assert!(!builtin_source_matches(&modified_deps, app));
     }
 }
