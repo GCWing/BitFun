@@ -2353,7 +2353,7 @@ pub(crate) fn request_desktop_exit(app: &tauri::AppHandle, exit_code: i32, reaso
     if DESKTOP_EXIT_REQUESTED.swap(true, Ordering::AcqRel) {
         return;
     }
-    save_main_window_state(app);
+    save_main_window_state(app, reason);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         perform_process_exit_cleanup().await;

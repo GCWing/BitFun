@@ -47,7 +47,7 @@
     "modelName": "Model name (e.g. deepseek-v4-flash)",
     "skip": "Skip for now",
     "nextTheme": "Next: Theme",
-    "description": "Configure and manage AI model providers",
+    "description": "Manage default models, providers, subscriptions, catalog data, and network connections.",
     "providerLabel": "Select Model Provider",
     "selectProvider": "or select a preset provider",
     "customProvider": "Custom Configuration",

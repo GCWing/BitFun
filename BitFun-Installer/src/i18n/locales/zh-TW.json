@@ -47,7 +47,7 @@
     "modelName": "模型名稱（如 deepseek-v4-flash）",
     "skip": "稍後設定",
     "nextTheme": "下一步：主題",
-    "description": "設定和管理 AI 模型提供商",
+    "description": "管理預設模型、模型服務、訂閱帳戶、模型目錄與網路連線。",
     "providerLabel": "選擇模型提供商",
     "selectProvider": "或選擇預設提供商",
     "customProvider": "自定義設定",
