@@ -209,12 +209,12 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
   const rustJob = workflow.jobs['rust-build-check'];
   const frontendJob = workflow.jobs['frontend-build'];
-  const trustedMain =
-    "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}";
+  const trustedBase =
+    "${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/1.0.0-explore') }}";
 
   assert.equal(
     rustJob.needs,
-    'rust-impact',
+    'build-impact',
     'Rust validation must not wait for the frontend build',
   );
   assert.equal(
@@ -247,9 +247,25 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
       false,
       `${jobName} must consume the committed Cargo.lock`,
     );
-    assert.equal(cache?.with?.['save-if'], trustedMain);
-    assert.equal(cache?.with?.['cache-on-failure'], trustedMain);
+    assert.equal(cache?.with?.['save-if'], trustedBase);
+    assert.equal(cache?.with?.['cache-on-failure'], trustedBase);
+    assert.match(
+      cache?.with?.['shared-key'] ?? '',
+      /github\.base_ref \|\| github\.ref_name/,
+      `${jobName} must not mix main and explore build outputs`,
+    );
   }
+
+  const cliJob = workflow.jobs['cli-test'];
+  assert.equal(cliJob['timeout-minutes'], 30);
+  assert.ok(
+    cliJob.strategy.matrix.include.some((entry) => entry.os === 'windows-latest'),
+    'Windows ConPTY contracts must run before Nightly',
+  );
+  assert.equal(
+    cliJob.steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
+    'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
+  );
 
   const rustCache = rustJob.steps.find((step) =>
     step.uses?.startsWith('swatinem/rust-cache@'),
@@ -273,7 +289,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     (step) => step.name === 'Save Sherpa native libraries',
   );
   const sherpaCacheKey =
-    'sherpa-onnx-v1-${{ runner.os }}-${{ runner.arch }}-1.13.4-static';
+    'sherpa-onnx-v2-${{ github.base_ref || github.ref_name }}-${{ runner.os }}-${{ runner.arch }}-1.13.4-static';
 
   assert.equal(restoreSherpaCache?.uses, 'actions/cache/restore@v5');
   assert.equal(restoreSherpaCache?.with?.path, 'target/sherpa-onnx-prebuilt');
@@ -288,7 +304,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   assert.equal(saveSherpaCache?.with?.key, sherpaCacheKey);
   assert.equal(
     saveSherpaCache?.if,
-    "github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.sherpa-native-cache.outputs.cache-hit != 'true'",
+    "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/1.0.0-explore') && steps.sherpa-native-cache.outputs.cache-hit != 'true'",
   );
   assert.ok(
     rustJob.steps.indexOf(restoreSherpaCache) <
@@ -304,6 +320,14 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   const commandByStep = new Map(
     rustJob.steps.map((step) => [step.name, step.run]),
   );
+  const verifyMetadata = rustJob.steps.find(
+    (step) => step.name === 'Verify committed Cargo metadata',
+  );
+  assert.equal(verifyMetadata?.run, 'cargo metadata --locked --no-deps');
+  assert.ok(
+    rustJob.steps.indexOf(verifyMetadata) < rustJob.steps.indexOf(checkCompilation),
+    'CI must validate the committed Cargo.lock before the workspace check',
+  );
   assert.equal(
     commandByStep.get('Run subscription authentication tests'),
     'cargo test --locked -p bitfun-ai-adapters --features subscription-auth --lib subscription_auth',
@@ -316,9 +340,17 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     installerCheck?.run,
     'cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml',
   );
+  const fileWatchContracts = rustJob.steps.find(
+    (step) => step.name === 'Run file watch contract tests',
+  );
   assert.equal(
-    commandByStep.get('Run file watch contract tests'),
+    fileWatchContracts?.run,
     'cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',
+  );
+  assert.equal(
+    fileWatchContracts?.if,
+    undefined,
+    'file-watch contracts must exercise FSEvents on macOS',
   );
   assert.equal(
     commandByStep.get('Run search tool tests'),
@@ -326,7 +358,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
 });
 
-test('gates Rust and CLI validation behind one fail-closed impact decision', () => {
+test('gates fast checks and PR packaging behind one fail-closed build decision', (t) => {
   const workflow = yaml.parse(
     readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8'),
   );
@@ -337,9 +369,10 @@ test('gates Rust and CLI validation behind one fail-closed impact decision', () 
       'nested Markdown may be a Rust compile-time input and must trigger classification',
     );
   }
-  const impactJob = workflow.jobs['rust-impact'];
+  const impactJob = workflow.jobs['build-impact'];
   const cliJob = workflow.jobs['cli-test'];
   const rustJob = workflow.jobs['rust-build-check'];
+  const buildJob = workflow.jobs['package-impact-contract'];
   const resultJob = workflow.jobs['rust-validation-result'];
   const frontendJob = workflow.jobs['frontend-build'];
 
@@ -351,17 +384,69 @@ test('gates Rust and CLI validation behind one fail-closed impact decision', () 
     frontendJob.steps.find((step) => step.name === 'Check core boundaries')?.run,
     'pnpm run check:core-boundaries',
   );
+  assert.equal(frontendJob.needs, 'build-impact');
+  const frontendNode = frontendJob.steps.find((step) =>
+    step.uses?.startsWith('actions/setup-node@'));
+  assert.equal(frontendNode?.with?.cache, undefined);
+  assert.equal(frontendNode?.with?.['package-manager-cache'], false);
+  const frontendGate = "needs.build-impact.outputs.frontend_required != 'false'";
+  for (const stepName of [
+    'Verify committed release metadata',
+    'Verify Installer i18n projection',
+    'Verify Installer Tauri package alignment',
+    'Build plugin Host resources',
+    'Generate web API bindings',
+    'Build web UI',
+    'Build mobile web',
+    'Project a Nightly version',
+    'Verify projected release metadata',
+  ]) {
+    assert.equal(
+      frontendJob.steps.find((step) => step.name === stepName)?.if,
+      frontendGate,
+      `${stepName} must run for code changes and skip documentation-only changes`,
+    );
+  }
+  const releaseMetadata = 'cargo metadata --locked --no-deps';
+  assert.equal(
+    frontendJob.steps.find((step) => step.name === 'Verify committed release metadata')?.run,
+    releaseMetadata,
+  );
+  assert.equal(
+    frontendJob.steps.find((step) => step.name === 'Verify projected release metadata')?.run,
+    releaseMetadata,
+  );
 
-  assert.equal(impactJob.name, 'Rust / CLI Impact');
+  assert.equal(impactJob.name, 'Build Impact');
   assert.equal(impactJob['timeout-minutes'], 5);
   assert.equal(
     impactJob.outputs.rust_required,
     '${{ steps.classify.outputs.rust_required }}',
   );
+  assert.equal(
+    impactJob.outputs.desktop_platforms,
+    '${{ steps.classify.outputs.desktop_platforms }}',
+  );
+  assert.equal(
+    impactJob.outputs.desktop_packages_impacted,
+    '${{ steps.classify.outputs.desktop_packages_impacted }}',
+  );
+  assert.equal(
+    impactJob.outputs.pr_producer_required,
+    '${{ steps.classify.outputs.pr_producer_required }}',
+  );
+  assert.equal(
+    impactJob.outputs.relay_image_required,
+    '${{ steps.classify.outputs.relay_image_required }}',
+  );
+  assert.equal(
+    impactJob.outputs.dsh_profile_required,
+    '${{ steps.classify.outputs.dsh_profile_required }}',
+  );
   const checkout = impactJob.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
   assert.equal(checkout?.with?.['fetch-depth'], 0);
   const classify = impactJob.steps.find((step) => step.id === 'classify');
-  assert.match(classify?.run ?? '', /scripts\/ci\/classify-rust-impact\.mjs/);
+  assert.match(classify?.run ?? '', /scripts\/ci\/classify-build-impact\.mjs/);
   assert.equal(
     classify?.env?.BASE_SHA,
     '${{ github.event.pull_request.base.sha || github.event.before }}',
@@ -377,58 +462,107 @@ test('gates Rust and CLI validation behind one fail-closed impact decision', () 
   assert.match(classify?.run ?? '', /--range-mode "\$RANGE_MODE"/);
 
   for (const job of [cliJob, rustJob]) {
-    assert.equal(job.needs, 'rust-impact');
+    assert.equal(job.needs, 'build-impact');
     assert.match(job.if, /!cancelled\(\)/);
     assert.doesNotMatch(job.if, /always\(\)/);
     assert.match(job.if, /rust_required != 'false'/);
   }
 
+  assert.equal(buildJob.name, 'Impact-selected Linux / Relay Contract');
+  assert.equal(buildJob.needs, 'build-impact');
+  assert.equal(buildJob.uses, './.github/workflows/linux-binaries.yml');
+  assert.match(buildJob.if, /github\.event_name == 'pull_request'/);
+  assert.match(buildJob.if, /pr_producer_required == 'true'/);
+  assert.deepEqual(buildJob.permissions, { contents: 'read' });
+  assert.deepEqual(buildJob.with, {
+    checkout_ref: '${{ github.sha }}',
+    version: '0.0.0-nightly.ci.${{ github.run_id }}',
+    artifact_prefix: 'ci-${{ github.run_id }}',
+    artifact_retention_days: 1,
+    validate_relay_image:
+      "${{ needs.build-impact.outputs.relay_image_required == 'true' }}",
+    upload_artifacts: false,
+    cache_write: false,
+  });
+
   assert.equal(resultJob.name, 'Rust / CLI Validation');
   assert.equal(resultJob.if, '${{ always() }}');
   assert.deepEqual(
     [...resultJob.needs].sort(),
-    ['cli-test', 'rust-build-check', 'rust-impact'],
+    ['build-impact', 'cli-test', 'package-impact-contract', 'rust-build-check'],
   );
   const verify = resultJob.steps.find((step) => step.name === 'Verify Rust and CLI result');
-  assert.equal(verify?.env?.RUST_REQUIRED, '${{ needs.rust-impact.outputs.rust_required }}');
-  assert.equal(verify?.env?.IMPACT_RESULT, '${{ needs.rust-impact.result }}');
+  assert.equal(verify?.env?.RUST_REQUIRED, '${{ needs.build-impact.outputs.rust_required }}');
+  assert.equal(
+    verify?.env?.PR_PRODUCER_REQUIRED,
+    '${{ needs.build-impact.outputs.pr_producer_required }}',
+  );
+  assert.equal(verify?.env?.EVENT_NAME, '${{ github.event_name }}');
+  assert.equal(verify?.env?.IMPACT_RESULT, '${{ needs.build-impact.result }}');
   assert.equal(verify?.env?.CLI_RESULT, '${{ needs.cli-test.result }}');
   assert.equal(verify?.env?.RUST_RESULT, '${{ needs.rust-build-check.result }}');
+  assert.equal(
+    verify?.env?.BUILD_RESULT,
+    '${{ needs.package-impact-contract.result }}',
+  );
   assert.equal(verify?.shell, 'pwsh');
-  assert.match(verify?.run ?? '', /expected skipped Rust and CLI jobs/i);
-  assert.match(verify?.run ?? '', /expected successful Rust and CLI jobs/i);
+  assert.match(verify?.run ?? '', /successful impact-selected producer jobs/i);
+  assert.match(verify?.run ?? '', /successful Rust and CLI jobs/i);
+
+  const dshJob = workflow.jobs['dsh-profile-windows'];
+  assert.equal(dshJob.needs, 'build-impact');
+  assert.match(dshJob.if, /dsh_profile_required == 'true'/);
 
   const statuses = ['success', 'skipped', 'failure', 'cancelled'];
   const cases = [];
   for (const impactResult of statuses.filter((status) => status !== 'success')) {
     cases.push({
       rustRequired: 'true',
+      producerRequired: 'true',
+      eventName: 'pull_request',
       impactResult,
       cliResult: 'success',
       rustResult: 'success',
+      buildResult: 'success',
       expectedSuccess: false,
     });
   }
   for (const rustRequired of ['false', 'true']) {
-    for (const cliResult of statuses) {
-      for (const rustResult of statuses) {
-        cases.push({
-          rustRequired,
-          impactResult: 'success',
-          cliResult,
-          rustResult,
-          expectedSuccess: rustRequired === 'false'
-            ? cliResult === 'skipped' && rustResult === 'skipped'
-            : cliResult === 'success' && rustResult === 'success',
-        });
+    for (const producerRequired of ['false', 'true']) {
+      for (const eventName of ['pull_request', 'push']) {
+        for (const cliResult of statuses) {
+          for (const rustResult of statuses) {
+            for (const buildResult of statuses) {
+              const packageExpected = eventName === 'pull_request'
+                && producerRequired === 'true';
+              cases.push({
+                rustRequired,
+                producerRequired,
+                eventName,
+                impactResult: 'success',
+                cliResult,
+                rustResult,
+                buildResult,
+                expectedSuccess: (packageExpected
+                  ? buildResult === 'success'
+                  : buildResult === 'skipped') && (rustRequired === 'false'
+                  ? cliResult === 'skipped' && rustResult === 'skipped'
+                  : cliResult === 'success' && rustResult === 'success'),
+              });
+            }
+          }
+        }
       }
     }
   }
   cases.push({
     rustRequired: '',
+    producerRequired: 'false',
+    eventName: 'push',
     impactResult: 'success',
     cliResult: 'skipped',
     rustResult: 'skipped',
+    buildResult: 'success',
     expectedSuccess: false,
   });
   const truthTable = spawnSync(
@@ -445,9 +579,12 @@ ${verify.run}
 }
 foreach ($case in $cases) {
   $env:RUST_REQUIRED = [string]$case.rustRequired
+  $env:PR_PRODUCER_REQUIRED = [string]$case.producerRequired
+  $env:EVENT_NAME = [string]$case.eventName
   $env:IMPACT_RESULT = [string]$case.impactResult
   $env:CLI_RESULT = [string]$case.cliResult
   $env:RUST_RESULT = [string]$case.rustResult
+  $env:BUILD_RESULT = [string]$case.buildResult
   $succeeded = $true
   try { & $verify } catch { $succeeded = $false }
   if ($succeeded -ne [bool]$case.expectedSuccess) {
@@ -461,22 +598,91 @@ foreach ($case in $cases) {
       encoding: 'utf8',
     },
   );
+  if (truthTable.error?.code === 'ENOENT') {
+    t.skip('pwsh is not installed; GitHub-hosted runners execute this truth table');
+    return;
+  }
   assert.equal(truthTable.status, 0, `${truthTable.stdout}${truthTable.stderr}`);
 });
 
-test('generates web API bindings before nightly web type-check', () => {
+test('nightly validates generated inputs and projected lockfiles before packaging', () => {
   const workflow = yaml.parse(
-    readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
+    readFileSync(
+      path.join(repoRoot, '.github/workflows/nightly-artifacts.yml'),
+      'utf8',
+    ),
   );
+  const callInputs = workflow.on.workflow_call.inputs;
   const packageJob = workflow.jobs.package;
+  const linuxJob = workflow.jobs['linux-binaries'];
   const steps = packageJob.steps;
+  const committedMetadataIndex = steps.findIndex(
+    (step) => step.name === 'Verify committed Cargo metadata',
+  );
   const generationIndex = steps.findIndex(
     (step) => step.name === 'Generate web API bindings',
   );
   const typeCheckIndex = steps.findIndex(
     (step) => step.name === 'Type-check web UI',
   );
+  const patchIndex = steps.findIndex(
+    (step) => step.name === 'Patch nightly version',
+  );
+  const tauriAlignmentIndex = steps.findIndex(
+    (step) => step.name === 'Verify Installer Tauri package alignment',
+  );
+  const installerI18nIndex = steps.findIndex(
+    (step) => step.name === 'Verify Installer i18n projection',
+  );
+  const metadataIndex = steps.findIndex(
+    (step) => step.name === 'Verify projected Cargo metadata',
+  );
+  const buildIndex = steps.findIndex(
+    (step) => step.name === 'Build desktop app',
+  );
 
+  assert.equal(callInputs.checkout_ref.required, true);
+  assert.equal(callInputs.version.required, true);
+  assert.equal(callInputs.artifact_prefix.required, true);
+  assert.equal(callInputs.artifact_retention_days.default, 1);
+  assert.equal(callInputs.build_desktop_packages.default, true);
+  assert.equal(callInputs.build_linux_binaries.default, true);
+  assert.equal(callInputs.build_relay_image.default, true);
+  assert.equal(callInputs.upload_artifacts.default, true);
+  assert.equal(callInputs.cache_write.default, false);
+  assert.equal(
+    callInputs.desktop_platforms.default,
+    '["linux-x64","linux-arm64","macos-arm64","macos-x64","windows-x64"]',
+  );
+  assert.equal(workflow.permissions.contents, 'read');
+  assert.equal(
+    linuxJob.if,
+    '${{ inputs.build_linux_binaries || inputs.build_relay_image }}',
+  );
+  assert.equal(
+    linuxJob.with.validate_relay_image,
+    '${{ inputs.build_relay_image }}',
+  );
+
+  const node = steps.find((step) => step.name === 'Setup Node.js');
+  assert.equal(node?.with?.cache, undefined);
+  assert.equal(node?.with?.['package-manager-cache'], false);
+  const rustCache = steps.find((step) =>
+    step.uses?.startsWith('swatinem/rust-cache@'));
+  const restoreOnlyOnPr =
+    "${{ inputs.cache_write && github.event_name != 'pull_request' }}";
+  assert.equal(rustCache?.with?.['save-if'], restoreOnlyOnPr);
+  assert.equal(rustCache?.with?.['cache-on-failure'], restoreOnlyOnPr);
+  const upload = steps.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
+  const verifyOutputs = steps.find((step) => step.name === 'Verify package outputs');
+  assert.match(verifyOutputs?.run ?? '', /bitfun-installer\.exe/);
+  assert.match(verifyOutputs?.run ?? '', /\*\.AppImage/);
+  assert.ok(steps.indexOf(verifyOutputs) < steps.indexOf(upload));
+  assert.equal(upload?.if, '${{ inputs.upload_artifacts }}');
+
+  assert.notEqual(committedMetadataIndex, -1);
+  assert.notEqual(installerI18nIndex, -1);
+  assert.notEqual(tauriAlignmentIndex, -1);
   assert.notEqual(generationIndex, -1);
   assert.notEqual(typeCheckIndex, -1);
   assert.equal(
@@ -486,6 +692,222 @@ test('generates web API bindings before nightly web type-check', () => {
   assert.ok(
     generationIndex < typeCheckIndex,
     'nightly must generate web API bindings before type-checking the web UI',
+  );
+  assert.ok(
+    committedMetadataIndex < patchIndex &&
+      installerI18nIndex < patchIndex &&
+      tauriAlignmentIndex < patchIndex &&
+      typeCheckIndex < patchIndex &&
+      patchIndex < metadataIndex &&
+      metadataIndex < buildIndex,
+    'nightly must verify the projected lockfile before nested locked build hooks run',
+  );
+  const expectedMetadata = 'cargo metadata --locked --no-deps';
+  assert.equal(steps[committedMetadataIndex].run, expectedMetadata);
+  assert.equal(steps[metadataIndex].run, expectedMetadata);
+  assert.equal(steps[installerI18nIndex].if, "runner.os == 'Windows'");
+  assert.equal(
+    steps[installerI18nIndex].run,
+    'pnpm --dir BitFun-Installer run sync:i18n',
+  );
+  assert.equal(steps[tauriAlignmentIndex].if, "runner.os == 'Windows'");
+  assert.match(
+    steps[tauriAlignmentIndex].run,
+    /Found version mismatched Tauri packages/,
+  );
+  assert.equal(
+    steps.some((step) => step.run?.includes('cargo generate-lockfile')),
+    false,
+    'nightly must not hide stale committed lockfiles by regenerating them ad hoc',
+  );
+  assert.equal(
+    steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
+    'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
+  );
+});
+
+test('nightly orchestrates the shared build before the separately privileged publish', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
+  );
+  const build = workflow.jobs['build-artifacts'];
+  const publish = workflow.jobs['publish-nightly'];
+
+  assert.equal(workflow.on.workflow_call, undefined);
+  assert.deepEqual(workflow.concurrency, {
+    group: 'nightly-${{ github.repository }}',
+    'cancel-in-progress': true,
+  });
+  assert.equal(build.uses, './.github/workflows/nightly-artifacts.yml');
+  assert.deepEqual(build.permissions, { contents: 'read' });
+  assert.deepEqual(build.with, {
+    checkout_ref: '${{ github.sha }}',
+    version: '${{ needs.check-changes.outputs.nightly_version }}',
+    artifact_prefix: 'nightly',
+    artifact_retention_days:
+      "${{ fromJSON(inputs.artifact_retention_days || '7') }}",
+    build_desktop_packages: true,
+    desktop_platforms:
+      '["linux-x64","linux-arm64","macos-arm64","macos-x64","windows-x64"]',
+    build_linux_binaries: true,
+    build_relay_image: true,
+    upload_artifacts: true,
+    cache_write: "${{ github.repository_owner == 'GCWing' }}",
+  });
+  assert.deepEqual(publish.needs, ['check-changes', 'build-artifacts']);
+  assert.match(publish.if, /inputs\.build_only != true/);
+  assert.deepEqual(publish.permissions, {
+    contents: 'write',
+    packages: 'write',
+  });
+});
+
+test('Linux binary packaging uses the shared locked version projection contract', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/linux-binaries.yml'), 'utf8'),
+  );
+  const inputs = workflow.on.workflow_call.inputs;
+  const steps = workflow.jobs.build.steps;
+  const nodeIndex = steps.findIndex(
+    (step) => step.name === 'Setup Node.js',
+  );
+  const committedIndex = steps.findIndex(
+    (step) => step.name === 'Verify committed Cargo metadata',
+  );
+  const patchIndex = steps.findIndex(
+    (step) => step.name === 'Patch build version',
+  );
+  const projectedIndex = steps.findIndex(
+    (step) => step.name === 'Verify projected Cargo metadata',
+  );
+  const buildIndex = steps.findIndex(
+    (step) => step.name === 'Build CLI and Relay Server',
+  );
+
+  assert.equal(inputs.artifact_retention_days.default, 7);
+  assert.equal(inputs.upload_artifacts.default, true);
+  assert.equal(inputs.cache_write.default, false);
+  assert.equal(inputs.validate_relay_image.default, true);
+  assert.equal(steps[nodeIndex].uses, 'actions/setup-node@v5');
+  assert.equal(steps[nodeIndex].with['node-version-file'], 'package.json');
+  assert.ok(
+    nodeIndex < patchIndex &&
+      committedIndex < patchIndex &&
+      patchIndex < projectedIndex &&
+      projectedIndex < buildIndex,
+  );
+  assert.match(steps[patchIndex].run, /node scripts\/set-build-version\.mjs/);
+  assert.doesNotMatch(steps[patchIndex].run, /sed -i/);
+  assert.equal(steps[committedIndex].run, 'cargo metadata --locked --no-deps');
+  assert.equal(steps[projectedIndex].run, 'cargo metadata --locked --no-deps');
+  assert.match(steps[buildIndex].run, /cargo build --locked --release/);
+  const rustCache = steps.find((step) =>
+    step.uses?.startsWith('swatinem/rust-cache@'));
+  const restoreOnlyOnPr =
+    "${{ inputs.cache_write && github.event_name != 'pull_request' }}";
+  assert.equal(rustCache?.with?.['save-if'], restoreOnlyOnPr);
+  assert.equal(rustCache?.with?.['cache-on-failure'], restoreOnlyOnPr);
+  const upload = steps.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
+  const verifyOutputs = steps.find((step) => step.name === 'Verify Linux binary outputs');
+  const validateImage = steps.find((step) => step.name === 'Validate Relay runtime image');
+  assert.match(verifyOutputs?.run ?? '', /sha256sum --check/);
+  assert.ok(steps.indexOf(verifyOutputs) < steps.indexOf(upload));
+  assert.equal(validateImage?.if, '${{ inputs.validate_relay_image }}');
+  assert.equal(validateImage?.with?.push, false);
+  assert.equal(validateImage?.with?.platforms, 'linux/${{ matrix.platform.docker_arch }}');
+  assert.equal(upload?.if, '${{ inputs.upload_artifacts }}');
+  assert.equal(
+    upload?.with?.['retention-days'],
+    '${{ inputs.artifact_retention_days }}',
+  );
+});
+
+test('PR-capable release builds cannot save repository caches or upload CI packages', () => {
+  const ci = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8'),
+  );
+  const artifacts = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/nightly-artifacts.yml'), 'utf8'),
+  );
+  const linux = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/linux-binaries.yml'), 'utf8'),
+  );
+
+  for (const workflow of [artifacts, linux]) {
+    for (const job of Object.values(workflow.jobs)) {
+      for (const cache of (job.steps ?? []).filter((step) =>
+        step.uses?.startsWith('swatinem/rust-cache@'))) {
+        assert.match(cache.with['save-if'], /github\.event_name != 'pull_request'/);
+        assert.match(cache.with['cache-on-failure'], /github\.event_name != 'pull_request'/);
+        assert.match(cache.with['shared-key'], /github\.base_ref \|\| github\.ref_name/);
+      }
+    }
+  }
+
+  for (const workflow of [ci, artifacts, linux]) {
+    for (const job of Object.values(workflow.jobs)) {
+      for (const bun of (job.steps ?? []).filter((step) =>
+        step.uses?.startsWith('oven-sh/setup-bun@'))) {
+        assert.equal(bun.with?.['no-cache'], true);
+      }
+    }
+  }
+
+  const packageCaller = ci.jobs['package-impact-contract'];
+  assert.equal(packageCaller.with.cache_write, false);
+  assert.equal(packageCaller.with.upload_artifacts, false);
+  const node = artifacts.jobs.package.steps.find(
+    (step) => step.name === 'Setup Node.js',
+  );
+  assert.equal(node.with.cache, undefined);
+  assert.equal(node.with['package-manager-cache'], false);
+});
+
+test('nightly publishes and verifies the Relay image in the current repository owner scope', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
+  );
+  const steps = workflow.jobs['publish-nightly'].steps;
+  const metadata = steps.find(
+    (step) => step.name === 'Resolve nightly image metadata',
+  );
+  const publish = steps.find(
+    (step) => step.name === 'Build and push multi-platform Relay image',
+  );
+  const smoke = steps.find(
+    (step) => step.name === 'Smoke-test published Relay image on both platforms',
+  );
+  const manifest = steps.find(
+    (step) => step.name === 'Generate Linux binaries manifest',
+  );
+  const verifyDescriptor = steps.find(
+    (step) => step.name === 'Verify published Relay image descriptor',
+  );
+  const verifyMacCli = steps.find(
+    (step) => step.name === 'Verify published macOS CLI assets',
+  );
+  const image = '${{ steps.nightly-image-meta.outputs.image }}';
+
+  assert.match(
+    metadata?.run ?? '',
+    /image=ghcr\.io\/\$\{GITHUB_REPOSITORY_OWNER,,\}\/bitfun-relay-server/,
+  );
+  assert.equal(
+    publish?.with?.tags,
+    `${image}:${'${{ env.NIGHTLY_TAG }}'}\n${image}:${'${{ steps.nightly-image-meta.outputs.asset_version }}'}\n`,
+  );
+  assert.equal(
+    smoke?.run,
+    `bash scripts/relay/smoke-image.sh \\\n  "${image}@\${IMAGE_DIGEST}"\n`,
+  );
+  assert.match(manifest?.run ?? '', /--repo "\$\{\{ github\.repository \}\}"/);
+  assert.match(
+    verifyDescriptor?.run ?? '',
+    /\$\{GITHUB_SERVER_URL\}\/\$\{GITHUB_REPOSITORY\}\/releases\/download/,
+  );
+  assert.match(
+    verifyMacCli?.run ?? '',
+    /\$\{GITHUB_SERVER_URL\}\/\$\{GITHUB_REPOSITORY\}\/releases\/download/,
   );
 });
 
@@ -659,28 +1081,35 @@ test('beta publishing cannot advance the Relay latest image tag', () => {
 });
 
 test('nightly and beta use the shared build-version projection', () => {
+  const artifacts = yaml.parse(
+    readFileSync(
+      path.join(repoRoot, '.github/workflows/nightly-artifacts.yml'),
+      'utf8',
+    ),
+  );
   const nightly = yaml.parse(
     readFileSync(path.join(repoRoot, '.github/workflows/nightly.yml'), 'utf8'),
   );
-  const patch = nightly.jobs.package.steps.find(
+  const patch = artifacts.jobs.package.steps.find(
     (step) => step.name === 'Patch nightly version',
   );
   assert.match(patch.run, /node scripts\/set-build-version\.mjs/);
-  assert.equal(nightly.jobs.package.env.BITFUN_RELEASE_CHANNEL, 'nightly');
+  assert.equal(artifacts.jobs.package.env.BITFUN_RELEASE_CHANNEL, 'nightly');
   assert.equal(
-    nightly.jobs.package.env.TAURI_UPDATER_ENDPOINT,
+    artifacts.jobs.package.env.TAURI_UPDATER_ENDPOINT,
     'https://github.com/GCWing/BitFun/releases/latest/download/latest.json',
   );
   assert.equal(
-    nightly.jobs.package.env.TAURI_UPDATER_FALLBACK_ENDPOINT,
+    artifacts.jobs.package.env.TAURI_UPDATER_FALLBACK_ENDPOINT,
     'https://openbitfun.com/release/latest.json',
   );
-  assert.equal(nightly.jobs.package.env.BITFUN_ENABLE_UPDATER_ARTIFACTS, undefined);
+  assert.equal(artifacts.jobs.package.env.BITFUN_ENABLE_UPDATER_ARTIFACTS, undefined);
   const signingStep = nightly.jobs['publish-nightly'].steps.find(
     (step) => step.name === 'Sign installer packages',
   );
   assert.match(signingStep.run, /write-minisign-public-key\.mjs/);
 });
+
 
 test('Linux Rust workflows do not install an unused native OpenSSL toolchain', () => {
   for (const workflowPath of [
