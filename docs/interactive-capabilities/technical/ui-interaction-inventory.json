@@ -5,9 +5,9 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "e94ff7da7ba104f8bce70a0d11c8e3137ef9ec87dfea22b40b4e1c0cc038c7fd",
-  "fileCount": 364,
-  "interactionCount": 4402,
+  "digest": "154fb37d1f29ab10e8f342c0de543258a8ca07584c08cfa659f4a161346eac58",
+  "fileCount": 365,
+  "interactionCount": 4408,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -780,6 +780,11 @@
       "digest": "5921d31e205fe8c7f72bfe76744cd593fa223334685709f909b0242bd717406e"
     },
     {
+      "sourceFile": "src/web-ui/src/flow_chat/components/AcpModeSelector.tsx",
+      "interactionCount": 8,
+      "digest": "4fb25e7b3a84e494b0508cbefd3014aeac3d165e061d13548543094720a00563"
+    },
+    {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInput.tsx",
       "interactionCount": 72,
       "digest": "3bc3014007ebb954f0b4118133c0d5eb466e57589e77ddffc407f09d05b0952c"
@@ -851,8 +856,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ModelSelector.tsx",
-      "interactionCount": 51,
-      "digest": "4ed5c1325e9a0badcecef22b8cefbbb24d0e9dd3e1a118840199ab3a203abf1e"
+      "interactionCount": 49,
+      "digest": "b1b2ef2ebd07ae3dbbe8425b42c51ac35871064675b2c00b3bb1cc3e65461b09"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/PendingQueuePanel.tsx",
