@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowUpRight, FolderOpen } from 'lucide-react';
 import type { MiniAppBubbleCustomization } from '@/app/scenes/miniapps/miniAppStore';
 import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
-import { IconButton as UiIconButton } from '@bitfun/ui';
 
 interface MiniAppBubbleWelcomeProps {
   appName: string;
@@ -71,7 +70,7 @@ export const MiniAppBubbleWelcome: React.FC<MiniAppBubbleWelcomeProps> = ({
           )}
           <div className="bitfun-fmc__miniapp-suggestions-list" data-bf-component="miniapp-bubble-welcome" data-bf-part="suggestionsList">
             {suggestions.map((suggestion, index) => (
-              <UiIconButton aria-label={suggestion.prompt}
+              <button aria-label={suggestion.prompt}
                 key={`${suggestion.label}:${index}`}
                 type="button"
                 className="bitfun-fmc__miniapp-suggestion"
@@ -82,7 +81,7 @@ export const MiniAppBubbleWelcome: React.FC<MiniAppBubbleWelcomeProps> = ({
               >
                 <span>{suggestion.label}</span>
                 <ArrowUpRight size={13} aria-hidden="true" />
-              </UiIconButton>
+              </button>
             ))}
           </div>
         </div>

@@ -42,7 +42,6 @@ import {
   updateIfOperationCurrent,
 } from './remoteConnectOperationCleanup';
 import './RemoteConnectDialog.scss';
-import { IconButton as UiIconButton } from '@bitfun/ui';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -943,7 +942,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     return (
       <div data-bf-component="remote-connect-dialog" data-bf-part="body" className="bitfun-remote-connect__body">
         {connectionResult.qr_url && (
-          <UiIconButton
+          <button
             type="button"
             className="bitfun-remote-connect__qr-box"
             title={t('remoteConnect.copyUrl')}
@@ -951,7 +950,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             onClick={() => void handleCopyPairingUrl()}
           >
             <QRCodeSVG value={connectionResult.qr_url} size={180} level="M" includeMargin />
-          </UiIconButton>
+          </button>
         )}
         {connectionResult.bot_pairing_code && (
           <div className="bitfun-remote-connect__pairing-code-box">

@@ -35,7 +35,6 @@ import {
   createReviewPlatformTab,
 } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
-import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const PULL_REQUEST_OVERVIEW_LIMIT = 3;
 
@@ -1054,7 +1053,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   ) : (
                     <div className="flowchat-header__pull-request-list">
                       {pullRequestOverview.items.map(pullRequest => (
-                        <UiIconButton aria-label={`#${pullRequest.number} ${pullRequest.title}`}
+                        <button aria-label={`#${pullRequest.number} ${pullRequest.title}`}
                           key={`${pullRequest.providerId ?? 'auto'}:${pullRequest.id}`}
                           type="button"
                           className="flowchat-header__pull-request-item"
@@ -1064,7 +1063,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                         >
                           <span>#{pullRequest.number} {pullRequest.title}</span>
                           <ChevronRight size={13} aria-hidden="true" />
-                        </UiIconButton>
+                        </button>
                       ))}
                     </div>
                   )}

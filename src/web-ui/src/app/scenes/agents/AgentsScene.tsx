@@ -72,7 +72,6 @@ import {
   useModelSelectPresentation,
 } from '@/infrastructure/config/components/ModelSelectPresentation';
 import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
-import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
 
@@ -1380,7 +1379,7 @@ const AgentsHomeView: React.FC = () => {
                             fields={tooltipFields}
                           >
                             <span className="agent-card__tooltip-trigger">
-                              <UiIconButton
+                              <button
                                 type="button"
                                 className={`agent-card__token${isOn ? ' is-on' : ''}${isExternal ? ' is-readonly' : ''}`}
                                 disabled={isExternal}
@@ -1401,7 +1400,7 @@ const AgentsHomeView: React.FC = () => {
                                 <span className="agent-card__token-name">
                                   {subagent.name}{isExternal ? ` · ${t('filters.external')}` : ''}
                                 </span>
-                              </UiIconButton>
+                              </button>
                             </span>
                           </AgentCapabilityTooltip>
                         );

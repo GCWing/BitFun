@@ -92,7 +92,6 @@ import {
 } from './sessionNavExpand';
 import { useSessionRowRemovalTransition } from './sessionRowShift';
 import './SessionsSection.scss';
-import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('SessionsSection');
 const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
@@ -2002,7 +2001,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       {aggregateLoadStatus}
 
       {!showAllWithoutLimit && expandLevel === 2 && topLevelSessions.length > sessionDisplayLimit && (
-        <UiIconButton
+        <button
           type="button"
           className="bitfun-nav-panel__inline-toggle"
           data-testid="nav-session-list-load-more"
@@ -2018,7 +2017,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             +{topLevelSessions.length - sessionDisplayLimit}
           </span>
           <ChevronDown size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
-        </UiIconButton>
+        </button>
       )}
 
       {!showAllWithoutLimit && expandToggleState.shouldRender && (

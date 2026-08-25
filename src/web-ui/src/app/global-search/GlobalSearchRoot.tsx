@@ -446,7 +446,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
               >
                 {groupDetailPage ? (
                   <div className="global-search__detail-header">
-                    <UiIconButton
+                    <button
                       type="button"
                       className="global-search__detail-back"
                       onClick={closeGroupDetails}
@@ -455,7 +455,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     >
                       <ChevronLeft size={15} strokeWidth={1.8} aria-hidden="true" />
                       <span>{tCommon('nav.search.back')}</span>
-                    </UiIconButton>
+                    </button>
                     <div className="global-search__detail-heading">
                       <span id={labelId} className="global-search__group-title">{groupLabel}</span>
                       <span className="global-search__group-count">
@@ -468,7 +468,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     <span className="global-search__group-title">{groupLabel}</span>
                     <span className="global-search__group-meta">
                       {groupView.canOpenDetails ? (
-                        <UiIconButton
+                        <button
                           type="button"
                           className="global-search__group-drilldown"
                           onClick={() => openGroupDetails(groupId as GlobalSearchDrilldownGroupId)}
@@ -480,7 +480,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                         >
                           <span>{tCommon('nav.search.resultCount', { count: groupView.totalCount })}</span>
                           <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" />
-                        </UiIconButton>
+                        </button>
                       ) : (
                         <span aria-hidden="true">
                           {tCommon('nav.search.resultCount', { count: groupView.totalCount })}
