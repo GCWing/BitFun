@@ -1,4 +1,4 @@
-import { RemoteSession } from '../../model/RemoteModels';
+import { RemoteSession, SessionSummary } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
@@ -346,6 +346,75 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
       all.filter((item: RemoteSession) => item.workspacePath !== this.remotePageState.workspacePath),
       deviceId
     );
+    this.publishRemoteSessions(this.mergeSessions(current, extras), this.remotePageState.hasMoreSessions);
+  }
+
+  /**
+   * Reconciles the workspace row that owns a newly created remote session.
+   *
+   * Creating from the sidebar deliberately does not switch the desktop's
+   * active workspace. A normal session refresh therefore still lists the old
+   * active workspace and cannot discover the new row. Publish the confirmed
+   * create immediately, then refresh the workspace named by the response.
+   */
+  async reconcileCreatedRemoteSession(session: SessionSummary): Promise<void> {
+    const workspacePath = session.workspacePath.trim();
+    if (workspacePath.length === 0 || workspacePath === this.remotePageState.workspacePath) {
+      await this.remoteSessionViewModel.refreshSessions();
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const created: RemoteSession = {
+      id: session.sessionId,
+      title: session.title,
+      agentType: session.agentType,
+      status: 'active',
+      updatedAt: now,
+      createdAt: now,
+      messageCount: session.initialTurnId ? 1 : 0,
+      workspacePath
+    };
+    this.remoteWorkspaceSessions = this.replaceWorkspaceSessions(
+      workspacePath,
+      this.mergeSessions([created], this.sessionsForWorkspace(workspacePath))
+    );
+    this.publishRemoteWorkspaceSessions();
+
+    try {
+      const refreshed = await this.sessionManager.listSessionsForWorkspace(workspacePath, 50);
+      const containsCreated = refreshed.some((item: RemoteSession): boolean => item.id === session.sessionId);
+      this.remoteWorkspaceSessions = this.replaceWorkspaceSessions(
+        workspacePath,
+        containsCreated ? refreshed : this.mergeSessions([created], refreshed)
+      );
+      this.publishRemoteWorkspaceSessions();
+    } catch (err) {
+      // The create already succeeded and is on screen. Keep that confirmed row
+      // instead of turning a follow-up list failure into a false create error.
+      RemoteLogger.warn(`created session workspace refresh failed path=${workspacePath}: ${String(err)}`);
+    }
+  }
+
+  private sessionsForWorkspace(path: string): RemoteSession[] {
+    return this.remotePageState.sessions.filter((item: RemoteSession): boolean => item.workspacePath === path);
+  }
+
+  private replaceWorkspaceSessions(path: string, replacement: RemoteSession[]): RemoteSession[] {
+    const preserved = this.remotePageState.sessions.filter((item: RemoteSession): boolean => {
+      return item.workspacePath !== path;
+    });
+    return replacement.concat(preserved);
+  }
+
+  private publishRemoteWorkspaceSessions(): void {
+    const currentPath = this.remotePageState.workspacePath;
+    const current = this.remotePageState.sessions.filter((item: RemoteSession): boolean => {
+      return (item.workspacePath || currentPath) === currentPath;
+    });
+    const extras = this.remoteWorkspaceSessions.filter((item: RemoteSession): boolean => {
+      return item.workspacePath !== currentPath;
+    });
     this.publishRemoteSessions(this.mergeSessions(current, extras), this.remotePageState.hasMoreSessions);
   }
 
