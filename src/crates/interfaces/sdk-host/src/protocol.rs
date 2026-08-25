@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: u32 = 5;
+pub const PROTOCOL_VERSION: u32 = 6;
 
 pub const METHOD_INITIALIZE: &str = "initialize";
 pub const METHOD_SESSION_CREATE: &str = "session/create";
@@ -291,7 +291,7 @@ impl HostCapabilities {
             event_stream: true,
             tool_events: true,
             image_input: true,
-            structured_output: false,
+            structured_output: true,
             usage: true,
             custom_tools: false,
             permission_responses: true,
@@ -466,6 +466,9 @@ pub struct QueryStartParams {
     pub prompt: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<String>,
+    #[cfg_attr(feature = "ts", ts(optional, type = "Record<string, unknown>"))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<serde_json::Value>,
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub session_id: Option<String>,
@@ -698,6 +701,9 @@ pub struct QueryUsage {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct QueryOutput {
     pub text: String,
+    #[cfg_attr(feature = "ts", ts(optional, type = "unknown"))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structured: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

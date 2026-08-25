@@ -586,6 +586,7 @@ fn submit_turn_accepts_the_existing_64_kib_tui_paste_contract() {
             request: AgentDialogTurnRequest {
                 session_id: "session-1".to_string(),
                 message: "x".repeat(64 * 1024),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some("turn-1".to_string()),
                 execution: Default::default(),

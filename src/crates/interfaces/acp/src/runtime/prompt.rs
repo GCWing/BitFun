@@ -104,6 +104,7 @@ fn dialog_turn_request(session: &AcpSessionState, prompt: ParsedPrompt) -> Agent
     AgentDialogTurnRequest {
         session_id: session.bitfun_session_id.clone(),
         message: prompt.user_message,
+        output_schema: None,
         original_message: prompt.original_user_message,
         turn_id: None,
         execution: Default::default(),

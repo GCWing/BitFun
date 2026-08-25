@@ -282,7 +282,7 @@ impl AIClient {
             custom_body,
             1,
             trace,
-            None,
+            request_context,
         )
         .await
     }
@@ -439,7 +439,16 @@ impl AIClient {
     ) -> Result<StreamResponse> {
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
-                openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
+                openai::chat::send_stream(
+                    self,
+                    messages,
+                    tools,
+                    extra_body,
+                    max_tries,
+                    trace,
+                    request_context,
+                )
+                .await
             }
             ApiFormat::OpenAIResponses => {
                 openai::responses::send_stream(
@@ -454,12 +463,28 @@ impl AIClient {
                 .await
             }
             ApiFormat::Anthropic => {
-                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
+                anthropic::request::send_stream(
+                    self,
+                    messages,
+                    tools,
+                    extra_body,
+                    max_tries,
+                    trace,
+                    request_context,
+                )
+                .await
             }
             ApiFormat::Gemini => {
-                gemini::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
+                gemini::request::send_stream(
+                    self,
+                    messages,
+                    tools,
+                    extra_body,
+                    max_tries,
+                    trace,
+                    request_context,
+                )
+                .await
             }
             ApiFormat::GeminiCodeAssist => {
                 gemini::code_assist::send_stream(
@@ -610,7 +635,7 @@ fn gemini_response_to_trace(response: &GeminiResponse) -> ModelExchangeResponseT
 mod tests {
     use super::{send_message_retry_delay_ms, AIClient};
     use crate::providers::{anthropic, gemini, gemini::GeminiMessageConverter, openai};
-    use crate::types::{AIConfig, ToolDefinition};
+    use crate::types::{AIConfig, ModelRequestContext, ToolDefinition};
     use crate::types::{ReasoningPresetAction, ReasoningPresetDescriptor};
     use axum::extract::State;
     use axum::http::header::CONTENT_TYPE;
@@ -671,6 +696,69 @@ mod tests {
         let mut client = make_test_client(format, None);
         client.config.custom_request_body_mode = Some("trim".to_string());
         client
+    }
+
+    fn structured_output_context() -> ModelRequestContext {
+        ModelRequestContext {
+            prompt_cache_route_key: None,
+            output_schema: Some(json!({
+                "type": "object",
+                "properties": { "summary": { "type": "string" } }
+            })),
+        }
+    }
+
+    #[test]
+    fn provider_request_bodies_map_turn_output_schema() {
+        let context = structured_output_context();
+        let chat = openai::chat::build_request_body_with_context(
+            &make_test_client("openai", None),
+            "https://example.com/v1/chat/completions",
+            Vec::new(),
+            None,
+            Some(json!({ "response_format": { "type": "text" } })),
+            Some(&context),
+        );
+        assert_eq!(chat["response_format"]["type"], "json_schema");
+        assert_eq!(
+            chat["response_format"]["json_schema"]["schema"],
+            context.output_schema.clone().unwrap()
+        );
+
+        let anthropic = anthropic::request::build_request_body_with_context(
+            &make_test_client("anthropic", None),
+            "https://api.anthropic.com/v1/messages",
+            None,
+            Vec::new(),
+            None,
+            Some(json!({ "output_config": { "effort": "high" } })),
+            Some(&context),
+        );
+        assert_eq!(anthropic["output_config"]["effort"], "high");
+        assert_eq!(
+            anthropic["output_config"]["format"]["schema"],
+            context.output_schema.clone().unwrap()
+        );
+
+        let gemini = gemini::request::build_request_body_with_context(
+            &make_test_client("gemini", None),
+            None,
+            Vec::new(),
+            None,
+            Some(json!({
+                "responseMimeType": "text/plain",
+                "responseJsonSchema": { "type": "string" }
+            })),
+            Some(&context),
+        );
+        assert_eq!(
+            gemini["generationConfig"]["responseMimeType"],
+            "application/json"
+        );
+        assert_eq!(
+            gemini["generationConfig"]["responseJsonSchema"],
+            context.output_schema.unwrap()
+        );
     }
 
     fn reasoning_preset(

@@ -2156,6 +2156,7 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: submission.session_id,
                 message: submission.content,
+                output_schema: None,
                 original_message: None,
                 turn_id: Some(submission.turn_id),
                 execution: Default::default(),

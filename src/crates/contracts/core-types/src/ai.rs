@@ -653,6 +653,8 @@ pub struct AIConfig {
 pub struct ModelRequestContext {
     /// Stable, opaque routing identity for provider-side prompt-prefix caches.
     pub prompt_cache_route_key: Option<String>,
+    /// JSON Schema requested for this turn's final model output.
+    pub output_schema: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

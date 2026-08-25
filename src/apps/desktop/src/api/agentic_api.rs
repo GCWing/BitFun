@@ -2329,6 +2329,7 @@ fn desktop_dialog_turn_request(
     Ok(AgentDialogTurnRequest {
         session_id,
         message: user_input,
+        output_schema: None,
         original_message: original_user_input,
         turn_id,
         execution,

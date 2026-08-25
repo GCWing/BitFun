@@ -150,6 +150,7 @@ impl SubmitDialogTurnBody {
         AgentDialogTurnRequest {
             session_id: self.session_id,
             message: self.message,
+            output_schema: None,
             original_message: self.original_message,
             turn_id: self.turn_id,
             execution: self.execution,

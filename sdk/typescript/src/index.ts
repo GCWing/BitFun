@@ -8,6 +8,7 @@ export type {
   AgentModelOptions,
   AgentModelProvider,
   Input,
+  JsonSchema,
   AssistantTextDelta,
   OutcomeCertainty,
   PermissionDecision,

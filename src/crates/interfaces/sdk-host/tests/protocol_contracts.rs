@@ -15,7 +15,7 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": 5,
+            "protocolVersion": 6,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
             "capabilities": {
                 "serverNotifications": true,
@@ -33,7 +33,7 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
     let params: InitializeParams = request.params_as().unwrap();
 
     assert_eq!(request.id, Some(RequestId::Number(1)));
-    assert_eq!(PROTOCOL_VERSION, 5);
+    assert_eq!(PROTOCOL_VERSION, 6);
     assert_eq!(params.protocol_version, PROTOCOL_VERSION);
     assert!(params.capabilities.server_notifications);
     assert!(params.capabilities.permission_responses);
@@ -81,7 +81,7 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
             event_stream: true,
             tool_events: true,
             image_input: true,
-            structured_output: false,
+            structured_output: true,
             usage: true,
             custom_tools: false,
             permission_responses: true,
@@ -111,7 +111,7 @@ fn current_host_capabilities_are_a_deliberate_subset_of_the_headless_cli_target(
         capabilities.session_create_lifetime,
         SessionLifetime::Durable
     );
-    assert!(!capabilities.structured_output);
+    assert!(capabilities.structured_output);
     assert!(capabilities.usage);
     assert!(!capabilities.custom_tools);
     assert!(capabilities.permission_responses);
@@ -139,6 +139,34 @@ fn query_input_carries_only_text_and_local_image_paths() {
             "imageUrl": "https://example.com/image.png"
         }))
         .is_err()
+    );
+}
+
+#[test]
+fn query_input_accepts_one_turn_scoped_output_schema() {
+    let params: QueryStartParams = serde_json::from_value(serde_json::json!({
+        "prompt": "summarize the repository",
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "summary": { "type": "string" }
+            },
+            "required": ["summary"],
+            "additionalProperties": false
+        }
+    }))
+    .unwrap();
+
+    assert_eq!(
+        params.output_schema,
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "summary": { "type": "string" }
+            },
+            "required": ["summary"],
+            "additionalProperties": false
+        }))
     );
 }
 
@@ -225,6 +253,7 @@ fn query_events_and_terminal_errors_are_closed_protocol_values() {
         status: QueryTerminalStatus::Failed,
         output: QueryOutput {
             text: "partial response".to_string(),
+            structured: None,
         },
         usage: Some(QueryUsage {
             input_tokens: 100,
