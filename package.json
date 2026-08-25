@@ -131,6 +131,8 @@
     "design-system:adoption:check": "node scripts/check-design-system-adoption.mjs",
     "design-system:adoption:update": "node scripts/check-design-system-adoption.mjs --update-baseline",
     "design-system:adoption:test": "node --test scripts/check-design-system-adoption.test.mjs",
+    "design-system:button:audit": "node scripts/audit-button-usage.mjs",
+    "design-system:button:audit:test": "node --test scripts/audit-button-usage.test.mjs",
     "type-check:relay-page-auth": "tsc --noEmit --skipLibCheck --lib ES2020,DOM --moduleResolution bundler --module preserve --target ES2020 src/crates/services/relay-service/web/page-auth-client.ts",
     "build:relay-page-auth": "pnpm run type-check:relay-page-auth && esbuild src/crates/services/relay-service/web/page-auth-client.ts --bundle --minify --format=iife --platform=browser --target=es2020 --legal-comments=inline --outfile=src/crates/services/relay-service/src/routes/page_auth_client.bundle.js",
     "test:relay-page-auth": "node --test src/crates/services/relay-service/web/page-auth-client.test.mjs",
