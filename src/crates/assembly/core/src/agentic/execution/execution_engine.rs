@@ -101,11 +101,8 @@ fn skill_agent_listing_reminders(
     )
 }
 
-fn reached_fixed_model_round_limit(
-    max_model_rounds: Option<usize>,
-    completed_rounds: usize,
-) -> bool {
-    max_model_rounds.is_some_and(|limit| completed_rounds >= limit)
+fn reached_fixed_model_round_limit(max_rounds: usize, completed_rounds: usize) -> bool {
+    max_rounds > 0 && completed_rounds >= max_rounds
 }
 
 fn runtime_context_needs_for_manifest(manifest: &ResolvedToolManifest) -> RuntimeContextNeeds {
@@ -163,6 +160,15 @@ impl Default for ExecutionEngineConfig {
         Self {
             max_rounds: crate::service::config::types::DEFAULT_MAX_ROUNDS,
             max_consecutive_same_tool: 3,
+        }
+    }
+}
+
+impl ExecutionEngineConfig {
+    pub fn from_ai_config(ai_config: &crate::service::config::types::AIConfig) -> Self {
+        Self {
+            max_rounds: ai_config.max_rounds,
+            ..Self::default()
         }
     }
 }
@@ -3691,8 +3697,6 @@ impl ExecutionEngine {
             })
             .await?;
 
-        let max_model_rounds = (self.config.max_rounds > 0).then_some(self.config.max_rounds);
-
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)
         let mut messages = vec![turn_prompt_scaffold.system_prompt_message.clone()];
         messages.extend(initial_messages);
@@ -3776,9 +3780,11 @@ impl ExecutionEngine {
 
         // Loop to execute model rounds
         loop {
-            if reached_fixed_model_round_limit(max_model_rounds, completed_rounds) {
-                let limit = max_model_rounds.expect("checked above");
-                warn!("Reached max rounds limit: {}, stopping execution", limit);
+            if reached_fixed_model_round_limit(self.config.max_rounds, completed_rounds) {
+                warn!(
+                    "Reached max rounds limit: {}, stopping execution",
+                    self.config.max_rounds
+                );
                 finalization_reason = Some("max_rounds");
                 break;
             }
@@ -5143,9 +5149,9 @@ impl ExecutionEngine {
 mod tests {
     use super::{
         activate_conditional_instructions_after_round, manual_compaction_terminal_error,
-        resolve_round_permission_mode, runtime_context_needs_for_manifest,
-        skill_agent_listing_reminders, ContextHealthSnapshot, ExecutionEngine, RoundResult,
-        TurnPromptScaffold,
+        reached_fixed_model_round_limit, resolve_round_permission_mode,
+        runtime_context_needs_for_manifest, skill_agent_listing_reminders, ContextHealthSnapshot,
+        ExecutionEngine, ExecutionEngineConfig, RoundResult, TurnPromptScaffold,
     };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, ToolListingSections, UserContextPolicy,
@@ -5253,6 +5259,30 @@ mod tests {
 
         assert!(!runtime_context_needs_for_manifest(&base).exec_control);
         assert!(runtime_context_needs_for_manifest(&active).exec_control);
+    }
+
+    #[test]
+    fn zero_max_rounds_disables_the_fixed_round_limit() {
+        assert!(!reached_fixed_model_round_limit(0, 0));
+        assert!(!reached_fixed_model_round_limit(0, 10_000));
+    }
+
+    #[test]
+    fn positive_max_rounds_stops_at_the_configured_limit() {
+        assert!(!reached_fixed_model_round_limit(200, 199));
+        assert!(reached_fixed_model_round_limit(200, 200));
+        assert!(reached_fixed_model_round_limit(200, 201));
+    }
+
+    #[test]
+    fn max_rounds_execution_config_projects_the_global_ai_limit() {
+        let mut ai_config = AIConfig::default();
+        ai_config.max_rounds = 37;
+
+        assert_eq!(
+            ExecutionEngineConfig::from_ai_config(&ai_config).max_rounds,
+            37
+        );
     }
 
     #[test]
@@ -6556,10 +6586,4 @@ mod tests {
             image_attachments: None,
         })
     }
-}
-#[test]
-fn unlimited_profile_never_reaches_a_fixed_model_round_limit() {
-    assert!(!reached_fixed_model_round_limit(None, 0));
-    assert!(!reached_fixed_model_round_limit(None, 10_000));
-    assert!(reached_fixed_model_round_limit(Some(200), 200));
 }

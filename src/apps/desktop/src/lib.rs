@@ -2074,29 +2074,14 @@ async fn init_agentic_system() -> anyhow::Result<(
         tool_pipeline.clone(),
     ));
 
-    // Get execution config from global settings
-    let exec_config = match bitfun_core::service::config::get_global_config_service().await {
-        Ok(config_service) => {
-            match config_service
-                .get_config::<bitfun_core::service::config::types::GlobalConfig>(None)
-                .await
-            {
-                Ok(global_config) => execution::ExecutionEngineConfig {
-                    max_rounds: global_config.ai.max_rounds,
-                    ..Default::default()
-                },
-                Err(_) => Default::default(),
-            }
-        }
-        Err(_) => Default::default(),
-    };
+    let execution_config = execution::execution_engine_config_from_global_config().await;
 
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        exec_config,
+        execution_config,
     ));
 
     let runtime_ownership = Arc::new(
