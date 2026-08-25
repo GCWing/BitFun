@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -66,13 +67,31 @@ test('build version projection updates every release-owned version file', () => 
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ version: '1.0.0', packages: { '': { version: '1.0.0' } } }));
   }
-  writeFixture(root, 'Cargo.toml', 'version = "1.0.0" # x-release-please-version\n');
+  writeFixture(
+    root,
+    'Cargo.toml',
+    `[package]
+name = "build-version-fixture"
+version = "1.0.0" # x-release-please-version
+edition = "2021"
+
+[workspace]
+members = []
+exclude = ["src/apps/relay-server", "BitFun-Installer/src-tauri"]
+`,
+  );
+  writeFixture(root, 'src/lib.rs', 'pub fn fixture() {}\n');
   writeFixture(
     root,
     'src/apps/relay-server/Cargo.toml',
     'version = "1.0.0" # x-release-please-version\n',
   );
   writeFixture(root, 'BitFun-Installer/src-tauri/Cargo.toml', 'version = "1.0.0"\n');
+  const initialLock = spawnSync('cargo', ['generate-lockfile'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(initialLock.status, 0, initialLock.stderr);
 
   setBuildVersion(root, '1.1.0-beta.2');
 
@@ -86,6 +105,15 @@ test('build version projection updates every release-owned version file', () => 
     readFileSync(path.join(root, 'src/apps/relay-server/Cargo.toml'), 'utf8'),
     /1\.1\.0-beta\.2/,
   );
+  assert.match(
+    readFileSync(path.join(root, 'Cargo.lock'), 'utf8'),
+    /name = "build-version-fixture"\nversion = "1\.1\.0-beta\.2"/,
+  );
+  const lockedMetadata = spawnSync('cargo', ['metadata', '--locked', '--no-deps'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(lockedMetadata.status, 0, lockedMetadata.stderr);
 });
 
 function writeFixture(root, relative, content) {
