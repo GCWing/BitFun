@@ -1,81 +1,33 @@
-# BitFun 产品运行时架构
+# BitFun 产品架构
 
-本文件定义 BitFun 产品运行时的稳定架构边界。详细执行计划见
-[`../plans/core-decomposition-plan.md`](../plans/core-decomposition-plan.md)；智能体内核、运行时服务和 crate
-约束见 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件运行时、Plugin Host 进程和生态适配细节见
-[`plugin-runtime-design.md`](extensions/plugin-runtime-design.md)；跨 GUI/TUI 的产品定制、布局选择和
-内置扩展边界见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；CLI 产品入口和配置
-兼容见 [`cli-product-line-design.md`](cli-product-line-design.md)；HarmonyOS PC 原生 CLI/TUI 平台规约见
-[`platform-portability-design.md`](platform-portability-design.md)。跨专题实施顺序见
-[`../plans/product-architecture-evolution-plan.md`](../plans/product-architecture-evolution-plan.md)。外部 AI 工作内容架构见
-[`external-ai-work-sources-design.md`](extensions/external-ai-work-sources-design.md)；OpenCode 扩展总矩阵、配置资产、插件执行、
-终端插件和外部集成适配分别见
-[`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
-[`opencode-config-assets-adapter-design.md`](extensions/opencode-config-assets-adapter-design.md)、
-[`opencode-plugin-runtime-adapter-design.md`](extensions/opencode-plugin-runtime-adapter-design.md)、
-[`opencode-tui-plugin-adapter-design.md`](extensions/opencode-tui-plugin-adapter-design.md) 和
-[`opencode-external-integration-adapter-design.md`](extensions/opencode-external-integration-adapter-design.md)；BitFun 能力如何
-可装配并双向接入 Claude Code、Codex、OpenCode、Trae 等宿主见
-[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 BitFun Agent SDK、SDK Host、
-Headless CLI 与各产品入口的统一心智见
-[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；多个 GUI/TUI/Remote/CLI/SDK 实例共存时的 Agent Runtime 部署、
-状态共享、隔离、容量与 Plugin Host 关系见
-[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)；Desktop GUI、Web UI 和交互式 TUI 的产品后端边界、
-Embedded direct-runtime、Shared App Server 及迁移约束见
-[`app-server-architecture.md`](app-server-architecture.md)；GUI、Agent、搜索和说明书如何共享同一产品功能/设置 owner 见
-[`product-control-plane.md`](product-control-plane.md)。Embedded interactive TUI direct-runtime 已交付；Shared App Server
-仍是待评审提案。当前调用路径和稳定 owner 边界以本文及已接线代码为准。其他已批准的详细设计与本文件冲突时，以本文件为准。
+本文件定义 BitFun 产品架构的稳定边界，并通过 4+1 视图分别描述逻辑职责、代码组织、运行协作、部署拓扑和关键场景。生产实现以已接线代码为事实基线；专题设计如需改变本文边界，必须同步更新本文件。提案、静态发现和未形成生产闭环的能力不得表述为已交付接口。
 
-Cargo feature、第三方依赖 owner、测试目标和本地/CI 验证分工见
-[`rust-build-dependency-boundaries.md`](rust-build-dependency-boundaries.md)。该文档补充本架构的构建视图，不改变本文定义的运行时 owner 和分层依赖方向。
+| 专题 | 详细设计 |
+|---|---|
+| Agent Runtime | [运行时服务](agent-runtime-services-design.md)、[部署模型](agent-runtime-deployment-design.md)、[App Server](app-server-architecture.md) |
+| 扩展体系 | [Plugin Runtime](extensions/plugin-runtime-design.md)、[能力集成](extensions/capability-runtime-integration-design.md)、[外部来源](extensions/external-ai-work-sources-design.md)、[OpenCode 兼容](extensions/opencode-extension-compatibility.md) |
+| 产品交付 | [产品定制](product-customization-blueprint.md)、[CLI 产品线](cli-product-line-design.md)、[Agent SDK](agent-sdk-product-architecture.md)、[平台可移植性](platform-portability-design.md) |
+| 产品控制面 | [Product Control](product-control-plane.md) |
+| 架构演进 | [Core 拆分](../plans/core-decomposition-plan.md)、[演进计划](../plans/product-architecture-evolution-plan.md)、[Rust 依赖边界](rust-build-dependency-boundaries.md) |
 
-本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
+Embedded interactive TUI direct-runtime 已交付。当前 loopback Web Server 已承载 Embedded Runtime 和 WebSocket App Server；Shared App Server 的跨进程共享形态仍需按生产调用路径逐项验收。当前调用路径和稳定 owner 边界以本文及已接线代码为准。
 
 ## 1. 架构目标
 
-BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和插件生态。架构目标是降低后端实现高频变更对稳定接口的影响，同时保持插件生态和 OpenCode-compatible 能力可以按受控路径扩展。
+BitFun 面向 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 与扩展生态。架构以稳定 owner 为核心，通过受控适配支持多种产品入口和外部生态语义。
 
-设计原则：
+1. **稳定归属**：每项行为只有一个状态 owner 和主入口；适配、传输与重构不得建立平行业务路径。
+2. **最小契约**：运行时、平台服务和扩展实现只通过必要的稳定接口或只读视图被消费；新增公开抽象必须有真实调用方、版本策略和验证方式。
+3. **平台隔离**：产品逻辑保持平台无关，操作系统差异留在宿主入口和具体能力实现；target 选择 ABI，feature 只选择真实可选能力。
+4. **语义转换**：OpenCode 等生态是兼容目标而非内部模型；adapter 保留外部可观察语义，再映射到 BitFun owner，由 owner 校验并提交最终状态。
+5. **先装配后扩展**：产品身份、能力上限和入口布局在构建或组装期确定；用户配置、Hook 和 Plugin 只能在该上限内扩展。
+6. **发现执行分离**：发现与加载顺序只产生候选输入，不授予执行许可；可执行来源在激活、身份或能力范围变化时重新授权，调用时仍执行权限判断。
+7. **受监督执行**：第三方代码运行在受监督子进程并具备期限、取消、流控和故障回收；没有 OS 或容器硬边界时，不宣称完全隔离。
+8. **单一 Runtime**：GUI、TUI、CLI、ACP、Server、Remote 与 SDK 通过各自 adapter 使用同一 Agent Runtime 行为；共享能力事实，不共享界面、传输或宿主状态。
 
-1. **接口少而稳定**：每个接口边界只有一个主入口；不能因为新增生态适配或实现重构而新增平行接口。
-2. **实现不外溢**：运行时、平台服务、生态适配器、插件执行单元和传输实现只能通过稳定接口、只读视图或内部 ABI 被消费。
-3. **外部语义可变换，最终提交有归属**：OpenCode Hook 可以按其稳定语义修改输入、输出和权限决定；BitFun
-   归属模块负责顺序、结构、一致性和用户/组织策略校验并提交最终状态，不能把可写 Hook 一律降级成只读候选。
-4. **OpenCode 是兼容目标，不是内部模型**：适配层尽量保持 OpenCode plugin、hook、custom tool、TUI plugin、
-   Client、配置和加载顺序的外部可观察行为，但这些类型不能反向成为 BitFun 智能体、配置或界面的内部数据模型。
-5. **公开接口有预算**：新增公开 DTO、trait、模块或入口必须同时具备归属模块、真实消费方、版本策略、验证方式和删除条件。
-6. **入口形态受宿主约束**：TUI、GUI、Web、Headless CLI 和公开 SDK adapter 共享 Agent Runtime API
-   用例、能力服务接口和只读视图，不共享公开语言包、传输、渲染句柄、主题键、键位模型或界面状态；
-   插件界面贡献必须先声明目标入口形态，再由对应宿主适配。
-7. **产品定制先解析，运行时扩展后加载**：产品身份、能力上限和 GUI/TUI 布局选择在构建/组装期解析；用户配置和插件只能在该上限内扩展，不能反向改写产品事实。
-8. **平台差异留在入口和具体能力实现**：target 只选择 ABI，feature 只控制确实可选的依赖；共享内核不按平台
-   分叉业务语义，也不新增包含所有 OS 方法的总接口。新端口必须有当前调用方。
-9. **发现无感，生效按风险分级**：外部用户/项目来源后台发现，不阻塞产品入口；无冲突的低风险声明式内容可自动应用并提供撤销；
-   Command、Tool、Subagent 等可执行来源与产品本地能力或独立外部 provider 同名时必须由用户选择，且选择只在候选身份与内容版本不变时复用。现有 Skill 根继续按已发布顺序解析，并展示来源和默认覆盖项；带模式的管理界面展示应用模式开关后的实际采用项；
-   可执行来源首次启用或能力扩大时形成非阻塞确认。激活后的本地 OpenCode 扩展默认按当前用户能力
-   运行；经 BitFun 能力接口的调用可细分限制，脚本直接文件/网络/进程能力只在真实操作系统或容器边界存在时可
-   粗粒度收紧，否则停用相应插件。策略降级必须与待确认、解析错误和插件故障分开显示。
-10. **开放权限不降低可靠性**：第三方 JS/TS 始终位于受监督子进程；standalone Tool 使用现有 worker，完整 package plugin
-    使用 Plugin Host。目标边界具备期限、取消、流量控制、崩溃回收、错误去重和结构校验；业务等待不得被单个插件无限阻塞。
-    缺少平台硬资源限制时，内存、CPU 或进程风暴仍是明确残余风险，不能用“独立进程”宣称完全隔离。
-11. **来源发现与执行许可分离**：生态来源和加载顺序只决定候选输入，不自动授予执行权限。任何可执行来源在
-   首次激活、启动或 import 前，以及来源身份、内容版本、执行域/用户、策略上限或凭据/环境可见范围
-    变化时，由既有归属模块重新检查是否允许执行。经 BitFun 接口发起的调用仍执行调用时权限判断；脚本运行时的
-   直接文件、网络和进程副作用只能依靠真实 OS/容器边界限制。来源的首次选择由产品来源体验保存，
-    不因此新增对内部准备阶段的重复激活、通用 trusted-folder 模型或独立信任服务。
-12. **一个能力核心，多种宿主适配**：Memory、Context、Workflow、Subagent、Tool 等能力只在已有 owner 中按真实
-     第二实现增量开放 Provider/策略装配；对外通过少量能力接口和宿主 adapter 暴露。MCP、Plugin、Hook、SDK 或
-     Server 入口不能反向替换状态 owner、权限上限、取消树、资源硬额度、事件身份或审计，也不能被描述为一个
-     跨产品通用插件包。
-13. **一个 Agent Runtime，多种交付形态**：GUI、TUI、Headless CLI、公开 SDK、ACP 与 Server/Remote 都是
-     同一 Agent Runtime 的 adapter。Query、Session、Tool/MCP、Permission、Hook、Event/Usage 只有一个行为
-     归属模块；公开 SDK 不成为内部入口的依赖，ACP 和 Headless CLI 也不成为完整 SDK 的别名。目标部署中，第一方
-     GUI/TUI/本机 Remote 可以共享 Agent Runtime，一次性 Headless CLI 保留 Embedded，公开 SDK 默认使用私有 SDK Host；
-     这些 Rust 部署都只通过 `PluginRuntimeClient` 和 services 归属模块管理自己的 Node/Bun Plugin Host 子进程。
+调用路径长度是工程成本而非独立目标。兼容隔离、能力选择和只读视图可以保留必要中间层，但不得长期维持无消费方的抽象。
 
-调用路径长度只作为工程成本处理，不作为独立架构目标。允许保留承担兼容隔离、只读视图或能力选择职责的中间层；不允许为了兼容而长期暴露没有消费方的抽象接口。
-
-## 2. 4+1 Architecture Views
+## 2. 4+1 架构视图
 
 4+1 视图分别描述系统职责、代码组织、运行协作、部署边界和关键场景，避免把逻辑模块、crate、进程和调用链混在同一张图中。分类沿用 [Kruchten 4+1](https://www3.software.ibm.com/ibmdl/pub/software/rational/web/whitepapers/2003/Pbk4p1.pdf)，图的层级、动态协作和部署节点表达参考 [C4](https://c4model.com/diagrams) 以及 arc42 的 [Building Block](https://docs.arc42.org/section-5/)、[Runtime](https://docs.arc42.org/section-6/) 和 [Deployment](https://docs.arc42.org/section-7/) 视图；这些方法只提供视角和表达规则，不替代 BitFun 的真实 owner 与代码边界。
 
@@ -84,179 +36,173 @@ Level 0 展示系统级主要边界和依赖方向；Level 1 再按 Level 0 的�
 
 ### 2.1 Logical View · Level 0
 
-Logical View 只表达当前系统的职责模块与依赖方向，不表达 crate 归属或进程位置。
+Logical View 面向产品、领域和架构设计者，表达系统为用户提供能力所需要的稳定职责、职责分解及其主要依赖。
+它不表达 crate、contract、接口签名、进程部署或运行步骤；这些信息分别属于 Development、Process 和 Physical View。
+Level 0 只保留具有独立职责、生命周期或策略边界的模块；成熟度变化不改变模块的位置和依赖。
+
+实线箭头表示区域级依赖，不表示模块调用链。状态：**绿色实框** = Complete；**黄色实框** = Partial；**灰色虚框** = Planned。
 
 ```mermaid
-%%{init: {"theme":"base","flowchart":{"curve":"basis","nodeSpacing":28,"rankSpacing":34},"themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","primaryColor":"#ffffff","primaryTextColor":"#171717","primaryBorderColor":"#737373","lineColor":"#525252","secondaryColor":"#fafafa","tertiaryColor":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#a3a3a3"}}}%%
-flowchart TB
-  subgraph Consumers["Consumers"]
-    direction LR
-    Users["Users"] ~~~ APIClients["API Clients"]
+%%{init: {"theme":"base","block":{"padding":8}}}%%
+block-beta
+  columns 5
+
+  block:Application:5
+    columns 5
+    ApplicationTitle["Application"] Workspace["Workspace"] Conversation["Conversation"] Task["Task"] Artifact["Artifact"]
   end
 
-  subgraph BitFun["BitFun"]
-    direction TB
-
-    subgraph Product["Product"]
-      direction LR
-      ProductHosts["Product Hosts"]
-
-      subgraph RuntimeAssembly["Runtime Assembly"]
-        direction LR
-        CapabilityPlan["Capability Plan"] ~~~ RuntimeWiring["Runtime Wiring"]
-      end
-
-      ProductFeatures["Product Features"]
+  block:MainColumn:4
+    columns 1
+    block:AgentCore
+      columns 5
+      AgentCoreTitle["Agent Core"] AgentLoop["Agent Loop"] Session["Session"] Scheduling["Scheduling"] Context["Context"]
+      Memory["Memory"] ModelRouting["Model<br/>Routing"] HumanInteraction["Human<br/>Interaction"] DFX["DFX"] space
     end
-
-    RuntimeAPI["Runtime API"]
-
-    subgraph AgentCore["Agent Core"]
-      direction LR
-
-      subgraph AgentKernel["Agent Kernel"]
-        direction LR
-        SessionState["Session State"] ~~~ TaskControl["Task Control"]
-      end
-
-      subgraph Execution["Execution"]
-        direction LR
-        AgentLoop["Agent Loop"] ~~~ ToolRuntime["Tool Runtime"]
-      end
+    block:ToolExecution
+      columns 4
+      ToolExecutionTitle["Tools & Execution"] BuiltInTools["Built-in<br/>Tools"] ToolProtocols["Tool<br/>Protocols"] ToolExecutionRuntime["Tool<br/>Execution"]
+      ExecutionPolicy["Execution<br/>Policy"] Sandbox["Sandbox"] Terminal["Terminal"] ComputerUse["Computer<br/>Use"]
     end
-
-    subgraph Extensions["Extensions"]
-      direction LR
-      Contributions["Contributions"] ~~~ PluginRuntime["Plugin Runtime"]
-    end
-
-    ServicePorts["Service Ports"]
-
-    subgraph SharedBoundary["Shared Boundary"]
-      direction LR
-      StableContracts["Stable Contracts"]
-      SecurityControl["Security Control"]
-      PlatformServices["Platform Services"]
-      StableContracts ~~~ SecurityControl ~~~ PlatformServices
+    block:CrossPlatform
+      columns 5
+      CrossPlatformTitle["Cross-platform"] Windows["Windows"] MacOS["macOS"] Linux["Linux"] OpenHarmony["OpenHarmony"]
     end
   end
 
-  PluginEcosystems["Plugin Ecosystems"]
-
-  subgraph PlatformSystems["Platform Resources"]
-    direction LR
-    AIProviders["AI Providers"] ~~~ OS["OS"] ~~~ RemoteSystems["Remote Systems"]
+  block:Extensions
+    columns 1
+    ExtensionsTitle["Extension<br/>Dimension"]
+    ProductCustomization["Product<br/>Customization"]
+    CustomAgents["Custom Agents"]
+    Skills["Skills"]
+    Hooks["Hooks"]
+    ToolExtensions["Tool<br/>Extensions"]
   end
 
-  Consumers --> ProductHosts
-  ProductHosts --> ProductFeatures
-  ProductHosts --> RuntimeAPI
-  ProductFeatures --> RuntimeAPI
-  RuntimeAssembly -.-> ProductHosts
-  RuntimeAssembly -.-> ProductFeatures
-  RuntimeAssembly -.-> AgentKernel
-  RuntimeAssembly -.-> Extensions
-  RuntimeAPI --> AgentKernel
-  AgentKernel --> Execution
-  Execution --> ServicePorts
-  Extensions ==> Execution
-  Extensions ==> ServicePorts
-  ServicePorts --> SharedBoundary
-  Extensions ==> PluginEcosystems
-  SharedBoundary --> PlatformSystems
+  Application --> AgentCore
+  Application --> Extensions
+  AgentCore --> ToolExecution
+  ToolExecution --> CrossPlatform
+  Extensions --> CrossPlatform
 
-  classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
-  classDef interface fill:#fafafa,stroke:#404040,stroke-width:1.6px,color:#171717;
-  class Users,APIClients,ProductHosts,CapabilityPlan,RuntimeWiring,ProductFeatures,SessionState,TaskControl,AgentLoop,ToolRuntime,Contributions,PluginRuntime,StableContracts,SecurityControl,PlatformServices,PluginEcosystems,AIProviders,OS,RemoteSystems module;
-  class RuntimeAPI,ServicePorts interface;
+  classDef complete fill:#eaf8ef,stroke:#238636,stroke-width:1.5px,color:#123a1c
+  classDef partial fill:#fff4ce,stroke:#9a6700,stroke-width:1.5px,color:#4d3500
+  classDef planned fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:6 4,color:#334155
+  classDef sectionTitle fill:transparent,stroke:transparent,color:#171717,font-size:12px,font-weight:600
 
-  style BitFun fill:#ffffff,stroke:#171717,stroke-width:2.2px;
-  style Product fill:#fafafa,stroke:#737373,stroke-width:1.3px;
-  style AgentCore fill:#fafafa,stroke:#737373,stroke-width:1.3px;
-  style SharedBoundary fill:#fafafa,stroke:#737373,stroke-width:1.3px;
-  style RuntimeAssembly fill:#ffffff,stroke:#a3a3a3;
-  style AgentKernel fill:#ffffff,stroke:#a3a3a3;
-  style Execution fill:#ffffff,stroke:#a3a3a3;
-  style Extensions fill:#ffffff,stroke:#737373,stroke-width:1.3px;
-  style Consumers fill:#ffffff,stroke:#a3a3a3;
-  style PlatformSystems fill:#ffffff,stroke:#a3a3a3;
+  class Workspace,Conversation,Task,AgentLoop,Session,Scheduling,ModelRouting,BuiltInTools,ToolExecutionRuntime,ExecutionPolicy,Terminal,Windows,MacOS complete
+  class Artifact,Context,Memory,HumanInteraction,DFX,ToolProtocols,ComputerUse,Linux,ProductCustomization,CustomAgents,Skills,Hooks,ToolExtensions partial
+  class Sandbox,OpenHarmony planned
+  class ApplicationTitle,AgentCoreTitle,ToolExecutionTitle,CrossPlatformTitle,ExtensionsTitle sectionTitle
+
+  style Application fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style AgentCore fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style ToolExecution fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style CrossPlatform fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style Extensions fill:#faf8ff,stroke:#7c3aed,stroke-width:2px
+  style MainColumn fill:transparent,stroke:transparent
 ```
 
-实线表示依赖，虚线表示装配，粗线表示扩展路径。
+| Area | Elements | Responsibility |
+|---|---|---|
+| Application | Workspace、Conversation、Task、Artifact | 用户工作范围、交互历史、工作意图与交付结果 |
+| Agent Core | Agent Loop、Session、Scheduling、Context、Memory、Model Routing、Human Interaction、DFX | 推理循环、运行状态、任务编排、模型决策、人机协同与可观测事实 |
+| Tools & Execution | Built-in Tools、Tool Protocols、Tool Execution、Execution Policy、Sandbox、Terminal、Computer Use | 工具接入、策略决策和受控执行 |
+| Cross-platform | Windows、macOS、Linux、OpenHarmony | 隔离操作系统差异，提供上层所需的平台能力 |
+| Extension Dimension | Product Customization、Custom Agents、Skills、Hooks、Tool Extensions | 作为正交维度扩展 Application、Agent Core 和 Tools & Execution，不改变原业务 owner |
 
-| Boundary | Responsibility |
-|---|---|
-| Product | 承载产品入口、能力选择和用户功能 |
-| Runtime API | 向产品入口提供稳定用例接口 |
-| Agent Core | 管理会话与任务，并推进 Agent 和工具执行 |
-| Extensions | 接收生态贡献并隔离插件执行 |
-| Service Ports | 隔离执行逻辑与具体平台能力 |
-| Shared Boundary | 统一稳定契约、安全控制和平台服务 |
+Application → Extension Dimension 表示产品入口消费受控扩展；Extension Dimension → Cross-platform 表示扩展的发现与执行受平台能力约束。两项依赖均不改变 Agent Core → Tools & Execution → Cross-platform 的主分层关系。
 
-稳定边界：Product Hosts 只经过 Runtime API 和只读投影消费能力，不能直接调用插件执行单元或具体平台实现；Extensions 只能提交受控贡献，最终状态、权限结果、工具结果和审计事实仍由对应 owner 提交。`PluginRuntimeClient` 持有类型化调用、期限、串行化和响应校验；物理进程健康与进程树回收属于 Services。
+Application 表达产品领域对象；Conversation 与 Task 分别区别于运行时的 Session 与 Scheduling。Code Agent、Deep Review、Deep Research 属于由多个逻辑职责组合而成的场景；Mini Apps 与 Canvas 是 Artifact 的呈现机制；Desktop、CLI、Web、Mobile 是产品交付形态。`Agent Runtime`、contract、port、adapter 和外部系统不构成 Level 0 逻辑模块。DFX 在本视图中表示诊断、Tracing、指标、审计和运行质量反馈，不包含测试工程或开发流程。
+
+当前生产代码与验证证据支持以下成熟度判定：
+
+| Area | Complete | Partial | Planned |
+|---|---|---|---|
+| Application | Workspace、Conversation、Task | Artifact | — |
+| Agent Core | Agent Loop、Session、Scheduling、Model Routing | Context、Memory、Human Interaction、DFX | — |
+| Tools & Execution | Built-in Tools、Tool Execution、Execution Policy、Terminal | Tool Protocols、Computer Use | Sandbox |
+| Cross-platform | Windows、macOS | Linux | OpenHarmony |
+| Extension Dimension | — | Product Customization、Custom Agents、Skills、Hooks、Tool Extensions | — |
+
+Complete 要求职责在生产入口形成完整闭环；Partial 表示已进入生产路径但仍有关键缺口；Planned 表示职责已确定但尚未形成生产闭环。BitFun 的判定依据是生产 owner、实际入口和已知限制，具体证据见 [Agent Runtime 服务边界](agent-runtime-services-design.md)、[Agent Runtime 部署边界](agent-runtime-deployment-design.md)、[Agent Hooks](../features/agent-hooks.zh-CN.md)、[Plugin Runtime](extensions/plugin-runtime-design.md)、[产品定制边界](product-customization-blueprint.md)、[平台可移植性](platform-portability-design.md) 与 [OpenCode 兼容边界](extensions/opencode-extension-compatibility.md)。[Codex Sandbox](https://github.com/openai/codex/blob/main/codex-rs/README.md#experimenting-with-the-codex-sandbox)、[Claude Code Sandboxing](https://code.claude.com/docs/en/sandboxing)、[Claude Code Monitoring](https://code.claude.com/docs/en/monitoring-usage) 和 [OpenCode Plugins](https://opencode.ai/v2/docs/build/plugins) 仅用于能力边界对照，不作为 BitFun 的交付证据；设计、静态发现、空 port 或单入口演示不提升成熟度。
 
 ### 2.2 Development View · Level 0
 
-Development View 展示仓库的静态代码组织。层间依赖只允许向下，可跨过中间层，但不能反向依赖上层；图中子项表示主要 crate 家族或产品入口，不等同于 Logical View 的职责模块。
+Development View 展示仓库的静态代码组织。层间依赖只允许向下，可跨过中间层，但不能反向依赖上层。图中子项表示代码家族，当前 workspace 的完整模块库存见下表。Contract 与 port 是支撑多个逻辑职责的静态代码边界，仅在 Development View 中表达。
 
 ```mermaid
-flowchart TB
-  subgraph AppsLayer[" "]
-    direction LR
-    AppsTitle["1 · Apps & Interfaces"] ~~~ Desktop["Desktop"] ~~~ CLI["CLI"] ~~~ Server["Server"] ~~~ Relay["Relay"] ~~~ WebUI["Web UI"] ~~~ MobileUI["Mobile UI"] ~~~ ACP["ACP"] ~~~ SDKHost["SDK Host"]
+%%{init: {"theme":"base","block":{"padding":8}}}%%
+block-beta
+  columns 1
+
+  block:AppsLayer
+    columns 5
+    AppsTitle["1 · Apps & Interfaces"] ProductApps["Product Apps"] WebUI["Web UI"] MobileUI["Mobile UI"] Interfaces["Interfaces"]
   end
 
-  subgraph AssemblyLayer[" "]
-    direction LR
-    AssemblyTitle["2 · Assembly"] ~~~ AgentContent["Built-in Agent Content"] ~~~ CoreAssembly["Core Assembly"] ~~~ ExternalSources["External Sources"] ~~~ ProductCaps["Product Capabilities"]
+  block:AssemblyLayer
+    columns 5
+    AssemblyTitle["2 · Assembly"] AgentContent["Built-in<br/>Agent Content"] CoreAssembly["Core<br/>Assembly"] ExternalSources["External<br/>Sources"] ProductCaps["Product<br/>Capabilities"]
   end
 
-  subgraph AdaptersLayer[" "]
-    direction LR
-    AdaptersTitle["3 · Adapters"] ~~~ RuntimeIPC["Runtime IPC"] ~~~ ModelAdapters["Model Adapters"] ~~~ SourceAdapters["Source Adapters"] ~~~ Transport["Transport"] ~~~ WebDriver["WebDriver"]
+  block:AdaptersLayer
+    columns 7
+    AdaptersTitle["3 · Adapters"] RuntimeIPC["Runtime<br/>IPC"] AIAdapters["AI<br/>Adapters"] SourceAdapters["Source<br/>Adapters"] HookSupport["Hook<br/>Support"] Transport["Transport"] WebDriver["WebDriver"]
   end
 
-  subgraph ServicesLayer[" "]
-    direction LR
-    ServicesTitle["4 · Services"] ~~~ CoreServices["Core Services"] ~~~ Integrations["Integrations"] ~~~ MiniAppMarket["MiniApp Market"] ~~~ RelayService["Relay Service"] ~~~ Terminal["Terminal"] ~~~ PageRuntime["Page Runtime"]
+  block:ServicesLayer
+    columns 6
+    ServicesTitle["4 · Services"] CoreServices["Core<br/>Services"] Integrations["Integrations"] RelayService["Relay<br/>Service"] PageRuntime["Page<br/>Runtime"] Terminal["Terminal"]
   end
 
-  subgraph ExecutionLayer[" "]
-    direction LR
-    ExecutionTitle["5 · Execution"] ~~~ AgentRuntime["Agent Runtime"] ~~~ AgentWorkflows["Agent Workflows"] ~~~ AgentStream["Agent Stream"] ~~~ ToolRuntime["Tool Runtime"] ~~~ PluginClient["Plugin Client"] ~~~ Harness["Harness"] ~~~ RuntimeServices["Runtime Services"]
+  block:ExecutionLayer
+    columns 11
+    ExecutionTitle["5 · Execution"] AgentRuntime["Agent<br/>Runtime"] AgentWorkflows["Agent<br/>Workflows"] AgentStream["Agent<br/>Stream"] Harness["Harness"] PluginClient["Plugin<br/>Client"] RuntimeServices["Runtime<br/>Services"] ToolContracts["Tool<br/>Contracts"] ToolGroups["Tool<br/>Groups"] ToolExecution["Tool<br/>Execution"] JSONRepair["JSON<br/>Repair"]
   end
 
-  subgraph ContractsLayer[" "]
-    direction LR
-    ContractsTitle["6 · Contracts"] ~~~ CoreTypes["Core Types"] ~~~ Events["Events"] ~~~ RuntimePorts["Runtime Ports"] ~~~ ProductDomains["Product Domains"]
+  block:ContractsLayer
+    columns 5
+    ContractsTitle["6 · Contracts"] CoreTypes["Core Types"] Events["Events"] RuntimePorts["Runtime<br/>Ports"] ProductDomains["Product<br/>Domains"]
   end
 
-  AppsTitle --> AssemblyTitle --> AdaptersTitle --> ServicesTitle --> ExecutionTitle --> ContractsTitle
+  AppsLayer --> AssemblyLayer
+  AssemblyLayer --> AdaptersLayer
+  AdaptersLayer --> ServicesLayer
+  ServicesLayer --> ExecutionLayer
+  ExecutionLayer --> ContractsLayer
 
-  classDef header fill:#fafafa,stroke:#404040,stroke-width:1.6px,color:#171717;
-  classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
-  class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle header;
-  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentWorkflows,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
-  style AppsLayer fill:#ffffff,stroke:#a3a3a3;
-  style AssemblyLayer fill:#ffffff,stroke:#a3a3a3;
-  style AdaptersLayer fill:#ffffff,stroke:#a3a3a3;
-  style ServicesLayer fill:#ffffff,stroke:#a3a3a3;
-  style ExecutionLayer fill:#ffffff,stroke:#a3a3a3;
-  style ContractsLayer fill:#ffffff,stroke:#a3a3a3;
+  classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717
+  classDef sectionTitle fill:transparent,stroke:transparent,color:#171717,font-size:12px,font-weight:600
+  class ProductApps,WebUI,MobileUI,Interfaces,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,AIAdapters,SourceAdapters,HookSupport,Transport,WebDriver,CoreServices,Integrations,RelayService,PageRuntime,Terminal,AgentRuntime,AgentWorkflows,AgentStream,Harness,PluginClient,RuntimeServices,ToolContracts,ToolGroups,ToolExecution,JSONRepair,CoreTypes,Events,RuntimePorts,ProductDomains module
+  class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle sectionTitle
+
+  style AppsLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style AssemblyLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style AdaptersLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style ServicesLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style ExecutionLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
+  style ContractsLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
 ```
 
-箭头表示允许的依赖方向；实际 crate 可以直接依赖任意更低层。Logical 与 Development 的主要映射如下，映射是多对多关系：
+箭头表示允许的依赖方向；实际 crate 可以直接依赖任意更低层。当前 Cargo metadata、pnpm workspace 与非 Rust 产品入口核验后的完整库存如下：
 
-| Development layer | Repository scope | Logical elements |
+| Development area | Repository scope | Current modules |
 |---|---|---|
-| Apps & Interfaces | `src/apps/*`、Web/Mobile UI、`interfaces/*` | Product Hosts、Product Features、Runtime API |
-| Assembly | `assembly/*` | Runtime Assembly、Product Features、Agent Kernel |
-| Adapters | `adapters/*` | Extensions、Platform Services |
-| Services | `services/*` | Agent Kernel、Security Control、Platform Services |
-| Execution | `execution/*` | Agent Core、Extensions、Service Ports |
-| Contracts | `contracts/*` | Stable Contracts、Security Control、Service Ports |
+| Apps | `src/apps/*` | `desktop`、`cli`、`server`、`relay-server`、`sdk-host`、`miniapp-market-server`、`skin-market-server` |
+| Web and delivery | product roots | `src/web-ui`、`src/mobile-web`、`src/miniapp-market-web`、`src/skin-market-web`、`src/apps/mobile`、`BitFun-Installer`、`tests/e2e` |
+| SDK | `sdk/*` | `typescript` |
+| Shared frontend | `src/shared` | `shared` |
+| Interfaces | `src/crates/interfaces/*` | `acp`、`app-server`、`app-server-client`、`app-server-protocol`、`sdk-host` |
+| Assembly | `src/crates/assembly/*` | `agent-content`、`core`、`external-sources`、`product-capabilities` |
+| Adapters | `src/crates/adapters/*` | `agent-runtime-ipc`、`ai-adapters`、`claude-code-adapter`、`codex-adapter`、`dsh-adapter`、`opencode-adapter`、`static-hook-support`、`transport`、`webdriver` |
+| Services | `src/crates/services/*` | `services-core`、`services-integrations`、`miniapp-market-service`、`skin-market-service`、`relay-service`、`page-function-runtime`、`terminal` |
+| Execution | `src/crates/execution/*` | `agent-runtime`、`agent-workflows`、`agent-stream`、`harness`、`plugin-runtime-client`、`runtime-services`、`tool-contracts`、`tool-provider-groups`、`tool-execution`、`tool-call-jsonrepair` |
+| Contracts | `src/crates/contracts/*` | `core-types`、`events`、`runtime-ports`、`product-domains` |
 
-各开发区域对逻辑能力的覆盖如下：
+Installer、E2E 以及 MiniApp/Skin market server 和对应 service 在 Level 0 图中分别归入交付入口、测试范围或 Services 家族，不作为独立架构模块。
+Logical 与 Development 的主要映射如下，映射是多对多关系：
 
 | Development area | Logical coverage |
 |---|---|
