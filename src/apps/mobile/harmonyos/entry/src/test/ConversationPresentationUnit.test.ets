@@ -38,6 +38,7 @@ import {
 import { RemoteCompactHomePolicy } from '../main/ets/pages/policy/RemoteCompactHomePolicy';
 import { AccountDeviceSelectionPolicy } from '../main/ets/pages/policy/AccountDeviceSelectionPolicy';
 import { SidebarConnectionActionPolicy } from '../main/ets/pages/policy/SidebarConnectionActionPolicy';
+import { SidebarDeviceProjectionPolicy } from '../main/ets/pages/policy/SidebarDeviceProjectionPolicy';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 import {
   ConnectScanDecisionPolicy,
@@ -382,6 +383,21 @@ export default function conversationPresentationUnitTest() {
     it('hides the redundant scan action after a QR connection succeeds', 0, () => {
       expect(SidebarConnectionActionPolicy.shouldShowScan('disconnected')).assertTrue();
       expect(SidebarConnectionActionPolicy.shouldShowScan('connected')).assertFalse();
+    });
+
+    it('merges matching QR targets and keeps unmatched QR targets beside account devices', 0, () => {
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        [], 'room', 'desk-qr', true, false
+      )).assertTrue();
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        ['desk-qr'], 'room', 'desk-qr', true, false
+      )).assertFalse();
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        ['desk-account'], 'room', 'desk-qr', true, false
+      )).assertTrue();
+      expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
+        ['desk-account'], 'none', '', false, false
+      )).assertFalse();
     });
 
     it('does not keep leftover pending-copy keys that claim general chat is unavailable', 0, () => {
