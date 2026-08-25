@@ -1489,14 +1489,19 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&outside, root.join("bundles")).unwrap();
         #[cfg(windows)]
-        assert!(std::process::Command::new("cmd")
-            .args(["/c", "mklink", "/J"])
-            .arg(root.join("bundles"))
-            .arg(&outside)
-            .output()
-            .expect("create junction")
-            .status
-            .success());
+        {
+            use std::os::windows::process::CommandExt;
+
+            assert!(std::process::Command::new("cmd")
+                .args(["/c", "mklink", "/J"])
+                .arg(root.join("bundles"))
+                .arg(&outside)
+                .creation_flags(0x0800_0000)
+                .output()
+                .expect("create junction")
+                .status
+                .success());
+        }
         let store = HookImportStore::open(root, ExternalSourceScope::UserGlobal)
             .await
             .unwrap();

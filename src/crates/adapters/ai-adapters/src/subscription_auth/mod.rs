@@ -1223,16 +1223,17 @@ mod tests {
         let loaded_path = parent.join("child-loaded");
         let resume_path = parent.join("child-resume");
         let outcome_path = parent.join("child-outcome");
-        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-            .arg("--exact")
-            .arg("subscription_auth::tests::cross_process_stale_login_cas_child")
-            .arg("--nocapture")
-            .env(STALE_LOGIN_CHILD_METADATA_ENV, &path)
-            .env(STALE_LOGIN_CHILD_LOADED_ENV, &loaded_path)
-            .env(STALE_LOGIN_CHILD_RESUME_ENV, &resume_path)
-            .env(STALE_LOGIN_CHILD_OUTCOME_ENV, &outcome_path)
-            .spawn()
-            .expect("spawn stale-login child process");
+        let mut child =
+            bitfun_services_core::process_manager::create_command(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("subscription_auth::tests::cross_process_stale_login_cas_child")
+                .arg("--nocapture")
+                .env(STALE_LOGIN_CHILD_METADATA_ENV, &path)
+                .env(STALE_LOGIN_CHILD_LOADED_ENV, &loaded_path)
+                .env(STALE_LOGIN_CHILD_RESUME_ENV, &resume_path)
+                .env(STALE_LOGIN_CHILD_OUTCOME_ENV, &outcome_path)
+                .spawn()
+                .expect("spawn stale-login child process");
 
         tokio::time::timeout(Duration::from_secs(5), async {
             while !loaded_path.exists() {

@@ -27,14 +27,16 @@ fn run_freshly_written(command: &mut Command) -> std::io::Result<Output> {
 
 #[test]
 fn legacy_version_matches_primary_and_warns_only_on_stderr() {
-    let primary = Command::new(env!("CARGO_BIN_EXE_bitfun"))
-        .arg("--version")
-        .output()
-        .expect("run bitfun --version");
-    let legacy = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
-        .arg("--version")
-        .output()
-        .expect("run deprecated bitfun-cli --version");
+    let primary =
+        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+            .arg("--version")
+            .output()
+            .expect("run bitfun --version");
+    let legacy =
+        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun-cli"))
+            .arg("--version")
+            .output()
+            .expect("run deprecated bitfun-cli --version");
 
     assert!(primary.status.success());
     assert!(legacy.status.success());
@@ -45,14 +47,16 @@ fn legacy_version_matches_primary_and_warns_only_on_stderr() {
 
 #[test]
 fn legacy_forwards_clap_failure_exit_code() {
-    let primary = Command::new(env!("CARGO_BIN_EXE_bitfun"))
-        .arg("--not-a-real-option")
-        .output()
-        .expect("run invalid primary command");
-    let legacy = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
-        .arg("--not-a-real-option")
-        .output()
-        .expect("run invalid legacy command");
+    let primary =
+        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+            .arg("--not-a-real-option")
+            .output()
+            .expect("run invalid primary command");
+    let legacy =
+        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun-cli"))
+            .arg("--not-a-real-option")
+            .output()
+            .expect("run invalid legacy command");
 
     assert_eq!(legacy.status.code(), primary.status.code());
     assert!(String::from_utf8_lossy(&legacy.stderr).starts_with(DEPRECATION));
@@ -69,8 +73,10 @@ fn legacy_reports_a_missing_primary_without_recursing() {
     let copied = temp.path().join(file_name);
     std::fs::copy(env!("CARGO_BIN_EXE_bitfun-cli"), &copied)
         .expect("copy deprecated launcher without primary sibling");
-    let output = run_freshly_written(Command::new(copied).arg("--version"))
-        .expect("run isolated deprecated launcher");
+    let output = run_freshly_written(
+        bitfun_services_core::process_manager::create_command(copied).arg("--version"),
+    )
+    .expect("run isolated deprecated launcher");
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success());

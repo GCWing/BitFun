@@ -216,7 +216,8 @@ impl CliTestEnvironment {
     }
 
     pub(crate) fn std_command(&self) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_bitfun"));
+        let mut command =
+            bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"));
         command.current_dir(&self.workspace);
         self.apply_std_environment(&mut command);
         command
@@ -276,7 +277,7 @@ impl CliTestEnvironment {
     }
 
     fn run_git(&self, args: &[&str]) {
-        let output = Command::new("git")
+        let output = bitfun_services_core::process_manager::create_command("git")
             .args(args)
             .current_dir(&self.workspace)
             .output()

@@ -13,6 +13,20 @@ use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
+fn create_test_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let command = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        let mut command = command;
+        command.creation_flags(0x0800_0000);
+        command
+    }
+    #[cfg(not(windows))]
+    command
+}
+
 fn context(workspace_root: PathBuf) -> ExternalSourceContext {
     ExternalSourceContext {
         workspace_root: Some(workspace_root),
@@ -67,7 +81,7 @@ fn opencode_config_dir_keeps_xdg_user_config_when_read_from_environment() {
     let temp = TempDir::new().unwrap();
     let xdg = temp.path().join("xdg");
     let explicit = temp.path().join("explicit");
-    let output = Command::new(std::env::current_exe().expect("current test executable"))
+    let output = create_test_command(std::env::current_exe().expect("current test executable"))
         .arg("--exact")
         .arg("opencode_config_dir_keeps_xdg_user_config_when_read_from_environment")
         .arg("--nocapture")

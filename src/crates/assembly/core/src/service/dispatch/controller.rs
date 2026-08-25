@@ -1867,7 +1867,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let repository = temp.path().join("baseline");
         std::fs::create_dir_all(&repository).expect("repository");
-        let init = std::process::Command::new("git")
+        let init = crate::util::create_test_command("git")
             .arg("-C")
             .arg(&repository)
             .args(["init", "--quiet", "--initial-branch=main"])

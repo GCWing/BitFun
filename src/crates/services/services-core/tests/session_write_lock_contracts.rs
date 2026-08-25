@@ -140,7 +140,13 @@ fn abnormal_process_exit_releases_the_writer() {
     let project_root = tempdir().expect("project runtime root");
     let storage_root = project_root.path().join("sessions");
     let ready_path = project_root.path().join("child-ready");
-    let mut child = Command::new(std::env::current_exe().expect("current test executable"))
+    let mut command = Command::new(std::env::current_exe().expect("current test executable"));
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let mut child = command
         .arg("--exact")
         .arg("abnormal_exit_child_holds_writer")
         .arg("--nocapture")

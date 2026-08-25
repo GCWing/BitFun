@@ -1867,15 +1867,17 @@ mod file_lock_tests {
         )
         .await
         .expect("stage cleanup intent before vault write and metadata commit");
-        let mut child = std::process::Command::new(std::env::current_exe().expect("test binary"))
-            .arg("--exact")
-            .arg("subscription_auth::store::file_lock_tests::cross_process_lock_child")
-            .arg("--nocapture")
-            .env(LOCK_CHILD_METADATA_ENV, &metadata_path)
-            .env(LOCK_CHILD_STARTED_ENV, &started_path)
-            .env(LOCK_CHILD_OBSERVED_ENV, &observed_path)
-            .spawn()
-            .expect("spawn lock-contending child process");
+        let mut child = bitfun_services_core::process_manager::create_command(
+            std::env::current_exe().expect("test binary"),
+        )
+        .arg("--exact")
+        .arg("subscription_auth::store::file_lock_tests::cross_process_lock_child")
+        .arg("--nocapture")
+        .env(LOCK_CHILD_METADATA_ENV, &metadata_path)
+        .env(LOCK_CHILD_STARTED_ENV, &started_path)
+        .env(LOCK_CHILD_OBSERVED_ENV, &observed_path)
+        .spawn()
+        .expect("spawn lock-contending child process");
 
         tokio::time::timeout(Duration::from_secs(2), async {
             while !started_path.exists() {

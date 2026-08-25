@@ -1,7 +1,6 @@
 #![cfg(feature = "workspace-search")]
 
 use std::path::Path;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use bitfun_services_integrations::workspace_search::{
@@ -127,7 +126,7 @@ async fn content_search_hydrates_real_line_text_and_previews() {
 
 #[cfg(test)]
 fn git(repo_root: &Path, args: &[&str]) {
-    let output = Command::new("git")
+    let output = bitfun_services_core::process_manager::create_command("git")
         .current_dir(repo_root)
         .args(args)
         .output()

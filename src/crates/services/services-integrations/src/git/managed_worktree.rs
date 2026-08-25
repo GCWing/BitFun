@@ -478,11 +478,10 @@ mod tests {
     use super::GitService;
     use std::fs;
     use std::path::Path;
-    use std::process::Command;
     use tempfile::TempDir;
 
     fn git(path: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
+        let output = bitfun_services_core::process_manager::create_command("git")
             .current_dir(path)
             .env("GIT_TERMINAL_PROMPT", "0")
             .args(args)
