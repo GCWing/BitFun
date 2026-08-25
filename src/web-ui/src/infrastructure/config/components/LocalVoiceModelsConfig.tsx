@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,13 +9,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import {
-  Badge,
-  IconButton,
-  Modal,
-  confirmDanger,
-  type BadgeVariant,
-} from '@/component-library';
+import { Badge, Modal, confirmDanger, type BadgeVariant } from '@/component-library';
 import {
   speechAPI,
   workspaceAPI,
@@ -415,9 +409,8 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
                 {isUsable ? (
                   <IconButton
                     aria-label={t('model.more')}
-                    tooltip={t('model.more')}
-                    variant="ghost"
-                    size="small"
+                    title={t('model.more')}
+                    size="md"
                     data-bf-component="voice-input-config"
                     data-bf-part="modelMore"
                     onClick={event => openMaintenanceMenu(event, model)}
@@ -451,9 +444,8 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
           <span>{t('localModels.description')}</span>
           <IconButton
             aria-label={t('model.refresh')}
-            tooltip={t('model.refresh')}
-            variant="ghost"
-            size="small"
+            title={t('model.refresh')}
+            size="md"
             onClick={() => void loadModels()}
             disabled={loading || busyAction !== null || anyDownloading}
           >

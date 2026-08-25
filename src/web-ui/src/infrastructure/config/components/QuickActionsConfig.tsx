@@ -1,14 +1,8 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Zap, GitCommitHorizontal, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  IconButton,
-  Modal,
-  Input,
-  Textarea,
-} from '@/component-library';
+import { ConfigPageLoading, Modal, Input, Textarea } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -176,10 +170,9 @@ const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelet
         />
         <IconButton
           type="button"
-          size="small"
-          variant="ghost"
+          size="md"
           aria-label={t('edit.button')}
-          tooltip={t('edit.button')}
+          title={t('edit.button')}
           onClick={() => onEdit(action)}
         >
           <Pencil size={13} />
@@ -187,10 +180,9 @@ const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelet
         {canDelete && (
           <IconButton
             type="button"
-            size="small"
-            variant="ghost"
+            size="md"
             aria-label={t('delete.button')}
-            tooltip={t('delete.button')}
+            title={t('delete.button')}
             onClick={() => onDelete(action.id)}
             className="quick-actions-config__delete-btn"
           >

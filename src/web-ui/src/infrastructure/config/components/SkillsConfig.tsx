@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp } from 'lucide-react';
-import { Select, Input, Search, IconButton, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
+import { Select, Input, Search, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
@@ -222,7 +222,8 @@ const SkillsConfig: React.FC = () => {
       <div className="bitfun-collection-form" data-bf-component="skills-config" data-bf-part="form">
         <div className="bitfun-collection-form__header">
           <h3>{t('form.title')}</h3>
-          <IconButton variant="ghost" size="small" onClick={resetForm} tooltip={t('form.closeTooltip')}>
+          <IconButton size="md" onClick={resetForm} title={t('form.closeTooltip')}
+          aria-label={t('form.closeTooltip')}>
             <X size={14} />
           </IconButton>
         </div>
@@ -254,7 +255,8 @@ const SkillsConfig: React.FC = () => {
               onChange={(e) => setFormPath(e.target.value)}
               variant="outlined"
             />
-            <IconButton variant="default" size="medium" onClick={handleBrowse} tooltip={t('form.path.browseTooltip')}>
+            <IconButton size="lg" onClick={handleBrowse} title={t('form.path.browseTooltip')}
+            aria-label={t('form.path.browseTooltip')}>
               <FolderOpen size={16} />
             </IconButton>
           </div>
@@ -525,10 +527,10 @@ const SkillsConfig: React.FC = () => {
 
   const refreshExtra = (
     <IconButton
-      variant="ghost"
-      size="small"
+      size="md"
       onClick={() => loadSkills(true)}
-      tooltip={t('toolbar.refreshTooltip')}
+      title={t('toolbar.refreshTooltip')}
+      aria-label={t('toolbar.refreshTooltip')}
     >
       <RefreshCw size={16} />
     </IconButton>
@@ -538,10 +540,11 @@ const SkillsConfig: React.FC = () => {
     <>
       {level === 'user' && refreshExtra}
       <IconButton
-        variant="primary"
-        size="small"
+        tone="primary"
+        size="md"
         onClick={() => { setFormLevel(level); setShowAddForm(true); }}
-        tooltip={t('toolbar.addTooltip')}
+        title={t('toolbar.addTooltip')}
+        aria-label={t('toolbar.addTooltip')}
         disabled={level === 'project' && !hasWorkspace}
       >
         <Plus size={16} />
@@ -636,10 +639,10 @@ const SkillsConfig: React.FC = () => {
           description={t('market.subtitle')}
           extra={(
             <IconButton
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={() => loadMarketSkills(marketKeyword)}
-              tooltip={t('market.refreshTooltip')}
+              title={t('market.refreshTooltip')}
+              aria-label={t('market.refreshTooltip')}
             >
               <RefreshCw size={16} />
             </IconButton>

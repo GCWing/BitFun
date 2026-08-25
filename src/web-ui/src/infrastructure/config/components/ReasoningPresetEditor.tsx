@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -12,15 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import {
-  IconButton,
-  Input,
-  NumberInput,
-  Select,
-  Textarea,
-  Tooltip,
-  type SelectOption,
-} from '@/component-library';
+import { Input, NumberInput, Select, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,
@@ -727,12 +719,14 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                             : preset.actions,
                         })}
                       />
-                      <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveUp')} disabled={disabled || presetIndex === 0} onClick={() => movePreset(presetIndex, -1)}><ArrowUp size={14} /></IconButton>
-                      <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveDown')} disabled={disabled || presetIndex === presets.length - 1} onClick={() => movePreset(presetIndex, 1)}><ArrowDown size={14} /></IconButton>
+                      <IconButton size="md" title={t('reasoningPresets.moveUp')}
+                      aria-label={t('reasoningPresets.moveUp')} disabled={disabled || presetIndex === 0} onClick={() => movePreset(presetIndex, -1)}><ArrowUp size={14} /></IconButton>
+                      <IconButton size="md" title={t('reasoningPresets.moveDown')}
+                      aria-label={t('reasoningPresets.moveDown')} disabled={disabled || presetIndex === presets.length - 1} onClick={() => movePreset(presetIndex, 1)}><ArrowDown size={14} /></IconButton>
                       <IconButton
-                        size="small"
-                        variant="ghost"
-                        tooltip={t('reasoningPresets.remove')}
+                        size="md"
+                        title={t('reasoningPresets.remove')}
+                        aria-label={t('reasoningPresets.remove')}
                         disabled={disabled}
                         onClick={() => {
                           resetJsonDraftState();
@@ -858,12 +852,14 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           data-bf-component="reasoning-preset-editor"
                           data-bf-part="actionControls"
                         >
-                          <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveUp')} disabled={disabled || actionIndex === 0} onClick={() => moveAction(presetIndex, actionIndex, -1)}><ArrowUp size={14} /></IconButton>
-                          <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveDown')} disabled={disabled || actionIndex === (preset.actions?.length ?? 0) - 1} onClick={() => moveAction(presetIndex, actionIndex, 1)}><ArrowDown size={14} /></IconButton>
+                          <IconButton size="md" title={t('reasoningPresets.moveUp')}
+                          aria-label={t('reasoningPresets.moveUp')} disabled={disabled || actionIndex === 0} onClick={() => moveAction(presetIndex, actionIndex, -1)}><ArrowUp size={14} /></IconButton>
+                          <IconButton size="md" title={t('reasoningPresets.moveDown')}
+                          aria-label={t('reasoningPresets.moveDown')} disabled={disabled || actionIndex === (preset.actions?.length ?? 0) - 1} onClick={() => moveAction(presetIndex, actionIndex, 1)}><ArrowDown size={14} /></IconButton>
                           <IconButton
-                            size="small"
-                            variant="ghost"
-                            tooltip={t('reasoningPresets.remove')}
+                            size="md"
+                            title={t('reasoningPresets.remove')}
+                            aria-label={t('reasoningPresets.remove')}
                             disabled={disabled || (preset.actions?.length ?? 0) <= 1}
                             onClick={() => {
                               resetJsonDraftState();

@@ -60,8 +60,9 @@ describe('AppearancePackageConfigSection', () => {
     expect(html).toContain('data-bf-part="packageSection"');
     expect(html).toContain('data-bf-part="packageActions"');
     expect(html).toContain('data-bf-component="button"');
+    expect(html.match(/data-bf-component="icon-button"/g)).toHaveLength(2);
     expect(html.match(/data-bf-variant="fill"/g)).toHaveLength(2);
-    expect(html.match(/data-size="md"/g)).toHaveLength(2);
+    expect(html.match(/data-size="md"/g)).toHaveLength(4);
     expect(html).toContain('bitfun-config-page-section');
     expect(html).not.toContain('appearance-package-config__action-button');
     expect(html).not.toContain('.bitfun-skin');

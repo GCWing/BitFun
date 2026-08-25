@@ -1,3 +1,4 @@
+import { IconButton } from '@bitfun/ui';
 /**
  * Display component for MCP tools.
  * Supports MCP Apps: when tool result contains ui:// resource, renders interactive UI in sandboxed iframe.
@@ -6,7 +7,7 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CubeLoading, IconButton } from '../../component-library';
+import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { createLogger } from '@/shared/utils/logger';
@@ -642,13 +643,13 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
           {!isFailed && hasContent && (
             <IconButton
               className="preview-toggle-btn"
-              variant="ghost"
-              size="xs"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleExpanded();
               }}
-              tooltip={isExpanded ? t('toolCards.common.collapseContent') : t('toolCards.common.expandContent')}
+              title={isExpanded ? t('toolCards.common.collapseContent') : t('toolCards.common.expandContent')}
+              aria-label={isExpanded ? t('toolCards.common.collapseContent') : t('toolCards.common.expandContent')}
             >
               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </IconButton>

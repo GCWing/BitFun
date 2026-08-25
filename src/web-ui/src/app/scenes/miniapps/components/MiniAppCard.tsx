@@ -1,7 +1,6 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React from 'react';
 import { Play, Square, Trash2 } from 'lucide-react';
-import { IconButton } from '@/component-library';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
 import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
@@ -166,7 +165,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
                 </Button>
                 {isRunning && onStop ? (
                   <IconButton
-                    size="small"
+                    size="md"
                     onClick={handleStopClick}
                     aria-label={t('card.stop')}
                     title={t('card.stop')}
@@ -175,8 +174,8 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
                   </IconButton>
                 ) : (
                   <IconButton
-                    size="small"
-                    variant="danger"
+                    size="md"
+                    tone="danger"
                     onClick={handleDeleteClick}
                     aria-label={t('card.delete')}
                     title={t('card.delete')}

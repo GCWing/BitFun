@@ -1,6 +1,6 @@
+import { IconButton } from '@bitfun/ui';
 import React from 'react';
 import { Check, Copy } from 'lucide-react';
-import { IconButton } from '../../component-library';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './ToolCardHeaderActions.scss';
 
@@ -58,11 +58,10 @@ export const ToolCardCopyAction: React.FC<ToolCardCopyActionProps> = ({
       data-bf-component="tool-card-header-actions"
       data-bf-part="action"
       className={`tool-card-header-action tool-card-copy-action${copied ? ' copied' : ''}${className ? ` ${className}` : ''}`}
-      variant="ghost"
-      size="xs"
+      size="sm"
       onClick={copy}
       disabled={disabled}
-      tooltip={copied ? (copiedTooltip ?? successMessage) : tooltip}
+      title={copied ? (copiedTooltip ?? successMessage) : tooltip}
       aria-label={ariaLabel ?? tooltip}
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}

@@ -1,7 +1,8 @@
+import { IconButton } from '@bitfun/ui';
 import React from 'react';
 import { Check, Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Tooltip } from '../../component-library';
+import { Tooltip } from '../../component-library';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './CopyableTextPreview.scss';
 
@@ -63,10 +64,9 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
               data-bf-component="copyable-text-preview"
               data-bf-part="copyAction"
               data-bf-state={copied ? 'copied' : undefined}
-              variant="ghost"
-              size="xs"
+              size="sm"
               onClick={copy}
-              tooltip={copyTooltip}
+              title={copyTooltip}
               aria-label={copyTooltip}
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}

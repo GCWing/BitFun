@@ -14,6 +14,13 @@ vi.mock('lucide-react', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  CubeLoading: ({ text }: { text: string }) => <div>{text}</div>,
+}));
+
+vi.mock('@bitfun/ui', () => ({
+  Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...props}>{children}</button>
+  ),
   IconButton: ({
     children,
     ...props
@@ -21,13 +28,6 @@ vi.mock('@/component-library', () => ({
     <button type="button" data-component="icon-button" {...props}>
       {children}
     </button>
-  ),
-  CubeLoading: ({ text }: { text: string }) => <div>{text}</div>,
-}));
-
-vi.mock('@bitfun/ui', () => ({
-  Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button type="button" {...props}>{children}</button>
   ),
 }));
 

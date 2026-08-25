@@ -1,3 +1,4 @@
+import { IconButton } from '@bitfun/ui';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -17,7 +18,7 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Search, ConfirmDialog, IconButton } from '@/component-library';
+import { Search, ConfirmDialog } from '@/component-library';
 import {
   GalleryEmpty,
   GalleryGrid,
@@ -374,7 +375,7 @@ const MiniAppGalleryView: React.FC = () => {
             <span className="miniapp-gallery__import-anchor">
               <IconButton
                 ref={importTriggerRef}
-                size="medium"
+                size="lg"
                 onClick={() => setImportMenuOpen(open => !open)}
                 disabled={loading}
                 title={t('importAction')}
@@ -430,8 +431,8 @@ const MiniAppGalleryView: React.FC = () => {
               ) : null}
             </span>
             <IconButton
-              size="medium"
-              variant="primary"
+              size="lg"
+              tone="primary"
               onClick={() => {
                 closeImportMenu();
                 setCreationModeNoticeOpen(true);

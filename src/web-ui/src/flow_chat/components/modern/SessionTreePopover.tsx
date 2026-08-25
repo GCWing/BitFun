@@ -1,3 +1,4 @@
+import { IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -9,7 +10,7 @@ import {
   RefreshCw,
   Square,
 } from 'lucide-react';
-import { DotMatrixLoader, IconButton } from '@/component-library';
+import { DotMatrixLoader } from '@/component-library';
 import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
 import { sessionAPI, type SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
@@ -501,10 +502,9 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
             <div className="session-tree-popover__node-actions">
               <IconButton
                 className="session-tree-popover__action-menu-button"
-                variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={(event) => handleActionMenuToggle(event, node)}
-                tooltip={t('flowChatHeader.agentTreeActions')}
+                title={t('flowChatHeader.agentTreeActions')}
                 aria-label={t('flowChatHeader.agentTreeActions')}
                 aria-haspopup="menu"
                 aria-expanded={openActionSessionId === node.sessionId}
@@ -600,10 +600,9 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
         >
           <span>{t('flowChatHeader.agentTreeLoadFailed')}</span>
           <IconButton
-            variant="ghost"
-            size="xs"
+            size="sm"
             onClick={() => void refreshSnapshot()}
-            tooltip={t('flowChatHeader.agentTreeRetry')}
+            title={t('flowChatHeader.agentTreeRetry')}
             aria-label={t('flowChatHeader.agentTreeRetry')}
           >
             <RefreshCw size={13} />
@@ -647,8 +646,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           isOpen ? 'open' : null,
           hasActiveDescendants ? 'active' : null,
         ].filter(Boolean).join(' ') || undefined}
-        variant="ghost"
-        size="xs"
+        size="sm"
         onClick={(event) => {
           const nextOpen = !isOpen;
           if (nextOpen) {
@@ -661,7 +659,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
             closePopover(event.detail === 0 ? 'keyboard' : 'pointer');
           }
         }}
-        tooltip={panelLabel}
+        title={panelLabel}
         aria-label={panelLabel}
         aria-expanded={isOpen}
         aria-haspopup="dialog"

@@ -1,8 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Package, RefreshCw, RotateCcw, Settings2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, IconButton } from '@/component-library';
+import { Badge } from '@/component-library';
 import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
 import { configAPI } from '@/infrastructure/api';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
@@ -461,9 +461,9 @@ const SkillsSuiteView: React.FC = () => {
         ))}
         </div>
         <IconButton
-          size="small"
+          size="md"
           className="skills-suite__mode-reset"
-          isLoading={resettingModeId === suiteModeId}
+          loading={resettingModeId === suiteModeId}
           disabled={isSaving}
           onClick={() => { void resetMode(currentMode); }}
           title={t('suite.modeActions.reset', { mode: t(currentMode.labelKey) })}

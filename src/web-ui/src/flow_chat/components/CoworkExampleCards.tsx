@@ -1,3 +1,4 @@
+import { IconButton } from '@bitfun/ui';
 /**
  * Cowork example cards shown in empty sessions.
  */
@@ -21,7 +22,7 @@ import {
   RotateCcw,
   Plus,
 } from 'lucide-react';
-import { Card, IconButton, Tooltip } from '@/component-library';
+import { Card, Tooltip } from '@/component-library';
 import './CoworkExampleCards.scss';
 
 type ExampleId =
@@ -137,8 +138,7 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
           {onAddPlugin && (
             <Tooltip content={t('coworkExamples.addPlugin')}>
               <IconButton
-                variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={onAddPlugin}
                 aria-label={t('coworkExamples.addPlugin')}
               >
@@ -148,8 +148,7 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
           )}
           <Tooltip content={t('coworkExamples.refresh')}>
             <IconButton
-              variant="ghost"
-              size="xs"
+              size="sm"
               onClick={handleRefresh}
               aria-label={t('coworkExamples.refresh')}
             >
@@ -159,8 +158,7 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
           {onClose && (
             <Tooltip content={t('coworkExamples.close')}>
               <IconButton
-                variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={onClose}
                 aria-label={t('coworkExamples.close')}
               >

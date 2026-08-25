@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Input, Modal, Select, type SelectOption } from '@/component-library';
+import { Input, Modal, Select, type SelectOption } from '@/component-library';
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 
@@ -432,10 +432,9 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                     <div data-bf-component="global-permission-rules-dialog" data-bf-part="ruleActions" className="global-permission-rules-dialog__rule-actions">
                       <IconButton
                         type="button"
-                        size="small"
-                        variant="ghost"
+                        size="md"
                         aria-label={t('permissionPolicy.moveGlobalRuleUp')}
-                        tooltip={t('permissionPolicy.moveGlobalRuleUp')}
+                        title={t('permissionPolicy.moveGlobalRuleUp')}
                         disabled={isSaving || exiting || activeIndex === 0}
                         onClick={() => moveDraftRule(rule.localId, -1)}
                       >
@@ -443,10 +442,9 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                       </IconButton>
                       <IconButton
                         type="button"
-                        size="small"
-                        variant="ghost"
+                        size="md"
                         aria-label={t('permissionPolicy.moveGlobalRuleDown')}
-                        tooltip={t('permissionPolicy.moveGlobalRuleDown')}
+                        title={t('permissionPolicy.moveGlobalRuleDown')}
                         disabled={
                           isSaving
                           || exiting
@@ -459,10 +457,9 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                       </IconButton>
                       <IconButton
                         type="button"
-                        size="small"
-                        variant="ghost"
+                        size="md"
                         aria-label={t('permissionPolicy.removeGlobalRule')}
-                        tooltip={t('permissionPolicy.removeGlobalRule')}
+                        title={t('permissionPolicy.removeGlobalRule')}
                         disabled={isSaving || exiting}
                         onClick={() => handleRemoveRule(rule.localId)}
                       >

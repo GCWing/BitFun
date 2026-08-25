@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -17,7 +17,7 @@ import {
   Server,
   Terminal,
 } from 'lucide-react';
-import { IconButton, Input, Select, Textarea } from '@/component-library';
+import { Input, Select, Textarea } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -1639,12 +1639,11 @@ const AcpAgentsConfig: React.FC = () => {
                             {t('remote.refreshDetection')}
                           </Button>
                           <IconButton
-                            variant="ghost"
-                            size="small"
+                            size="md"
                             aria-label={t('remote.hideConnection', {
                               name: connection.name || connection.id,
                             })}
-                            tooltip={t('remote.hideConnection', {
+                            title={t('remote.hideConnection', {
                               name: connection.name || connection.id,
                             })}
                             onClick={() => hideRemoteConnection(connection)}
@@ -1844,12 +1843,11 @@ const AcpAgentsConfig: React.FC = () => {
                         </div>
                       </div>
                       <IconButton
-                        variant="ghost"
-                        size="small"
+                        size="md"
                         aria-label={t('remote.restoreConnection', {
                           name: connection.name || connection.id,
                         })}
-                        tooltip={t('remote.restoreConnection', {
+                        title={t('remote.restoreConnection', {
                           name: connection.name || connection.id,
                         })}
                         onClick={() => restoreRemoteConnection(connection)}

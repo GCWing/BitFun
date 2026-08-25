@@ -15,9 +15,9 @@
  * the local port is an allocation that moves when the number is taken.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, IconButton, Input, Checkbox } from '@/component-library';
+import { Modal, Input, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
@@ -266,10 +266,9 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
             <span>{t('ssh.portForward.detectedTitle')}</span>
             <IconButton
               type="button"
-              size="small"
-              variant="ghost"
+              size="md"
               disabled={isDetecting}
-              tooltip={t('ssh.portForward.detect')}
+              title={t('ssh.portForward.detect')}
               aria-label={t('ssh.portForward.detect')}
               data-testid="ssh-port-forward-detect"
             onClick={() => void detect()}
@@ -394,9 +393,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                   <div className="port-forward-dialog__row-actions">
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
-                      tooltip={t('ssh.portForward.openInBrowser')}
+                      size="md"
+                      title={t('ssh.portForward.openInBrowser')}
                       aria-label={t('ssh.portForward.openInBrowser')}
                       onClick={() => handleOpen(forward)}
                     >
@@ -404,9 +402,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                     </IconButton>
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
-                      tooltip={t('ssh.portForward.copyAddress')}
+                      size="md"
+                      title={t('ssh.portForward.copyAddress')}
                       aria-label={t('ssh.portForward.copyAddress')}
                       onClick={() => handleCopy(forward)}
                     >
@@ -414,9 +411,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                     </IconButton>
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
-                      tooltip={t('ssh.portForward.stop')}
+                      size="md"
+                      title={t('ssh.portForward.stop')}
                       aria-label={t('ssh.portForward.stop')}
                       onClick={() => void handleStop(forward.id)}
                       data-testid="ssh-port-forward-stop"

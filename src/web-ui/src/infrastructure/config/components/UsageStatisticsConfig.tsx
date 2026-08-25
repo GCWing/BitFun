@@ -1,13 +1,7 @@
+import { IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, CalendarRange, Search, X } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfigPageMessage,
-  ConfigPageRefreshButton,
-  IconButton,
-  Input,
-  Select,
-} from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, Input, Select } from '@/component-library';
 import {
   TokenUsageStatisticsUnavailableError,
   tokenUsageStatisticsApi,
@@ -774,9 +768,8 @@ const UsageStatisticsConfig: React.FC = () => {
               suffix={filterInput ? (
                 <IconButton
                   type="button"
-                  size="xs"
-                  variant="ghost"
-                  tooltip={t('filter.clear')}
+                  size="sm"
+                  title={t('filter.clear')}
                   aria-label={t('filter.clear')}
                   onClick={clearFilter}
                 >

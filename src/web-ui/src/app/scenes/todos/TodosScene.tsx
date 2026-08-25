@@ -11,7 +11,7 @@
  * broadcast on the shared change event so those views stay in step.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -27,7 +27,7 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react';
-import { IconButton, Modal, PresenceBoundary, confirmDanger } from '@/component-library';
+import { Modal, PresenceBoundary, confirmDanger } from '@/component-library';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -427,9 +427,9 @@ const TodosScene: React.FC = () => {
           >
             <IconButton
               type="button"
-              size="xs"
+              size="sm"
               aria-label={t('calendar.previousMonth')}
-              tooltip={t('calendar.previousMonth')}
+              title={t('calendar.previousMonth')}
               onClick={() => shiftMonth(-1)}
               data-testid="todos-calendar-prev"
             >
@@ -441,9 +441,9 @@ const TodosScene: React.FC = () => {
             </span>
             <IconButton
               type="button"
-              size="xs"
+              size="sm"
               aria-label={t('calendar.nextMonth')}
-              tooltip={t('calendar.nextMonth')}
+              title={t('calendar.nextMonth')}
               onClick={() => shiftMonth(1)}
               data-testid="todos-calendar-next"
             >

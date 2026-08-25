@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -15,7 +15,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, IconButton, Search, Select, confirmDanger } from '@/component-library';
+import { Badge, Search, Select, confirmDanger } from '@/component-library';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
   GalleryDetailModal,
@@ -931,10 +931,10 @@ const AgentsHomeView: React.FC = () => {
               {t('agentsOverview.editAgent')}
             </Button>
             <IconButton
-              size="small"
-              variant="ghost"
-              tooltip={t('agentsOverview.deleteAgent')}
-              isLoading={deletingAgent}
+              size="md"
+              title={t('agentsOverview.deleteAgent')}
+              aria-label={t('agentsOverview.deleteAgent')}
+              loading={deletingAgent}
               onClick={() => void handleDeleteCustomAgent()}
             >
               <Trash2 size={14} />
@@ -1116,9 +1116,15 @@ const AgentsHomeView: React.FC = () => {
                       {isCurrentTabEditing ? (
                         <>
                           <IconButton
-                            size="small"
-                            variant="ghost"
-                            tooltip={
+                            size="md"
+                            title={
+                              currentCapabilityTab === 'tools'
+                                ? t('agentsOverview.toolsReset')
+                                : currentCapabilityTab === 'skills'
+                                  ? t('agentsOverview.reset')
+                                  : t('agentsOverview.reset')
+                            }
+                            aria-label={
                               currentCapabilityTab === 'tools'
                                 ? t('agentsOverview.toolsReset')
                                 : currentCapabilityTab === 'skills'

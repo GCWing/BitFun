@@ -1,16 +1,8 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
-import {
-  NumberInput,
-  IconButton,
-  ConfigPageLoading,
-  Modal,
-  Select,
-  confirmDanger,
-  type SelectOption,
-} from '@/component-library';
+import { NumberInput, ConfigPageLoading, Modal, Select, confirmDanger, type SelectOption } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import {
@@ -930,12 +922,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 <span className="bitfun-runtime-settings__pet-actions" data-bf-component="runtime-settings" data-bf-part="petActions">
                   <IconButton
                     type="button"
-                    size="small"
-                    variant="ghost"
+                    size="md"
                     onClick={() => void handleRefreshCompanionPets()}
                     disabled={companionPetsLoading}
                     aria-label={t('features.pet.refresh')}
-                    tooltip={t('features.pet.refresh')}
+                    title={t('features.pet.refresh')}
                   >
                     <RefreshCw size={14} />
                   </IconButton>
@@ -1056,12 +1047,12 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                               {isUserPet && IS_TAURI_DESKTOP && pet && (
                                 <IconButton
                                   type="button"
-                                  size="small"
-                                  variant="danger"
+                                  size="md"
+                                  tone="danger"
                                   className="bitfun-runtime-settings__pet-select-delete"
                                   disabled={isDeleting}
                                   aria-label={t('features.pet.delete')}
-                                  tooltip={t('features.pet.delete')}
+                                  title={t('features.pet.delete')}
                                   onClick={(e) => void handleDeleteCompanionPet(e, pet)}
                                 >
                                   <Trash2 size={14} />
@@ -1320,10 +1311,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     </span>
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
+                      size="md"
                       aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
+                      title={t('computerUse.refreshStatus')}
                       disabled={computerUseBusy || computerUseStatusLoading}
                       onClick={() => void refreshComputerUseStatus()}
                     >
@@ -1368,10 +1358,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     </span>
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
+                      size="md"
                       aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
+                      title={t('computerUse.refreshStatus')}
                       disabled={computerUseBusy || computerUseStatusLoading}
                       onClick={() => void refreshComputerUseStatus()}
                     >
@@ -1546,10 +1535,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     </span>
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
+                      size="md"
                       aria-label={t('browserControl.refreshStatus')}
-                      tooltip={t('browserControl.refreshStatus')}
+                      title={t('browserControl.refreshStatus')}
                       disabled={browserControlBusy || browserStatusLoading}
                       onClick={() => void refreshBrowserControlStatus()}
                     >

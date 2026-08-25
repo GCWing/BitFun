@@ -5,10 +5,9 @@
  * several rows with different times.
  */
 
-import { Switch } from '@bitfun/ui';
+import { Switch, IconButton } from '@bitfun/ui';
 import React from 'react';
 import { CalendarClock, Pencil, Trash2 } from 'lucide-react';
-import { IconButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { CronJob } from '@/infrastructure/api';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -155,19 +154,19 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
         <div className="bf-todos__row-action-buttons">
           <IconButton
             type="button"
-            size="xs"
+            size="sm"
             aria-label={t('actions.edit')}
-            tooltip={t('actions.edit')}
+            title={t('actions.edit')}
             onClick={() => onEdit(job)}
           >
             <Pencil size={13} />
           </IconButton>
           <IconButton
             type="button"
-            size="xs"
-            variant="danger"
+            size="sm"
+            tone="danger"
             aria-label={t('actions.delete')}
-            tooltip={t('actions.delete')}
+            title={t('actions.delete')}
             onClick={() => onDelete(job)}
           >
             <Trash2 size={13} />

@@ -2,12 +2,11 @@
  * Unified SSH authentication prompt.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Input, Modal } from '@/component-library';
 import { Select } from '@/component-library';
-import { IconButton } from '@/component-library';
 import { FolderOpen, Key, Loader2, Lock, Server, User } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
 import {
@@ -221,10 +220,9 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
                 suffix={
                   <IconButton
                     type="button"
-                    variant="ghost"
-                    size="small"
+                    size="md"
                     className="ssh-auth-prompt-dialog__browse-key"
-                    tooltip={t('ssh.remote.browsePrivateKey')}
+                    title={t('ssh.remote.browsePrivateKey')}
                     aria-label={t('ssh.remote.browsePrivateKey')}
                     disabled={isConnecting}
                     onClick={() => void handleBrowsePrivateKey()}
@@ -256,10 +254,9 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
                 suffix={
                   <IconButton
                     type="button"
-                    variant="ghost"
-                    size="small"
+                    size="md"
                     className="ssh-auth-prompt-dialog__browse-key"
-                    tooltip={t('ssh.remote.browseCertificate')}
+                    title={t('ssh.remote.browseCertificate')}
                     aria-label={t('ssh.remote.browseCertificate')}
                     disabled={isConnecting}
                     onClick={() => void handleBrowseCertificate()}

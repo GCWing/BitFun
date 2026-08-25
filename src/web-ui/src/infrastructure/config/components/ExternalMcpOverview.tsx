@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { Puzzle, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '@/component-library';
 import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
@@ -457,20 +456,18 @@ const ExternalMcpOverview: React.FC = () => {
         <>
           {loadFailed ? (
             <IconButton
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={() => void loadSnapshot()}
-              tooltip={t('external.retry')}
+              title={t('external.retry')}
               aria-label={t('external.retry')}
             >
               <RefreshCw size={16} aria-hidden="true" />
             </IconButton>
           ) : null}
           <IconButton
-            variant="ghost"
-            size="small"
+            size="md"
             onClick={() => openEcosystemCompatibility({ ownerSurface: 'external-sources' })}
-            tooltip={t('external.manage')}
+            title={t('external.manage')}
             aria-label={t('external.manage')}
           >
             <Puzzle size={16} aria-hidden="true" />

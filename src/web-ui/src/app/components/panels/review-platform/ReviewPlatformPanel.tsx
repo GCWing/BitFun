@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -26,7 +26,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { IconButton, Input, MarkdownRenderer, Modal, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
+import { Input, MarkdownRenderer, Modal, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -1293,9 +1293,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       <div data-bf-component="review-platform" data-bf-part="pagination" className="review-platform__pagination review-platform__detail-pagination">
         <IconButton
           className="review-platform__icon-button"
-          size="xs"
-          variant="ghost"
-          tooltip={`Previous ${label} page`}
+          size="sm"
+          title={`Previous ${label} page`}
+          aria-label={`Previous ${label} page`}
           disabled={page.pageIndex === 0}
           onClick={() => onPageChange(page.pageIndex - 1)}
         >
@@ -1306,9 +1306,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         </span>
         <IconButton
           className="review-platform__icon-button"
-          size="xs"
-          variant="ghost"
-          tooltip={`Next ${label} page`}
+          size="sm"
+          title={`Next ${label} page`}
+          aria-label={`Next ${label} page`}
           disabled={!page.hasNext && page.pageIndex >= page.totalPages - 1}
           onClick={() => onPageChange(page.pageIndex + 1)}
         >
@@ -1894,9 +1894,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             )}
             <IconButton
               className="review-platform__icon-button"
-              size="xs"
-              variant="ghost"
-              tooltip={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+              size="sm"
+              title={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+              aria-label={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
               disabled={!selectedRemote || selectedRemote.platform === 'unknown' || loading || authSaving}
               onClick={handleOpenAuthModal}
             >
@@ -1905,9 +1905,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             {account?.authSource === 'stored' && (
               <IconButton
                 className="review-platform__icon-button"
-                size="xs"
-                variant="ghost"
-                tooltip="Clear token"
+                size="sm"
+                title="Clear token"
+                aria-label="Clear token"
                 disabled={!selectedRemote || loading || authSaving}
                 onClick={handleClearAuthToken}
               >
@@ -1916,11 +1916,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             )}
             <IconButton
               className="review-platform__icon-button"
-              size="xs"
-              variant="ghost"
-              tooltip="Refresh"
+              size="sm"
+              title="Refresh"
+              aria-label="Refresh"
               onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}
-              isLoading={loading}
+              loading={loading}
             >
               <RefreshCw size={14} />
             </IconButton>
@@ -1957,7 +1957,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               onChange={event => setQuery(event.target.value)}
               placeholder="Search pull requests"
               prefix={<Search size={14} />}
-              suffix={query ? <IconButton className="review-platform__icon-button" size="xs" variant="ghost" onClick={() => setQuery('')}><XCircle size={14} /></IconButton> : undefined}
+              suffix={query ? <IconButton className="review-platform__icon-button" size="sm" onClick={() => setQuery('')} aria-label="Clear search"><XCircle size={14} /></IconButton> : undefined}
             />
             {!isGithubUserList && (
               <div className="review-platform__state-filters" data-bf-component="review-platform" data-bf-part="filters">
@@ -2042,9 +2042,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             <div className="review-platform__pagination" data-bf-component="review-platform" data-bf-part="pagination">
               <IconButton
                 className="review-platform__icon-button"
-                size="xs"
-                variant="ghost"
-                tooltip="Previous page"
+                size="sm"
+                title="Previous page"
+                aria-label="Previous page"
                 disabled={currentPageIndex === 0}
                 onClick={() => handlePageChange(currentPageIndex - 1)}
               >
@@ -2055,9 +2055,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               </span>
               <IconButton
                 className="review-platform__icon-button"
-                size="xs"
-                variant="ghost"
-                tooltip="Next page"
+                size="sm"
+                title="Next page"
+                aria-label="Next page"
                 disabled={!pagination.hasNext && currentPageIndex >= totalPages - 1}
                 onClick={() => handlePageChange(currentPageIndex + 1)}
               >
@@ -2183,9 +2183,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   {detailOnly && selectedRemote && selectedRemote.platform !== 'unknown' && (
                     <IconButton
                       className="review-platform__icon-button"
-                      size="xs"
-                      variant="ghost"
-                      tooltip={selectedRemote.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+                      size="sm"
+                      title={selectedRemote.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+                      aria-label={selectedRemote.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
                       onClick={handleOpenAuthModal}
                       disabled={authSaving}
                     >
@@ -2194,12 +2194,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   )}
                   <IconButton
                     className="review-platform__icon-button"
-                    size="xs"
-                    variant="ghost"
-                    tooltip="Refresh pull request"
+                    size="sm"
+                    title="Refresh pull request"
+                    aria-label="Refresh pull request"
                     disabled={detailLoading}
                     onClick={handleRefreshDetail}
-                    isLoading={detailLoading}
+                    loading={detailLoading}
                   >
                     <RefreshCw size={14} />
                   </IconButton>
@@ -2320,9 +2320,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                 {expandable && (
                                   <IconButton
                                     className="review-platform__icon-button review-platform__ci-action"
-                                    size="xs"
-                                    variant="ghost"
-                                    tooltip={isCiExpanded ? 'Collapse details' : 'Expand details'}
+                                    size="sm"
+                                    title={isCiExpanded ? 'Collapse details' : 'Expand details'}
+                                    aria-label={isCiExpanded ? 'Collapse details' : 'Expand details'}
                                     onClick={() => toggleCiExpanded(item)}
                                     disabled={ciLogLoading}
                                     aria-busy={ciLogLoading}
@@ -2332,9 +2332,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                 )}
                                 <IconButton
                                   className="review-platform__icon-button review-platform__ci-action"
-                                  size="xs"
-                                  variant="ghost"
-                                  tooltip="Add this result to chat"
+                                  size="sm"
+                                  title="Add this result to chat"
+                                  aria-label="Add this result to chat"
                                   onClick={() => void handleAddCiItemContext(item)}
                                   disabled={!selectedPr}
                                 >
@@ -2343,9 +2343,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                 {item.webUrl && (
                                   <IconButton
                                     className="review-platform__icon-button review-platform__ci-action"
-                                    size="xs"
-                                    variant="ghost"
-                                    tooltip="Open result in provider"
+                                    size="sm"
+                                    title="Open result in provider"
+                                    aria-label="Open result in provider"
                                     onClick={() => void handleOpenCiUrl(item.webUrl)}
                                   >
                                     <Link2 size={12} />

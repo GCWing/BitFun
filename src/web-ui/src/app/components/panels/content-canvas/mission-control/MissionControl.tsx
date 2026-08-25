@@ -4,11 +4,10 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { X, Merge } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
-import { IconButton } from '@/component-library';
 import { ThumbnailCard } from './ThumbnailCard';
 import { SearchFilter } from './SearchFilter';
 import { useCanvasStore } from '../stores';
@@ -211,9 +210,9 @@ export const MissionControl: React.FC<MissionControlProps> = ({
               </Button>
             )}
             <IconButton
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={onClose}
+              aria-label={t('canvas.exit')}
             >
               <X size={14} />
             </IconButton>

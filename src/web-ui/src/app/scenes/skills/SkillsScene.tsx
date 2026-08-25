@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -20,7 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, ConfirmDialog, IconButton, Input, Modal, Search, Select } from '@/component-library';
+import { Badge, ConfirmDialog, Input, Modal, Search, Select } from '@/component-library';
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import {
@@ -568,7 +568,7 @@ const SkillsScene: React.FC = () => {
                               data-bf-part="installedCardActions"
                             >
                               <IconButton
-                                size="small"
+                                size="md"
                                 onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
                                 aria-label={t('list.item.detail')}
                                 title={t('list.item.detail')}
@@ -579,8 +579,8 @@ const SkillsScene: React.FC = () => {
                               </IconButton>
                               {canDeleteSkill(skill) && (
                                 <IconButton
-                                  size="small"
-                                  variant="danger"
+                                  size="md"
+                                  tone="danger"
                                   onClick={() => setDeleteTarget(skill)}
                                   aria-label={t('list.item.deleteTooltip')}
                                   title={t('list.item.deleteTooltip')}
@@ -980,7 +980,7 @@ const SkillsScene: React.FC = () => {
               variant="outlined"
             />
             <IconButton
-              size="medium"
+              size="lg"
               onClick={installed.handleBrowse}
               aria-label={t('form.path.browseTooltip')}
               title={t('form.path.browseTooltip')}

@@ -1,7 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, RefreshCw, Square } from 'lucide-react';
-import { IconButton, Select, type SelectOption } from '@/component-library';
+import { Select, type SelectOption } from '@/component-library';
 import {
   DEFAULT_SPEECH_SAMPLE_RATE,
   speechAPI,
@@ -250,10 +250,9 @@ export function VoiceInputDiagnostics({
             className="voice-input-config__device-select"
           />
           <IconButton
-            size="small"
-            variant="ghost"
+            size="md"
             aria-label={t('diagnostics.microphone.refresh')}
-            tooltip={t('diagnostics.microphone.refresh')}
+            title={t('diagnostics.microphone.refresh')}
             disabled={phase !== 'idle'}
             onClick={() => void loadMicrophones()}
           >

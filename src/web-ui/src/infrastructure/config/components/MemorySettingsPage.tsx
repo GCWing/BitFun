@@ -1,15 +1,8 @@
-import { Switch } from '@bitfun/ui';
+import { Switch, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfirmDialog,
-  IconButton,
-  NumberInput,
-  Select,
-  type SelectOption,
-} from '@/component-library';
+import { ConfigPageLoading, ConfirmDialog, NumberInput, Select, type SelectOption } from '@/component-library';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -262,39 +255,34 @@ const MemorySettingsPage: React.FC = () => {
           <>
             <IconButton
               type="button"
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={() => void handleResetSettings()}
-              isLoading={actionBusy === 'reset-settings'}
+              loading={actionBusy === 'reset-settings'}
               disabled={actionBusy !== null}
-              tooltip={t('actions.resetSettings')}
-              tooltipPlacement="bottom"
+              title={t('actions.resetSettings')}
               aria-label={t('actions.resetSettings')}
             >
               <RotateCcw />
             </IconButton>
             <IconButton
               type="button"
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={() => void handleOpenMemoryDirectory()}
-              isLoading={actionBusy === 'open-directory'}
+              loading={actionBusy === 'open-directory'}
               disabled={actionBusy !== null}
-              tooltip={t('actions.openDirectory')}
-              tooltipPlacement="bottom"
+              title={t('actions.openDirectory')}
               aria-label={t('actions.openDirectory')}
             >
               <FolderOpen />
             </IconButton>
             <IconButton
               type="button"
-              variant="danger"
-              size="small"
+              tone="danger"
+              size="md"
               onClick={() => setResetMemoryConfirmOpen(true)}
-              isLoading={actionBusy === 'reset-memory'}
+              loading={actionBusy === 'reset-memory'}
               disabled={actionBusy !== null}
-              tooltip={t('actions.resetMemory')}
-              tooltipPlacement="bottom"
+              title={t('actions.resetMemory')}
               aria-label={t('actions.resetMemory')}
             >
               <Trash2 />

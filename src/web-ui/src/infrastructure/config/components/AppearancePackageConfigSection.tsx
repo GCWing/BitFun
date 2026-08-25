@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Download, Image, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@bitfun/ui';
-import { IconButton, Tooltip, confirmDialog } from '@/component-library';
+import { Button, IconButton } from '@bitfun/ui';
+import { Tooltip, confirmDialog } from '@/component-library';
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,
@@ -82,7 +82,7 @@ export function AppearancePackageFailurePanel({
           )}
         </div>
         <IconButton
-          size="small"
+          size="md"
           title={t('package.diagnostics.dismiss')}
           aria-label={t('package.diagnostics.dismiss')}
           onClick={onDismiss}
@@ -337,7 +337,7 @@ export function AppearancePackageConfigSection() {
           {selectedAppearance && (
             <>
               <IconButton
-                size="small"
+                size="md"
                 title={t('package.export')}
                 aria-label={t('package.export')}
                 disabled={busy}
@@ -346,7 +346,7 @@ export function AppearancePackageConfigSection() {
                 <Download size={14} />
               </IconButton>
               <IconButton
-                size="small"
+                size="md"
                 title={t('package.delete')}
                 aria-label={t('package.delete')}
                 disabled={busy}

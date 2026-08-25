@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -16,15 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
-import {
-  ConfigPageLoading,
-  ConfigPageMessage,
-  ConfigPageRefreshButton,
-  ConfirmDialog,
-  IconButton,
-  Input,
-  NumberInput,
-} from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, ConfirmDialog, Input, NumberInput } from '@/component-library';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { configAPI, worktreeAPI } from '@/infrastructure/api';
@@ -621,11 +613,10 @@ const WorktreeSettingsPage: React.FC = () => {
           </div>
           <div className="bitfun-worktree-settings__delete-control">
             <IconButton
-              variant="danger"
-              size="small"
+              tone="danger"
+              size="md"
               disabled={Boolean(blockCode) || deletingWorktreeId !== null}
-              isLoading={deletingWorktreeId === worktree.worktreeId}
-              tooltip={blockReason ?? t('management.delete.action')}
+              loading={deletingWorktreeId === worktree.worktreeId}
               title={blockReason ?? undefined}
               onClick={() => setDeleteTarget({
                 projectWorkspacePath: project.projectWorkspacePath,

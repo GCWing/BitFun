@@ -1,7 +1,6 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AlertTriangle, Check, Eye, EyeOff, Loader2, RefreshCw, Send, Trash2, X } from 'lucide-react';
-import { IconButton } from '@/component-library';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { MiniApp, MiniAppCustomizationMetadata, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -410,11 +409,10 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
           <span>{appName}</span>
         </div>
         <IconButton
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={handleClose}
           disabled={busy}
-          tooltip={t('customize.close')}
+          title={t('customize.close')}
           aria-label={t('customize.close')}
         >
           <X size={14} />

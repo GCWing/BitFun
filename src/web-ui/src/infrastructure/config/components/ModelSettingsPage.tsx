@@ -1,8 +1,8 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
-import { Select, IconButton, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Select, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -2291,14 +2291,14 @@ const ModelSettingsPage: React.FC = () => {
                         data-testid="settings-model-selected-remove-btn"
                         data-model-id={draft.modelName}
                         data-model-name={draft.modelName}
-                        variant="ghost"
-                        size="small"
+                        size="md"
                         className="bitfun-model-settings__selected-model-remove"
                         onClick={(e) => {
                           e.stopPropagation();
                           removeSelectedModelDraft(draft.modelName);
                         }}
-                        tooltip={t('providerSelection.removeModel')}
+                        title={t('providerSelection.removeModel')}
+                        aria-label={t('providerSelection.removeModel')}
                       >
                         <X size={14} />
                       </IconButton>
@@ -2857,7 +2857,8 @@ const ModelSettingsPage: React.FC = () => {
                         <div key={index} className="bitfun-model-settings__header-row">
                           <Input value={key} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.keyPlaceholder')} inputSize="small" className="bitfun-model-settings__header-key" />
                           <Input value={value} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.valuePlaceholder')} inputSize="small" className="bitfun-model-settings__header-value" />
-                          <IconButton variant="ghost" size="small" onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }} tooltip={t('actions.delete')}><X size={14} /></IconButton>
+                          <IconButton size="md" onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }} title={t('actions.delete')}
+                          aria-label={t('actions.delete')}><X size={14} /></IconButton>
                         </div>
                       ))}
                       <Button type="button" variant="outline" size="sm" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-model-settings__add-header-btn" leadingIcon={<Plus size={14} />}>{t('advancedSettings.customHeaders.addHeader')}</Button>
@@ -3037,27 +3038,28 @@ const ModelSettingsPage: React.FC = () => {
           }}
         />
         <IconButton
-          variant="ghost"
-          size="small"
-          isLoading={isTesting}
+          size="md"
+          loading={isTesting}
           onClick={() => void handleTest(config)}
-          tooltip={t('actions.test')}
+          title={t('actions.test')}
+          aria-label={t('actions.test')}
         >
           {isTesting ? <Loader size={14} /> : <Wifi size={14} />}
         </IconButton>
         <IconButton
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={() => handleEdit(config)}
-          tooltip={t('actions.edit')}
+          title={t('actions.edit')}
+          aria-label={t('actions.edit')}
         >
           <SquarePen size={14} />
         </IconButton>
         <IconButton
-          variant="danger"
-          size="small"
+          tone="danger"
+          size="md"
           onClick={() => void handleDelete(config.id!)}
-          tooltip={t('actions.delete')}
+          title={t('actions.delete')}
+          aria-label={t('actions.delete')}
         >
           <Trash2 size={14} />
         </IconButton>
@@ -3162,10 +3164,9 @@ const ModelSettingsPage: React.FC = () => {
           description={t('subscriptionAuth.sectionDescription')}
           extra={(
             <IconButton
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={refreshSubscriptionAccounts}
-              tooltip={t('subscriptionAuth.rescan')}
+              title={t('subscriptionAuth.rescan')}
               aria-label={t('subscriptionAuth.rescan')}
               disabled={isLoadingSubscriptions}
             >
@@ -3437,10 +3438,10 @@ const ModelSettingsPage: React.FC = () => {
           description={t('subtitle')}
           extra={(
             <IconButton
-              variant="ghost"
-              size="small"
+              size="md"
               onClick={handleCreateNew}
-              tooltip={t('actions.addProvider')}
+              title={t('actions.addProvider')}
+              aria-label={t('actions.addProvider')}
             >
               <Plus size={16} />
             </IconButton>
@@ -3469,10 +3470,10 @@ const ModelSettingsPage: React.FC = () => {
                     </div>
                     <div className="bitfun-model-settings__provider-group-actions" data-bf-component="model-settings" data-bf-part="providerGroupActions">
                       <IconButton
-                        variant="ghost"
-                        size="small"
+                        size="md"
                         onClick={() => handleEditProvider(group.models[0])}
-                        tooltip={t('actions.edit')}
+                        title={t('actions.edit')}
+                        aria-label={t('actions.edit')}
                       >
                         <SquarePen size={14} />
                       </IconButton>
@@ -3494,17 +3495,19 @@ const ModelSettingsPage: React.FC = () => {
           extra={(
             <div className="bitfun-model-settings__catalog-actions">
               <IconButton
-                variant="ghost"
-                size="small"
-                tooltip={t('modelsDevCatalog.viewDetails')}
+                size="md"
+                title={t('modelsDevCatalog.viewDetails')}
+                aria-label={t('modelsDevCatalog.viewDetails')}
                 onClick={() => setShowModelsDevDetails(true)}
               >
                 <Eye size={14} aria-hidden="true" />
               </IconButton>
               <IconButton
-                variant="ghost"
-                size="small"
-                tooltip={t(isRefreshingModelsDev
+                size="md"
+                title={t(isRefreshingModelsDev
+                  ? 'modelsDevCatalog.refreshing'
+                  : 'modelsDevCatalog.refreshNow')}
+                aria-label={t(isRefreshingModelsDev
                   ? 'modelsDevCatalog.refreshing'
                   : 'modelsDevCatalog.refreshNow')}
                 onClick={() => void handleRefreshModelsDev()}
@@ -3641,9 +3644,9 @@ const ModelSettingsPage: React.FC = () => {
             <div className="bitfun-model-settings__catalog-path">
               <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
               <IconButton
-                variant="ghost"
-                size="small"
-                tooltip={t('modelsDevCatalog.reveal')}
+                size="md"
+                title={t('modelsDevCatalog.reveal')}
+                aria-label={t('modelsDevCatalog.reveal')}
                 onClick={() => {
                   void aiApi.revealModelsDevCacheDirectory().catch((error) => {
                     log.warn('Failed to reveal models.dev cache', { error });

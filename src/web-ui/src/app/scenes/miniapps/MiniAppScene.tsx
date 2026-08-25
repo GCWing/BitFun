@@ -2,7 +2,7 @@
  * MiniAppScene — standalone scene tab for a single MiniApp.
  * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
  */
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -11,7 +11,6 @@ import type { MiniApp, MiniAppDraft } from '@/infrastructure/api/service-api/Min
 import { useAppearance } from '@/infrastructure/appearance';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
-import { IconButton } from '@/component-library';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useMiniAppStore } from './miniAppStore';
@@ -169,11 +168,11 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
             onOpen={handleOpenCustomize}
           />
           <IconButton
-            variant="ghost"
-            size="small"
+            size="md"
             onClick={handleReload}
             disabled={loading}
-            tooltip={t('scene.reload')}
+            title={t('scene.reload')}
+            aria-label={t('scene.reload')}
           >
             {loading ? (
               <Loader2 size={14} className="miniapp-scene__spinning" />
@@ -222,10 +221,9 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
                     <small>{t('customize.previewHint')}</small>
                   </div>
                   <IconButton
-                    variant="ghost"
-                    size="small"
+                    size="md"
                     onClick={() => setCustomizePreview(null)}
-                    tooltip={t('customize.hidePreview')}
+                    title={t('customize.hidePreview')}
                     aria-label={t('customize.hidePreview')}
                   >
                     <X size={14} />

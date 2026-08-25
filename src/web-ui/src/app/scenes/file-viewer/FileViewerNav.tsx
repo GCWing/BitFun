@@ -1,3 +1,4 @@
+import { IconButton } from '@bitfun/ui';
 /**
  * FileViewerNav — scene-specific navigation for the file viewer scene.
  *
@@ -11,7 +12,6 @@ import { Folder, Search as SearchIcon, List, FilePlus, FolderPlus, RefreshCw } f
 import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
-import { IconButton } from '@/component-library';
 import type { FileExplorerToolbarHandlers } from '@/tools/file-system';
 import FilesPanel from '../../components/panels/FilesPanel';
 import './FileViewerNav.scss';
@@ -42,39 +42,36 @@ const FileViewerNav: React.FC = () => {
             {viewMode === 'tree' && explorerToolbar && (
               <>
                 <IconButton
-                  size="xs"
-                  variant="ghost"
+                  size="sm"
                   onClick={explorerToolbar.onNewFile}
-                  tooltip={tTools('fileTree.newFile')}
-                  tooltipPlacement="bottom"
+                  title={tTools('fileTree.newFile')}
+                  aria-label={tTools('fileTree.newFile')}
                 >
                   <FilePlus size={14} />
                 </IconButton>
                 <IconButton
-                  size="xs"
-                  variant="ghost"
+                  size="sm"
                   onClick={explorerToolbar.onNewFolder}
-                  tooltip={tTools('fileTree.newFolder')}
-                  tooltipPlacement="bottom"
+                  title={tTools('fileTree.newFolder')}
+                  aria-label={tTools('fileTree.newFolder')}
                 >
                   <FolderPlus size={14} />
                 </IconButton>
                 <IconButton
-                  size="xs"
-                  variant="ghost"
+                  size="sm"
                   onClick={explorerToolbar.onRefresh}
-                  tooltip={tTools('fileTree.refresh')}
-                  tooltipPlacement="bottom"
+                  title={tTools('fileTree.refresh')}
+                  aria-label={tTools('fileTree.refresh')}
                 >
                   <RefreshCw size={14} />
                 </IconButton>
               </>
             )}
             <IconButton
-              size="xs"
+              size="sm"
               onClick={handleToggleViewMode}
-              tooltip={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
-              tooltipPlacement="bottom"
+              title={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
+              aria-label={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
             >
               {viewMode === 'tree' ? <SearchIcon size={14} /> : <List size={14} />}
             </IconButton>

@@ -1,3 +1,4 @@
+import { IconButton } from '@bitfun/ui';
 /**
  * Pending queue panel
  *
@@ -23,7 +24,7 @@ import {
   Inbox,
   Loader2,
 } from 'lucide-react';
-import { Tooltip, IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { stateMachineManager } from '../state-machine';
 import { FlowChatStore } from '../store/FlowChatStore';
@@ -325,7 +326,7 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="md"
                         className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--primary"
                         onClick={() => handleEditSave(item)}
                         aria-label={t('pendingQueue.actions.saveEdit')}
@@ -337,7 +338,7 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="md"
                         className="bitfun-pending-queue-panel__btn"
                         onClick={handleEditCancel}
                         aria-label={t('pendingQueue.actions.cancelEdit')}
@@ -352,7 +353,7 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="md"
                         className="bitfun-pending-queue-panel__btn"
                         disabled={isSending}
                         onClick={() => handleEditStart(item)}
@@ -365,7 +366,7 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="md"
                         className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--primary"
                         disabled={isSending || recoveryInFlight}
                         onClick={() => {
@@ -384,7 +385,7 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="md"
                         className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--danger"
                         disabled={isSending}
                         onClick={() => handleDelete(item)}

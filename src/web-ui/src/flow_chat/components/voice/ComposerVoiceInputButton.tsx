@@ -1,7 +1,6 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, Download, Loader2, Mic, VolumeX, X } from 'lucide-react';
-import { IconButton } from '@/component-library';
 import type { ComposerVoiceInputController } from './useComposerVoiceInput';
 
 const VOICE_TIMELINE_SAMPLE_COUNT = 32;
@@ -142,9 +141,8 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             <IconButton
               aria-label={controller.setupCancelTooltip}
               className="bitfun-chat-input__voice-setup-dismiss"
-              variant="ghost"
-              size="xs"
-              tooltip={controller.setupCancelTooltip}
+              size="sm"
+              title={controller.setupCancelTooltip}
               onClick={(event) => {
                 event.stopPropagation();
                 controller.dismissSetup();
@@ -240,10 +238,9 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             <IconButton
               aria-label={controller.cancelTooltip}
               className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--cancel"
-              variant="ghost"
-              size="xs"
+              size="sm"
               disabled={transcribing}
-              tooltip={controller.cancelTooltip}
+              title={controller.cancelTooltip}
               onClick={(event) => {
                 event.stopPropagation();
                 controller.cancel();
@@ -257,10 +254,9 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             <IconButton
             aria-label={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
             className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--transcribe"
-            variant="ghost"
-            size="xs"
+            size="sm"
             disabled={controlsDisabled}
-            tooltip={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
+            title={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
             onClick={(event) => {
               event.stopPropagation();
               controller.transcribe();
@@ -278,10 +274,10 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             <IconButton
             aria-label={controlsDisabled ? controller.tooltip : controller.sendTooltip}
             className="bitfun-chat-input__voice-pill-send"
-            variant="danger"
-            size="xs"
+            tone="danger"
+            size="sm"
             disabled={controlsDisabled}
-            tooltip={controlsDisabled ? controller.tooltip : controller.sendTooltip}
+            title={controlsDisabled ? controller.tooltip : controller.sendTooltip}
             onClick={(event) => {
               event.stopPropagation();
               controller.transcribeAndSend();
@@ -305,10 +301,9 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
         <IconButton
         aria-label={controller.tooltip}
         className="bitfun-chat-input__voice-control"
-        variant="ghost"
-        size="xs"
+        size="sm"
         disabled={controller.disabled}
-        tooltip={controller.tooltip}
+        title={controller.tooltip}
         onClick={(event) => {
           event.stopPropagation();
           controller.toggle();
