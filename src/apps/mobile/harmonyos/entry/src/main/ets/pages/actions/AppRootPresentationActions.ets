@@ -74,6 +74,8 @@ export interface SidebarPresentationActions {
   readonly enterCode: () => void;
   /** Opens the QR scanner directly from sidebar device actions. */
   readonly scanDesktop: () => void;
+  /** Offers sign-in or QR pairing from the device-section add button. */
+  readonly addDesktop: () => void;
   readonly settings: () => void;
   readonly openAccount: () => void;
   readonly openSession: (session: RemoteSession) => void;
@@ -102,6 +104,7 @@ export interface SettingsPresentationActions {
 
 export interface ConnectPresentationActions {
   readonly back: () => void;
+  readonly openAccount: () => void;
   readonly connect: (password?: string) => void;
   readonly clearPairing: () => void;
   readonly urlChanged: (url: string) => void;
@@ -135,7 +138,7 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {}, send: () => {}
     },
     onSidebar: {
-      close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {},
+      close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {}, addDesktop: () => {},
       settings: () => {}, openAccount: () => {},
       openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
     },
@@ -150,7 +153,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       setLanguage: async () => {}
     },
     onConnect: {
-      back: () => {}, connect: () => {}, clearPairing: () => {}, urlChanged: () => {}, userChanged: () => {},
+      back: () => {}, openAccount: () => {}, connect: () => {}, clearPairing: () => {},
+      urlChanged: () => {}, userChanged: () => {},
       detected: () => DetectedUrlAction.INVALID, inputVisible: () => {}, paste: () => {}, scan: () => {},
       cloudListDevices: async () => [], cloudSelectDevice: async () => {}
     },

@@ -37,6 +37,7 @@ export struct AppSidebar {
   @Event onClose: () => void = () => {};
   @Event onNewChat: () => void = () => {};
   @Event onEnterCode: () => void = () => {};
+  @Event onScanDesktop: () => void = () => {};
   @Event onCollapse: () => void = () => {};
   @Event onOpenViewSettings: () => void = () => {};
   @Event onSearchQueryChange: (query: string) => void = (_query: string) => {};
@@ -348,25 +349,40 @@ export struct AppSidebar {
   @Builder
   private SignedOutFooter() {
     Column({ space: 8 }) {
-      Button(RemoteI18n.t('sidebar.signInBitFunAccount'))
+      Button() {
+        Text(RemoteI18n.t('sidebar.scanToConnect'))
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(INK)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Clip })
+      }
         .width('100%')
         .height(48)
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(CARD)
+        .padding(0)
+        .backgroundColor(CARD)
+        .border({ width: 1, color: LINE })
+        .borderRadius(16)
+        .onClick(() => {
+          this.onScanDesktop();
+        })
+
+      Button() {
+        Text(RemoteI18n.t('sidebar.signInBitFunAccount'))
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(CARD)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Clip })
+      }
+        .width('100%')
+        .height(48)
+        .padding(0)
         .backgroundColor(INK)
         .borderRadius(16)
         .onClick(() => {
           this.onOpenAccount();
         })
-
-      Text(RemoteI18n.t('sidebar.signInHint'))
-        .width('100%')
-        .fontSize(12)
-        .lineHeight(17)
-        .fontColor(MUTED)
-        .textAlign(TextAlign.Center)
-        .maxLines(2)
     }
       .width('100%')
       .zIndex(2)

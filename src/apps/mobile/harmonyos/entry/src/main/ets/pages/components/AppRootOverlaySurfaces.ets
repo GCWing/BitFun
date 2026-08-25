@@ -48,6 +48,7 @@ export struct AppSidebarSurface {
       onClose: this.actions.onSidebar.close,
       onNewChat: this.actions.onSidebar.newChat,
       onEnterCode: this.actions.onSidebar.enterCode,
+      onScanDesktop: this.actions.onSidebar.scanDesktop,
       onOpenViewSettings: this.onOpenRemoteViewSettings,
       onSearchQueryChange: (query: string) => {
         this.actions.onRemoteHome.queryChanged(query);
@@ -87,7 +88,7 @@ export struct AppSidebarSurface {
       },
       onToggleDevice: this.actions.onRemoteHome.toggleDirectoryDevice,
       onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
-      onScan: this.actions.onSidebar.scanDesktop
+      onAdd: this.actions.onSidebar.addDesktop
     })
   }
 
@@ -187,6 +188,7 @@ export struct AppConnectSurface {
       accountUsername: this.remotePageState.accountUsername,
       openIntent: this.openIntent,
       onBack: this.actions.onConnect.back,
+      onOpenAccount: this.actions.onConnect.openAccount,
       onConnect: this.actions.onConnect.connect,
       onRemoteUrlChange: this.actions.onConnect.urlChanged,
       onUserIdChange: this.actions.onConnect.userChanged,
