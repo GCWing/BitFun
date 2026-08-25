@@ -869,7 +869,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-agent-workflows"
-version = "0.2.18"
+version = "0.2.19"
 dependencies = [
  "regex",
 ]
@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "bitfun-opencode-plugin-host"
-version = "0.2.18"
+version = "0.2.19"
 dependencies = [
  "base64 0.22.1",
  "bitfun-services-core",
