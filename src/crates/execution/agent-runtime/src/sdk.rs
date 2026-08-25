@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 8;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 9;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -35,6 +35,7 @@ impl AgentRuntimeSdkCompatibility {
 }
 
 pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapabilityProfile};
+pub use crate::dialog_turn::TurnTokenUsage;
 pub use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 pub use crate::permission::{
     PermissionReplyResolution, PermissionRequestEventReceiver, PermissionRequestManager,

@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use bitfun_agent_runtime::sdk::{
     PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
-    PortErrorKind, RuntimeError,
+    PortErrorKind, RuntimeError, TurnTokenUsage,
 };
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{AgenticEvent, ToolEventIdentity};
@@ -53,65 +53,7 @@ pub(crate) enum ExecApprovalMode {
     Auto,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub(super) struct ExecTokenUsage {
-    pub(super) input_tokens: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) output_tokens: Option<usize>,
-    pub(super) total_tokens: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) cached_tokens: Option<usize>,
-}
-
-impl ExecTokenUsage {
-    fn merge_round(&mut self, round: Self) {
-        self.input_tokens = self.input_tokens.saturating_add(round.input_tokens);
-        self.output_tokens = self
-            .output_tokens
-            .zip(round.output_tokens)
-            .map(|(current, next)| current.saturating_add(next));
-        self.total_tokens = self.total_tokens.saturating_add(round.total_tokens);
-        self.cached_tokens = self
-            .cached_tokens
-            .zip(round.cached_tokens)
-            .map(|(current, next)| current.saturating_add(next));
-    }
-
-    pub(super) fn accumulate_event<'a>(
-        aggregate: &mut Option<Self>,
-        event: &'a AgenticEvent,
-        expected_turn_id: &str,
-    ) -> Option<&'a str> {
-        let AgenticEvent::TokenUsageUpdated {
-            turn_id,
-            model_config_id,
-            input_tokens,
-            output_tokens,
-            total_tokens,
-            cached_tokens,
-            ..
-        } = event
-        else {
-            return None;
-        };
-        if turn_id != expected_turn_id {
-            return None;
-        }
-
-        let round = Self {
-            input_tokens: *input_tokens,
-            output_tokens: *output_tokens,
-            total_tokens: *total_tokens,
-            cached_tokens: *cached_tokens,
-        };
-        if let Some(total) = aggregate.as_mut() {
-            total.merge_round(round);
-        } else {
-            *aggregate = Some(round);
-        }
-        Some(model_config_id)
-    }
-}
+pub(super) type ExecTokenUsage = TurnTokenUsage;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(super) struct ExecJsonResult {

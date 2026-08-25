@@ -27,6 +27,7 @@ export interface AgentCapabilities {
   cancellation: boolean;
   eventStream: boolean;
   toolEvents: boolean;
+  imageInput: boolean;
   permissionResponses: boolean;
   structuredOutput: boolean;
   usage: boolean;
@@ -86,8 +87,14 @@ export interface SdkErrorDetails {
 
 export type SessionLifetime = "connection" | "durable";
 
+export type UserInput =
+  | { type: "text"; text: string }
+  | { type: "local_image"; path: string };
+
+export type Input = string | readonly UserInput[];
+
 export interface QueryInput {
-  prompt: string;
+  prompt: Input;
   agent?: string;
 }
 
@@ -97,7 +104,7 @@ export interface SessionCreateInput {
 }
 
 export interface TurnInput {
-  prompt: string;
+  prompt: Input;
 }
 
 export interface Turn {
@@ -162,6 +169,13 @@ export interface ResultError extends SdkErrorDetails {
   message: string;
 }
 
+export interface Usage {
+  inputTokens: number;
+  outputTokens?: number;
+  totalTokens: number;
+  cachedTokens?: number;
+}
+
 export interface Result {
   type: "result";
   queryId: string;
@@ -170,6 +184,7 @@ export interface Result {
   operationId: string;
   status: ResultStatus;
   outputText: string;
+  usage?: Usage;
   error?: ResultError;
 }
 

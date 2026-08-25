@@ -43,7 +43,7 @@ test("Rust wire export produces executable validators for every type", async () 
   }
 
   const initializeResult = {
-    protocolVersion: 4,
+    protocolVersion: 5,
     runtimeVersion: "0.1.0",
     stability: "not_delivered",
     capabilities: {
@@ -55,8 +55,9 @@ test("Rust wire export produces executable validators for every type", async () 
       sessionClose: true,
       eventStream: true,
       toolEvents: true,
+      imageInput: true,
       structuredOutput: false,
-      usage: false,
+      usage: true,
       customTools: false,
       permissionResponses: true,
       hooks: false,
