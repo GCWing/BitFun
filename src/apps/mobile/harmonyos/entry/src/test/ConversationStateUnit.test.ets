@@ -179,16 +179,28 @@ export default function conversationStateUnitTest() {
       expect(items[0].type).assertEqual('empty_state');
     });
 
-    it('deduplicates optimistic user messages replaced by persisted messages', 0, () => {
+    it('deduplicates optimistic user messages confirmed with the same id', 0, () => {
       const items = ChatTimelineProjector.project([
-        chatMessage('remote-user-1', 'user', 'Explain this file')
+        chatMessage('message-user-1', 'user', 'Explain this file')
       ], [
-        chatMessage('msg-local-1', 'user', ' Explain this file ')
+        chatMessage('message-user-1', 'user', ' Explain this file ')
       ], chatMessage('', 'assistant', ''), false);
 
       expect(items.length).assertEqual(1);
-      expect(items[0].id).assertEqual('message-remote-user-1');
+      expect(items[0].id).assertEqual('message-message-user-1');
       expect(items[0].type).assertEqual('user_message');
+    });
+
+    it('keeps repeated user text when optimistic and historical ids differ', 0, () => {
+      const items = ChatTimelineProjector.project([
+        chatMessage('historical-user-1', 'user', '你是谁')
+      ], [
+        chatMessage('optimistic-user-2', 'user', '你是谁')
+      ], chatMessage('', 'assistant', ''), false);
+
+      expect(items.length).assertEqual(2);
+      expect(items[0].id).assertEqual('message-historical-user-1');
+      expect(items[1].id).assertEqual('pending-optimistic-user-2');
     });
 
     it('keeps optimistic image messages when persisted image payload differs', 0, () => {
@@ -205,20 +217,20 @@ export default function conversationStateUnitTest() {
     });
 
     it('keeps active turn until matching assistant message is persisted', 0, () => {
-      const activeTurn = chatMessage('active-turn-1', 'assistant', 'Done with the edit', 'completed');
+      const activeTurn = activeChatMessage('turn-1', 'Done with the edit', 'completed');
       const beforeFinal = ChatTimelineProjector.project([
         chatMessage('remote-user-1', 'user', 'Please edit')
       ], [], activeTurn, false);
       const afterFinal = ChatTimelineProjector.project([
         chatMessage('remote-user-1', 'user', 'Please edit'),
-        chatMessage('assistant-final-1', 'assistant', 'Done with the edit')
+        chatMessage('turn-1_assistant', 'assistant', 'Done with the edit')
       ], [], activeTurn, false);
 
       expect(beforeFinal.length).assertEqual(2);
       expect(beforeFinal[1].type).assertEqual('assistant_live_turn');
       expect(beforeFinal[1].isFinalizing).assertEqual(true);
       expect(afterFinal.length).assertEqual(2);
-      expect(afterFinal[1].id).assertEqual('message-assistant-final-1');
+      expect(afterFinal[1].id).assertEqual('message-turn-1_assistant');
       expect(afterFinal[1].type).assertEqual('assistant_message');
     });
 
@@ -278,6 +290,103 @@ export default function conversationStateUnitTest() {
   });
 
   describe('ChatTimelineStore', () => {
+    it('keeps persisted messages with different ids even when their text matches', 0, () => {
+      const merged = RemoteUiState.mergeMessages([
+        chatMessage('msg-historical-1', 'user', '你是谁')
+      ], [
+        chatMessage('msg-current-2', 'user', '你是谁')
+      ]);
+
+      expect(merged.length).assertEqual(2);
+      expect(merged[0].id).assertEqual('msg-historical-1');
+      expect(merged[1].id).assertEqual('msg-current-2');
+    });
+
+    it('appends a repeated user message and reconciles only its new acknowledgement', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-repeat');
+      store.setPersistedMessages([
+        chatMessage('msg-historical-user', 'user', '你是谁'),
+        chatMessage('assistant-historical', 'assistant', '旧回复')
+      ]);
+      store.appendOptimisticMessage(chatMessage('optimistic-user-current', 'user', '你是谁'));
+
+      let items = store.project(false);
+      expect(items.length).assertEqual(3);
+      expect(items[2].id).assertEqual('pending-optimistic-user-current');
+
+      store.mergePersistedMessages([
+        chatMessage('msg-current-user', 'user', '你是谁')
+      ]);
+      const state = store.snapshot();
+      items = store.project(false);
+      expect(state.persistedMessages.length).assertEqual(3);
+      expect(state.optimisticMessages.length).assertEqual(0);
+      expect(items.length).assertEqual(3);
+      expect(items[0].id).assertEqual('message-msg-historical-user');
+      expect(items[2].id).assertEqual('message-msg-current-user');
+    });
+
+    it('reconciles identical queued user messages one acknowledgement at a time', 0, () => {
+      const remaining = ChatTimelineStore.optimisticMessagesNotPersisted([
+        chatMessage('optimistic-user-1', 'user', '继续'),
+        chatMessage('optimistic-user-2', 'user', '继续')
+      ], [
+        chatMessage('persisted-user-1', 'user', '继续')
+      ]);
+
+      expect(remaining.length).assertEqual(1);
+      expect(remaining[0].id).assertEqual('optimistic-user-2');
+    });
+
+    it('keeps one identical local message when one remote acknowledgement arrives', 0, () => {
+      const merged = RemoteUiState.mergeRemoteWithLocalOptimistic([
+        chatMessage('persisted-user-1', 'user', '继续')
+      ], [
+        chatMessage('optimistic-user-1', 'user', '继续'),
+        chatMessage('optimistic-user-2', 'user', '继续')
+      ]);
+
+      expect(merged.length).assertEqual(2);
+      expect(merged[0].id).assertEqual('persisted-user-1');
+      expect(merged[1].id).assertEqual('optimistic-user-2');
+    });
+
+    it('does not reconcile identical remote text when image payloads differ', 0, () => {
+      const merged = RemoteUiState.mergeRemoteWithLocalOptimistic([
+        chatMessageWithImage(
+          'persisted-user-image', 'user', '分析图片', 'remote.png', 'data:image/png;base64,remote'
+        )
+      ], [
+        chatMessageWithImage(
+          'optimistic-user-image', 'user', '分析图片', 'local.png', 'data:image/png;base64,local'
+        )
+      ]);
+
+      expect(merged.length).assertEqual(2);
+      expect(merged[1].id).assertEqual('optimistic-user-image');
+    });
+
+    it('does not hide an active reply that matches historical assistant text', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-repeat-assistant');
+      store.setPersistedMessages([
+        chatMessage('assistant-historical', 'assistant', '相同回复')
+      ]);
+      store.setActiveTurn(activeChatMessage('turn-current', '相同回复'));
+
+      let state = store.snapshot();
+      expect(state.activeTurn ? state.activeTurn.id : '').assertEqual('active-turn-current');
+      expect(store.project(false).length).assertEqual(2);
+
+      store.mergePersistedMessages([
+        chatMessage('assistant-current', 'assistant', '相同回复')
+      ]);
+      state = store.snapshot();
+      expect(state.persistedMessages.length).assertEqual(2);
+      expect(state.activeTurn ? state.activeTurn.id : '').assertEqual('');
+    });
+
     it('updates same-id persisted messages when final content arrives later', 0, () => {
       const pendingFinal = chatMessage('assistant-final-same-id', 'assistant', '');
       pendingFinal.text = 'Still reasoning';

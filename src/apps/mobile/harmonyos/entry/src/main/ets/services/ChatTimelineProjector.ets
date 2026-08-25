@@ -1,4 +1,4 @@
-import { ChatMessage, ChatMessageItemResponse, ImageAttachment, RemoteToolStatusResponse } from '../model/RemoteModels';
+import { ChatMessage, ChatMessageItemResponse, RemoteToolStatusResponse } from '../model/RemoteModels';
 
 export type ChatTimelineItemType =
   | 'user_message'
@@ -171,7 +171,7 @@ export class ChatTimelineProjector {
   static pendingMessagesNotPersisted(pendingMessages: ChatMessage[], messages: ChatMessage[]): ChatMessage[] {
     return pendingMessages.filter((pending: ChatMessage) => {
       return !messages.some((message: ChatMessage) => {
-        return ChatTimelineProjector.isPersistedUserDuplicate(pending, message);
+        return pending.role === 'user' && message.role === 'user' && pending.id === message.id;
       });
     });
   }
@@ -212,9 +212,8 @@ export class ChatTimelineProjector {
     if (activeTurn.turnId && activeTurn.turnId.length > 0 && message.id === `${activeTurn.turnId}_assistant`) {
       return true;
     }
-    const activeText = (activeTurn.text || '').trim();
-    const messageText = (message.text || '').trim();
-    return activeText.length > 0 && activeText === messageText;
+    return activeTurn.turnId !== undefined && activeTurn.turnId.length > 0 &&
+      message.turnId !== undefined && message.turnId === activeTurn.turnId;
   }
 
   private static hasDisplayableAssistantFinal(message: ChatMessage): boolean {
@@ -289,27 +288,6 @@ export class ChatTimelineProjector {
       ].join(':'));
     });
     return parts.join(',');
-  }
-
-  private static isPersistedUserDuplicate(pending: ChatMessage, message: ChatMessage): boolean {
-    if (pending.role !== 'user' || message.role !== 'user') {
-      return false;
-    }
-    if (pending.id === message.id) {
-      return true;
-    }
-    const pendingText = (pending.text || '').trim();
-    const messageText = (message.text || '').trim();
-    if (pendingText.length === 0 || pendingText !== messageText) {
-      return false;
-    }
-    return ChatTimelineProjector.imageSignature(pending.images || []) === ChatTimelineProjector.imageSignature(message.images || []);
-  }
-
-  private static imageSignature(images: ImageAttachment[]): string {
-    return images.map((image: ImageAttachment) => {
-      return `${image.name || ''}:${image.data_url || ''}`;
-    }).sort().join('|');
   }
 
   private static stableTextHash(text: string): string {

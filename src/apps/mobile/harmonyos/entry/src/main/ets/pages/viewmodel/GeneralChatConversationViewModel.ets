@@ -295,7 +295,7 @@ export class GeneralChatConversationViewModel {
 
   private localUserMessage(text: string, images: SelectedImageAttachment[]): ChatMessage {
     return {
-      id: Encoding.randomId('user'),
+      id: Encoding.randomId('optimistic-user'),
       turnId: '',
       role: 'user',
       text,
