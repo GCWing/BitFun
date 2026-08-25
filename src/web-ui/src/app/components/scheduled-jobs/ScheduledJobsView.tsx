@@ -5,11 +5,10 @@
  * job list at top, inline editor expands below the selected job.
  */
 
-import { Button, Switch } from '@bitfun/ui';
+import { Button, IconButton, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import {
-  IconButton,
   Input,
   Select,
   Textarea,
@@ -671,10 +670,10 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                         </div>
                         <IconButton
                           type="button"
-                          size="xs"
-                          variant="danger"
+                          size="sm"
+                          tone="danger"
                           aria-label={t('nav.scheduledJobs.actions.delete')}
-                          tooltip={t('nav.scheduledJobs.actions.delete')}
+                          title={t('nav.scheduledJobs.actions.delete')}
                           onClick={e => { e.stopPropagation(); void handleDeleteJob(job); }}
                         >
                           <Trash2 size={13} />
