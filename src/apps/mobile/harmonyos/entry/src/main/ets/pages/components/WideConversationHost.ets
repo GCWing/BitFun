@@ -286,7 +286,7 @@ export struct WideConversationHost {
           }
           Row() {
             Column() { this.RouteSurface(showBackButton) }
-              .width('100%').height('100%').constraintSize({ maxWidth: WIDE_DETAIL_CONTENT_MAX_WIDTH })
+              .width('100%').height('100%')
               .backgroundColor(PAGE_BG)
           }
           .width(this.currentDetailWidth() > 0 ? this.currentDetailWidth() : '100%')
