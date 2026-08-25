@@ -1,0 +1,834 @@
+{
+  "schemaVersion": 1,
+  "legacy": {
+    "aliasReferences": 2,
+    "byModule": {
+      "../../../component-library/components/Input": 1,
+      "../../component-library": 26,
+      "../component-library": 1,
+      "@/component-library": 302,
+      "@/component-library/components": 1,
+      "@/component-library/components/Alert/appearance": 1,
+      "@/component-library/components/Avatar/appearance": 1,
+      "@/component-library/components/Badge": 1,
+      "@/component-library/components/Badge/appearance": 1,
+      "@/component-library/components/Card": 1,
+      "@/component-library/components/Card/appearance": 1,
+      "@/component-library/components/Checkbox/appearance": 1,
+      "@/component-library/components/Checkbox/Checkbox": 1,
+      "@/component-library/components/CodeEditor/appearance": 1,
+      "@/component-library/components/ConfigPage/appearance": 1,
+      "@/component-library/components/ConfirmDialog/appearance": 1,
+      "@/component-library/components/ConfirmDialog/confirmService": 20,
+      "@/component-library/components/CubeLoading/appearance": 1,
+      "@/component-library/components/CubeLogo/appearance": 1,
+      "@/component-library/components/DotMatrixLoader/appearance": 1,
+      "@/component-library/components/Empty": 1,
+      "@/component-library/components/Empty/appearance": 1,
+      "@/component-library/components/FilterPill/appearance": 1,
+      "@/component-library/components/FlowChatCards/appearance": 1,
+      "@/component-library/components/FlowChatCards/ContextCompressionCard/appearance": 1,
+      "@/component-library/components/IconButton": 3,
+      "@/component-library/components/IconButton/appearance": 1,
+      "@/component-library/components/IconButton/IconButton": 1,
+      "@/component-library/components/Input": 1,
+      "@/component-library/components/Input/appearance": 1,
+      "@/component-library/components/Input/Input": 1,
+      "@/component-library/components/InputDialog/appearance": 1,
+      "@/component-library/components/Markdown": 7,
+      "@/component-library/components/Markdown/appearance": 1,
+      "@/component-library/components/Markdown/Markdown": 5,
+      "@/component-library/components/Markdown/MarkdownMathRenderer.preload": 1,
+      "@/component-library/components/Markdown/MermaidBlock.appearance": 1,
+      "@/component-library/components/Modal/appearance": 1,
+      "@/component-library/components/NumberInput/appearance": 1,
+      "@/component-library/components/PopupCloseButton/appearance": 1,
+      "@/component-library/components/PresenceBoundary": 4,
+      "@/component-library/components/PresenceBoundary/PresenceBoundary": 1,
+      "@/component-library/components/Search/appearance": 1,
+      "@/component-library/components/Select/appearance": 1,
+      "@/component-library/components/StreamText/appearance": 1,
+      "@/component-library/components/Tabs": 1,
+      "@/component-library/components/Tabs/appearance": 1,
+      "@/component-library/components/Tag": 1,
+      "@/component-library/components/Tag/appearance": 1,
+      "@/component-library/components/TaskRunningIndicator/appearance": 1,
+      "@/component-library/components/Textarea/appearance": 1,
+      "@/component-library/components/Textarea/Textarea": 1,
+      "@/component-library/components/TextStrokeEffect/appearance": 1,
+      "@/component-library/components/Tooltip": 3,
+      "@/component-library/components/Tooltip/appearance": 1,
+      "@/component-library/components/ViewTransitionBoundary/appearance": 1,
+      "@/component-library/components/WindowControls/appearance": 1,
+      "@/component-library/icons": 2,
+      "@/component-library/preview/appearance": 1,
+      "@/component-library/preview/IconCatalogPreview.appearance": 1,
+      "@components/IconButton/IconButton": 1,
+      "@components/Select/Select": 1
+    },
+    "bySymbol": {
+      "Alert": 8,
+      "alertAppearanceDescriptor": 1,
+      "Avatar": 1,
+      "avatarAppearanceDescriptor": 1,
+      "Badge": 14,
+      "badgeAppearanceDescriptor": 1,
+      "BadgeVariant": 2,
+      "BITFUN_ICON_SIZE": 4,
+      "Card": 4,
+      "cardAppearanceDescriptor": 1,
+      "CardBody": 2,
+      "CardHeader": 1,
+      "Checkbox": 9,
+      "checkboxAppearanceDescriptor": 1,
+      "codeEditorAppearanceDescriptor": 1,
+      "componentPreviewAppearanceDescriptor": 1,
+      "configPageAppearanceDescriptor": 1,
+      "ConfigPageLoading": 11,
+      "ConfigPageMessage": 5,
+      "ConfigPageMessageData": 1,
+      "ConfigPageRefreshButton": 2,
+      "confirmDanger": 16,
+      "confirmDialog": 8,
+      "ConfirmDialog": 9,
+      "confirmDialogAppearanceDescriptor": 1,
+      "confirmDialogChoice": 2,
+      "ConfirmDialogChoice": 1,
+      "ConfirmDialogOptions": 2,
+      "ConfirmDialogRenderer": 1,
+      "confirmWarning": 12,
+      "contextCompressionCardAppearanceDescriptor": 1,
+      "CubeLoading": 17,
+      "cubeLoadingAppearanceDescriptor": 1,
+      "cubeLogoAppearanceDescriptor": 1,
+      "DotMatrixLoader": 7,
+      "dotMatrixLoaderAppearanceDescriptor": 1,
+      "Empty": 1,
+      "emptyAppearanceDescriptor": 1,
+      "filterPillAppearanceDescriptor": 1,
+      "flowChatCardAppearanceDescriptor": 1,
+      "HarnessCreativeIcon": 2,
+      "IconButton": 86,
+      "iconButtonAppearanceDescriptor": 1,
+      "iconCatalogAppearanceDescriptor": 1,
+      "Input": 42,
+      "inputAppearanceDescriptor": 1,
+      "InputDialog": 2,
+      "inputDialogAppearanceDescriptor": 1,
+      "LineRange": 11,
+      "Markdown": 3,
+      "markdownAppearanceDescriptor": 1,
+      "MarkdownRenderer": 7,
+      "MarkdownTraceContext": 1,
+      "mermaidBlockAppearanceDescriptor": 1,
+      "Modal": 47,
+      "modalAppearanceDescriptor": 1,
+      "ModalProps": 1,
+      "NavigationExtensionsCompatibilityIcon": 1,
+      "NavigationMiniAppIcon": 1,
+      "NavigationSessionContextAddIcon": 1,
+      "NavigationSessionViewAllIcon": 1,
+      "NavigationSessionViewGroupedIcon": 1,
+      "NumberInput": 7,
+      "numberInputAppearanceDescriptor": 1,
+      "PopupCloseButton": 8,
+      "popupCloseButtonAppearanceDescriptor": 1,
+      "PRESENCE_BOUNDARY_MIN_EXIT_MS": 5,
+      "PresenceBoundary": 16,
+      "Search": 17,
+      "searchAppearanceDescriptor": 1,
+      "Select": 38,
+      "selectAppearanceDescriptor": 1,
+      "SelectOption": 16,
+      "SessionGroupAssistantIcon": 1,
+      "SessionGroupAssistantSelectedIcon": 1,
+      "SessionGroupRemoteWorkspaceIcon": 1,
+      "SessionGroupRemoteWorkspaceSelectedIcon": 1,
+      "SessionGroupWorkspaceIcon": 1,
+      "SessionGroupWorkspaceSelectedIcon": 1,
+      "streamTextAppearanceDescriptor": 1,
+      "TabPane": 5,
+      "Tabs": 5,
+      "tabsAppearanceDescriptor": 1,
+      "Tag": 1,
+      "tagAppearanceDescriptor": 1,
+      "TaskRunningIndicator": 1,
+      "taskRunningIndicatorAppearanceDescriptor": 1,
+      "Textarea": 19,
+      "textareaAppearanceDescriptor": 1,
+      "textStrokeEffectAppearanceDescriptor": 1,
+      "ToolProcessingDots": 7,
+      "ToolProcessingDotsSize": 1,
+      "Tooltip": 83,
+      "tooltipAppearanceDescriptor": 1,
+      "ViewTransitionBoundary": 2,
+      "viewTransitionBoundaryAppearanceDescriptor": 1,
+      "WindowControls": 1,
+      "windowControlsAppearanceDescriptor": 1
+    },
+    "moduleReferences": 425
+  },
+  "nativeControls": {
+    "allowlist": [],
+    "byFile": {
+      "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx": {
+        "button": 5,
+        "input": 1
+      },
+      "src/web-ui/src/app/components/MCPInteractionDialog/MCPInteractionDialog.tsx": {
+        "textarea": 1
+      },
+      "src/web-ui/src/app/components/NavBar/NavBar.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/app/components/NavPanel/components/AssistantSessionCreateMenu.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/components/NavPanel/components/BranchQuickSwitch.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/app/components/NavPanel/components/DeviceStatusControl.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/NavPanel/components/GithubStarButton.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/NavPanel/components/NavItem.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/NavPanel/components/PersistentFooterActions.tsx": {
+        "button": 5
+      },
+      "src/web-ui/src/app/components/NavPanel/components/StickySectionHeader.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/NavPanel/components/WorkspaceSessionFilterMenu.tsx": {
+        "button": 7
+      },
+      "src/web-ui/src/app/components/NavPanel/components/WorkspaceSessionGroupingToggle.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/NavPanel/MainNav.tsx": {
+        "button": 14
+      },
+      "src/web-ui/src/app/components/NavPanel/sections/sessions/SessionsSection.tsx": {
+        "button": 12
+      },
+      "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx": {
+        "button": 30
+      },
+      "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceRelatedPathsDialog.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/anchor-zone/AnchorZone.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/empty-state/EmptyState.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/mission-control/MissionControl.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/mission-control/ThumbnailCard.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/quick-look/QuickLook.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/tab-bar/Tab.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/tab-bar/TabBar.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/panels/content-canvas/tab-bar/TabOverflowMenu.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/components/panels/FilesPanel.tsx": {
+        "button": 5
+      },
+      "src/web-ui/src/app/components/panels/review-platform/ReviewPlatformPanel.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/components/RemoteConnectDialog/AccountPanel.tsx": {
+        "button": 7
+      },
+      "src/web-ui/src/app/components/RemoteConnectDialog/RemoteConnectDialog.tsx": {
+        "button": 9
+      },
+      "src/web-ui/src/app/components/SceneBar/SceneBar.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/components/scheduled-jobs/DateTimePickerPopover.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/components/TitleBar/NotificationButton.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/global-search/GlobalSearchRoot.tsx": {
+        "button": 5,
+        "input": 1
+      },
+      "src/web-ui/src/app/layout/FloatingMiniChat.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/layout/MiniAppBubbleWelcome.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/agents/AgentsScene.test.tsx": {
+        "button": 3,
+        "input": 2
+      },
+      "src/web-ui/src/app/scenes/agents/AgentsScene.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/app/scenes/agents/components/CreateAgentPage.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/scenes/agents/components/SkillGroupPicker.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/scenes/agents/components/ToolGroupPicker.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/scenes/browser/BrowserPanel.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/app/scenes/browser/BrowserScene.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/app/scenes/ecosystem-compatibility/EcosystemCompatibilityScene.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/scenes/git/GitNav.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/git/views/BranchesView.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/git/views/WorkingCopyView.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/scenes/miniapps/customization/MiniAppCustomizePanel.tsx": {
+        "textarea": 1
+      },
+      "src/web-ui/src/app/scenes/miniapps/views/MiniAppGalleryView.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/scenes/miniapps/views/MiniAppMarketView.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/app/scenes/miniapps/views/MiniAppSubmissionsView.tsx": {
+        "button": 2,
+        "textarea": 2
+      },
+      "src/web-ui/src/app/scenes/my-agent/InsightsScene.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/app/scenes/pages/PagesScene.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/app/scenes/profile/views/AssistantAvatarPicker.test.tsx": {
+        "button": 2,
+        "input": 1
+      },
+      "src/web-ui/src/app/scenes/profile/views/AssistantAvatarPicker.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/app/scenes/profile/views/AssistantCard.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/profile/views/AssistantConfigPage.tsx": {
+        "button": 1,
+        "textarea": 1
+      },
+      "src/web-ui/src/app/scenes/profile/views/AssistantDefaultsPage.tsx": {
+        "button": 9,
+        "input": 1
+      },
+      "src/web-ui/src/app/scenes/profile/views/NurseryGallery.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/settings/components/ArchivedSessionsConfig.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx": {
+        "button": 6
+      },
+      "src/web-ui/src/app/scenes/settings/SettingsNav.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/scenes/shell/components/ShellNavEntryItem.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/shell/components/ShellNavWorkspaceSwitcher.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/scenes/shell/ShellNav.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/app/scenes/skills/components/SkillCard.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/skills/components/SkillsSuiteView.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/app/scenes/skills/SkillsScene.tsx": {
+        "button": 7
+      },
+      "src/web-ui/src/app/scenes/todos/components/TodoCalendar.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/app/scenes/todos/components/TodoEditor.test.tsx": {
+        "button": 1,
+        "input": 3,
+        "select": 1,
+        "textarea": 1
+      },
+      "src/web-ui/src/app/scenes/todos/components/TodoEditor.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/features/dispatch/DispatchInstallDialog.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/features/dispatch/DispatchInstallDialog.tsx": {
+        "input": 2
+      },
+      "src/web-ui/src/features/dispatch/DispatchResultDialog.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/features/dispatch/DispatchTargetPicker.tsx": {
+        "button": 7
+      },
+      "src/web-ui/src/features/market-account/MarketAccountControls.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/features/market-account/MarketAccountControls.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/features/relay-deploy/RelayDeployWizard.tsx": {
+        "button": 5
+      },
+      "src/web-ui/src/features/ssh-remote/PortForwardDialog.test.tsx": {
+        "button": 2,
+        "input": 2
+      },
+      "src/web-ui/src/features/ssh-remote/PortForwardDialog.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/features/ssh-remote/RemoteFileBrowser.tsx": {
+        "button": 11,
+        "input": 2
+      },
+      "src/web-ui/src/features/ssh-remote/SSHConnectionDialog.test.tsx": {
+        "button": 2,
+        "input": 1,
+        "select": 1
+      },
+      "src/web-ui/src/features/ssh-remote/SSHConnectionDialog.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.review-action.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/btw/DeepReviewActionBar.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/flow_chat/components/ChatInput.tsx": {
+        "button": 5
+      },
+      "src/web-ui/src/flow_chat/components/ChatInputApprovalBand.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/ChatInputWorkspaceStrip.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/ChatInputWorkspaceStrip.tsx": {
+        "button": 11
+      },
+      "src/web-ui/src/flow_chat/components/CopyableTextPreview.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/CurrentSessionTitle.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/DeepReviewConsentDialog.test.tsx": {
+        "button": 3,
+        "input": 1
+      },
+      "src/web-ui/src/flow_chat/components/FileMentionPicker.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/FileMentionPickerOverlay.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/HarnessProfileSelector.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/flow_chat/components/ModelSelector.tsx": {
+        "button": 12
+      },
+      "src/web-ui/src/flow_chat/components/modern/ExportImageButton.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/flow_chat/components/modern/FlowChatHeader.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/flow_chat/components/modern/FlowChatHeader.tsx": {
+        "button": 9
+      },
+      "src/web-ui/src/flow_chat/components/modern/FlowChatTurnRail.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/modern/ForkSessionButton.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/modern/ModelRoundItem.tsx": {
+        "button": 8
+      },
+      "src/web-ui/src/flow_chat/components/modern/SessionFileModificationsBar.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/modern/SessionFilesBadge.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/flow_chat/components/modern/SessionTreePopover.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/modern/SessionTreePopover.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/components/modern/TurnFailureNoticeItem.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/flow_chat/components/modern/UserMessageEditComposer.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/flow_chat/components/modern/UserMessageItem.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/modern/UserMessageItem.tsx": {
+        "button": 5
+      },
+      "src/web-ui/src/flow_chat/components/PendingQueuePanel.tsx": {
+        "textarea": 1
+      },
+      "src/web-ui/src/flow_chat/components/ReasoningPresetSelector.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/components/ScrollToBottomButton.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/ScrollToLatestBar.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/ScrollToTurnHeaderButton.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/session-menu/SessionMenu.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/components/toolbar-mode/ToolbarMode.tsx": {
+        "button": 8
+      },
+      "src/web-ui/src/flow_chat/components/usage/SessionRuntimeStatusEntry.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/usage/SessionUsageComponents.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/components/usage/SessionUsagePanel.tsx": {
+        "button": 5,
+        "input": 1
+      },
+      "src/web-ui/src/flow_chat/components/usage/SessionUsageReportCard.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/flow_chat/components/WelcomePanel.tsx": {
+        "button": 6
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/DecisionExecutionGate.tsx": {
+        "button": 1,
+        "textarea": 1
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/DeepReviewActionBar.tsx": {
+        "button": 2,
+        "textarea": 1
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/PartialResultsPanel.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/RemediationSelectionPanel.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/RemediationSelectionPanel.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/ReviewActionControls.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/flow_chat/deep-review/action-bar/ReviewActionHeader.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/hooks/useSessionModeSelection.test.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/hooks/useWorkspaceModeCatalog.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/AskUserQuestionCard.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/AskUserQuestionCard.tsx": {
+        "input": 7
+      },
+      "src/web-ui/src/flow_chat/tool-cards/CodeReviewReportExportActions.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/CodeReviewReportExportActions.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/tool-cards/CodeReviewToolCard.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/flow_chat/tool-cards/CreatePlanDisplay.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/ExecProcessToolCardView.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/flow_chat/tool-cards/GenerativeWidgetToolCard.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/GitToolDisplay.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/SnapshotFullscreenDiffViewer.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/TaskToolDisplay.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/TaskToolDisplay.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/flow_chat/tool-cards/ToolCardIconSlot.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/ToolTimeoutIndicator.tsx": {
+        "button": 5
+      },
+      "src/web-ui/src/flow_chat/tool-cards/ViewImageToolCard.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/tool-cards/WebFetchCard.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/flow_chat/utils/captureElementToDownloadsPng.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/AcpAgentsConfig.test.tsx": {
+        "button": 2,
+        "input": 1,
+        "select": 1,
+        "textarea": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/AppearanceMarketDialog.test.tsx": {
+        "button": 1,
+        "input": 2,
+        "textarea": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/AppearanceMarketDialog.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/infrastructure/config/components/AppearanceMarketWorkflows.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/AppearancePackageConfigSection.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/AppearanceSettingsPage.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/ApplicationSettingsPages.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/common/ConfigCollectionItem.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/common/ConfigCollectionItem.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/external-sources/ExternalAppsOverview.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/ExternalMcpOverview.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/ExternalSourcesConfig.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/infrastructure/config/components/form-controls/ConfigSection.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/GlobalPermissionRulesDialog.test.tsx": {
+        "button": 2,
+        "input": 1,
+        "select": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/HooksConfig.test.tsx": {
+        "button": 2,
+        "input": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/MCPResourceBrowser.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/ModelSelectionRadio.tsx": {
+        "input": 3
+      },
+      "src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/infrastructure/config/components/ReasoningConfigPanel.test.tsx": {
+        "button": 4
+      },
+      "src/web-ui/src/infrastructure/config/components/ReasoningPresetEditor.test.tsx": {
+        "button": 2,
+        "input": 3,
+        "select": 1,
+        "textarea": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/ReasoningPresetEditor.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/infrastructure/config/components/ReviewCapacitySection.test.tsx": {
+        "button": 1,
+        "input": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/RuntimeSettingsPages.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/SkillsConfig.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/UsageStatisticsConfig.test.tsx": {
+        "button": 2,
+        "input": 1,
+        "select": 1
+      },
+      "src/web-ui/src/infrastructure/config/components/WorktreeSettingsPage.test.tsx": {
+        "button": 4,
+        "input": 3
+      },
+      "src/web-ui/src/infrastructure/config/components/WorktreeSettingsPage.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/infrastructure/font-preference/components/FontPreferencePanel.tsx": {
+        "button": 4,
+        "input": 1
+      },
+      "src/web-ui/src/infrastructure/peer-device/DeviceSurfaceSwitcher.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/infrastructure/peer-device/PeerDirectoryBrowser.tsx": {
+        "button": 5,
+        "input": 1
+      },
+      "src/web-ui/src/shared/announcement-system/components/AnnouncementToastItem.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/shared/announcement-system/components/FeatureModal.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/shared/context-system/components/ContextCard/ContextCard.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/shared/context-system/components/ContextList/ContextList.test.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/shared/context-system/core/types/CodeSnippetContextImpl.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/shared/notification-system/components/NotificationCenter.tsx": {
+        "button": 8
+      },
+      "src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/tools/bitfun-canvas/runtime/sdk/controls.tsx": {
+        "select": 1
+      },
+      "src/web-ui/src/tools/bitfun-canvas/runtime/sdk/data-display.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/tools/editor/components/DiffEditor.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/tools/editor/components/EditorBreadcrumb.tsx": {
+        "button": 1
+      },
+      "src/web-ui/src/tools/editor/components/ImageViewer.tsx": {
+        "button": 6
+      },
+      "src/web-ui/src/tools/editor/components/MarkdownEditor.test.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/tools/editor/components/PlanViewer.tsx": {
+        "input": 1
+      },
+      "src/web-ui/src/tools/editor/components/StatusBarPopovers/StatusBarPopovers.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/tools/editor/meditor/components/EditArea.tsx": {
+        "textarea": 1
+      },
+      "src/web-ui/src/tools/editor/meditor/components/MEditor.tsx": {
+        "textarea": 1
+      },
+      "src/web-ui/src/tools/file-system/components/FileSearchResults.tsx": {
+        "button": 3
+      },
+      "src/web-ui/src/tools/generative-widget/GenerativeWidgetPanel.tsx": {
+        "textarea": 1
+      },
+      "src/web-ui/src/tools/git/components/GitDiffView/GitDiffView.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/tools/git/components/GitGraphView/GitGraphView.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/tools/git/components/PushButton/PushButton.tsx": {
+        "button": 2
+      },
+      "src/web-ui/src/tools/terminal/components/ConnectedTerminal.tsx": {
+        "button": 2
+      }
+    },
+    "total": 593
+  },
+  "newLibrary": {
+    "moduleReferences": 153
+  }
+}

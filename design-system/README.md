@@ -18,6 +18,32 @@ Design Lab exposes an Overview, a searchable component catalog with interactive 
 
 `@bitfun/ui/registry` is the component source of truth. Design Lab derives its component navigation, counts, token scopes, and detail routes from that package export; adding Lab copy or a preview cannot publish a component or keep a removed component alive.
 
+## Web UI migration
+
+Figma is the design source for new public components. Components are implemented
+fresh in `@bitfun/ui`; code and styles from `src/web-ui/src/component-library`
+are not copied into this package. The legacy implementation may be inspected only
+to preserve required product behavior while its call sites are migrated.
+
+Generic anatomy, interaction, and accessibility belong in `@bitfun/ui`.
+Product-specific composition, localization, overlay hosts, routes, stores, and
+platform adapters remain in the owning Web UI feature. Once every external
+reference to a legacy component reaches zero, remove that legacy component. The
+end state removes the whole Web UI component-library directory and its aliases.
+
+The adoption ratchet prevents new legacy references and new independent native
+controls while allowing both debts to decrease:
+
+```bash
+pnpm run design-system:adoption:check
+pnpm run design-system:adoption:test
+pnpm run design-system:adoption:update # only after a verified migration lowers debt
+```
+
+The update command refuses to record an increase. A deliberately native product
+control must be narrowly reviewed and listed in the baseline allowlist rather
+than hidden by raising counts.
+
 ## Commands
 
 ```bash
