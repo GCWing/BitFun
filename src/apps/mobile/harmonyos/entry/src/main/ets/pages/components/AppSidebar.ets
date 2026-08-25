@@ -37,6 +37,7 @@ export struct AppSidebar {
   @Event onClose: () => void = () => {};
   @Event onNewChat: () => void = () => {};
   @Event onEnterCode: () => void = () => {};
+  @Event onScanDesktop: () => void = () => {};
   @Event onCollapse: () => void = () => {};
   @Event onOpenViewSettings: () => void = () => {};
   @Event onSearchQueryChange: (query: string) => void = (_query: string) => {};
@@ -90,7 +91,7 @@ export struct AppSidebar {
           }
           .width('100%')
           .alignItems(HorizontalAlign.Start)
-          .padding({ bottom: 84 })
+          .padding({ bottom: this.isAccountAuthenticated() ? 84 : 140 })
         }
         .width('100%')
         .height('100%')
@@ -103,7 +104,7 @@ export struct AppSidebar {
         // visually sliced by the chat button sitting on top of it.
         Column()
           .width('100%')
-          .height(92)
+          .height(this.isAccountAuthenticated() ? 92 : 140)
           .hitTestBehavior(HitTestMode.None)
           .linearGradient({
             angle: 180,
@@ -347,17 +348,34 @@ export struct AppSidebar {
 
   @Builder
   private SignedOutFooter() {
-    Button(RemoteI18n.t('sidebar.signInBitFunAccount'))
+    Column({ space: 10 }) {
+      Button(RemoteI18n.t('sidebar.scanToConnect'))
+        .width('100%')
+        .height(48)
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(INK)
+        .backgroundColor(CARD)
+        .border({ width: 1, color: LINE })
+        .borderRadius(16)
+        .onClick(() => {
+          this.onScanDesktop();
+        })
+
+      Button(RemoteI18n.t('sidebar.signInBitFunAccount'))
+        .width('100%')
+        .height(48)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(CARD)
+        .backgroundColor(INK)
+        .borderRadius(16)
+        .onClick(() => {
+          this.onOpenAccount();
+        })
+    }
       .width('100%')
-      .height(48)
-      .fontSize(16)
-      .fontWeight(FontWeight.Bold)
-      .fontColor(CARD)
-      .backgroundColor(INK)
-      .borderRadius(16)
-      .onClick(() => {
-        this.onOpenAccount();
-      })
+      .zIndex(2)
   }
 
   @Builder

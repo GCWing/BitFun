@@ -164,6 +164,7 @@ export struct WideConversationHost {
           onClose: this.actions.onSidebar.close,
           onNewChat: this.actions.onSidebar.newChat,
           onEnterCode: this.actions.onSidebar.enterCode,
+          onScanDesktop: this.actions.onSidebar.scanDesktop,
           onCollapse: this.onCollapseMasterPane,
           onOpenViewSettings: this.onOpenRemoteViewSettings,
           onSearchQueryChange: (query: string) => {

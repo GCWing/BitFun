@@ -363,6 +363,7 @@ export default function conversationPresentationUnitTest() {
       expect(RemoteI18n.t('sidebar.conversations')).assertEqual('最近对话');
       expect(RemoteI18n.t('sidebar.devices')).assertEqual('设备');
       expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
+      expect(RemoteI18n.t('sidebar.scanToConnect')).assertEqual('扫码连接电脑');
       expect(RemoteI18n.t('sidebar.local')).assertEqual('sidebar.local');
       expect(RemoteI18n.t('sidebar.code')).assertEqual('sidebar.code');
       expect(RemoteI18n.t('sidebar.recent')).assertEqual('sidebar.recent');
