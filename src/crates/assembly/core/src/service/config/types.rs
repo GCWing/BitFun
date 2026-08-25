@@ -2100,6 +2100,19 @@ mod tests {
     }
 
     #[test]
+    fn missing_max_rounds_defaults_to_unlimited_and_explicit_limits_survive() {
+        let defaulted: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(defaulted.ai.max_rounds, 0);
+
+        let limited: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "ai": { "max_rounds": 37 }
+        }))
+        .expect("explicit max rounds should deserialize");
+        assert_eq!(limited.ai.max_rounds, 37);
+    }
+
+    #[test]
     fn user_tool_groups_default_to_version_one_without_persisted_groups() {
         let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
             .expect("legacy global config should deserialize");
