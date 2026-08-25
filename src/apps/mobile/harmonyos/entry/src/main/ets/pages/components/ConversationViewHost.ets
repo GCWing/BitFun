@@ -17,7 +17,6 @@ export struct ConversationViewHost {
   @Param showBackButton: boolean = true;
   @Param showSidebarRestoreButton: boolean = false;
   @Param composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
-  @Param contentHorizontalOffset: number = 0;
   @Param hoverOperateMode: boolean = false;
   @Param onRestoreSidebar: () => void = () => {};
   @Param onIntent: (intent: ConversationIntent) => void = (_intent: ConversationIntent) => {};
@@ -53,7 +52,6 @@ export struct ConversationViewHost {
       showBackButton: this.showBackButton,
       showSidebarRestoreButton: this.showSidebarRestoreButton,
       composerPresentation: this.composerPresentation,
-      contentHorizontalOffset: this.contentHorizontalOffset,
       hoverOperateMode: this.hoverOperateMode,
       onOpenSidebar: () => this.dispatch(ConversationIntents.simple(ConversationIntentType.OpenSidebar)),
       onRestoreSidebar: this.onRestoreSidebar,

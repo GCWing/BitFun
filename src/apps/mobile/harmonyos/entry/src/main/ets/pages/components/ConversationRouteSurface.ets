@@ -34,7 +34,6 @@ export struct ConversationRouteSurface {
   @Param showSidebarRestoreButton: boolean = false;
   @Param useWidePresentation: boolean = false;
   @Param hoverOperateMode: boolean = false;
-  @Param contentHorizontalOffset: number = 0;
   @Event onRestoreSidebar: () => void = () => {};
 
   build() {
@@ -84,7 +83,6 @@ export struct ConversationRouteSurface {
           showBackButton: this.showBackButton,
           showSidebarRestoreButton: this.showSidebarRestoreButton,
           composerPresentation: this.useWidePresentation ? ComposerPresentation.Floating : ComposerPresentation.Compact,
-          contentHorizontalOffset: this.contentHorizontalOffset,
           hoverOperateMode: this.hoverOperateMode,
           onRestoreSidebar: this.onRestoreSidebar,
           onIntent: (intent: ConversationIntent) => this.actions.onConversationIntent(this.route, intent)
