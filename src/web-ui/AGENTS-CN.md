@@ -64,8 +64,9 @@ pnpm run build:web                     # 构建相关改动或复现 CI
 pnpm run i18n:audit
 pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit
 pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts
-pnpm run type-check:web
+pnpm run check:web
 ```
 
 以上依次用于 locale 资源、locale contract/shared terms、i18n runtime/namespace loading 和普通 Web UI 代码。
-完整 lint、build 与大范围测试由 CI 兜底，除非本地改动确实需要复现。
+`check:web` 会执行类型检查，以及 CI 使用的 Appearance contract、主题颜色和主题视觉治理门禁，确保渲染 DOM
+或样式回归能在本地发现。完整 lint、build 与大范围测试由 CI 兜底，除非本地改动确实需要复现。

@@ -154,12 +154,12 @@ GUI、Mobile、Installer 和 CLI/TUI 可以选择不同主题集合，但共享�
 主题变更至少运行：
 
 ```bash
-pnpm run theme:color-audit:all
-pnpm run theme:color-audit:test
-pnpm run theme:visual-contract
-pnpm run appearance:contract-audit
+pnpm run check:web
 pnpm run generate-startup-appearance-bootstrap
 ```
+
+`check:web` 聚合执行类型检查、Appearance contract、主题颜色审计及其 contract tests，以及主题视觉治理契约，
+与 CI 针对 Web UI 的 Appearance 门禁保持一致。
 
 若 Appearance 源影响生成产物，先运行 `pnpm run generate-startup-appearance-bootstrap`，再确认只有预期的只读产物发生变化。
 跨 surface 视觉变化还应按 `theme-visual-governance-contract.json` 的覆盖项完成 focused review；自动审计不等于视觉
