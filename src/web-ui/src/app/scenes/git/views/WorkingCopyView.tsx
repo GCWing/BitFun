@@ -2,7 +2,7 @@
  * WorkingCopyView — Git working copy: commit bar + file list + diff area (ContentCanvas mode=git).
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useTranslation } from 'react-i18next';
@@ -18,8 +18,9 @@ import {
   ArrowDown,
   Sparkles,
   FileCode2,
+  X,
 } from 'lucide-react';
-import { Tooltip, IconButton, Textarea, Search as SearchComponent } from '@/component-library';
+import { Tooltip, Textarea, Search as SearchComponent } from '@/component-library';
 import { ContentCanvas } from '@/app/components/panels/content-canvas';
 import { CanvasStoreModeContext } from '@/app/components/panels/content-canvas/stores';
 import { useGitState, useGitOperations, useGitAgent } from '@/tools/git/hooks';
@@ -412,10 +413,10 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
             </Tooltip>
           )}
           <div className="bitfun-git-scene-working-copy__sync-actions" data-bf-component="working-copy-view" data-bf-part="syncActions">
-            <IconButton size="xs" variant="ghost" onClick={handlePull} disabled={isOperating} tooltip={t('actions.pull')}>
+            <IconButton size="sm" onClick={handlePull} disabled={isOperating} title={t('actions.pull')} aria-label={t('actions.pull')}>
               <ArrowDown size={14} />
             </IconButton>
-            <IconButton size="xs" variant="ghost" onClick={handlePush} disabled={isOperating} tooltip={t('actions.push')}>
+            <IconButton size="sm" onClick={handlePush} disabled={isOperating} title={t('actions.push')} aria-label={t('actions.push')}>
               <ArrowUp size={14} />
             </IconButton>
           </div>
@@ -435,9 +436,11 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
             disabled={isOperating || isGeneratingCommit}
           />
           {isGeneratingCommit ? (
-            <IconButton size="xs" variant="ghost" onClick={cancelCommitGeneration} tooltip={t('actions.cancelGenerate')} />
+            <IconButton size="sm" onClick={cancelCommitGeneration} title={t('actions.cancelGenerate')} aria-label={t('actions.cancelGenerate')}>
+              <X size={14} />
+            </IconButton>
           ) : (
-            <IconButton size="xs" variant="ghost" onClick={handleAIGenerateCommit} disabled={isOperating} tooltip={t('actions.aiGenerateCommit')}>
+            <IconButton size="sm" tone="primary" onClick={handleAIGenerateCommit} disabled={isOperating} title={t('actions.aiGenerateCommit')} aria-label={t('actions.aiGenerateCommit')}>
               <Sparkles size={14} />
             </IconButton>
           )}
@@ -481,25 +484,25 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                         : t('fileGroups.unstagedWithCount', { count: filteredFiles.unstaged.length })}
                     </span>
                     <IconButton
-                      size="xs"
-                      variant="ghost"
+                      size="sm"
                       onClick={e => {
                         e.stopPropagation();
                         toggleSelectAll();
                       }}
-                      tooltip={isAllSelected ? t('selection.deselectAll') : t('selection.selectAll')}
+                      title={isAllSelected ? t('selection.deselectAll') : t('selection.selectAll')}
+                      aria-label={isAllSelected ? t('selection.deselectAll') : t('selection.selectAll')}
                     >
                       {isAllSelected ? <Check size={14} /> : isPartialSelected ? <Minus size={14} /> : <Circle size={14} />}
                     </IconButton>
                     <IconButton
-                      size="xs"
-                      variant="ghost"
+                      size="sm"
                       onClick={e => {
                         e.stopPropagation();
                         handleStageSelectedFiles();
                       }}
                       disabled={isOperating || selectedFiles.size === 0}
-                      tooltip={t('actions.stageSelected', { count: selectedFiles.size })}
+                      title={t('actions.stageSelected', { count: selectedFiles.size })}
+                      aria-label={t('actions.stageSelected', { count: selectedFiles.size })}
                     >
                       <Check size={14} />
                     </IconButton>
@@ -534,14 +537,14 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                           {dirPath && <span className="bitfun-git-scene-working-copy__file-dir">{dirPath}</span>}
                           <span className={`bitfun-git-scene-working-copy__file-status ${statusInfo.className}`} data-bf-component="working-copy-view" data-bf-part="fileStatus">{statusInfo.text}</span>
                           <IconButton
-                            size="xs"
-                            variant="ghost"
+                            size="sm"
                             onClick={e => {
                               e.stopPropagation();
                               handleDiscardFile(file.path, 'unstaged');
                             }}
                             disabled={isOperating}
-                            tooltip={t('actions.discardFile')}
+                            title={t('actions.discardFile')}
+                            aria-label={t('actions.discardFile')}
                           >
                             <RotateCcw size={12} />
                           </IconButton>
@@ -589,14 +592,14 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                           {dirPath && <span className="bitfun-git-scene-working-copy__file-dir">{dirPath}</span>}
                           <span className="bitfun-git-scene-working-copy__file-status wcv-status--added" data-bf-component="working-copy-view" data-bf-part="fileStatus">U</span>
                           <IconButton
-                            size="xs"
-                            variant="ghost"
+                            size="sm"
                             onClick={e => {
                               e.stopPropagation();
                               handleDiscardFile(filePath, 'untracked');
                             }}
                             disabled={isOperating}
-                            tooltip={t('actions.deleteFile')}
+                            title={t('actions.deleteFile')}
+                            aria-label={t('actions.deleteFile')}
                           >
                             <RotateCcw size={12} />
                           </IconButton>
@@ -630,14 +633,14 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                           <span className="bitfun-git-scene-working-copy__file-name" data-bf-component="working-copy-view" data-bf-part="fileName">{file.path}</span>
                           <span className={`bitfun-git-scene-working-copy__file-status ${statusInfo.className}`} data-bf-component="working-copy-view" data-bf-part="fileStatus">{statusInfo.text}</span>
                           <IconButton
-                            size="xs"
-                            variant="ghost"
+                            size="sm"
                             onClick={e => {
                               e.stopPropagation();
                               handleDiscardFile(file.path, 'staged');
                             }}
                             disabled={isOperating}
-                            tooltip={t('actions.discardFile')}
+                            title={t('actions.discardFile')}
+                            aria-label={t('actions.discardFile')}
                           >
                             <RotateCcw size={12} />
                           </IconButton>
