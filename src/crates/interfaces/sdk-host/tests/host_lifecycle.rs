@@ -823,6 +823,43 @@ async fn host_with_query_limit(
     )
 }
 
+async fn host_with_output(
+    output_text: &str,
+) -> (
+    SdkHostConnection,
+    Arc<FakeOwner>,
+    mpsc::Receiver<serde_json::Value>,
+) {
+    let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    let owner = Arc::new(FakeOwner::with_output(
+        queue.clone(),
+        output_text.to_string(),
+    ));
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(owner.clone())
+        .with_dialog_turn_port(owner.clone())
+        .with_cancellation_port(owner.clone())
+        .with_turn_settlement_port(owner.clone())
+        .with_session_management_port(owner.clone())
+        .with_session_close_port(owner.clone())
+        .with_permission_request_manager(permission_manager())
+        .with_event_source(AgentEventSource::new(queue))
+        .build()
+        .unwrap();
+    let (output, receiver) = mpsc::channel(32);
+    (
+        SdkHostConnection::new(
+            runtime,
+            "D:/workspace/project",
+            output,
+            SdkHostConfig::default(),
+            fake_installer(),
+        ),
+        owner,
+        receiver,
+    )
+}
+
 #[async_trait]
 impl AgentTurnCancellationPort for FakeOwner {
     async fn cancel_turn(
@@ -1303,6 +1340,98 @@ async fn query_streams_existing_events_and_one_terminal_result() {
     assert_eq!(result["params"]["status"], "completed");
     assert_eq!(result["params"]["output"]["text"], "fixture result");
     assert!(output.try_recv().is_err(), "terminal result must be unique");
+}
+
+#[tokio::test]
+async fn query_passes_output_schema_to_runtime_and_returns_parsed_json() {
+    let (host, owner, mut output) = host_with_output(r#"{"summary":"ready"}"#).await;
+    initialize(&host, &mut output).await;
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "summary": { "type": "string" }
+        },
+        "required": ["summary"],
+        "additionalProperties": false
+    });
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-structured",
+        "method": "query/start",
+        "params": {
+            "prompt": "summarize the repository",
+            "outputSchema": schema
+        }
+    })))
+    .await;
+
+    let accepted = output.recv().await.unwrap();
+    assert_eq!(accepted["result"]["accepted"], true);
+    let submitted = owner.dialog_requests.lock().unwrap();
+    assert_eq!(submitted.last().unwrap().output_schema, Some(schema));
+    drop(submitted);
+
+    assert_eq!(output.recv().await.unwrap()["method"], "query/event");
+    let result = output.recv().await.unwrap();
+    assert_eq!(result["method"], "query/result");
+    assert_eq!(result["params"]["status"], "completed");
+    assert_eq!(result["params"]["output"]["text"], r#"{"summary":"ready"}"#);
+    assert_eq!(
+        result["params"]["output"]["structured"],
+        serde_json::json!({ "summary": "ready" })
+    );
+}
+
+#[tokio::test]
+async fn query_rejects_a_non_object_output_schema_before_submission() {
+    let (host, owner, mut output) = host().await;
+    initialize(&host, &mut output).await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-invalid-schema",
+        "method": "query/start",
+        "params": {
+            "prompt": "summarize the repository",
+            "outputSchema": ["not", "an", "object"]
+        }
+    })))
+    .await;
+
+    let rejected = output.recv().await.unwrap();
+    assert_eq!(rejected["error"]["data"]["code"], "invalid_request");
+    assert!(owner.dialog_requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn query_fails_when_structured_output_is_not_json() {
+    let (host, _, mut output) = host_with_output("not json").await;
+    initialize(&host, &mut output).await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-invalid-output",
+        "method": "query/start",
+        "params": {
+            "prompt": "summarize the repository",
+            "outputSchema": { "type": "object" }
+        }
+    })))
+    .await;
+
+    let accepted = output.recv().await.unwrap();
+    assert_eq!(accepted["result"]["accepted"], true);
+    assert_eq!(output.recv().await.unwrap()["method"], "query/event");
+    let result = output.recv().await.unwrap();
+    assert_eq!(result["params"]["status"], "failed");
+    assert_eq!(result["params"]["output"]["text"], "not json");
+    assert!(result["params"]["output"].get("structured").is_none());
+    assert_eq!(result["params"]["error"]["data"]["code"], "internal");
+    assert_eq!(
+        result["params"]["error"]["data"]["operationId"],
+        result["params"]["operationId"]
+    );
 }
 
 #[tokio::test]

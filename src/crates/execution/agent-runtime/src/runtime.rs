@@ -3512,6 +3512,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: "session_1".to_string(),
                 message: "hello".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some("turn_1".to_string()),
                 execution: Default::default(),
@@ -3567,6 +3568,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: "session_1".to_string(),
                 message: "hello".to_string(),
+                output_schema: None,
                 original_message: Some("hello".to_string()),
                 turn_id: Some("turn_1".to_string()),
                 execution: Default::default(),
@@ -3686,6 +3688,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: "requested-session".to_string(),
                 message: "hello".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some("turn-1".to_string()),
                 execution: Default::default(),

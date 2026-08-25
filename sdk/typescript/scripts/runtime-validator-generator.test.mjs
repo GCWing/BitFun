@@ -92,6 +92,31 @@ test("generated validators reject missing required fields", async () => {
   }
 });
 
+test("generated validators accept JSON values without accepting arbitrary runtime values", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitfun-wire-validator-"));
+  try {
+    await writeFile(
+      join(directory, "JsonPayload.ts"),
+      "export type JsonPayload = { schema: Record<string, unknown>, value: unknown };\n",
+    );
+
+    const validators = await loadValidators(directory);
+
+    assert.equal(
+      validators.isJsonPayload({
+        schema: { type: "object", properties: { summary: { type: "string" } } },
+        value: { summary: "ready", count: 1, tags: [true, null] },
+      }),
+      true,
+    );
+    assert.equal(validators.isJsonPayload({ schema: [], value: "ready" }), false);
+    assert.equal(validators.isJsonPayload({ schema: {}, value: undefined }), false);
+    assert.equal(validators.isJsonPayload({ schema: {}, value: () => true }), false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("generation fails closed for unsupported type syntax", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitfun-wire-validator-"));
   try {

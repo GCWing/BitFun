@@ -9,7 +9,9 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_anthropic_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ReasoningPresetAction, ReasoningPresetDescriptor, ToolDefinition};
+use crate::types::{
+    Message, ModelRequestContext, ReasoningPresetAction, ReasoningPresetDescriptor, ToolDefinition,
+};
 use anyhow::{anyhow, Result};
 use log::debug;
 use reqwest::RequestBuilder;
@@ -267,13 +269,14 @@ fn compile_reasoning_action(
     }
 }
 
-pub(crate) fn try_build_request_body(
+fn try_build_request_body_with_context(
     client: &AIClient,
     url: &str,
     system_message: Option<String>,
     anthropic_messages: Vec<serde_json::Value>,
     anthropic_tools: Option<Vec<serde_json::Value>>,
     extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
 ) -> Result<serde_json::Value> {
     let max_tokens = client.config.max_tokens.unwrap_or(32000);
 
@@ -357,6 +360,15 @@ pub(crate) fn try_build_request_body(
             },
         )?;
     }
+    if let Some(schema) = request_context.and_then(|context| context.output_schema.as_ref()) {
+        if !request_body["output_config"].is_object() {
+            request_body["output_config"] = serde_json::json!({});
+        }
+        request_body["output_config"]["format"] = serde_json::json!({
+            "type": "json_schema",
+            "schema": schema
+        });
+    }
 
     shared::log_request_body(
         "ai::anthropic_stream_request",
@@ -381,6 +393,25 @@ pub(crate) fn try_build_request_body(
     Ok(request_body)
 }
 
+pub(crate) fn try_build_request_body(
+    client: &AIClient,
+    url: &str,
+    system_message: Option<String>,
+    anthropic_messages: Vec<serde_json::Value>,
+    anthropic_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+) -> Result<serde_json::Value> {
+    try_build_request_body_with_context(
+        client,
+        url,
+        system_message,
+        anthropic_messages,
+        anthropic_tools,
+        extra_body,
+        None,
+    )
+}
+
 #[cfg(test)]
 pub(crate) fn build_request_body(
     client: &AIClient,
@@ -401,6 +432,28 @@ pub(crate) fn build_request_body(
     .expect("request body should compile")
 }
 
+#[cfg(test)]
+pub(crate) fn build_request_body_with_context(
+    client: &AIClient,
+    url: &str,
+    system_message: Option<String>,
+    anthropic_messages: Vec<serde_json::Value>,
+    anthropic_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
+) -> serde_json::Value {
+    try_build_request_body_with_context(
+        client,
+        url,
+        system_message,
+        anthropic_messages,
+        anthropic_tools,
+        extra_body,
+        request_context,
+    )
+    .expect("request body should compile")
+}
+
 pub(crate) async fn send_stream(
     client: &AIClient,
     messages: Vec<Message>,
@@ -408,6 +461,7 @@ pub(crate) async fn send_stream(
     extra_body: Option<serde_json::Value>,
     max_tries: usize,
     trace: Option<ModelExchangeTraceConfig>,
+    request_context: Option<ModelRequestContext>,
 ) -> Result<StreamResponse> {
     let url = client.config.request_url.clone();
     debug!(
@@ -418,13 +472,14 @@ pub(crate) async fn send_stream(
     let (system_message, anthropic_messages) =
         AnthropicMessageConverter::convert_messages(messages);
     let anthropic_tools = AnthropicMessageConverter::convert_tools(tools);
-    let request_body = try_build_request_body(
+    let request_body = try_build_request_body_with_context(
         client,
         &url,
         system_message,
         anthropic_messages,
         anthropic_tools,
         extra_body,
+        request_context.as_ref(),
     )?;
     let inline_think_in_text = client.config.inline_think_in_text;
     let idle_timeout = client.stream_options.idle_timeout;
