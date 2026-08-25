@@ -14,12 +14,13 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { Terminal, ExternalLink, Square } from 'lucide-react';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
-import { DotMatrixLoader, IconButton } from '../../component-library';
+import { DotMatrixLoader } from '../../component-library';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -490,10 +491,10 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     return (
       <IconButton
         className="terminal-action-btn external-btn terminal-open-panel-btn"
-        variant="ghost"
-        size="xs"
+        size="sm"
         onClick={handleOpenInPanel}
-        tooltip={t('toolCards.terminal.openInPanel')}
+        title={t('toolCards.terminal.openInPanel')}
+        aria-label={t('toolCards.terminal.openInPanel')}
         data-testid="chat-shell-tool-open-panel"
       >
         <ExternalLink size={12} />
@@ -553,10 +554,11 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
         <span className="terminal-critical-actions">
           <IconButton
             className="terminal-action-btn interrupt-btn"
-            variant="warning"
-            size="xs"
+            tone="danger"
+            size="sm"
             onClick={handleInterrupt}
-            tooltip={t('toolCards.terminal.interrupt')}
+            title={t('toolCards.terminal.interrupt')}
+            aria-label={t('toolCards.terminal.interrupt')}
           >
             <Square size={12} fill="currentColor" />
           </IconButton>

@@ -4,7 +4,7 @@
     "aliasReferences": 2,
     "byModule": {
       "../../../component-library/components/Input": 1,
-      "../../component-library": 25,
+      "../../component-library": 24,
       "../component-library": 1,
       "@/component-library": 280,
       "@/component-library/components": 1,
@@ -29,7 +29,6 @@
       "@/component-library/components/FlowChatCards/appearance": 1,
       "@/component-library/components/FlowChatCards/ContextCompressionCard/appearance": 1,
       "@/component-library/components/IconButton/appearance": 1,
-      "@/component-library/components/IconButton/IconButton": 1,
       "@/component-library/components/Input": 1,
       "@/component-library/components/Input/appearance": 1,
       "@/component-library/components/Input/Input": 1,
@@ -107,7 +106,7 @@
       "filterPillAppearanceDescriptor": 1,
       "flowChatCardAppearanceDescriptor": 1,
       "HarnessCreativeIcon": 2,
-      "IconButton": 8,
+      "IconButton": 1,
       "iconButtonAppearanceDescriptor": 1,
       "iconCatalogAppearanceDescriptor": 1,
       "Input": 42,
@@ -165,7 +164,7 @@
       "WindowControls": 1,
       "windowControlsAppearanceDescriptor": 1
     },
-    "moduleReferences": 399
+    "moduleReferences": 397
   },
   "nativeControls": {
     "allowlist": [],
@@ -717,6 +716,6 @@
     "total": 445
   },
   "newLibrary": {
-    "moduleReferences": 242
+    "moduleReferences": 243
   }
 }

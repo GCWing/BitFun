@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { Check, ShieldCheck, ShieldX, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { IconButton } from '../../component-library';
 import type { FlowToolItem, ToolRejectOptions } from '../types/flow-chat';
 import type { AcpPermissionOption } from '@/infrastructure/api/service-api/ACPClientAPI';
 import './AcpPermissionActions.scss';
@@ -57,8 +56,8 @@ function optionIcon(kind: AcpPermissionOption['kind']): React.ReactNode {
   }
 }
 
-function buttonVariant(kind: AcpPermissionOption['kind']): 'success' | 'danger' {
-  return isApprovalKind(kind) ? 'success' : 'danger';
+function buttonTone(kind: AcpPermissionOption['kind']): 'primary' | 'danger' {
+  return isApprovalKind(kind) ? 'primary' : 'danger';
 }
 
 export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
@@ -123,11 +122,11 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
             data-bf-part="action"
             data-bf-decision={approve ? 'allow' : 'reject'}
             className={`tool-card-header-action acp-permission-actions__icon-button acp-permission-actions__icon-button--${option.kind}`}
-            variant={buttonVariant(option.kind)}
-            size="xs"
+            tone={buttonTone(option.kind)}
+            size="sm"
             onClick={handleClick}
             disabled={disabled}
-            tooltip={tooltip}
+            title={tooltip}
             aria-label={tooltip}
           >
             {optionIcon(option.kind)}

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ClipboardList, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp, FolderOpen, Save, Check } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
@@ -16,7 +16,7 @@ import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
 import yaml from 'yaml';
-import { IconButton, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -433,9 +433,9 @@ ${JSON.stringify(simpleTodos, null, 2)}
             <span className="create-plan-header-folder-btn-wrapper">
               <IconButton
                 type="button"
-                size="small"
-                variant={hasSavedToProject ? 'success' : 'default'}
-                isLoading={isSavingToProject}
+                size="md"
+                tone={hasSavedToProject ? 'primary' : 'neutral'}
+                loading={isSavingToProject}
                 onClick={handleSavePlanToProject}
                 disabled={!planFilePath || !currentWorkspace || isSavingToProject || hasSavedToProject}
                 aria-label={savePlanTooltip}
@@ -448,7 +448,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
             <span className="create-plan-header-folder-btn-wrapper">
               <IconButton
                 type="button"
-                size="small"
+                size="md"
                 onClick={handleRevealPlanInExplorer}
                 disabled={isRevealPlanDisabled}
                 aria-label={revealPlanTooltip}
@@ -468,9 +468,9 @@ ${JSON.stringify(simpleTodos, null, 2)}
         {planData.todos && planData.todos.length > 0 && (
           <IconButton
             type="button"
-            size="small"
+            size="md"
             onClick={handleToggleTodos}
-            tooltip={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
+            title={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
             aria-label={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
           >
             {isTodosExpanded ? <ChevronsDownUp size={22} /> : <ChevronsUpDown size={22} />}

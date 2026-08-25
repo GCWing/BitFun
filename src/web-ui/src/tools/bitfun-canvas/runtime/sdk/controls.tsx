@@ -1,7 +1,6 @@
 import { Checkbox as BitFunCheckbox } from '@/component-library/components/Checkbox/Checkbox';
-import { IconButton as BitFunIconButton } from '@/component-library/components/IconButton/IconButton';
 import { Input as BitFunInput } from '@/component-library/components/Input/Input';
-import { Switch as BitFunSwitch } from '@bitfun/ui';
+import { IconButton as BitFunIconButton, Switch as BitFunSwitch } from '@bitfun/ui';
 import { Textarea as BitFunTextarea } from '@/component-library/components/Textarea/Textarea';
 import type {
   CanvasCheckboxProps,
@@ -22,6 +21,17 @@ function controlSize(size: 'sm' | 'small' | 'md' | 'medium' | 'lg' | 'large' | u
 
 function selectSizeClass(size: CanvasSelectProps['size']) {
   return `bf-select--${controlSize(size)}`;
+}
+
+function iconButtonSize(size: CanvasIconButtonProps['size']): 'sm' | 'md' | 'lg' {
+  if (size === 'sm' || size === 'small') return 'md';
+  return 'lg';
+}
+
+function iconButtonTone(variant: CanvasIconButtonProps['variant']): 'neutral' | 'primary' | 'danger' {
+  if (variant === 'danger' || variant === 'warning') return 'danger';
+  if (variant === 'primary' || variant === 'success' || variant === 'ai') return 'primary';
+  return 'neutral';
 }
 
 function normalizeOption(option: string | number | CanvasSelectOption): CanvasSelectOption {
@@ -133,13 +143,35 @@ export function TextArea({ onChange, ...props }: CanvasTextAreaProps) {
   );
 }
 
-export function IconButton({ size, title, tooltip, ...props }: CanvasIconButtonProps) {
+export function IconButton({
+  children,
+  size,
+  title,
+  tooltip,
+  variant,
+  shape,
+  isLoading,
+  style,
+  ...props
+}: CanvasIconButtonProps) {
+  const accessibleName = props['aria-label']
+    ?? (typeof tooltip === 'string' ? tooltip : undefined)
+    ?? title
+    ?? 'Action';
+
   return (
     <BitFunIconButton
       {...props}
-      size={controlSize(size)}
-      tooltip={tooltip ?? title}
-      title={typeof title === 'string' ? title : undefined}
+      aria-label={accessibleName}
+      children={children ?? null}
+      loading={isLoading}
+      size={iconButtonSize(size)}
+      style={{
+        ...style,
+        ...(shape === 'circle' ? { borderRadius: '999px' } : null),
+      }}
+      title={typeof tooltip === 'string' ? tooltip : title}
+      tone={iconButtonTone(variant)}
     />
   );
 }

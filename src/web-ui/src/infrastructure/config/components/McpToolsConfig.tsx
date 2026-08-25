@@ -4,7 +4,7 @@
  * Uses settings/mcp-tools for page title/subtitle, settings/mcp for the MCP section.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import {
   Textarea,
-  IconButton,
   Modal,
   ToolProcessingDots,
   confirmDanger,
@@ -1103,10 +1102,9 @@ const McpToolsConfig: React.FC = () => {
             </span>
           ) : null}
           <IconButton
-            variant="ghost"
-            size="small"
+            size="md"
             onClick={() => void loadServers()}
-            tooltip={tMcp('actions.refresh')}
+            title={tMcp('actions.refresh')}
             aria-label={tMcp('actions.refresh')}
           >
             <RefreshCw size={16} aria-hidden="true" />
@@ -1114,10 +1112,9 @@ const McpToolsConfig: React.FC = () => {
         </>
       ) : null}
       <IconButton
-        variant="ghost"
-        size="small"
+        size="md"
         onClick={() => setShowJsonEditor(!showJsonEditor)}
-        tooltip={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
+        title={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
         aria-label={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
       >
         {showJsonEditor ? <X size={16} /> : <FileJson size={16} />}
@@ -1136,30 +1133,28 @@ const McpToolsConfig: React.FC = () => {
     <>
       {isRemoteServer(server) && (
         <IconButton
-          size="small"
-          variant="ghost"
+          size="md"
           onClick={() => handleOpenAuthDialog(server)}
-          tooltip={tMcp('actions.remoteAuth')}
+          title={tMcp('actions.remoteAuth')}
           aria-label={tMcp('actions.remoteAuth')}
         >
           <KeyRound size={14} />
         </IconButton>
       )}
       <IconButton
-        size="small"
-        variant="ghost"
+        size="md"
         onClick={() => handleDeleteServer(server)}
-        tooltip={tMcp('actions.delete')}
+        title={tMcp('actions.delete')}
         aria-label={tMcp('actions.delete')}
       >
         <Trash2 size={14} />
       </IconButton>
       {isStopped(server.status) ? (
         <IconButton
-          size="small"
-          variant="success"
+          size="md"
+          tone="primary"
           onClick={() => handleStartServer(server)}
-          tooltip={
+          title={
             canStartServer(server)
               ? tMcp('actions.start')
               : tMcp('messages.commandUnavailable', { serverId: server.id })
@@ -1174,20 +1169,19 @@ const McpToolsConfig: React.FC = () => {
         </IconButton>
       ) : (
         <IconButton
-          size="small"
-          variant="warning"
+          size="md"
+          tone="danger"
           onClick={() => handleStopServer(server.id)}
-          tooltip={tMcp('actions.stop')}
+          title={tMcp('actions.stop')}
           aria-label={tMcp('actions.stop')}
         >
           <Square size={14} />
         </IconButton>
       )}
       <IconButton
-        size="small"
-        variant="ghost"
+        size="md"
         onClick={() => handleRestartServer(server)}
-        tooltip={
+        title={
           canStartServer(server)
             ? tMcp('actions.restart')
             : tMcp('messages.commandUnavailable', { serverId: server.id })
@@ -1328,10 +1322,9 @@ const McpToolsConfig: React.FC = () => {
             <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty" role="status">
               <p>{tMcp('jsonEditor.loadFailed')}</p>
               <IconButton
-                variant="ghost"
-                size="small"
+                size="md"
                 onClick={() => void loadJsonConfig()}
-                tooltip={tMcp('actions.refresh')}
+                title={tMcp('actions.refresh')}
                 aria-label={tMcp('actions.refresh')}
               >
                 <RefreshCw size={16} aria-hidden="true" />
