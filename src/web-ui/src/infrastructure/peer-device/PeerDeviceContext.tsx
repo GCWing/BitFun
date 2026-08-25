@@ -44,14 +44,25 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
 
   const value = useMemo(
-    () => ({
-      peerMode: snapshot.peerMode,
-      attachments: [...snapshot.attachments],
-      switchToDevice,
-      switchToLocal,
-      disconnectDevice,
-      disconnectAllDevices,
-    }),
+    () => {
+      const currentDeviceId = snapshot.peerMode.active
+        ? snapshot.peerMode.deviceId
+        : null;
+      const currentPeerCapabilities = currentDeviceId
+        ? snapshot.attachments.find(
+            (attachment) => attachment.deviceId === currentDeviceId,
+          )?.capabilities ?? null
+        : null;
+      return {
+        peerMode: snapshot.peerMode,
+        attachments: [...snapshot.attachments],
+        currentPeerCapabilities,
+        switchToDevice,
+        switchToLocal,
+        disconnectDevice,
+        disconnectAllDevices,
+      };
+    },
     [
       snapshot,
       switchToDevice,
