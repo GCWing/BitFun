@@ -119,6 +119,26 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'detailed',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
+  'AgentSpawn': {
+    toolName: 'AgentSpawn',
+    displayName: 'Launch Agent',
+    icon: '',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Launch a background agent',
+    displayMode: 'detailed',
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
+  },
+  'AgentSendInput': {
+    toolName: 'AgentSendInput',
+    displayName: 'Send Agent Input',
+    icon: '',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Send a follow-up instruction to an agent',
+    displayMode: 'detailed',
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
+  },
   'AgentWait': {
     toolName: 'AgentWait',
     displayName: 'Wait for Agents',
@@ -540,6 +560,8 @@ export const DEDICATED_TOOL_CARD_NAMES = new Set([
   'WebFetch',
   'Task',
   'LaunchReviewAgent',
+  'AgentSpawn',
+  'AgentSendInput',
   'AgentWait',
   'TodoWrite',
   'submit_code_review',

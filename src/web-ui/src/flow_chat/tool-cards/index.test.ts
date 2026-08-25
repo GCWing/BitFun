@@ -10,10 +10,16 @@ import {
   usesDefaultToolCard,
 } from './index';
 import { TaskToolDisplay } from './TaskToolDisplay';
+import { AgentControlToolCard } from './AgentControlToolCard';
 
 describe('tool card registry', () => {
   it('projects managed Review workers through the unified coverage card', () => {
     expect(getToolCardComponent('LaunchReviewAgent')).toBe(TaskToolDisplay);
+  });
+
+  it('renders AgentSpawn and AgentSendInput with the shared agent control card', () => {
+    expect(getToolCardComponent('AgentSpawn')).toBe(AgentControlToolCard);
+    expect(getToolCardComponent('AgentSendInput')).toBe(AgentControlToolCard);
   });
 
   it('keeps lightweight dedicated-card classification aligned with the component registry', () => {
