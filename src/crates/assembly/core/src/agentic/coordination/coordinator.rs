@@ -11480,6 +11480,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         timeout: Duration,
         delivered_parent_dialog_turn_id: &str,
         cancellation_token: Option<&CancellationToken>,
+        round_injection_preemption_token: Option<&CancellationToken>,
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
         self.background_subagent_outcomes
             .wait_for(
@@ -11489,6 +11490,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 timeout,
                 delivered_parent_dialog_turn_id,
                 cancellation_token,
+                round_injection_preemption_token,
             )
             .await
     }
@@ -17432,6 +17434,7 @@ mod tests {
                 Duration::from_millis(10),
                 "wait-turn-1",
                 None,
+                None,
             )
             .await
             .expect("AgentWait should collect the completed outcome");
@@ -17450,6 +17453,7 @@ mod tests {
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
                 "wait-turn-2",
+                None,
                 None,
             )
             .await
@@ -17555,6 +17559,7 @@ mod tests {
                 Duration::from_millis(10),
                 "wait-turn",
                 None,
+                None,
             )
             .await
             .expect("AgentWait should collect a prior-turn outcome in the same session");
@@ -17596,6 +17601,7 @@ mod tests {
                 Duration::from_millis(1),
                 "wait-turn-1",
                 None,
+                None,
             )
             .await
             .expect("all selector timeout should return partial results");
@@ -17612,6 +17618,7 @@ mod tests {
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
                 "wait-turn-2",
+                None,
                 None,
             )
             .await
@@ -17649,6 +17656,7 @@ mod tests {
                 BackgroundSubagentWaitMode::Any,
                 Duration::from_secs(6),
                 "wait-turn",
+                None,
                 None,
             )
             .await
@@ -17697,6 +17705,7 @@ mod tests {
                 Duration::from_secs(10),
                 "cancelled-wait-turn",
                 Some(&cancellation),
+                None,
             )
             .await
             .expect_err("cancelled AgentWait should not return a partial result");
@@ -17709,6 +17718,7 @@ mod tests {
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
                 "retry-wait-turn",
+                None,
                 None,
             )
             .await
@@ -17737,6 +17747,7 @@ mod tests {
                 Duration::from_millis(1),
                 "wait-turn",
                 None,
+                None,
             )
             .await
             .expect("AgentWait timeout should be returned normally");
@@ -17744,6 +17755,95 @@ mod tests {
         assert_eq!(result.status.as_str(), "timed_out");
         assert!(result.outcomes.is_empty());
         assert_eq!(result.pending_bg_task_ids, vec![registered.bg_task_id]);
+    }
+
+    #[tokio::test]
+    async fn steered_agent_wait_returns_pending_tasks_without_cancelling_them() {
+        let (coordinator, _) = test_coordinator();
+        let registered = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session",
+        )
+        .await;
+        let preemption = tokio_util::sync::CancellationToken::new();
+        preemption.cancel();
+
+        let result = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                std::slice::from_ref(&registered.bg_task_id),
+                BackgroundSubagentWaitMode::All,
+                Duration::from_secs(10),
+                "steered-wait-turn",
+                None,
+                Some(&preemption),
+            )
+            .await
+            .expect("steering should end AgentWait normally");
+
+        assert_eq!(result.status.as_str(), "steered");
+        assert!(result.outcomes.is_empty());
+        assert_eq!(result.pending_bg_task_ids, vec![registered.bg_task_id]);
+    }
+
+    #[tokio::test]
+    async fn steered_agent_wait_returns_and_consumes_available_partial_results() {
+        let (coordinator, _) = test_coordinator();
+        let completed_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-completed",
+        )
+        .await;
+        let pending_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-pending",
+        )
+        .await;
+        let completed = super::SubagentResult::completed("done".to_string());
+        coordinator
+            .background_subagent_outcomes
+            .complete(completed_task.task_pk, Ok(&completed))
+            .await;
+        let preemption = tokio_util::sync::CancellationToken::new();
+        preemption.cancel();
+
+        let result = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                &[],
+                BackgroundSubagentWaitMode::All,
+                Duration::from_secs(10),
+                "steered-wait-turn",
+                None,
+                Some(&preemption),
+            )
+            .await
+            .expect("steering should return collected outcomes");
+
+        assert_eq!(result.status.as_str(), "steered");
+        assert_eq!(result.outcomes.len(), 1);
+        assert_eq!(result.outcomes[0].bg_task_id, completed_task.bg_task_id);
+        assert_eq!(result.pending_bg_task_ids, vec![pending_task.bg_task_id]);
+
+        let retry = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                std::slice::from_ref(&completed_task.bg_task_id),
+                BackgroundSubagentWaitMode::All,
+                Duration::from_millis(10),
+                "retry-wait-turn",
+                None,
+                None,
+            )
+            .await
+            .expect("a steered wait should consume returned outcomes");
+        assert_eq!(retry.status.as_str(), "no_matching_tasks");
     }
 
     #[test]

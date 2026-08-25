@@ -149,6 +149,10 @@ impl ToolUseContext {
         self.runtime_handles.cancellation_token()
     }
 
+    pub fn round_injection_preemption_token(&self) -> Option<&CancellationToken> {
+        self.runtime_handles.round_injection_preemption_token()
+    }
+
     pub fn workspace_services(&self) -> Option<&WorkspaceServices> {
         self.runtime_handles.workspace_services()
     }
@@ -191,6 +195,7 @@ impl ToolUseContext {
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             runtime_handles: core_tool_runtime_handles(
                 workspace_services,
+                None,
                 None,
                 None,
                 remote_exec_port,
@@ -250,6 +255,7 @@ pub(crate) fn build_tool_use_context_for_task(
         Some(task.tool_call.tool_id.clone()),
         computer_use_host,
         cancellation_token,
+        task.round_injection_preemption_token.clone(),
     )
 }
 
@@ -258,6 +264,7 @@ pub(crate) fn build_tool_use_context_for_execution_context(
     tool_call_id: Option<String>,
     computer_use_host: Option<ComputerUseHostRef>,
     cancellation_token: CancellationToken,
+    round_injection_preemption_token: Option<CancellationToken>,
 ) -> ToolUseContext {
     ToolUseContext {
         tool_call_id,
@@ -272,6 +279,7 @@ pub(crate) fn build_tool_use_context_for_execution_context(
         runtime_handles: core_tool_runtime_handles(
             context.workspace_services.clone(),
             Some(cancellation_token),
+            round_injection_preemption_token,
             context.terminal_port.clone(),
             context.remote_exec_port.clone(),
         ),
@@ -310,6 +318,7 @@ pub(crate) fn build_tool_description_context(
         runtime_handles: core_tool_runtime_handles(
             workspace_services.cloned(),
             None,
+            None,
             terminal_port.cloned(),
             remote_exec_port.cloned(),
         ),
@@ -327,10 +336,12 @@ fn canvas_storage_for_workspace(
 fn core_tool_runtime_handles(
     workspace_services: Option<WorkspaceServices>,
     cancellation_token: Option<CancellationToken>,
+    round_injection_preemption_token: Option<CancellationToken>,
     terminal_port: Option<Arc<dyn TerminalPort>>,
     remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
 ) -> ToolRuntimeHandles {
     ToolRuntimeHandles::new(workspace_services, cancellation_token)
+        .with_round_injection_preemption_token(round_injection_preemption_token)
         .with_terminal_port(terminal_port)
         .with_remote_exec_port(remote_exec_port)
 }

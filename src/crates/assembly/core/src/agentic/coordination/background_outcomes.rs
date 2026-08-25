@@ -42,6 +42,7 @@ impl BackgroundSubagentOutcome {
 pub(crate) enum BackgroundSubagentWaitStatus {
     Completed,
     TimedOut,
+    Steered,
     NoMatchingTasks,
 }
 
@@ -50,6 +51,7 @@ impl BackgroundSubagentWaitStatus {
         match self {
             Self::Completed => "completed",
             Self::TimedOut => "timed_out",
+            Self::Steered => "steered",
             Self::NoMatchingTasks => "no_matching_tasks",
         }
     }
@@ -207,6 +209,7 @@ impl BackgroundSubagentOutcomeStore {
         timeout: Duration,
         delivered_parent_dialog_turn_id: &str,
         cancellation_token: Option<&CancellationToken>,
+        round_injection_preemption_token: Option<&CancellationToken>,
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
         self.reconcile_stale_running_tasks(parent_session_id)
             .await?;
@@ -229,10 +232,38 @@ impl BackgroundSubagentOutcomeStore {
         let mut debounce_deadline = None;
 
         loop {
+            if cancellation_token.is_some_and(CancellationToken::is_cancelled) {
+                return Err(BitFunError::cancelled(
+                    "AgentWait was cancelled".to_string(),
+                ));
+            }
+
             let notified = self.changes.notified();
             tokio::pin!(notified);
 
             let available = self.collect_available(&selected_task_pks).await?;
+            if round_injection_preemption_token.is_some_and(CancellationToken::is_cancelled) {
+                if available.outcomes.is_empty() {
+                    return Ok(wait_result(
+                        BackgroundSubagentWaitStatus::Steered,
+                        Vec::new(),
+                        available.pending_bg_task_ids,
+                    ));
+                }
+                if let Some(result) = self
+                    .claim_result(
+                        parent_session_id,
+                        delivered_parent_dialog_turn_id,
+                        BackgroundSubagentWaitStatus::Steered,
+                        available,
+                    )
+                    .await?
+                {
+                    return Ok(result);
+                }
+                debounce_deadline = None;
+                continue;
+            }
             if !available.outcomes.is_empty() && available.pending_bg_task_ids.is_empty() {
                 if let Some(result) = self
                     .claim_result(
@@ -283,22 +314,24 @@ impl BackgroundSubagentOutcomeStore {
                 continue;
             }
 
-            match cancellation_token {
-                Some(token) => {
-                    tokio::select! {
-                        _ = token.cancelled() => {
-                            return Err(BitFunError::cancelled("AgentWait was cancelled".to_string()));
-                        }
-                        _ = &mut notified => {}
-                        _ = sleep_until(wake_at) => {}
+            tokio::select! {
+                biased;
+                _ = async {
+                    match cancellation_token {
+                        Some(token) => token.cancelled().await,
+                        None => std::future::pending::<()>().await,
                     }
+                } => {
+                    return Err(BitFunError::cancelled("AgentWait was cancelled".to_string()));
                 }
-                None => {
-                    tokio::select! {
-                        _ = &mut notified => {}
-                        _ = sleep_until(wake_at) => {}
+                _ = async {
+                    match round_injection_preemption_token {
+                        Some(token) => token.cancelled().await,
+                        None => std::future::pending::<()>().await,
                     }
-                }
+                } => {}
+                _ = &mut notified => {}
+                _ = sleep_until(wake_at) => {}
             }
         }
     }
@@ -698,6 +731,7 @@ mod tests {
             BackgroundSubagentWaitMode::All,
             Duration::from_millis(50),
             "wait-turn",
+            None,
             None,
         )
         .await

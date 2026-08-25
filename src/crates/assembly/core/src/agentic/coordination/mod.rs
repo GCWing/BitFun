@@ -17,7 +17,7 @@ pub use turn_outcome::*;
 
 pub(crate) use background_outcomes::{
     BackgroundSubagentOutcome, BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode,
-    BackgroundSubagentWaitResult,
+    BackgroundSubagentWaitResult, BackgroundSubagentWaitStatus,
 };
 pub(crate) use coordination_store::DirectChildAgentRecord;
 
