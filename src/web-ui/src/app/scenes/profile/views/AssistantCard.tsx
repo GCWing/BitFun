@@ -57,7 +57,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
       role="listitem"
       style={style}
     >
-      <IconButton
+      <button
         data-bf-component="assistant-card"
         data-bf-part="main"
         type="button"
@@ -107,7 +107,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             aria-hidden="true"
           />
         </span>
-      </IconButton>
+      </button>
 
       <footer className="assistant-card__footer" data-bf-component="assistant-card" data-bf-part="footer">
         <Button

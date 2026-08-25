@@ -445,7 +445,7 @@ const MainNav: React.FC<MainNavProps> = ({
       <div ref={sectionsScrollRef} data-bf-component="nav-panel" data-bf-part="sections" className="bitfun-nav-panel__sections" data-testid="nav-sections">
         <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
           <Tooltip content={assistantManagerLabel} placement="right" followCursor>
-            <UiIconButton
+            <button
               type="button"
               className={[
                 'bitfun-nav-panel__top-action-btn',
@@ -463,7 +463,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 <User size={15} />
               </span>
               <span>{assistantManagerLabel}</span>
-            </UiIconButton>
+            </button>
           </Tooltip>
 
           <Tooltip content={t('nav.tooltips.todos')} placement="right" followCursor>
@@ -538,7 +538,7 @@ const MainNav: React.FC<MainNavProps> = ({
               data-testid="agent-skill-tabs"
             >
               <Tooltip content={agentsTooltip} placement="right" followCursor>
-                <UiIconButton
+                <button
                   type="button"
                   className={[
                     'bitfun-nav-panel__top-action-btn',
@@ -557,11 +557,11 @@ const MainNav: React.FC<MainNavProps> = ({
                     <Users size={15} />
                   </span>
                   <span>{t('nav.items.agents')}</span>
-                </UiIconButton>
+                </button>
               </Tooltip>
 
               <Tooltip content={skillsTooltip} placement="right" followCursor>
-                <UiIconButton
+                <button
                   type="button"
                   className={[
                     'bitfun-nav-panel__top-action-btn',
@@ -580,7 +580,7 @@ const MainNav: React.FC<MainNavProps> = ({
                     <Puzzle size={15} />
                   </span>
                   <span>{t('nav.items.skills')}</span>
-                </UiIconButton>
+                </button>
               </Tooltip>
 
               <Tooltip content={ecosystemCompatibilityTooltip} placement="right" followCursor>
