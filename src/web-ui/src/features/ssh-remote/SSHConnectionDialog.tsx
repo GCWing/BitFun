@@ -3,7 +3,7 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input as UiInput } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
@@ -745,13 +745,13 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 <h3 className="ssh-connection-dialog__section-title">
                   {t('ssh.remote.savedConnections')}
                 </h3>
-                <Input
-                  className="ssh-connection-dialog__search"
+                <UiInput
+                  containerClassName="ssh-connection-dialog__search"
+                  variant="search"
                   value={savedSearch}
                   onChange={(e) => setSavedSearch(e.target.value)}
                   placeholder={t('actions.search')}
-                  prefix={<Search size={14} />}
-                  size="small"
+                  leadingIcon={<Search size={14} />}
                 />
               </div>
               <div className="ssh-connection-dialog__saved-list" data-bf-component="ssh-remote" data-bf-part="connectionList">
@@ -825,13 +825,13 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 <h3 className="ssh-connection-dialog__section-title">
                   {t('ssh.remote.sshConfigHosts') || 'SSH Config'}
                 </h3>
-                <Input
-                  className="ssh-connection-dialog__search"
+                <UiInput
+                  containerClassName="ssh-connection-dialog__search"
+                  variant="search"
                   value={configSearch}
                   onChange={(e) => setConfigSearch(e.target.value)}
                   placeholder={t('actions.search')}
-                  prefix={<Search size={14} />}
-                  size="small"
+                  leadingIcon={<Search size={14} />}
                 />
               </div>
               <div className="ssh-connection-dialog__saved-list">

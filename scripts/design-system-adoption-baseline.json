@@ -6,7 +6,7 @@
       "../../../component-library/components/Input": 1,
       "../../component-library": 24,
       "../component-library": 1,
-      "@/component-library": 279,
+      "@/component-library": 278,
       "@/component-library/components": 1,
       "@/component-library/components/Alert/appearance": 1,
       "@/component-library/components/Avatar/appearance": 1,
@@ -109,7 +109,7 @@
       "IconButton": 1,
       "iconButtonAppearanceDescriptor": 1,
       "iconCatalogAppearanceDescriptor": 1,
-      "Input": 33,
+      "Input": 27,
       "inputAppearanceDescriptor": 1,
       "InputDialog": 2,
       "inputDialogAppearanceDescriptor": 1,
@@ -164,7 +164,7 @@
       "WindowControls": 1,
       "windowControlsAppearanceDescriptor": 1
     },
-    "moduleReferences": 396
+    "moduleReferences": 395
   },
   "nativeControls": {
     "allowlist": [],
