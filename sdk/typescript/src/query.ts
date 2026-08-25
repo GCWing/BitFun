@@ -313,6 +313,9 @@ export class Query implements AsyncIterable<QueryStreamItem> {
       operationId: params.operationId,
       status: params.status,
       outputText: params.output.text,
+      ...(params.output.structured === undefined
+        ? {}
+        : { structuredOutput: params.output.structured }),
       ...(params.usage === undefined ? {} : { usage: mapUsage(params.usage) }),
       ...(params.error === undefined ? {} : { error: mapResultError(params.error) }),
     };

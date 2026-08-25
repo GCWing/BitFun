@@ -5,16 +5,17 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_openai_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ToolDefinition};
+use crate::types::{Message, ModelRequestContext, ToolDefinition};
 use anyhow::Result;
 use log::{debug, warn};
 
-pub(crate) fn try_build_request_body(
+fn try_build_request_body_with_context(
     client: &AIClient,
     url: &str,
     openai_messages: Vec<serde_json::Value>,
     openai_tools: Option<Vec<serde_json::Value>>,
     extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
 ) -> Result<serde_json::Value> {
     let mut request_body = serde_json::json!({
         "model": client.config.model,
@@ -112,6 +113,16 @@ pub(crate) fn try_build_request_body(
             );
         }
     }
+    if let Some(schema) = request_context.and_then(|context| context.output_schema.as_ref()) {
+        request_body["response_format"] = serde_json::json!({
+            "type": "json_schema",
+            "json_schema": {
+                "name": "bitfun_output",
+                "strict": true,
+                "schema": schema
+            }
+        });
+    }
 
     shared::log_request_body(
         "ai::openai_stream_request",
@@ -122,6 +133,23 @@ pub(crate) fn try_build_request_body(
     common::attach_tools(&mut request_body, openai_tools, "ai::openai_stream_request");
 
     Ok(request_body)
+}
+
+pub(crate) fn try_build_request_body(
+    client: &AIClient,
+    url: &str,
+    openai_messages: Vec<serde_json::Value>,
+    openai_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+) -> Result<serde_json::Value> {
+    try_build_request_body_with_context(
+        client,
+        url,
+        openai_messages,
+        openai_tools,
+        extra_body,
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -136,6 +164,26 @@ pub(crate) fn build_request_body(
         .expect("request body should compile")
 }
 
+#[cfg(test)]
+pub(crate) fn build_request_body_with_context(
+    client: &AIClient,
+    url: &str,
+    openai_messages: Vec<serde_json::Value>,
+    openai_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
+) -> serde_json::Value {
+    try_build_request_body_with_context(
+        client,
+        url,
+        openai_messages,
+        openai_tools,
+        extra_body,
+        request_context,
+    )
+    .expect("request body should compile")
+}
+
 pub(crate) async fn send_stream(
     client: &AIClient,
     messages: Vec<Message>,
@@ -143,6 +191,7 @@ pub(crate) async fn send_stream(
     extra_body: Option<serde_json::Value>,
     max_tries: usize,
     trace: Option<ModelExchangeTraceConfig>,
+    request_context: Option<ModelRequestContext>,
 ) -> Result<StreamResponse> {
     let url = client.config.request_url.clone();
     debug!(
@@ -152,8 +201,14 @@ pub(crate) async fn send_stream(
 
     let openai_messages = OpenAIMessageConverter::convert_messages(messages);
     let openai_tools = OpenAIMessageConverter::convert_tools(tools);
-    let request_body =
-        try_build_request_body(client, &url, openai_messages, openai_tools, extra_body)?;
+    let request_body = try_build_request_body_with_context(
+        client,
+        &url,
+        openai_messages,
+        openai_tools,
+        extra_body,
+        request_context.as_ref(),
+    )?;
     let inline_think_in_text = client.config.inline_think_in_text;
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;

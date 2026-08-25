@@ -148,6 +148,7 @@ async fn submit_dialog_turn(state: &PeerHostState, args: &Value) -> Result<Value
         .submit_dialog_turn(AgentDialogTurnRequest {
             session_id: session_id.clone(),
             message: user_input,
+            output_schema: None,
             original_message: original_user_input,
             turn_id: Some(turn_id.clone()),
             execution: Default::default(),

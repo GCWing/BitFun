@@ -93,9 +93,12 @@ export type UserInput =
 
 export type Input = string | readonly UserInput[];
 
+export type JsonSchema = Record<string, unknown>;
+
 export interface QueryInput {
   prompt: Input;
   agent?: string;
+  outputSchema?: JsonSchema;
 }
 
 export interface SessionCreateInput {
@@ -105,6 +108,7 @@ export interface SessionCreateInput {
 
 export interface TurnInput {
   prompt: Input;
+  outputSchema?: JsonSchema;
 }
 
 export interface Turn {
@@ -184,6 +188,7 @@ export interface Result {
   operationId: string;
   status: ResultStatus;
   outputText: string;
+  structuredOutput?: unknown;
   usage?: Usage;
   error?: ResultError;
 }

@@ -2593,6 +2593,27 @@ fn agent_dialog_turn_prepended_messages(
         .collect()
 }
 
+fn agent_dialog_turn_metadata(
+    mut metadata: serde_json::Map<String, serde_json::Value>,
+    output_schema: Option<serde_json::Value>,
+) -> PortResult<Option<serde_json::Value>> {
+    metadata.remove(bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY);
+    if let Some(output_schema) = output_schema {
+        if !output_schema.is_object() {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Output schema must be a JSON object",
+            ));
+        }
+        metadata.insert(
+            bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY.to_string(),
+            output_schema,
+        );
+    }
+
+    Ok((!metadata.is_empty()).then_some(serde_json::Value::Object(metadata)))
+}
+
 impl DialogScheduler {
     pub(crate) async fn submit_agent_dialog_turn_reject_if_busy(
         &self,
@@ -2645,11 +2666,8 @@ impl DialogScheduler {
         let image_contexts = agent_dialog_turn_image_contexts(&request.attachments)?;
         let prepended_messages =
             agent_dialog_turn_prepended_messages(&request.prepended_reminders)?;
-        let user_message_metadata = if request.metadata.is_empty() {
-            None
-        } else {
-            Some(serde_json::Value::Object(request.metadata))
-        };
+        let user_message_metadata =
+            agent_dialog_turn_metadata(request.metadata, request.output_schema)?;
         let resolved_turn_id = request
             .turn_id
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -3099,6 +3117,42 @@ mod tests {
         .into_port_error();
 
         assert_eq!(error.kind, PortErrorKind::SessionInUse);
+    }
+
+    #[test]
+    fn output_schema_field_owns_reserved_metadata_key() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY.to_string(),
+            serde_json::json!({ "type": "string" }),
+        );
+
+        assert_eq!(
+            agent_dialog_turn_metadata(metadata.clone(), None).unwrap(),
+            None
+        );
+
+        let schema = serde_json::json!({ "type": "object" });
+        let merged = agent_dialog_turn_metadata(metadata, Some(schema.clone())).unwrap();
+        assert_eq!(
+            merged
+                .and_then(|value| value.as_object().cloned())
+                .and_then(|metadata| metadata
+                    .get(bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY)
+                    .cloned()),
+            Some(schema)
+        );
+    }
+
+    #[test]
+    fn output_schema_requires_an_object_root() {
+        let error = agent_dialog_turn_metadata(
+            serde_json::Map::new(),
+            Some(serde_json::json!(["not", "an", "object"])),
+        )
+        .expect_err("array schema root must be rejected");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
     }
 
     fn test_scheduler() -> (
@@ -3710,6 +3764,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: "missing-session".to_string(),
                 message: "hello".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some("missing-turn".to_string()),
                 execution: Default::default(),
@@ -3775,6 +3830,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "queued prompt".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
                 execution: Default::default(),
@@ -3850,6 +3906,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "expanded command prompt".to_string(),
+                output_schema: None,
                 original_message: Some("/review".to_string()),
                 turn_id: Some("delegated-turn".to_string()),
                 execution: bitfun_runtime_ports::AgentDialogTurnExecution::FreshExternalSubagent {
@@ -3907,6 +3964,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "queued prompt".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some("queued-turn".to_string()),
                 execution: Default::default(),
@@ -3937,6 +3995,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "expanded command prompt".to_string(),
+                output_schema: None,
                 original_message: Some("/review".to_string()),
                 turn_id: Some("delegated-turn".to_string()),
                 execution: bitfun_runtime_ports::AgentDialogTurnExecution::FreshExternalSubagent {
@@ -3998,6 +4057,7 @@ mod tests {
             .submit_agent_dialog_turn_reject_if_busy(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "second prompt".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some("rejected-turn".to_string()),
                 execution: Default::default(),
@@ -4070,6 +4130,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "duplicate".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
                 execution: Default::default(),
@@ -4114,6 +4175,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "wrong workspace".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
                 execution: Default::default(),
@@ -4164,6 +4226,7 @@ mod tests {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.to_string(),
                 message: "invalid agent".to_string(),
+                output_schema: None,
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
                 execution: Default::default(),

@@ -164,6 +164,14 @@ fn try_build_request_body_with_context(
         );
         shared::apply_reasoning_actions(preset, &mut request_body, protected_keys, &[], compile)?;
     }
+    if let Some(schema) = request_context.and_then(|context| context.output_schema.as_ref()) {
+        request_body["text"]["format"] = serde_json::json!({
+            "type": "json_schema",
+            "name": "bitfun_output",
+            "strict": true,
+            "schema": schema
+        });
+    }
 
     shared::log_request_body(
         TARGET,
@@ -375,6 +383,7 @@ mod tests {
         let client = test_client();
         let request_context = ModelRequestContext {
             prompt_cache_route_key: Some("lineage-1".to_string()),
+            output_schema: None,
         };
         let request_body = build_request_body_with_context(
             &client,
@@ -386,5 +395,28 @@ mod tests {
         );
 
         assert_eq!(request_body["prompt_cache_key"], json!("lineage-1"));
+    }
+
+    #[test]
+    fn attaches_turn_output_schema_after_custom_body_merge() {
+        let schema = json!({
+            "type": "object",
+            "properties": { "summary": { "type": "string" } }
+        });
+        let request_context = ModelRequestContext {
+            prompt_cache_route_key: None,
+            output_schema: Some(schema.clone()),
+        };
+        let request_body = build_request_body_with_context(
+            &test_client(),
+            None,
+            Vec::new(),
+            None,
+            Some(json!({ "text": { "format": { "type": "text" } } })),
+            Some(&request_context),
+        );
+
+        assert_eq!(request_body["text"]["format"]["type"], "json_schema");
+        assert_eq!(request_body["text"]["format"]["schema"], schema);
     }
 }

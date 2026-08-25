@@ -550,9 +550,15 @@ impl ExecutionEngine {
     const FINALIZE_USER_FOLLOWUP: &'static str =
         "Provide a final answer. You MUST not call any tools.";
 
-    fn model_request_context(prompt_cache_lineage_id: &str) -> ModelRequestContext {
+    fn model_request_context(
+        prompt_cache_lineage_id: &str,
+        context: &HashMap<String, String>,
+    ) -> ModelRequestContext {
         ModelRequestContext {
             prompt_cache_route_key: Some(prompt_cache_lineage_id.to_string()),
+            output_schema: context
+                .get(bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY)
+                .and_then(|schema| serde_json::from_str(schema).ok()),
         }
     }
 
@@ -2578,8 +2584,10 @@ impl ExecutionEngine {
         };
         Self::validate_frozen_model_contract(context).await?;
         Self::validate_frozen_reasoning_contract(context, ai_client.as_ref())?;
-        let model_request_context =
-            Self::model_request_context(session.effective_prompt_cache_lineage_id());
+        let model_request_context = Self::model_request_context(
+            session.effective_prompt_cache_lineage_id(),
+            &context.context,
+        );
 
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
@@ -3502,8 +3510,10 @@ impl ExecutionEngine {
         };
         Self::validate_frozen_model_contract(&context).await?;
         Self::validate_frozen_reasoning_contract(&context, ai_client.as_ref())?;
-        let model_request_context =
-            Self::model_request_context(session.effective_prompt_cache_lineage_id());
+        let model_request_context = Self::model_request_context(
+            session.effective_prompt_cache_lineage_id(),
+            &context.context,
+        );
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
         let primary_model_facts = Self::resolve_primary_model_context(
@@ -6466,9 +6476,10 @@ mod tests {
 
     #[test]
     fn provider_prompt_cache_route_key_depends_only_on_lineage() {
-        let first = ExecutionEngine::model_request_context("session-1");
-        let same_lineage = ExecutionEngine::model_request_context("session-1");
-        let changed_lineage = ExecutionEngine::model_request_context("session-2");
+        let context = HashMap::new();
+        let first = ExecutionEngine::model_request_context("session-1", &context);
+        let same_lineage = ExecutionEngine::model_request_context("session-1", &context);
+        let changed_lineage = ExecutionEngine::model_request_context("session-2", &context);
 
         assert_eq!(first.prompt_cache_route_key.as_deref(), Some("session-1"));
         assert_eq!(
@@ -6479,6 +6490,23 @@ mod tests {
             first.prompt_cache_route_key,
             changed_lineage.prompt_cache_route_key
         );
+    }
+
+    #[test]
+    fn model_request_context_reads_one_turn_output_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": { "summary": { "type": "string" } }
+        });
+        let mut context = HashMap::new();
+        context.insert(
+            bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY.to_string(),
+            schema.to_string(),
+        );
+
+        let request_context = ExecutionEngine::model_request_context("session-1", &context);
+
+        assert_eq!(request_context.output_schema, Some(schema));
     }
 
     fn command_result(tool_name: &str, success: bool, exit_code: Option<i32>) -> Message {

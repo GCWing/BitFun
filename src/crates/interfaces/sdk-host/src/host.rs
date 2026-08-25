@@ -236,6 +236,7 @@ struct QueryLease {
     turn_id: String,
     operation_id: String,
     output: StdMutex<QueryOutputBuffer>,
+    structured_output_requested: bool,
     usage: StdMutex<Option<TurnTokenUsage>>,
     terminal: AtomicBool,
     stop_forwarding: CancellationToken,
@@ -248,6 +249,34 @@ struct QueryLease {
 struct QueryOutputBuffer {
     text: String,
     wire_bytes: usize,
+    structured_attempt: Option<QueryOutputAttempt>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct QueryOutputAttempt {
+    round_id: String,
+    attempt_id: Option<String>,
+    attempt_index: Option<u32>,
+}
+
+impl QueryOutputBuffer {
+    fn append(&mut self, text: &str, structured_attempt: Option<QueryOutputAttempt>) -> bool {
+        if let Some(attempt) = structured_attempt {
+            if self.structured_attempt.as_ref() != Some(&attempt) {
+                self.text.clear();
+                self.wire_bytes = 0;
+                self.structured_attempt = Some(attempt);
+            }
+        }
+
+        let encoded_bytes = json_string_content_bytes(text);
+        if encoded_bytes > MAX_QUERY_OUTPUT_WIRE_BYTES.saturating_sub(self.wire_bytes) {
+            return false;
+        }
+        self.text.push_str(text);
+        self.wire_bytes += encoded_bytes;
+        true
+    }
 }
 
 impl QueryLease {
@@ -1127,6 +1156,19 @@ impl SdkHostConnection {
             .await;
             return;
         }
+        if params
+            .output_schema
+            .as_ref()
+            .is_some_and(|schema| !schema.is_object())
+        {
+            self.send_invalid_params(
+                request.id.clone(),
+                ErrorStage::Query,
+                "outputSchema must be a JSON object",
+            )
+            .await;
+            return;
+        }
         if params.session_id.is_some()
             && (params.session_name.is_some()
                 || params.agent.is_some()
@@ -1321,6 +1363,7 @@ impl SdkHostConnection {
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: session_id.clone(),
                 message: params.prompt,
+                output_schema: params.output_schema.clone(),
                 original_message: None,
                 turn_id: None,
                 execution: Default::default(),
@@ -1367,6 +1410,7 @@ impl SdkHostConnection {
             turn_id: turn_id.clone(),
             operation_id: operation_id.clone(),
             output: StdMutex::new(QueryOutputBuffer::default()),
+            structured_output_requested: params.output_schema.is_some(),
             usage: StdMutex::new(None),
             terminal: AtomicBool::new(false),
             stop_forwarding: CancellationToken::new(),
@@ -1574,20 +1618,29 @@ impl SdkHostConnection {
                     if let Some(projected) = project_query_event(&envelope.event) {
                         if let QueryEvent::AssistantTextDelta { text } = &projected {
                             let output_exceeded = {
-                                let encoded_bytes = json_string_content_bytes(text);
                                 let mut output = lease
                                     .output
                                     .lock()
                                     .expect("SDK Host Query output lock poisoned");
-                                if encoded_bytes
-                                    > MAX_QUERY_OUTPUT_WIRE_BYTES.saturating_sub(output.wire_bytes)
-                                {
-                                    true
-                                } else {
-                                    output.text.push_str(text);
-                                    output.wire_bytes += encoded_bytes;
-                                    false
-                                }
+                                let structured_attempt =
+                                    lease.structured_output_requested.then(|| {
+                                        match &envelope.event {
+                                            AgenticEvent::TextChunk {
+                                                round_id,
+                                                attempt_id,
+                                                attempt_index,
+                                                ..
+                                            } => QueryOutputAttempt {
+                                                round_id: round_id.clone(),
+                                                attempt_id: attempt_id.clone(),
+                                                attempt_index: *attempt_index,
+                                            },
+                                            _ => unreachable!(
+                                                "assistant text projection requires TextChunk"
+                                            ),
+                                        }
+                                    });
+                                !output.append(text, structured_attempt)
                             };
                             if output_exceeded {
                                 connection
@@ -2600,14 +2653,11 @@ impl SdkHostConnection {
     async fn send_query_result(
         &self,
         lease: &QueryLease,
-        status: QueryTerminalStatus,
+        mut status: QueryTerminalStatus,
         mut error: Option<QueryResultError>,
     ) -> bool {
         if !lease.emit_output {
             return true;
-        }
-        if let Some(error) = error.as_mut() {
-            error.data.operation_id = Some(lease.operation_id.clone());
         }
         let output_text = lease
             .output
@@ -2615,6 +2665,25 @@ impl SdkHostConnection {
             .expect("SDK Host Query output lock poisoned")
             .text
             .clone();
+        let structured =
+            if lease.structured_output_requested && status == QueryTerminalStatus::Completed {
+                match serde_json::from_str(&output_text) {
+                    Ok(value) => Some(value),
+                    Err(_) => {
+                        status = QueryTerminalStatus::Failed;
+                        error = Some(QueryResultError::new(
+                            ErrorCode::Internal,
+                            false,
+                            None,
+                            &lease.query_id,
+                            "Model returned invalid JSON for the requested output schema",
+                        ));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
         let usage = lease
             .usage
             .lock()
@@ -2626,6 +2695,9 @@ impl SdkHostConnection {
                 total_tokens: usage.total_tokens,
                 cached_tokens: usage.cached_tokens,
             });
+        if let Some(error) = error.as_mut() {
+            error.data.operation_id = Some(lease.operation_id.clone());
+        }
         self.send_notification(
             NOTIFICATION_QUERY_RESULT,
             QueryResultParams {
@@ -2634,7 +2706,10 @@ impl SdkHostConnection {
                 turn_id: lease.turn_id.clone(),
                 operation_id: lease.operation_id.clone(),
                 status,
-                output: QueryOutput { text: output_text },
+                output: QueryOutput {
+                    text: output_text,
+                    structured,
+                },
                 usage,
                 error,
             },
@@ -3333,7 +3408,10 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
 
 #[cfg(test)]
 mod runtime_error_tests {
-    use super::{is_local_image_path, runtime_error_facts, runtime_error_kind};
+    use super::{
+        is_local_image_path, runtime_error_facts, runtime_error_kind, QueryOutputAttempt,
+        QueryOutputBuffer,
+    };
     use crate::protocol::{ErrorCode, RecoveryAction};
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
 
@@ -3343,6 +3421,31 @@ mod runtime_error_tests {
         assert!(!is_local_image_path("https://example.com/failure.png"));
         assert!(!is_local_image_path("screenshots/failure.svg"));
         assert!(!is_local_image_path("  "));
+    }
+
+    #[test]
+    fn structured_output_keeps_only_the_last_model_attempt() {
+        let attempt = |round_id: &str| QueryOutputAttempt {
+            round_id: round_id.to_string(),
+            attempt_id: Some(format!("{round_id}-attempt")),
+            attempt_index: Some(0),
+        };
+        let mut output = QueryOutputBuffer::default();
+
+        assert!(output.append(r#"{"draft":true}"#, Some(attempt("round-1"))));
+        assert!(output.append(r#"{"final":true}"#, Some(attempt("round-2"))));
+
+        assert_eq!(output.text, r#"{"final":true}"#);
+    }
+
+    #[test]
+    fn plain_output_still_aggregates_model_rounds() {
+        let mut output = QueryOutputBuffer::default();
+
+        assert!(output.append("first", None));
+        assert!(output.append("second", None));
+
+        assert_eq!(output.text, "firstsecond");
     }
 
     #[test]

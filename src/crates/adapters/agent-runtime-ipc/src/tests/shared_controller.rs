@@ -687,6 +687,7 @@ fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> Runtim
         request: AgentDialogTurnRequest {
             session_id: session_id.to_string(),
             message: "hello".to_string(),
+            output_schema: None,
             original_message: None,
             turn_id: Some(turn_id.to_string()),
             execution: Default::default(),

@@ -36,6 +36,13 @@ export async function generateRuntimeValidators(
     '  return typeof value === "object" && value !== null && !Array.isArray(value);',
     "}",
     "",
+    "function isJsonValue(value: unknown): boolean {",
+    '  if (value === null || typeof value === "string" || typeof value === "boolean") return true;',
+    '  if (typeof value === "number") return Number.isFinite(value);',
+    "  if (Array.isArray(value)) return value.every(isJsonValue);",
+    "  return isRecord(value) && Object.values(value).every(isJsonValue);",
+    "}",
+    "",
     "function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {",
     "  const keys = Object.keys(value);",
     "  return keys.length <= allowed.length && keys.every((key) => allowed.includes(key));",
@@ -148,6 +155,9 @@ function emitTypeCheck(node, value, aliases, owner) {
   if (node.kind === ts.SyntaxKind.BooleanKeyword) {
     return `typeof ${value} === "boolean"`;
   }
+  if (node.kind === ts.SyntaxKind.UnknownKeyword) {
+    return `isJsonValue(${value})`;
+  }
   if (ts.isArrayTypeNode(node)) {
     const item = emitTypeCheck(node.elementType, "item", aliases, owner);
     return `(Array.isArray(${value}) && ${value}.every((item: unknown) => ${item}))`;
@@ -175,6 +185,9 @@ function emitTypeCheck(node, value, aliases, owner) {
     }
     if (name === "Record" && isEmptyRecord(node)) {
       return `(isRecord(${value}) && Object.keys(${value}).length === 0)`;
+    }
+    if (name === "Record" && isJsonRecord(node)) {
+      return `(isRecord(${value}) && Object.values(${value}).every(isJsonValue))`;
     }
     throw new Error(
       `${owner}: unsupported type reference ${name}; runtime validator generation is fail-closed`,
@@ -225,6 +238,14 @@ function isEmptyRecord(node) {
   return (
     node.typeArguments[0].kind === ts.SyntaxKind.SymbolKeyword &&
     node.typeArguments[1].kind === ts.SyntaxKind.NeverKeyword
+  );
+}
+
+function isJsonRecord(node) {
+  return (
+    node.typeArguments?.length === 2 &&
+    node.typeArguments[0].kind === ts.SyntaxKind.StringKeyword &&
+    node.typeArguments[1].kind === ts.SyntaxKind.UnknownKeyword
   );
 }
 

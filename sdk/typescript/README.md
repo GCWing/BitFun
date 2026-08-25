@@ -19,6 +19,8 @@ The slice validates the intended public object model:
   attachments;
 - a terminal `Result` reports aggregate token usage when the provider supplied
   usage for that Turn;
+- a Turn may request JSON output with `outputSchema`; its terminal `Result`
+  keeps the raw text and exposes the parsed value as `structuredOutput`;
 - the same stream reports safe Tool lifecycle facts and permission requests;
   `Query.respondPermission()` supports allow once, allow always, or reject;
 - protocol and process failures use `SdkError`, including outcome certainty.
@@ -93,6 +95,28 @@ const result = await query.result();
 console.log(result.usage?.totalTokens);
 ```
 
+Structured output is scoped to one Query or Session Turn:
+
+```typescript
+const result = await (
+  await client.query({
+    prompt: "Summarize the repository",
+    outputSchema: {
+      type: "object",
+      properties: { summary: { type: "string" } },
+      required: ["summary"],
+      additionalProperties: false,
+    },
+  })
+).result();
+
+console.log(result.structuredOutput);
+```
+
+The Host requires an object schema and maps it to the selected OpenAI Chat,
+OpenAI Responses, Anthropic, or Gemini protocol. It parses the final response
+as JSON; invalid JSON produces a failed Result while preserving `outputText`.
+
 `local_image` accepts local PNG, JPEG, GIF, and WebP paths. Image bytes and
 remote URLs are intentionally outside this local Host protocol.
 
@@ -126,8 +150,8 @@ separately. This PR does not publish the package. A future registry release
 still needs platform packages, signing, and release verification.
 
 Browser and mobile runtimes cannot launch the local native Host. Custom
-functions, general user-input callbacks, structured output, Python support,
-platform package publication, signing, and downloads
+functions, general user-input callbacks, Python support, platform package
+publication, signing, and downloads
 remain deferred.
 
 ## Development

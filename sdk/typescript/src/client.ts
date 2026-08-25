@@ -96,6 +96,7 @@ export class AgentClient {
     const params: QueryStartParams = {
       prompt: normalized.prompt,
       images: normalized.images,
+      outputSchema: input.outputSchema,
       sessionId: null,
       sessionName: null,
       agent: input.agent ?? null,
