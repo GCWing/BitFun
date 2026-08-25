@@ -6,7 +6,7 @@
       "../../../component-library/components/Input": 1,
       "../../component-library": 26,
       "../component-library": 1,
-      "@/component-library": 302,
+      "@/component-library": 300,
       "@/component-library/components": 1,
       "@/component-library/components/Alert/appearance": 1,
       "@/component-library/components/Avatar/appearance": 1,
@@ -108,7 +108,7 @@
       "filterPillAppearanceDescriptor": 1,
       "flowChatCardAppearanceDescriptor": 1,
       "HarnessCreativeIcon": 2,
-      "IconButton": 86,
+      "IconButton": 84,
       "iconButtonAppearanceDescriptor": 1,
       "iconCatalogAppearanceDescriptor": 1,
       "Input": 42,
@@ -166,7 +166,7 @@
       "WindowControls": 1,
       "windowControlsAppearanceDescriptor": 1
     },
-    "moduleReferences": 425
+    "moduleReferences": 423
   },
   "nativeControls": {
     "allowlist": [],
@@ -829,6 +829,6 @@
     "total": 593
   },
   "newLibrary": {
-    "moduleReferences": 153
+    "moduleReferences": 155
   }
 }

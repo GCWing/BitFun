@@ -76,6 +76,21 @@
       "$type": "dimension",
       "$value": "40px"
     },
+    "iconButton": {
+      "size": {
+        "$type": "dimension",
+        "sm": { "$value": "22px" },
+        "md": { "$value": "28px" },
+        "lg": { "$value": "32px" }
+      },
+      "iconSize": {
+        "$type": "dimension",
+        "sm": { "$value": "14px" },
+        "md": { "$value": "16px" },
+        "lg": { "$value": "16px" }
+      },
+      "radius": { "$type": "dimension", "$value": "4px" }
+    },
     "switch": {
       "$type": "dimension",
       "trackWidth": { "$value": "28px" },

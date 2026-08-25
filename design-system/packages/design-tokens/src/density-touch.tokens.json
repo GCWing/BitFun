@@ -12,6 +12,18 @@
       "md": { "$type": "dimension", "$value": "48px" },
       "lg": { "$type": "dimension", "$value": "56px" }
     },
-    "hitTarget": { "$type": "dimension", "$value": "48px" }
+    "hitTarget": { "$type": "dimension", "$value": "48px" },
+    "iconButton": {
+      "size": {
+        "sm": { "$type": "dimension", "$value": "32px" },
+        "md": { "$type": "dimension", "$value": "40px" },
+        "lg": { "$type": "dimension", "$value": "48px" }
+      },
+      "iconSize": {
+        "sm": { "$type": "dimension", "$value": "16px" },
+        "md": { "$type": "dimension", "$value": "20px" },
+        "lg": { "$type": "dimension", "$value": "24px" }
+      }
+    }
   }
 }

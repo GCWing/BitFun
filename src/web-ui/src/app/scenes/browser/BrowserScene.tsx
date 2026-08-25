@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Globe, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '@/component-library';
+import { IconButton } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useEmbeddedBrowserWebview } from './useEmbeddedBrowserWebview';
@@ -43,8 +43,7 @@ const BrowserScene: React.FC = () => {
       >
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={browser.goBack}
           aria-label={t('nav.back')}
           data-testid="browser-back-button"
@@ -53,8 +52,7 @@ const BrowserScene: React.FC = () => {
         </IconButton>
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={browser.goForward}
           aria-label={t('nav.forward')}
           data-testid="browser-forward-button"
@@ -63,8 +61,7 @@ const BrowserScene: React.FC = () => {
         </IconButton>
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={browser.reload}
           disabled={browser.isLoading}
           aria-label={t('actions.refresh')}

@@ -37,9 +37,9 @@ test("Button preview opens on the filled variant used by the reference inspector
   );
 });
 
-test("Button matrix is limited to the four reference interaction states", async () => {
+test("Button and IconButton matrices use the four reference interaction states", async () => {
   const source = await readFile(detailSource, "utf8");
-  const declaration = /case "Button":\s*return \[([^\]]+)\] as const;/.exec(source);
+  const declaration = /case "Button":\s*case "IconButton":\s*return \[([^\]]+)\] as const;/.exec(source);
 
   assert.ok(declaration);
   assert.deepEqual(
@@ -65,6 +65,17 @@ test("Button inspector wires the real disabled, loading, and icon controls", asy
   assert.match(source, /setPreviewIcon/);
   assert.match(source, /setPreviewIconPosition/);
   assert.match(source, /renderPreview\(previewState, variant, tone, true\)/);
+});
+
+test("IconButton preview exposes Figma states and accessible sample code", async () => {
+  const source = await readFile(detailSource, "utf8");
+  const styles = await readFile(stylesSource, "utf8");
+
+  assert.match(source, /component\.name === "IconButton"/);
+  assert.match(source, /data-component="icon-button"/);
+  assert.match(source, /aria-label=\{t\("components\.preview\.moreActions"\)\}/);
+  assert.match(source, /<List aria-hidden="true"/);
+  assert.match(styles, /\[data-component="icon-button"\]/);
 });
 
 test("TabGroup preview carries the selected and outline reference composition", async () => {

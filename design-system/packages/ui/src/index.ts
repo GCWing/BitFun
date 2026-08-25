@@ -6,6 +6,12 @@ export {
   type ButtonTone,
   type ButtonVariant,
 } from "./components/Button";
+export {
+  IconButton,
+  type IconButtonProps,
+  type IconButtonSize,
+  type IconButtonTone,
+} from "./components/IconButton";
 export { Switch, type SwitchProps } from "./components/Switch";
 export {
   TabGroup,

@@ -3,10 +3,12 @@ import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  List,
   MessageCircle,
 } from "lucide-react";
 import {
   Button,
+  IconButton,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -15,6 +17,7 @@ import {
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
+  type IconButtonTone,
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
@@ -159,6 +162,7 @@ export function ComponentDetailPage({
   const states = useMemo(() => {
     switch (component.name) {
       case "Button":
+      case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
@@ -166,7 +170,9 @@ export function ComponentDetailPage({
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
   }, [component.name]);
-  const inspectorStates = component.name === "Button" ? buttonInspectorStates : states;
+  const inspectorStates = component.name === "Button" || component.name === "IconButton"
+    ? buttonInspectorStates
+    : states;
 
   const codeSample = useMemo(() => {
     if (component.name === "Button") {
@@ -178,6 +184,10 @@ export function ComponentDetailPage({
         ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
         : "";
       return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" tone="${tone}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
+    }
+    if (component.name === "IconButton") {
+      const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
+      return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.moreActions")}"\n  size="${size}"\n  tone="${tone}"${stateProps}\n>\n  <List />\n</IconButton>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
@@ -242,6 +252,22 @@ export function ComponentDetailPage({
         >
           {t("components.preview.session")}
         </Button>
+      );
+    }
+
+    if (component.name === "IconButton") {
+      return (
+        <IconButton
+          aria-label={t("components.preview.moreActions")}
+          className={state === "focus-visible" ? "lab-force-focus" : undefined}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          disabled={state === "disabled" || applyInspectorControls && inspectorDisabled}
+          loading={state === "loading" || applyInspectorControls && inspectorLoading}
+          size={size}
+          tone={previewTone as IconButtonTone}
+        >
+          <List aria-hidden="true" />
+        </IconButton>
       );
     }
 
@@ -352,6 +378,29 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
+              ) : component.name === "IconButton" ? (
+                <div className="component-preview-matrix" data-component="icon-button">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">IconButton</span>
+                  {states.map((state) => (
+                    <div
+                      className="component-preview-matrix__cell"
+                      data-active={state === previewState || undefined}
+                      key={state}
+                    >
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
               ) : component.name === "TabGroup" ? (
                 <div className="component-preview-matrix" data-component="tab-group">
                   <span className="component-preview-matrix__corner" />
@@ -445,7 +494,7 @@ export function ComponentDetailPage({
                       value={variant}
                     />
                   )}
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorSelect
                       label={t("detail.tone")}
                       onChange={(value) => setTone(value as ButtonTone)}
@@ -453,7 +502,7 @@ export function ComponentDetailPage({
                       value={tone}
                     />
                   )}
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorSelect
                       label={t("detail.size")}
                       onChange={(value) => setSize(value as PreviewSize)}
@@ -467,14 +516,14 @@ export function ComponentDetailPage({
                     options={inspectorStates}
                     value={previewState}
                   />
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorToggle
                       checked={inspectorDisabled}
                       label={t("detail.disabled")}
                       onCheckedChange={setInspectorDisabled}
                     />
                   )}
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorToggle
                       checked={inspectorLoading}
                       label={t("detail.loading")}

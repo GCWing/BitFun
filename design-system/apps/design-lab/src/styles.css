@@ -3144,6 +3144,12 @@ input.lab-force-focus {
   min-width: 640px;
 }
 
+.component-preview-matrix[data-component="icon-button"] {
+  grid-template-columns: 96px repeat(4, minmax(112px, 1fr));
+  grid-template-rows: 48px 102px;
+  min-width: 592px;
+}
+
 .component-preview-matrix[data-component="switch"] {
   grid-template-columns: 88px repeat(4, minmax(112px, 1fr));
   grid-template-rows: 50px minmax(250px, 1fr);

@@ -9,7 +9,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Globe, RefreshCw, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '@/component-library';
+import { IconButton } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useContextStore } from '@/shared/context-system';
@@ -165,8 +165,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
       <form data-bf-component="browser-panel" data-bf-part="toolbar" className="browser-panel__toolbar" onSubmit={handleSubmit} data-testid="browser-panel-title">
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={goBack}
           aria-label={t('nav.back')}
           data-testid="browser-back-button"
@@ -175,8 +174,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
         </IconButton>
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={goForward}
           aria-label={t('nav.forward')}
           data-testid="browser-forward-button"
@@ -185,8 +183,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
         </IconButton>
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="md"
           onClick={reload}
           disabled={isLoading}
           aria-label={t('actions.refresh')}
@@ -212,8 +209,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
         {isTauri && (
           <IconButton
             type="button"
-            variant="ghost"
-            size="small"
+            size="md"
             onClick={() => void handleInspector()}
             aria-label={isInspectorActive ? t('browserView.stopElementSelection') : t('browserView.startElementSelection')}
             className={isInspectorActive ? 'browser-panel__inspector-btn--active' : undefined}

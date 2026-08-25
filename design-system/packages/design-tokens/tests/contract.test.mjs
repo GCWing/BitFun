@@ -39,6 +39,24 @@ test("Switch geometry preserves the compact reference contract", () => {
   assert.equal(tokens["control.switch.thumbTravelReverse"], "-12px");
 });
 
+test("IconButton geometry preserves the Figma reference and density modes", () => {
+  const valuesFor = (name) => tokenCatalog.find((token) => token.name === name)?.values;
+
+  assert.equal(tokens["control.iconButton.size.sm"], "22px");
+  assert.equal(tokens["control.iconButton.iconSize.sm"], "14px");
+  assert.equal(tokens["control.iconButton.radius"], "4px");
+  assert.deepEqual(valuesFor("control.iconButton.size.md"), {
+    comfortable: "28px",
+    compact: "24px",
+    touch: "40px",
+  });
+  assert.deepEqual(valuesFor("control.iconButton.iconSize.lg"), {
+    comfortable: "16px",
+    compact: "16px",
+    touch: "24px",
+  });
+});
+
 test("TabGroup geometry preserves the capsule selected and outline contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
