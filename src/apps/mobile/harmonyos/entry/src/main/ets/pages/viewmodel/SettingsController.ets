@@ -285,16 +285,11 @@ export class SettingsController {
     if (cloud.remoteState.controlTargetType === 'account_device') {
       this.resetAccountDeviceConnection(true);
     }
-    this.cloudSession = undefined;
-    this.cloudRelayUrl = '';
+    this.clearCloudAccountProjection(cloud);
     this.store.replaceAccountModels([]);
     await this.refreshModelCatalog();
     await cloud.sessionStore.clear();
     await cloud.hooks.clearCachedRemoteData();
-    this.accountDevices = [];
-    cloud.hooks.onAccountDevices([]);
-    cloud.remoteState.setAccountUserId('');
-    cloud.remoteState.setAccountUsername('');
     cloud.remoteState.clearControlTarget();
     RemoteLogger.info('cloud account logout success');
   }
@@ -744,15 +739,30 @@ export class SettingsController {
   private async expireCloudAccountSession(): Promise<void> {
     const cloud = this.requireCloud();
     cloud.hooks.invalidatePreview();
+    if (cloud.remoteState.controlTargetType === 'account_device') {
+      this.resetAccountDeviceConnection(true);
+    }
+    // Publish the signed-out projection before awaiting storage. A revoked
+    // credential must never leave stale account devices actionable merely
+    // because preferences or cache cleanup is slow (or fails).
+    this.clearCloudAccountProjection(cloud);
+    this.store.replaceAccountModels([]);
+    await this.refreshModelCatalog();
+    await cloud.sessionStore.clear();
+    await cloud.hooks.clearCachedRemoteData();
+    RemoteLogger.info('cloud account session expired');
+  }
+
+  /** Drops every observable fact owned by the account session. */
+  private clearCloudAccountProjection(cloud: CloudAccountSettingsDependencies): void {
+    this.stopPresencePolling();
     this.cloudSession = undefined;
     this.cloudRelayUrl = '';
     this.accountDevices = [];
-    await cloud.sessionStore.clear();
+    this.lastAccountDevicesAt = 0;
+    cloud.hooks.onAccountDevices([]);
     cloud.remoteState.setAccountUserId('');
     cloud.remoteState.setAccountUsername('');
-    if (cloud.remoteState.controlTargetType === 'account_device') {
-      this.resetAccountDeviceConnection(false);
-    }
   }
 
   private prepareAccountDeviceConnection(): void {

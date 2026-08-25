@@ -164,6 +164,7 @@ export struct WideConversationHost {
           onClose: this.actions.onSidebar.close,
           onNewChat: this.actions.onSidebar.newChat,
           onEnterCode: this.actions.onSidebar.enterCode,
+          onScanDesktop: this.actions.onSidebar.scanDesktop,
           onCollapse: this.onCollapseMasterPane,
           onOpenViewSettings: this.onOpenRemoteViewSettings,
           onSearchQueryChange: (query: string) => {
@@ -198,6 +199,7 @@ export struct WideConversationHost {
       workspacePath: this.remotePageState.workspacePath,
       workspaceKind: this.remotePageState.workspaceKind,
       connectionState: this.remotePageState.connectionState,
+      controlTargetType: this.remotePageState.controlTargetType,
       controlTargetDeviceId: this.remotePageState.controlTargetDeviceId,
       controlTargetDeviceName: this.remotePageState.controlTargetDeviceName ||
         this.remotePageState.desktopName,
@@ -213,7 +215,7 @@ export struct WideConversationHost {
       },
       onToggleDevice: this.actions.onRemoteHome.toggleDirectoryDevice,
       onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
-      onConnect: this.actions.onSidebar.connectDesktop
+      onAdd: this.actions.onSidebar.addDesktop
     })
   }
 

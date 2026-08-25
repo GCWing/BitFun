@@ -94,6 +94,7 @@ import {
 import {
   CloudAccountClient,
   CloudAccountDevice,
+  CloudAccountRequestError,
   CloudAccountSession
 } from '../main/ets/services/CloudAccountClient';
 import {
@@ -325,9 +326,31 @@ class ScriptedAccountSessionManager extends RemoteSessionManager {
 /** HUKS and preferences are not reachable from a local unit run. */
 class InMemoryCloudAccountSessionStore extends CloudAccountSessionStore {
   readonly saved: PersistedCloudAccountSession[] = [];
+  clears: number = 0;
 
   async save(session: PersistedCloudAccountSession): Promise<void> {
     this.saved.push(session);
+  }
+
+  async clear(): Promise<void> {
+    this.clears += 1;
+  }
+}
+
+/** Publishes one roster, then models the relay revoking the account token. */
+class ExpiringAccountClient extends CloudAccountClient {
+  listCalls: number = 0;
+
+  async listDevices(
+    _relayUrl: string,
+    _session: CloudAccountSession,
+    _selfDeviceId: string = ''
+  ): Promise<CloudAccountDevice[]> {
+    this.listCalls += 1;
+    if (this.listCalls === 1) {
+      return [{ deviceId: 'desk-a', deviceName: 'Desktop A', online: true }];
+    }
+    throw new CloudAccountRequestError('expired', 401);
   }
 }
 
@@ -337,10 +360,12 @@ class AccountDeviceSwitchHarness {
   readonly sessionStore: InMemoryCloudAccountSessionStore = new InMemoryCloudAccountSessionStore();
   heartbeatStarts: number = 0;
   heartbeatStops: number = 0;
+  cachedRemoteClears: number = 0;
   settingsClosings: number = 0;
+  readonly accountDeviceSnapshots: CloudAccountDevice[][] = [];
   readonly controller: SettingsController;
 
-  constructor() {
+  constructor(client: CloudAccountClient = new CloudAccountClient()) {
     const hooks: CloudAccountSettingsHooks = {
       deviceId: (): string => 'phone',
       remoteAvailable: (): boolean => true,
@@ -352,17 +377,19 @@ class AccountDeviceSwitchHarness {
       startHeartbeat: (): void => { this.heartbeatStarts += 1; },
       resetTimeline: (): void => {},
       resetKnownRemoteState: (): void => {},
-      clearCachedRemoteData: async (): Promise<void> => {},
+      clearCachedRemoteData: async (): Promise<void> => { this.cachedRemoteClears += 1; },
       closeSettings: (): void => { this.settingsClosings += 1; },
       closeConnectSheet: (): void => {},
       navigateRemoteHome: (): void => {},
       loadRecentWorkspaces: async (): Promise<void> => {},
-      onAccountDevices: (_devices: CloudAccountDevice[]): void => {},
+      onAccountDevices: (devices: CloudAccountDevice[]): void => {
+        this.accountDeviceSnapshots.push(devices.slice());
+      },
       onBeforeControlTargetChange: (): void => {},
       onControlTargetChanged: (): void => {}
     };
     const cloud: CloudAccountSettingsDependencies = {
-      client: new CloudAccountClient(),
+      client,
       sessionStore: this.sessionStore,
       sessionManager: this.sessionManager,
       remoteState: this.remoteState,
@@ -1026,6 +1053,27 @@ export default function transportAndGeneralChatUnitTest() {
       expect(state.apiUrl).assertEqual('https://chat.example.com');
       expect(state.conversation.selectedModelId).assertEqual('local-general-chat');
       expect(state.serviceState).assertEqual(GeneralChatServiceState.Ready);
+    });
+
+    it('clears the published device roster when the account token expires', 0, async () => {
+      const client = new ExpiringAccountClient();
+      const harness = new AccountDeviceSwitchHarness(client);
+      await harness.controller.listCloudAccountDevices();
+
+      let reported = '';
+      try {
+        await harness.controller.listCloudAccountDevices();
+      } catch (err) {
+        reported = err instanceof Error ? err.message : String(err);
+      }
+
+      expect(reported).assertEqual(RemoteI18n.t('remote.settings.accountExpired'));
+      expect(harness.accountDeviceSnapshots.length).assertEqual(2);
+      expect(harness.accountDeviceSnapshots[0].length).assertEqual(1);
+      expect(harness.accountDeviceSnapshots[1].length).assertEqual(0);
+      expect(harness.controller.hasCloudAccountSession()).assertFalse();
+      expect(harness.sessionStore.clears).assertEqual(1);
+      expect(harness.cachedRemoteClears).assertEqual(1);
     });
 
     it('puts the phone back on the previous desktop when a device switch fails', 0, async () => {

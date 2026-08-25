@@ -4,6 +4,7 @@ import { AppRootHostPort } from '../main/ets/pages/host/AppRootHostAdapter';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
 import { AppRootRuntime } from '../main/ets/pages/runtime/AppRootRuntime';
 import { FilePreviewRequest, FilePreviewTarget } from '../main/ets/model/FilePreviewTarget';
+import { CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 
 class FakeAppRootHost implements AppRootHostPort {
   externalLinks: string[] = [];
@@ -96,6 +97,23 @@ export default function appRootLifecycleUnitTest() {
       expect(runtime.handleNavigationBack(AppRoute.RemoteChat)).assertTrue();
       expect(runtime.filePreviewState.visible).assertFalse();
       expect(runtime.handleRootBack()).assertFalse();
+    });
+
+    it('dismisses the connect sheet before navigating back', 0, () => {
+      const runtime = new TestAppRootRuntime();
+      runtime.openConnectSheet();
+
+      expect(runtime.appShellState.showConnectSheet).assertTrue();
+      expect(runtime.handleRootBack()).assertTrue();
+      expect(runtime.appShellState.showConnectSheet).assertFalse();
+    });
+
+    it('opens the scanner directly when adding a desktop', 0, () => {
+      const runtime = new TestAppRootRuntime();
+
+      runtime.presentationActions.onSidebar.addDesktop();
+      expect(runtime.appShellState.showConnectSheet).assertTrue();
+      expect(runtime.appShellState.connectSheetIntent).assertEqual(CONNECT_INTENT_SCAN);
     });
 
     it('invalidates and closes preview when the remote target changes', 0, () => {
