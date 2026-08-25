@@ -1,7 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { IconButton, Input, Modal, Select, confirmDanger, type SelectOption } from '@/component-library';
+import { Input, Modal, Select, confirmDanger, type SelectOption } from '@/component-library';
 import {
   permissionAPI,
   type PermissionGrant,
@@ -277,10 +277,10 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                   </div>
                   <IconButton
                     type="button"
-                    size="small"
-                    variant="ghost"
+                    size="md"
+                    tone="danger"
                     aria-label={t('projectPermissions.removeGrant')}
-                    tooltip={t('projectPermissions.removeGrant')}
+                    title={t('projectPermissions.removeGrant')}
                     disabled={isBusy}
                     onClick={() => void handleRemovePermissionGrant(grant)}
                   >
@@ -351,10 +351,9 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                   <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="ruleActions" className="workspace-project-permissions-dialog__rule-actions">
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
+                      size="md"
                       aria-label={t('projectPermissions.moveRuleUp')}
-                      tooltip={t('projectPermissions.moveRuleUp')}
+                      title={t('projectPermissions.moveRuleUp')}
                       disabled={isBusy || index === 0}
                       onClick={() => moveDraftRule(index, -1)}
                     >
@@ -362,10 +361,9 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                     </IconButton>
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
+                      size="md"
                       aria-label={t('projectPermissions.moveRuleDown')}
-                      tooltip={t('projectPermissions.moveRuleDown')}
+                      title={t('projectPermissions.moveRuleDown')}
                       disabled={isBusy || index === draftRules.length - 1}
                       onClick={() => moveDraftRule(index, 1)}
                     >
@@ -373,10 +371,10 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                     </IconButton>
                     <IconButton
                       type="button"
-                      size="small"
-                      variant="ghost"
+                      size="md"
+                      tone="danger"
                       aria-label={t('projectPermissions.removeRule')}
-                      tooltip={t('projectPermissions.removeRule')}
+                      title={t('projectPermissions.removeRule')}
                       disabled={isBusy}
                       onClick={() => setDraftRules((rules) => rules.filter(({ localId }) => localId !== rule.localId))}
                     >
