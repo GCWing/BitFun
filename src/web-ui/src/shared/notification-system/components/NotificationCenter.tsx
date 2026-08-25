@@ -1,6 +1,7 @@
  
 
 import React, { useState, useMemo } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { Search, Modal, PopupCloseButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -333,23 +334,28 @@ export const NotificationCenter: React.FC = () => {
         </div>
         {!notification.read && <div className="notification-center__item-badge" />}
         <div className="notification-center__item-actions">
-          <button
+          <IconButton
+            aria-label={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
             className="notification-center__item-expand"
             onClick={(e) => {
               e.stopPropagation();
               handleNotificationClick(notification);
             }}
             title={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
+            size="sm"
           >
             {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-          <button
+          </IconButton>
+          <IconButton
+            aria-label={t('common:actions.delete')}
             className="notification-center__item-delete"
             onClick={(e) => handleDeleteNotification(e, notification.id)}
             title={t('common:actions.delete')}
+            size="sm"
+            tone="danger"
           >
             <XCircle size={16} />
-          </button>
+          </IconButton>
         </div>
       </div>
     );
@@ -367,24 +373,25 @@ export const NotificationCenter: React.FC = () => {
         <div className="notification-center__header" data-bf-component="notification" data-bf-part="centerHeader">
           <h2 className="notification-center__title">{t('components:notificationCenter.title')}</h2>
           <div className="notification-center__header-actions">
-            <button
-              type="button"
+            <IconButton
               className="notification-center__header-button"
               onClick={handleMarkAllRead}
               title={t('components:notificationCenter.actions.markAllRead')}
               aria-label={t('components:notificationCenter.actions.markAllRead')}
+              size="sm"
             >
               <CheckCheck size={16} />
-            </button>
-            <button
-              type="button"
+            </IconButton>
+            <IconButton
               className="notification-center__header-button"
               onClick={handleClearAll}
               title={t('components:notificationCenter.actions.clearAll')}
               aria-label={t('components:notificationCenter.actions.clearAll')}
+              size="sm"
+              tone="danger"
             >
               <Trash2 size={16} />
-            </button>
+            </IconButton>
             <PopupCloseButton
               className="notification-center__close"
               onClick={handleClose}

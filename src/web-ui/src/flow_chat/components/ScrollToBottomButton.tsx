@@ -4,6 +4,7 @@
  */
 
 import React, { useLayoutEffect, useRef } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { PresenceBoundary, Tooltip } from '@/component-library';
 import './ScrollToBottomButton.scss';
@@ -41,7 +42,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
   return (
     <PresenceBoundary active={visible}>
       <Tooltip content={t('scroll.toBottom')} disabled={!visible}>
-        <button data-bf-component="scroll-to-bottom-button" data-bf-part="root"
+        <IconButton data-bf-component="scroll-to-bottom-button" data-bf-part="root"
           ref={buttonRef}
           {...buttonProps}
           data-visible={visible ? 'true' : 'false'}
@@ -49,6 +50,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
           onClick={visible ? onClick : undefined}
           aria-hidden={!visible}
           aria-label={unreadCount ? t('scroll.toBottomWithCount', { count: unreadCount }) : t('scroll.toBottom')}
+          size="md"
           tabIndex={visible ? buttonProps.tabIndex : -1}
           {...(!visible ? { inert: '' } : {})}
         >
@@ -70,7 +72,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
           {unreadCount !== undefined && unreadCount > 0 && (
             <span data-bf-component="scroll-to-bottom-button" data-bf-part="badge" className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
           )}
-        </button>
+        </IconButton>
       </Tooltip>
     </PresenceBoundary>
   );

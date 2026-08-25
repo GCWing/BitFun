@@ -10,10 +10,10 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal, Input, Select, Alert, IconButton } from '@/component-library';
+import { Modal, Input, Select, Alert } from '@/component-library';
 import {
   Server, User, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine,
   CheckCircle2, XCircle, AlertTriangle, RefreshCw, Eye, EyeOff, Search,
@@ -862,9 +862,15 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
               prefix={<Lock size={16} />} size="medium" disabled={connecting}
               suffix={
-                <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassword((s) => !s)} tabIndex={-1}>
+                <IconButton
+                  aria-label={t(showPassword ? 'accountLogin.hidePassword' : 'accountLogin.showPassword')}
+                  className="bitfun-input-toggle"
+                  onClick={() => setShowPassword((s) => !s)}
+                  size="sm"
+                  tabIndex={-1}
+                >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                </IconButton>
               } />
           </div>
         )}
@@ -876,8 +882,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 placeholder="~/.ssh/id_rsa" prefix={<Key size={16} />} size="medium"
                 disabled={connecting}
                 suffix={
-                  <IconButton type="button" variant="ghost" size="small"
-                    tooltip={t('ssh.remote.browsePrivateKey')}
+                  <IconButton size="sm"
+                    title={t('ssh.remote.browsePrivateKey')}
                     aria-label={t('ssh.remote.browsePrivateKey')}
                     disabled={connecting}
                     onClick={() => void handleBrowsePrivateKey()}>
@@ -891,9 +897,15 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 onChange={(e) => setFormData((p) => ({ ...p, passphrase: e.target.value }))}
                 placeholder={t('ssh.remote.passphraseOptional')} size="medium" disabled={connecting}
                 suffix={
-                  <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassphrase((s) => !s)} tabIndex={-1}>
+                  <IconButton
+                    aria-label={t(showPassphrase ? 'accountLogin.hidePassword' : 'accountLogin.showPassword')}
+                    className="bitfun-input-toggle"
+                    onClick={() => setShowPassphrase((s) => !s)}
+                    size="sm"
+                    tabIndex={-1}
+                  >
                     {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+                  </IconButton>
                 } />
             </div>
           </>
@@ -1241,9 +1253,15 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             value={regPassword} onChange={(e) => setRegPassword(e.target.value)}
             prefix={<Lock size={16} />} size="medium" disabled={regLoading}
             suffix={
-              <button type="button" className="bitfun-input-toggle" onClick={() => setShowRegPassword((s) => !s)} tabIndex={-1}>
+              <IconButton
+                aria-label={t(showRegPassword ? 'accountLogin.hidePassword' : 'accountLogin.showPassword')}
+                className="bitfun-input-toggle"
+                onClick={() => setShowRegPassword((s) => !s)}
+                size="sm"
+                tabIndex={-1}
+              >
                 {showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+              </IconButton>
             } />
         </div>
         {regMode === 'create' && (

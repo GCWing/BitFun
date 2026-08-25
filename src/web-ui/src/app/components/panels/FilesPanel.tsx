@@ -3,7 +3,7 @@
  * Displays the file explorer for the current workspace
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List } from 'lucide-react';
@@ -14,7 +14,7 @@ import {
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
 import { useExplorerSearch } from '@/tools/file-explorer';
-import { Search, IconButton, Tooltip, Badge, confirmWarning } from '@/component-library';
+import { Search, Tooltip, Badge, confirmWarning } from '@/component-library';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
 import { workspaceAPI } from '@/infrastructure/api';
 import type { FileSystemNode } from '@/tools/file-system/types';
@@ -1049,10 +1049,10 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           actions={
             workspacePath && (
               <IconButton
-                size="xs"
+                aria-label={viewMode === 'tree' ? t('actions.switchToSearch') : t('actions.switchToTree')}
                 onClick={handleToggleViewMode}
-                tooltip={viewMode === 'tree' ? t('actions.switchToSearch') : t('actions.switchToTree')}
-                tooltipPlacement="bottom"
+                size="sm"
+                title={viewMode === 'tree' ? t('actions.switchToSearch') : t('actions.switchToTree')}
               >
                 {viewMode === 'tree' ? <SearchIcon size={14} /> : <List size={14} />}
               </IconButton>
@@ -1092,31 +1092,40 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               </div>
               <div className="bitfun-files-panel__search-options">
                 <Tooltip content={t('options.caseSensitive')}>
-                  <button
-                    type="button"
+                  <IconButton
+                    aria-label={t('options.caseSensitive')}
+                    aria-pressed={searchOptions.caseSensitive}
                     className={`bitfun-files-panel__search-option ${searchOptions.caseSensitive ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
+                    size="sm"
+                    tone={searchOptions.caseSensitive ? 'primary' : 'neutral'}
                   >
                     <CaseSensitive size={14} />
-                  </button>
+                  </IconButton>
                 </Tooltip>
                 <Tooltip content={t('options.wholeWord')}>
-                  <button
-                    type="button"
+                  <IconButton
+                    aria-label={t('options.wholeWord')}
+                    aria-pressed={searchOptions.wholeWord}
                     className={`bitfun-files-panel__search-option ${searchOptions.wholeWord ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, wholeWord: !prev.wholeWord }))}
+                    size="sm"
+                    tone={searchOptions.wholeWord ? 'primary' : 'neutral'}
                   >
                     <WholeWord size={14} />
-                  </button>
+                  </IconButton>
                 </Tooltip>
                 <Tooltip content={t('options.useRegex')}>
-                  <button
-                    type="button"
+                  <IconButton
+                    aria-label={t('options.useRegex')}
+                    aria-pressed={searchOptions.useRegex}
                     className={`bitfun-files-panel__search-option ${searchOptions.useRegex ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, useRegex: !prev.useRegex }))}
+                    size="sm"
+                    tone={searchOptions.useRegex ? 'primary' : 'neutral'}
                   >
                     <Regex size={14} />
-                  </button>
+                  </IconButton>
                 </Tooltip>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Activity } from 'lucide-react';
 import { Tooltip } from '@/component-library';
@@ -26,15 +27,16 @@ function SessionRuntimeButton({
   const { t } = useTranslation('flow-chat');
   return (
     <Tooltip content={t('usage.runtime.tooltip')}>
-      <button data-bf-component="session-runtime-status-entry" data-bf-part="root"
+      <Button data-bf-component="session-runtime-status-entry" data-bf-part="root"
         className="session-runtime-status-entry"
-        type="button"
+        leadingIcon={<Activity size={13} />}
         onClick={onOpen}
         aria-label={t('usage.runtime.open')}
+        size="sm"
+        variant="fill"
       >
-        <Activity size={13} data-bf-component="session-runtime-status-entry" data-bf-part="icon" aria-hidden />
         <span data-bf-component="session-runtime-status-entry" data-bf-part="label">{t('usage.runtime.button')}</span>
-      </button>
+      </Button>
     </Tooltip>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { Star } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -37,20 +38,24 @@ const GithubStarButton: React.FC = () => {
   return (
     <div className="bitfun-nav-panel__footer-star">
       <Tooltip content={t('nav.githubStar.tooltip')} placement="top">
-        <button
-          type="button"
+        <Button
           className="bitfun-nav-panel__footer-star-btn"
+          leadingIcon={(
+            <span className="bitfun-nav-panel__footer-btn-icon-swap">
+              <Star size={14} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+              <Star size={14} fill="currentColor" className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
+            </span>
+          )}
           onClick={handleStar}
+          size="sm"
+          tone="primary"
+          variant="fill"
           data-testid="nav-footer-github-star-btn"
           data-bf-component="nav-panel"
           data-bf-part="footerButton"
         >
-          <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-            <Star size={14} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-            <Star size={14} fill="currentColor" className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-          </span>
           <span className="bitfun-nav-panel__footer-star-label">{t('nav.githubStar.label')}</span>
-        </button>
+        </Button>
       </Tooltip>
     </div>
   );

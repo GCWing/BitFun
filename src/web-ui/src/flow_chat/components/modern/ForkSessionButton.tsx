@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { GitFork, Loader2 } from 'lucide-react';
+import { IconButton } from '@bitfun/ui';
+import { GitFork } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { flowChatManager } from '../../services/FlowChatManager';
@@ -54,13 +55,16 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
       content={t('modelRound.forkDialog')}
       placement="top"
     >
-      <button
+      <IconButton
+        aria-label={t('modelRound.forkDialog')}
         className="model-round-item__action-btn model-round-item__fork-btn"
         onClick={handleFork}
         disabled={isForking}
+        loading={isForking}
+        size="sm"
       >
-        {isForking ? <Loader2 size={14} className="spinning" /> : <GitFork size={14} />}
-      </button>
+        <GitFork size={14} />
+      </IconButton>
     </Tooltip>
   );
 };

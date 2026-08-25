@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import './ScrollToTurnHeaderButton.scss';
@@ -32,12 +33,13 @@ export const ScrollToTurnHeaderButton: React.FC<ScrollToTurnHeaderButtonProps> =
       <div data-bf-component="scroll-to-turn-header-button" data-bf-part="gradient" className="scroll-to-turn-header-trigger__gradient" />
       <div data-bf-component="scroll-to-turn-header-button" data-bf-part="content" className="scroll-to-turn-header-trigger__content">
         <Tooltip content={turnLabel || t('scroll.toCurrentTurn')}>
-          <button
+          <IconButton
             data-bf-component="scroll-to-turn-header-button"
             data-bf-part="button"
             className="scroll-to-turn-header-trigger__btn"
             onClick={onClick}
             aria-label={turnLabel || t('scroll.toCurrentTurn')}
+            size="sm"
             tabIndex={visible ? 0 : -1}
           >
             <svg
@@ -55,7 +57,7 @@ export const ScrollToTurnHeaderButton: React.FC<ScrollToTurnHeaderButtonProps> =
                 strokeLinejoin="round"
               />
             </svg>
-          </button>
+          </IconButton>
         </Tooltip>
       </div>
     </div>

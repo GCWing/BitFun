@@ -108,7 +108,7 @@
       "filterPillAppearanceDescriptor": 1,
       "flowChatCardAppearanceDescriptor": 1,
       "HarnessCreativeIcon": 2,
-      "IconButton": 84,
+      "IconButton": 82,
       "iconButtonAppearanceDescriptor": 1,
       "iconCatalogAppearanceDescriptor": 1,
       "Input": 42,
@@ -193,9 +193,6 @@
       "src/web-ui/src/app/components/NavPanel/components/DeviceStatusControl.tsx": {
         "button": 1
       },
-      "src/web-ui/src/app/components/NavPanel/components/GithubStarButton.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/app/components/NavPanel/components/NavItem.tsx": {
         "button": 1
       },
@@ -248,7 +245,7 @@
         "button": 2
       },
       "src/web-ui/src/app/components/panels/FilesPanel.tsx": {
-        "button": 5
+        "button": 2
       },
       "src/web-ui/src/app/components/panels/review-platform/ReviewPlatformPanel.tsx": {
         "button": 3
@@ -357,7 +354,7 @@
         "button": 1
       },
       "src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx": {
-        "button": 6
+        "button": 3
       },
       "src/web-ui/src/app/scenes/settings/SettingsNav.tsx": {
         "button": 2
@@ -412,7 +409,7 @@
         "button": 2
       },
       "src/web-ui/src/features/relay-deploy/RelayDeployWizard.tsx": {
-        "button": 5
+        "button": 2
       },
       "src/web-ui/src/features/ssh-remote/PortForwardDialog.test.tsx": {
         "button": 2,
@@ -477,9 +474,6 @@
       "src/web-ui/src/flow_chat/components/ModelSelector.tsx": {
         "button": 12
       },
-      "src/web-ui/src/flow_chat/components/modern/ExportImageButton.tsx": {
-        "button": 2
-      },
       "src/web-ui/src/flow_chat/components/modern/FlowChatHeader.test.tsx": {
         "button": 1,
         "input": 1
@@ -488,9 +482,6 @@
         "button": 9
       },
       "src/web-ui/src/flow_chat/components/modern/FlowChatTurnRail.tsx": {
-        "button": 1
-      },
-      "src/web-ui/src/flow_chat/components/modern/ForkSessionButton.tsx": {
         "button": 1
       },
       "src/web-ui/src/flow_chat/components/modern/ModelRoundItem.tsx": {
@@ -526,13 +517,7 @@
       "src/web-ui/src/flow_chat/components/ReasoningPresetSelector.tsx": {
         "button": 3
       },
-      "src/web-ui/src/flow_chat/components/ScrollToBottomButton.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/flow_chat/components/ScrollToLatestBar.tsx": {
-        "button": 1
-      },
-      "src/web-ui/src/flow_chat/components/ScrollToTurnHeaderButton.tsx": {
         "button": 1
       },
       "src/web-ui/src/flow_chat/components/session-menu/SessionMenu.tsx": {
@@ -540,9 +525,6 @@
       },
       "src/web-ui/src/flow_chat/components/toolbar-mode/ToolbarMode.tsx": {
         "button": 8
-      },
-      "src/web-ui/src/flow_chat/components/usage/SessionRuntimeStatusEntry.tsx": {
-        "button": 1
       },
       "src/web-ui/src/flow_chat/components/usage/SessionUsageComponents.test.tsx": {
         "button": 1
@@ -772,7 +754,7 @@
         "button": 1
       },
       "src/web-ui/src/shared/notification-system/components/NotificationCenter.tsx": {
-        "button": 8
+        "button": 4
       },
       "src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx": {
         "button": 3
@@ -788,9 +770,6 @@
       },
       "src/web-ui/src/tools/editor/components/EditorBreadcrumb.tsx": {
         "button": 1
-      },
-      "src/web-ui/src/tools/editor/components/ImageViewer.tsx": {
-        "button": 6
       },
       "src/web-ui/src/tools/editor/components/MarkdownEditor.test.tsx": {
         "button": 2
@@ -826,9 +805,9 @@
         "button": 2
       }
     },
-    "total": 593
+    "total": 567
   },
   "newLibrary": {
-    "moduleReferences": 155
+    "moduleReferences": 163
   }
 }

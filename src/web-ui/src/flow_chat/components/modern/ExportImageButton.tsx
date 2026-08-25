@@ -5,8 +5,9 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
+import { Button, IconButton } from '@bitfun/ui';
 import { createRoot } from 'react-dom/client';
-import { Image, Loader2 } from 'lucide-react';
+import { Image } from 'lucide-react';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '@/shared/notification-system';
 import { FlowTextBlock } from '../FlowTextBlock';
@@ -513,8 +514,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         messageNode: (
           <>
             {successPrefix}
-            <button
-              type="button"
+            <Button
               className="notification-item__path-link"
               onClick={(e) => {
                 e.preventDefault();
@@ -523,7 +523,8 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
               }}
             >
               {filePath}
-            </button>
+              variant="text"
+            </Button>
           </>
         ),
       });
@@ -540,7 +541,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
 
   return (
     <Tooltip content={isExporting ? i18nService.t('flow-chat:exportImage.exporting') : i18nService.t('flow-chat:exportImage.exportToImage')} placement="top">
-      <button
+      <IconButton
         className={`model-round-item__action-btn model-round-item__export-btn ${className}`}
         data-bf-component="export-image"
         data-bf-part="trigger"
@@ -550,9 +551,11 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         aria-label={isExporting
           ? i18nService.t('flow-chat:exportImage.exporting')
           : i18nService.t('flow-chat:exportImage.exportToImage')}
+        loading={isExporting}
+        size="sm"
       >
-        {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
-      </button>
+        <Image size={14} />
+      </IconButton>
     </Tooltip>
   );
 };

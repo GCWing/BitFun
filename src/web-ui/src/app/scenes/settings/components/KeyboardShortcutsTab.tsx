@@ -10,7 +10,7 @@
  * - Reset button restores all defaults
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -668,11 +668,12 @@ const KeyboardShortcutsTab: React.FC = () => {
                       </Tooltip>
                       {mergedTabPending && recordingId !== MERGED_TAB_RECORD_ID && (
                         <Tooltip content={t('keyboard.revertChange')} placement="top">
-                          <button
-                            type="button"
+                          <IconButton
+                            aria-label={t('keyboard.revertChange')}
                             className="kb-shortcuts__revert-btn"
                             data-bf-component="keyboard-shortcuts"
                             data-bf-part="revert"
+                            size="sm"
                             onClick={() => {
                               setPendingChanges((prev) => {
                                 const next = { ...prev };
@@ -682,7 +683,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                             }}
                           >
                             ↩
-                          </button>
+                          </IconButton>
                         </Tooltip>
                       )}
                     </div>
@@ -742,11 +743,12 @@ const KeyboardShortcutsTab: React.FC = () => {
                       </Tooltip>
                       {mergedScenePending && recordingId !== MERGED_SCENE_RECORD_ID && (
                         <Tooltip content={t('keyboard.revertChange')} placement="top">
-                          <button
-                            type="button"
+                          <IconButton
+                            aria-label={t('keyboard.revertChange')}
                             className="kb-shortcuts__revert-btn"
                             data-bf-component="keyboard-shortcuts"
                             data-bf-part="revert"
+                            size="sm"
                             onClick={() => {
                               setPendingChanges((prev) => {
                                 const next = { ...prev };
@@ -756,7 +758,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                             }}
                           >
                             ↩
-                          </button>
+                          </IconButton>
                         </Tooltip>
                       )}
                     </div>
@@ -834,11 +836,12 @@ const KeyboardShortcutsTab: React.FC = () => {
                             </Tooltip>
                             {pending && !isRecording && (
                               <Tooltip content={t('keyboard.revertChange')} placement="top">
-                                <button
-                                  type="button"
+                                <IconButton
+                                  aria-label={t('keyboard.revertChange')}
                                   className="kb-shortcuts__revert-btn"
                                   data-bf-component="keyboard-shortcuts"
                                   data-bf-part="revert"
+                                  size="sm"
                                   onClick={() => {
                                     setPendingChanges((prev) => {
                                       const next = { ...prev };
@@ -848,7 +851,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                                   }}
                                 >
                                   ↩
-                                </button>
+                                </IconButton>
                               </Tooltip>
                             )}
                           </>
