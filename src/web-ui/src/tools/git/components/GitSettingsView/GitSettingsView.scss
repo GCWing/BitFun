@@ -118,34 +118,6 @@ $opacity-high: 0.8 !default;
     margin-top: -$size-gap-1;
   }
 
-  &__form-input {
-    padding: $size-gap-2 $size-gap-3;
-    background: var(--bf-appearance-token-element-bg-base);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-family: $font-family-mono;
-    transition:
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard;
-
-    &:focus {
-      outline: none;
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-medium);
-    }
-
-    &::placeholder {
-      color: var(--bf-appearance-token-color-text-muted);
-    }
-
-    &:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-  }
-
   &__form-select {
     padding: $size-gap-2 $size-gap-3;
     background: var(--bf-appearance-token-element-bg-base);

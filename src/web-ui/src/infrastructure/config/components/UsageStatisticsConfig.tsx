@@ -1,7 +1,7 @@
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Input } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, CalendarRange, Search, X } from 'lucide-react';
-import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, Input, Select } from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, Select } from '@/component-library';
 import {
   TokenUsageStatisticsUnavailableError,
   tokenUsageStatisticsApi,
@@ -756,16 +756,15 @@ const UsageStatisticsConfig: React.FC = () => {
               triggerAriaLabel={t('filter.kind.label')}
             />
             <Input
-              className="bitfun-usage-stats__filter-input"
-              inputSize="small"
+              containerClassName="bitfun-usage-stats__filter-input"
               value={filterInput}
               onChange={(event) => setFilterInput(event.target.value)}
               placeholder={t('filter.placeholder')}
               aria-label={t('filter.inputLabel')}
               data-testid="usage-filter-input"
               maxLength={100}
-              prefix={<Search size={14} aria-hidden />}
-              suffix={filterInput ? (
+              leadingIcon={<Search size={14} aria-hidden />}
+              trailingContent={filterInput ? (
                 <IconButton
                   type="button"
                   size="sm"
@@ -776,6 +775,7 @@ const UsageStatisticsConfig: React.FC = () => {
                   <X size={12} aria-hidden />
                 </IconButton>
               ) : undefined}
+              variant="search"
             />
           </div>
           <ConfigPageRefreshButton

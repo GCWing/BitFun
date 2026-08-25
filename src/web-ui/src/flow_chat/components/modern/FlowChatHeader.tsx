@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import {
   ChevronDown,
@@ -21,7 +21,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { Tooltip, Input } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
@@ -696,11 +696,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           >
             <Input
               ref={searchInputRef}
-              className="flowchat-header__search-field"
-              variant="filled"
-              inputSize="small"
-              prefix={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
-              suffix={
+              containerClassName="flowchat-header__search-field"
+              leadingIcon={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
+              trailingContent={
                 <span
                   className="flowchat-header__search-inline-controls"
                   data-bf-component="flow-chat-header"
@@ -746,7 +744,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               onKeyDown={handleSearchKeyDown}
               placeholder={t('flowChatHeader.searchPlaceholder')}
               aria-label={t('flowChatHeader.searchPlaceholder')}
-              error={hasNoResults}
+              aria-invalid={hasNoResults}
+              variant="search"
             />
             <IconButton
               className="flowchat-header__search-close"

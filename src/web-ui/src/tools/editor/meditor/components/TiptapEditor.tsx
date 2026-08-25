@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details';
@@ -19,7 +19,6 @@ import type { Editor as TiptapEditorInstance, JSONContent } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Selection } from '@tiptap/pm/state';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input } from '@/component-library';
 import { editorAiAPI } from '@/infrastructure/api/service-api/EditorAiAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -1239,11 +1238,8 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
               >
                 <Input
                   ref={inlineAiInputRef}
-                  variant="filled"
-                  inputSize="medium"
-                  className="m-editor-inline-ai__composer-input"
                   data-testid="md-inline-ai-input"
-                  prefix={<PenLine size={14} strokeWidth={1.75} />}
+                  leadingIcon={<PenLine size={14} strokeWidth={1.75} />}
                   value={inlineAiState.query}
                   onChange={(event) => {
                     const nextValue = event.target.value;
@@ -1283,7 +1279,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                       void handleContinueWriting();
                     }
                   }}
-                  suffix={(
+                  trailingContent={(
                     <div className="m-editor-inline-ai__composer-actions">
                       <span className="m-editor-inline-ai__page-chip">{t('editor.meditor.inlineAi.currentPage')}</span>
                       <IconButton

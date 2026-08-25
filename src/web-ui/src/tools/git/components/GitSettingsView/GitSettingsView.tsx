@@ -1,6 +1,6 @@
 /** Git settings view. */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
+import { Tabs, TabPane, Select, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -171,7 +171,6 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
             {t('settingsView.sections.user.nameLabel')}
           </label>
           <Input
-            className="bitfun-git-settings-view__form-input"
             type="text"
             value={config.user.name}
             onChange={(e) => updateUserConfig('name', e.target.value)}
@@ -185,7 +184,6 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
             {t('settingsView.sections.user.emailLabel')}
           </label>
           <Input
-            className="bitfun-git-settings-view__form-input"
             type="email"
             value={config.user.email}
             onChange={(e) => updateUserConfig('email', e.target.value)}
@@ -245,7 +243,6 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
             <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
               <label className="bitfun-git-settings-view__form-label">{t('settingsView.sections.remotes.urlLabel')}</label>
               <Input
-                className="bitfun-git-settings-view__form-input"
                 type="text"
                 value={remote?.url || ''}
                 onChange={(e) => updateRemoteConfig(name, 'url', e.target.value)}
@@ -286,7 +283,6 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
             <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
               <label className="bitfun-git-settings-view__form-label">{t('settingsView.sections.branch.remoteLabel')}</label>
               <Input
-                className="bitfun-git-settings-view__form-input"
                 type="text"
                 value={branchConfig.remote || ''}
                 readOnly
@@ -295,7 +291,6 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
             <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
               <label className="bitfun-git-settings-view__form-label">{t('settingsView.sections.branch.mergeLabel')}</label>
               <Input
-                className="bitfun-git-settings-view__form-input"
                 type="text"
                 value={branchConfig.merge || ''}
                 readOnly
