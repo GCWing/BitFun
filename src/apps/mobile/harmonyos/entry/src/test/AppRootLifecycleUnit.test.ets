@@ -98,6 +98,15 @@ export default function appRootLifecycleUnitTest() {
       expect(runtime.handleRootBack()).assertFalse();
     });
 
+    it('dismisses the connect sheet before navigating back', 0, () => {
+      const runtime = new TestAppRootRuntime();
+      runtime.openConnectSheet();
+
+      expect(runtime.appShellState.showConnectSheet).assertTrue();
+      expect(runtime.handleRootBack()).assertTrue();
+      expect(runtime.appShellState.showConnectSheet).assertFalse();
+    });
+
     it('invalidates and closes preview when the remote target changes', 0, () => {
       const runtime = new TestAppRootRuntime();
       runtime.filePreviewState.begin(new FilePreviewTarget(

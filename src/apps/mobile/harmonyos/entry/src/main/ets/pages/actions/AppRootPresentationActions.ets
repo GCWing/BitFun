@@ -72,14 +72,8 @@ export interface SidebarPresentationActions {
   readonly close: () => void;
   readonly newChat: () => void;
   readonly enterCode: () => void;
-  /** Opens the QR scanner directly from the signed-out sidebar. */
+  /** Opens the QR scanner directly from sidebar device actions. */
   readonly scanDesktop: () => void;
-  /**
-   * Pair with or pick a desktop. Distinct from `enterCode`, which only moves
-   * the visible surface to Remote: a row labelled "connect a desktop" has to
-   * open the connect sheet, or it navigates to a placeholder and stops there.
-   */
-  readonly connectDesktop: () => void;
   readonly settings: () => void;
   readonly openAccount: () => void;
   readonly openSession: (session: RemoteSession) => void;
@@ -141,7 +135,7 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {}, send: () => {}
     },
     onSidebar: {
-      close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {}, connectDesktop: () => {},
+      close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {},
       settings: () => {}, openAccount: () => {},
       openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
     },

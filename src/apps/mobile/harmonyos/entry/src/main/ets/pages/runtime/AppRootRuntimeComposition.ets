@@ -895,7 +895,6 @@ export abstract class AppRootRuntimeComposition {
       newChat: (): void => { this.closeAppSidebar(); this.conversationController.prepareNewGeneralChat(); },
       enterCode: (): void => { this.closeAppSidebar(); this.enterCodeEntry(); },
       scanDesktop: (): void => { this.closeAppSidebar(); this.openConnectSheet(CONNECT_INTENT_SCAN); },
-      connectDesktop: (): void => { this.closeAppSidebar(); this.openConnectSheet(); },
       settings: (): void => { this.closeAppSidebar(); this.appShellState.openSettings('general'); },
       openAccount: (): void => {
         this.closeAppSidebar();

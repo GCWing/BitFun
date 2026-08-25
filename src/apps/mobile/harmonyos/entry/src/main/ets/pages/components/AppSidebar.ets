@@ -37,7 +37,6 @@ export struct AppSidebar {
   @Event onClose: () => void = () => {};
   @Event onNewChat: () => void = () => {};
   @Event onEnterCode: () => void = () => {};
-  @Event onScanDesktop: () => void = () => {};
   @Event onCollapse: () => void = () => {};
   @Event onOpenViewSettings: () => void = () => {};
   @Event onSearchQueryChange: (query: string) => void = (_query: string) => {};
@@ -91,7 +90,7 @@ export struct AppSidebar {
           }
           .width('100%')
           .alignItems(HorizontalAlign.Start)
-          .padding({ bottom: this.isAccountAuthenticated() ? 84 : 140 })
+          .padding({ bottom: this.isAccountAuthenticated() ? 84 : 120 })
         }
         .width('100%')
         .height('100%')
@@ -104,7 +103,7 @@ export struct AppSidebar {
         // visually sliced by the chat button sitting on top of it.
         Column()
           .width('100%')
-          .height(this.isAccountAuthenticated() ? 92 : 140)
+          .height(this.isAccountAuthenticated() ? 92 : 120)
           .hitTestBehavior(HitTestMode.None)
           .linearGradient({
             angle: 180,
@@ -348,20 +347,7 @@ export struct AppSidebar {
 
   @Builder
   private SignedOutFooter() {
-    Column({ space: 10 }) {
-      Button(RemoteI18n.t('sidebar.scanToConnect'))
-        .width('100%')
-        .height(48)
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(INK)
-        .backgroundColor(CARD)
-        .border({ width: 1, color: LINE })
-        .borderRadius(16)
-        .onClick(() => {
-          this.onScanDesktop();
-        })
-
+    Column({ space: 8 }) {
       Button(RemoteI18n.t('sidebar.signInBitFunAccount'))
         .width('100%')
         .height(48)
@@ -373,6 +359,14 @@ export struct AppSidebar {
         .onClick(() => {
           this.onOpenAccount();
         })
+
+      Text(RemoteI18n.t('sidebar.signInHint'))
+        .width('100%')
+        .fontSize(12)
+        .lineHeight(17)
+        .fontColor(MUTED)
+        .textAlign(TextAlign.Center)
+        .maxLines(2)
     }
       .width('100%')
       .zIndex(2)
