@@ -390,3 +390,19 @@ test('fails closed when paths or event ranges are invalid or unavailable', (t) =
     assert.deepEqual(JSON.parse(result.outputs.desktop_platforms), allPlatforms);
   }
 });
+
+test('rejects tracked Rust sources that reference the Web UI source tree', (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'bitfun-build-impact-boundary-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  git(root, ['init', '--initial-branch=main']);
+  writeFileSync(path.join(root, 'README.md'), 'baseline\n');
+  const base = commit(root, 'baseline');
+  const rustFile = path.join(root, 'src/lib.rs');
+  mkdirSync(path.dirname(rustFile), { recursive: true });
+  writeFileSync(rustFile, 'const WEB: &str = include_dir!("../web-ui/src");\n');
+  const head = commit(root, 'forbidden Rust input');
+
+  const result = runClassifier(root, base, head);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Rust source must not reference the Web UI source tree/);
+});

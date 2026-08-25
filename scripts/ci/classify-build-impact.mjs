@@ -2,6 +2,8 @@ import { appendFileSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { rustWebUiSourceBoundaryRule } from '../core-boundaries/rules/source-rules.mjs';
+import { scanForbiddenContentUnder } from '../core-boundaries/source-content-checks.mjs';
 
 function readArg(args, name) {
   const index = args.indexOf(name);
@@ -366,6 +368,18 @@ export function run(args = process.argv.slice(2), env = process.env) {
       'Usage: classify-build-impact.mjs --base <sha> --head <sha> '
       + '[--range-mode direct|merge-base]',
     );
+  }
+
+  const boundaryFindings = scanForbiddenContentUnder(
+    process.cwd(),
+    rustWebUiSourceBoundaryRule,
+  );
+  if (boundaryFindings.length > 0) {
+    const details = boundaryFindings
+      .slice(0, 20)
+      .map((finding) => `${finding.repoPath}:${finding.line}: ${finding.message}`)
+      .join('\n');
+    throw new Error(`${rustWebUiSourceBoundaryRule.reason}\n${details}`);
   }
 
   let paths = [];

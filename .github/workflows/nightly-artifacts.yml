@@ -89,6 +89,12 @@ jobs:
         with:
           ref: ${{ inputs.checkout_ref }}
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+          no-cache: true
+
       - name: Install Linux system dependencies (Tauri bundler)
         if: runner.os == 'Linux'
         shell: bash
@@ -171,6 +177,11 @@ jobs:
           if grep -Fq 'Error: Found version mismatched Tauri packages.' <<<"$info"; then
             exit 1
           fi
+
+      - name: Build plugin Host resources
+        run: |
+          bun install --cwd src/apps/extension-host --frozen-lockfile
+          bun run --cwd src/apps/extension-host build
 
       - name: Generate web API bindings
         run: pnpm --dir src/web-ui run gen:types
