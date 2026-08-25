@@ -2916,14 +2916,14 @@ mod tests {
         let executable = std::env::current_exe().expect("test executable");
         let test_name =
             "dispatch::store::tests::cross_process_reader_and_writer_remain_consistent_during_rotation";
-        let mut reader = std::process::Command::new(&executable)
+        let mut reader = bitfun_services_core::process_manager::create_command(&executable)
             .args(["--exact", test_name, "--nocapture"])
             .env(MODE_ENV, "reader")
             .env(ROOT_ENV, &root)
             .env(DONE_ENV, &done)
             .spawn()
             .expect("spawn stress reader");
-        let writer = std::process::Command::new(&executable)
+        let writer = bitfun_services_core::process_manager::create_command(&executable)
             .args(["--exact", test_name, "--nocapture"])
             .env(MODE_ENV, "writer")
             .env(ROOT_ENV, &root)
@@ -3076,20 +3076,22 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let bitfun_home = dir.path().join("bitfun-home");
         let user_root = dir.path().join("user-root");
-        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
-            .args([
-                "--exact",
-                "dispatch::store::tests::default_store_honors_path_manager_storage_overrides",
-                "--nocapture",
-            ])
-            .env(CHILD_ENV, &bitfun_home)
-            .env("BITFUN_HOME", &bitfun_home)
-            .env("BITFUN_USER_ROOT", &user_root)
-            .env("BITFUN_E2E_STORAGE_GUARD", "1")
-            .env_remove("BITFUN_E2E_HOME")
-            .env_remove("BITFUN_E2E_USER_ROOT")
-            .output()
-            .expect("run isolated path test");
+        let output = bitfun_services_core::process_manager::create_command(
+            std::env::current_exe().expect("test executable"),
+        )
+        .args([
+            "--exact",
+            "dispatch::store::tests::default_store_honors_path_manager_storage_overrides",
+            "--nocapture",
+        ])
+        .env(CHILD_ENV, &bitfun_home)
+        .env("BITFUN_HOME", &bitfun_home)
+        .env("BITFUN_USER_ROOT", &user_root)
+        .env("BITFUN_E2E_STORAGE_GUARD", "1")
+        .env_remove("BITFUN_E2E_HOME")
+        .env_remove("BITFUN_E2E_USER_ROOT")
+        .output()
+        .expect("run isolated path test");
         assert!(
             output.status.success(),
             "isolated child failed:\nstdout:\n{}\nstderr:\n{}",

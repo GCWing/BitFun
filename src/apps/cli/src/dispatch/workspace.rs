@@ -1573,7 +1573,7 @@ fn commit_exists(repo: &Path, commit: &str) -> Result<bool> {
 }
 
 fn git_command(dir: &Path) -> Command {
-    let mut command = Command::new("git");
+    let mut command = bitfun_services_core::process_manager::create_command("git");
     command
         .current_dir(dir)
         // A detached dispatch worker has nobody to answer a credential or
@@ -2419,20 +2419,22 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let bitfun_home = dir.path().join("bitfun-home");
         let user_root = dir.path().join("user-root");
-        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
-            .args([
-                "--exact",
-                "dispatch::workspace::tests::completed_clean_sync_poll_returns_the_durable_result",
-                "--nocapture",
-            ])
-            .env(CHILD_ENV, &bitfun_home)
-            .env("BITFUN_HOME", &bitfun_home)
-            .env("BITFUN_USER_ROOT", &user_root)
-            .env("BITFUN_E2E_STORAGE_GUARD", "1")
-            .env_remove("BITFUN_E2E_HOME")
-            .env_remove("BITFUN_E2E_USER_ROOT")
-            .output()
-            .expect("run isolated clean-sync poll test");
+        let output = bitfun_services_core::process_manager::create_command(
+            std::env::current_exe().expect("test executable"),
+        )
+        .args([
+            "--exact",
+            "dispatch::workspace::tests::completed_clean_sync_poll_returns_the_durable_result",
+            "--nocapture",
+        ])
+        .env(CHILD_ENV, &bitfun_home)
+        .env("BITFUN_HOME", &bitfun_home)
+        .env("BITFUN_USER_ROOT", &user_root)
+        .env("BITFUN_E2E_STORAGE_GUARD", "1")
+        .env_remove("BITFUN_E2E_HOME")
+        .env_remove("BITFUN_E2E_USER_ROOT")
+        .output()
+        .expect("run isolated clean-sync poll test");
         assert!(
             output.status.success(),
             "isolated child failed:\nstdout:\n{}\nstderr:\n{}",

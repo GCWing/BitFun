@@ -6,7 +6,6 @@ mod worker;
 mod workspace;
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_core::infrastructure::ai::AIClientFactory;
@@ -853,7 +852,7 @@ fn classify_repository_probe(result: Result<GitProbeOutput, GitProbeOutput>) -> 
 /// below matches Git's English prose, and a localized host would otherwise make
 /// an ownership rejection unrecognizable.
 fn git_probe(workspace: &Path, args: &[&str]) -> Result<GitProbeOutput, GitProbeOutput> {
-    let output = Command::new("git")
+    let output = bitfun_services_core::process_manager::create_command("git")
         .env("LC_ALL", "C")
         .arg("-C")
         .arg(workspace)

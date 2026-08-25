@@ -2,7 +2,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bitfun_services_integrations::function_agents::FunctionAgentGitService;
@@ -74,7 +73,7 @@ fn git(repo: &Path, args: &[&str]) {
 }
 
 fn git_with_env(repo: &Path, args: &[&str], envs: &[(&str, &str)]) {
-    let mut command = Command::new("git");
+    let mut command = bitfun_services_core::process_manager::create_command("git");
     command.args(args).current_dir(repo);
     for (key, value) in envs {
         command.env(key, value);

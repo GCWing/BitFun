@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 
 const PLUGIN_SOURCE: &[u8] = br#"
 import { type Plugin, tool } from "@opencode-ai/plugin"
@@ -42,7 +42,7 @@ fn write_package(workspace: &Path, source: &[u8], declared_hash: &str) {
 
 fn run_cli(workspace: &Path, user_root: &Path, home_root: &Path, args: &[&str]) -> Output {
     let config_root = user_root.join("host-config");
-    Command::new(env!("CARGO_BIN_EXE_bitfun"))
+    bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
         .args(args)
         .current_dir(workspace)
         .env_remove("BITFUN_USER_ROOT")
@@ -120,18 +120,19 @@ fn plugin_source_cli_rejects_unavailable_product_paths() {
     let config_root = temp.path().join("host-config");
     std::fs::create_dir_all(&workspace).expect("create workspace");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_bitfun"))
-        .args(["plugins", "list"])
-        .current_dir(&workspace)
-        .env_remove("BITFUN_USER_ROOT")
-        .env_remove("BITFUN_HOME")
-        .env_remove("BITFUN_E2E_USER_ROOT")
-        .env_remove("BITFUN_E2E_HOME")
-        .env("BITFUN_E2E_STORAGE_GUARD", "1")
-        .env("APPDATA", &config_root)
-        .env("XDG_CONFIG_HOME", &config_root)
-        .output()
-        .expect("run bitfun");
+    let output =
+        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+            .args(["plugins", "list"])
+            .current_dir(&workspace)
+            .env_remove("BITFUN_USER_ROOT")
+            .env_remove("BITFUN_HOME")
+            .env_remove("BITFUN_E2E_USER_ROOT")
+            .env_remove("BITFUN_E2E_HOME")
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env("APPDATA", &config_root)
+            .env("XDG_CONFIG_HOME", &config_root)
+            .output()
+            .expect("run bitfun");
 
     assert!(!output.status.success());
     assert!(stderr(&output).contains("Configuration error"));

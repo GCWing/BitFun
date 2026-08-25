@@ -492,7 +492,7 @@ mod tests {
 
     #[cfg(windows)]
     fn process_is_alive(pid: u32) -> bool {
-        std::process::Command::new("powershell.exe")
+        crate::process_manager::create_command("powershell.exe")
             .arg("-NoProfile")
             .arg("-NonInteractive")
             .arg("-Command")

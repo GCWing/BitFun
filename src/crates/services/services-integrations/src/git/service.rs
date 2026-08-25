@@ -1531,10 +1531,10 @@ fn ensure_worktree_directory_excluded(common_git_dir: &Path) -> Result<(), GitEr
 #[cfg(test)]
 mod review_path_tests {
     use super::{review_path_has_parent_traversal, GitLogParams, GitService};
-    use std::{fs, path::Path, process::Command};
+    use std::{fs, path::Path};
 
     fn git(root: &Path, args: &[&str], commit_date: Option<&str>) {
-        let mut command = Command::new("git");
+        let mut command = bitfun_services_core::process_manager::create_command("git");
         command.current_dir(root).args(args);
         if let Some(commit_date) = commit_date {
             command
