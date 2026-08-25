@@ -631,19 +631,21 @@ mod tests {
 
     #[cfg(feature = "product-full")]
     #[test]
-    fn product_capability_provider_plan_covers_registry_manifest_in_order() {
+    fn product_capability_provider_plan_covers_registry_manifest_without_owning_order() {
         let assembly = bitfun_product_capabilities::default_product_capability_assembly();
-        let provider_tools = assembly
+        let mut provider_tools = assembly
             .tool_provider_group_plan()
             .iter()
             .flat_map(|group| group.tool_names())
             .map(|tool_name| tool_name.to_string())
             .collect::<Vec<_>>();
+        let mut registry_tools = create_tool_registry().get_tool_names();
+        provider_tools.sort();
+        registry_tools.sort();
 
         assert_eq!(
-            provider_tools,
-            create_tool_registry().get_tool_names(),
-            "provider-based assembly must preserve the existing builtin registry order"
+            provider_tools, registry_tools,
+            "provider-based assembly must cover the existing builtin registry manifest"
         );
     }
 
@@ -661,11 +663,16 @@ mod tests {
             vec![
                 "core.basic",
                 "core.agent",
-                "core.canvas",
                 "core.session",
-                "core.integration"
+                "core.git",
+                "core.web",
+                "core.mcp",
+                "core.computer-use",
+                "core.review",
+                "core.miniapp",
+                "core.canvas",
             ],
-            "provider groups must stay stable until concrete tool-pack owners exist"
+            "provider groups must preserve the reviewed atomic ownership order"
         );
     }
 

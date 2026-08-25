@@ -145,19 +145,16 @@ const CORE_BASIC_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
     ToolPackFeatureGroup::Basic,
     ToolPackFeatureGroup::ImageAnalysis,
 ];
-const CORE_AGENT_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
-    ToolPackFeatureGroup::AgentControl,
-    ToolPackFeatureGroup::Git,
-];
+const CORE_AGENT_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::AgentControl];
+const CORE_REVIEW_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::AgentControl];
 const CORE_CANVAS_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Canvas];
 const CORE_SESSION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::AgentControl];
-const CORE_INTEGRATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
-    ToolPackFeatureGroup::BrowserWeb,
-    ToolPackFeatureGroup::Mcp,
-    ToolPackFeatureGroup::Git,
-    ToolPackFeatureGroup::MiniApp,
-    ToolPackFeatureGroup::ComputerUse,
-];
+const CORE_GIT_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Git];
+const CORE_WEB_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::BrowserWeb];
+const CORE_MCP_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Mcp];
+const CORE_COMPUTER_USE_FEATURE_GROUPS: &[ToolPackFeatureGroup] =
+    &[ToolPackFeatureGroup::ComputerUse];
+const CORE_MINIAPP_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::MiniApp];
 
 const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
@@ -186,7 +183,6 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
         tool_names: &[
             "Task",
             "AgentWait",
-            "LaunchReviewAgent",
             "Skill",
             "AskUserQuestion",
             "TodoWrite",
@@ -194,16 +190,9 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "create_goal",
             "update_goal",
             "CreatePlan",
-            "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
-            "GetFileDiff",
         ],
-    },
-    ToolProviderGroupPlan {
-        provider_id: "core.canvas",
-        feature_groups: CORE_CANVAS_FEATURE_GROUPS,
-        tool_names: &["CreateCanvas", "ReadCanvas", "UpdateCanvas", "PatchCanvas"],
     },
     ToolProviderGroupPlan {
         provider_id: "core.session",
@@ -211,29 +200,53 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
         tool_names: &["SessionControl", "SessionMessage", "SessionHistory", "Cron"],
     },
     ToolProviderGroupPlan {
-        provider_id: "core.integration",
-        feature_groups: CORE_INTEGRATION_FEATURE_GROUPS,
+        provider_id: "core.git",
+        feature_groups: CORE_GIT_FEATURE_GROUPS,
+        tool_names: &["GetFileDiff", "Git", "Worktree", "ReviewPlatform"],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.web",
+        feature_groups: CORE_WEB_FEATURE_GROUPS,
+        tool_names: &["WebSearch", "WebFetch", "ControlHub"],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.mcp",
+        feature_groups: CORE_MCP_FEATURE_GROUPS,
         tool_names: &[
-            "WebSearch",
-            "WebFetch",
             "ListMCPResources",
             "ReadMCPResource",
             "ListMCPPrompts",
             "GetMCPPrompt",
+        ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.computer-use",
+        feature_groups: CORE_COMPUTER_USE_FEATURE_GROUPS,
+        tool_names: &["ComputerUse"],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.review",
+        feature_groups: CORE_REVIEW_FEATURE_GROUPS,
+        tool_names: &["LaunchReviewAgent", "submit_code_review"],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.miniapp",
+        feature_groups: CORE_MINIAPP_FEATURE_GROUPS,
+        tool_names: &[
             "GenerativeUI",
-            "Git",
-            "Worktree",
-            "ReviewPlatform",
             "InitMiniApp",
             "FinalizeMiniApp",
             "PublishMiniApp",
             "PublishAppearance",
             "PageDeploy",
             "PagePublish",
-            "ControlHub",
-            "ComputerUse",
             "Playbook",
         ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.canvas",
+        feature_groups: CORE_CANVAS_FEATURE_GROUPS,
+        tool_names: &["CreateCanvas", "ReadCanvas", "UpdateCanvas", "PatchCanvas"],
     },
 ];
 
@@ -431,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn product_provider_group_plan_preserves_core_runtime_order() {
+    fn product_provider_group_plan_exposes_atomic_runtime_owners() {
         let provider_ids = product_tool_provider_group_plan()
             .iter()
             .map(|group| group.provider_id())
@@ -442,15 +455,20 @@ mod tests {
             vec![
                 "core.basic",
                 "core.agent",
-                "core.canvas",
                 "core.session",
-                "core.integration"
+                "core.git",
+                "core.web",
+                "core.mcp",
+                "core.computer-use",
+                "core.review",
+                "core.miniapp",
+                "core.canvas",
             ]
         );
     }
 
     #[test]
-    fn product_provider_group_plan_preserves_builtin_tool_order() {
+    fn product_provider_group_plan_keeps_stable_atomic_owner_tool_listings() {
         let tool_names = product_tool_provider_group_plan()
             .iter()
             .flat_map(|group| group.tool_names().iter().copied())
@@ -475,7 +493,6 @@ mod tests {
                 "ListModels",
                 "Task",
                 "AgentWait",
-                "LaunchReviewAgent",
                 "Skill",
                 "AskUserQuestion",
                 "TodoWrite",
@@ -483,37 +500,38 @@ mod tests {
                 "create_goal",
                 "update_goal",
                 "CreatePlan",
-                "submit_code_review",
                 "GetToolSpec",
                 "CallDeferredTool",
-                "GetFileDiff",
-                "CreateCanvas",
-                "ReadCanvas",
-                "UpdateCanvas",
-                "PatchCanvas",
                 "SessionControl",
                 "SessionMessage",
                 "SessionHistory",
                 "Cron",
+                "GetFileDiff",
+                "Git",
+                "Worktree",
+                "ReviewPlatform",
                 "WebSearch",
                 "WebFetch",
+                "ControlHub",
                 "ListMCPResources",
                 "ReadMCPResource",
                 "ListMCPPrompts",
                 "GetMCPPrompt",
+                "ComputerUse",
+                "LaunchReviewAgent",
+                "submit_code_review",
                 "GenerativeUI",
-                "Git",
-                "Worktree",
-                "ReviewPlatform",
                 "InitMiniApp",
                 "FinalizeMiniApp",
                 "PublishMiniApp",
                 "PublishAppearance",
                 "PageDeploy",
                 "PagePublish",
-                "ControlHub",
-                "ComputerUse",
                 "Playbook",
+                "CreateCanvas",
+                "ReadCanvas",
+                "UpdateCanvas",
+                "PatchCanvas",
             ]
         );
     }
@@ -538,29 +556,30 @@ mod tests {
             feature_groups,
             vec![
                 ("core.basic", vec!["basic", "image-analysis"]),
-                ("core.agent", vec!["agent-control", "git"]),
-                ("core.canvas", vec!["canvas"]),
+                ("core.agent", vec!["agent-control"]),
                 ("core.session", vec!["agent-control"]),
-                (
-                    "core.integration",
-                    vec!["browser-web", "mcp", "git", "miniapp", "computer-use",]
-                ),
+                ("core.git", vec!["git"]),
+                ("core.web", vec!["browser-web"]),
+                ("core.mcp", vec!["mcp"]),
+                ("core.computer-use", vec!["computer-use"]),
+                ("core.review", vec!["agent-control"]),
+                ("core.miniapp", vec!["miniapp"]),
+                ("core.canvas", vec!["canvas"]),
             ]
         );
     }
 
     #[test]
     fn product_provider_group_plan_selector_preserves_product_plan_order_for_requested_ids() {
-        let plan =
-            try_product_tool_provider_group_plan_for_ids(&["core.integration", "core.basic"])
-                .expect("known provider groups should select");
+        let plan = try_product_tool_provider_group_plan_for_ids(&["core.mcp", "core.basic"])
+            .expect("known provider groups should select");
 
         let provider_ids = plan
             .iter()
             .map(|group| group.provider_id())
             .collect::<Vec<_>>();
 
-        assert_eq!(provider_ids, vec!["core.basic", "core.integration"]);
+        assert_eq!(provider_ids, vec!["core.basic", "core.mcp"]);
     }
 
     #[test]

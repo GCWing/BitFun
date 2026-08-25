@@ -681,21 +681,6 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/harness.rs',
-    patterns: [
-      {
-        regex: /\bproduct_assembly_plan_for_profile\b/,
-        message:
-          'core agentic harness facade must not rebuild product assembly plans; use bitfun-product-capabilities harness registry entrypoints',
-      },
-      {
-        regex: /\bfn product_harness_registry_for_profile\b/,
-        message:
-          'core agentic harness facade must not own profile-scoped harness registry construction',
-      },
-    ],
-  },
-  {
     path: 'src/crates/assembly/core/src/agentic/persistence/session_branch.rs',
     patterns: [
       {
@@ -1418,16 +1403,6 @@ export const forbiddenContentRules = [
   {
     path: 'src/crates/assembly/product-capabilities/src/lib.rs',
     patterns: [
-      {
-        regex: /\bpub struct HarnessProviderDescriptor\b/,
-        message:
-          'product-capabilities must not redefine provider-neutral harness descriptors; use bitfun-harness',
-      },
-      {
-        regex: /\bfn build_harness_registry_from_descriptors\b/,
-        message:
-          'product-capabilities must not own descriptor registry construction; use bitfun-harness',
-      },
       {
         regex: /\bpub enum ProductCapabilityBuildError\b/,
         message:

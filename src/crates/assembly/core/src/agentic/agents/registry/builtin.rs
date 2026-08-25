@@ -1,7 +1,7 @@
 use super::types::{AgentEntry, AgentSource};
 use super::visibility::SubagentVisibilityPolicy;
 use super::AgentRegistry;
-use crate::agentic::agents::registry::catalog::builtin_agent_specs;
+use crate::agentic::agents::registry::catalog::{builtin_agent_specs, builtin_agent_specs_for_ids};
 use crate::agentic::agents::{Agent, AgentCategory, SubAgentSource};
 use bitfun_agent_runtime::agents as runtime_agents;
 use log::error;
@@ -14,6 +14,18 @@ pub(crate) fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static s
 
 impl AgentRegistry {
     pub(crate) fn build_builtin_agents() -> HashMap<String, AgentEntry> {
+        Self::build_builtin_agents_from_specs(builtin_agent_specs())
+    }
+
+    fn build_builtin_agents_for_ids(agent_ids: &[&str]) -> HashMap<String, AgentEntry> {
+        Self::build_builtin_agents_from_specs(builtin_agent_specs_for_ids(
+            agent_ids.iter().copied(),
+        ))
+    }
+
+    fn build_builtin_agents_from_specs(
+        specs: Vec<crate::agentic::agents::registry::catalog::BuiltinAgentSpec>,
+    ) -> HashMap<String, AgentEntry> {
         let mut agents = HashMap::new();
 
         let register = |agents: &mut HashMap<String, AgentEntry>,
@@ -39,7 +51,7 @@ impl AgentRegistry {
             );
         };
 
-        for spec in builtin_agent_specs() {
+        for spec in specs {
             let source = if spec.category == AgentCategory::SubAgent {
                 Some(SubAgentSource::Builtin)
             } else {
@@ -59,8 +71,17 @@ impl AgentRegistry {
 
     /// Create a new agent registry with built-in agents
     pub fn new() -> Self {
+        Self::from_builtin_agents(Self::build_builtin_agents())
+    }
+
+    pub(crate) fn for_profile(profile: bitfun_product_capabilities::DeliveryProfile) -> Self {
+        let plan = bitfun_product_capabilities::product_assembly_plan_for_profile(profile);
+        Self::from_builtin_agents(Self::build_builtin_agents_for_ids(plan.agent_ids()))
+    }
+
+    fn from_builtin_agents(agents: HashMap<String, AgentEntry>) -> Self {
         Self {
-            agents: std::sync::RwLock::new(Self::build_builtin_agents()),
+            agents: std::sync::RwLock::new(agents),
             project_subagents: std::sync::RwLock::new(HashMap::new()),
             user_custom_agents_loaded: std::sync::RwLock::new(false),
             external_subagents: std::sync::Arc::new(

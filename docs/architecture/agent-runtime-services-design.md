@@ -16,7 +16,7 @@ Shared Agent Runtime 与 Plugin Host 的进程关系见
 本文中的接口片段只说明依赖方向和职责，不自动构成当前 API 或实施承诺。当前接口名称、字段和消费方以代码为准；
 新增公共类型前必须有真实生产调用方、版本边界和验证路径。现有 `agent-runtime::sdk` 是
 Rust Runtime SDK（当前 preview），不是公开 Python/TypeScript BitFun Agent SDK。CLI、ACP、
-Desktop 仍保留 `bitfun-core/product-full` 兼容 owner。CLI 与 CLI 托管的 ACP server 已消费各自的产品组装结果；
+Desktop 仍复用 `bitfun-core` 的兼容 owner；只有 Desktop 与本机兼容 Server Host 选择 `product-full`。CLI 与 CLI 托管的 ACP server 已消费各自的产品组装结果；
 Desktop 主交互只消费由现有 Core 归属模块构造的少量应用接口，尚未组装完整 Desktop profile。这些接入都不等于
 协调器、调度器、持久化或工具执行 owner 已迁移；ACP 的完整持久化历史、模型/模式目录与提供方配置、MCP、客户端路径与
 Desktop 的其余入口仍保留明确的兼容边界，活动会话的模型/模式写入已通过 Agent Runtime API 回到 Core owner。
@@ -68,7 +68,7 @@ Agent Runtime API 的逻辑归属与物理部署分离：相同归属模块可�
 私有 SDK Host 或目标机器 Runtime 中。任何 Rust 部署都只管理自己进程树内的服务与 Node/Bun Plugin Host；不能因为多个
 GUI/TUI/Remote Client 连接就复制 Runtime 状态模块，或按 Client/Workspace 创建 Plugin Host。
 
-Rust Runtime SDK 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v6 preview：
+Rust Runtime SDK 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v8 preview：
 小版本更新允许增加可选 builder hook、有默认实现的端口方法或注册表查询能力，但不得向外部可用
 Rust 结构体字面量（struct literal）构造的 DTO 直接增加字段，也不得改变既有端口语义、错误分类、session / turn 标识含义或
 默认 feature 依赖。任何需要调用方改写现有嵌入代码的变更，必须提升接口版本并提供兼容迁移路径。
@@ -85,9 +85,15 @@ v4 将活动 Turn 的文本 steer 纳入 `AgentDialogTurnPort`，复用同一个
 
 v6 将完整 Rust Runtime SDK 从空默认编译面移入 `agent-runtime` owner feature。现有 Rust embedder
 迁移时在 `bitfun-agent-runtime` 依赖上显式选择 `features = ["agent-runtime"]`；启用后 `sdk` 模块、
-公开路径和运行时行为保持不变。只消费 DeepResearch 编号或 Hook 设置的调用方应分别选择
-`deep-research` 或 `native-hook-settings`，不需要继承完整 Runtime。仓库内最小 SDK example 通过
+公开路径和运行时行为保持不变。只消费 Hook 设置的调用方选择
+`native-hook-settings`，不需要继承完整 Runtime。DeepResearch 编号策略归
+`agent-workflows`，不再通过 Agent Runtime feature 暴露。仓库内最小 SDK example 通过
 `required-features = ["agent-runtime"]` 明确记录这一版本边界。
+
+v7 增加持久 Session 的显式卸载，用于 SDK Host 重启后的恢复与同 Session 单写释放。
+
+v8 删除从未接入真实执行路径的 Harness descriptor registry、builder 注入和查询接口。命名工作流由
+Product Assembly 选择并在 `agent-workflows` / 现有产品 owner 中执行，SDK 调用方无需安装或注入另一套工作流框架。
 
 只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有具体服务管理器、读取产品命令
 注册表、理解 ACP/内部端口或依赖全局可变状态，公开 SDK 发布边界就不成立。公开 SDK 的完整
@@ -144,8 +150,8 @@ Server/WebSocket 或 OpenCode v1/v2 的版本化事件清单必须随真实消�
 |---|---|---|---|---|
 | 产品组装接口 | `src/crates/assembly/*` | 特性包、内核接口、执行层接口、运行时服务、平台提供方 | 智能体内部状态机、具体 UI 组件实现作为下层依赖 | 按产品形态组装能力，输出类型化运行时部件 |
 | 产品特性接口 | `product-capabilities`、`product-domains`、对应入口归属模块 | 内核接口、能力状态只读接口、能力/副作用接口、领域接口 | OS 具体实现、Tauri 句柄、执行层具体实现、最终权限策略 | 把内核能力映射为用户功能、入口视图和默认策略 |
-| Rust 内核接口 | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | 稳定接口、工具/工作流注册表、类型化服务 | `bitfun-core`、Tauri、Web UI、ACP 协议、提供方具体实现 | 会话 / 轮次 / 事件 / 权限 / 调度 / 上下文等 SDK 候选接口 |
-| 执行层接口 | `tool-contracts`、`tool-provider-groups`、`tool-execution`、`harness` | 稳定接口、运行时端口、注入的服务端口 | 产品注册表、UI、具体文件系统/Git/终端/MCP 客户端 | 工具、skills、MCP 工具桥接、沙箱、工作流执行语义 |
+| Rust 内核接口 | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | 稳定接口、通用 Agent/Tool/Hook 注册接口、类型化服务 | `bitfun-core`、命名产品工作流、Tauri、Web UI、ACP 协议、提供方具体实现 | 会话 / 轮次 / 事件 / 权限 / 调度 / 上下文等 SDK 候选接口 |
+| 执行层接口 | `agent-workflows`、`tool-contracts`、`tool-provider-groups`、`tool-execution` | 稳定接口、运行时端口、注入的服务端口 | 产品注册表、UI、具体文件系统/Git/终端/MCP 客户端 | 命名工作流策略、工具、skills、MCP 工具桥接、沙箱和执行语义 |
 | 扩展接口 | `PluginRuntimeClient` / OpenCode 兼容 / ACP 适配器归属模块 | Rust 内核接口、工具/事件/权限子接口、能力/副作用接口 | Web UI React 实现、Tauri 状态、内核权威状态写入 | 把外部生态能力转换为工具、Hook 变换、界面贡献和诊断 |
 | 平台/提供方适配器接口 | `services/*`、`adapters/*`、app-local provider | 运行时端口、稳定 DTO、允许的第三方库 | 产品特性、智能体内核状态机、UI 命令 | 实现文件系统、终端、网络、远端、Git、MCP 传输、AI 提供方等边界外 I/O |
 | 稳定数据接口 | `contracts/*` | 低层无行为依赖或标准序列化依赖 | 上层 crate、具体管理器、UI 渲染 | DTO、事件、端口、能力/副作用、权限、沙箱、审计、类型化错误 |
@@ -155,7 +161,8 @@ Server/WebSocket 或 OpenCode v1/v2 的版本化事件清单必须随真实消�
 - `contracts/*` 或 `runtime-ports` 依赖 `bitfun-core`、assembly、apps、UI 或具体服务。
 - `agent-runtime` 依赖 `bitfun-core`、Tauri、Web UI、ACP 协议、AI 提供方具体实现、MCP 客户端具体实现或 OS 服务管理器。
 - `tool-contracts` 依赖具体 service crate；`tool-execution` 依赖产品注册表、产品权限策略或具体 UI。
-- `harness` 依赖具体文件系统/Git/终端管理器；它只通过端口和提供方接口获取能力。
+- 禁止 `agent-runtime` 反向依赖 `agent-workflows`；命名工作流可以消费 Runtime / contracts，Runtime 不感知工作流名称。
+- 禁止 `agent-workflows` 依赖具体文件系统/Git/终端管理器；具体 I/O 由 Services 持有，工作流只保留无 I/O 决策或通过窄端口调用。
 - `plugin-runtime-client` 不能依赖 Web UI React 组件实现、Tauri app 状态或具体 core 管理器。
 - 产品特性直接依赖平台适配器具体实现、执行层具体实现、全局可变运行时状态或边界外资源客户端。
 
@@ -257,7 +264,7 @@ pub trait WorkspacePort: Send + Sync {
 
 ```text
 bitfun-runtime-services
-  bundle.rs             # RuntimeServices / ToolServices / HarnessServices
+  bundle.rs             # RuntimeServices / narrow service views
   builder.rs            # 类型化 builder
   capability.rs         # capability ids 与 availability
   registry.rs           # provider 注册
@@ -418,7 +425,6 @@ impl AgentRuntimeBuilder {
     pub fn with_services(self, services: RuntimeServices) -> Self;
     pub fn with_event_stream(self, events: AgentEventStream) -> Self;
     pub fn with_tool_registry(self, registry: Arc<dyn RuntimeToolRegistry>) -> Self;
-    pub fn with_harness_registry(self, registry: Arc<HarnessRegistry>) -> Self;
     pub fn with_hook_registry(self, hooks: RuntimeHookRegistry) -> Self;
     pub fn with_agent_registry(self, agents: Arc<dyn RuntimeAgentRegistry>) -> Self;
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError>;
@@ -432,7 +438,7 @@ impl AgentRuntime {
 该 Rust 接口是内部产品入口复用的当前形态，不是公开 Python/TypeScript SDK 的目标 API。它必须只接收
 已组装的类型化部件，不负责创建
 文件系统、终端、MCP、AI 客户端、Remote 提供方或产品命令。
-当前 v6 preview 接口以 message / attachment / metadata、默认标准执行目标和活动 Turn 文本 steer 作为最小输入形态；若把
+当前 v8 preview 接口以 message / attachment / metadata、默认标准执行目标和活动 Turn 文本 steer 作为最小输入形态；若把
 model-round cancellation token、结构化 AgentInput 或更复杂的事件游标纳入公开 SDK，
 必须分别评审 Rust Runtime SDK、SDK Host protocol 和公开 SDK API 的版本，并保留旧路径兼容。
 
@@ -665,76 +671,36 @@ pub struct ToolExecutionContext {
 
 ### 3.3 工作流层
 
-目标归属 crate：`bitfun-harness`。
+目标归属 crate：`bitfun-agent-workflows`。
 
 职责：
 
-- 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从运行时内核中分离。
-- 定义工作流描述符、路由计划、提供方注册表、工作流计划、步骤、策略、产物、
-  review gate 和 post-processor。
-- 通过 Agent Runtime API、工具运行时和服务端口编排。
+- 承载 DeepReview、DeepResearch 等按名称定义、可独立测试的工作流策略。
+- 复用 Agent Runtime 的通用 Session / Turn / Tool / Event 能力，不复制 Agent loop。
+- 将具体文件、Git、网络、终端和模型调用留在 Services 或当前兼容 owner。
 
-建议内部模块：
+当前最小模块：
 
 ```text
-bitfun-harness
-  provider.rs
-  registry.rs
-  plan.rs
-  context.rs
-  artifact.rs
-  hooks.rs
-  review_gate.rs
-  sdd/
-  deep_review/
-  deep_research/
-  miniapp/
-```
-
-核心接口：
-
-```rust
-#[async_trait::async_trait]
-pub trait HarnessProvider: Send + Sync {
-    fn id(&self) -> HarnessId;
-    fn capabilities(&self) -> HarnessCapabilities;
-
-    async fn plan(
-        &self,
-        ctx: HarnessPlanningContext,
-        input: HarnessInput,
-    ) -> Result<HarnessPlan, HarnessError>;
-
-    async fn execute(
-        &self,
-        ctx: HarnessExecutionContext,
-        plan: HarnessPlan,
-    ) -> Result<HarnessOutcome, HarnessError>;
-}
-
-pub struct HarnessExecutionContext {
-    pub runtime: Arc<AgentRuntime>,
-    pub tools: Arc<ToolRuntime>,
-    pub services: HarnessServices,
-    pub events: Arc<dyn RuntimeEventSink>,
-}
+agent-workflows
+  deep_research.rs   # citation renumbering and post-process gate
 ```
 
 设计约束：
 
-- 工作流允许编排运行时/工具，但不拥有会话管理器内部结构。
-- 工作流不直接访问具体文件系统 / Git / 终端。
+- `agent-workflows` 可以单向依赖 `agent-runtime` 和 contracts；`agent-runtime` 禁止依赖命名工作流。
+- 当前没有第二个可执行 provider，因此不建立通用 workflow trait、registry、descriptor 或 step engine。
+- 工作流策略保持无 I/O；需要编排 Runtime / Tool 时，只增加当前生产调用链所需的窄接口。
 - 产品命令只映射到工作流能力，不把命令展示逻辑下沉。
-- 新工作流通过提供方注册，不改 Agent Runtime 或 Agent Runtime API 的稳定用例。
-- 描述符专用或旧兼容接口只能表达路由计划；不得被描述为已经拥有具体工作流执行。
-  执行语义移动必须单独证明行为等价。
+- MiniApp、Canvas 是产品产物与呈现能力，不进入该 crate。
+- DeepReview 仍有兼容逻辑位于 `agent-runtime` 与 `assembly/core`；只有真实调用方切换、行为等价测试通过且旧写入方删除后，才算迁移完成。
 
 ## 4. 产品组装与扩展
 
 ### 4.1 产品组装
 
 产品组装是组装根，不是另一个业务内核。当前 `src/crates/assembly/product-capabilities` 已提供
-`DeliveryProfile`、静态能力计划、运行时服务校验、Harness 注册和插件运行时绑定；
+`DeliveryProfile`、静态能力计划、Agent ID / 原子工具组选择、运行时服务校验和插件运行时绑定；
 `src/crates/assembly/core` 仍承担 `bitfun-core` 兼容组装。现有 `ProductAssembler` 是具体结构体，
 通过 `assemble(ProductAssemblyInput)` 产生 `ProductRuntimeParts`，本文件不再为它定义第二套目标接口。
 
@@ -743,7 +709,7 @@ pub struct HarnessExecutionContext {
 SDK profile 当前从共享产品事实获得与 Headless CLI 相同的能力集合，但保持独立产品身份和
 `AgentSubmissionSource::SdkHost`；这不建立 CLI crate/协议依赖。Desktop 主交互直接从现有协调器和调度器端口构造窄口径
 Rust Runtime SDK，不注册未实现的 `RuntimeServices` 能力，也不宣称完整 Desktop profile 可用。CLI 通过
-一个调用级上下文把该 Rust 接口、Harness、能力注册、调用级权限和 Agentic 事件广播交给 TUI、Exec、Session、Usage 与
+一个调用级上下文把该 Rust 接口、能力注册、调用级权限和 Agentic 事件广播交给 TUI、Exec、Session、Usage 与
 交互模式下的 Peer Host。Rust Runtime SDK 已承接会话创建/列举/删除/基础恢复、重命名/归档、会话模型更新、thread-goal 查询、类型化转录读取、本地分支、用量生成、
 轮次提交/取消与精确结算、用户显式 Shell 命令，以及 CLI/TUI 的工具确认、拒绝和用户问题回答；Shell 命令通过窄端口回到 Core 的正常 ToolPipeline、权限、工作区路由和持久化 owner，不构成通用 Tool 或进程执行 API。固定 ID 创建使用独立的
 `create_session_with_id` 方法，普通创建 DTO 只增加可选工作区 ID 与模型 ID 事实，不承载调用方指定的会话 ID。
@@ -775,7 +741,7 @@ Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSn
 职责：
 
 - 接收入口唯一选择的 `DeliveryProfile` 与具体 `RuntimeServices`，生成静态能力计划并校验必需服务。
-- 构造 Harness 注册表和类型化 `PluginRuntimeBinding`；不使用全局注册表。
+- 输出 profile-scoped Agent ID / 原子工具组计划和类型化 `PluginRuntimeBinding`；不执行工作流或创建具体 provider。
 - 把组装结果交给运行时 builder；不拥有会话、工具执行、工作流执行或 UI 生命周期。
 - 对缺失服务和不支持的插件运行时返回类型化错误，不让下层按产品形态分支。
 - 产品定义、品牌资源、凭据、用户运行时配置和任意构建脚本不进入运行时组装输入。
@@ -801,7 +767,7 @@ Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSn
   `interfaces/sdk-host` 只保留版本化协议和连接用例。Host 不通过 CLI 启动，也不使用 CLI submission source。
 - CLI 的 `json` 输出为单结果文档，`stream-json` 直接复用现有 Agent 事件对象；协议层不新增
   `schema_version`、`sequence` 或平行事件 taxonomy。
-- 能力计划选择工具提供方组计划和 Harness 描述符；当前不存在供任意模块注册所有对象的通用组装注册表。
+- 能力计划选择 Agent ID 和原子工具提供方组；当前不存在供任意模块注册所有对象的通用组装注册表。
 - 插件运行时通过 `runtime-ports` 的 `PluginRuntimeBinding` 注入；`assembly/core` 负责构造当前 `PluginRuntimeClient` 与生态适配器组合，当前受管 package 链路不创建 Plugin Host。
 - 智能体、命令、skill 和 UI 继续由各自归属模块管理。仓库尚无稳定的 `ProductCommandRegistry` 或
   通用 `AgentDefinitionRegistry`，不得为未来入口先行引入。
@@ -812,7 +778,7 @@ Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSn
 
 - 产品组装允许依赖具体实现；运行时内核不允许依赖具体实现。
 - 不同产品允许注册不同入口命令和入口视图，但必须映射到稳定能力。
-- 组装层只选择能力计划、提供方/Harness 描述符和插件 binding；命令、审核、MiniApp、ACP、工具、智能体、
+- 组装层只选择能力计划、提供方和插件 binding；命令、审核、MiniApp、ACP、工具、智能体、
   skill 与 UI 定义仍由各自 owner 管理，并按已选能力消费可用性事实。
 - 组装层不得改变底层运行时语义来适配某个入口。
 - `DeliveryProfile` 只能影响能力/提供方选择，不得让下层出现 `if desktop`
@@ -880,7 +846,7 @@ Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSn
 ### 4.3 Product Capability 设计
 
 Product Capability 是产品能力的静态声明，由 `assembly/product-capabilities` 归属。当前实现已经声明能力集合、
-feature group、运行时服务要求、工具提供方组、Harness 描述符和插件可用性；它不拥有 UI、动态健康、权限决策
+feature group、运行时服务要求、内置 Agent ID、原子工具提供方组和插件可用性；它不拥有 UI、动态健康、权限决策
 或具体 IO。运行时插件不得成为裁剪内置产品功能的主机制，Cargo feature 也不得直接当作用户可见能力事实。
 
 当前 crate 中不存在通用 `CapabilityPack` trait，也没有理由仅为文档中的候选模块预先固化该 ABI。新增能力先复用
@@ -986,7 +952,7 @@ remote probing 或 startup timeout。
 建议归属：
 
 - prompt module：Agent Runtime 的 prompt assembly contract。
-- skill：prompt / resource / instruction 扩展，作为 agent definition 或 harness input 的一部分。
+- skill：prompt / resource / instruction 扩展，作为 agent definition 或工作流输入的一部分。
 - subagent definition：现有 `RuntimeAgentRegistry` 与智能体定义 owner。
 - subagent execution：Agent Runtime。
 - Task tool：Tool Runtime entrypoint，经 Agent Runtime API 调用 Agent Runtime。
@@ -1066,7 +1032,7 @@ pub trait BeforeToolExecution: Send + Sync {
 
 取消：
 
-- turn、tool、subagent、harness step 都必须接收 cancellation。
+- turn、tool、subagent 和实际工作流任务都必须接收 cancellation。
 - cancellation outcome 必须可观测。
 - background task 必须有 result delivery 或 explicit detached state。
 
@@ -1119,13 +1085,11 @@ Runtime 测试：
 - fork context seeding。
 - background result delivery。
 
-Harness 测试：
+命名工作流测试：
 
-- provider 注册。
-- plan 结构。
-- artifact 输出。
-- review gate。
-- hook order。
+- 无 I/O 策略输入输出。
+- 重复执行的确定性。
+- Runtime 取消 / 恢复契约的集成边界（只有真实编排路径出现后再增加）。
 
 Product 测试：
 
@@ -1143,7 +1107,7 @@ Product 测试：
 
 - `bitfun-agent-runtime` 不依赖 `bitfun-core`，Rust Runtime SDK 已有最小测试保护。
 - `bitfun-runtime-services` 提供类型化服务注入；工具 contracts、provider groups 与 execution 已分层。
-- `bitfun-harness` 已提供类型化工作流描述与注册能力。
+- `bitfun-agent-workflows` 已接管 DeepResearch 的无 I/O 报告后处理；没有建立通用工作流 registry 或第二套执行引擎。
 - `bitfun-core` 可继续作为 `product-full` 兼容接口，避免迁移期间一次性重写入口。
 - CLI 已以 `DeliveryProfile::Cli` 构造真实 Runtime Parts 和 Rust Runtime SDK；本地 Agent 入口、会话、用量和
   Peer Host 共用一个调用级上下文与广播事件源，审批策略不再写回全局配置。Peer Host 通过该 Rust 接口提交/精确取消

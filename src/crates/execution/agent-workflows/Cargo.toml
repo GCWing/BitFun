@@ -1,0 +1,21 @@
+[package]
+name = "bitfun-agent-workflows"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Named BitFun agent workflow policies"
+autotests = false
+
+[lib]
+name = "bitfun_agent_workflows"
+crate-type = ["rlib"]
+
+[dependencies]
+regex = { workspace = true }
+
+[[test]]
+name = "deep_research_contracts"
+path = "tests/deep_research_contracts.rs"
+
+[lints]
+workspace = true

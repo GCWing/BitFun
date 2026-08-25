@@ -4,7 +4,7 @@ Scope: this guide applies to `src/crates/assembly/product-capabilities`.
 
 `bitfun-product-capabilities` owns product capability pack assembly facts: which
 delivery profiles, runtime services, feature groups, tool provider group ids,
-harness provider descriptors, profile-scoped harness registries, and runtime
+profile-scoped built-in Agent ids, plugin availability, and runtime
 service availability wrappers a product capability selects. It does not own
 concrete runtime execution.
 
@@ -15,13 +15,17 @@ concrete runtime execution.
   terminal, tool-runtime, or concrete tool implementations.
 - Keep this crate limited to stable delivery profile facts, capability ids,
   feature group facts, service capability facts, runtime service availability
-  checks, tool provider group id selection, and harness provider descriptor
-  selection.
+  checks, built-in Agent id selection, tool provider group id selection, and
+  plugin availability facts.
 - `ProductToolPlan` is the assembly-owned authority for the exact tool feature
-  owners requested by one runtime. Provider groups preserve registration order;
-  they are not feature unions. The Agent Runtime baseline plan selects only
-  `Basic` and `AgentControl`, while delivery profiles select their reviewed
-  product plan explicitly.
+  owners requested by one runtime. Provider groups preserve atomic ownership;
+  Core materialization separately preserves the observable registry order.
+  They are not feature unions. The Agent Runtime baseline plan selects only
+  `core.basic`, `core.agent`, and `core.session`, while delivery profiles
+  select their reviewed product plan explicitly.
+- Delivery profiles select built-in Agent ids and atomic tool provider groups
+  together. CLI, ACP, and SDK currently select only the Code Agent capability;
+  product workflow names must not leak in through a compiled Cargo feature.
 - `ProductAssembler` may validate explicit profile input and return immutable
   runtime parts; it must not create concrete services or product state.
 - `ProductCoreDependencyMode::ExplicitCoreCapabilityClosure` records that an
@@ -30,8 +34,8 @@ concrete runtime execution.
   umbrella feature.
 - Do not encode product UI behavior, permission decisions, session lifecycle,
   filesystem/process IO, Git/AI provider acquisition, or feature defaults here.
-- Preserve default product tool provider order and legacy harness provider ids
-  when changing capability packs.
+- Preserve atomic provider ids and tool ownership when changing capability
+  packs; do not make capability-pack order redefine runtime tool order.
 
 ## Verification
 

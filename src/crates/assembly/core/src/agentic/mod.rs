@@ -23,7 +23,6 @@ pub mod context_profile;
 pub mod coordination;
 pub mod deep_review;
 pub mod deep_review_policy;
-pub mod harness;
 pub(crate) mod subagent_runtime;
 
 // Shared-context fork-agent execution module

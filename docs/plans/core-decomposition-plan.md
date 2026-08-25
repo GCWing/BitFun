@@ -37,7 +37,7 @@
 | apps / interfaces | 选择唯一入口形态，提交 profile，转换协议或界面数据 | 成为共享运行时归属模块，复制会话/工具/权限逻辑 |
 | assembly | 选择能力、提供方和兼容接口，输出类型化 runtime parts | 依赖 app crate，持有平台进程/协议实现，重新解释动态配置 |
 | adapters / services | 协议转换、平台 I/O、可复用具体实现 | 反向依赖 assembly 或产品入口 |
-| execution | Agent、Tool、Harness 和 `PluginRuntimeClient` 的可移植执行语义 | 读取交付形态，依赖 app/adapter 具体实现，或持有 Plugin Host 物理进程 |
+| execution | Agent、Tool、命名工作流和 `PluginRuntimeClient` 的可移植执行语义 | 读取交付形态，依赖 app/adapter 具体实现，或持有 Plugin Host 物理进程 |
 | contracts | 稳定 DTO、事实和端口 | 依赖上层或持有运行时行为 |
 
 需要同时被独立应用和嵌入式模式复用的能力，先下沉为 services/adapters owner，再由 app 与 assembly 同向消费。
@@ -58,8 +58,8 @@ assembly → apps；embedded 的 bind、静态 fallback 和任务生命周期由
 
 CLI 是首个入口迁移对象，因为它已有独立产品诉求、显式设计和最小 CI 命令。
 
-当前端到端能力已经完成：入口只提交一次 `DeliveryProfile::Cli`，通过现有 `ProductAssembler` 获得计划、服务可用性、
-Harness 和禁用的插件 binding；TUI、Exec、Session 与 Usage 共用一个 `CliRuntimeContext`。主会话客户端的创建（包括
+当前端到端能力已经完成：入口只提交一次 `DeliveryProfile::Cli`，通过现有 `ProductAssembler` 获得计划、服务可用性
+和禁用的插件 binding；TUI、Exec、Session 与 Usage 共用一个 `CliRuntimeContext`。主会话客户端的创建（包括
 `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、类型化转录、本地分支、用量生成、
 会话模型更新、ACP 活动会话模式更新、轮次提交/取消和精确轮次结算均走 Agent Runtime SDK；Desktop 与 Peer Host 的本地工作区准备、
 会话文件清单、类型化快照统计和工作区文件回滚通过不属于 SDK 的窄 owner port 复用现有 Core 快照实现；Desktop 保留既有远程空结果，
@@ -111,7 +111,7 @@ Core 只为插件兼容提供已有 owner 的窄接口：真实工具、类型�
 - 不扩张现有通用插件调用与效果 DTO 去承载 Hook、Client 或 TUI；
 - 不为未来生态新增公共注册表或多用途 DTO；
 - 不把静态名称、`ready` 或 adapter fixture 当作工具可调用；
-- 不让 SDLC Harness 定义第二套插件接口。
+- 不再引入只有描述符、没有真实执行调用方的通用工作流框架。
 
 ## 6. 固定执行流程
 

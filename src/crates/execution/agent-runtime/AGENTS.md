@@ -9,13 +9,12 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 
 ## Feature Boundaries
 
-- `deep-research` exposes only provider-neutral citation renumbering.
 - `native-hook-settings` exposes Codex-compatible hook settings parsing and
   validation without process execution.
 - `native-hook-runtime` extends settings with payload, output, and managed
   child-process execution.
 - `agent-runtime` selects the complete portable runtime and includes
-  `native-hook-runtime`; it intentionally does not include `deep-research`.
+  `native-hook-runtime`.
 - `default` stays empty. Consumers select the smallest owner feature they use;
   do not add a compatibility `full` feature or rely on another workspace
   consumer to create a Cargo feature union.
@@ -25,13 +24,13 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 - Do not depend on `bitfun-core`, app crates, Tauri, ACP protocol, web UI,
   concrete service crates, or product-domain implementations.
 - The `sdk` module may re-export only stable runtime request/response types,
-  runtime-port contracts, and the service/tool/harness registry types needed
+  runtime-port contracts, and the service/tool/agent/hook registry types needed
   for dependency injection. It must not re-export raw PluginRuntimeClient types
   such as plugin runtime bindings, dispatch/read request types, status snapshots,
   plugin fault diagnostics, or host clients; Product Assembly uses the internal runtime
   builder when it needs to inject a plugin runtime.
 - `AgentRuntime` may depend on stable ports plus injected `RuntimeServices`,
-  tool registry, harness registry, and hook registry. Product assembly owns
+  tool registry, agent registry, and hook registry. Product assembly owns
   concrete registration; this crate must not create concrete managers, app
   state, filesystem, terminal, MCP, remote, or AI clients.
 - The `runtime` module is internal / Product Assembly facing. Do not route
@@ -50,13 +49,11 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   planning, agent-session reply planning, thread-goal accounting/mutation/continuation decisions,
   scheduled-job lifecycle state transitions, runtime event facts,
   registry visibility/availability, custom subagent schema/default decisions,
-  builtin agent definition catalog, skill catalog/root/mode/selection facts,
+  skill catalog/root/mode/selection facts,
   thread-goal metadata / event payload /
   token usage / scheduler delivery plans, thread-goal tool wire contracts,
   session config/defaults/summary and persisted session-state sidecar shape,
-  user-question validation/result/channel contracts, SessionControl input/cancel-route/result contracts, DeepReview
-  policy/manifest/budget/queue/report/cache/shared-context/task-execution
-  shaping decisions, DeepResearch citation renumbering,
+  user-question validation/result/channel contracts, SessionControl input/cancel-route/result contracts,
   custom subagent markdown front-matter IO, custom subagent discovery/loading,
   post-call hook routing/executor orchestration,
   tool confirmation gate/planning/failure/wait-result/channel mapping, light checkpoint
@@ -70,14 +67,19 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   facts.
 - Keep concrete prompt fact collection, workspace context IO, prompt-cache
   persistence wiring, dynamic environment collection, concrete hook side
-  effects, DeepReview task launch/provider wait/report persistence,
-  DeepResearch storage IO/post-turn hook and concrete product tool execution
+  effects, named product workflow policy and execution, and concrete product tool execution
   outside this crate until a reviewed migration proves behavior equivalence.
+- DeepReview compatibility modules and the built-in product Agent catalog still
+  present here and in `assembly/core` are migration debt, not Runtime scope.
+  Product Assembly already owns the selected Agent IDs. These compatibility
+  paths may receive fixes needed to preserve existing behavior, but new named
+  workflow policy belongs in `agent-workflows`; migrate one production path at
+  a time with equivalence tests before deleting the old owner.
 - Add focused tests before moving any runtime decision into this crate.
 
 ## Test Target Layout
 
-Integration contracts use seven explicit Cargo targets so package-level checks
+Integration contracts use six explicit Cargo targets so package-level checks
 do not relink the same feature-free dependency closure for every source file,
 while platform-specific process tests retain executable-level isolation:
 
@@ -87,7 +89,6 @@ while platform-specific process tests retain executable-level isolation:
 | `agent_session_contracts` | Events, scheduling, sessions, SDK behavior, and workspace-reference ports |
 | `agent_interaction_contracts` | Permissions, questions, hook payloads, and post-call hook behavior (`agent-runtime`) |
 | `agent_long_horizon_contracts` | DeepReview and long-running thread-goal behavior (`agent-runtime`) |
-| `deep_research_contracts` | Citation numbering without the complete Agent Runtime (`deep-research`) |
 | `native_hook_settings_contracts` | Hook settings parsing without process execution (`native-hook-settings`) |
 | `native_hook_execution_contracts` | Unix-only native process execution, timeout, and cleanup behavior |
 
@@ -109,8 +110,7 @@ Use the focused contract form by default. Run the package-wide form only when a
 change crosses several runtime targets:
 
 ```bash
-cargo test --locked -p bitfun-agent-runtime --no-default-features --features agent-runtime,deep-research --lib --tests
-cargo test --locked -p bitfun-agent-runtime --no-default-features --features deep-research --test deep_research_contracts
+cargo test --locked -p bitfun-agent-runtime --no-default-features --features agent-runtime --lib --tests
 cargo test --locked -p bitfun-agent-runtime --no-default-features --features native-hook-settings --test native_hook_settings_contracts
 cargo test --locked -p bitfun-agent-runtime --no-default-features --features agent-runtime --test <target> <module>::<test>
 ```

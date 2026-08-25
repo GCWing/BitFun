@@ -8,7 +8,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
-use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
     AgentDialogTurnRecoveryOutcome, AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest,
@@ -233,7 +232,6 @@ pub struct AgentRuntime {
     event_source: Option<AgentEventSource>,
     session_event_journal: Option<Arc<SessionEventJournal>>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
-    harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
     mode_catalog: Option<Arc<dyn AgentModeCatalogPort>>,
@@ -407,10 +405,6 @@ impl std::fmt::Debug for AgentRuntime {
                 "tool_registry",
                 &self.tool_registry.as_ref().map(|_| "<RuntimeToolRegistry>"),
             )
-            .field(
-                "harness_registry",
-                &self.harness_registry.as_ref().map(|_| "<HarnessRegistry>"),
-            )
             .field("hook_count", &self.hook_registry.hooks().len())
             .field(
                 "agent_registry",
@@ -466,7 +460,6 @@ pub struct AgentRuntimeBuilder {
     event_source: Option<AgentEventSource>,
     session_event_journal: Option<Arc<SessionEventJournal>>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
-    harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
     mode_catalog: Option<Arc<dyn AgentModeCatalogPort>>,
@@ -643,11 +636,6 @@ impl AgentRuntimeBuilder {
         self
     }
 
-    pub fn with_harness_registry(mut self, registry: Arc<HarnessRegistry>) -> Self {
-        self.harness_registry = Some(registry);
-        self
-    }
-
     pub fn with_hook_registry(mut self, registry: RuntimeHookRegistry) -> Self {
         self.hook_registry = registry;
         self
@@ -697,7 +685,6 @@ impl AgentRuntimeBuilder {
             event_source,
             session_event_journal,
             tool_registry,
-            harness_registry,
             hook_registry,
             agent_registry,
             mode_catalog,
@@ -736,7 +723,6 @@ impl AgentRuntimeBuilder {
             event_source,
             session_event_journal,
             tool_registry,
-            harness_registry,
             hook_registry,
             agent_registry,
             mode_catalog,
@@ -1062,13 +1048,6 @@ impl AgentRuntime {
             .submit_user_answers(request)
             .await?;
         Ok(())
-    }
-
-    pub fn harness_provider_ids(&self) -> Vec<&str> {
-        self.harness_registry
-            .as_ref()
-            .map(|registry| registry.provider_ids())
-            .unwrap_or_default()
     }
 
     pub fn hook_registry(&self) -> &RuntimeHookRegistry {

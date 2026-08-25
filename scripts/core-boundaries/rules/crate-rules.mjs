@@ -3,6 +3,7 @@
 const agentRuntimeIpcForbiddenDeps = [
   'bitfun-acp',
   'bitfun-agent-runtime',
+  'bitfun-agent-workflows',
   'bitfun-agent-stream',
   'bitfun-agent-tools',
   'bitfun-ai-adapters',
@@ -12,7 +13,6 @@ const agentRuntimeIpcForbiddenDeps = [
   'bitfun-core-types',
   'bitfun-dsh-adapter',
   'bitfun-external-sources',
-  'bitfun-harness',
   'bitfun-opencode-adapter',
   'bitfun-page-function-runtime',
   'bitfun-plugin-runtime-client',
@@ -46,10 +46,10 @@ export const noCoreDependencyCrates = [
   'agent-stream',
   'tool-call-jsonrepair',
   'agent-runtime',
+  'agent-workflows',
   'agent-runtime-ipc',
   'app-server-client',
   'app-server-protocol',
-  'harness',
   'plugin-runtime-client',
   'product-capabilities',
   'runtime-ports',
@@ -185,6 +185,7 @@ export const lightweightBoundaryRules = [
       'bitfun-agent-runtime-ipc',
       'bitfun-services-core',
       'bitfun-services-integrations',
+      'bitfun-agent-workflows',
       'bitfun-runtime-services',
       'bitfun-product-capabilities',
       'bitfun-external-sources',
@@ -293,6 +294,7 @@ export const lightweightBoundaryRules = [
     reason: 'runtime-services must stay a typed service assembly contract without concrete runtime implementations',
     forbiddenDeps: [
       'bitfun-core',
+      'bitfun-agent-workflows',
       'bitfun-ai-adapters',
       'bitfun-agent-stream',
       'bitfun-services-core',
@@ -321,6 +323,7 @@ export const lightweightBoundaryRules = [
     reason: 'agent-runtime must own portable runtime decisions without concrete service or product implementations',
     forbiddenDeps: [
       'bitfun-core',
+      'bitfun-agent-workflows',
       'bitfun-ai-adapters',
       'bitfun-services-core',
       'bitfun-services-integrations',
@@ -374,9 +377,9 @@ export const lightweightBoundaryRules = [
     ],
   },
   {
-    crateName: 'harness',
+    crateName: 'agent-workflows',
     reason:
-      'harness must own workflow contracts without concrete service, product, or platform implementations',
+      'agent-workflows must own named workflow policy without concrete service, assembly, or platform implementations',
     forbiddenDeps: [
       'bitfun-core',
       'bitfun-ai-adapters',

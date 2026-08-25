@@ -1,4 +1,4 @@
-//! Provider-neutral DeepResearch report post-processing.
+//! DeepResearch report post-processing policy.
 //!
 //! This module owns deterministic citation renumbering for finalized research
 //! reports. It does not read or write files; callers provide the report body

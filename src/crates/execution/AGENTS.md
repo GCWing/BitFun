@@ -2,20 +2,20 @@
 
 # Execution Primitives Layer
 
-This layer owns reusable agent, harness, stream, plugin runtime client, typed-service, and tool
+This layer owns reusable agent, named-workflow, stream, plugin runtime client, typed-service, and tool
 execution primitives. It is not the complete Agent Runtime SDK and not the
 assembled product runtime. Product assembly decides which primitives, tool
-provider groups, harness providers, adapters, and services are active for a
+provider groups, workflow capabilities, adapters, and services are active for a
 delivery form.
 
 ## Modules
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `agent-runtime` | Agent registry, scheduler, session/config/context facts, prompt cache, hooks, goals, prompt facts, port-backed `AgentRuntime` facade, DeepReview provider-neutral state, DeepResearch citation renumbering, and runtime control / confirmation contracts | [AGENTS.md](agent-runtime/AGENTS.md) |
+| `agent-runtime` | Portable Agent / Session / Turn lifecycle facts, scheduling and cancellation decisions, prompt/cache/context facts, hooks, goals, extension contracts, and the port-backed `AgentRuntime` facade | [AGENTS.md](agent-runtime/AGENTS.md) |
+| `agent-workflows` | Named product workflow policy that is independent of UI, protocol, and concrete I/O; currently DeepResearch report post-processing | [AGENTS.md](agent-workflows/AGENTS.md) |
 | `agent-stream` | Provider-neutral stream DTOs, tool-call accumulation, and replay contracts | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool contracts, execution gates, input validation, and result presentation contracts. Cargo package remains `bitfun-agent-tools`. | [AGENTS.md](tool-contracts/AGENTS.md) |
-| `harness` | Harness workflow contracts and registry primitives | [AGENTS.md](harness/AGENTS.md) |
 | `plugin-runtime-client` | Default `PluginRuntimeClient` implementation for dispatch, duplicate-request results, and fault diagnostics; the JS/TS Plugin Host remains a child process managed through service ports | [AGENTS.md](plugin-runtime-client/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly and service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
 | `tool-provider-groups` | Tool provider group facts and product-full tool group composition. Cargo package remains `bitfun-tool-packs`. | [AGENTS.md](tool-provider-groups/AGENTS.md) |
@@ -32,6 +32,9 @@ delivery form.
 - Keep protocol projection and external provider request shaping in `adapters`.
 - Keep product feature selection and delivery-profile decisions in `assembly`,
   not in execution primitives.
+- Keep named product workflow policy in `agent-workflows`; Agent Runtime must
+  never depend on named workflows. Product artifact and presentation lifecycle
+  stays in its product owner.
 - Tool packs should describe provider groups and required services; concrete
   service access should flow through ports or typed runtime services.
 

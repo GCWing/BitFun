@@ -8,10 +8,10 @@ export const crateLayoutRules = [
   { crateName: 'runtime-ports', layer: 'contracts', path: 'src/crates/contracts/runtime-ports' },
 
   { crateName: 'agent-runtime', layer: 'execution', path: 'src/crates/execution/agent-runtime' },
+  { crateName: 'agent-workflows', layer: 'execution', path: 'src/crates/execution/agent-workflows' },
   { crateName: 'agent-stream', layer: 'execution', path: 'src/crates/execution/agent-stream' },
   { crateName: 'tool-call-jsonrepair', layer: 'execution', path: 'src/crates/execution/tool-call-jsonrepair' },
   { crateName: 'agent-tools', layer: 'execution', path: 'src/crates/execution/tool-contracts' },
-  { crateName: 'harness', layer: 'execution', path: 'src/crates/execution/harness' },
   { crateName: 'plugin-runtime-client', layer: 'execution', path: 'src/crates/execution/plugin-runtime-client' },
   { crateName: 'runtime-services', layer: 'execution', path: 'src/crates/execution/runtime-services' },
   { crateName: 'tool-packs', layer: 'execution', path: 'src/crates/execution/tool-provider-groups' },

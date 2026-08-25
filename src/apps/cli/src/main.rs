@@ -894,10 +894,9 @@ async fn initialize_core_services_for_deployment(
                 .has_capability(entry.requirement().service_capability())
         }));
     tracing::info!(
-        "CLI product runtime assembled: profile={}, services={}, harnesses={}, plugin_runtime={:?}",
+        "CLI product runtime assembled: profile={}, services={}, plugin_runtime={:?}",
         runtime.product().plan().profile().id(),
         runtime.product().service_availability().len(),
-        runtime.product().harness_provider_ids().len(),
         runtime.product().plugin_runtime(),
     );
 

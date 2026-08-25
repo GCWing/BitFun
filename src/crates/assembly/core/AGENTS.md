@@ -168,7 +168,7 @@ Use these files for ownership details instead of expanding this guide:
 - `docs/architecture/agent-runtime-services-design.md`
 - `src/crates/execution/agent-runtime/AGENTS.md`
 - `src/crates/execution/tool-contracts/AGENTS.md`
-- `src/crates/execution/harness/AGENTS.md`
+- `src/crates/execution/agent-workflows/AGENTS.md`
 - `src/crates/contracts/product-domains/AGENTS.md`
 - `src/crates/contracts/runtime-ports/` and `src/crates/execution/runtime-services/` source docs
 - `src/crates/services/services-core/AGENTS.md`
