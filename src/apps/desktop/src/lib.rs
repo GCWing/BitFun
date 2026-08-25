@@ -2037,6 +2037,7 @@ pub async fn run() {
             api::miniapp_agent_api::miniapp_agent_turn_text,
             api::miniapp_agent_api::miniapp_agent_cancel_stale_runs,
             api::miniapp_loopx_api::miniapp_loopx_attach,
+            api::miniapp_loopx_api::miniapp_loopx_list_models,
             api::miniapp_loopx_api::miniapp_loopx_resolve_intake,
             api::miniapp_loopx_api::miniapp_loopx_create_task,
             api::miniapp_loopx_api::miniapp_loopx_action,

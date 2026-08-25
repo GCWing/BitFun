@@ -80,6 +80,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   // LoopX is local-Desktop-only until its workspace, event replay, and
   // permission mailbox contracts are negotiated across Peer Device Mode.
   'miniapp_loopx_attach',
+  'miniapp_loopx_list_models',
   'miniapp_loopx_resolve_intake',
   'miniapp_loopx_create_task',
   'miniapp_loopx_action',

@@ -14,6 +14,7 @@ export const LOOPX_BUILTIN_APP_ID = 'builtin-bitfun-loopx';
 
 type LoopxBridgeCall =
   | { kind: 'attach'; request: LoopxAttachRequest }
+  | { kind: 'listModels' }
   | { kind: 'resolveIntake'; request: LoopxResolveIntakeRequest }
   | { kind: 'createTask'; request: LoopxCreateTaskRequest }
   | { kind: 'action'; request: LoopxActionRequest }
@@ -21,6 +22,7 @@ type LoopxBridgeCall =
 
 const LOOPX_METHODS = new Set([
   'loopx.attach',
+  'loopx.listModels',
   'loopx.resolveIntake',
   'loopx.createTask',
   'loopx.action',
@@ -193,6 +195,11 @@ export function parseLoopxBridgeCall(
         afterCursor: optionalUnsignedInteger(rawParams.afterCursor, 'params.afterCursor'),
       },
     };
+  }
+
+  if (method === 'loopx.listModels') {
+    assertAllowedKeys(rawParams, [], 'params');
+    return { kind: 'listModels' };
   }
 
   if (method === 'loopx.resolveIntake') {

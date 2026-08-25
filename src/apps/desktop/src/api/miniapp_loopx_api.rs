@@ -1,7 +1,9 @@
 use super::app_state::AppState;
-use bitfun_core::miniapp::{
-    loopx::LoopxController, MiniAppCustomizationOriginKind, BUILTIN_APPS,
+use bitfun_core::miniapp::ai_bridge::{
+    available_models_for_permissions, MiniAppAiModelDescriptor, MiniAppAiModelInfo,
 };
+use bitfun_core::miniapp::{loopx::LoopxController, MiniAppCustomizationOriginKind, BUILTIN_APPS};
+use bitfun_core::service::config::types::GlobalConfig;
 use bitfun_product_domains::miniapp::builtin::builtin_source_matches;
 use bitfun_product_domains::miniapp::loopx::{
     LoopxActionRequest, LoopxActionResponse, LoopxAttachRequest, LoopxAttachResponse,
@@ -59,6 +61,12 @@ pub struct MiniAppLoopxEventsSinceRequest {
     pub input: LoopxEventsSinceRequest,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppLoopxListModelsRequest {
+    pub app_id: String,
+}
+
 async fn authorize_builtin(state: &AppState, app_id: &str) -> Result<(), String> {
     if app_id != LOOPX_BUILTIN_APP_ID {
         return Err("LoopX controller is available only to the built-in LoopX MiniApp".to_string());
@@ -99,6 +107,53 @@ fn unsupported_error() -> String {
     format!(
         "{LOOPX_UNSUPPORTED_EXECUTION_DOMAIN}: LoopX currently supports only a local Desktop workspace"
     )
+}
+
+/// List the host-configured chat models for the LoopX model picker. This is
+/// gated on the same verified-builtin check as the controller bridge (not the
+/// MiniApp AI permission), because the LoopX native agent selects the model.
+#[tauri::command]
+pub async fn miniapp_loopx_list_models(
+    app_state: State<'_, AppState>,
+    request: MiniAppLoopxListModelsRequest,
+) -> Result<Vec<MiniAppAiModelInfo>, String> {
+    authorize_builtin(&app_state, &request.app_id).await?;
+    let global_config = app_state
+        .config_service
+        .get_config::<GlobalConfig>(None)
+        .await
+        .map_err(|error| error.to_string())?;
+    let primary_id = global_config
+        .ai
+        .resolve_model_selection("primary")
+        .unwrap_or_default();
+    let fast_id = global_config
+        .ai
+        .resolve_model_selection("fast")
+        .unwrap_or_default();
+    let models = available_models_for_permissions(
+        global_config
+            .ai
+            .models
+            .iter()
+            .map(|model| MiniAppAiModelDescriptor {
+                id: model.id.clone(),
+                name: model.name.clone(),
+                model_name: model.model_name.clone(),
+                provider: model.provider.clone(),
+                enabled: model.enabled,
+                supports_text_chat: model.capabilities.iter().any(|capability| {
+                    matches!(
+                        capability,
+                        bitfun_core::service::config::types::ModelCapability::TextChat
+                    )
+                }),
+            }),
+        &[],
+        &primary_id,
+        &fast_id,
+    );
+    Ok(models)
 }
 
 #[tauri::command]

@@ -980,6 +980,16 @@ export class MiniAppAPI {
     }
   }
 
+  async loopxListModels(appId: string): Promise<AiModelInfo[]> {
+    try {
+      return await api.invoke('miniapp_loopx_list_models', {
+        request: { appId },
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_loopx_list_models', error, { appId });
+    }
+  }
+
   async loopxResolveIntake(
     appId: string,
     request: LoopxResolveIntakeRequest,

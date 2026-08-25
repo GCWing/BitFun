@@ -259,6 +259,10 @@ export function useMiniAppBridge(
             reply(await miniAppAPI.loopxAttach(appId, call.request));
             return;
           }
+          if (call.kind === 'listModels') {
+            reply(await miniAppAPI.loopxListModels(appId));
+            return;
+          }
           if (call.kind === 'resolveIntake') {
             reply(await miniAppAPI.loopxResolveIntake(appId, call.request));
             return;

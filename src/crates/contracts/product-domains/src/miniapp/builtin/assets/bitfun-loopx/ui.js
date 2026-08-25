@@ -1232,9 +1232,9 @@ function updateCreateButton() {
 async function loadModelCatalog() {
   const select = view.modelSelect;
   if (!select || select.tagName !== 'SELECT') return;
-  if (!app || !app.ai || typeof app.ai.getModels !== 'function') return;
+  if (!app || !app.loopx || typeof app.loopx.listModels !== 'function') return;
   try {
-    const models = await app.ai.getModels();
+    const models = await app.loopx.listModels();
     const current = select.value || 'auto';
     select.replaceChildren();
     const auto = document.createElement('option');

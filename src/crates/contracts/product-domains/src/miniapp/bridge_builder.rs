@@ -137,6 +137,7 @@ pub fn build_bridge_script(
     // method. Other MiniApps receive an explicit unsupported response.
     loopx: {{
       attach:        (opts) => _rpc('loopx.attach', opts || {{}}),
+      listModels:    () => _rpc('loopx.listModels', {{}}),
       resolveIntake: (opts) => _rpc('loopx.resolveIntake', opts || {{}}),
       createTask:    (opts) => _rpc('loopx.createTask', opts || {{}}),
       action:        (opts) => _rpc('loopx.action', opts || {{}}),
