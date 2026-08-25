@@ -7,6 +7,7 @@ export type {
   AgentClientOptions,
   AgentModelOptions,
   AgentModelProvider,
+  Input,
   AssistantTextDelta,
   OutcomeCertainty,
   PermissionDecision,
@@ -27,4 +28,6 @@ export type {
   Turn,
   TurnInput,
   ToolEvent,
+  Usage,
+  UserInput,
 } from "./types.js";

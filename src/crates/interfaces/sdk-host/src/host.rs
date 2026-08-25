@@ -1,18 +1,19 @@
 //! Connection-scoped SDK Host request and Query lifecycle.
 
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionDeleteRequest, AgentSessionModelUpdateRequest, AgentSessionReleaseRequest,
-    AgentSessionRestoreRequest, AgentSessionWorkspaceRequest, AgentSubmissionSource,
-    AgentTurnCancellationRequest, AgentTurnSettlementRequest, DialogSubmissionPolicy,
-    DialogSubmitOutcome, PermissionReply, PermissionReplySource, PermissionRequest,
-    PermissionRequestEvent, PermissionRequestSourceKind, PortError, PortErrorKind, RuntimeError,
-    AUTO_APPROVE_ASK_CONTEXT_KEY,
+    AgentDialogTurnRequest, AgentInputAttachment, AgentRuntime, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionModelUpdateRequest,
+    AgentSessionReleaseRequest, AgentSessionRestoreRequest, AgentSessionWorkspaceRequest,
+    AgentSubmissionSource, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
+    DialogSubmissionPolicy, DialogSubmitOutcome, PermissionReply, PermissionReplySource,
+    PermissionRequest, PermissionRequestEvent, PermissionRequestSourceKind, PortError,
+    PortErrorKind, RuntimeError, TurnTokenUsage, AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_core_types::ErrorCategory;
@@ -29,12 +30,12 @@ use crate::protocol::{
     PermissionDecision, PermissionRespondParams, PermissionRespondResult, PermissionSource,
     PermissionSourceKind, QueryCancelParams, QueryCancelResult, QueryEvent, QueryEventParams,
     QueryOutput, QueryResultError, QueryResultParams, QueryStartParams, QueryStartResult,
-    QueryTerminalStatus, RecoveryAction, RequestId, SessionCloseParams, SessionCloseResult,
-    SessionCreateParams, SessionCreateResult, SessionLifetime, SessionResumeParams, ShutdownParams,
-    ShutdownResult, TemporaryModelConfig, ToolEventStatus, JSON_RPC_VERSION, METHOD_INITIALIZE,
-    METHOD_PERMISSION_RESPOND, METHOD_QUERY_CANCEL, METHOD_QUERY_START, METHOD_SESSION_CLOSE,
-    METHOD_SESSION_CREATE, METHOD_SESSION_RESUME, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT,
-    NOTIFICATION_QUERY_RESULT, PROTOCOL_VERSION,
+    QueryTerminalStatus, QueryUsage, RecoveryAction, RequestId, SessionCloseParams,
+    SessionCloseResult, SessionCreateParams, SessionCreateResult, SessionLifetime,
+    SessionResumeParams, ShutdownParams, ShutdownResult, TemporaryModelConfig, ToolEventStatus,
+    JSON_RPC_VERSION, METHOD_INITIALIZE, METHOD_PERMISSION_RESPOND, METHOD_QUERY_CANCEL,
+    METHOD_QUERY_START, METHOD_SESSION_CLOSE, METHOD_SESSION_CREATE, METHOD_SESSION_RESUME,
+    METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT, NOTIFICATION_QUERY_RESULT, PROTOCOL_VERSION,
 };
 
 const DEFAULT_SESSION_NAME: &str = "BitFun SDK query";
@@ -235,6 +236,7 @@ struct QueryLease {
     turn_id: String,
     operation_id: String,
     output: StdMutex<QueryOutputBuffer>,
+    usage: StdMutex<Option<TurnTokenUsage>>,
     terminal: AtomicBool,
     stop_forwarding: CancellationToken,
     emit_output: bool,
@@ -1107,11 +1109,20 @@ impl SdkHostConnection {
         else {
             return;
         };
-        if params.prompt.trim().is_empty() {
+        if params.prompt.trim().is_empty() && params.images.is_empty() {
             self.send_invalid_params(
                 request.id.clone(),
                 ErrorStage::Query,
-                "prompt must not be empty",
+                "prompt and images must not both be empty",
+            )
+            .await;
+            return;
+        }
+        if params.images.iter().any(|path| !is_local_image_path(path)) {
+            self.send_invalid_params(
+                request.id.clone(),
+                ErrorStage::Query,
+                "images must contain non-empty local paths with png, jpg, jpeg, gif, or webp extensions",
             )
             .await;
             return;
@@ -1299,6 +1310,11 @@ impl SdkHostConnection {
             AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
             serde_json::Value::Bool(false),
         );
+        let attachments = params
+            .images
+            .iter()
+            .map(|image_path| local_image_attachment(image_path, &session.workspace_path))
+            .collect();
         let submitted = match self
             .inner
             .runtime
@@ -1315,7 +1331,7 @@ impl SdkHostConnection {
                 policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::SdkHost),
                 reply_route: None,
                 prepended_reminders: Vec::new(),
-                attachments: Vec::new(),
+                attachments,
                 metadata: submission_metadata,
             })
             .await
@@ -1351,6 +1367,7 @@ impl SdkHostConnection {
             turn_id: turn_id.clone(),
             operation_id: operation_id.clone(),
             output: StdMutex::new(QueryOutputBuffer::default()),
+            usage: StdMutex::new(None),
             terminal: AtomicBool::new(false),
             stop_forwarding: CancellationToken::new(),
             emit_output,
@@ -1544,6 +1561,14 @@ impl SdkHostConnection {
                 if event_turn_id(&envelope.event) != Some(lease.turn_id.as_str()) {
                     continue;
                 }
+                TurnTokenUsage::accumulate_event(
+                    &mut lease
+                        .usage
+                        .lock()
+                        .expect("SDK Host Query usage lock poisoned"),
+                    &envelope.event,
+                    &lease.turn_id,
+                );
                 let terminal = terminal_fact(&envelope.event, &lease.turn_id, &lease.query_id);
                 if lease.emit_output {
                     if let Some(projected) = project_query_event(&envelope.event) {
@@ -2590,6 +2615,17 @@ impl SdkHostConnection {
             .expect("SDK Host Query output lock poisoned")
             .text
             .clone();
+        let usage = lease
+            .usage
+            .lock()
+            .expect("SDK Host Query usage lock poisoned")
+            .as_ref()
+            .map(|usage| QueryUsage {
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
+                total_tokens: usage.total_tokens,
+                cached_tokens: usage.cached_tokens,
+            });
         self.send_notification(
             NOTIFICATION_QUERY_RESULT,
             QueryResultParams {
@@ -2599,6 +2635,7 @@ impl SdkHostConnection {
                 operation_id: lease.operation_id.clone(),
                 status,
                 output: QueryOutput { text: output_text },
+                usage,
                 error,
             },
         )
@@ -3034,8 +3071,47 @@ fn event_turn_id(event: &AgenticEvent) -> Option<&str> {
         AgenticEvent::DialogTurnCompleted { turn_id, .. }
         | AgenticEvent::DialogTurnCancelled { turn_id, .. }
         | AgenticEvent::DialogTurnFailed { turn_id, .. }
+        | AgenticEvent::TokenUsageUpdated { turn_id, .. }
         | AgenticEvent::TextChunk { turn_id, .. }
         | AgenticEvent::ToolEvent { turn_id, .. } => Some(turn_id),
+        _ => None,
+    }
+}
+
+fn is_local_image_path(path: &str) -> bool {
+    !path.trim().is_empty()
+        && !path.contains("://")
+        && local_image_mime_type(Path::new(path)).is_some()
+}
+
+fn local_image_attachment(image_path: &str, workspace_path: &str) -> AgentInputAttachment {
+    let image_path = PathBuf::from(image_path);
+    let image_path = if image_path.is_absolute() {
+        image_path
+    } else {
+        Path::new(workspace_path).join(image_path)
+    };
+    let mime_type = local_image_mime_type(&image_path).expect("validated local image extension");
+    AgentInputAttachment::image_context(
+        format!("sdk-image-{}", uuid::Uuid::new_v4()),
+        Some(image_path.to_string_lossy().into_owned()),
+        None,
+        mime_type,
+        None,
+    )
+}
+
+fn local_image_mime_type(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("png") => Some("image/png"),
+        Some("jpg" | "jpeg") => Some("image/jpeg"),
+        Some("gif") => Some("image/gif"),
+        Some("webp") => Some("image/webp"),
         _ => None,
     }
 }
@@ -3257,9 +3333,17 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
 
 #[cfg(test)]
 mod runtime_error_tests {
-    use super::{runtime_error_facts, runtime_error_kind};
+    use super::{is_local_image_path, runtime_error_facts, runtime_error_kind};
     use crate::protocol::{ErrorCode, RecoveryAction};
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+
+    #[test]
+    fn local_image_input_accepts_supported_paths_and_rejects_urls() {
+        assert!(is_local_image_path("screenshots/failure.PNG"));
+        assert!(!is_local_image_path("https://example.com/failure.png"));
+        assert!(!is_local_image_path("screenshots/failure.svg"));
+        assert!(!is_local_image_path("  "));
+    }
 
     #[test]
     fn session_writer_conflict_uses_existing_action_required_response() {

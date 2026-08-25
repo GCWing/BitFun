@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: u32 = 4;
+pub const PROTOCOL_VERSION: u32 = 5;
 
 pub const METHOD_INITIALIZE: &str = "initialize";
 pub const METHOD_SESSION_CREATE: &str = "session/create";
@@ -269,6 +269,7 @@ pub struct HostCapabilities {
     pub session_close: bool,
     pub event_stream: bool,
     pub tool_events: bool,
+    pub image_input: bool,
     pub structured_output: bool,
     pub usage: bool,
     pub custom_tools: bool,
@@ -289,8 +290,9 @@ impl HostCapabilities {
             session_close: true,
             event_stream: true,
             tool_events: true,
+            image_input: true,
             structured_output: false,
-            usage: false,
+            usage: true,
             custom_tools: false,
             permission_responses: true,
             hooks: false,
@@ -462,6 +464,8 @@ impl SessionCreateResult {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct QueryStartParams {
     pub prompt: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<String>,
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub session_id: Option<String>,
@@ -670,7 +674,24 @@ pub struct QueryResultParams {
     pub output: QueryOutput,
     #[cfg_attr(feature = "ts", ts(optional))]
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<QueryUsage>,
+    #[cfg_attr(feature = "ts", ts(optional))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<QueryResultError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct QueryUsage {
+    pub input_tokens: usize,
+    #[cfg_attr(feature = "ts", ts(optional))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<usize>,
+    pub total_tokens: usize,
+    #[cfg_attr(feature = "ts", ts(optional))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cached_tokens: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

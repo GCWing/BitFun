@@ -7,8 +7,10 @@ import { AgentClient, SdkError } from "../src/index.js";
 import { createAgentClient } from "../src/internal/client.js";
 import type {
   AgentClientOptions,
+  Input,
   QueryInput,
   SessionCreateInput,
+  UserInput,
 } from "../src/types.js";
 
 const clientOptions = {
@@ -35,6 +37,12 @@ void queryModelOverride;
 void sessionModelOverride;
 void packageHostOptions;
 
+const multimodalInput: Input = [
+  { type: "text", text: "hello" },
+  { type: "local_image", path: "screenshots/fixture.png" },
+] satisfies UserInput[];
+void multimodalInput;
+
 test("a Query streams tool and permission events before the terminal Result", async () => {
   const clientToHost = new PassThrough();
   const hostToClient = new PassThrough();
@@ -55,7 +63,7 @@ test("a Query streams tool and permission events before the terminal Result", as
   assert.ok(client instanceof AgentClient);
   assert.equal(initializeRequests.length, 1);
   assert.deepEqual(initializeRequests[0], {
-    protocolVersion: 4,
+    protocolVersion: 5,
     clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
     capabilities: {
       serverNotifications: true,
@@ -69,7 +77,11 @@ test("a Query streams tool and permission events before the terminal Result", as
     },
   });
   const query = await client.query({
-    prompt: "hello",
+    prompt: [
+      { type: "text", text: "hello" },
+      { type: "local_image", path: "screenshots/fixture.png" },
+      { type: "text", text: "focus on the layout" },
+    ],
     model: "attempted-override",
   } as QueryInput);
   assert.equal(query.id, "query-1");
@@ -81,9 +93,10 @@ test("a Query streams tool and permission events before the terminal Result", as
     cancellation: true,
     eventStream: true,
     toolEvents: true,
+    imageInput: true,
     permissionResponses: true,
     structuredOutput: false,
-    usage: false,
+    usage: true,
     customTools: false,
     hooks: false,
     mcpConfiguration: false,
@@ -155,6 +168,12 @@ test("a Query streams tool and permission events before the terminal Result", as
       operationId: "operation-1",
       status: "completed",
       outputText: "fixture result",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        totalTokens: 125,
+        cachedTokens: 40,
+      },
     },
   ]);
   assert.equal((await query.result()).outputText, "fixture result");
@@ -189,7 +208,9 @@ test("an explicit Session starts Turns on the existing client connection", async
   assert.equal(session.agent, "agentic");
   assert.equal(session.lifetime, "durable");
 
-  const query = await session.startTurn({ prompt: "continue" });
+  const query = await session.startTurn({
+    prompt: [{ type: "local_image", path: "screenshots/continued.webp" }],
+  });
   assert.equal((await query.result()).outputText, "continued");
   await session.close();
   assert.equal(typeof session[Symbol.asyncDispose], "function");
@@ -562,7 +583,7 @@ async function runFixtureHost(
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          protocolVersion: 4,
+          protocolVersion: 5,
           runtimeVersion: "0.2.17",
           stability: "not_delivered",
           capabilities: {
@@ -574,8 +595,9 @@ async function runFixtureHost(
             sessionClose: true,
             eventStream: true,
             toolEvents: true,
+            imageInput: true,
             structuredOutput: false,
-            usage: false,
+            usage: true,
             customTools: false,
             permissionResponses: true,
             hooks: false,
@@ -589,7 +611,8 @@ async function runFixtureHost(
     }
     if (request.method === "query/start") {
       assert.deepEqual(request.params, {
-        prompt: "hello",
+        prompt: "hello\n\nfocus on the layout",
+        images: ["screenshots/fixture.png"],
         sessionId: null,
         sessionName: null,
         agent: null,
@@ -702,6 +725,12 @@ async function runFixtureHost(
           operationId: "operation-1",
           status: "completed",
           output: { text: "fixture result" },
+          usage: {
+            inputTokens: 100,
+            outputTokens: 25,
+            totalTokens: 125,
+            cachedTokens: 40,
+          },
         },
       });
       continue;
@@ -765,7 +794,8 @@ async function runSessionFixtureHost(
     }
     if (request.method === "query/start") {
       assert.deepEqual(request.params, {
-        prompt: "continue",
+        prompt: "",
+        images: ["screenshots/continued.webp"],
         sessionId: "session-explicit",
       });
       write(responses, {
@@ -1313,7 +1343,7 @@ function initializeResponse(id: number): unknown {
     jsonrpc: "2.0",
     id,
     result: {
-      protocolVersion: 4,
+      protocolVersion: 5,
       runtimeVersion: "0.2.17",
       stability: "not_delivered",
       capabilities: {
@@ -1325,8 +1355,9 @@ function initializeResponse(id: number): unknown {
         sessionClose: true,
         eventStream: true,
         toolEvents: true,
+        imageInput: true,
         structuredOutput: false,
-        usage: false,
+        usage: true,
         customTools: false,
         permissionResponses: true,
         hooks: false,
