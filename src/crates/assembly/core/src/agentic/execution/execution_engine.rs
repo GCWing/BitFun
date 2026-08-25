@@ -5002,7 +5002,7 @@ impl ExecutionEngine {
         // dialog success) so other agents and failed turns are unaffected.
         #[cfg(feature = "deep-research")]
         {
-            if bitfun_agent_runtime::deep_research::should_post_process_research_report(
+            if bitfun_agent_workflows::deep_research::should_post_process_research_report(
                 &agent_type,
                 success,
             ) {

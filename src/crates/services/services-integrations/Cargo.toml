@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 log = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
+bitfun-agent-workflows = { path = "../../execution/agent-workflows", optional = true }
 bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
@@ -119,8 +120,7 @@ canvas-runtime = [
 deep-research = [
     "anyhow",
     "async-trait",
-    "dep:bitfun-agent-runtime",
-    "bitfun-agent-runtime/deep-research",
+    "dep:bitfun-agent-workflows",
     "bitfun-runtime-ports/workspace-ports",
 ]
 git = [

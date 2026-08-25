@@ -1347,6 +1347,10 @@ export const requiredContentRules = [
         message: 'missing product capability assembly owner',
       },
       {
+        regex: /\bpub fn agent_ids\b/,
+        message: 'missing profile-scoped built-in Agent selection',
+      },
+      {
         regex: /\bProductFeatureGroup\b/,
         message: 'missing product feature group fact owner',
       },
@@ -1416,6 +1420,25 @@ export const requiredContentRules = [
       {
         regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
         message: 'missing legacy harness route non-execution regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/runtime_boundary.rs',
+    reason:
+      'product-capabilities tests must keep headless Agent hosts free of named product workflows and monolithic tool groups',
+    patterns: [
+      {
+        regex: /\bheadless_agent_hosts_select_only_the_code_agent_product_capability\b/,
+        message: 'missing headless capability boundary regression',
+      },
+      {
+        regex: /\bheadless_agent_hosts_keep_explore_code_agents_without_product_workflow_agents\b/,
+        message: 'missing headless Agent catalog boundary regression',
+      },
+      {
+        regex: /\bcode_agent_tools_are_selected_from_atomic_provider_groups\b/,
+        message: 'missing atomic tool group boundary regression',
       },
     ],
   },
@@ -2595,9 +2618,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/deep_research.rs',
+    path: 'src/crates/execution/agent-workflows/src/deep_research.rs',
     reason:
-      'agent-runtime must own provider-neutral DeepResearch citation renumbering without core session or filesystem IO dependencies',
+      'agent-workflows must own provider-neutral DeepResearch citation policy without session or filesystem IO dependencies',
     patterns: [
       {
         regex: /\bpub fn renumber_research_report\b/,
@@ -2622,9 +2645,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
+    path: 'src/crates/execution/agent-workflows/tests/deep_research_contracts.rs',
     reason:
-      'agent-runtime must keep behavior-equivalence contracts for DeepResearch citation renumbering',
+      'agent-workflows must keep behavior-equivalence contracts for DeepResearch citation renumbering',
     patterns: [
       {
         regex: /\bdeep_research_citation_renumber_owner_preserves_report_and_display_map_contracts\b/,
@@ -5264,15 +5287,11 @@ export const requiredContentRules = [
     reason: 'Agent Runtime leaf capability modules must stay behind their exact owner features',
     patterns: [
       {
-        regex: /#\[cfg\(feature = "deep-research"\)\]\r?\npub mod deep_research;/,
-        message: 'deep-research must gate its pure report capability',
-      },
-      {
         regex: /#\[cfg\(feature = "native-hook-settings"\)\]\r?\npub mod native_hooks;/,
         message: 'native-hook-settings must gate the portable hook facade',
       },
       ...agentRuntimeRootPublicModules
-        .filter((moduleName) => !['deep_research', 'native_hooks'].includes(moduleName))
+        .filter((moduleName) => moduleName !== 'native_hooks')
         .map((moduleName) => ({
           regex: new RegExp(`#\\[cfg\\(feature = "agent-runtime"\\)\\]\\r?\\npub mod ${moduleName};`),
           message: `${moduleName} must stay behind the full agent-runtime owner`,
@@ -7184,8 +7203,9 @@ export const requiredContentRules = [
         message: 'missing product runtime owner registry equivalence regression',
       },
       {
-        regex: /\bproduct_tool_runtime_registry_preserves_provider_plan_order\b/,
-        message: 'missing product tool provider plan-to-registry order regression',
+        regex:
+          /\bproduct_tool_runtime_provider_plan_covers_registry_without_owning_order\b/,
+        message: 'missing product tool ownership and registry-order separation regression',
       },
       {
         regex: /\bproduct_tool_runtime_keeps_no_direct_core_profiles_empty\b/,
@@ -7217,6 +7237,14 @@ export const requiredContentRules = [
       {
         regex: /\bcreate_product_tool_registry_from_plan\b/,
         message: 'missing product registry creation adapter',
+      },
+      {
+        regex: /\bPRODUCT_TOOL_REGISTRATION_ORDER\b/,
+        message: 'missing product registry order compatibility contract',
+      },
+      {
+        regex: /\bMissingRegistrationOrder\b/,
+        message: 'product registry materialization must reject unordered planned tools',
       },
       {
         regex: /\bunavailable_feature_groups\b/,

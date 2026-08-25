@@ -85,7 +85,7 @@ mod tests {
                 reason: PluginRuntimeUnavailableReason::NotBuilt
             }
         ));
-        assert!(!parts.harness_registry().provider_ids().is_empty());
+        assert!(parts.harness_registry().provider_ids().is_empty());
     }
 
     #[test]
@@ -108,6 +108,6 @@ mod tests {
                 reason: PluginRuntimeUnavailableReason::UnsupportedProfile
             }
         ));
-        assert!(!parts.harness_registry().provider_ids().is_empty());
+        assert!(parts.harness_registry().provider_ids().is_empty());
     }
 }

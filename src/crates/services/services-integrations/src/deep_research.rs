@@ -1,9 +1,9 @@
 //! Citation renumbering hook for finalized DeepResearch reports.
 //!
 //! This module owns the best-effort filesystem hook and sidecar persistence.
-//! The deterministic report rewrite stays in `bitfun-agent-runtime`.
+//! The deterministic report rewrite stays in `bitfun-agent-workflows`.
 
-use bitfun_agent_runtime::deep_research::{
+use bitfun_agent_workflows::deep_research::{
     renumber_research_report, ResearchCitationDisplayMapEntry,
 };
 use bitfun_runtime_ports::WorkspaceFileSystem;

@@ -106,9 +106,11 @@ restrictions remain enforced.
 - Assemble CLI through `DeliveryProfile::Cli` and validated product Runtime
   parts. Hiding a command is not a backend capability restriction.
 - The CLI selects the reviewed `bitfun-core` owner-feature closure
-  (`agent-runtime`, `canvas-runtime`, `external-sources`, `plugin-runtime`, and
-  `ssh-remote`). Do not replace it with `product-full` or a CLI-named umbrella;
-  add a Core feature only when a production CLI path consumes that owner.
+  (`agent-runtime`, `external-sources`, `plugin-runtime`, `remote-connect`, and
+  `ssh-remote`) plus the Code Agent atomic tool owners. It must not register
+  DeepReview, DeepResearch, MiniApp, or Canvas agents/tools. Do not replace the
+  closure with `product-full` or a CLI-named umbrella; add a Core feature only
+  when a production CLI path consumes that owner.
 - CLI consumes typed external-source summaries and actions. It does not parse
   source files, import executable modules, start plugin workers, duplicate
   approval state, or treat static discovery as runtime availability.

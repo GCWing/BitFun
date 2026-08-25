@@ -452,6 +452,47 @@ fn memory_phase2_hidden_agent_is_registered() {
 }
 
 #[test]
+fn sdk_agent_registry_excludes_desktop_product_workflows() {
+    let registry = AgentRegistry::for_profile(bitfun_product_capabilities::DeliveryProfile::Sdk);
+    let plan = bitfun_product_capabilities::product_assembly_plan_for_profile(
+        bitfun_product_capabilities::DeliveryProfile::Sdk,
+    );
+
+    for product_agent in [
+        "DeepResearch",
+        "ResearchSpecialist",
+        "DeepReview",
+        "CodeReview",
+        "ReviewWorker",
+        "ReviewJudge",
+        "ReviewFixer",
+    ] {
+        assert!(
+            !registry.check_agent_exists(product_agent),
+            "SDK registry must not contain {product_agent}"
+        );
+    }
+    for code_agent in plan.agent_ids() {
+        assert!(
+            registry.check_agent_exists(code_agent),
+            "SDK registry must contain {code_agent}"
+        );
+    }
+}
+
+#[test]
+fn product_full_agent_registry_preserves_the_complete_builtin_catalog() {
+    let mut selected =
+        AgentRegistry::for_profile(bitfun_product_capabilities::DeliveryProfile::ProductFull)
+            .agent_ids(RuntimeAgentRegistryQuery::default());
+    let mut compatibility = AgentRegistry::new().agent_ids(RuntimeAgentRegistryQuery::default());
+    selected.sort();
+    compatibility.sort();
+
+    assert_eq!(selected, compatibility);
+}
+
+#[test]
 fn generate_doc_hidden_agent_defaults_to_fast() {
     assert_eq!(default_model_id_for_builtin_agent("GenerateDoc"), "fast");
 }
