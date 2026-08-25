@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Input, Modal, confirmDanger } from '@/component-library';
+import { Modal, confirmDanger } from '@/component-library';
 import type { UserToolGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
 import {
@@ -279,8 +279,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                   }
                 }}
                 placeholder={t('agentsOverview.toolGroups.groupNamePlaceholder')}
-                inputSize="small"
-                error={nameError}
+                aria-invalid={nameError}
                 disabled={saving}
               />
             </div>

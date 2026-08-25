@@ -10,10 +10,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import {
-  Input,
-} from '@/component-library';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Input } from '@bitfun/ui';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -568,7 +565,6 @@ const AssistantConfigPage: React.FC = () => {
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
-                    size="small"
                     className="acp-left-header__meta-input"
                   />
                 ) : (
@@ -592,7 +588,6 @@ const AssistantConfigPage: React.FC = () => {
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
-                    size="small"
                     className="acp-left-header__meta-input"
                   />
                 ) : (
