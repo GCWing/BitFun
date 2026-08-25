@@ -897,8 +897,7 @@ export abstract class AppRootRuntimeComposition {
       scanDesktop: (): void => { this.closeAppSidebar(); this.openConnectSheet(CONNECT_INTENT_SCAN); },
       addDesktop: (): void => {
         this.closeAppSidebar();
-        this.openConnectSheet(this.remotePageState.accountUserId.length > 0 ?
-          CONNECT_INTENT_SCAN : CONNECT_INTENT_AUTO);
+        this.openConnectSheet(CONNECT_INTENT_SCAN);
       },
       settings: (): void => { this.closeAppSidebar(); this.appShellState.openSettings('general'); },
       openAccount: (): void => {
