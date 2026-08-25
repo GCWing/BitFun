@@ -10,10 +10,36 @@ const log = createLogger('ModelConfigManager');
 const t = (key: string, options?: Record<string, unknown>) => i18nService.t(key, options);
 
 type ProviderConfigLike = {
+  id?: string;
   name?: string;
   model_name?: string;
   base_url?: string;
+  metadata?: Record<string, unknown> | null;
 };
+
+export const PROVIDER_INSTANCE_METADATA_KEY = 'provider_instance_id';
+
+/**
+ * The provider instance a model config belongs to: one configured endpoint plus
+ * credential, which is what the user manages as a single "provider".
+ */
+export function getProviderInstanceId(
+  config: ProviderConfigLike | null | undefined,
+): string | undefined {
+  const value = config?.metadata?.[PROVIDER_INSTANCE_METADATA_KEY];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Grouping key for presenting models by provider. Configs written before the
+ * provider-instance migration, and drafts that have not been saved yet, fall
+ * back to their own identity so they stay visible as their own group.
+ */
+export function getProviderGroupKey(config: ProviderConfigLike): string {
+  return getProviderInstanceId(config)
+    || config.id
+    || `${config.name ?? ''}:${config.model_name ?? ''}`;
+}
 
 function inferProviderTemplate(config: ProviderConfigLike): ProviderTemplate | undefined {
   const matchedCatalogItem = matchProviderCatalogItemByBaseUrl(config.base_url);

@@ -12,7 +12,15 @@ import {
 } from '../types';
 import { configManager } from '../services/ConfigManager';
 import { getCapabilitiesByCategory, resolveModelCategory } from '../services/modelCategory';
-import { allocateModelConfigId, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
+import {
+  allocateModelConfigId,
+  getModelDisplayName,
+  getProviderDisplayName,
+  getProviderGroupKey,
+  getProviderInstanceId,
+  getProviderTemplateId,
+  PROVIDER_INSTANCE_METADATA_KEY,
+} from '../services/modelConfigs';
 import { resolveProviderTemplates } from '../services/builtinProviderCatalog';
 import { normalizeProviderBaseUrl } from '../services/providerCatalog';
 import { supportsResponsesReasoning } from '../utils/reasoning';
@@ -212,20 +220,8 @@ function parseOptionalPositiveIntegerInput(value: string): number | null | undef
   return parsed;
 }
 
-const PROVIDER_INSTANCE_METADATA_KEY = 'provider_instance_id';
-
 function generateProviderInstanceId(): string {
   return `provider_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function getProviderInstanceId(config: AIModelConfigType | Partial<AIModelConfigType> | null | undefined): string | undefined {
-  if (!config) return undefined;
-  const value = config.metadata?.[PROVIDER_INSTANCE_METADATA_KEY];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function getProviderGroupKey(config: AIModelConfigType): string {
-  return getProviderInstanceId(config) || config.id || `${config.name}:${config.model_name}`;
 }
 
 

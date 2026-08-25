@@ -2511,6 +2511,8 @@
     "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
+    "providerModelCount": "{{total}} 個模型",
+    "backToProviders": "返回供應商列表",
     "fastMode": "Fast 模式",
     "fastModeDescription": "1.5 倍速度，消耗更多額度",
     "acpMode": "模式",

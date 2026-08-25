@@ -211,23 +211,25 @@ describe('ModelSelector external transport reuse', () => {
       'ai.models': [
         {
           id: 'model-a',
-          name: 'Model A',
+          name: 'Shared provider',
           model_name: 'model-a-native',
           provider: 'openai',
           base_url: 'https://example.test/v1',
           enabled: true,
           category: 'text',
           capabilities: ['text_chat'],
+          metadata: { provider_instance_id: 'provider-shared' },
         },
         {
           id: 'model-b',
-          name: 'Model B',
+          name: 'Shared provider',
           model_name: 'model-b-native',
           provider: 'openai',
           base_url: 'https://example.test/v1',
           enabled: true,
           category: 'text',
           capabilities: ['text_chat'],
+          metadata: { provider_instance_id: 'provider-shared' },
         },
       ],
       'ai.default_models': { primary: 'model-a' },
@@ -285,6 +287,11 @@ describe('ModelSelector external transport reuse', () => {
     ).not.toBeNull();
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-provider"][data-provider-key="provider-shared"]',
+      )?.click();
     });
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>(

@@ -225,6 +225,29 @@
     }
   }
   
+  // One menu level. It is remounted on every step, so its entry animation is
+  // what makes the height change read as a step in a direction rather than as
+  // the surface resizing on its own.
+  &__level {
+    transition:
+      opacity 120ms ease,
+      transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &[data-direction='forward'] {
+      @starting-style {
+        opacity: 0;
+        transform: translateX(8px);
+      }
+    }
+
+    &[data-direction='back'] {
+      @starting-style {
+        opacity: 0;
+        transform: translateX(-8px);
+      }
+    }
+  }
+
   &__dropdown-header {
     display: flex;
     align-items: center;
@@ -244,6 +267,50 @@
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
+  }
+
+  // The provider level's header is a label; a provider's own header is the way
+  // back out of it, so the whole strip becomes the control.
+  &__dropdown-header--nav {
+    padding: 0;
+  }
+
+  &__back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: inherit;
+    font-size: flow-type.$control-size;
+    font-weight: 500;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: pointer;
+    transition:
+      background-color 140ms ease,
+      color 140ms ease;
+
+    &:hover {
+      background: var(--bf-appearance-token-color-accent-100);
+    }
+  }
+
+  &__back-icon {
+    flex-shrink: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__back-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   
   &__divider {
@@ -404,6 +471,18 @@
     flex-shrink: 0;
   }
 
+  &__option-count {
+    flex-shrink: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: flow-type.$meta-size;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__option-chevron {
+    flex-shrink: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
   :root[data-bf-appearance-mode="light"] &,
   :root[data-bf-appearance-mode="light"] &,
   .light & {
@@ -444,7 +523,9 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-model-selector__trigger,
   .bitfun-model-selector__option,
-  .bitfun-model-selector__chevron {
+  .bitfun-model-selector__back,
+  .bitfun-model-selector__chevron,
+  .bitfun-model-selector__level {
     transition-duration: 0ms;
   }
 
