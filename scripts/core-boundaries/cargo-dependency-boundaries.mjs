@@ -1333,8 +1333,6 @@ export function findProductEntrypointCoreFeatureViolations(
     'tools-browser-web',
     'tools-computer-use',
     'tools-image-analysis',
-    'tools-miniapp',
-    'tools-canvas',
     'tools-agent-control',
   ];
   const reviewedCoreFeatureClosures = new Map([

@@ -26,8 +26,6 @@ bitfun-core = { path = "../../crates/assembly/core", features = [
     "tools-browser-web",
     "tools-computer-use",
     "tools-image-analysis",
-    "tools-miniapp",
-    "tools-canvas",
     "tools-agent-control",
 ] }
 bitfun-sdk-host = { path = "../../crates/interfaces/sdk-host" }

@@ -22,7 +22,6 @@ export const agentRuntimeRootPublicModules = [
   'context_profile',
   'custom_agent',
   'custom_subagent',
-  'deep_research',
   'deep_review',
   'dialog_turn',
   'event_bus',

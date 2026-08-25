@@ -868,6 +868,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitfun-agent-workflows"
+version = "0.2.18"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "bitfun-ai-adapters"
 version = "0.2.18"
 dependencies = [
@@ -1056,6 +1063,7 @@ dependencies = [
  "bitfun-agent-runtime",
  "bitfun-agent-stream",
  "bitfun-agent-tools",
+ "bitfun-agent-workflows",
  "bitfun-ai-adapters",
  "bitfun-claude-code-adapter",
  "bitfun-codex-adapter",
@@ -1585,6 +1593,7 @@ dependencies = [
  "base64 0.22.1",
  "bitfun-agent-runtime",
  "bitfun-agent-tools",
+ "bitfun-agent-workflows",
  "bitfun-core-types",
  "bitfun-events",
  "bitfun-product-domains",

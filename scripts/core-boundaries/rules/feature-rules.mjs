@@ -116,7 +116,7 @@ export const optionalDependencyFeatureOwnerRules = [
     crateName: 'agent-runtime',
     reviewedAggregateFeatures: ['native-hook-runtime'],
     reason:
-      'agent-runtime optional dependencies must stay behind the full runtime, DeepResearch, or native-hook owner slice',
+      'agent-runtime optional dependencies must stay behind the full runtime or native-hook owner slice',
     dependencies: [
       { depName: 'async-trait', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
@@ -129,7 +129,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'dashmap', ownerFeatures: ['agent-runtime'] },
       { depName: 'hex', ownerFeatures: ['agent-runtime'] },
       { depName: 'log', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
-      { depName: 'regex', ownerFeatures: ['agent-runtime', 'deep-research', 'native-hook-settings'] },
+      { depName: 'regex', ownerFeatures: ['agent-runtime', 'native-hook-settings'] },
       { depName: 'serde', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
       { depName: 'serde_json', ownerFeatures: ['agent-runtime', 'native-hook-runtime', 'native-hook-settings'] },
       { depName: 'serde_yaml', ownerFeatures: ['agent-runtime'] },
@@ -151,7 +151,8 @@ export const optionalDependencyFeatureOwnerRules = [
         depName: 'bitfun-ai-adapters',
         ownerFeatures: ['ai-adapter-runtime', 'subscription-auth'],
       },
-      { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime', 'deep-research'] },
+      { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-workflows', ownerFeatures: ['deep-research'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime', 'local-storage', 'mcp-runtime'] },
       { depName: 'bitfun-claude-code-adapter', ownerFeatures: ['external-sources'] },
@@ -260,7 +261,8 @@ export const optionalDependencyFeatureOwnerRules = [
         depName: 'base64',
         ownerFeatures: ['mcp', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete', 'speech'],
       },
-      { depName: 'bitfun-agent-runtime', ownerFeatures: ['deep-research', 'hook-import'] },
+      { depName: 'bitfun-agent-runtime', ownerFeatures: ['hook-import'] },
+      { depName: 'bitfun-agent-workflows', ownerFeatures: ['deep-research'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['remote-connect', 'speech'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'plugin-source'] },
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['deep-research', 'git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
@@ -548,7 +550,6 @@ export const capabilityContractDependencyRules = [
     manifestPath: 'src/crates/execution/agent-runtime/Cargo.toml',
     featureProfiles: {
       default: [],
-      'deep-research': ['dep:regex'],
       'native-hook-settings': ['dep:regex', 'dep:serde_json'],
       'native-hook-runtime': [
         'native-hook-settings',
@@ -606,7 +607,6 @@ export const capabilityContractDependencyRules = [
         [capabilityEdge([], { optional: true })],
         [
           capabilityForwarder('agent-runtime', 'agent-runtime'),
-          capabilityForwarder('deep-research', 'deep-research', true),
         ],
         ['agent-runtime'],
         ['external-sources', 'mcp-runtime', 'opencode-plugin-host', 'plugin-runtime', 'product-search', 'product-full', 'remote-connect', 'tools-mcp'],
@@ -629,10 +629,9 @@ export const capabilityContractDependencyRules = [
       ['bitfun-services-integrations', capabilityConsumer(
         [capabilityEdge([], { optional: true })],
         [
-          capabilityForwarder('deep-research', 'deep-research'),
           capabilityForwarder('hook-import', 'native-hook-settings'),
         ],
-        ['deep-research', 'hook-import'],
+        ['hook-import'],
         ['product-full'],
       )],
     ]),
@@ -708,8 +707,6 @@ export const acpServerCoreFeatures = [
   'tools-browser-web',
   'tools-computer-use',
   'tools-image-analysis',
-  'tools-miniapp',
-  'tools-canvas',
   'tools-agent-control',
 ];
 
@@ -810,6 +807,7 @@ export const coreClosedFeatureProfileRules = [
       'dep:bitfun-agent-content',
       'dep:bitfun-agent-stream',
       'dep:bitfun-agent-tools',
+      'dep:bitfun-harness',
       'bitfun-agent-tools/computer-use-contract',
       'bitfun-runtime-ports/agent-api',
       'bitfun-runtime-ports/git-port',
@@ -820,7 +818,6 @@ export const coreClosedFeatureProfileRules = [
       'bitfun-runtime-ports/tool-runtime-handles',
       'bitfun-runtime-ports/workspace-ports',
       'dep:base64',
-      'dep:bitfun-harness',
       'dep:dashmap',
       'dep:filetime',
       'dep:flate2',
@@ -1131,7 +1128,7 @@ export const coreClosedFeatureProfileRules = [
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'deep-research',
     requiredFeatureRefs: [
-      'bitfun-agent-runtime?/deep-research',
+      'dep:bitfun-agent-workflows',
       'bitfun-services-integrations/deep-research',
     ],
     exact: true,

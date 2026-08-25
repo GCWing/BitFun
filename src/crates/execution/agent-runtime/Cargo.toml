@@ -17,7 +17,6 @@ required-features = ["agent-runtime"]
 
 [features]
 default = []
-deep-research = ["dep:regex"]
 native-hook-settings = ["dep:regex", "dep:serde_json"]
 native-hook-runtime = [
     "native-hook-settings",
@@ -104,11 +103,6 @@ required-features = ["agent-runtime"]
 name = "native_hook_execution_contracts"
 path = "tests/native_hook_execution_contracts.rs"
 required-features = ["native-hook-runtime"]
-
-[[test]]
-name = "deep_research_contracts"
-path = "tests/deep_research_contracts.rs"
-required-features = ["deep-research"]
 
 [[test]]
 name = "native_hook_settings_contracts"

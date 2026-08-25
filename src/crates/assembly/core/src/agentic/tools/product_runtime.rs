@@ -127,6 +127,8 @@ impl ProductToolRuntime {
 
 #[cfg(all(test, feature = "product-full"))]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::ProductToolRuntime;
     use crate::agentic::tools::registry::create_tool_registry;
     use bitfun_product_capabilities::{product_assembly_plan_for_profile, DeliveryProfile};
@@ -152,7 +154,7 @@ mod tests {
     }
 
     #[test]
-    fn product_tool_runtime_registry_preserves_provider_plan_order() {
+    fn product_tool_runtime_provider_plan_covers_registry_without_owning_order() {
         let assembly = product_assembly_plan_for_profile(DeliveryProfile::ProductFull)
             .capability_assembly()
             .clone();
@@ -160,10 +162,20 @@ mod tests {
             .tool_provider_group_plan()
             .iter()
             .flat_map(|group| group.tool_names())
-            .map(|tool_name| tool_name.to_string())
-            .collect::<Vec<_>>();
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let registry_names = create_tool_registry()
+            .get_tool_names()
+            .into_iter()
+            .collect::<BTreeSet<_>>();
 
-        assert_eq!(planned_names, create_tool_registry().get_tool_names());
+        assert_eq!(
+            planned_names,
+            registry_names
+                .iter()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>()
+        );
     }
 
     #[test]
@@ -172,16 +184,23 @@ mod tests {
         let owner_registry = runtime
             .create_registry()
             .expect("CLI runtime plan must materialize in the product-full test build");
-        let compatibility_registry = create_tool_registry();
+        let selected_names = product_assembly_plan_for_profile(DeliveryProfile::Cli)
+            .capability_assembly()
+            .tool_provider_group_plan()
+            .iter()
+            .flat_map(|group| group.tool_names())
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let expected_names = create_tool_registry()
+            .get_tool_names()
+            .into_iter()
+            .filter(|tool_name| selected_names.contains(tool_name.as_str()))
+            .collect::<Vec<_>>();
 
-        assert_eq!(
-            owner_registry.get_tool_names(),
-            compatibility_registry.get_tool_names()
-        );
-        assert_eq!(
-            owner_registry.get_deferred_tool_names(),
-            compatibility_registry.get_deferred_tool_names()
-        );
+        assert_eq!(owner_registry.get_tool_names(), expected_names);
+        assert!(owner_registry.get_tool("CodeReview").is_none());
+        assert!(owner_registry.get_tool("CreateCanvas").is_none());
+        assert!(owner_registry.get_tool("InitMiniApp").is_none());
     }
 
     #[test]
@@ -190,16 +209,23 @@ mod tests {
         let owner_registry = runtime
             .create_registry()
             .expect("ACP runtime plan must materialize in the product-full test build");
-        let compatibility_registry = create_tool_registry();
+        let selected_names = product_assembly_plan_for_profile(DeliveryProfile::Acp)
+            .capability_assembly()
+            .tool_provider_group_plan()
+            .iter()
+            .flat_map(|group| group.tool_names())
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let expected_names = create_tool_registry()
+            .get_tool_names()
+            .into_iter()
+            .filter(|tool_name| selected_names.contains(tool_name.as_str()))
+            .collect::<Vec<_>>();
 
-        assert_eq!(
-            owner_registry.get_tool_names(),
-            compatibility_registry.get_tool_names()
-        );
-        assert_eq!(
-            owner_registry.get_deferred_tool_names(),
-            compatibility_registry.get_deferred_tool_names()
-        );
+        assert_eq!(owner_registry.get_tool_names(), expected_names);
+        assert!(owner_registry.get_tool("CodeReview").is_none());
+        assert!(owner_registry.get_tool("CreateCanvas").is_none());
+        assert!(owner_registry.get_tool("InitMiniApp").is_none());
     }
 
     #[test]

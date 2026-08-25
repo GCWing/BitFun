@@ -11,8 +11,75 @@ use bitfun_agent_tools::{
 use bitfun_tool_packs::{
     tool_feature_group, unavailable_feature_groups, ToolPackFeatureGroup, ToolProviderGroupPlan,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+// Product capability groups own inclusion. Core keeps the established registry
+// order because it is observable in model tool manifests and deferred catalogs.
+const PRODUCT_TOOL_REGISTRATION_ORDER: &[&str] = &[
+    "LS",
+    "Read",
+    "view_image",
+    "analyze_image",
+    "Glob",
+    "Grep",
+    "Write",
+    "Edit",
+    "Delete",
+    "ExecCommand",
+    "WriteStdin",
+    "ExecControl",
+    "GetTime",
+    "ListModels",
+    "BitFunControl",
+    "Task",
+    "AgentSpawn",
+    "AgentSendInput",
+    "AgentInterrupt",
+    "AgentList",
+    "AgentDelete",
+    "AgentWait",
+    "LaunchReviewAgent",
+    "Skill",
+    "AskUserQuestion",
+    "TodoWrite",
+    "get_goal",
+    "create_goal",
+    "update_goal",
+    "CreatePlan",
+    "submit_code_review",
+    "GetToolSpec",
+    "CallDeferredTool",
+    "GetFileDiff",
+    "CreateCanvas",
+    "ReadCanvas",
+    "UpdateCanvas",
+    "PatchCanvas",
+    "SessionControl",
+    "SessionMessage",
+    "SessionHistory",
+    "Cron",
+    "PortForward",
+    "WebSearch",
+    "WebFetch",
+    "ListMCPResources",
+    "ReadMCPResource",
+    "ListMCPPrompts",
+    "GetMCPPrompt",
+    "GenerativeUI",
+    "Git",
+    "Worktree",
+    "ReviewPlatform",
+    "InitMiniApp",
+    "FinalizeMiniApp",
+    "PublishMiniApp",
+    "PublishAppearance",
+    "PageDeploy",
+    "PagePublish",
+    "ControlHub",
+    "ComputerUse",
+    "Playbook",
+];
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProductToolMaterializationError {
@@ -20,6 +87,11 @@ pub(crate) enum ProductToolMaterializationError {
     UnavailableFeatureGroups { groups: String },
     #[error("product tool {tool_name} in provider {provider_id} has no feature owner")]
     MissingFeatureOwner {
+        provider_id: &'static str,
+        tool_name: &'static str,
+    },
+    #[error("product tool {tool_name} in provider {provider_id} has no registry order")]
+    MissingRegistrationOrder {
         provider_id: &'static str,
         tool_name: &'static str,
     },
@@ -148,9 +220,8 @@ pub(in crate::agentic::tools) fn create_product_tool_registry_from_plan(
         .iter()
         .copied()
         .collect::<HashSet<_>>();
-    let mut entries = Vec::new();
+    let mut selected_tools = HashMap::new();
     for provider in plan {
-        let mut tool_names = Vec::new();
         for tool_name in provider.tool_names() {
             let feature_group = tool_feature_group(tool_name).ok_or(
                 ProductToolMaterializationError::MissingFeatureOwner {
@@ -159,12 +230,22 @@ pub(in crate::agentic::tools) fn create_product_tool_registry_from_plan(
                 },
             )?;
             if requested.contains(&feature_group) {
-                tool_names.push(*tool_name);
+                selected_tools.insert(*tool_name, provider.provider_id());
             }
         }
-        if !tool_names.is_empty() {
-            entries.push((provider.provider_id(), tool_names));
+    }
+
+    let mut entries = Vec::new();
+    for tool_name in PRODUCT_TOOL_REGISTRATION_ORDER {
+        if let Some(provider_id) = selected_tools.remove(tool_name) {
+            entries.push((provider_id, vec![*tool_name]));
         }
+    }
+    if let Some((tool_name, provider_id)) = selected_tools.into_iter().next() {
+        return Err(ProductToolMaterializationError::MissingRegistrationOrder {
+            provider_id,
+            tool_name,
+        });
     }
 
     Ok(ToolRuntimeAssembly::with_tool_decorator(tool_decorator)

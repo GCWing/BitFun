@@ -122,6 +122,7 @@ pub struct ProductCapabilityPack {
     id: ProductCapabilityId,
     required_services: &'static [RuntimeServiceCapability],
     tool_provider_group_ids: &'static [&'static str],
+    agent_ids: &'static [&'static str],
     harness_provider_descriptors: &'static [HarnessProviderDescriptor],
 }
 
@@ -130,12 +131,14 @@ impl ProductCapabilityPack {
         id: ProductCapabilityId,
         required_services: &'static [RuntimeServiceCapability],
         tool_provider_group_ids: &'static [&'static str],
+        agent_ids: &'static [&'static str],
         harness_provider_descriptors: &'static [HarnessProviderDescriptor],
     ) -> Self {
         Self {
             id,
             required_services,
             tool_provider_group_ids,
+            agent_ids,
             harness_provider_descriptors,
         }
     }
@@ -150,6 +153,10 @@ impl ProductCapabilityPack {
 
     pub const fn tool_provider_group_ids(self) -> &'static [&'static str] {
         self.tool_provider_group_ids
+    }
+
+    pub const fn agent_ids(self) -> &'static [&'static str] {
+        self.agent_ids
     }
 
     pub const fn harness_provider_descriptors(self) -> &'static [HarnessProviderDescriptor] {
@@ -371,6 +378,7 @@ impl ProductServiceCapabilityRequirement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductCapabilityAssembly {
     capability_ids: Vec<ProductCapabilityId>,
+    agent_ids: Vec<&'static str>,
     feature_groups: Vec<ProductFeatureGroup>,
     service_requirements: Vec<ProductServiceCapabilityRequirement>,
     tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
@@ -436,6 +444,10 @@ impl ProductAssemblyPlan {
 
     pub fn capability_assembly(&self) -> &ProductCapabilityAssembly {
         &self.capability_assembly
+    }
+
+    pub fn agent_ids(&self) -> &[&'static str] {
+        self.capability_assembly.agent_ids()
     }
 
     pub fn extension_capabilities(&self) -> &ProductExtensionCapabilitySet {
@@ -731,6 +743,7 @@ fn default_plugin_runtime_binding_for_profile(profile: DeliveryProfile) -> Plugi
 impl ProductCapabilityAssembly {
     fn new(
         capability_ids: Vec<ProductCapabilityId>,
+        agent_ids: Vec<&'static str>,
         feature_groups: Vec<ProductFeatureGroup>,
         service_requirements: Vec<ProductServiceCapabilityRequirement>,
         tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
@@ -738,6 +751,7 @@ impl ProductCapabilityAssembly {
     ) -> Self {
         Self {
             capability_ids,
+            agent_ids,
             feature_groups,
             service_requirements,
             tool_provider_group_plan,
@@ -747,6 +761,10 @@ impl ProductCapabilityAssembly {
 
     pub fn capability_ids(&self) -> &[ProductCapabilityId] {
         &self.capability_ids
+    }
+
+    pub fn agent_ids(&self) -> &[&'static str] {
+        &self.agent_ids
     }
 
     pub fn feature_groups(&self) -> &[ProductFeatureGroup] {
@@ -868,6 +886,19 @@ impl ProductCapabilityRegistry {
         provider_ids
     }
 
+    pub fn agent_ids(self) -> Vec<&'static str> {
+        let mut seen = HashSet::new();
+        let mut agent_ids = Vec::new();
+        for pack in self.packs {
+            for agent_id in pack.agent_ids() {
+                if seen.insert(*agent_id) {
+                    agent_ids.push(*agent_id);
+                }
+            }
+        }
+        agent_ids
+    }
+
     pub fn try_tool_provider_group_plan(
         self,
     ) -> Result<Vec<ToolProviderGroupPlan>, ProductCapabilityBuildError> {
@@ -919,6 +950,7 @@ impl ProductCapabilityRegistry {
             feature_groups_from_tool_provider_group_plan(&tool_provider_group_plan);
         Ok(ProductCapabilityAssembly::new(
             self.capability_ids(),
+            self.agent_ids(),
             feature_groups,
             self.service_requirements(),
             tool_provider_group_plan,
@@ -1003,6 +1035,8 @@ const CODE_AGENT_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Events,
     RuntimeServiceCapability::Clock,
     RuntimeServiceCapability::Terminal,
+    RuntimeServiceCapability::Git,
+    RuntimeServiceCapability::Network,
 ];
 const DEEP_REVIEW_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Workspace,
@@ -1026,9 +1060,47 @@ const CANVAS_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Events,
 ];
 
-const CODE_AGENT_TOOL_GROUPS: &[&str] = &["core.basic", "core.agent", "core.session"];
-const INTEGRATION_TOOL_GROUPS: &[&str] = &["core.integration"];
+const CODE_AGENT_TOOL_GROUPS: &[&str] = &[
+    "core.basic",
+    "core.agent",
+    "core.session",
+    "core.git",
+    "core.web",
+    "core.mcp",
+    "core.computer-use",
+];
+const DEEP_REVIEW_TOOL_GROUPS: &[&str] = &["core.review"];
+const DEEP_RESEARCH_TOOL_GROUPS: &[&str] = &["core.web", "core.mcp"];
+const MINIAPP_TOOL_GROUPS: &[&str] = &["core.miniapp"];
 const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
+
+const CODE_AGENT_IDS: &[&str] = &[
+    "minimal",
+    "agentic",
+    "Cowork",
+    "Multitask",
+    "Plan",
+    "Claw",
+    "Team",
+    "Ultra",
+    "SwarmPlanner",
+    "SwarmWorker",
+    "SwarmReviewer",
+    "ComputerUse",
+    "Explore",
+    "GeneralPurpose",
+    "GenerateDoc",
+    "MemoryPhase2",
+];
+const DEEP_REVIEW_AGENT_IDS: &[&str] = &[
+    "ReviewWorker",
+    "ReviewJudge",
+    "ReviewFixer",
+    "CodeReview",
+    "DeepReview",
+];
+const DEEP_RESEARCH_AGENT_IDS: &[&str] = &["DeepResearch", "ResearchSpecialist"];
+const NO_PRODUCT_AGENTS: &[&str] = &[];
 
 const DEEP_REVIEW_HARNESS_CAPABILITIES: &[HarnessCapability] = &[
     HarnessCapability::Plan,
@@ -1076,46 +1148,45 @@ const CODE_AGENT_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack:
     ProductCapabilityId::CodeAgent,
     CODE_AGENT_SERVICES,
     CODE_AGENT_TOOL_GROUPS,
+    CODE_AGENT_IDS,
     NO_HARNESS_PROVIDERS,
 );
 const DEEP_REVIEW_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::DeepReview,
     DEEP_REVIEW_SERVICES,
-    INTEGRATION_TOOL_GROUPS,
+    DEEP_REVIEW_TOOL_GROUPS,
+    DEEP_REVIEW_AGENT_IDS,
     DEEP_REVIEW_HARNESS_PROVIDERS,
 );
 const DEEP_RESEARCH_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::DeepResearch,
     DEEP_RESEARCH_SERVICES,
-    INTEGRATION_TOOL_GROUPS,
+    DEEP_RESEARCH_TOOL_GROUPS,
+    DEEP_RESEARCH_AGENT_IDS,
     DEEP_RESEARCH_HARNESS_PROVIDERS,
 );
 const MINIAPP_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::MiniApp,
     MINIAPP_SERVICES,
-    INTEGRATION_TOOL_GROUPS,
+    MINIAPP_TOOL_GROUPS,
+    NO_PRODUCT_AGENTS,
     MINIAPP_HARNESS_PROVIDERS,
 );
 const CANVAS_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::Canvas,
     CANVAS_SERVICES,
     CANVAS_TOOL_GROUPS,
+    NO_PRODUCT_AGENTS,
     NO_HARNESS_PROVIDERS,
 );
 const VOICE_INPUT_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::VoiceInput,
     &[],
     &[],
+    NO_PRODUCT_AGENTS,
     NO_HARNESS_PROVIDERS,
 );
 
-const CORE_COMPATIBILITY_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
-    CODE_AGENT_CAPABILITY_PACK,
-    DEEP_REVIEW_CAPABILITY_PACK,
-    DEEP_RESEARCH_CAPABILITY_PACK,
-    MINIAPP_CAPABILITY_PACK,
-    CANVAS_CAPABILITY_PACK,
-];
 const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
     CODE_AGENT_CAPABILITY_PACK,
     DEEP_REVIEW_CAPABILITY_PACK,
@@ -1135,12 +1206,15 @@ pub fn default_product_capability_assembly() -> ProductCapabilityAssembly {
 }
 
 pub fn agent_runtime_baseline_tool_plan() -> ProductToolPlan {
+    let tool_provider_group_plan =
+        try_product_tool_provider_group_plan_for_ids(&["core.basic", "core.agent", "core.session"])
+            .expect("Agent Runtime baseline tool groups must exist");
     ProductToolPlan::new(
         vec![
             ProductFeatureGroup::Basic,
             ProductFeatureGroup::AgentControl,
         ],
-        bitfun_tool_packs::product_tool_provider_group_plan().to_vec(),
+        tool_provider_group_plan,
     )
 }
 
@@ -1168,7 +1242,7 @@ fn product_capability_registry_for_profile(profile: DeliveryProfile) -> ProductC
             default_product_capability_registry()
         }
         DeliveryProfile::Cli | DeliveryProfile::Acp | DeliveryProfile::Sdk => {
-            ProductCapabilityRegistry::new(CORE_COMPATIBILITY_CAPABILITY_PACKS)
+            ProductCapabilityRegistry::new(&[CODE_AGENT_CAPABILITY_PACK])
         }
         DeliveryProfile::Server
         | DeliveryProfile::Remote
