@@ -1,9 +1,8 @@
  
 
 import React from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { X, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
-import { IconButton } from '@/component-library/components/IconButton';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
 import { notificationService } from '../services/NotificationService';
@@ -87,16 +86,20 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
 
       
       {closable && (
-        <IconButton
-          variant="ghost"
-          size="xs"
+        <span
+          className="notification-item__close"
           data-bf-component="notification"
           data-bf-part="itemClose"
-          onClick={handleClose}
-          aria-label={t('actions.close')}
         >
-          <X size={14} />
-        </IconButton>
+          <IconButton
+            size="sm"
+            onClick={handleClose}
+            aria-label={t('actions.close')}
+            title={t('actions.close')}
+          >
+            <X size={14} />
+          </IconButton>
+        </span>
       )}
     </div>
   );

@@ -28,7 +28,6 @@
       "@/component-library/components/FilterPill/appearance": 1,
       "@/component-library/components/FlowChatCards/appearance": 1,
       "@/component-library/components/FlowChatCards/ContextCompressionCard/appearance": 1,
-      "@/component-library/components/IconButton": 3,
       "@/component-library/components/IconButton/appearance": 1,
       "@/component-library/components/IconButton/IconButton": 1,
       "@/component-library/components/Input": 1,
@@ -108,7 +107,7 @@
       "filterPillAppearanceDescriptor": 1,
       "flowChatCardAppearanceDescriptor": 1,
       "HarnessCreativeIcon": 2,
-      "IconButton": 75,
+      "IconButton": 72,
       "iconButtonAppearanceDescriptor": 1,
       "iconCatalogAppearanceDescriptor": 1,
       "Input": 42,
@@ -166,7 +165,7 @@
       "WindowControls": 1,
       "windowControlsAppearanceDescriptor": 1
     },
-    "moduleReferences": 421
+    "moduleReferences": 418
   },
   "nativeControls": {
     "allowlist": [],
@@ -718,6 +717,6 @@
     "total": 445
   },
   "newLibrary": {
-    "moduleReferences": 225
+    "moduleReferences": 227
   }
 }
