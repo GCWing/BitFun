@@ -628,7 +628,7 @@ fn resolve_worker_host_path() -> Option<std::path::PathBuf> {
 /// layouts mirror `resolve_worker_host_path`, with the platform binary name
 /// under a `loopx/` subdirectory. Returns the resource directory so the
 /// worker pool can export it as `BITFUN_RESOURCE_DIR`.
-fn resolve_bundled_loopx_dir() -> Option<std::path::PathBuf> {
+pub(crate) fn resolve_bundled_loopx_dir() -> Option<std::path::PathBuf> {
     let bin_name = if cfg!(windows) { "loopx.exe" } else { "loopx" };
     let mut candidates: Vec<std::path::PathBuf> = Vec::new();
 

@@ -5,7 +5,7 @@ use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
 /// Exposes window.app with call(), fs.*, shell.*, net.*, os.*, storage.*, dialog.*,
-/// ai.*, agent.*, deck.*, chat.*, clipboard.*, lifecycle, events.
+/// ai.*, agent.*, loopx.*, deck.*, chat.*, clipboard.*, lifecycle, events.
 pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
@@ -129,6 +129,20 @@ pub fn build_bridge_script(
       cancelStaleRuns: () => _rpc('agent.cancelStaleRuns', {{}}),
       onEvent:        (fn) => app.on('agent:event', fn),
       offEvent:       (fn) => app.off('agent:event', fn),
+    }},
+
+    // Built-in LoopX console namespace. The outer bridge and Desktop host
+    // verify the exact built-in identity, active runner scope, content hash,
+    // customization origin, and local execution domain before accepting any
+    // method. Other MiniApps receive an explicit unsupported response.
+    loopx: {{
+      attach:        (opts) => _rpc('loopx.attach', opts || {{}}),
+      resolveIntake: (opts) => _rpc('loopx.resolveIntake', opts || {{}}),
+      createTask:    (opts) => _rpc('loopx.createTask', opts || {{}}),
+      action:        (opts) => _rpc('loopx.action', opts || {{}}),
+      eventsSince:   (opts) => _rpc('loopx.eventsSince', opts || {{}}),
+      onEvent:       (fn) => app.on('loopx:event', fn),
+      offEvent:      (fn) => app.off('loopx:event', fn),
     }},
 
     // Deck namespace — renders one slide HTML page in a hidden host WebView

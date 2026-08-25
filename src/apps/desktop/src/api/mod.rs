@@ -33,6 +33,7 @@ pub mod lsp_api;
 pub mod lsp_workspace_api;
 pub mod mcp_api;
 pub mod miniapp_agent_api;
+pub mod miniapp_loopx_api;
 pub mod miniapp_api;
 pub mod miniapp_export_api;
 pub mod miniapp_market_api;

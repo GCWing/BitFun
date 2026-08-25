@@ -1,0 +1,492 @@
+#![cfg(feature = "miniapp")]
+
+use bitfun_product_domains::miniapp::loopx::{
+    build_intake_fingerprint, decide_action_status, decide_events_page_status, decide_task_dedup,
+    decide_task_restart, decide_task_transition, derive_environment_status,
+    intake_scope_is_pregrantable, parse_loopx_intake, task_state_after_restart, LoopxActionKind,
+    LoopxActionRequest, LoopxActionStatus, LoopxAgentFinishRequest, LoopxAgentPort,
+    LoopxAgentStartRequest, LoopxCliAnswerGateRequest, LoopxCliGateDecision,
+    LoopxCliHandshakeRequest, LoopxCliPort, LoopxCoreEnvironmentFacts, LoopxCreateTaskRequest,
+    LoopxDedupDecision, LoopxEnvironmentFact, LoopxEnvironmentFactStatus, LoopxEnvironmentStatus,
+    LoopxEventsPageStatus, LoopxExistingTask, LoopxIntakeCandidate, LoopxIntakeParseErrorKind,
+    LoopxIntakeTarget, LoopxIssueKey, LoopxItemKind, LoopxOptionalEnvironmentFacts,
+    LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey, LoopxResolveIntakeRequest,
+    LoopxRestartDecision, LoopxSnapshot, LoopxTaskIdentity, LoopxTaskState,
+    LoopxTransitionDecision, LoopxWorkspacePort, LoopxWorkspacePrepareRequest,
+    LOOPX_CLI_SCHEMA_VERSION, LOOPX_PINNED_VERSION,
+};
+
+fn issue(owner: &str, repository: &str, number: u64) -> LoopxIssueKey {
+    LoopxIssueKey {
+        repository: LoopxRepositoryKey {
+            host: "github.com".to_string(),
+            owner: owner.to_ascii_lowercase(),
+            repository: repository.to_ascii_lowercase(),
+        },
+        kind: LoopxItemKind::Issue,
+        number,
+    }
+}
+
+fn existing(
+    task_id: &str,
+    key: LoopxIssueKey,
+    attempt: u32,
+    state: LoopxTaskState,
+) -> LoopxExistingTask {
+    LoopxExistingTask {
+        task_id: task_id.to_string(),
+        identity: LoopxTaskIdentity { item: key, attempt },
+        state,
+    }
+}
+
+#[test]
+fn github_url_matrix_accepts_only_supported_intake_targets() {
+    let cases = [
+        (
+            "https://github.com/OpenAI/Codex/issues/123?utm_source=test#issuecomment-1",
+            "github.com/openai/codex/issues/123",
+        ),
+        (
+            "https://www.github.com/OpenAI/Codex/pull/456/",
+            "github.com/openai/codex/pull/456",
+        ),
+        ("https://github.com/OpenAI/Codex", "github.com/openai/codex"),
+        (
+            "https://github.com/OpenAI/Codex/issues?q=is%3Aopen",
+            "github.com/openai/codex",
+        ),
+        ("git@github.com:OpenAI/Codex.git", "github.com/openai/codex"),
+        ("OpenAI/Codex", "github.com/openai/codex"),
+    ];
+
+    for (input, expected) in cases {
+        let parsed = parse_loopx_intake(input).unwrap_or_else(|error| panic!("{input}: {error}"));
+        let actual = match parsed {
+            LoopxIntakeTarget::Repository { repository } => repository.canonical_id(),
+            LoopxIntakeTarget::Item { item } => item.canonical_id(),
+        };
+        assert_eq!(actual, expected, "{input}");
+    }
+
+    let unsupported = parse_loopx_intake("https://gitlab.com/openai/codex/issues/1").unwrap_err();
+    assert_eq!(unsupported.kind, LoopxIntakeParseErrorKind::UnsupportedHost);
+    let unsupported_path =
+        parse_loopx_intake("https://github.com/openai/codex/actions").unwrap_err();
+    assert_eq!(
+        unsupported_path.kind,
+        LoopxIntakeParseErrorKind::UnsupportedPath
+    );
+    let zero = parse_loopx_intake("https://github.com/openai/codex/issues/0").unwrap_err();
+    assert_eq!(zero.kind, LoopxIntakeParseErrorKind::InvalidItemNumber);
+}
+
+#[test]
+fn canonical_item_identity_collapses_case_and_url_noise() {
+    let first = parse_loopx_intake("https://github.com/OpenAI/Codex/issues/42").unwrap();
+    let second = parse_loopx_intake("http://github.com/openai/codex/issues/42?x=1").unwrap();
+    assert_eq!(first, second);
+
+    let LoopxIntakeTarget::Item { item } = first else {
+        panic!("expected item target");
+    };
+    assert_eq!(item.canonical_id(), "github.com/openai/codex/issues/42");
+    assert_eq!(
+        item.canonical_url(),
+        "https://github.com/openai/codex/issues/42"
+    );
+
+    let pr = parse_loopx_intake("https://github.com/openai/codex/pull/42").unwrap();
+    assert_ne!(LoopxIntakeTarget::Item { item }, pr);
+}
+
+#[test]
+fn nonterminal_duplicate_opens_the_existing_task() {
+    let key = issue("openai", "codex", 7);
+    let tasks = vec![existing(
+        "task-running",
+        key.clone(),
+        1,
+        LoopxTaskState::Running,
+    )];
+
+    assert_eq!(
+        decide_task_dedup(&key, LoopxRemoteItemState::Open, &tasks, false),
+        LoopxDedupDecision::OpenExisting {
+            task_id: "task-running".to_string()
+        }
+    );
+}
+
+#[test]
+fn terminal_duplicate_requires_an_explicit_new_attempt() {
+    let key = issue("openai", "codex", 8);
+    let tasks = vec![
+        existing("attempt-1", key.clone(), 1, LoopxTaskState::Failed),
+        existing("attempt-2", key.clone(), 2, LoopxTaskState::Completed),
+    ];
+
+    assert_eq!(
+        decide_task_dedup(&key, LoopxRemoteItemState::Open, &tasks, false),
+        LoopxDedupDecision::RequireExplicitRetry {
+            previous_task_id: "attempt-2".to_string(),
+            next_attempt: 3,
+        }
+    );
+    assert_eq!(
+        decide_task_dedup(&key, LoopxRemoteItemState::Open, &tasks, true),
+        LoopxDedupDecision::CreateAttempt { attempt: 3 }
+    );
+}
+
+#[test]
+fn resolved_remote_item_is_a_successful_noop() {
+    let key = issue("openai", "codex", 9);
+    assert_eq!(
+        decide_task_dedup(&key, LoopxRemoteItemState::Closed, &[], false),
+        LoopxDedupDecision::ClosedNoop
+    );
+
+    let mut pr = key;
+    pr.kind = LoopxItemKind::PullRequest;
+    assert_eq!(
+        decide_task_dedup(&pr, LoopxRemoteItemState::Merged, &[], false),
+        LoopxDedupDecision::ClosedNoop
+    );
+}
+
+#[test]
+fn restart_never_resumes_inflight_work_implicitly() {
+    for state in [
+        LoopxTaskState::Preparing,
+        LoopxTaskState::Queued,
+        LoopxTaskState::Running,
+        LoopxTaskState::WaitingForUser,
+        LoopxTaskState::RetryWait,
+        LoopxTaskState::Cancelling,
+    ] {
+        assert_eq!(
+            decide_task_restart(state),
+            LoopxRestartDecision::RequireRecovery
+        );
+        assert_eq!(
+            task_state_after_restart(state),
+            LoopxTaskState::RecoveryRequired
+        );
+    }
+
+    for state in [
+        LoopxTaskState::RecoveryRequired,
+        LoopxTaskState::Stopped,
+        LoopxTaskState::Completed,
+        LoopxTaskState::Failed,
+        LoopxTaskState::Archived,
+    ] {
+        assert_eq!(
+            decide_task_restart(state),
+            LoopxRestartDecision::Preserve { state }
+        );
+        assert_eq!(task_state_after_restart(state), state);
+    }
+}
+
+#[test]
+fn transition_policy_separates_turn_completion_from_task_completion() {
+    assert_eq!(
+        decide_task_transition(LoopxTaskState::Running, LoopxTaskState::Queued),
+        LoopxTransitionDecision::Allowed {
+            next: LoopxTaskState::Queued
+        }
+    );
+    assert_eq!(
+        decide_task_transition(LoopxTaskState::Running, LoopxTaskState::Completed),
+        LoopxTransitionDecision::Allowed {
+            next: LoopxTaskState::Completed
+        }
+    );
+    assert_eq!(
+        decide_task_transition(LoopxTaskState::Completed, LoopxTaskState::Running),
+        LoopxTransitionDecision::Rejected
+    );
+}
+
+#[test]
+fn additive_snapshot_fields_deserialize_with_safe_legacy_defaults() {
+    let snapshot: LoopxSnapshot = serde_json::from_value(serde_json::json!({
+        "streamId": "legacy-stream",
+        "tasks": [{
+            "id": "legacy-task",
+            "status": "legacy_active",
+            "identity": {
+                "item": {
+                    "repository": {
+                        "host": "github.com",
+                        "owner": "openai",
+                        "repository": "codex"
+                    },
+                    "kind": "issue",
+                    "number": 10
+                },
+                "attempt": 1
+            }
+        }]
+    }))
+    .unwrap();
+
+    assert_eq!(snapshot.schema_version, LOOPX_CLI_SCHEMA_VERSION);
+    assert_eq!(snapshot.tasks[0].state, LoopxTaskState::RecoveryRequired);
+    assert_eq!(snapshot.tasks[0].task_id, "legacy-task");
+    assert_eq!(
+        snapshot.environment.core.sidecar.status,
+        LoopxEnvironmentFactStatus::Unknown
+    );
+    assert_eq!(
+        snapshot.execution_support.to_string(),
+        "unsupported_execution_domain"
+    );
+
+    let encoded = serde_json::to_value(&snapshot).unwrap();
+    assert_eq!(encoded["tasks"][0]["state"], "recovery_required");
+    assert_eq!(encoded["executionSupport"], "unsupported_execution_domain");
+}
+
+#[test]
+fn action_and_create_requests_use_idempotency_and_revision_fields() {
+    let resolve: LoopxResolveIntakeRequest = serde_json::from_value(serde_json::json!({
+        "input": "https://github.com/openai/codex/issues/1"
+    }))
+    .unwrap();
+    assert_eq!(resolve.model_id, "auto");
+
+    let action: LoopxActionRequest = serde_json::from_value(serde_json::json!({
+        "taskId": "task-1",
+        "action": "retry_environment",
+        "clientRequestId": "request-1",
+        "expectedRevision": 17
+    }))
+    .unwrap();
+    assert_eq!(action.action, LoopxActionKind::RetryEnvironment);
+    assert_eq!(action.client_request_id, "request-1");
+    assert_eq!(action.expected_revision, 17);
+
+    let create: LoopxCreateTaskRequest = serde_json::from_value(serde_json::json!({
+        "clientRequestId": "request-2",
+        "previewFingerprint": "sha256:abc",
+        "selectedItems": [],
+        "modelId": "primary",
+        "grantedScopes": ["workspace_read"],
+        "retryTerminal": false
+    }))
+    .unwrap();
+    assert_eq!(create.client_request_id, "request-2");
+    assert_eq!(
+        create.granted_scopes,
+        vec![LoopxPermissionScope::WorkspaceRead]
+    );
+
+    let page_status = serde_json::to_value(LoopxEventsPageStatus::SnapshotRequired).unwrap();
+    assert_eq!(page_status, "snapshot_required");
+}
+
+#[test]
+fn intake_fingerprint_is_order_independent_but_state_sensitive() {
+    let target = parse_loopx_intake("https://github.com/openai/codex/issues").unwrap();
+    let candidate = |number, state| LoopxIntakeCandidate {
+        key: issue("openai", "codex", number),
+        url: format!("https://github.com/openai/codex/issues/{number}"),
+        title: format!("Issue {number}"),
+        state,
+        ..LoopxIntakeCandidate::default()
+    };
+    let first = vec![
+        candidate(1, LoopxRemoteItemState::Open),
+        candidate(2, LoopxRemoteItemState::Open),
+    ];
+    let reversed = vec![first[1].clone(), first[0].clone()];
+    let scopes = [
+        LoopxPermissionScope::AgentExecution,
+        LoopxPermissionScope::WorkspaceWrite,
+    ];
+
+    let fingerprint =
+        build_intake_fingerprint(&target, &first, Some("/work/codex"), "primary", &scopes);
+    assert_eq!(
+        fingerprint,
+        build_intake_fingerprint(&target, &reversed, Some("/work/codex"), "primary", &scopes)
+    );
+
+    let changed = vec![
+        candidate(1, LoopxRemoteItemState::Closed),
+        candidate(2, LoopxRemoteItemState::Open),
+    ];
+    assert_ne!(
+        fingerprint,
+        build_intake_fingerprint(&target, &changed, Some("/work/codex"), "primary", &scopes)
+    );
+}
+
+#[test]
+fn handshake_defaults_pin_the_supported_loopx_contract() {
+    let request: LoopxCliHandshakeRequest = serde_json::from_value(serde_json::json!({
+        "operationId": "probe-1"
+    }))
+    .unwrap();
+    assert_eq!(request.required_loopx_version, LOOPX_PINNED_VERSION);
+    assert_eq!(request.required_schema_version, LOOPX_CLI_SCHEMA_VERSION);
+
+    fn assert_object_safe(_: &dyn LoopxCliPort) {}
+    let _ = assert_object_safe;
+}
+
+#[test]
+fn workspace_agent_and_gate_ports_keep_routes_typed() {
+    let key = issue("openai", "codex", 11);
+    let workspace = LoopxWorkspacePrepareRequest {
+        operation_id: "workspace-1".to_string(),
+        task_id: "task-1".to_string(),
+        item: key.clone(),
+    };
+    let workspace_json = serde_json::to_value(workspace).unwrap();
+    assert_eq!(workspace_json["operationId"], "workspace-1");
+    assert_eq!(workspace_json["item"]["number"], 11);
+    assert!(workspace_json.get("worktreePath").is_none());
+
+    let agent = LoopxAgentStartRequest {
+        operation_id: "agent-1".to_string(),
+        task_id: "task-1".to_string(),
+        generation: 3,
+        worktree_path: "/worktrees/task-1".to_string(),
+        prompt: "Fix the selected issue".to_string(),
+        model_id: "primary".to_string(),
+        metadata: Default::default(),
+    };
+    let agent_json = serde_json::to_value(agent).unwrap();
+    assert_eq!(agent_json["generation"], 3);
+    assert_eq!(agent_json["worktreePath"], "/worktrees/task-1");
+
+    let finish = LoopxAgentFinishRequest {
+        operation_id: "finish-1".to_string(),
+        task_id: "task-1".to_string(),
+        generation: 3,
+        worktree_path: "/worktrees/task-1".to_string(),
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+    };
+    let finish_json = serde_json::to_value(finish).unwrap();
+    assert_eq!(finish_json["worktreePath"], "/worktrees/task-1");
+    assert_eq!(finish_json["sessionId"], "session-1");
+    assert_eq!(finish_json["turnId"], "turn-1");
+    let finish_roundtrip: LoopxAgentFinishRequest = serde_json::from_value(finish_json).unwrap();
+    assert_eq!(finish_roundtrip.worktree_path, "/worktrees/task-1");
+    assert_eq!(LoopxAgentFinishRequest::default().worktree_path, "");
+
+    let gate: LoopxCliAnswerGateRequest = serde_json::from_value(serde_json::json!({
+        "operationId": "gate-1",
+        "taskId": "task-1",
+        "generation": 3,
+        "worktreePath": "/worktrees/task-1",
+        "registryPath": "/worktrees/task-1/.loopx/registry.json",
+        "goalId": "goal-1",
+        "agentId": "agent-1",
+        "gateId": "gate-publish",
+        "decision": "reject",
+        "note": "Do not publish",
+        "grantedScope": null
+    }))
+    .unwrap();
+    assert_eq!(gate.decision, LoopxCliGateDecision::Reject);
+    assert_eq!(gate.agent_id, "agent-1");
+    assert_eq!(gate.gate_id, "gate-publish");
+
+    fn assert_workspace_object_safe(_: &dyn LoopxWorkspacePort) {}
+    fn assert_agent_object_safe(_: &dyn LoopxAgentPort) {}
+    let _ = (assert_workspace_object_safe, assert_agent_object_safe);
+}
+
+#[test]
+fn optional_environment_failures_degrade_without_blocking_core_readiness() {
+    let available = LoopxEnvironmentFact {
+        status: LoopxEnvironmentFactStatus::Available,
+        ..LoopxEnvironmentFact::default()
+    };
+    let core = LoopxCoreEnvironmentFacts {
+        sidecar: available.clone(),
+        git_worktree: available.clone(),
+        agent_model: available,
+    };
+    let optional = LoopxOptionalEnvironmentFacts {
+        python_fallback: LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Unavailable,
+            ..LoopxEnvironmentFact::default()
+        },
+        ..LoopxOptionalEnvironmentFacts::default()
+    };
+    assert_eq!(
+        derive_environment_status(&core, &optional),
+        LoopxEnvironmentStatus::Degraded
+    );
+
+    let mut blocked_core = core;
+    blocked_core.sidecar.status = LoopxEnvironmentFactStatus::Unavailable;
+    assert_eq!(
+        derive_environment_status(&blocked_core, &optional),
+        LoopxEnvironmentStatus::Blocked
+    );
+    assert!(intake_scope_is_pregrantable(
+        LoopxPermissionScope::WorkspaceWrite
+    ));
+    assert!(!intake_scope_is_pregrantable(
+        LoopxPermissionScope::PullRequest
+    ));
+}
+
+#[test]
+fn action_idempotency_precedes_revision_conflict() {
+    assert_eq!(
+        decide_action_status(true, 4, 5),
+        LoopxActionStatus::Duplicate
+    );
+    assert_eq!(
+        decide_action_status(false, 4, 5),
+        LoopxActionStatus::RevisionConflict
+    );
+    assert_eq!(
+        decide_action_status(false, 5, 5),
+        LoopxActionStatus::Applied
+    );
+}
+
+#[test]
+fn event_cursor_gaps_and_stream_changes_require_a_snapshot() {
+    assert_eq!(
+        decide_events_page_status("stream-2", "stream-1", 10, Some(5), 20),
+        LoopxEventsPageStatus::SnapshotRequired
+    );
+    assert_eq!(
+        decide_events_page_status("stream-2", "stream-2", 3, Some(5), 20),
+        LoopxEventsPageStatus::SnapshotRequired
+    );
+    assert_eq!(
+        decide_events_page_status("stream-2", "stream-2", 4, Some(5), 20),
+        LoopxEventsPageStatus::Current
+    );
+    assert_eq!(
+        decide_events_page_status("stream-2", "stream-2", 21, Some(5), 20),
+        LoopxEventsPageStatus::SnapshotRequired
+    );
+}
+
+trait EnumString {
+    fn to_string(self) -> String;
+}
+
+impl EnumString for bitfun_product_domains::miniapp::loopx::LoopxExecutionSupport {
+    fn to_string(self) -> String {
+        serde_json::to_value(self)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+}

@@ -1,0 +1,271 @@
+use bitfun_product_domains::miniapp::loopx::{
+    task_state_after_restart, LoopxEnvironmentSnapshot, LoopxEvent, LoopxEventKind,
+    LoopxEventLevel, LoopxEventSource, LoopxEventsPageStatus, LoopxEventsSinceResponse,
+    LoopxExecutionDomain, LoopxExecutionSupport, LoopxPhase, LoopxSnapshot, LoopxTaskSnapshot,
+};
+use bitfun_services_core::json_store::JsonFileStore;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+const LOOPX_STATE_SCHEMA_VERSION: u32 = 1;
+const MAX_SEMANTIC_EVENTS: usize = 2_000;
+const MAX_IDEMPOTENCY_KEYS: usize = 512;
+const DEFAULT_EVENT_PAGE_SIZE: usize = 200;
+const MAX_EVENT_PAGE_SIZE: usize = 1_000;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxPersistedState {
+    pub schema_version: u32,
+    pub stream_id: String,
+    pub cursor: u64,
+    pub revision: u64,
+    pub environment: LoopxEnvironmentSnapshot,
+    pub tasks: Vec<LoopxTaskSnapshot>,
+    pub runtime: BTreeMap<String, LoopxTaskRuntimeRecord>,
+    pub events: Vec<LoopxEvent>,
+    pub processed_request_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxTaskRuntimeRecord {
+    pub operation_id: String,
+    pub registry_path: String,
+    pub session_id: Option<String>,
+    pub agent_turn_id: Option<String>,
+    pub loopx_turn_id: Option<String>,
+    pub settlement_token: Option<String>,
+    pub expected_durable_revision: Option<String>,
+}
+
+impl Default for LoopxPersistedState {
+    fn default() -> Self {
+        Self::new(0)
+    }
+}
+
+impl LoopxPersistedState {
+    pub fn new(now_ms: i64) -> Self {
+        Self {
+            schema_version: LOOPX_STATE_SCHEMA_VERSION,
+            stream_id: uuid::Uuid::new_v4().to_string(),
+            cursor: 0,
+            revision: 0,
+            environment: LoopxEnvironmentSnapshot::default(),
+            tasks: Vec::new(),
+            runtime: BTreeMap::new(),
+            events: Vec::new(),
+            processed_request_ids: Vec::new(),
+        }
+        .with_generated_time(now_ms)
+    }
+
+    fn with_generated_time(mut self, now_ms: i64) -> Self {
+        self.environment.checked_at = (now_ms > 0).then_some(now_ms);
+        self
+    }
+
+    pub fn snapshot(
+        &self,
+        execution_domain: LoopxExecutionDomain,
+        execution_support: LoopxExecutionSupport,
+        unsupported_reason: Option<String>,
+        now_ms: i64,
+    ) -> LoopxSnapshot {
+        LoopxSnapshot {
+            schema_version: self.schema_version,
+            stream_id: self.stream_id.clone(),
+            cursor: self.cursor,
+            revision: self.revision,
+            execution_domain,
+            execution_support,
+            unsupported_reason,
+            environment: self.environment.clone(),
+            tasks: self.tasks.clone(),
+            generated_at: now_ms,
+        }
+    }
+
+    pub fn apply_restart_policy(&mut self, now_ms: i64) -> bool {
+        let mut changed = false;
+        for task in &mut self.tasks {
+            let restarted = task_state_after_restart(task.state);
+            if restarted == task.state {
+                continue;
+            }
+            task.state = restarted;
+            task.phase = LoopxPhase::Recovering;
+            task.revision = task.revision.saturating_add(1);
+            task.updated_at = now_ms;
+            task.current_tool = None;
+            task.deadline_at = None;
+            task.retry_at = None;
+            changed = true;
+        }
+        if changed {
+            self.revision = self.revision.saturating_add(1);
+            self.append_event(LoopxEvent {
+                kind: LoopxEventKind::SnapshotInvalidated,
+                level: LoopxEventLevel::Warning,
+                source: LoopxEventSource::Controller,
+                phase: Some(LoopxPhase::Recovering),
+                message: "Host restarted; unfinished LoopX tasks require explicit recovery"
+                    .to_string(),
+                important: true,
+                occurred_at: now_ms,
+                ..LoopxEvent::default()
+            });
+        }
+        changed
+    }
+
+    pub fn append_event(&mut self, mut event: LoopxEvent) {
+        self.cursor = self.cursor.saturating_add(1);
+        event.stream_id = self.stream_id.clone();
+        event.cursor = self.cursor;
+        self.events.push(event);
+        if self.events.len() > MAX_SEMANTIC_EVENTS {
+            let remove = self.events.len() - MAX_SEMANTIC_EVENTS;
+            self.events.drain(0..remove);
+        }
+    }
+
+    pub fn events_since(
+        &self,
+        stream_id: &str,
+        after_cursor: u64,
+        requested_limit: Option<u32>,
+    ) -> LoopxEventsSinceResponse {
+        if stream_id != self.stream_id {
+            return LoopxEventsSinceResponse {
+                status: LoopxEventsPageStatus::SnapshotRequired,
+                stream_id: self.stream_id.clone(),
+                next_cursor: self.cursor,
+                ..LoopxEventsSinceResponse::default()
+            };
+        }
+
+        let limit = requested_limit
+            .map(|value| value as usize)
+            .unwrap_or(DEFAULT_EVENT_PAGE_SIZE)
+            .clamp(1, MAX_EVENT_PAGE_SIZE);
+        let mut available = self
+            .events
+            .iter()
+            .filter(|event| event.cursor > after_cursor);
+        let events = available.by_ref().take(limit).cloned().collect::<Vec<_>>();
+        let has_more = available.next().is_some();
+        let next_cursor = events
+            .last()
+            .map(|event| event.cursor)
+            .unwrap_or(after_cursor.min(self.cursor));
+        LoopxEventsSinceResponse {
+            status: LoopxEventsPageStatus::Current,
+            stream_id: self.stream_id.clone(),
+            events,
+            next_cursor,
+            has_more,
+        }
+    }
+
+    pub fn has_processed_request(&self, request_id: &str) -> bool {
+        self.processed_request_ids
+            .iter()
+            .any(|existing| existing == request_id)
+    }
+
+    pub fn record_processed_request(&mut self, request_id: String) {
+        if request_id.is_empty() || self.has_processed_request(&request_id) {
+            return;
+        }
+        self.processed_request_ids.push(request_id);
+        if self.processed_request_ids.len() > MAX_IDEMPOTENCY_KEYS {
+            let remove = self.processed_request_ids.len() - MAX_IDEMPOTENCY_KEYS;
+            self.processed_request_ids.drain(0..remove);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LoopxStateStore {
+    path: PathBuf,
+    json: JsonFileStore,
+}
+
+impl LoopxStateStore {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            json: JsonFileStore,
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub async fn load(&self) -> Result<Option<LoopxPersistedState>, String> {
+        self.json
+            .read_locked_optional(&self.path)
+            .await
+            .map_err(|error| format!("Failed to load LoopX task state: {error}"))
+    }
+
+    pub async fn save(&self, state: &LoopxPersistedState) -> Result<(), String> {
+        self.json
+            .write_atomic_strict(&self.path, state)
+            .await
+            .map_err(|error| format!("Failed to persist LoopX task state: {error}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_product_domains::miniapp::loopx::{LoopxTaskState, LoopxTaskSnapshot};
+
+    #[tokio::test]
+    async fn restart_requires_explicit_recovery_and_round_trips() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let store = LoopxStateStore::new(root.path().join("loopx-state.json"));
+        let mut state = LoopxPersistedState::new(10);
+        state.tasks.push(LoopxTaskSnapshot {
+            task_id: "task-1".to_string(),
+            state: LoopxTaskState::Running,
+            phase: LoopxPhase::AgentRunning,
+            revision: 3,
+            created_at: 1,
+            updated_at: 2,
+            ..LoopxTaskSnapshot::default()
+        });
+        assert!(state.apply_restart_policy(20));
+        store.save(&state).await.expect("save");
+
+        let loaded = store.load().await.expect("load").expect("state");
+        assert_eq!(loaded.tasks[0].state, LoopxTaskState::RecoveryRequired);
+        assert_eq!(loaded.tasks[0].revision, 4);
+        assert_eq!(loaded.events[0].kind, LoopxEventKind::SnapshotInvalidated);
+    }
+
+    #[test]
+    fn cursor_gap_and_pagination_are_explicit() {
+        let mut state = LoopxPersistedState::new(1);
+        for index in 0..3 {
+            state.append_event(LoopxEvent {
+                message: format!("event-{index}"),
+                ..LoopxEvent::default()
+            });
+        }
+
+        let wrong = state.events_since("old-stream", 0, None);
+        assert_eq!(wrong.status, LoopxEventsPageStatus::SnapshotRequired);
+        let first = state.events_since(&state.stream_id, 0, Some(2));
+        assert_eq!(first.events.len(), 2);
+        assert!(first.has_more);
+        let second = state.events_since(&state.stream_id, first.next_cursor, Some(2));
+        assert_eq!(second.events.len(), 1);
+        assert!(!second.has_more);
+    }
+}

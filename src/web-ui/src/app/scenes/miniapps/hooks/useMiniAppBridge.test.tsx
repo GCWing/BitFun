@@ -17,8 +17,16 @@ import { useMiniAppBridge } from './useMiniAppBridge';
 
 const mocks = vi.hoisted(() => ({
   activeTabId: 'miniapp:market-lens',
+  peerModeActive: false,
+  workspaceKind: undefined as 'remote' | undefined,
   agentEnsureSession: vi.fn(),
   agentRun: vi.fn(),
+  getCustomizationMetadata: vi.fn(),
+  loopxAttach: vi.fn(),
+  loopxResolveIntake: vi.fn(),
+  loopxCreateTask: vi.fn(),
+  loopxAction: vi.fn(),
+  loopxEventsSince: vi.fn(),
   apiListen: vi.fn(),
   openMainSession: vi.fn(),
   addExternalSession: vi.fn(),
@@ -29,6 +37,12 @@ vi.mock('@/infrastructure/api/service-api/MiniAppAPI', () => ({
   miniAppAPI: {
     agentEnsureSession: mocks.agentEnsureSession,
     agentRun: mocks.agentRun,
+    getCustomizationMetadata: mocks.getCustomizationMetadata,
+    loopxAttach: mocks.loopxAttach,
+    loopxResolveIntake: mocks.loopxResolveIntake,
+    loopxCreateTask: mocks.loopxCreateTask,
+    loopxAction: mocks.loopxAction,
+    loopxEventsSince: mocks.loopxEventsSince,
   },
 }));
 
@@ -39,7 +53,14 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 }));
 
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
-  useCurrentWorkspace: () => ({ workspacePath: '/repo' }),
+  useCurrentWorkspace: () => ({
+    workspacePath: '/repo',
+    workspace: mocks.workspaceKind ? { workspaceKind: mocks.workspaceKind } : null,
+  }),
+}));
+
+vi.mock('@/infrastructure/peer-device/peerModeFlag', () => ({
+  isPeerDeviceModeActive: () => mocks.peerModeActive,
 }));
 
 vi.mock('@/infrastructure/theme/hooks/useTheme', () => ({
@@ -119,14 +140,16 @@ function ScopedBridgeHarness({
   appId,
   title,
   runScope,
+  strictRuntime = true,
 }: {
   appId: string;
   title: string;
   runScope: { kind: 'active'; appId: string } | { kind: 'draft'; appId: string; draftId: string };
+  strictRuntime?: boolean;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const scopedApp = { ...app, id: appId, name: title } as MiniApp;
-  useMiniAppBridge(iframeRef, scopedApp, runScope, true);
+  useMiniAppBridge(iframeRef, scopedApp, runScope, strictRuntime);
   return <iframe ref={iframeRef} title={title} />;
 }
 
@@ -151,6 +174,8 @@ describe('useMiniAppBridge floating Agent routing', () => {
 
   beforeEach(() => {
     mocks.activeTabId = 'miniapp:market-lens';
+    mocks.peerModeActive = false;
+    mocks.workspaceKind = undefined;
     mocks.agentEnsureSession.mockResolvedValue({
       sessionId: 'session-1',
       created: true,
@@ -357,5 +382,351 @@ describe('useMiniAppBridge floating Agent routing', () => {
     });
 
     expect(mocks.agentRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('useMiniAppBridge LoopX controller routing', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    mocks.peerModeActive = false;
+    mocks.workspaceKind = undefined;
+    mocks.apiListen.mockImplementation(() => vi.fn());
+    mocks.getCustomizationMetadata.mockResolvedValue({
+      origin: {
+        kind: 'builtin',
+        builtin_id: 'builtin-bitfun-loopx',
+        builtin_version: 1,
+      },
+      local_override: false,
+      updated_at: 1,
+    });
+    mocks.loopxAttach.mockResolvedValue({
+      snapshot: { streamId: 'stream-1', cursor: 0, revision: 1 },
+    });
+    mocks.loopxResolveIntake.mockResolvedValue({ preview: { fingerprint: 'preview-1' } });
+    mocks.loopxCreateTask.mockResolvedValue({ outcomes: [], snapshotRevision: 2 });
+    mocks.loopxAction.mockResolvedValue({ status: 'applied', currentRevision: 3 });
+    mocks.loopxEventsSince.mockResolvedValue({
+      status: 'current',
+      streamId: 'stream-1',
+      events: [],
+      nextCursor: 4,
+      hasMore: false,
+    });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    vi.clearAllMocks();
+  });
+
+  it('routes an active, non-strict verified builtin through the typed controller API', async () => {
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="LoopX"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime={false}
+        />,
+      );
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+
+    await dispatchRpc(iframe, 1, 'loopx.attach', {
+      knownStreamId: 'stream-1',
+      afterCursor: 4,
+    });
+
+    expect(mocks.getCustomizationMetadata).toHaveBeenCalledWith('builtin-bitfun-loopx');
+    expect(mocks.loopxAttach).toHaveBeenCalledWith('builtin-bitfun-loopx', {
+      knownStreamId: 'stream-1',
+      afterCursor: 4,
+    });
+
+    await dispatchRpc(iframe, 2, 'loopx.resolveIntake', {
+      input: 'https://github.com/GCWing/BitFun/issues/2382',
+      modelId: 'primary',
+    });
+    expect(mocks.loopxResolveIntake).toHaveBeenCalledWith('builtin-bitfun-loopx', {
+      input: 'https://github.com/GCWing/BitFun/issues/2382',
+      modelId: 'primary',
+    });
+
+    const selectedItem = {
+      repository: { host: 'github.com', owner: 'GCWing', repository: 'BitFun' },
+      kind: 'issue',
+      number: 2382,
+    };
+    await dispatchRpc(iframe, 3, 'loopx.createTask', {
+      clientRequestId: 'request-1',
+      previewFingerprint: 'preview-1',
+      selectedItems: [selectedItem],
+      modelId: 'primary',
+      grantedScopes: ['workspace_read', 'agent_execution'],
+      retryTerminal: false,
+    });
+    expect(mocks.loopxCreateTask).toHaveBeenCalledWith('builtin-bitfun-loopx', {
+      clientRequestId: 'request-1',
+      previewFingerprint: 'preview-1',
+      selectedItems: [selectedItem],
+      modelId: 'primary',
+      grantedScopes: ['workspace_read', 'agent_execution'],
+      retryTerminal: false,
+    });
+
+    await dispatchRpc(iframe, 4, 'loopx.action', {
+      taskId: 'task-1',
+      action: 'pause',
+      clientRequestId: 'request-2',
+      expectedRevision: 2,
+    });
+    expect(mocks.loopxAction).toHaveBeenCalledWith('builtin-bitfun-loopx', {
+      taskId: 'task-1',
+      action: 'pause',
+      clientRequestId: 'request-2',
+      expectedRevision: 2,
+      gateId: undefined,
+      note: undefined,
+    });
+
+    await dispatchRpc(iframe, 5, 'loopx.eventsSince', {
+      streamId: 'stream-1',
+      afterCursor: 4,
+      limit: 50,
+    });
+    expect(mocks.loopxEventsSince).toHaveBeenCalledWith('builtin-bitfun-loopx', {
+      streamId: 'stream-1',
+      afterCursor: 4,
+      limit: 50,
+    });
+  });
+
+  it('forwards host controller events only after builtin metadata is verified', async () => {
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="LoopX events"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+    const listenCall = mocks.apiListen.mock.calls.find(
+      ([eventName]) => eventName === 'miniapp://loopx-event',
+    );
+    expect(listenCall).toBeDefined();
+    const payload = {
+      streamId: 'stream-1',
+      cursor: 5,
+      kind: 'progress',
+      level: 'info',
+      source: 'controller',
+      message: 'Task is running',
+    };
+
+    act(() => {
+      (listenCall?.[1] as (event: typeof payload) => void)(payload);
+    });
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'bitfun:event',
+      event: 'loopx:event',
+      payload,
+    }, '*');
+  });
+
+  it('does not subscribe the local LoopX event stream while rendering a peer', async () => {
+    mocks.peerModeActive = true;
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="Peer LoopX"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(mocks.apiListen.mock.calls.some(
+      ([eventName]) => eventName === 'miniapp://loopx-event',
+    )).toBe(false);
+  });
+
+  it('does not subscribe the local LoopX event stream for a remote workspace', async () => {
+    mocks.workspaceKind = 'remote';
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="Remote workspace LoopX"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(mocks.apiListen.mock.calls.some(
+      ([eventName]) => eventName === 'miniapp://loopx-event',
+    )).toBe(false);
+  });
+
+  it('denies LoopX controller access from a draft preview', async () => {
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="LoopX draft"
+          runScope={{
+            kind: 'draft',
+            appId: 'builtin-bitfun-loopx',
+            draftId: 'draft-1',
+          }}
+          strictRuntime={false}
+        />,
+      );
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await dispatchRpc(iframe, 2, 'loopx.attach');
+
+    expect(mocks.getCustomizationMetadata).not.toHaveBeenCalled();
+    expect(mocks.loopxAttach).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 2,
+        error: expect.objectContaining({ message: expect.stringContaining('draft previews') }),
+      }),
+      '*',
+    );
+  });
+
+  it('denies LoopX controller access to every other MiniApp id', async () => {
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="user-loopx-copy"
+          title="LoopX copy"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime={false}
+        />,
+      );
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await dispatchRpc(iframe, 3, 'loopx.attach');
+
+    expect(mocks.getCustomizationMetadata).not.toHaveBeenCalled();
+    expect(mocks.loopxAttach).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 3,
+        error: expect.objectContaining({ message: expect.stringContaining('restricted') }),
+      }),
+      '*',
+    );
+  });
+
+  it('denies LoopX controller access from a strict runtime', async () => {
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="Strict LoopX"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime
+        />,
+      );
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await dispatchRpc(iframe, 6, 'loopx.attach');
+
+    expect(mocks.getCustomizationMetadata).not.toHaveBeenCalled();
+    expect(mocks.loopxAttach).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 6,
+        error: expect.objectContaining({ message: expect.stringContaining('strict') }),
+      }),
+      '*',
+    );
+  });
+
+  it('denies a locally overridden builtin', async () => {
+    mocks.getCustomizationMetadata.mockResolvedValue({
+      origin: { kind: 'builtin', builtin_id: 'builtin-bitfun-loopx' },
+      local_override: true,
+      updated_at: 2,
+    });
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="Overridden LoopX"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime={false}
+        />,
+      );
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await dispatchRpc(iframe, 4, 'loopx.attach');
+
+    expect(mocks.loopxAttach).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 4,
+        error: expect.objectContaining({ message: expect.stringContaining('local override') }),
+      }),
+      '*',
+    );
+  });
+
+  it('rejects raw CLI arguments instead of forwarding them to the host', async () => {
+    await act(async () => {
+      root.render(
+        <ScopedBridgeHarness
+          appId="builtin-bitfun-loopx"
+          title="LoopX"
+          runScope={{ kind: 'active', appId: 'builtin-bitfun-loopx' }}
+          strictRuntime={false}
+        />,
+      );
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await dispatchRpc(iframe, 5, 'loopx.attach', {
+      argv: ['loopx', '--registry', 'C:\\untrusted\\registry.json'],
+    });
+
+    expect(mocks.loopxAttach).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 5,
+        error: expect.objectContaining({ message: expect.stringContaining('host-controlled') }),
+      }),
+      '*',
+    );
   });
 });

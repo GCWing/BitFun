@@ -157,6 +157,13 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "show_agent_companion_desktop_pet",
     "hide_agent_companion_desktop_pet",
     "append_flow_chat_diagnostics",
+    // LoopX is local-Desktop-only until its workspace, event replay, and
+    // permission mailbox contracts are negotiated across Peer Device Mode.
+    "miniapp_loopx_attach",
+    "miniapp_loopx_resolve_intake",
+    "miniapp_loopx_create_task",
+    "miniapp_loopx_action",
+    "miniapp_loopx_events_since",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.

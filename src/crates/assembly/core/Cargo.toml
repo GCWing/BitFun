@@ -351,6 +351,7 @@ tools-miniapp = [
     "bitfun-product-domains/appearance-market",
     "bitfun-product-domains/miniapp",
     "bitfun-services-integrations/miniapp-runtime",
+    "bitfun-services-integrations/miniapp-loopx",
     "bitfun-services-integrations/miniapp-market",
     "runtime-services",
     "dep:reqwest",

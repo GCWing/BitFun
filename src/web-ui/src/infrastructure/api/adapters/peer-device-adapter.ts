@@ -77,6 +77,13 @@ const LOCAL_ONLY_COMMANDS = new Set([
   // Computer Use Tool, so Desktop Peer B surfaces B's own OS permission prompts
   // and settings panes. CLI Peer refuses them in deny.rs and the UI gates the
   // section on host type. See SessionConfig + peer_host_invoke + cli deny.rs.
+  // LoopX is local-Desktop-only until its workspace, event replay, and
+  // permission mailbox contracts are negotiated across Peer Device Mode.
+  'miniapp_loopx_attach',
+  'miniapp_loopx_resolve_intake',
+  'miniapp_loopx_create_task',
+  'miniapp_loopx_action',
+  'miniapp_loopx_events_since',
   // Detached dispatch uses this controller's SSH credentials and observer index.
   'dispatch_list_targets',
   'dispatch_probe_target',

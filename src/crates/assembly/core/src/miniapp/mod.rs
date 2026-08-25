@@ -7,6 +7,8 @@ pub mod exporter;
 pub mod host_dispatch;
 pub mod js_worker;
 pub mod js_worker_pool;
+#[cfg(feature = "agent-runtime")]
+pub mod loopx;
 pub mod manager;
 pub mod runtime_detect;
 pub mod storage;
@@ -18,6 +20,7 @@ pub use bitfun_product_domains::miniapp::draft::{MiniAppDraft, MiniAppDraftManif
 pub use bitfun_product_domains::miniapp::{
     agent_bridge, ai_bridge, bridge_builder, lifecycle, permission_policy, rate_limit, types,
 };
+pub use bitfun_product_domains::miniapp::builtin::builtin_content_hash;
 
 pub use builtin::{seed_builtin_miniapps, BuiltinApp, BUILTIN_APPS};
 pub use exporter::{ExportCheckResult, ExportOptions, ExportResult, ExportTarget, MiniAppExporter};

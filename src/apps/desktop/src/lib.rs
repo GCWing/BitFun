@@ -808,6 +808,73 @@ pub async fn run() {
 
     let path_manager = get_path_manager_arc();
 
+    let loopx_resource_dir = api::app_state::resolve_bundled_loopx_dir();
+    let mut loopx_cli_config =
+        bitfun_services_integrations::miniapp::loopx_cli::LoopxCliAdapterConfig::packaged(
+            loopx_resource_dir.clone().unwrap_or_else(|| {
+                path_manager
+                    .miniapp_dir(bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID)
+                    .join("missing-bundled-loopx")
+            }),
+        );
+    if loopx_resource_dir.is_none() {
+        loopx_cli_config.system_fallback =
+            bitfun_services_integrations::miniapp::loopx_cli::LoopxSystemFallbackPolicy::ExactPinned;
+    }
+    let loopx_cli_adapter =
+        bitfun_services_integrations::miniapp::loopx_cli::LoopxCliProcessAdapter::new(
+            loopx_cli_config,
+        );
+    let loopx_cli_adapter = match bitfun_services_integrations::miniapp::loopx_github::GithubLoopxIntakeMetadataProvider::new() {
+        Ok(provider) => loopx_cli_adapter.with_intake_metadata_provider(Arc::new(provider)),
+        Err(error) => {
+            log::warn!("LoopX GitHub intake metadata is unavailable: {error}");
+            loopx_cli_adapter
+        }
+    };
+    let loopx_cli: Arc<dyn bitfun_product_domains::miniapp::loopx::LoopxCliPort> =
+        Arc::new(loopx_cli_adapter);
+    let loopx_workspace: Arc<dyn bitfun_product_domains::miniapp::loopx::LoopxWorkspacePort> =
+        Arc::new(
+            bitfun_services_integrations::miniapp::loopx_workspace::LoopxWorkspaceService::new(
+                bitfun_services_integrations::miniapp::loopx_workspace::LoopxWorkspaceServiceConfig::new(
+                    path_manager
+                        .miniapp_dir(bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID)
+                        .join("workspaces"),
+                    std::path::PathBuf::from("git"),
+                ),
+            ),
+        );
+    let loopx_agent: Arc<dyn bitfun_product_domains::miniapp::loopx::LoopxAgentPort> = Arc::new(
+        bitfun_core::miniapp::loopx::CoreLoopxAgentPort::new(coordinator.clone()),
+    );
+    let loopx_controller = bitfun_core::miniapp::loopx::LoopxController::load(
+        loopx_cli,
+        loopx_workspace,
+        loopx_agent,
+        bitfun_core::miniapp::loopx::LoopxStateStore::new(
+            path_manager
+                .miniapp_dir(bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID)
+                .join("loopx-controller-state.json"),
+        ),
+    )
+    .await;
+    event_router.subscribe_internal(
+        "loopx_tasks".to_string(),
+        Arc::new(bitfun_core::miniapp::loopx::LoopxEventSubscriber::new(
+            loopx_controller.clone(),
+        )),
+    );
+    let loopx_controller_state = api::miniapp_loopx_api::LoopxControllerState {
+        controller: loopx_controller.clone(),
+    };
+    let loopx_environment_controller = loopx_controller.clone();
+    tokio::spawn(async move {
+        if let Err(error) = loopx_environment_controller.refresh_environment().await {
+            log::warn!("LoopX environment initialization failed: {error}");
+        }
+    });
+
     let mut builder = tauri::Builder::default();
 
     let is_e2e_webdriver =
@@ -854,6 +921,7 @@ pub async fn run() {
         .manage(desktop_runtime)
         .manage(coordinator_state)
         .manage(scheduler_state)
+        .manage(loopx_controller_state)
         .manage(path_manager)
         .manage(coordinator)
         .manage(scheduler)
@@ -882,6 +950,30 @@ pub async fn run() {
         .setup(move |app| {
             let setup_started = Instant::now();
             startup_trace.record_phase("tauri_setup_start", "native_setup");
+            let mut loopx_events = app
+                .state::<api::miniapp_loopx_api::LoopxControllerState>()
+                .controller
+                .subscribe();
+            let loopx_event_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    match loopx_events.recv().await {
+                        Ok(event) => {
+                            if let Err(error) =
+                                loopx_event_handle.emit("miniapp://loopx-event", event)
+                            {
+                                log::warn!("Failed to emit LoopX task event: {error}");
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                            log::warn!(
+                                "LoopX task event subscriber lagged; clients will replay by cursor: skipped={skipped}"
+                            );
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            });
             #[cfg(target_os = "macos")]
             {
                 app.on_menu_event(|app, event| {
@@ -1944,6 +2036,11 @@ pub async fn run() {
             api::miniapp_agent_api::miniapp_agent_cancel,
             api::miniapp_agent_api::miniapp_agent_turn_text,
             api::miniapp_agent_api::miniapp_agent_cancel_stale_runs,
+            api::miniapp_loopx_api::miniapp_loopx_attach,
+            api::miniapp_loopx_api::miniapp_loopx_resolve_intake,
+            api::miniapp_loopx_api::miniapp_loopx_create_task,
+            api::miniapp_loopx_api::miniapp_loopx_action,
+            api::miniapp_loopx_api::miniapp_loopx_events_since,
             api::miniapp_export_api::miniapp_render_slide_page,
             // Browser API (embedded webview)
             api::browser_api::browser_webview_eval,

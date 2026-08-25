@@ -41,3 +41,103 @@ describe('MiniAppAPI agent bridge', () => {
     });
   });
 });
+
+describe('MiniAppAPI LoopX controller bridge', () => {
+  beforeEach(() => invoke.mockReset());
+
+  it('uses structured requests for attach and replay', async () => {
+    invoke.mockResolvedValue({});
+
+    await miniAppAPI.loopxAttach('builtin-bitfun-loopx', {
+      knownStreamId: 'stream-1',
+      afterCursor: 7,
+    });
+    await miniAppAPI.loopxEventsSince('builtin-bitfun-loopx', {
+      streamId: 'stream-1',
+      afterCursor: 7,
+      limit: 100,
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'miniapp_loopx_attach', {
+      request: {
+        appId: 'builtin-bitfun-loopx',
+        knownStreamId: 'stream-1',
+        afterCursor: 7,
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'miniapp_loopx_events_since', {
+      request: {
+        appId: 'builtin-bitfun-loopx',
+        streamId: 'stream-1',
+        afterCursor: 7,
+        limit: 100,
+      },
+    });
+  });
+
+  it('keeps intake and task creation on typed controller commands', async () => {
+    invoke.mockResolvedValue({});
+    const item = {
+      repository: { host: 'github.com', owner: 'GCWing', repository: 'BitFun' },
+      kind: 'issue' as const,
+      number: 2382,
+    };
+
+    await miniAppAPI.loopxResolveIntake('builtin-bitfun-loopx', {
+      input: 'https://github.com/GCWing/BitFun/issues/2382',
+      modelId: 'primary',
+    });
+    await miniAppAPI.loopxCreateTask('builtin-bitfun-loopx', {
+      clientRequestId: 'request-1',
+      previewFingerprint: 'preview-1',
+      selectedItems: [item],
+      modelId: 'primary',
+      grantedScopes: ['workspace_read', 'workspace_write', 'agent_execution'],
+      retryTerminal: false,
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'miniapp_loopx_resolve_intake', {
+      request: {
+        appId: 'builtin-bitfun-loopx',
+        input: 'https://github.com/GCWing/BitFun/issues/2382',
+        modelId: 'primary',
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'miniapp_loopx_create_task', {
+      request: {
+        appId: 'builtin-bitfun-loopx',
+        clientRequestId: 'request-1',
+        previewFingerprint: 'preview-1',
+        selectedItems: [item],
+        modelId: 'primary',
+        grantedScopes: ['workspace_read', 'workspace_write', 'agent_execution'],
+        retryTerminal: false,
+      },
+    });
+  });
+
+  it('forwards only the typed action envelope', async () => {
+    invoke.mockResolvedValue({});
+
+    await miniAppAPI.loopxAction('builtin-bitfun-loopx', {
+      taskId: 'task-1',
+      action: 'approve',
+      clientRequestId: 'request-2',
+      expectedRevision: 9,
+      gateId: 'gate-1',
+      note: 'Approved after review',
+    });
+
+    expect(invoke).toHaveBeenCalledWith('miniapp_loopx_action', {
+      request: {
+        appId: 'builtin-bitfun-loopx',
+        taskId: 'task-1',
+        action: 'approve',
+        clientRequestId: 'request-2',
+        expectedRevision: 9,
+        gateId: 'gate-1',
+        note: 'Approved after review',
+      },
+    });
+  });
+});

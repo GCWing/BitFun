@@ -190,6 +190,28 @@ miniapp-runtime = [
     "uuid",
     "which",
 ]
+miniapp-loopx = [
+    "async-trait",
+    "bitfun-product-domains/miniapp",
+    "bitfun-services-core/process-runtime",
+    "dep:bitfun-product-domains",
+    "hex",
+    "reqwest",
+    "reqwest/json",
+    "reqwest/rustls",
+    "sha2",
+    "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
+    "tokio-util",
+    "url",
+    "which",
+]
 miniapp-market = [
     "bitfun-product-domains/appearance-market",
     "chrono",
@@ -419,6 +441,7 @@ product-full = [
     "function-agents",
     "git",
     "hook-import",
+    "miniapp-loopx",
     "miniapp-runtime",
     "mcp",
     "plugin-source",
@@ -475,6 +498,11 @@ required-features = ["mcp"]
 name = "mcp_streamable_http_contracts"
 path = "tests/mcp_streamable_http_contracts.rs"
 required-features = ["mcp"]
+
+[[test]]
+name = "miniapp_loopx_contracts"
+path = "tests/miniapp_loopx_contracts.rs"
+required-features = ["miniapp-loopx"]
 
 [[test]]
 name = "remote_connect_contracts"

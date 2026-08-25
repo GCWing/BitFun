@@ -42,6 +42,9 @@ pub mod models_dev;
 #[cfg(feature = "miniapp-runtime")]
 pub mod miniapp;
 
+#[cfg(all(feature = "miniapp-loopx", not(feature = "miniapp-runtime")))]
+pub mod miniapp;
+
 #[cfg(feature = "miniapp-market")]
 pub mod miniapp_market;
 

@@ -1266,6 +1266,26 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "miniapp_loopx_action",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "miniapp_loopx_attach",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "miniapp_loopx_create_task",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "miniapp_loopx_events_since",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "miniapp_loopx_resolve_intake",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "miniapp_permission_diff_for_draft",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

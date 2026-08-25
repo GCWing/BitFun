@@ -34,6 +34,11 @@ name = "miniapp_contracts"
 path = "tests/miniapp_contracts.rs"
 required-features = ["miniapp"]
 
+[[test]]
+name = "loopx_contracts"
+path = "tests/loopx_contracts.rs"
+required-features = ["miniapp"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
