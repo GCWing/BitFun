@@ -127,7 +127,14 @@ const AssistantDefaultsPage: React.FC = () => {
       return true;
     }
     const capabilities = peerDevice.currentPeerCapabilities;
-    return capabilities === null ? true : capabilities.toolCatalog;
+    // null capabilities = host not yet probed → optimistic. A probed host may
+    // also report `null` for this field (older host that didn't advertise it):
+    // stay optimistic so an older Desktop that does implement get_all_tools_info
+    // keeps its list. An older CLI that lacks it returns unsupported on invoke.
+    // See PR #2428 #4.
+    return capabilities === null || capabilities.toolCatalog === null
+      ? true
+      : capabilities.toolCatalog;
   })();
 
   const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);

@@ -42,11 +42,24 @@ import ReviewCapacitySection from './ReviewCapacitySection';
 import ToolJsonRepairSection from './ToolJsonRepairSection';
 import { ask, open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import './RuntimeSettingsPages.scss';
 
 const log = createLogger('RuntimeSettings');
 
 const IS_TAURI_DESKTOP = typeof window !== 'undefined' && '__TAURI__' in window;
+
+/**
+ * A peer host that refuses Browser Control / Computer Use (CLI Peer returns
+ * "local-only and cannot run on peer"; Desktop Peer would surface a different
+ * error). We detect that string so the settings section can show an explicit
+ * "unsupported on this peer" notice instead of firing invokes that silently
+ * fail on every refresh. See PR #2428 review #4 issue #1.
+ */
+function isPeerUnsupportedBrowserControlError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /is local-only and cannot run on peer|is not supported on CLI peer host/i.test(message);
+}
 
 type ComputerUseStatusPayload = {
   computerUseEnabled: boolean;
@@ -130,6 +143,15 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   const [isGlobalPermissionRulesDialogOpen, setIsGlobalPermissionRulesDialogOpen] = useState(false);
 
   const { computerUseEnabled, setComputerUseEnabled } = useComputerUseEnabled();
+  // Browser Control / Computer Use run on the host that runs the Tool. Desktop
+  // Peer B executes them on B; CLI Peer refuses them (deny.rs). When the
+  // rendered peer is a CLI Peer the refresh invokes return "local-only and
+  // cannot run on peer" — we surface that as an explicit unsupported notice
+  // instead of silently degrading. Null = controller local (no peer) or peer
+  // capabilities not yet probed (optimistically supported). See PR #2428 #1.
+  const peerDevice = usePeerDeviceModeOptional();
+  const peerModeActive = peerDevice?.peerMode.active === true;
+  const [peerBrowserControlUnsupported, setPeerBrowserControlUnsupported] = useState(false);
   const [computerUseAccess, setComputerUseAccess] = useState(false);
   const [computerUseScreen, setComputerUseScreen] = useState(false);
   const [computerUseBusy, setComputerUseBusy] = useState(false);
@@ -157,12 +179,17 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     setComputerUseStatusLoading(true);
     try {
       const s = await api.invoke<ComputerUseStatusPayload>('computer_use_get_status');
+      setPeerBrowserControlUnsupported(false);
       setComputerUseEnabled(s.computerUseEnabled);
       setComputerUseAccess(s.accessibilityGranted);
       setComputerUseScreen(s.screenCaptureGranted);
       setComputerUsePlatformNote(s.platformNote);
       return true;
     } catch (error) {
+      if (isPeerUnsupportedBrowserControlError(error)) {
+        setPeerBrowserControlUnsupported(true);
+        return false;
+      }
       log.error('computer_use_get_status failed', error);
       return false;
     } finally {
@@ -187,6 +214,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         }>('browser_control_get_status', { request: { port: 9222 } }),
         api.invoke<{ options: BrowserControlBrowserOption[] }>('browser_control_list_browsers'),
       ]);
+      setPeerBrowserControlUnsupported(false);
       setBrowserCdpAvailable(s.cdpAvailable);
       setBrowserDefaultCdpSupported(s.defaultCdpSupported);
       setBrowserDefaultCdpEnabled(s.defaultCdpEnabled);
@@ -196,6 +224,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
       setBrowserPageCount(s.pageCount);
       setBrowserOptions(browsers.options);
     } catch (error) {
+      if (isPeerUnsupportedBrowserControlError(error)) {
+        setPeerBrowserControlUnsupported(true);
+      } else {
+        log.error('browser_control_get_status failed', error);
+      }
       log.error('browser_control_get_status failed', error);
     } finally {
       setBrowserStatusLoading(false);
@@ -218,6 +251,21 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
       .then((info) => setPlatform(info.platform || ''))
       .catch((error) => log.warn('getSystemInfo failed', error));
   }, [refreshComputerUseStatus, refreshBrowserControlStatus, setComputerUseEnabled]);
+
+  // Browser Control / Computer Use route to the rendered host. Re-probe on every
+  // surface switch (local ↔ peer A ↔ peer B): a CLI Peer returns unsupported,
+  // a Desktop Peer / local host returns status. Resets the unsupported flag so
+  // a switch away from a CLI Peer re-shows controls instead of the notice.
+  // The current peer's deviceId is part of the dep so A→B (both peers) fires.
+  const renderedPeerDeviceId = peerDevice?.peerMode.active
+    ? peerDevice.peerMode.deviceId
+    : null;
+  useEffect(() => {
+    if (!IS_TAURI_DESKTOP) return;
+    setPeerBrowserControlUnsupported(false);
+    void refreshComputerUseStatus();
+    void refreshBrowserControlStatus();
+  }, [peerModeActive, renderedPeerDeviceId, refreshComputerUseStatus, refreshBrowserControlStatus]);
 
   const loadPageData = useCallback(async () => {
     setIsLoading(true);
@@ -1236,7 +1284,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             IS_TAURI_DESKTOP ? t('computerUse.sectionDescription') : t('computerUse.desktopOnly')
           }
         >
-          {IS_TAURI_DESKTOP ? (
+          {IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
             <>
               <ConfigPageRow label={t('computerUse.enable')} description={t('computerUse.enableDesc')} align="center">
                 <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
@@ -1363,6 +1411,14 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 </div>
               )}
             </>
+          ) : peerBrowserControlUnsupported ? (
+            <ConfigPageRow
+              label={t('computerUse.peerUnsupported')}
+              description=""
+              align="center"
+            >
+              <span />
+            </ConfigPageRow>
           ) : null}
         </ConfigPageSection>
 
@@ -1373,7 +1429,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             IS_TAURI_DESKTOP ? t('browserControl.sectionDescription') : t('browserControl.desktopOnly')
           }
         >
-          {IS_TAURI_DESKTOP ? (
+          {IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
             <>
               {/* Only show browser selector when CDP is not connected */}
               {!browserCdpAvailable && (
@@ -1514,6 +1570,14 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 </div>
               </ConfigPageRow>
             </>
+          ) : peerBrowserControlUnsupported ? (
+            <ConfigPageRow
+              label={t('browserControl.peerUnsupported')}
+              description=""
+              align="center"
+            >
+              <span />
+            </ConfigPageRow>
           ) : null}
         </ConfigPageSection>
 

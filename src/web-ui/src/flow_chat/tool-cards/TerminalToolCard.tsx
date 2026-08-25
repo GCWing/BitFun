@@ -398,13 +398,20 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   // `cancel_tool` capability. While the peer's capabilities are still being
   // probed (null), stay optimistic so the button doesn't flicker off then on
   // once the handshake resolves — a CLI Peer Host now implements cancel_tool,
-  // so the optimistic default is correct in the common case.
+  // so the optimistic default is correct in the common case. A probed host may
+  // also report `null` for this field (an older host that didn't advertise it):
+  // stay optimistic so an older Desktop that does implement cancel_tool keeps
+  // a working Interrupt button; an older CLI that lacks it returns unsupported
+  // on invoke, which the handler already surfaces by restoring the button.
+  // See PR #2428 #4.
   const canCancelTool = (() => {
     if (!peerDevice || !peerDevice.peerMode.active) {
       return true;
     }
     const capabilities = peerDevice.currentPeerCapabilities;
-    return capabilities === null ? true : capabilities.cancelTool;
+    return capabilities === null || capabilities.cancelTool === null
+      ? true
+      : capabilities.cancelTool;
   })();
 
   const viewState = useMemo(() => {

@@ -128,6 +128,7 @@
     "openSettings": "系统设置",
     "refreshStatus": "刷新状态",
     "desktopOnly": "桌面控制仅在 BitFun 桌面应用中可用。",
+    "peerUnsupported": "桌面控制运行在所连接的 Peer 主机上。该 Peer 主机（CLI）不支持此功能，无法在此配置。",
     "platformNote": "说明",
     "platformNotes": {
       "macos": "当前构建仍需在系统设置中授予辅助功能权限。",
@@ -140,6 +141,7 @@
     "sectionTitle": "浏览器控制",
     "sectionDescription": "选择 BitFun 使用的浏览器和连接方式。",
     "desktopOnly": "浏览器控制仅在 BitFun 桌面应用中可用。",
+    "peerUnsupported": "浏览器控制运行在所连接的 Peer 主机上。该 Peer 主机（CLI）不支持此功能，无法在此配置。",
     "preferredBrowser": "浏览器",
     "preferredBrowserDesc": "默认使用系统浏览器。",
     "notInstalled": "未安装",

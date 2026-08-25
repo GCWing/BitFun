@@ -47,10 +47,20 @@ export interface PeerHostCapabilities {
   readonly productControlV1?: boolean;
   readonly productControlNativeV1?: boolean;
   readonly productControlPresentationV1?: boolean;
-  /** Host implements `cancel_tool` (per-tool interrupt). Gates the Terminal Interrupt button. */
-  readonly cancelTool: boolean;
-  /** Host implements `get_all_tools_info` (read-only tool catalog). Gates the Agents/Assistant tool list. */
-  readonly toolCatalog: boolean;
+  /**
+   * Host implements `cancel_tool` (per-tool interrupt). Gates the Terminal
+   * Interrupt button. `null` = the host's `peer_mode_ping` did not advertise
+   * the field (older host): consumers treat `null` as optimistic-supported so
+   * an older Desktop that actually implements cancel_tool keeps a working
+   * button, while an older CLI that doesn't returns unsupported on invoke.
+   */
+  readonly cancelTool: boolean | null;
+  /**
+   * Host implements `get_all_tools_info` (read-only tool catalog). Gates the
+   * Agents/Assistant tool list. `null` = the host did not advertise the field
+   * (older host); consumers treat `null` as optimistic-supported.
+   */
+  readonly toolCatalog: boolean | null;
 }
 
 /** Immutable view of one connection; safe to hold in component state. */
@@ -127,8 +137,10 @@ const NO_CAPABILITIES: PeerHostCapabilities = {
   productControlV1: false,
   productControlNativeV1: false,
   productControlPresentationV1: false,
-  cancelTool: false,
-  toolCatalog: false,
+  // Unknown (not yet probed) — not the same as `false` (probed, unsupported).
+  // Consumers treat `null` optimistically so an unprobed host is not gated off.
+  cancelTool: null,
+  toolCatalog: null,
 };
 
 interface ConnectionEntry {
@@ -374,16 +386,23 @@ export class PeerConnectionManager {
 
   private async probeCapabilities(deviceId: string): Promise<PeerHostCapabilities> {
     const result = await this.hostInvoke<PeerModePingResult>(deviceId, 'peer_mode_ping', {});
+    // For the new fields (cancel_tool / tool_catalog) preserve `undefined` as
+    // `null` (unknown) rather than coercing to `false`: an older Desktop that
+    // does not advertise the field but does implement the command would
+    // otherwise have its working capability hidden. `null` lets consumers
+    // stay optimistic; an older CLI that truly lacks the command returns
+    // unsupported on invoke, which the UI already handles. See PR #2428 #4.
+    const caps = result?.capabilities;
     return {
-      idempotentDialogSubmit: result?.capabilities?.idempotent_dialog_submit === true,
-      targetedSessionRollback: result?.capabilities?.targeted_session_rollback === true,
-      tokenUsageStatistics: result?.capabilities?.token_usage_statistics === true,
-      productControlV1: result?.capabilities?.product_control_v1 === true,
-      productControlNativeV1: result?.capabilities?.product_control_native_v1 === true,
+      idempotentDialogSubmit: caps?.idempotent_dialog_submit === true,
+      targetedSessionRollback: caps?.targeted_session_rollback === true,
+      tokenUsageStatistics: caps?.token_usage_statistics === true,
+      productControlV1: caps?.product_control_v1 === true,
+      productControlNativeV1: caps?.product_control_native_v1 === true,
       productControlPresentationV1:
-        result?.capabilities?.product_control_presentation_v1 === true,
-      cancelTool: result?.capabilities?.cancel_tool === true,
-      toolCatalog: result?.capabilities?.tool_catalog === true,
+        caps?.product_control_presentation_v1 === true,
+      cancelTool: caps?.cancel_tool === undefined ? null : caps.cancel_tool === true,
+      toolCatalog: caps?.tool_catalog === undefined ? null : caps.tool_catalog === true,
     };
   }
 
@@ -436,6 +455,7 @@ export class PeerConnectionManager {
       if (this.entries.get(entry.deviceId) !== entry) {
         return;
       }
+      const previousCapabilities = entry.capabilities;
       entry.capabilities = capabilities;
       entry.adapter.setHostCapabilities({
         supportsIdempotentDialogSubmit: capabilities.idempotentDialogSubmit,
@@ -447,8 +467,15 @@ export class PeerConnectionManager {
       const recovered = entry.health !== 'ready';
       entry.health = 'ready';
       this.scheduleKeepalive(entry);
-      if (recovered) {
-        log.info('Peer connection recovered', { deviceId: entry.deviceId });
+      // Publish when the host's advertised capabilities changed too, not only
+      // on recovery: a peer that stayed `ready` but restarted on a different
+      // build mid-session must push a fresh React snapshot, or UI keeps gating
+      // on stale capabilities (e.g. a tool-catalog flag flipping). See #2428 #6.
+      const capabilitiesChanged = !capabilitiesEqual(previousCapabilities, capabilities);
+      if (recovered || capabilitiesChanged) {
+        if (recovered) {
+          log.info('Peer connection recovered', { deviceId: entry.deviceId });
+        }
         this.publish();
       }
     } catch (error) {
@@ -587,6 +614,25 @@ export class PeerConnectionManager {
       }
     }
   }
+}
+
+/**
+ * Shallow-compare the capability fields a React snapshot exposes. Used by the
+ * keepalive path to decide whether a fresh `publish()` is warranted when a
+ * `ready` peer's host reports different capabilities (e.g. after a restart on
+ * a different build) without a state transition. `null` (unknown) and a boolean
+ * are intentionally distinct: an unprobed field flipping to a concrete value is
+ * a change the UI should react to.
+ */
+function capabilitiesEqual(
+  a: PeerHostCapabilities,
+  b: PeerHostCapabilities,
+): boolean {
+  return a.idempotentDialogSubmit === b.idempotentDialogSubmit &&
+    a.targetedSessionRollback === b.targetedSessionRollback &&
+    a.tokenUsageStatistics === b.tokenUsageStatistics &&
+    a.cancelTool === b.cancelTool &&
+    a.toolCatalog === b.toolCatalog;
 }
 
 /** Window-wide instance; peer links outlive any component that renders them. */
