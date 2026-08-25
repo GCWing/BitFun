@@ -1935,6 +1935,15 @@
       "descriptionLabel": "說明",
       "schemaLabel": "輸入 Schema"
     },
+    "agentWait": {
+      "title": "等待子 Agent 完成",
+      "completed": "已收到 {{count}} 個結果",
+      "steered": "已提前結束等待",
+      "timedOut": "等待期限已到；仍有 {{count}} 個任務在執行",
+      "failed": "執行失敗",
+      "failedWithError": "執行失敗：{{error}}",
+      "steeringHint": "可以傳送引導訊息提前結束等待並讓 Agent 處理新指示"
+    },
     "todoWrite": {
       "tasksCount": "{{count}} 項任務",
       "progress": "({{completed}}/{{total}} 完成)",

@@ -1129,6 +1129,7 @@ impl RoundExecutor {
                     Some(format!("round-budget-{}", round_id)),
                     self.computer_use_host(),
                     CancellationToken::new(),
+                    None,
                 );
 
             // Execute tools — convert pipeline-level Err into per-tool error results

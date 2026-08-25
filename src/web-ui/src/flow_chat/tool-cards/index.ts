@@ -29,6 +29,7 @@ import { GlobSearchDisplay } from './GlobSearchDisplay';
 import { LSDisplay } from './LSDisplay';
 import { TodoWriteDisplay } from './TodoWriteDisplay';
 import { TaskToolDisplay } from './TaskToolDisplay';
+import { AgentWaitToolCard } from './AgentWaitToolCard';
 import { CodeReviewToolCard } from './CodeReviewToolCard';
 import { FileOperationToolCard } from './FileOperationToolCard';
 import { DefaultToolCard } from './DefaultToolCard';
@@ -79,6 +80,7 @@ export const TOOL_CARD_COMPONENTS = {
   // Advanced tools
   'Task': TaskToolDisplay,
   'LaunchReviewAgent': TaskToolDisplay,
+  'AgentWait': AgentWaitToolCard,
   'TodoWrite': TodoWriteDisplay,
   
   'submit_code_review': CodeReviewToolCard,

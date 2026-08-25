@@ -1,6 +1,6 @@
 use crate::agentic::coordination::{
     get_global_coordinator, BackgroundSubagentOutcome, BackgroundSubagentWaitMode,
-    BackgroundSubagentWaitResult,
+    BackgroundSubagentWaitResult, BackgroundSubagentWaitStatus,
 };
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -93,15 +93,21 @@ impl AgentWaitTool {
     }
 
     fn assistant_result(result: &BackgroundSubagentWaitResult) -> String {
+        let finished = if result.status == BackgroundSubagentWaitStatus::Steered {
+            "AgentWait ended early because user steering arrived. Background agents continue running."
+                .to_string()
+        } else {
+            format!("AgentWait finished with status {}.", result.status.as_str())
+        };
         if result.outcomes.is_empty() {
             return format!(
-                "AgentWait finished with status {}. Pending background task IDs: {}.",
-                result.status.as_str(),
+                "{} Pending background task IDs: {}.",
+                finished,
                 result.pending_bg_task_ids.join(", ")
             );
         }
 
-        let mut message = format!("AgentWait finished with status {}.", result.status.as_str());
+        let mut message = finished;
         for outcome in &result.outcomes {
             message.push_str(&format!(
                 "\n<result bg_task_id=\"{}\" agent_id=\"{}\" status=\"{}\">",
@@ -135,6 +141,10 @@ impl Tool for AgentWaitTool {
     }
 
     fn manages_own_execution_timeout(&self) -> bool {
+        true
+    }
+
+    fn round_injection_yieldable(&self) -> bool {
         true
     }
 
@@ -230,6 +240,7 @@ Wait for every selected task to complete. The tool also returns when `timeout_se
                 Duration::from_secs(request.timeout_seconds),
                 dialog_turn_id,
                 context.cancellation_token(),
+                context.round_injection_preemption_token(),
             )
             .await?;
         let data = json!({
@@ -249,6 +260,13 @@ Wait for every selected task to complete. The tool also returns when `timeout_se
 mod tests {
     use super::{AgentWaitTool, DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS};
     use crate::agentic::tools::framework::Tool;
+
+    #[test]
+    fn agent_wait_owns_timeout_and_yields_to_round_injection() {
+        let tool = AgentWaitTool::new();
+        assert!(tool.manages_own_execution_timeout());
+        assert!(tool.round_injection_yieldable());
+    }
 
     #[test]
     fn missing_or_empty_task_ids_are_tolerated_by_the_parser() {

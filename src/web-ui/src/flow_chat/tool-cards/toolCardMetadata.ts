@@ -119,6 +119,16 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'detailed',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
+  'AgentWait': {
+    toolName: 'AgentWait',
+    displayName: 'Wait for Agents',
+    icon: 'WAIT',
+    requiresConfirmation: false,
+    resultDisplayType: 'summary',
+    description: 'Wait for background agent results',
+    displayMode: 'compact',
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
+  },
   'TodoWrite': {
     toolName: 'TodoWrite',
     displayName: 'Task Manager',
@@ -530,6 +540,7 @@ export const DEDICATED_TOOL_CARD_NAMES = new Set([
   'WebFetch',
   'Task',
   'LaunchReviewAgent',
+  'AgentWait',
   'TodoWrite',
   'submit_code_review',
   'ContextCompression',

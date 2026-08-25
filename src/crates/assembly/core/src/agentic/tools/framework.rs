@@ -134,6 +134,12 @@ pub trait Tool: Send + Sync {
         false
     }
 
+    /// Whether a pending round injection may end this tool normally so the
+    /// current turn can advance without cancelling the underlying work.
+    fn round_injection_yieldable(&self) -> bool {
+        false
+    }
+
     /// Whether to support streaming output
     fn supports_streaming(&self) -> bool {
         false

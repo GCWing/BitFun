@@ -1266,21 +1266,33 @@ impl ToolPipeline {
         }
     }
 
-    async fn cancel_tools_for_round_injection(
+    async fn preempt_tools_for_round_injection(
         &self,
         task_ids: impl IntoIterator<Item = String>,
+        preemption: RoundInjectionToolPreemption,
     ) -> BitFunResult<()> {
         for task_id in task_ids {
-            self.cancel_tool(
-                &task_id,
-                ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE.to_string(),
-            )
-            .await?;
+            let Some(task) = self.state_manager.get_task(&task_id) else {
+                continue;
+            };
+            if tool_task_state_kind(&task.state).is_terminal() {
+                continue;
+            }
+
+            if let Some(token) = task.round_injection_preemption_token {
+                token.cancel();
+            } else if preemption.should_cancel_running_tools() {
+                self.cancel_tool(
+                    &task_id,
+                    ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE.to_string(),
+                )
+                .await?;
+            }
         }
         Ok(())
     }
 
-    fn spawn_round_injection_cancellation_watch(
+    fn spawn_round_injection_preemption_watch(
         &self,
         task_ids: Vec<String>,
         interrupt: Option<crate::agentic::round_preempt::DialogRoundInjectionInterrupt>,
@@ -1294,8 +1306,11 @@ impl ToolPipeline {
             };
 
             loop {
-                if interrupt.should_cancel_running_tools() {
-                    let _ = pipeline.cancel_tools_for_round_injection(task_ids).await;
+                let preemption = interrupt.pending_tool_preemption();
+                if preemption.should_interrupt_after_current_atomic_unit() {
+                    let _ = pipeline
+                        .preempt_tools_for_round_injection(task_ids, preemption)
+                        .await;
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(25)).await;
@@ -1340,41 +1355,53 @@ impl ToolPipeline {
             })
             .count();
 
-        // Determine concurrency safety for each tool call
-        let concurrency_flags: Vec<bool> = {
+        // Resolve execution traits before tasks are created so round-injection
+        // preemption can be routed without a second registry lookup.
+        let execution_traits: Vec<(bool, bool)> = {
             let registry = self.tool_registry.read().await;
             resolved_tool_calls
                 .iter()
                 .map(|(_, invocation, resolution_error)| {
                     if resolution_error.is_some() {
-                        return false;
+                        return (false, false);
                     }
-                    let tool_is_concurrency_safe = registry
-                        .get_tool(&invocation.effective_tool_name)
-                        .and_then(|tool| {
-                            resolve_contextual_tool(
-                                tool,
-                                context
-                                    .workspace
-                                    .as_ref()
-                                    .map(|workspace| workspace.root_path()),
-                                context
-                                    .workspace
-                                    .as_ref()
-                                    .is_some_and(|workspace| workspace.is_remote()),
-                            )
-                        })
+                    let tool =
+                        registry
+                            .get_tool(&invocation.effective_tool_name)
+                            .and_then(|tool| {
+                                resolve_contextual_tool(
+                                    tool,
+                                    context
+                                        .workspace
+                                        .as_ref()
+                                        .map(|workspace| workspace.root_path()),
+                                    context
+                                        .workspace
+                                        .as_ref()
+                                        .is_some_and(|workspace| workspace.is_remote()),
+                                )
+                            });
+                    let tool_is_concurrency_safe = tool
+                        .as_ref()
                         .map(|tool| tool.is_concurrency_safe(Some(&invocation.effective_arguments)))
                         .unwrap_or(false);
-                    tool_call_concurrency_safe_for_batch(
+                    let concurrency_safe = tool_call_concurrency_safe_for_batch(
                         &invocation.effective_tool_name,
                         tool_is_concurrency_safe,
                         subagent_call_count,
                         options.subagent_batch_execution_policy,
-                    )
+                    );
+                    let round_injection_yieldable = tool
+                        .as_ref()
+                        .is_some_and(|tool| tool.round_injection_yieldable());
+                    (concurrency_safe, round_injection_yieldable)
                 })
                 .collect()
         };
+        let concurrency_flags = execution_traits
+            .iter()
+            .map(|(concurrency_safe, _)| *concurrency_safe)
+            .collect::<Vec<_>>();
         let concurrency_safe_count = concurrency_flags.iter().filter(|&&flag| flag).count();
 
         // Create tasks for all tool calls
@@ -1390,6 +1417,9 @@ impl ToolPipeline {
                 options.clone(),
             );
             task.tool_call_order = tool_call_order as u32;
+            if execution_traits[tool_call_order].1 {
+                task.round_injection_preemption_token = Some(CancellationToken::new());
+            }
             let tool_id = self.state_manager.create_task(task).await;
             task_ids.push(tool_id);
         }
@@ -1488,7 +1518,7 @@ impl ToolPipeline {
             .and_then(|task_id| self.state_manager.get_task(task_id))
             .and_then(|task| task.context.steering_interrupt.clone());
         let watch_handle =
-            self.spawn_round_injection_cancellation_watch(task_ids.clone(), batch_interrupt);
+            self.spawn_round_injection_preemption_watch(task_ids.clone(), batch_interrupt);
 
         let futures: Vec<_> = task_ids
             .iter()
@@ -1535,7 +1565,7 @@ impl ToolPipeline {
 
             let interrupt = task.and_then(|task| task.context.steering_interrupt.clone());
             let watch_handle =
-                self.spawn_round_injection_cancellation_watch(vec![task_id.clone()], interrupt);
+                self.spawn_round_injection_preemption_watch(vec![task_id.clone()], interrupt);
             let result = self.execute_single_tool(task_id.clone()).await;
             if let Some(handle) = watch_handle {
                 handle.abort();
@@ -2482,6 +2512,7 @@ mod tests {
         response: serde_json::Value,
         delay_ms: u64,
         readonly: bool,
+        round_injection_yieldable: bool,
     }
 
     struct CapturingTestTool {
@@ -2728,6 +2759,10 @@ mod tests {
             self.readonly
         }
 
+        fn round_injection_yieldable(&self) -> bool {
+            self.round_injection_yieldable
+        }
+
         fn input_schema(&self) -> serde_json::Value {
             json!({ "type": "object" })
         }
@@ -2748,10 +2783,20 @@ mod tests {
         async fn call_impl(
             &self,
             _input: &serde_json::Value,
-            _context: &ToolUseContext,
+            context: &ToolUseContext,
         ) -> BitFunResult<Vec<ToolResult>> {
             if self.delay_ms > 0 {
-                sleep(Duration::from_millis(self.delay_ms)).await;
+                if let Some(token) = context
+                    .round_injection_preemption_token()
+                    .filter(|_| self.round_injection_yieldable)
+                {
+                    tokio::select! {
+                        _ = sleep(Duration::from_millis(self.delay_ms)) => {}
+                        _ = token.cancelled() => {}
+                    }
+                } else {
+                    sleep(Duration::from_millis(self.delay_ms)).await;
+                }
             }
             Ok(vec![ToolResult::Result {
                 data: self.response.clone(),
@@ -2874,6 +2919,25 @@ mod tests {
                 response,
                 delay_ms,
                 readonly: true,
+                round_injection_yieldable: false,
+            }));
+    }
+
+    async fn register_yieldable_test_tool(
+        pipeline: &ToolPipeline,
+        name: &str,
+        response: serde_json::Value,
+    ) {
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(StaticTestTool {
+                name: name.to_string(),
+                response,
+                delay_ms: 30_000,
+                readonly: true,
+                round_injection_yieldable: true,
             }));
     }
 
@@ -2949,6 +3013,7 @@ mod tests {
                 response: json!({ "unexpected": true }),
                 delay_ms: 0,
                 readonly: false,
+                round_injection_yieldable: false,
             }));
         let mut options = ToolExecutionOptions::default();
         options.permission_policy = ResolvedPermissionPolicy::new(
@@ -4367,6 +4432,62 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results[0].result.is_error);
         assert_eq!(results[0].result.result["category"], json!("cancelled"));
+    }
+
+    #[tokio::test]
+    async fn yieldable_tools_end_normally_for_every_non_none_round_injection_policy() {
+        for policy in [
+            RoundInjectionToolPreemption::InterruptAfterCurrentAtomicUnit,
+            RoundInjectionToolPreemption::CancelRunningCooperatively,
+            RoundInjectionToolPreemption::CancelRunningForcefully,
+        ] {
+            let pipeline = test_tool_pipeline();
+            register_yieldable_test_tool(&pipeline, "AgentWait", json!({ "status": "steered" }))
+                .await;
+
+            let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+            let buffer_for_injection = buffer.clone();
+            tokio::spawn(async move {
+                sleep(Duration::from_millis(50)).await;
+                buffer_for_injection.push(
+                    "session_1",
+                    test_round_injection(RoundInjectionKind::UserSteering, policy),
+                );
+            });
+
+            let mut context = test_tool_execution_context();
+            context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                buffer,
+            ));
+            let results = pipeline
+                .execute_tools(
+                    vec![test_tool_call("agent_wait", "AgentWait")],
+                    context,
+                    ToolExecutionOptions::default(),
+                )
+                .await
+                .expect("yieldable tool should finish normally");
+
+            assert_eq!(results.len(), 1, "policy: {policy:?}");
+            assert!(!results[0].result.is_error, "policy: {policy:?}");
+            assert_eq!(
+                results[0].result.result["status"],
+                json!("steered"),
+                "policy: {policy:?}"
+            );
+            assert!(
+                matches!(
+                    pipeline
+                        .state_manager
+                        .get_task("agent_wait")
+                        .map(|task| task.state),
+                    Some(ToolExecutionState::Completed { .. })
+                ),
+                "policy: {policy:?}"
+            );
+        }
     }
 
     #[test]
