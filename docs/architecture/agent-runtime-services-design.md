@@ -68,7 +68,7 @@ Agent Runtime API 的逻辑归属与物理部署分离：相同归属模块可�
 私有 SDK Host 或目标机器 Runtime 中。任何 Rust 部署都只管理自己进程树内的服务与 Node/Bun Plugin Host；不能因为多个
 GUI/TUI/Remote Client 连接就复制 Runtime 状态模块，或按 Client/Workspace 创建 Plugin Host。
 
-Rust Runtime SDK 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v7 preview：
+Rust Runtime SDK 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v8 preview：
 小版本更新允许增加可选 builder hook、有默认实现的端口方法或注册表查询能力，但不得向外部可用
 Rust 结构体字面量（struct literal）构造的 DTO 直接增加字段，也不得改变既有端口语义、错误分类、session / turn 标识含义或
 默认 feature 依赖。任何需要调用方改写现有嵌入代码的变更，必须提升接口版本并提供兼容迁移路径。
@@ -95,6 +95,9 @@ v7 增加持久 Session 的显式卸载，用于 SDK Host 重启后的恢复与�
 通用 Harness descriptor registry、builder 注入和查询接口继续作为 SDK 兼容面保留。Product Assembly 仍决定
 内置 provider；CLI、ACP 和 SDK Headless profile 不自动注册 DeepReview、DeepResearch 或 MiniApp provider。
 命名工作流策略由 `agent-workflows` / 现有产品 owner 持有，不能把 Harness registry 当成第二套产品工作流 owner。
+
+v8 增加 `TurnTokenUsage` 聚合事实。对应 SDK Host protocol v5 支持本地图片输入并在 Query 终态返回用量；
+该版本不删除或改写 Harness registry 注入/查询接口。
 
 只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有具体服务管理器、读取产品命令
 注册表、理解 ACP/内部端口或依赖全局可变状态，公开 SDK 发布边界就不成立。公开 SDK 的完整
@@ -441,7 +444,7 @@ impl AgentRuntime {
 该 Rust 接口是内部产品入口复用的当前形态，不是公开 Python/TypeScript SDK 的目标 API。它必须只接收
 已组装的类型化部件，不负责创建
 文件系统、终端、MCP、AI 客户端、Remote 提供方或产品命令。
-当前 v7 preview 接口以 message / attachment / metadata、默认标准执行目标和活动 Turn 文本 steer 作为最小输入形态；若把
+当前 v8 preview 接口以 message / attachment / metadata、默认标准执行目标和活动 Turn 文本 steer 作为最小输入形态；若把
 model-round cancellation token、结构化 AgentInput 或更复杂的事件游标纳入公开 SDK，
 必须分别评审 Rust Runtime SDK、SDK Host protocol 和公开 SDK API 的版本，并保留旧路径兼容。
 

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -44,6 +45,7 @@ struct FakeOwner {
     updated_models: Mutex<Vec<(String, String)>>,
     settlement_requests: Mutex<Vec<AgentTurnSettlementRequest>>,
     dialog_metadata: Mutex<Vec<serde_json::Map<String, serde_json::Value>>>,
+    dialog_requests: Mutex<Vec<AgentDialogTurnRequest>>,
     emit_terminal: bool,
     fail_dialog_submit: bool,
     fail_delete: bool,
@@ -393,6 +395,7 @@ impl AgentDialogTurnPort for FakeOwner {
         &self,
         request: AgentDialogTurnRequest,
     ) -> PortResult<DialogSubmitOutcome> {
+        self.dialog_requests.lock().unwrap().push(request.clone());
         self.dialog_metadata
             .lock()
             .unwrap()
@@ -1300,6 +1303,108 @@ async fn query_streams_existing_events_and_one_terminal_result() {
     assert_eq!(result["params"]["status"], "completed");
     assert_eq!(result["params"]["output"]["text"], "fixture result");
     assert!(output.try_recv().is_err(), "terminal result must be unique");
+}
+
+#[tokio::test]
+async fn query_maps_local_image_paths_to_existing_runtime_attachments() {
+    let (host, owner, mut output) = host().await;
+    initialize(&host, &mut output).await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-image",
+        "method": "query/start",
+        "params": {
+            "prompt": "",
+            "images": ["screenshots/fixture.jpg"]
+        }
+    })))
+    .await;
+
+    let accepted = output.recv().await.unwrap();
+    assert_eq!(accepted["result"]["accepted"], true);
+    let requests = owner.dialog_requests.lock().unwrap();
+    let request = requests.last().expect("submitted dialog request");
+    assert!(request.message.is_empty());
+    let attachment = &request.attachments[0];
+    assert_eq!(attachment.kind, "remote_image");
+    assert_eq!(attachment.metadata["mimeType"], "image/jpeg");
+    assert_eq!(
+        PathBuf::from(
+            attachment.metadata["imagePath"]
+                .as_str()
+                .expect("local image path")
+        ),
+        PathBuf::from("D:/workspace/project").join("screenshots/fixture.jpg")
+    );
+}
+
+#[tokio::test]
+async fn query_result_aggregates_usage_for_its_turn() {
+    let (host, owner, mut output) = host_with_query_limit(1).await;
+    initialize(&host, &mut output).await;
+
+    host.handle_request(request(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "query-usage",
+        "method": "query/start",
+        "params": { "prompt": "hello" }
+    })))
+    .await;
+
+    let accepted = output.recv().await.unwrap();
+    assert_eq!(accepted["result"]["turnId"], "turn-fixture");
+    assert_eq!(output.recv().await.unwrap()["method"], "query/event");
+    let session_id = accepted["result"]["sessionId"].as_str().unwrap();
+    let queue = owner.queue.lock().unwrap().clone().unwrap();
+    for event in [
+        usage_event(session_id, "turn-fixture", 100, Some(25), 125, Some(40)),
+        usage_event(session_id, "another-turn", 900, Some(90), 990, Some(80)),
+        usage_event(session_id, "turn-fixture", 200, Some(50), 250, Some(80)),
+        AgenticEvent::DialogTurnCompleted {
+            session_id: session_id.to_string(),
+            turn_id: "turn-fixture".to_string(),
+            total_rounds: 2,
+            total_tools: 0,
+            duration_ms: 1,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("stop".to_string()),
+            has_final_response: Some(true),
+        },
+    ] {
+        queue.enqueue(event, None).await.unwrap();
+    }
+
+    let result = output.recv().await.unwrap();
+    assert_eq!(result["method"], "query/result");
+    assert_eq!(result["params"]["usage"]["inputTokens"], 300);
+    assert_eq!(result["params"]["usage"]["outputTokens"], 75);
+    assert_eq!(result["params"]["usage"]["totalTokens"], 375);
+    assert_eq!(result["params"]["usage"]["cachedTokens"], 120);
+}
+
+fn usage_event(
+    session_id: &str,
+    turn_id: &str,
+    input_tokens: usize,
+    output_tokens: Option<usize>,
+    total_tokens: usize,
+    cached_tokens: Option<usize>,
+) -> AgenticEvent {
+    AgenticEvent::TokenUsageUpdated {
+        session_id: session_id.to_string(),
+        turn_id: turn_id.to_string(),
+        model_config_id: "model-config".to_string(),
+        effective_model_name: "provider-model".to_string(),
+        input_tokens,
+        output_tokens,
+        total_tokens,
+        max_context_tokens: Some(200_000),
+        is_subagent: false,
+        cached_tokens,
+        token_details: None,
+    }
 }
 
 #[tokio::test]

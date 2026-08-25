@@ -14,6 +14,11 @@ The slice validates the intended public object model:
   Host process;
 - `Query` is an ordered async stream with idempotent cancellation, cached final
   `Result`, and explicit close semantics;
+- a prompt can be a string or ordered `text` / `local_image` parts; local image
+  paths are resolved against the Session workspace and reuse Runtime image
+  attachments;
+- a terminal `Result` reports aggregate token usage when the provider supplied
+  usage for that Turn;
 - the same stream reports safe Tool lifecycle facts and permission requests;
   `Query.respondPermission()` supports allow once, allow always, or reject;
 - protocol and process failures use `SdkError`, including outcome certainty.
@@ -65,7 +70,12 @@ await using client = await AgentClient.start({
   },
 });
 
-await using query = await client.query({ prompt: "Summarize this repository" });
+await using query = await client.query({
+  prompt: [
+    { type: "text", text: "Explain this screenshot in repository context" },
+    { type: "local_image", path: "screenshots/failure.png" },
+  ],
+});
 for await (const item of query) {
   switch (item.type) {
     case "assistant_text_delta":
@@ -80,7 +90,11 @@ for await (const item of query) {
   }
 }
 const result = await query.result();
+console.log(result.usage?.totalTokens);
 ```
+
+`local_image` accepts local PNG, JPEG, GIF, and WebP paths. Image bytes and
+remote URLs are intentionally outside this local Host protocol.
 
 Use an explicit Session when the application needs continuity across client or
 Host restarts. Here `options` is the same trusted `AgentClientOptions` value
@@ -112,8 +126,8 @@ separately. This PR does not publish the package. A future registry release
 still needs platform packages, signing, and release verification.
 
 Browser and mobile runtimes cannot launch the local native Host. Custom
-functions, general user-input callbacks, structured output, usage, Python
-support, platform package publication, signing, and downloads
+functions, general user-input callbacks, structured output, Python support,
+platform package publication, signing, and downloads
 remain deferred.
 
 ## Development

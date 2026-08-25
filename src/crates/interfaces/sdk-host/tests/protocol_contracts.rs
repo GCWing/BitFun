@@ -2,9 +2,10 @@ use bitfun_sdk_host::protocol::{
     ErrorCode, ErrorData, ErrorStage, HostCapabilities, InitializeParams, InitializeResult,
     JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty,
     PermissionDecision, PermissionRespondParams, PermissionSource, PermissionSourceKind,
-    QueryEvent, QueryOutput, QueryResultError, QueryResultParams, QueryTerminalStatus,
-    RecoveryAction, RequestId, SessionLifetime, SessionResumeParams, Stability,
-    TemporaryModelConfig, TemporaryModelProvider, ToolEventStatus, PROTOCOL_VERSION,
+    QueryEvent, QueryOutput, QueryResultError, QueryResultParams, QueryStartParams,
+    QueryTerminalStatus, QueryUsage, RecoveryAction, RequestId, SessionLifetime,
+    SessionResumeParams, Stability, TemporaryModelConfig, TemporaryModelProvider, ToolEventStatus,
+    PROTOCOL_VERSION,
 };
 
 #[test]
@@ -14,7 +15,7 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": 4,
+            "protocolVersion": 5,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
             "capabilities": {
                 "serverNotifications": true,
@@ -32,7 +33,7 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
     let params: InitializeParams = request.params_as().unwrap();
 
     assert_eq!(request.id, Some(RequestId::Number(1)));
-    assert_eq!(PROTOCOL_VERSION, 4);
+    assert_eq!(PROTOCOL_VERSION, 5);
     assert_eq!(params.protocol_version, PROTOCOL_VERSION);
     assert!(params.capabilities.server_notifications);
     assert!(params.capabilities.permission_responses);
@@ -79,8 +80,9 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
             session_close: true,
             event_stream: true,
             tool_events: true,
+            image_input: true,
             structured_output: false,
-            usage: false,
+            usage: true,
             custom_tools: false,
             permission_responses: true,
             hooks: false,
@@ -103,18 +105,41 @@ fn current_host_capabilities_are_a_deliberate_subset_of_the_headless_cli_target(
     assert!(capabilities.session_close);
     assert!(capabilities.event_stream);
     assert!(capabilities.tool_events);
+    assert!(capabilities.image_input);
 
     assert_eq!(
         capabilities.session_create_lifetime,
         SessionLifetime::Durable
     );
     assert!(!capabilities.structured_output);
-    assert!(!capabilities.usage);
+    assert!(capabilities.usage);
     assert!(!capabilities.custom_tools);
     assert!(capabilities.permission_responses);
     assert!(!capabilities.hooks);
     assert!(!capabilities.mcp_configuration);
     assert!(!capabilities.prestarted_transport);
+}
+
+#[test]
+fn query_input_carries_only_text_and_local_image_paths() {
+    let params: QueryStartParams = serde_json::from_value(serde_json::json!({
+        "prompt": "describe these images",
+        "images": ["screenshots/one.png", "D:/captures/two.jpg"]
+    }))
+    .unwrap();
+
+    assert_eq!(params.prompt, "describe these images");
+    assert_eq!(
+        params.images,
+        vec!["screenshots/one.png", "D:/captures/two.jpg"]
+    );
+    assert!(
+        serde_json::from_value::<QueryStartParams>(serde_json::json!({
+            "prompt": "unsupported payload",
+            "imageUrl": "https://example.com/image.png"
+        }))
+        .is_err()
+    );
 }
 
 #[test]
@@ -201,6 +226,12 @@ fn query_events_and_terminal_errors_are_closed_protocol_values() {
         output: QueryOutput {
             text: "partial response".to_string(),
         },
+        usage: Some(QueryUsage {
+            input_tokens: 100,
+            output_tokens: Some(25),
+            total_tokens: 125,
+            cached_tokens: Some(40),
+        }),
         error: Some(QueryResultError {
             message: "Permission approval is required".to_string(),
             data: ErrorData {
@@ -220,6 +251,8 @@ fn query_events_and_terminal_errors_are_closed_protocol_values() {
     assert_eq!(result["error"]["data"]["stage"], "query");
     assert_eq!(result["operationId"], "operation-1");
     assert_eq!(result["output"]["text"], "partial response");
+    assert_eq!(result["usage"]["inputTokens"], 100);
+    assert_eq!(result["usage"]["cachedTokens"], 40);
     assert_eq!(result["error"]["data"]["outcomeCertainty"], "committed");
     assert_eq!(
         result["error"]["message"],

@@ -57,6 +57,7 @@ const requiredTypes = [
   "QueryResultParams",
   "QueryStartParams",
   "QueryStartResult",
+  "QueryUsage",
   "SessionCloseParams",
   "SessionCloseResult",
   "SessionCreateParams",

@@ -57,6 +57,8 @@ const client = await AgentClient.start({
 try {
   assert.equal(client.capabilities.query, true);
   assert.equal(client.capabilities.toolEvents, true);
+  assert.equal(client.capabilities.imageInput, true);
+  assert.equal(client.capabilities.usage, true);
   assert.equal(client.capabilities.permissionResponses, true);
 } finally {
   await client.close();
