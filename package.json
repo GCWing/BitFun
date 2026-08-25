@@ -24,6 +24,8 @@
     "preview:mobile-web": "pnpm --dir src/mobile-web preview",
     "lint:web": "pnpm --dir src/web-ui run lint",
     "lint:web:fix": "pnpm --dir src/web-ui run lint:fix",
+    "check:web": "pnpm run check:web:appearance && pnpm run type-check:web",
+    "check:web:appearance": "pnpm run appearance:contract-audit && pnpm run theme:color-audit:test && pnpm run theme:color-audit:all && pnpm run theme:visual-contract",
     "type-check:mobile-web": "pnpm --dir src/mobile-web run type-check",
     "i18n:generate": "node scripts/generate-i18n-contract.mjs",
     "i18n:contract:test": "node --test scripts/i18n-contract.test.mjs",

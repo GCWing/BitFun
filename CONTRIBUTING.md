@@ -164,7 +164,7 @@ Common local checks:
 | Change type | Typical verification |
 | --- | --- |
 | Repository metadata or GitHub config | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| Frontend runtime or UI | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
+| Frontend runtime or UI | `pnpm run check:web`, plus the nearest focused test when behavior changed |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
 | Rust shared runtime or services | `cargo check --workspace`, plus a focused `cargo test` when behavior changed |
 | Desktop/Tauri integration | `cargo check -p bitfun-desktop` |
@@ -173,6 +173,10 @@ Common local checks:
 For UI changes, include screenshots or a short recording when helpful. If you
 cannot run a relevant check, explain why in the PR and provide a lower-risk
 manual verification path.
+
+`pnpm run check:web` combines the Web UI type-check with the Appearance
+contract, theme color, and theme visual governance gates that CI applies to
+frontend changes.
 
 ## Security and Compliance
 

@@ -152,13 +152,16 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 | 改动类型 | 常用验证 |
 | --- | --- |
 | 仓库元信息或 GitHub 配置 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| 前端运行时或 UI | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
+| 前端运行时或 UI | `pnpm run check:web`；行为变化时再加最近的 focused test |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
 | Rust 共享 runtime 或 services | `cargo check --workspace`；行为变化时再加 focused `cargo test` |
 | Desktop/Tauri 集成 | `cargo check -p bitfun-desktop` |
 | i18n 资源或契约 | 使用 `AGENTS.md` 中匹配的 i18n 验证行 |
 
 UI 改动在有帮助时附截图或短录屏。无法运行相关检查时，在 PR 中说明原因，并提供风险更低的手动验证路径。
+
+`pnpm run check:web` 会组合执行 Web UI 类型检查，以及 CI 针对前端改动运行的 Appearance contract、
+主题颜色和主题视觉治理门禁。
 
 ## 安全与合规
 
