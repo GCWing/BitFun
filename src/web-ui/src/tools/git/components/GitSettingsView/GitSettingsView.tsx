@@ -1,6 +1,6 @@
 /** Git settings view. */
 
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, IconButton, Input, TabGroup } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { Tabs, TabPane, Select, Checkbox } from '@/component-library';
+import { Select, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -397,44 +397,24 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
       )}
 
       <div data-bf-component="git-settings-view" data-bf-part="tabs">
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key: string) => setActiveTab(key as 'user' | 'repository' | 'advanced')}
+        <TabGroup
+          items={[
+            { icon: <User />, id: 'git-settings-tab-user', label: t('settingsView.tabs.user'), panelId: 'git-settings-panel-user', value: 'user' },
+            { icon: <Globe />, id: 'git-settings-tab-repository', label: t('settingsView.tabs.repository'), panelId: 'git-settings-panel-repository', value: 'repository' },
+            { icon: <Key />, id: 'git-settings-tab-advanced', label: t('settingsView.tabs.advanced'), panelId: 'git-settings-panel-advanced', value: 'advanced' },
+          ]}
+          onValueChange={(key) => setActiveTab(key as 'user' | 'repository' | 'advanced')}
+          value={activeTab}
+        />
+        <div
+          aria-labelledby={`git-settings-tab-${activeTab}`}
+          id={`git-settings-panel-${activeTab}`}
+          role="tabpanel"
         >
-        <TabPane 
-          tabKey="user"
-          label={
-            <span className="bitfun-git-settings-view__tab-label">
-              <User size={16} />
-              {t('settingsView.tabs.user')}
-            </span>
-          }
-        >
-          {renderUserTab()}
-        </TabPane>
-        <TabPane 
-          tabKey="repository"
-          label={
-            <span className="bitfun-git-settings-view__tab-label">
-              <Globe size={16} />
-              {t('settingsView.tabs.repository')}
-            </span>
-          }
-        >
-          {renderRepositoryTab()}
-        </TabPane>
-        <TabPane 
-          tabKey="advanced"
-          label={
-            <span className="bitfun-git-settings-view__tab-label">
-              <Key size={16} />
-              {t('settingsView.tabs.advanced')}
-            </span>
-          }
-        >
-          {renderAdvancedTab()}
-        </TabPane>
-        </Tabs>
+          {activeTab === 'user' && renderUserTab()}
+          {activeTab === 'repository' && renderRepositoryTab()}
+          {activeTab === 'advanced' && renderAdvancedTab()}
+        </div>
       </div>
     </div>
   );

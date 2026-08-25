@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { TabPane, Tabs } from '@/component-library';
+import { TabGroup } from '@bitfun/ui';
 import { useSettingsStore } from '../settingsStore';
 import type { SettingsPageProps, SettingsViewId } from '../settingsTypes';
 import './SettingsViewPage.scss';
@@ -36,6 +36,7 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
     setActiveViewId(next);
     setActiveView(next);
   };
+  const activeView = views.find((view) => view.id === activeViewId) ?? views[0];
 
   return (
     <div
@@ -44,33 +45,39 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
       data-bf-part="root"
       data-bf-view={activeViewId}
     >
-      <Tabs
-        activeKey={activeViewId}
-        onChange={handleChange}
-        type="pill"
-        size="small"
+      <TabGroup
         className="bitfun-settings-view-page__tabs"
+        items={views.map((view) => ({
+          id: `settings-view-tab-${view.id}`,
+          label: view.label,
+          panelId: `settings-view-panel-${view.id}`,
+          value: view.id,
+        }))}
+        onValueChange={handleChange}
+        value={activeViewId}
+      />
+      <div
+        aria-labelledby={`settings-view-tab-${activeViewId}`}
+        className="bitfun-settings-view-page__panel"
+        id={`settings-view-panel-${activeViewId}`}
+        role="tabpanel"
       >
-        {views.map((view) => (
-          <TabPane key={view.id} tabKey={view.id} label={view.label}>
-            <Suspense fallback={(
-              <div
-                className="bitfun-settings-view-page__loading"
-                data-bf-component="settings-view-page"
-                data-bf-part="loading"
-                aria-busy="true"
-                aria-hidden="true"
-              >
-                <span className="bitfun-settings-view-page__loading-line" data-bf-component="settings-view-page" data-bf-part="loadingLine" />
-                <span className="bitfun-settings-view-page__loading-line" data-bf-component="settings-view-page" data-bf-part="loadingLine" />
-                <span className="bitfun-settings-view-page__loading-block" data-bf-component="settings-view-page" data-bf-part="loadingBlock" />
-              </div>
-            )}>
-              {view.content}
-            </Suspense>
-          </TabPane>
-        ))}
-      </Tabs>
+        <Suspense fallback={(
+          <div
+            className="bitfun-settings-view-page__loading"
+            data-bf-component="settings-view-page"
+            data-bf-part="loading"
+            aria-busy="true"
+            aria-hidden="true"
+          >
+            <span className="bitfun-settings-view-page__loading-line" data-bf-component="settings-view-page" data-bf-part="loadingLine" />
+            <span className="bitfun-settings-view-page__loading-line" data-bf-component="settings-view-page" data-bf-part="loadingLine" />
+            <span className="bitfun-settings-view-page__loading-block" data-bf-component="settings-view-page" data-bf-part="loadingBlock" />
+          </div>
+        )}>
+          {activeView?.content}
+        </Suspense>
+      </div>
     </div>
   );
 };

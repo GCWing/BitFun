@@ -3,8 +3,8 @@
  * Opening an app opens a separate scene tab (miniapp:id).
  */
 import React, { Suspense, lazy, useState } from 'react';
+import { TabGroup } from '@bitfun/ui';
 import { Download, Store, UploadCloud } from 'lucide-react';
-import { Tabs, TabPane } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppGalleryScene.scss';
 
@@ -20,41 +20,39 @@ const MiniAppGalleryScene: React.FC = () => {
 
   return (
     <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">
-      <Tabs
-        className="miniapp-gallery-scene__tabs"
-        type="line"
-        size="small"
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as MiniAppGalleryTab)}
+      <div className="miniapp-gallery-scene__nav">
+        <TabGroup
+          items={[
+            { icon: <Download />, id: 'miniapp-gallery-tab-installed', label: t('market.tabs.installed'), panelId: 'miniapp-gallery-panel-installed', value: 'installed' },
+            { icon: <Store />, id: 'miniapp-gallery-tab-market', label: t('market.tabs.market'), panelId: 'miniapp-gallery-panel-market', value: 'market' },
+            { icon: <UploadCloud />, id: 'miniapp-gallery-tab-submissions', label: t('market.tabs.submissions'), panelId: 'miniapp-gallery-panel-submissions', value: 'submissions' },
+          ]}
+          value={activeTab}
+          onValueChange={(key) => setActiveTab(key as MiniAppGalleryTab)}
+        />
+      </div>
+      <div
+        aria-labelledby={`miniapp-gallery-tab-${activeTab}`}
+        className="miniapp-gallery-scene__panel"
+        id={`miniapp-gallery-panel-${activeTab}`}
+        role="tabpanel"
       >
-        <TabPane
-          tabKey="installed"
-          icon={<Download size={14} />}
-          label={t('market.tabs.installed')}
-        >
+        {activeTab === 'installed' && (
           <Suspense fallback={null}>
             <MiniAppGalleryView />
           </Suspense>
-        </TabPane>
-        <TabPane
-          tabKey="market"
-          icon={<Store size={14} />}
-          label={t('market.tabs.market')}
-        >
+        )}
+        {activeTab === 'market' && (
           <Suspense fallback={null}>
             <MiniAppMarketView />
           </Suspense>
-        </TabPane>
-        <TabPane
-          tabKey="submissions"
-          icon={<UploadCloud size={14} />}
-          label={t('market.tabs.submissions')}
-        >
+        )}
+        {activeTab === 'submissions' && (
           <Suspense fallback={null}>
             <MiniAppSubmissionsView />
           </Suspense>
-        </TabPane>
-      </Tabs>
+        )}
+      </div>
     </div>
   );
 };

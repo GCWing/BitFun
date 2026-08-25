@@ -6,7 +6,7 @@
       "../../../component-library/components/Input": 1,
       "../../component-library": 24,
       "../component-library": 1,
-      "@/component-library": 278,
+      "@/component-library": 276,
       "@/component-library/components": 1,
       "@/component-library/components/Alert/appearance": 1,
       "@/component-library/components/Avatar/appearance": 1,
@@ -145,8 +145,8 @@
       "SessionGroupWorkspaceIcon": 1,
       "SessionGroupWorkspaceSelectedIcon": 1,
       "streamTextAppearanceDescriptor": 1,
-      "TabPane": 5,
-      "Tabs": 5,
+      "TabPane": 1,
+      "Tabs": 1,
       "tabsAppearanceDescriptor": 1,
       "Tag": 1,
       "tagAppearanceDescriptor": 1,
@@ -164,7 +164,7 @@
       "WindowControls": 1,
       "windowControlsAppearanceDescriptor": 1
     },
-    "moduleReferences": 395
+    "moduleReferences": 393
   },
   "nativeControls": {
     "allowlist": [],
@@ -716,6 +716,6 @@
     "total": 445
   },
   "newLibrary": {
-    "moduleReferences": 244
+    "moduleReferences": 246
   }
 }
