@@ -4,3 +4,5 @@ mod plugin_product_shape;
 mod product_capabilities;
 #[path = "product_capability_contracts/product_sdk_assembly.rs"]
 mod product_sdk_assembly;
+#[path = "product_capability_contracts/runtime_boundary.rs"]
+mod runtime_boundary;
