@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import type {
   PeerConnectionHealth,
   PeerConnectionLostReason,
+  PeerHostCapabilities,
 } from './PeerConnectionManager';
 
 /**
@@ -20,6 +21,11 @@ export interface PeerAttachmentState {
   deviceName: string;
   health: PeerConnectionHealth;
   lostReason: PeerConnectionLostReason | null;
+  /**
+   * Host capabilities probed via `peer_mode_ping`. Null when the host has not
+   * answered yet; consumers must fall back to a safe default (unsupported).
+   */
+  capabilities: PeerHostCapabilities | null;
 }
 
 /** A newer request may intentionally supersede an earlier rapid switch. */
@@ -34,6 +40,13 @@ export interface PeerDeviceContextValue {
    * reporting progress.
    */
   attachments: PeerAttachmentState[];
+  /**
+   * Capabilities of the currently rendered peer host, or null when rendering
+   * this machine or the host has not answered `peer_mode_ping` yet. Consumers
+   * gate peer-specific UI (e.g. Terminal Interrupt, tool catalog) on this
+   * instead of guessing from surface state.
+   */
+  currentPeerCapabilities: PeerHostCapabilities | null;
   /** Render another device, attaching it first when needed. */
   switchToDevice: (deviceId: string, deviceName: string) => Promise<SurfaceSwitchOutcome>;
   /** Render this machine again. Peer attachments are left running. */

@@ -844,6 +844,21 @@ impl CoreAgentRuntimeCompatibility {
             .map_err(|error| error.to_string())
     }
 
+    /// Cancel a running tool execution on this host.
+    ///
+    /// The controller renders tool cards (e.g. the Terminal card's Interrupt
+    /// button) for Turns this host owns, so it must be able to stop a running
+    /// tool here. This is the per-tool interrupt contract behind the
+    /// `cancel_tool` HostInvoke command; both Desktop and CLI Peer Hosts reach
+    /// the same Core-owned coordinator the local UI does, one level finer than
+    /// `cancel_dialog_turn`.
+    pub async fn cancel_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+        self.coordinator
+            .cancel_tool(tool_id, reason)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Applies the same Core deployment owner before a product compatibility
     /// path attaches to or mutates a structured workspace scope.
     pub fn ensure_workspace_runtime_ownership(

@@ -18,11 +18,6 @@ export default tseslint.config(
       'src/**/*.example.tsx',
       'src/component-library/components/registry.tsx',
       'src/component-library/preview/**',
-      // Pre-existing legacy: context-system type impls use class components
-      // with hooks and other legacy patterns. Kept out of lint to avoid
-      // unrelated churn; the dynamic-import fence still covers the rest of
-      // src/**. FileContextImpl.tsx here is migrated to api.invoke.
-      'src/shared/context-system/core/types/**',
     ],
   },
   {
@@ -137,6 +132,19 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+  {
+    // Pre-existing legacy: context-system type impls use class components
+    // that call React Hooks (a pattern predating the adapter fence). Exempt
+    // ONLY the noisy legacy rule here — the adapter fence
+    // (no-restricted-imports / no-restricted-syntax) still applies to this
+    // directory, so a direct or dynamic `invoke` import from
+    // '@tauri-apps/api/core' here fails the build just like anywhere else.
+    // This was previously a global ignore that let the whole fence be bypassed.
+    files: ['src/shared/context-system/core/types/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
     },
   },
   {

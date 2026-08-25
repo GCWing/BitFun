@@ -423,6 +423,12 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
             "token_usage_statistics": true,
+            // Desktop implements both per-tool cancel and the tool catalog
+            // (agentic_api::cancel_tool, tool_api::get_all_tools_info), so the
+            // controller can gate the Terminal Interrupt button and the tool
+            // catalog UI on these the same way it does on the CLI peer host.
+            "cancel_tool": true,
+            "tool_catalog": true,
         },
     }))
 }
@@ -539,6 +545,18 @@ mod tests {
         assert_eq!(
             value
                 .pointer("/capabilities/token_usage_statistics")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/cancel_tool")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/tool_catalog")
                 .and_then(Value::as_bool),
             Some(true)
         );

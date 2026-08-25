@@ -4,7 +4,6 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tauri::State;
 
 use bitfun_agent_runtime::sdk::AgentUserAnswersRequest;
@@ -14,6 +13,7 @@ use bitfun_core::agentic::{
     workspace::{local_workspace_services, remote_workspace_services},
     WorkspaceBinding,
 };
+use bitfun_core::agentic::tools::product_runtime::{build_tool_info, ToolInfoDto};
 use bitfun_core::product_runtime::CoreRuntimeServicesProvider;
 use bitfun_core::service::remote_ssh::workspace_state::{
     get_remote_workspace_manager, lookup_remote_connection, workspace_session_identity,
@@ -21,6 +21,12 @@ use bitfun_core::service::remote_ssh::workspace_state::{
 use bitfun_core::util::elapsed_ms_u64;
 
 use crate::runtime::DesktopRuntimeContext;
+
+/// Re-export the shared tool catalog DTO so callers see one `ToolInfo` type
+/// across the Desktop Tauri command and the CLI Peer Host handler. Core owns
+/// the shape; both hosts must answer `get_all_tools_info` with it so a
+/// controller cannot tell "unsupported" from "empty".
+pub type ToolInfo = ToolInfoDto;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,34 +44,11 @@ pub struct GetToolInfoRequest {
     pub tool_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DynamicMcpToolInfo {
-    pub server_id: String,
-    pub server_name: String,
-    pub tool_name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DynamicToolInfo {
-    pub provider_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider_kind: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcp: Option<DynamicMcpToolInfo>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolInfo {
-    pub name: String,
-    pub description: String,
-    pub input_schema: serde_json::Value,
-    pub is_readonly: bool,
-    pub is_concurrency_safe: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dynamic_info: Option<DynamicToolInfo>,
-}
+// Re-export the shared dynamic tool DTOs (Core already owns them under
+// `bitfun_core::agentic::tools::framework`); Desktop used to carry byte-for-byte
+// duplicates. Keeping the names re-exported preserves downstream `use ...::*`
+// imports in lib.rs.
+pub use bitfun_core::agentic::tools::framework::{DynamicMcpToolInfo, DynamicToolInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionResponse {
@@ -163,42 +146,6 @@ async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         workspace_services,
         remote_exec_port,
     )
-}
-
-fn to_dynamic_mcp_tool_info(
-    info: bitfun_core::agentic::tools::framework::DynamicMcpToolInfo,
-) -> DynamicMcpToolInfo {
-    DynamicMcpToolInfo {
-        server_id: info.server_id,
-        server_name: info.server_name,
-        tool_name: info.tool_name,
-    }
-}
-
-fn to_dynamic_tool_info(
-    info: bitfun_core::agentic::tools::framework::DynamicToolInfo,
-) -> DynamicToolInfo {
-    DynamicToolInfo {
-        provider_id: info.provider_id,
-        provider_kind: info.provider_kind,
-        mcp: info.mcp.map(to_dynamic_mcp_tool_info),
-    }
-}
-
-async fn build_tool_info(tool: &Arc<dyn bitfun_core::agentic::tools::framework::Tool>) -> ToolInfo {
-    let description = tool
-        .description()
-        .await
-        .unwrap_or_else(|_| "No description available".to_string());
-
-    ToolInfo {
-        name: tool.name().to_string(),
-        description,
-        input_schema: tool.input_schema_for_model().await,
-        is_readonly: tool.is_readonly(),
-        is_concurrency_safe: tool.is_concurrency_safe(None),
-        dynamic_info: tool.dynamic_tool_info().map(to_dynamic_tool_info),
-    }
 }
 
 fn has_explicit_workspace_path(workspace_path: Option<&str>) -> bool {
