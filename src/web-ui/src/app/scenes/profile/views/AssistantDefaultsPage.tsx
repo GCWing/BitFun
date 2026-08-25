@@ -28,6 +28,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { useNurseryStore } from '../nurseryStore';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { canQueryToolCatalogOnSurface } from '@/infrastructure/peer-device/peerCapabilityResolution';
 import './NurseryView.scss';
 
 const log = createLogger('AssistantDefaultsPage');
@@ -90,25 +91,6 @@ const AssistantDefaultsPage: React.FC = () => {
   const renderedPeerDeviceId = peerDevice?.peerMode.active
     ? peerDevice.peerMode.deviceId
     : null;
-  // Whether the current host advertises the `tool_catalog` capability. Local
-  // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
-  // While the capability is still being probed (null) we stay optimistic so the
-  // tool list doesn't disappear then reappear — a CLI Peer Host now implements
-  // get_all_tools_info, so the optimistic default is correct in the common case.
-  const canQueryToolCatalog = (() => {
-    if (!peerDevice || !peerDevice.peerMode.active) {
-      return true;
-    }
-    const capabilities = peerDevice.currentPeerCapabilities;
-    // null capabilities = host not yet probed → optimistic. A probed host may
-    // also report `null` for this field (older host that didn't advertise it):
-    // stay optimistic so an older Desktop that does implement get_all_tools_info
-    // keeps its list. An older CLI that lacks it returns unsupported on invoke.
-    // See PR #2428 #4.
-    return capabilities === null || capabilities.toolCatalog === null
-      ? true
-      : capabilities.toolCatalog;
-  })();
 
   const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
@@ -124,6 +106,28 @@ const AssistantDefaultsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
+
+  // Whether the current host advertises the `tool_catalog` capability. Local
+  // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
+  // While the capability is still being probed (null) we stay optimistic so the
+  // tool list doesn't disappear then reappear — a CLI Peer Host now implements
+  // get_all_tools_info, so the optimistic default is correct in the common case.
+  // An older CLI that didn't advertise the field is resolved via `hostKind`
+  // (cli → unsupported) by the shared helper, so the UI shows the unsupported
+  // state instead of masking a "not supported" error as an empty list. See PR
+  // #2428 round 5 #1.
+  const canQueryToolCatalog = canQueryToolCatalogOnSurface(
+    Boolean(peerDevice?.peerMode.active),
+    peerDevice?.currentPeerCapabilities ?? null,
+  );
+
+  // Writes (tool toggle, group toggle-all, reset) only make sense when the
+  // catalog loaded from this host. An unsupported or failed read would let the
+  // user toggle entries that don't reflect the runtime and save a config that
+  // the host can't act on. `empty` (catalog available, just no tools) keeps
+  // writes enabled because there is nothing to toggle anyway. See PR #2428
+  // round 5 #2.
+  const toolCatalogWritable = toolCatalogStatus === 'available' || toolCatalogStatus === 'empty';
 
   const skillsEnabled = useMemo(
     () => modeSkills.filter((skill) => skill.effectiveEnabled),
@@ -402,6 +406,7 @@ const AssistantDefaultsPage: React.FC = () => {
               size="small"
               checked={enabled}
               loading={toolsLoading[tool.name]}
+              disabled={!toolCatalogWritable || Boolean(toolsLoading[tool.name])}
               onChange={() => handleToolToggle(tool.name)}
               aria-label={tool.name}
             />
@@ -567,6 +572,7 @@ const AssistantDefaultsPage: React.FC = () => {
           <Switch
             size="small"
             checked={allOn}
+            disabled={!toolCatalogWritable}
             onChange={() => handleGroupToggleAll(toolNames)}
             aria-label={`Toggle all in ${label}`}
           />
@@ -615,6 +621,7 @@ const AssistantDefaultsPage: React.FC = () => {
                 size="small"
                 checked={enabled}
                 loading={toolsLoading[tool.name]}
+                disabled={!toolCatalogWritable || Boolean(toolsLoading[tool.name])}
                 onChange={() => handleToolToggle(tool.name)}
                 aria-label={tool.name}
               />
@@ -759,6 +766,7 @@ const AssistantDefaultsPage: React.FC = () => {
                   type="button"
                   className="gallery-plain-icon-btn"
                   onClick={handleResetTools}
+                  disabled={!toolCatalogWritable}
                   title={t('actions.reset')}
                   aria-label={t('actions.reset')}
                 >
@@ -785,8 +793,19 @@ const AssistantDefaultsPage: React.FC = () => {
               {mcpServerIds.size === 0 ? (
                 <div className="tc-mcp-empty">
                   <Plug2 size={20} className="tc-mcp-empty__icon" />
-                  <span className="tc-mcp-empty__text">{t('nursery.template.mcpEmptyTitle')}</span>
-                  <span className="tc-mcp-empty__hint">{t('nursery.template.mcpEmptyHint')}</span>
+                  {/* The MCP catalog comes from the same get_all_tools_info read
+                      as built-in tools, so an unsupported/failed host affects it
+                      the same way: don't mask it as "no MCP servers". */}
+                  <span className="tc-mcp-empty__text">
+                    {toolCatalogStatus === 'unsupported'
+                      ? t('empty.toolsUnsupported')
+                      : toolCatalogStatus === 'failed'
+                        ? t('empty.toolsFailed')
+                        : t('nursery.template.mcpEmptyTitle')}
+                  </span>
+                  {toolCatalogStatus !== 'unsupported' && toolCatalogStatus !== 'failed' ? (
+                    <span className="tc-mcp-empty__hint">{t('nursery.template.mcpEmptyHint')}</span>
+                  ) : null}
                 </div>
               ) : (
                 <div className="tc-tool-groups">

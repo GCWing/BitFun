@@ -100,6 +100,13 @@ pub(crate) fn peer_mode_ping_value() -> Value {
         "ok": true,
         "peer": true,
         "device_id": device_id,
+        // Declares which kind of host answered so the controller can resolve
+        // capabilities that an older CLI did not advertise. An older CLI
+        // (pre-`50b76516`) omits `cancel_tool`/`tool_catalog` and never
+        // implemented them; reporting `host_type: "cli"` lets the controller
+        // gate the Terminal Interrupt button / tool list off instead of showing
+        // an action that silently fails. See PR #2428 round 5 #1.
+        "host_type": "cli",
         "capabilities": {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,

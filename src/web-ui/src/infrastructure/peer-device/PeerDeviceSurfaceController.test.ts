@@ -134,6 +134,7 @@ class FakeConnectionManager {
         tokenUsageStatistics: true,
         cancelTool: true,
         toolCatalog: true,
+        hostKind: 'desktop',
       },
       consecutiveFailures: 0,
       lostReason: null,

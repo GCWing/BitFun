@@ -1651,7 +1651,8 @@
       "workingDirectory": "工作目录:",
       "exitCode": "退出码: {{code}}",
       "commandInterrupted": "命令已被中断",
-      "executionFailed": "命令执行失败"
+      "executionFailed": "命令执行失败",
+      "interruptFailed": "无法中断命令。远端主机可能不支持逐工具取消，或请求失败。"
     },
     "runCode": {
       "title": "运行代码",
