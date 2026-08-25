@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 6;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -86,11 +86,11 @@ pub use bitfun_runtime_ports::{
     AgentSessionListRequest, AgentSessionManagementPort, AgentSessionModePort,
     AgentSessionModeUpdateRequest, AgentSessionModelPort, AgentSessionModelSelection,
     AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
-    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
-    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentSessionReleaseRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome,
+    AgentSessionRollbackToTurnRequest, AgentSessionSummary, AgentSessionUsagePort,
+    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
@@ -489,6 +489,13 @@ impl AgentRuntime {
         request: AgentTransientSessionDiscardRequest,
     ) -> Result<bool, RuntimeError> {
         self.inner.discard_transient_session(request).await
+    }
+
+    pub async fn unload_persisted_session(
+        &self,
+        request: AgentSessionReleaseRequest,
+    ) -> Result<bool, RuntimeError> {
+        self.inner.unload_persisted_session(request).await
     }
 
     pub async fn list_sessions(

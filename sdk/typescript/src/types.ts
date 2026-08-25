@@ -84,7 +84,7 @@ export interface SdkErrorDetails {
   recovery?: RecoveryAction;
 }
 
-export type SessionLifetime = "connection";
+export type SessionLifetime = "connection" | "durable";
 
 export interface QueryInput {
   prompt: string;

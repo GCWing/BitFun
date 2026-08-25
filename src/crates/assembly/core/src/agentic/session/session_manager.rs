@@ -9720,6 +9720,14 @@ mod tests {
             [durable_id.as_str()]
         );
         assert!(sessions.contains_key(&transient_id));
+
+        assert!(SessionManager::collect_expired_session_candidates(
+            &sessions,
+            &transient_session_ids,
+            now,
+            Duration::MAX,
+        )
+        .is_empty());
     }
 
     #[test]

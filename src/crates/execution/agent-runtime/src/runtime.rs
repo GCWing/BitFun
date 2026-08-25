@@ -25,11 +25,11 @@ use bitfun_runtime_ports::{
     AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionManagementPort,
     AgentSessionModePort, AgentSessionModeUpdateRequest, AgentSessionModelPort,
     AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
-    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
-    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentSessionReleaseRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome,
+    AgentSessionRollbackToTurnRequest, AgentSessionSummary, AgentSessionUsagePort,
+    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
@@ -1172,6 +1172,23 @@ impl AgentRuntime {
                 ))
             })?
             .discard_transient_session(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn unload_persisted_session(
+        &self,
+        request: AgentSessionReleaseRequest,
+    ) -> Result<bool, RuntimeError> {
+        self.session_close
+            .as_ref()
+            .ok_or_else(|| {
+                RuntimeError::Port(PortError::new(
+                    PortErrorKind::NotAvailable,
+                    "agent session close port is not registered",
+                ))
+            })?
+            .unload_persisted_session(request)
             .await
             .map_err(RuntimeError::from)
     }

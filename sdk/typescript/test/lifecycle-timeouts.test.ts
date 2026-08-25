@@ -130,7 +130,7 @@ test("Session.close aborts an unresponsive Host after its cleanup deadline", asy
     sessionId: "session-timeout",
     sessionName: "timeout",
     agent: "agentic",
-    lifetime: "connection",
+    lifetime: "durable",
   };
   const createSession = Session.create as unknown as (
     owner: JsonRpcConnection,

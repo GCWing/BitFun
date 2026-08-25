@@ -43,12 +43,13 @@ test("Rust wire export produces executable validators for every type", async () 
   }
 
   const initializeResult = {
-    protocolVersion: 3,
+    protocolVersion: 4,
     runtimeVersion: "0.1.0",
     stability: "not_delivered",
     capabilities: {
       sessionCreate: true,
-      sessionCreateLifetime: "connection",
+      sessionCreateLifetime: "durable",
+      sessionResume: true,
       query: true,
       queryCancel: true,
       sessionClose: true,

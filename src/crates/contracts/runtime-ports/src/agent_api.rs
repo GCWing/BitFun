@@ -1500,11 +1500,10 @@ pub trait AgentWorkspaceReferencePort: Send + Sync {
     ) -> PortResult<Vec<AgentWorkspaceReference>>;
 }
 
-/// Deadline-bearing request for discarding a connection-scoped transient
-/// Session. This is separate from [`AgentSessionDeleteRequest`] so adding Host
-/// cleanup policy cannot break the established Rust Session-management API.
+/// Deadline-bearing request for releasing a loaded Session from one runtime.
+/// The lifecycle method decides whether persisted storage is preserved.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AgentTransientSessionDiscardRequest {
+pub struct AgentSessionReleaseRequest {
     pub workspace_path: String,
     pub session_id: String,
     pub remote_connection_id: Option<String>,
@@ -1512,7 +1511,10 @@ pub struct AgentTransientSessionDiscardRequest {
     pub wait_timeout_ms: u64,
 }
 
-/// Runtime lifecycle owner for connection-scoped Session cleanup.
+/// Compatibility name for callers that only discard transient Sessions.
+pub type AgentTransientSessionDiscardRequest = AgentSessionReleaseRequest;
+
+/// Runtime lifecycle owner for releasing loaded Sessions.
 #[async_trait::async_trait]
 pub trait AgentSessionClosePort: Send + Sync {
     /// Quiesces and discards only a loaded transient Session owned by the
@@ -1520,12 +1522,25 @@ pub trait AgentSessionClosePort: Send + Sync {
     /// remove persisted Session storage through this operation.
     async fn discard_transient_session(
         &self,
-        request: AgentTransientSessionDiscardRequest,
+        request: AgentSessionReleaseRequest,
     ) -> PortResult<bool> {
         let _ = request;
         Err(PortError::new(
             PortErrorKind::NotAvailable,
             "transient session discard is not supported by this provider",
+        ))
+    }
+
+    /// Quiesces and unloads a durable Session while preserving its persisted
+    /// state so another runtime can restore it later.
+    async fn unload_persisted_session(
+        &self,
+        request: AgentSessionReleaseRequest,
+    ) -> PortResult<bool> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "persisted session unload is not supported by this provider",
         ))
     }
 }

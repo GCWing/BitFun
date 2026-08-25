@@ -6,10 +6,11 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 
 pub const METHOD_INITIALIZE: &str = "initialize";
 pub const METHOD_SESSION_CREATE: &str = "session/create";
+pub const METHOD_SESSION_RESUME: &str = "session/resume";
 pub const METHOD_QUERY_START: &str = "query/start";
 pub const METHOD_QUERY_CANCEL: &str = "query/cancel";
 pub const METHOD_PERMISSION_RESPOND: &str = "permission/respond";
@@ -262,6 +263,7 @@ pub enum Stability {
 pub struct HostCapabilities {
     pub session_create: bool,
     pub session_create_lifetime: SessionLifetime,
+    pub session_resume: bool,
     pub query: bool,
     pub query_cancel: bool,
     pub session_close: bool,
@@ -280,7 +282,8 @@ impl HostCapabilities {
     pub const fn current() -> Self {
         Self {
             session_create: true,
-            session_create_lifetime: SessionLifetime::Connection,
+            session_create_lifetime: SessionLifetime::Durable,
+            session_resume: true,
             query: true,
             query_cancel: true,
             session_close: true,
@@ -304,6 +307,8 @@ impl HostCapabilities {
 pub enum SessionLifetime {
     /// Created and deleted by this Host connection.
     Connection,
+    /// Persisted by the Agent Runtime and resumable by a later Host process.
+    Durable,
 }
 
 fn deserialize_optional_request_id<'de, D>(deserializer: D) -> Result<Option<RequestId>, D::Error>
@@ -406,6 +411,13 @@ pub struct SessionCreateParams {
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SessionResumeParams {
+    pub session_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

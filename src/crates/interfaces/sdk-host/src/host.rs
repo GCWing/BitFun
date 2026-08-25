@@ -7,10 +7,12 @@ use std::time::Duration;
 
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSubmissionSource, AgentTransientSessionDiscardRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, DialogSubmissionPolicy, DialogSubmitOutcome, PermissionReply,
-    PermissionReplySource, PermissionRequest, PermissionRequestEvent, PermissionRequestSourceKind,
-    PortErrorKind, RuntimeError, AUTO_APPROVE_ASK_CONTEXT_KEY,
+    AgentSessionDeleteRequest, AgentSessionModelUpdateRequest, AgentSessionReleaseRequest,
+    AgentSessionRestoreRequest, AgentSessionWorkspaceRequest, AgentSubmissionSource,
+    AgentTurnCancellationRequest, AgentTurnSettlementRequest, DialogSubmissionPolicy,
+    DialogSubmitOutcome, PermissionReply, PermissionReplySource, PermissionRequest,
+    PermissionRequestEvent, PermissionRequestSourceKind, PortError, PortErrorKind, RuntimeError,
+    AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_core_types::ErrorCategory;
@@ -28,11 +30,11 @@ use crate::protocol::{
     PermissionSourceKind, QueryCancelParams, QueryCancelResult, QueryEvent, QueryEventParams,
     QueryOutput, QueryResultError, QueryResultParams, QueryStartParams, QueryStartResult,
     QueryTerminalStatus, RecoveryAction, RequestId, SessionCloseParams, SessionCloseResult,
-    SessionCreateParams, SessionCreateResult, SessionLifetime, ShutdownParams, ShutdownResult,
-    TemporaryModelConfig, ToolEventStatus, JSON_RPC_VERSION, METHOD_INITIALIZE,
+    SessionCreateParams, SessionCreateResult, SessionLifetime, SessionResumeParams, ShutdownParams,
+    ShutdownResult, TemporaryModelConfig, ToolEventStatus, JSON_RPC_VERSION, METHOD_INITIALIZE,
     METHOD_PERMISSION_RESPOND, METHOD_QUERY_CANCEL, METHOD_QUERY_START, METHOD_SESSION_CLOSE,
-    METHOD_SESSION_CREATE, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT, NOTIFICATION_QUERY_RESULT,
-    PROTOCOL_VERSION,
+    METHOD_SESSION_CREATE, METHOD_SESSION_RESUME, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT,
+    NOTIFICATION_QUERY_RESULT, PROTOCOL_VERSION,
 };
 
 const DEFAULT_SESSION_NAME: &str = "BitFun SDK query";
@@ -42,6 +44,7 @@ const PERMISSION_REJECTION_TIMEOUT_MS: u64 = 2_000;
 const DEFAULT_PERMISSION_RESPONSE_TIMEOUT_MS: u64 = 120_000;
 const MAX_PERMISSION_FEEDBACK_BYTES: usize = 4 * 1024;
 const MAX_SESSION_CLOSE_TIMEOUT_MS: u64 = 30_000;
+const MAX_SESSION_PUBLICATION_WAIT_MS: u64 = 500;
 const MAX_QUERY_OUTPUT_WIRE_BYTES: usize = 768 * 1024;
 
 fn json_string_content_bytes(value: &str) -> usize {
@@ -140,12 +143,14 @@ struct ConnectionState {
     cleanup_failed: bool,
     sessions: HashMap<String, SessionLease>,
     queries: HashMap<String, Arc<QueryLease>>,
+    attaching_sessions: HashSet<String>,
+    publishing_sessions: HashSet<String>,
     starting_query_sessions: HashSet<String>,
     active_query_sessions: HashSet<String>,
     closing_sessions: HashSet<String>,
     poisoned_sessions: HashSet<String>,
     pending_session_tasks: Vec<PendingSessionTask>,
-    untracked_transient_cleanups: HashMap<String, TransientSessionCleanup>,
+    untracked_session_cleanups: HashMap<String, SessionCleanup>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -168,18 +173,60 @@ struct SessionLease {
     remote_connection_id: Option<String>,
     remote_ssh_host: Option<String>,
     exposed: bool,
+    lifetime: SessionLifetime,
+    unexposed_release: SessionReleaseKind,
     _budget: Arc<OwnedSemaphorePermit>,
 }
 
 struct PendingSessionTask {
-    transient_cleanup: Option<TransientSessionCleanup>,
+    session_cleanup: Option<SessionCleanup>,
+    reservation: Option<SessionTaskReservation>,
     task: JoinHandle<()>,
 }
 
+enum SessionTaskReservation {
+    Attaching(String),
+    Publishing(String),
+}
+
+fn release_session_task_reservation(
+    state: &mut ConnectionState,
+    reservation: &SessionTaskReservation,
+) {
+    match reservation {
+        SessionTaskReservation::Attaching(session_id) => {
+            state.attaching_sessions.remove(session_id);
+        }
+        SessionTaskReservation::Publishing(session_id) => {
+            state.publishing_sessions.remove(session_id);
+        }
+    }
+}
+
 #[derive(Clone)]
-struct TransientSessionCleanup {
+struct SessionCleanup {
     session_id: String,
     workspace_path: String,
+    release_kind: SessionReleaseKind,
+}
+
+#[derive(Clone, Copy)]
+enum SessionReleaseKind {
+    DiscardTransient,
+    UnloadPersisted,
+    DeletePersisted,
+}
+
+impl SessionLease {
+    fn release_kind(&self) -> SessionReleaseKind {
+        if !self.exposed {
+            return self.unexposed_release;
+        }
+        match self.lifetime {
+            SessionLifetime::Connection => SessionReleaseKind::DiscardTransient,
+            SessionLifetime::Durable => SessionReleaseKind::UnloadPersisted,
+        }
+    }
 }
 
 struct QueryLease {
@@ -322,7 +369,7 @@ impl SdkHostConnection {
             (
                 state.initialization == InitializationState::Initialized,
                 state.shutting_down,
-                state.cleanup_failed || !state.untracked_transient_cleanups.is_empty(),
+                state.cleanup_failed || !state.untracked_session_cleanups.is_empty(),
             )
         };
         if !initialized {
@@ -364,6 +411,7 @@ impl SdkHostConnection {
 
         match request.method.as_str() {
             METHOD_SESSION_CREATE => self.handle_session_create(request).await,
+            METHOD_SESSION_RESUME => self.handle_session_resume(request).await,
             METHOD_QUERY_START => self.handle_query_start(request).await,
             METHOD_QUERY_CANCEL => self.handle_query_cancel(request).await,
             METHOD_PERMISSION_RESPOND => self.handle_permission_respond(request).await,
@@ -430,6 +478,9 @@ impl SdkHostConnection {
                 active.push(pending);
                 continue;
             }
+            if let Some(reservation) = &pending.reservation {
+                release_session_task_reservation(&mut state, reservation);
+            }
             match (&mut pending.task).now_or_never() {
                 Some(Ok(())) => {}
                 Some(Err(error)) => {
@@ -437,9 +488,9 @@ impl SdkHostConnection {
                         error = %error,
                         "SDK Host Session ownership task failed"
                     );
-                    if let Some(cleanup) = pending.transient_cleanup {
+                    if let Some(cleanup) = pending.session_cleanup {
                         state
-                            .untracked_transient_cleanups
+                            .untracked_session_cleanups
                             .insert(cleanup.session_id.clone(), cleanup);
                     }
                 }
@@ -453,7 +504,7 @@ impl SdkHostConnection {
         self.shutdown_connection_inner(None).await;
     }
 
-    /// Shuts down one connection without allowing a transient Session create
+    /// Shuts down one connection without allowing a Session ownership
     /// task to keep the Host process alive indefinitely.
     pub async fn shutdown_connection_bounded(&self, total_timeout: Duration) -> bool {
         self.shutdown_connection_inner(Some(total_timeout)).await
@@ -477,10 +528,7 @@ impl SdkHostConnection {
             self.settle_pending_session_task(pending, graceful_deadline)
                 .await;
         }
-        if !self
-            .compensate_registered_transient_sessions(deadline)
-            .await
-        {
+        if !self.compensate_registered_sessions(deadline).await {
             cleanup_complete = false;
         }
         let (queries, sessions) = {
@@ -546,7 +594,7 @@ impl SdkHostConnection {
         let mut cleanup = sessions
             .into_iter()
             .map(|(session_id, session)| {
-                let runtime = self.inner.runtime.clone();
+                let connection = self.clone();
                 let session_cleanup_timeout = deadline
                     .map(|deadline| {
                         deadline
@@ -556,18 +604,20 @@ impl SdkHostConnection {
                     .unwrap_or(Duration::from_millis(5_500));
                 async move {
                     let reported_session_id = session_id.clone();
+                    let release_kind = session.release_kind();
                     let cleanup = async move {
-                        runtime
-                            .discard_transient_session(AgentTransientSessionDiscardRequest {
-                                workspace_path: session.workspace_path,
-                                session_id: session_id.clone(),
-                                remote_connection_id: session.remote_connection_id,
-                                remote_ssh_host: session.remote_ssh_host,
-                                wait_timeout_ms: duration_ms(
+                        connection
+                            .release_runtime_session(
+                                session_id.clone(),
+                                session.workspace_path,
+                                session.remote_connection_id,
+                                session.remote_ssh_host,
+                                release_kind,
+                                duration_ms(
                                     session_cleanup_timeout
                                         .saturating_sub(Duration::from_millis(500)),
                                 ),
-                            })
+                            )
                             .await?;
                         Ok(())
                     };
@@ -618,7 +668,8 @@ impl SdkHostConnection {
         wait_deadline: Option<Instant>,
     ) {
         let PendingSessionTask {
-            transient_cleanup,
+            session_cleanup,
+            reservation,
             mut task,
         } = pending;
         let completed = if task.is_finished() {
@@ -640,39 +691,40 @@ impl SdkHostConnection {
                     error = %error,
                     "SDK Host Session ownership task failed"
                 );
-                if let Some(cleanup) = transient_cleanup {
-                    self.register_untracked_transient_cleanup(cleanup).await;
+                if let Some(cleanup) = session_cleanup {
+                    self.register_untracked_session_cleanup(cleanup).await;
                 }
             }
             None => {
                 task.abort();
                 let _ = task.await;
-                if let Some(cleanup) = transient_cleanup {
-                    self.register_untracked_transient_cleanup(cleanup).await;
+                if let Some(cleanup) = session_cleanup {
+                    self.register_untracked_session_cleanup(cleanup).await;
                 }
             }
         }
+        if let Some(reservation) = reservation {
+            let mut state = self.inner.state.lock().await;
+            release_session_task_reservation(&mut state, &reservation);
+        }
     }
 
-    async fn register_untracked_transient_cleanup(&self, cleanup: TransientSessionCleanup) {
+    async fn register_untracked_session_cleanup(&self, cleanup: SessionCleanup) {
         self.inner
             .state
             .lock()
             .await
-            .untracked_transient_cleanups
+            .untracked_session_cleanups
             .insert(cleanup.session_id.clone(), cleanup);
     }
 
-    async fn compensate_registered_transient_sessions(
-        &self,
-        cleanup_deadline: Option<Instant>,
-    ) -> bool {
+    async fn compensate_registered_sessions(&self, cleanup_deadline: Option<Instant>) -> bool {
         let cleanups = self
             .inner
             .state
             .lock()
             .await
-            .untracked_transient_cleanups
+            .untracked_session_cleanups
             .values()
             .cloned()
             .collect::<Vec<_>>();
@@ -683,7 +735,7 @@ impl SdkHostConnection {
                 async move {
                     let session_id = cleanup.session_id.clone();
                     let completed = connection
-                        .compensate_untracked_transient_session(cleanup, cleanup_deadline)
+                        .compensate_untracked_session(cleanup, cleanup_deadline)
                         .await;
                     (session_id, completed)
                 }
@@ -696,7 +748,7 @@ impl SdkHostConnection {
                     .state
                     .lock()
                     .await
-                    .untracked_transient_cleanups
+                    .untracked_session_cleanups
                     .remove(&session_id);
             } else {
                 cleanup_complete = false;
@@ -705,9 +757,9 @@ impl SdkHostConnection {
         cleanup_complete
     }
 
-    async fn compensate_untracked_transient_session(
+    async fn compensate_untracked_session(
         &self,
-        cleanup: TransientSessionCleanup,
+        cleanup: SessionCleanup,
         cleanup_deadline: Option<Instant>,
     ) -> bool {
         let cleanup_timeout = cleanup_deadline
@@ -715,17 +767,14 @@ impl SdkHostConnection {
             .unwrap_or(Duration::from_secs(5));
         let result = timeout(
             cleanup_timeout,
-            self.inner
-                .runtime
-                .discard_transient_session(AgentTransientSessionDiscardRequest {
-                    workspace_path: cleanup.workspace_path,
-                    session_id: cleanup.session_id.clone(),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
-                    wait_timeout_ms: duration_ms(
-                        cleanup_timeout.saturating_sub(Duration::from_millis(500)),
-                    ),
-                }),
+            self.release_runtime_session(
+                cleanup.session_id.clone(),
+                cleanup.workspace_path,
+                None,
+                None,
+                cleanup.release_kind,
+                duration_ms(cleanup_timeout.saturating_sub(Duration::from_millis(500))),
+            ),
         )
         .await;
         match result {
@@ -738,17 +787,65 @@ impl SdkHostConnection {
                 tracing::warn!(
                     session_id = %cleanup.session_id,
                     error_kind = runtime_error_kind(&error),
-                    "Failed to compensate an untracked transient SDK Host Session"
+                    "Failed to compensate an untracked SDK Host Session"
                 );
                 false
             }
             Err(_) => {
                 tracing::warn!(
                     session_id = %cleanup.session_id,
-                    "Transient SDK Host Session compensation timed out"
+                    "SDK Host Session compensation timed out"
                 );
                 false
             }
+        }
+    }
+
+    async fn release_runtime_session(
+        &self,
+        session_id: String,
+        workspace_path: String,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
+        release_kind: SessionReleaseKind,
+        wait_timeout_ms: u64,
+    ) -> Result<bool, RuntimeError> {
+        match release_kind {
+            SessionReleaseKind::DiscardTransient => {
+                self.inner
+                    .runtime
+                    .discard_transient_session(AgentSessionReleaseRequest {
+                        workspace_path,
+                        session_id,
+                        remote_connection_id,
+                        remote_ssh_host,
+                        wait_timeout_ms,
+                    })
+                    .await
+            }
+            SessionReleaseKind::UnloadPersisted => {
+                self.inner
+                    .runtime
+                    .unload_persisted_session(AgentSessionReleaseRequest {
+                        workspace_path,
+                        session_id,
+                        remote_connection_id,
+                        remote_ssh_host,
+                        wait_timeout_ms,
+                    })
+                    .await
+            }
+            SessionReleaseKind::DeletePersisted => self
+                .inner
+                .runtime
+                .delete_session(AgentSessionDeleteRequest {
+                    workspace_path,
+                    session_id,
+                    remote_connection_id,
+                    remote_ssh_host,
+                })
+                .await
+                .map(|_| true),
         }
     }
 
@@ -918,17 +1015,86 @@ impl SdkHostConnection {
                 },
                 workspace_path,
                 session_budget,
+                SessionLifetime::Durable,
             )
             .await;
         match result {
             Ok(created) => {
                 let session_id = created.session_id.clone();
-                self.deliver_session_create_response(request.id.clone(), created, session_id)
-                    .await;
+                self.deliver_session_create_response(
+                    request.id.clone(),
+                    created,
+                    session_id,
+                    SessionLifetime::Durable,
+                )
+                .await;
             }
             Err(error) => {
                 self.send_runtime_error(request.id.clone(), ErrorStage::Session, error)
                     .await
+            }
+        }
+    }
+
+    async fn handle_session_resume(&self, request: JsonRpcRequest) {
+        let Some(params) = self
+            .parse_params::<SessionResumeParams>(&request, ErrorStage::Session)
+            .await
+        else {
+            return;
+        };
+        if params.session_id.trim().is_empty() {
+            self.send_invalid_params(
+                request.id.clone(),
+                ErrorStage::Session,
+                "sessionId must not be empty",
+            )
+            .await;
+            return;
+        }
+        let Ok(session_budget) = self.inner.session_budget.clone().try_acquire_owned() else {
+            self.send_error(
+                request.id.clone(),
+                ErrorCode::Overloaded,
+                ErrorStage::Session,
+                true,
+                Some(RecoveryAction::Retry),
+                "SDK Host Session capacity is exhausted",
+            )
+            .await;
+            return;
+        };
+        let workspace_path = self.inner.default_cwd.clone();
+        let Some(model_id) = self.inner.state.lock().await.model_id.clone() else {
+            self.send_runtime_error(
+                request.id.clone(),
+                ErrorStage::Session,
+                PortError::new(
+                    PortErrorKind::NotAvailable,
+                    "SDK Host model is not initialized",
+                )
+                .into(),
+            )
+            .await;
+            return;
+        };
+        let session_id = params.session_id;
+        match self
+            .restore_leased_session(session_id.clone(), workspace_path, model_id, session_budget)
+            .await
+        {
+            Ok(restored) => {
+                self.deliver_session_create_response(
+                    request.id.clone(),
+                    restored,
+                    session_id,
+                    SessionLifetime::Durable,
+                )
+                .await;
+            }
+            Err(error) => {
+                self.send_runtime_error(request.id.clone(), ErrorStage::Session, error)
+                    .await;
             }
         }
     }
@@ -1045,6 +1211,7 @@ impl SdkHostConnection {
                         },
                         workspace_path,
                         session_budget,
+                        SessionLifetime::Connection,
                     )
                     .await
                 {
@@ -1064,7 +1231,7 @@ impl SdkHostConnection {
         let session = match self.reserve_query_session(&session_id).await {
             Ok(session) => session,
             Err(reservation_error) => {
-                if created_session && self.delete_unexposed_session(&session_id).await.is_err() {
+                if created_session && self.release_unexposed_session(&session_id).await.is_err() {
                     self.send_cleanup_required(request.id.clone(), ErrorStage::Query, &session_id)
                         .await;
                     return;
@@ -1093,13 +1260,13 @@ impl SdkHostConnection {
                 return;
             }
         };
-        let session_lifetime = SessionLifetime::Connection;
+        let session_lifetime = session.lifetime;
 
         let mut events = match self.inner.runtime.subscribe_session_events(&session_id) {
             Ok(events) => events,
             Err(error) => {
                 self.release_query_session(&session_id).await;
-                if created_session && self.delete_unexposed_session(&session_id).await.is_err() {
+                if created_session && self.release_unexposed_session(&session_id).await.is_err() {
                     self.send_cleanup_required(request.id.clone(), ErrorStage::Query, &session_id)
                         .await;
                     return;
@@ -1113,7 +1280,7 @@ impl SdkHostConnection {
             Ok(events) => events,
             Err(error) => {
                 self.release_query_session(&session_id).await;
-                if created_session && self.delete_unexposed_session(&session_id).await.is_err() {
+                if created_session && self.release_unexposed_session(&session_id).await.is_err() {
                     self.send_cleanup_required(request.id.clone(), ErrorStage::Query, &session_id)
                         .await;
                     return;
@@ -1156,7 +1323,7 @@ impl SdkHostConnection {
             Ok(outcome) => outcome,
             Err(error) => {
                 self.release_query_session(&session_id).await;
-                if created_session && self.delete_unexposed_session(&session_id).await.is_err() {
+                if created_session && self.release_unexposed_session(&session_id).await.is_err() {
                     self.send_cleanup_required(request.id.clone(), ErrorStage::Query, &session_id)
                         .await;
                     return;
@@ -1735,6 +1902,25 @@ impl SdkHostConnection {
             .await;
             return;
         }
+        let close_timeout_ms = params.wait_timeout_ms.unwrap_or(5_000);
+        if !self
+            .wait_for_session_publication(
+                &params.session_id,
+                Duration::from_millis(close_timeout_ms.min(MAX_SESSION_PUBLICATION_WAIT_MS)),
+            )
+            .await
+        {
+            self.send_error(
+                request.id.clone(),
+                ErrorCode::Timeout,
+                ErrorStage::Session,
+                true,
+                Some(RecoveryAction::Retry),
+                "Timed out waiting for Session creation or resume response to commit",
+            )
+            .await;
+            return;
+        }
         let session = {
             let mut state = self.inner.state.lock().await;
             if state.closing_sessions.contains(&params.session_id) {
@@ -1781,20 +1967,16 @@ impl SdkHostConnection {
             .await;
             return;
         };
-        let close_timeout_ms = params.wait_timeout_ms.unwrap_or(5_000);
         let session_id = params.session_id.clone();
-        let operation = async {
-            self.inner
-                .runtime
-                .discard_transient_session(AgentTransientSessionDiscardRequest {
-                    workspace_path: session.workspace_path,
-                    session_id: session_id.clone(),
-                    remote_connection_id: session.remote_connection_id,
-                    remote_ssh_host: session.remote_ssh_host,
-                    wait_timeout_ms: close_timeout_ms,
-                })
-                .await
-        };
+        let release_kind = session.release_kind();
+        let operation = self.release_runtime_session(
+            session_id,
+            session.workspace_path,
+            session.remote_connection_id,
+            session.remote_ssh_host,
+            release_kind,
+            close_timeout_ms,
+        );
         match timeout(Duration::from_millis(close_timeout_ms + 500), operation).await {
             Ok(Ok(unloaded)) => {
                 let queries = {
@@ -1874,6 +2056,27 @@ impl SdkHostConnection {
         state.cleanup_failed = true;
     }
 
+    async fn wait_for_session_publication(&self, session_id: &str, wait_timeout: Duration) -> bool {
+        timeout(wait_timeout, async {
+            loop {
+                self.reap_finished_pending_session_tasks().await;
+                if !self
+                    .inner
+                    .state
+                    .lock()
+                    .await
+                    .publishing_sessions
+                    .contains(session_id)
+                {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .is_ok()
+    }
+
     async fn ensure_session_lease(&self, session_id: &str) -> Result<SessionLease, RuntimeError> {
         self.inner
             .state
@@ -1885,7 +2088,7 @@ impl SdkHostConnection {
             .ok_or_else(|| {
                 bitfun_runtime_ports::PortError::new(
                     PortErrorKind::NotAvailable,
-                    "sessionId must belong to the same SDK Host connection; durable Session resume is not available in this protocol version",
+                    "sessionId must be created or resumed on this SDK Host connection before starting a Query",
                 )
                 .into()
             })
@@ -1896,6 +2099,7 @@ impl SdkHostConnection {
         request: AgentSessionCreateRequest,
         workspace_path: String,
         session_budget: OwnedSemaphorePermit,
+        lifetime: SessionLifetime,
     ) -> Result<bitfun_agent_runtime::sdk::AgentSessionCreateResult, RuntimeError> {
         let session_id = uuid::Uuid::new_v4().to_string();
         let runtime = self.inner.runtime.clone();
@@ -1913,9 +2117,18 @@ impl SdkHostConnection {
         let task_session_id = session_id.clone();
         let cleanup_workspace_path = workspace_path.clone();
         let creation = tokio::spawn(async move {
-            let result = runtime
-                .create_transient_session_with_id(task_session_id, request)
-                .await;
+            let result = match lifetime {
+                SessionLifetime::Connection => {
+                    runtime
+                        .create_transient_session_with_id(task_session_id, request)
+                        .await
+                }
+                SessionLifetime::Durable => {
+                    runtime
+                        .create_session_with_id(task_session_id, request)
+                        .await
+                }
+            };
             if let Ok(created) = &result {
                 task_state.lock().await.sessions.insert(
                     created.session_id.clone(),
@@ -1924,6 +2137,11 @@ impl SdkHostConnection {
                         remote_connection_id: None,
                         remote_ssh_host: None,
                         exposed: false,
+                        lifetime,
+                        unexposed_release: match lifetime {
+                            SessionLifetime::Connection => SessionReleaseKind::DiscardTransient,
+                            SessionLifetime::Durable => SessionReleaseKind::DeletePersisted,
+                        },
                         _budget: Arc::new(session_budget),
                     },
                 );
@@ -1933,10 +2151,15 @@ impl SdkHostConnection {
         connection_state
             .pending_session_tasks
             .push(PendingSessionTask {
-                transient_cleanup: Some(TransientSessionCleanup {
+                session_cleanup: Some(SessionCleanup {
                     session_id,
                     workspace_path: cleanup_workspace_path,
+                    release_kind: match lifetime {
+                        SessionLifetime::Connection => SessionReleaseKind::DiscardTransient,
+                        SessionLifetime::Durable => SessionReleaseKind::DeletePersisted,
+                    },
                 }),
+                reservation: None,
                 task: creation,
             });
         drop(connection_state);
@@ -1948,11 +2171,157 @@ impl SdkHostConnection {
         })?
     }
 
+    async fn restore_leased_session(
+        &self,
+        session_id: String,
+        workspace_path: String,
+        model_id: String,
+        session_budget: OwnedSemaphorePermit,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        let runtime = self.inner.runtime.clone();
+        let state = self.inner.state.clone();
+        let task_state = state.clone();
+        let (result_tx, result_rx) = oneshot::channel();
+        let mut connection_state = state.lock().await;
+        if connection_state.shutting_down {
+            return Err(PortError::new(
+                PortErrorKind::Cancelled,
+                "SDK Host connection is shutting down",
+            )
+            .into());
+        }
+        if connection_state.sessions.contains_key(&session_id)
+            || !connection_state
+                .attaching_sessions
+                .insert(session_id.clone())
+        {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Session is already attached to this SDK Host connection",
+            )
+            .into());
+        }
+        let task_session_id = session_id.clone();
+        let task_workspace_path = workspace_path.clone();
+        let cleanup_workspace_path = workspace_path.clone();
+        let restoration = tokio::spawn(async move {
+            let restored = runtime
+                .restore_session(AgentSessionRestoreRequest {
+                    workspace_path: task_workspace_path.clone(),
+                    session_id: task_session_id.clone(),
+                    include_internal: false,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                })
+                .await;
+            let result = match restored {
+                Err(error) => Err(error),
+                Ok(restored) => {
+                    let prepared = async {
+                        runtime
+                            .update_session_model(AgentSessionModelUpdateRequest {
+                                session_id: task_session_id.clone(),
+                                model_id: model_id.clone(),
+                            })
+                            .await?;
+                        let binding = runtime
+                            .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
+                                session_id: task_session_id.clone(),
+                            })
+                            .await?;
+                        let mut result = AgentSessionCreateResult::new(
+                            restored.session.session_id,
+                            restored.session.session_name,
+                            restored.session.agent_type,
+                        );
+                        result.model_id = Some(model_id);
+                        if let Some(binding) = binding {
+                            result.workspace_path = Some(binding.workspace_path);
+                            result.workspace_id = binding.workspace_id;
+                            result.project_workspace_path = binding.project_workspace_path;
+                            result.execution_target = binding.execution_target;
+                        } else {
+                            result.workspace_path = Some(task_workspace_path.clone());
+                        }
+                        Ok(result)
+                    }
+                    .await;
+                    if prepared.is_err() {
+                        let release = runtime
+                            .unload_persisted_session(AgentSessionReleaseRequest {
+                                workspace_path: task_workspace_path.clone(),
+                                session_id: task_session_id.clone(),
+                                remote_connection_id: None,
+                                remote_ssh_host: None,
+                                wait_timeout_ms: 4_500,
+                            })
+                            .await;
+                        if release.is_err() {
+                            task_state.lock().await.untracked_session_cleanups.insert(
+                                task_session_id.clone(),
+                                SessionCleanup {
+                                    session_id: task_session_id.clone(),
+                                    workspace_path: task_workspace_path.clone(),
+                                    release_kind: SessionReleaseKind::UnloadPersisted,
+                                },
+                            );
+                            Err(PortError::new(
+                                PortErrorKind::CleanupRequired,
+                                "Restored Session could not be prepared or released",
+                            )
+                            .into())
+                        } else {
+                            prepared
+                        }
+                    } else {
+                        prepared
+                    }
+                }
+            };
+            let mut connection_state = task_state.lock().await;
+            if let Ok(restored) = &result {
+                connection_state.sessions.insert(
+                    restored.session_id.clone(),
+                    SessionLease {
+                        workspace_path,
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                        exposed: false,
+                        lifetime: SessionLifetime::Durable,
+                        unexposed_release: SessionReleaseKind::UnloadPersisted,
+                        _budget: Arc::new(session_budget),
+                    },
+                );
+            }
+            drop(connection_state);
+            let _ = result_tx.send(result);
+        });
+        connection_state
+            .pending_session_tasks
+            .push(PendingSessionTask {
+                session_cleanup: Some(SessionCleanup {
+                    session_id: session_id.clone(),
+                    workspace_path: cleanup_workspace_path,
+                    release_kind: SessionReleaseKind::UnloadPersisted,
+                }),
+                reservation: Some(SessionTaskReservation::Attaching(session_id)),
+                task: restoration,
+            });
+        drop(connection_state);
+        result_rx.await.map_err(|_| {
+            RuntimeError::from(PortError::new(
+                PortErrorKind::Backend,
+                "SDK Host Session restore task ended without a result",
+            ))
+        })?
+    }
+
     async fn deliver_session_create_response(
         &self,
         request_id: Option<RequestId>,
         created: AgentSessionCreateResult,
         session_id: String,
+        lifetime: SessionLifetime,
     ) -> bool {
         let connection = self.clone();
         let (delivered_tx, delivered_rx) = oneshot::channel();
@@ -1960,11 +2329,13 @@ impl SdkHostConnection {
         if state.shutting_down {
             return false;
         }
+        state.publishing_sessions.insert(session_id.clone());
+        let publishing_session_id = session_id.clone();
         let delivery = tokio::spawn(async move {
             let delivered = connection
                 .send_success(
                     request_id,
-                    SessionCreateResult::from_runtime(created, SessionLifetime::Connection),
+                    SessionCreateResult::from_runtime(created, lifetime),
                 )
                 .await;
             if delivered {
@@ -1972,13 +2343,14 @@ impl SdkHostConnection {
             } else {
                 tokio::select! {
                     _ = connection.inner.shutdown_started.cancelled() => {}
-                    _ = connection.delete_unexposed_session(&session_id) => {}
+                    _ = connection.release_unexposed_session(&session_id) => {}
                 }
             }
             let _ = delivered_tx.send(delivered);
         });
         state.pending_session_tasks.push(PendingSessionTask {
-            transient_cleanup: None,
+            session_cleanup: None,
+            reservation: Some(SessionTaskReservation::Publishing(publishing_session_id)),
             task: delivery,
         });
         drop(state);
@@ -2020,7 +2392,9 @@ impl SdkHostConnection {
                         )
                         .await;
                     if created_session {
-                        let _ = connection.delete_unexposed_session(&lease.session_id).await;
+                        let _ = connection
+                            .release_unexposed_session(&lease.session_id)
+                            .await;
                     }
                 };
                 tokio::select! {
@@ -2031,7 +2405,8 @@ impl SdkHostConnection {
             let _ = delivered_tx.send(delivered);
         });
         state.pending_session_tasks.push(PendingSessionTask {
-            transient_cleanup: None,
+            session_cleanup: None,
+            reservation: None,
             task: delivery,
         });
         drop(state);
@@ -2069,12 +2444,13 @@ impl SdkHostConnection {
     }
 
     async fn mark_session_exposed(&self, session_id: &str) {
-        if let Some(session) = self.inner.state.lock().await.sessions.get_mut(session_id) {
+        let mut state = self.inner.state.lock().await;
+        if let Some(session) = state.sessions.get_mut(session_id) {
             session.exposed = true;
         }
     }
 
-    async fn delete_unexposed_session(&self, session_id: &str) -> Result<(), ()> {
+    async fn release_unexposed_session(&self, session_id: &str) -> Result<(), ()> {
         let lease = self
             .inner
             .state
@@ -2086,17 +2462,17 @@ impl SdkHostConnection {
         let Some(lease) = lease else {
             return Ok(());
         };
+        let release_kind = lease.release_kind();
         match timeout(
             Duration::from_millis(5_000),
-            self.inner
-                .runtime
-                .discard_transient_session(AgentTransientSessionDiscardRequest {
-                    workspace_path: lease.workspace_path,
-                    session_id: session_id.to_string(),
-                    remote_connection_id: lease.remote_connection_id,
-                    remote_ssh_host: lease.remote_ssh_host,
-                    wait_timeout_ms: 4_500,
-                }),
+            self.release_runtime_session(
+                session_id.to_string(),
+                lease.workspace_path,
+                lease.remote_connection_id,
+                lease.remote_ssh_host,
+                release_kind,
+                4_500,
+            ),
         )
         .await
         {
@@ -2108,7 +2484,7 @@ impl SdkHostConnection {
                 tracing::warn!(
                     session_id = %session_id,
                     error_kind = runtime_error_kind(&error),
-                    "Failed to delete an unexposed SDK Host Session"
+                    "Failed to release an unexposed SDK Host Session"
                 );
                 self.inner.state.lock().await.cleanup_failed = true;
                 Err(())
@@ -2116,7 +2492,7 @@ impl SdkHostConnection {
             Err(_) => {
                 tracing::warn!(
                     session_id = %session_id,
-                    "Timed out while deleting an unexposed SDK Host Session"
+                    "Timed out while releasing an unexposed SDK Host Session"
                 );
                 self.inner.state.lock().await.cleanup_failed = true;
                 Err(())

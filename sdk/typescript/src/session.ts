@@ -4,6 +4,7 @@ import type {
   SessionCloseParams,
   SessionCreateParams,
   SessionCreateResult,
+  SessionResumeParams,
 } from "./internal/wire/index.js";
 import type { JsonRpcConnection } from "./internal/json-rpc.js";
 import { withTimeout } from "./internal/deadline.js";
@@ -67,6 +68,21 @@ export class Sessions {
       params,
     );
     const session = Session.create(this.#connection, created, this.#onQuery);
+    this.#onSession(session);
+    return session;
+  }
+
+  async resume(sessionId: string): Promise<Session> {
+    this.#ensureClientOpen();
+    if (sessionId.trim().length === 0) {
+      throw new Error("sessionId must not be empty");
+    }
+    const params: SessionResumeParams = { sessionId };
+    const resumed = await this.#connection.request<SessionCreateResult>(
+      "session/resume",
+      params,
+    );
+    const session = Session.create(this.#connection, resumed, this.#onQuery);
     this.#onSession(session);
     return session;
   }

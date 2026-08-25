@@ -3,8 +3,8 @@ use bitfun_sdk_host::protocol::{
     JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty,
     PermissionDecision, PermissionRespondParams, PermissionSource, PermissionSourceKind,
     QueryEvent, QueryOutput, QueryResultError, QueryResultParams, QueryTerminalStatus,
-    RecoveryAction, RequestId, SessionLifetime, Stability, TemporaryModelConfig,
-    TemporaryModelProvider, ToolEventStatus, PROTOCOL_VERSION,
+    RecoveryAction, RequestId, SessionLifetime, SessionResumeParams, Stability,
+    TemporaryModelConfig, TemporaryModelProvider, ToolEventStatus, PROTOCOL_VERSION,
 };
 
 #[test]
@@ -14,7 +14,7 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
         "id": 1,
         "method": "initialize",
         "params": {
-            "protocolVersion": 3,
+            "protocolVersion": 4,
             "clientInfo": { "name": "fixture", "version": "0.1.0" },
             "capabilities": {
                 "serverNotifications": true,
@@ -32,7 +32,7 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
     let params: InitializeParams = request.params_as().unwrap();
 
     assert_eq!(request.id, Some(RequestId::Number(1)));
-    assert_eq!(PROTOCOL_VERSION, 3);
+    assert_eq!(PROTOCOL_VERSION, 4);
     assert_eq!(params.protocol_version, PROTOCOL_VERSION);
     assert!(params.capabilities.server_notifications);
     assert!(params.capabilities.permission_responses);
@@ -72,7 +72,8 @@ fn initialize_contract_is_versioned_and_binds_one_temporary_model() {
         result.capabilities,
         HostCapabilities {
             session_create: true,
-            session_create_lifetime: SessionLifetime::Connection,
+            session_create_lifetime: SessionLifetime::Durable,
+            session_resume: true,
             query: true,
             query_cancel: true,
             session_close: true,
@@ -105,7 +106,7 @@ fn current_host_capabilities_are_a_deliberate_subset_of_the_headless_cli_target(
 
     assert_eq!(
         capabilities.session_create_lifetime,
-        SessionLifetime::Connection
+        SessionLifetime::Durable
     );
     assert!(!capabilities.structured_output);
     assert!(!capabilities.usage);
@@ -114,6 +115,21 @@ fn current_host_capabilities_are_a_deliberate_subset_of_the_headless_cli_target(
     assert!(!capabilities.hooks);
     assert!(!capabilities.mcp_configuration);
     assert!(!capabilities.prestarted_transport);
+}
+
+#[test]
+fn durable_sessions_have_one_minimal_resume_contract() {
+    let params: SessionResumeParams = serde_json::from_value(serde_json::json!({
+        "sessionId": "session-1"
+    }))
+    .unwrap();
+
+    assert_eq!(params.session_id, "session-1");
+    assert_eq!(
+        serde_json::to_value(SessionLifetime::Durable).unwrap(),
+        serde_json::json!("durable")
+    );
+    assert!(HostCapabilities::current().session_resume);
 }
 
 #[test]
