@@ -97,6 +97,8 @@
     "rules":     "暂无守则",
     "memory":    "暂无记忆",
     "tools":     "暂无工具信息",
+    "toolsUnsupported": "所连接的 Peer 主机未提供工具目录。",
+    "toolsFailed":     "无法加载工具目录，请尝试刷新。",
     "skills":    "暂无技能"
   },
 

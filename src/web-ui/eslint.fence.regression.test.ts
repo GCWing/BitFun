@@ -69,22 +69,31 @@ const cases: ProbeCase[] = [
   },
 ];
 
+/**
+ * Resolve the eslint CLI entry as an absolute path and run it with `node`,
+ * without a shell. Going through `pnpm`/`pnpm.cmd` needed `shell: true` on
+ * Windows (a `.cmd` shim cannot be spawned with `shell: false`), which triggers
+ * Node's DEP0190 security deprecation. Running the eslint JS entry directly
+ * via `node` keeps `shell: false` on every platform and avoids the warning.
+ */
+function eslintBinPath(): string {
+  return resolve(webUiRoot, 'node_modules/eslint/bin/eslint.js');
+}
+
 function lintProbe(probe: ProbeCase): { hasError: boolean; output: string } {
-  // Invoke the local eslint CLI with a stdin probe under the probe filename.
-  // pnpm resolves the workspace eslint binary; --stdin + --stdin-filename make
-  // the rule's path selectors see the probe as if it lived at that path.
+  // --stdin + --stdin-filename make the rule's path selectors see the probe as
+  // if it lived at that path, so the fence applies per the probe's location.
   const args = [
-    'exec',
-    'eslint',
+    eslintBinPath(),
     '--stdin',
     '--stdin-filename',
     probe.filename,
   ];
-  const result = spawnSync('pnpm', args, {
+  const result = spawnSync(process.execPath, args, {
     cwd: webUiRoot,
     input: probe.source,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   const combined = `${result.stdout ?? ''}${result.stderr ?? ''}`;
   // ESLint exits non-zero and reports the restricted-imports/syntax error when

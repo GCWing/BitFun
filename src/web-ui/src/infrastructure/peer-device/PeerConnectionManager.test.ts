@@ -33,6 +33,41 @@ describe('PeerConnectionManager attach', () => {
     expect(manager.get('peer-1')).toBe(connection);
   });
 
+  it('reports new capability fields as null (unknown) when the host omits them', async () => {
+    // An older host's peer_mode_ping does not advertise cancel_tool /
+    // tool_catalog; coercing those to `false` would hide a working capability
+    // on an older Desktop (Interrupt button / tool list). They must parse to
+    // `null` so consumers stay optimistic. See PR #2428 #4.
+    const rpc = createRpc();
+    const manager = createManager(rpc.deviceRpc);
+
+    const connection = await manager.connect('peer-1', 'Studio');
+    const caps = connection.getState().capabilities;
+    expect(caps.cancelTool).toBeNull();
+    expect(caps.toolCatalog).toBeNull();
+  });
+
+  it('parses advertised new capability fields as true', async () => {
+    const manager = new PeerConnectionManager({
+      deviceRpc: async () => JSON.stringify({
+        resp: 'host_invoke_result',
+        ok: true,
+        value: {
+          capabilities: {
+            cancel_tool: true,
+            tool_catalog: true,
+          },
+        },
+      }),
+      getControllerDeviceId: async () => 'controller-1',
+    });
+
+    const connection = await manager.connect('peer-1', 'Studio');
+    const caps = connection.getState().capabilities;
+    expect(caps.cancelTool).toBe(true);
+    expect(caps.toolCatalog).toBe(true);
+  });
+
   it('leaves nothing attached when the handshake fails', async () => {
     const rpc = createRpc({ failCommands: new Set(['peer_control_attach']) });
     const manager = createManager(rpc.deviceRpc);
@@ -308,6 +343,44 @@ describe('PeerConnectionManager disposal', () => {
     reattach.resolve(JSON.stringify({ resp: 'host_invoke_result', ok: true, value: null }));
     await disposing;
     expect(commands.at(-1)).toBe('peer_control_detach');
+  });
+
+  it('publishes a snapshot when a ready peer reports changed capabilities', async () => {
+    // A peer that stays `ready` but whose host changes capabilities mid-session
+    // (e.g. a restart on a different build) must push a fresh snapshot, or the
+    // UI keeps gating on stale capabilities. See PR #2428 #6.
+    let capabilities: Record<string, unknown> = { cancel_tool: false, tool_catalog: false };
+    const manager = new PeerConnectionManager({
+      deviceRpc: async (_target, commandJson) => {
+        const parsed = JSON.parse(commandJson) as { command?: string };
+        if (parsed.command === 'peer_mode_ping') {
+          return JSON.stringify({
+            resp: 'host_invoke_result',
+            ok: true,
+            value: { capabilities },
+          });
+        }
+        return JSON.stringify({ resp: 'host_invoke_result', ok: true, value: null });
+      },
+      getControllerDeviceId: async () => 'controller-1',
+      keepaliveIntervalMs: KEEPALIVE_MS,
+    });
+
+    const connection = await manager.connect('peer-1', 'Studio');
+    expect(connection.getState().capabilities.cancelTool).toBe(false);
+
+    const snapshots: number[] = [];
+    manager.subscribe(states => snapshots.push(states.length));
+
+    // Host restarts advertising cancel_tool now available, without going degraded.
+    capabilities = { cancel_tool: true, tool_catalog: false };
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS);
+
+    await vi.waitFor(() => {
+      expect(connection.getState().capabilities.cancelTool).toBe(true);
+    });
+    // A snapshot was published for the capability change while staying ready.
+    expect(snapshots.length).toBeGreaterThan(0);
   });
 });
 

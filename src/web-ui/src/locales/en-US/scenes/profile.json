@@ -97,6 +97,8 @@
     "rules":     "No rules configured",
     "memory":    "No memories",
     "tools":     "No tools available",
+    "toolsUnsupported": "The connected peer host does not expose a tool catalog.",
+    "toolsFailed":     "Could not load the tool catalog. Try refreshing.",
     "skills":    "No skills"
   },
 

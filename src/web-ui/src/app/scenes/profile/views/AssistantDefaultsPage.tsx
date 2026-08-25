@@ -84,6 +84,12 @@ const AssistantDefaultsPage: React.FC = () => {
   const { t } = useTranslation('scenes/profile');
   const { openGallery } = useNurseryStore();
   const peerDevice = usePeerDeviceModeOptional();
+  // Identity of the rendered surface, so A→B (same capability, same workspace)
+  // still reloads the catalog from B instead of keeping A's stale list while
+  // config mutations route to B. See PR #2428 #3.
+  const renderedPeerDeviceId = peerDevice?.peerMode.active
+    ? peerDevice.peerMode.deviceId
+    : null;
   // Whether the current host advertises the `tool_catalog` capability. Local
   // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
   // While the capability is still being probed (null) we stay optimistic so the
@@ -94,11 +100,23 @@ const AssistantDefaultsPage: React.FC = () => {
       return true;
     }
     const capabilities = peerDevice.currentPeerCapabilities;
-    return capabilities === null ? true : capabilities.toolCatalog;
+    // null capabilities = host not yet probed → optimistic. A probed host may
+    // also report `null` for this field (older host that didn't advertise it):
+    // stay optimistic so an older Desktop that does implement get_all_tools_info
+    // keeps its list. An older CLI that lacks it returns unsupported on invoke.
+    // See PR #2428 #4.
+    return capabilities === null || capabilities.toolCatalog === null
+      ? true
+      : capabilities.toolCatalog;
   })();
 
   const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+  // Distinguish "host doesn't expose a catalog" / "read failed" / "really no
+  // tools" so the UI doesn't collapse all three into an empty list. See #2428 #5.
+  const [toolCatalogStatus, setToolCatalogStatus] = useState<
+    'available' | 'unsupported' | 'failed' | 'empty'
+  >('available');
   const [mcpServers, setMcpServers] = useState<MCPServerInfo[]>([]);
   const [modeSkills, setModeSkills] = useState<ModeSkillInfo[]>([]);
   const [toolsLoading, setToolsLoading] = useState<Record<string, boolean>>({});
@@ -202,12 +220,22 @@ const AssistantDefaultsPage: React.FC = () => {
         // instead of swallowing the unsupported error as an empty list. The
         // empty list then means "this host doesn't expose a catalog", not
         // "the runtime has no tools".
-        const toolsPromise = canQueryToolCatalog
-          ? api.invoke<ToolInfo[]>('get_all_tools_info').catch((error) => {
-              log.error('Failed to load tool catalog', { error });
-              return [] as ToolInfo[];
+        let toolsPromise: Promise<ToolInfo[]>;
+        if (canQueryToolCatalog) {
+          toolsPromise = api.invoke<ToolInfo[]>('get_all_tools_info')
+            .then((tools) => {
+              setToolCatalogStatus(tools.length > 0 ? 'available' : 'empty');
+              return tools;
             })
-          : Promise.resolve([] as ToolInfo[]);
+            .catch((error) => {
+              log.error('Failed to load tool catalog', { error });
+              setToolCatalogStatus('failed');
+              return [] as ToolInfo[];
+            });
+        } else {
+          setToolCatalogStatus('unsupported');
+          toolsPromise = Promise.resolve([] as ToolInfo[]);
+        }
         const [modeConf, tools, skillList, servers] = await Promise.all([
           configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
           toolsPromise,
@@ -224,7 +252,7 @@ const AssistantDefaultsPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [canQueryToolCatalog]);
+  }, [canQueryToolCatalog, renderedPeerDeviceId]);
 
   useEffect(() => {
     if (!detail) return;
@@ -739,7 +767,13 @@ const AssistantDefaultsPage: React.FC = () => {
               )}
             >
               {builtinTools.length === 0 ? (
-                <p className="nursery-empty">{t('empty.tools')}</p>
+                <p className="nursery-empty">
+                  {toolCatalogStatus === 'unsupported'
+                    ? t('empty.toolsUnsupported')
+                    : toolCatalogStatus === 'failed'
+                      ? t('empty.toolsFailed')
+                      : t('empty.tools')}
+                </p>
               ) : (
                 renderToolEnabledDisabledSplit(builtinToolsEnabled, builtinToolsDisabled, false)
               )}
