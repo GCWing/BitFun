@@ -206,7 +206,6 @@ export struct WideConversationHost {
       selectedSessionId: this.wideSelectedSessionId(),
       runningSessionId: this.remotePageState.hasRunningActiveTurn() ?
         this.remotePageState.activeSession.sessionId : '',
-      workspacePickerPlacement: this.sessionDetailsPlacement,
       onOpenSession: this.actions.onRemoteHome.openSessionInPlace,
       onCreateInWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.createInWorkspaceInPlace(path, 'code', deviceId);

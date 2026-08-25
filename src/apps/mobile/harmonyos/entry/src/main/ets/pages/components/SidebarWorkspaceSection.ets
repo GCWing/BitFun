@@ -8,23 +8,15 @@ import {
 import { MUTED } from './Theme';
 import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
 import { SidebarDeviceProjectionPolicy } from '../policy/SidebarDeviceProjectionPolicy';
-import {
-  SettingsPlacement,
-  SettingsPlacementPolicy,
-  SettingsSheetKind
-} from '../policy/SettingsPlacementPolicy';
-import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
-import { SidebarWorkspacePicker } from './SidebarWorkspacePicker';
 
 /**
  * The workspace half of the unified sidebar.
  *
- * Account desktops and QR-paired desktops share the same device -> Agent
- * projection. Workspaces are selected from the device row and remain Agent
- * execution context instead of another permanent sidebar level. A QR target
- * already present in the account directory merges by device id; otherwise it
- * is prepended as a transient device without hiding the account's desktops.
+ * Account desktops and QR-paired desktops share the same hierarchy:
+ * device -> workspace -> session. A QR target already present in the account
+ * directory merges by device id; otherwise it is prepended as a transient
+ * device without hiding the account's other desktops.
  */
 @ComponentV2
 export struct SidebarWorkspaceSection {
@@ -41,8 +33,6 @@ export struct SidebarWorkspaceSection {
   @Param selectedSessionId: string = '';
   @Param runningSessionId: string = '';
   @Param query: string = '';
-  @Param workspacePickerPlacement: SettingsPlacement =
-    SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onSessionActions: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onCreateInWorkspace: (deviceId: string, path: string) => void =
@@ -53,8 +43,6 @@ export struct SidebarWorkspaceSection {
   @Event onRetryDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onAdd: () => void = () => {};
   @Local visibleDeviceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
-  @Local showWorkspacePicker: boolean = false;
-  @Local workspacePickerDeviceId: string = '';
   private readonly transientEntry: DeviceDirectoryEntry = emptyDeviceDirectoryEntry('', '', false);
 
   build() {
@@ -74,7 +62,9 @@ export struct SidebarWorkspaceSection {
             query: this.query,
             showHeader: true,
             isActive: this.isActiveDevice(entry.deviceId),
-            onChooseWorkspace: () => this.openWorkspacePicker(entry),
+            onToggle: () => {
+              this.toggleEntry(entry);
+            },
             onRetry: () => {
               if (this.isDirectoryEntry(entry)) {
                 this.onRetryDevice(entry.deviceId);
@@ -84,6 +74,9 @@ export struct SidebarWorkspaceSection {
             onSessionActions: this.onSessionActions,
             onCreateInWorkspace: (path: string) => {
               this.onCreateInWorkspace(entry.deviceId, path);
+            },
+            onOpenWorkspace: (path: string) => {
+              this.onOpenWorkspace(entry.deviceId, path);
             }
           })
         }, (entry: DeviceDirectoryEntry): string => this.deviceKey(entry))
@@ -95,7 +88,6 @@ export struct SidebarWorkspaceSection {
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     .margin({ top: 18 })
-    .bindSheet($$this.showWorkspacePicker, this.WorkspacePicker(), this.workspacePickerSheetOptions())
   }
 
   @Builder
@@ -142,44 +134,6 @@ export struct SidebarWorkspaceSection {
     .onClick(() => {
       this.visibleDeviceCount += SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
     })
-  }
-
-  @Builder
-  private WorkspacePicker() {
-    SidebarWorkspacePicker({
-      deviceName: this.workspacePickerDevice().deviceName,
-      workspaces: this.workspacesForDevice(this.workspacePickerDevice()),
-      selectedWorkspacePath: this.isActiveDevice(this.workspacePickerDevice().deviceId) ?
-        this.workspacePath : '',
-      loading: this.workspacePickerDevice().status === 'loading',
-      onClose: () => {
-        this.showWorkspacePicker = false;
-      },
-      onSelectWorkspace: (path: string) => {
-        const deviceId = this.workspacePickerDeviceId;
-        this.showWorkspacePicker = false;
-        this.onOpenWorkspace(deviceId, path);
-      }
-    })
-  }
-
-  private openWorkspacePicker(entry: DeviceDirectoryEntry): void {
-    this.workspacePickerDeviceId = entry.deviceId;
-    if (!entry.expanded && entry.online) {
-      this.toggleEntry(entry);
-    }
-    this.showWorkspacePicker = true;
-  }
-
-  private workspacePickerDevice(): DeviceDirectoryEntry {
-    const entry = this.deviceEntries().find((item: DeviceDirectoryEntry): boolean =>
-      item.deviceId === this.workspacePickerDeviceId
-    );
-    return entry || this.transientEntry;
-  }
-
-  private workspacePickerSheetOptions(): SheetOptions {
-    return AdaptiveSheetOptions.fromPlacement(this.workspacePickerPlacement, true);
   }
 
   private deviceEntries(): DeviceDirectoryEntry[] {

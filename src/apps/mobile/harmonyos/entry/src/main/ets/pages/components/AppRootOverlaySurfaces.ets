@@ -78,7 +78,6 @@ export struct AppSidebarSurface {
         this.remotePageState.desktopName,
       selectedSessionId: this.remoteSelectedSessionId(),
       runningSessionId: this.remoteRunningSessionId(),
-      workspacePickerPlacement: this.sessionDetailsPlacement,
       onOpenSession: this.actions.onSidebar.openSession,
       onCreateInWorkspace: (deviceId: string, path: string) => {
         this.actions.onSidebar.close();
