@@ -39,6 +39,7 @@ import {
   type FileItem,
 } from './workspaceReferenceItems';
 import './FileMentionPicker.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('FileMentionPicker');
 const FILE_MENTION_SEARCH_DEBOUNCE_MS = 300;
@@ -578,7 +579,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       <div data-bf-component="file-mention-picker" data-bf-part="header" className="file-mention-picker__header">
         {!isSearchMode && pathHistory.length > 0 && (
           <Tooltip content={t('fileMention.goBack')}>
-            <button data-bf-component="file-mention-picker" data-bf-part="back" className="file-mention-picker__back-btn" onClick={goBack}><ChevronLeft size={12} /></button>
+            <UiButton data-bf-component="file-mention-picker" data-bf-part="back" className="file-mention-picker__back-btn" onClick={goBack}><ChevronLeft size={12} /></UiButton>
           </Tooltip>
         )}
         {isSearchMode ? <><Search size={11} /><span>{t('fileMention.searchResults')}</span></> : (

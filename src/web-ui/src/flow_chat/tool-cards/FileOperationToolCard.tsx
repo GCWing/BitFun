@@ -56,6 +56,7 @@ import {
   subscribeHistorySessionOpenTransition,
 } from '../services/sessionOpenIntent';
 import './FileOperationToolCard.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('FileOperationToolCard');
 const FILE_OPERATION_STREAMING_MAX_HEIGHT = 4 * 22; // 88px – compact while streaming
@@ -1191,14 +1192,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
           )}
           {canOpenFullCode && (
             <Tooltip content={t('toolCards.file.openFullCodeHint')} placement="top">
-              <button
+              <UiIconButton
                 type="button"
                 className="file-op-open-full-button"
                 onClick={handleOpenFullCodeClick}
                 aria-label={t('toolCards.file.openFullCodeHint')}
               >
                 <ChevronRight size={14} strokeWidth={2} absoluteStrokeWidth />
-              </button>
+              </UiIconButton>
             </Tooltip>
           )}
         </ToolCardHeaderActions>

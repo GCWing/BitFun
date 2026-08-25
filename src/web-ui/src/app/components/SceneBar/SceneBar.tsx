@@ -18,6 +18,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import type { SceneTabId } from './types';
 import './SceneBar.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('SceneBar');
 
@@ -159,7 +160,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
         </span>
       ),
       endAction: def.pinned ? undefined : (
-        <button
+        <UiIconButton
           type="button"
           aria-label={closeLabel}
           title={closeLabel}
@@ -172,7 +173,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
           tabIndex={-1}
         >
           <X size={12} aria-hidden="true" />
-        </button>
+        </UiIconButton>
       ),
     });
     return items;
@@ -192,7 +193,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
         data-bf-part="tabs"
       >
         {tabScrollState.hasOverflow && (
-          <button
+          <UiIconButton
             type="button"
             className="bitfun-scene-bar__scroll-button"
             aria-label={t('sceneBar.scrollPrevious')}
@@ -203,7 +204,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
             data-bf-part="scrollPrevious"
           >
             <ChevronLeft size={14} aria-hidden="true" />
-          </button>
+          </UiIconButton>
         )}
 
         <TabGroup
@@ -221,7 +222,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
         />
 
         {tabScrollState.hasOverflow && (
-          <button
+          <UiIconButton
             type="button"
             className="bitfun-scene-bar__scroll-button"
             aria-label={t('sceneBar.scrollNext')}
@@ -232,7 +233,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
             data-bf-part="scrollNext"
           >
             <ChevronRight size={14} aria-hidden="true" />
-          </button>
+          </UiIconButton>
         )}
       </div>
 

@@ -18,6 +18,7 @@ import {
 import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './SkillsConfig.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('SkillsConfig');
 
@@ -319,14 +320,14 @@ const SkillsConfig: React.FC = () => {
       </>
     );
     const control = canDeleteSkill(skill) ? (
-        <button
+        <UiIconButton aria-label={t('list.item.deleteTooltip')}
           type="button"
           className="bitfun-collection-btn bitfun-collection-btn--danger"
           onClick={() => setDeleteConfirm({ show: true, skill })}
           title={t('list.item.deleteTooltip')}
         >
           <Trash2 size={14} />
-        </button>
+        </UiIconButton>
     ) : null;
     const details = (
       <div data-bf-component="skills-config" data-bf-part="details">

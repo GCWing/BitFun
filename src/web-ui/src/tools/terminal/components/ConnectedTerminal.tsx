@@ -22,6 +22,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { SessionResponse, TerminalReplayEvent } from '../types';
 import type { TerminalPasteDecision } from '../utils';
 import './Terminal.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('ConnectedTerminal');
 
@@ -499,22 +500,22 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
             </span>
           </div>
           <div className="bitfun-terminal__toolbar-right">
-            <button
+            <UiIconButton aria-label="Send Ctrl+C"
               className="bitfun-terminal__toolbar-btn"
               onClick={handleSendCtrlC}
               title="Send Ctrl+C"
               data-testid="shell-command-rerun"
             >
               <span style={{ fontSize: 10, fontWeight: 'bold' }}>^C</span>
-            </button>
-            <button
+            </UiIconButton>
+            <UiIconButton aria-label="Close terminal"
               className="bitfun-terminal__toolbar-btn bitfun-terminal__toolbar-btn--danger"
               onClick={handleClose}
               title="Close terminal"
               data-testid="shell-panel-close"
             >
               <Trash2 size={14} />
-            </button>
+            </UiIconButton>
           </div>
         </div>
       )}

@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Badge, IconButton } from '@/component-library';
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import type { WorkspaceInfo } from '@/shared/types';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 interface AssistantCardProps {
   workspace: WorkspaceInfo;
@@ -57,7 +58,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
       role="listitem"
       style={style}
     >
-      <button
+      <UiIconButton
         data-bf-component="assistant-card"
         data-bf-part="main"
         type="button"
@@ -107,7 +108,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             aria-hidden="true"
           />
         </span>
-      </button>
+      </UiIconButton>
 
       <footer className="assistant-card__footer" data-bf-component="assistant-card" data-bf-part="footer">
         <Button

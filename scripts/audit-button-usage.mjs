@@ -21,6 +21,17 @@ const compoundRoles = new Set([
   'tab',
   'treeitem',
 ]);
+const compoundOwnerFiles = new Map([
+  ['src/web-ui/src/app/components/NavPanel/components/NavItem.tsx', 'navigation item'],
+  ['src/web-ui/src/app/components/NavPanel/components/WorkspaceSessionFilterMenu.tsx', 'menu'],
+  ['src/web-ui/src/app/components/NavPanel/MainNav.tsx', 'navigation'],
+  ['src/web-ui/src/app/scenes/git/GitNav.tsx', 'navigation'],
+  ['src/web-ui/src/app/scenes/miniapps/views/MiniAppMarketView.tsx', 'filter, rating, and card controls'],
+  ['src/web-ui/src/app/scenes/my-agent/InsightsScene.tsx', 'filter and report navigation controls'],
+  ['src/web-ui/src/app/scenes/skills/components/SkillCard.tsx', 'card action'],
+  ['src/web-ui/src/flow_chat/deep-review/action-bar/RemediationSelectionPanel.tsx', 'selection controls'],
+  ['src/web-ui/src/tools/bitfun-canvas/runtime/sdk/data-display.tsx', 'Mini App SDK control contract'],
+]);
 
 function attributeName(attribute) {
   return ts.isJsxAttribute(attribute) ? attribute.name.text : undefined;
@@ -65,13 +76,16 @@ function classifyButton(attributes, children) {
   const ownerPart = staticAttribute(attributes, 'data-bf-part');
   const className = staticAttribute(attributes, 'className');
   if (
-    compoundRoles.has(role)
+    (role !== undefined && role !== 'button')
+    || compoundRoles.has(role)
     || hasAttribute(attributes, 'aria-haspopup')
     || hasAttribute(attributes, 'aria-expanded')
     || hasAttribute(attributes, 'aria-pressed')
     || hasAttribute(attributes, 'aria-current')
-    || /(?:badge|card|filter|header|item|menu|nav|option|select|summary|tab|toggle|trigger)/i.test(ownerPart ?? '')
-    || /__(?:badge|card|filter|header|item|nav|option|select|summary|tab|toggle|trigger)(?:\b|[_-])/i.test(className ?? '')
+    || /(?:badge|bubble|card|filter|header|item|match|menu|mode|more|name|nav|node|option|pathDisplay|select|summary|tab|target|toggle|token|trigger)/i.test(ownerPart ?? '')
+    || /__(?:badge|breadcrumb|card|chip|device-select|expand|file-check|file-main|file-toggle|filter|header|item|match|mode|nav|node|option|path-display|row-name|select|state-chip|step-btn|summary|tab|target|toggle|token|trigger)(?:\b|[_-])/i.test(className ?? '')
+    || /(?:affordance-hit|list-item|section-header|__dot(?:\b|[_-])|__hit(?:\b|[_-]))/i.test(className ?? '')
+    || /(?:breadcrumb|card|chip|filter|item|match|menu|mode|nav|node|option|pill|select|summary|tab|target|toggle|token|trigger)/i.test(className ?? '')
     || /(?:menu|dropdown|popover|context)[_-].*item|item[_-].*(?:menu|dropdown)/i.test(className ?? '')
   ) {
     return 'compound';
@@ -116,6 +130,8 @@ export function analyzeButtonSource(file, source) {
         file,
         line: location.line + 1,
         kind: classifyButton(attributes, node.children),
+        className: staticAttribute(attributes, 'className'),
+        part: staticAttribute(attributes, 'data-bf-part'),
         role: staticAttribute(attributes, 'role'),
         owner: staticAttribute(attributes, 'data-bf-component'),
       });
@@ -127,6 +143,8 @@ export function analyzeButtonSource(file, source) {
         file,
         line: location.line + 1,
         kind: classifyButton(node.attributes, []),
+        className: staticAttribute(node.attributes, 'className'),
+        part: staticAttribute(node.attributes, 'data-bf-part'),
         role: staticAttribute(node.attributes, 'role'),
         owner: staticAttribute(node.attributes, 'data-bf-component'),
       });
@@ -163,6 +181,9 @@ export async function buildButtonInventory({ includeTests = false } = {}) {
     const file = path.relative(repositoryRoot, absolutePath).replaceAll(path.sep, '/');
     const source = await readFile(absolutePath, 'utf8');
     const analysis = analyzeButtonSource(file, source);
+    if (compoundOwnerFiles.has(file)) {
+      for (const button of analysis.buttons) button.kind = 'compound';
+    }
     buttons.push(...analysis.buttons);
     localButtonDefinitions.push(...analysis.localButtonDefinitions);
   }

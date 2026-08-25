@@ -44,6 +44,8 @@ import SkillsSuiteView from './components/SkillsSuiteView';
 import './SkillsScene.scss';
 import { useSkillsSceneStore, type InstalledFilter } from './skillsSceneStore';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
+import { IconButton as UiIconButton } from '@bitfun/ui';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('SkillsScene');
 
@@ -732,7 +734,7 @@ const SkillsScene: React.FC = () => {
 
                   {(market.totalPages > 1 || market.hasMore) && (
                     <div className="skills-discover__pagination" data-bf-scene="skills" data-bf-part="pagination">
-                      <button
+                      <UiIconButton
                         type="button"
                         className="skills-discover__page-btn"
                         onClick={market.goToPrevPage}
@@ -742,13 +744,13 @@ const SkillsScene: React.FC = () => {
                         data-bf-part="pageButton"
                       >
                         <ChevronLeft size={14} />
-                      </button>
+                      </UiIconButton>
                       <span className="skills-discover__page-info" data-bf-scene="skills" data-bf-part="pageInfo">
                         {market.hasMore
                           ? t('market.pagination.infoMore', { current: market.currentPage + 1 })
                           : t('market.pagination.info', { current: market.currentPage + 1, total: market.totalPages })}
                       </span>
-                      <button
+                      <UiIconButton
                         type="button"
                         className="skills-discover__page-btn"
                         onClick={() => void market.goToNextPage()}
@@ -758,7 +760,7 @@ const SkillsScene: React.FC = () => {
                         data-bf-part="pageButton"
                       >
                         <ChevronRight size={14} />
-                      </button>
+                      </UiIconButton>
                     </div>
                   )}
                 </>
@@ -892,7 +894,7 @@ const SkillsScene: React.FC = () => {
             <div className="bitfun-skills-scene__detail-row" data-testid="skill-detail-capabilities-section">
               <span className="bitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
               {canRevealSkillPath ? (
-                <button
+                <UiButton
                   type="button"
                   className="bitfun-skills-scene__detail-path-btn"
                   title={t('list.item.openPathInExplorer')}
@@ -900,7 +902,7 @@ const SkillsScene: React.FC = () => {
                   data-testid="skills-detail-path-btn"
                 >
                   {selectedInstalledSkill.path}
-                </button>
+                </UiButton>
               ) : (
                 <code className="bitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
               )}

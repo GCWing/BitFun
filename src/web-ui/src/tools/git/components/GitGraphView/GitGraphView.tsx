@@ -19,6 +19,7 @@ import { useAppearance } from '@/infrastructure/appearance';
 import { createLogger } from '@/shared/utils/logger';
 import { describeGitTrustFailure } from '../../services/GitService';
 import './GitGraphView.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('GitGraphView');
 
@@ -324,22 +325,22 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
                   <span className="git-graph-view__search-count">
                     {currentSearchIndex + 1} / {searchFilter.totalMatches}
                   </span>
-                  <button
+                  <UiIconButton aria-label={t('graph.searchPrevious')}
                     className="git-graph-view__search-nav-btn"
                     onClick={goToPreviousMatch}
                     title={t('graph.searchPrevious')}
                     disabled={searchFilter.totalMatches === 0}
                   >
                     <ChevronUp size={14} />
-                  </button>
-                  <button
+                  </UiIconButton>
+                  <UiIconButton aria-label={t('graph.searchNext')}
                     className="git-graph-view__search-nav-btn"
                     onClick={goToNextMatch}
                     title={t('graph.searchNext')}
                     disabled={searchFilter.totalMatches === 0}
                   >
                     <ChevronDown size={14} />
-                  </button>
+                  </UiIconButton>
                 </div>
               ) : searchFilter && debouncedSearchQuery && searchFilter.totalMatches === 0 ? (
                 <span className="git-graph-view__search-count git-graph-view__search-count--no-results">

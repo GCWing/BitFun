@@ -25,6 +25,7 @@ import {
   parentDirectoryPath,
 } from './peerDirectoryPath';
 import './PeerDirectoryBrowser.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('PeerDirectoryBrowser');
 
@@ -224,7 +225,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
           data-bf-component="peer-device"
           data-bf-part="toolbar"
         >
-          <button
+          <UiIconButton aria-label={t('peerDirectoryPicker.parent')}
             type="button"
             className="peer-directory-browser__tool-btn"
             disabled={!parentPath || loading}
@@ -234,8 +235,8 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-part="toolButton"
           >
             <ArrowLeft size={14} />
-          </button>
-          <button
+          </UiIconButton>
+          <UiIconButton aria-label={t('peerDirectoryPicker.home')}
             type="button"
             className="peer-directory-browser__tool-btn"
             disabled={loading}
@@ -245,8 +246,8 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-part="toolButton"
           >
             <Home size={14} />
-          </button>
-          <button
+          </UiIconButton>
+          <UiIconButton aria-label={t('peerDirectoryPicker.refresh')}
             type="button"
             className="peer-directory-browser__tool-btn"
             disabled={loading}
@@ -256,7 +257,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-part="toolButton"
           >
             <RefreshCw size={14} />
-          </button>
+          </UiIconButton>
           <div
             className="peer-directory-browser__path"
             data-bf-component="peer-device"

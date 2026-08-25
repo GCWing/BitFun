@@ -14,13 +14,15 @@ test('classifies independent, icon, and compound native buttons', () => {
         <button className="feature__menu-item">Rename</button>
         <button data-bf-part="marketCard">Theme</button>
         <button aria-current="page">Browse</button>
+        <button aria-label="Retry" />
+        <button className="feature__dot" aria-label="Page 2" />
       </>;
     }
   `);
 
   assert.deepEqual(
     inventory.buttons.map(button => button.kind),
-    ['action', 'icon', 'compound', 'compound', 'compound', 'compound', 'compound'],
+    ['action', 'icon', 'compound', 'compound', 'compound', 'compound', 'compound', 'icon', 'compound'],
   );
 });
 

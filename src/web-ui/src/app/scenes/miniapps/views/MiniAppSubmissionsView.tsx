@@ -41,6 +41,7 @@ import {
   createEmptyMarketSubmissionDraft,
 } from './miniAppSubmissionDraft';
 import './MiniAppSubmissionsView.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('MiniAppSubmissionsView');
 
@@ -375,7 +376,7 @@ const MiniAppSubmissionsView: React.FC = () => {
                 <div key={path}>
                   <FileImage size={14} />
                   <span title={path}>{fileName(path)}</span>
-                  <button
+                  <UiIconButton
                     type="button"
                     aria-label={t('market.submissions.removeScreenshot')}
                     onClick={() =>
@@ -383,7 +384,7 @@ const MiniAppSubmissionsView: React.FC = () => {
                     }
                   >
                     <X size={13} />
-                  </button>
+                  </UiIconButton>
                 </div>
               ))}
             </div>

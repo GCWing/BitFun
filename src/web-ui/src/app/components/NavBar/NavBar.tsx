@@ -18,6 +18,7 @@ import { PanelLeftIcon } from '../TitleBar/PanelIcons';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('NavBar');
 
@@ -118,7 +119,7 @@ const NavBar: React.FC<NavBarProps> = ({
 
       {/* Back / Forward */}
       <Tooltip content={t('nav.backShortcut')} placement="bottom" followCursor disabled={!canGoBack}>
-        <button
+        <UiIconButton
           type="button"
           className={`bitfun-nav-bar__btn${!canGoBack ? ' is-inactive' : ''}`}
           data-bf-component="nav-bar"
@@ -128,11 +129,11 @@ const NavBar: React.FC<NavBarProps> = ({
           aria-label={t('nav.back')}
         >
           <ArrowLeft size={15} />
-        </button>
+        </UiIconButton>
       </Tooltip>
 
       <Tooltip content={t('nav.forwardShortcut')} placement="bottom" followCursor disabled={!canGoForward}>
-        <button
+        <UiIconButton
           type="button"
           className={`bitfun-nav-bar__btn${!canGoForward ? ' is-inactive' : ''}`}
           data-bf-component="nav-bar"
@@ -142,7 +143,7 @@ const NavBar: React.FC<NavBarProps> = ({
           aria-label={t('nav.forward')}
         >
           <ArrowRight size={15} />
-        </button>
+        </UiIconButton>
       </Tooltip>
 
     </div>

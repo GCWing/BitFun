@@ -43,6 +43,7 @@ import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDevi
 import { canQueryToolCatalogOnSurface } from '@/infrastructure/peer-device/peerCapabilityResolution';
 import './NurseryView.scss';
 import './AssistantDefaultsPage.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('AssistantDefaultsPage');
 const ASSISTANT_MODE_ID = 'Claw';
@@ -643,14 +644,14 @@ const AssistantDefaultsPage: React.FC = () => {
             onChange={() => toggleCapability(row)}
             aria-label={t('nursery.template.toggleCapability', { name: row.name })}
           />
-          <button
+          <UiIconButton
             type="button"
             className="assistant-defaults-row__detail"
             onClick={() => openDetail(row.detail)}
             aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
           >
             <ChevronRight size={17} />
-          </button>
+          </UiIconButton>
         </div>
       </>
     );
@@ -773,14 +774,14 @@ const AssistantDefaultsPage: React.FC = () => {
                 <span className="assistant-defaults-group__count">
                   {t('nursery.template.enabledCount', { enabled: enabledCount, total: group.allRows.length })}
                 </span>
-                <button
+                <UiIconButton
                   type="button"
                   className="assistant-defaults-group__detail"
                   onClick={() => openDetail({ type: 'mcpServer', serverId: group.id })}
                   aria-label={t('nursery.template.openServerDetail')}
                 >
                   <Info size={16} />
-                </button>
+                </UiIconButton>
                 {allNames.length > 0 ? (
                   <Switch
                     checked={allEnabled}
@@ -847,7 +848,7 @@ const AssistantDefaultsPage: React.FC = () => {
               <span className="assistant-defaults-detail__eyebrow">MCP</span>
               <h3>{title}</h3>
             </div>
-            <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></button>
+            <UiIconButton type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></UiIconButton>
           </div>
           <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
             {server?.statusMessage ? <p className="assistant-defaults-detail__description">{server.statusMessage}</p> : null}
@@ -917,7 +918,7 @@ const AssistantDefaultsPage: React.FC = () => {
             <span className="assistant-defaults-detail__eyebrow">{kindLabel}</span>
             <h3>{row.name}</h3>
           </div>
-          <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></button>
+          <UiIconButton type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></UiIconButton>
         </div>
         <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
           <p className="assistant-defaults-detail__description">{row.description}</p>
@@ -1092,7 +1093,7 @@ const AssistantDefaultsPage: React.FC = () => {
                     placeholder={t('nursery.template.searchPlaceholder')}
                   />
                   {searchQuery ? (
-                    <button type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><X size={15} /></button>
+                    <UiIconButton type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><X size={15} /></UiIconButton>
                   ) : null}
                 </label>
                 <div className="assistant-defaults-filters" role="group" aria-label={t('nursery.template.filterLabel')}>

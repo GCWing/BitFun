@@ -48,6 +48,7 @@ import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system/services/NotificationService';
 import './TaskToolDisplay.scss';
 import './ModelThinkingDisplay.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 function readTaskDurationMs(toolResult: FlowToolItem['toolResult'] | undefined): number | undefined {
   const resultDuration = toolResult?.result?.duration;
@@ -840,7 +841,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   </span>
                 )}
                 {canStopSyncSubagent && (
-                  <button
+                  <UiButton
                     type="button"
                     className="task-subagent-stop-button"
                     onClick={handleStopSyncSubagent}
@@ -869,7 +870,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                     ) : (
                       <Square size={13} strokeWidth={2} aria-hidden />
                     )}
-                  </button>
+                  </UiButton>
                 )}
               </div>
             </div>

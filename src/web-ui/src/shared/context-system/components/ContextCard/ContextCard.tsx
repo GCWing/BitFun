@@ -7,6 +7,7 @@ import { contextRegistry } from '../../../services/ContextRegistry';
 import { useContextStore, selectValidationState, selectIsValidating } from '../../../stores/contextStore';
 import { useI18n } from '@/infrastructure/i18n';
 import './ContextCard.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 export interface ContextCardProps {
   context: ContextItem;
@@ -123,13 +124,13 @@ export const ContextCard: React.FC<ContextCardProps> = ({
           
           
           {onRemove && (
-            <button
+            <UiIconButton aria-label={t('contextSystem.contextCard.removeContext')}
               className="bitfun-context-card__remove-btn"
               onClick={handleRemove}
               title={t('contextSystem.contextCard.removeContext')}
             >
               <X size={14} />
-            </button>
+            </UiIconButton>
           )}
         </div>
       )}

@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 import { Tooltip } from '@/component-library';
 import { ConfigPageSection } from '../common';
 import type { ExternalApplicationView } from './applicationModel';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 export interface ExternalAppsOverviewProps {
   applications: ExternalApplicationView[];
@@ -50,7 +51,7 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
           </span>
           {application.attentionCount > 0 ? (
             <Tooltip content={t('applications.attentionRequired')} placement="top">
-              <button
+              <UiIconButton
                 type="button"
                 className="bitfun-external-sources-config__app-attention"
                 data-bf-component="external-sources-config"
@@ -61,7 +62,7 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
                 onClick={() => onOpenAttention(application.ecosystemId)}
               >
                 <CircleAlert size={16} aria-hidden="true" />
-              </button>
+              </UiIconButton>
             </Tooltip>
           ) : null}
           <div

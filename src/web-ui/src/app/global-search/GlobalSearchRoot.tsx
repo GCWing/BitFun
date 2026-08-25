@@ -65,6 +65,7 @@ import {
   type GlobalSearchSnapshot,
 } from './types';
 import './GlobalSearchRoot.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('GlobalSearch');
 const SEARCH_DEBOUNCE_MS = 90;
@@ -364,7 +365,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
               autoFocus={autoFocus}
             />
             {query ? (
-              <button
+              <UiIconButton
                 type="button"
                 className="global-search__clear"
                 onClick={() => {
@@ -375,7 +376,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                 aria-label={tCommon('nav.search.clear')}
               >
                 <X size={14} aria-hidden="true" />
-              </button>
+              </UiIconButton>
             ) : variant === 'modal' ? (
               <kbd className="global-search__shortcut" aria-hidden="true">{searchShortcutLabel}</kbd>
             ) : null}
@@ -445,7 +446,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
               >
                 {groupDetailPage ? (
                   <div className="global-search__detail-header">
-                    <button
+                    <UiIconButton
                       type="button"
                       className="global-search__detail-back"
                       onClick={closeGroupDetails}
@@ -454,7 +455,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     >
                       <ChevronLeft size={15} strokeWidth={1.8} aria-hidden="true" />
                       <span>{tCommon('nav.search.back')}</span>
-                    </button>
+                    </UiIconButton>
                     <div className="global-search__detail-heading">
                       <span id={labelId} className="global-search__group-title">{groupLabel}</span>
                       <span className="global-search__group-count">
@@ -467,7 +468,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     <span className="global-search__group-title">{groupLabel}</span>
                     <span className="global-search__group-meta">
                       {groupView.canOpenDetails ? (
-                        <button
+                        <UiIconButton
                           type="button"
                           className="global-search__group-drilldown"
                           onClick={() => openGroupDetails(groupId as GlobalSearchDrilldownGroupId)}
@@ -479,7 +480,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                         >
                           <span>{tCommon('nav.search.resultCount', { count: groupView.totalCount })}</span>
                           <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" />
-                        </button>
+                        </UiIconButton>
                       ) : (
                         <span aria-hidden="true">
                           {tCommon('nav.search.resultCount', { count: groupView.totalCount })}

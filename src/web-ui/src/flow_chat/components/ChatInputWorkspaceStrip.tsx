@@ -41,6 +41,8 @@ import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { formatCompactTokenCount } from '../utils/tokenUsageDisplay';
 import './ChatInputWorkspaceStrip.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
+import { Button as UiButton } from '@bitfun/ui';
 
 export interface ChatInputWorkspaceStripProps {
   /** Repo root for git status; may come from session when global workspace is unset. */
@@ -604,7 +606,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         {dispatchControl?.syncableJobId ? (
           <>
             <Tooltip content={tCommon('dispatch.syncTitle')} placement="top">
-              <button
+              <UiButton
                 type="button"
                 className="bitfun-chat-input-workspace-strip__dispatch-result"
                 onClick={() => setResultDialogOpen(true)}
@@ -612,7 +614,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               >
                 <RefreshCw size={12} strokeWidth={1.8} aria-hidden />
                 <span>{tCommon('dispatch.syncAction')}</span>
-              </button>
+              </UiButton>
             </Tooltip>
             <DispatchResultDialog
               open={resultDialogOpen}
@@ -889,7 +891,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         ) : null}
         {showUsage ? (
           <Tooltip content={usageTooltip}>
-            <button
+            <UiIconButton
               data-bf-component="chat-input-workspace-strip"
               data-bf-part="usageAction"
               className="bitfun-chat-input-workspace-strip__usage-btn"
@@ -911,7 +913,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                   />
                 ) : null}
               </span>
-            </button>
+            </UiIconButton>
           </Tooltip>
         ) : null}
       </div>

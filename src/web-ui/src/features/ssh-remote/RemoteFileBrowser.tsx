@@ -25,6 +25,7 @@ import {
   Download,
 } from 'lucide-react';
 import './RemoteFileBrowser.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 interface RemoteFileBrowserProps {
   connectionId: string;
@@ -428,13 +429,13 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
               }}
               title={t('ssh.remote.clickToEditPath') || 'Click to edit path'}
             >
-              <button
+              <UiIconButton aria-label={t('ssh.remote.homeFolder') || 'Home folder'}
                 className="remote-file-browser__breadcrumb-btn"
                 onClick={(e) => { e.stopPropagation(); navigateTo(homeAnchor); }}
                 title={t('ssh.remote.homeFolder') || 'Home folder'}
               >
                 <Home size={14} />
-              </button>
+              </UiIconButton>
               <ChevronRight size={12} className="remote-file-browser__breadcrumb-sep" />
               {pathParts.length === 0 ? (
                 <span className="remote-file-browser__breadcrumb-current">/</span>

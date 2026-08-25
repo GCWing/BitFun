@@ -11,6 +11,7 @@ import {
   SCROLL_TO_LATEST_INPUT_CLEARANCE_PX,
 } from '../utils/flowChatScrollLayout';
 import './ScrollToLatestBar.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 interface ScrollToLatestBarProps {
   visible: boolean;
@@ -102,11 +103,11 @@ export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
         <div data-bf-component="scroll-to-latest-bar" data-bf-part="gradient" className="scroll-to-latest-bar__gradient" />
 
         <div data-bf-component="scroll-to-latest-bar" data-bf-part="content" className="scroll-to-latest-bar__content" style={contentStyle}>
-          <button data-bf-component="scroll-to-latest-bar" data-bf-part="button" className="scroll-to-latest-bar__btn" aria-hidden="true" tabIndex={-1}>
+          <UiButton data-bf-component="scroll-to-latest-bar" data-bf-part="button" className="scroll-to-latest-bar__btn" aria-hidden="true" tabIndex={-1}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M8 3.5V12.5M8 12.5L4 8.5M8 12.5L12 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-          </button>
+          </UiButton>
         </div>
       </div>
     </PresenceBoundary>

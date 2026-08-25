@@ -47,6 +47,7 @@ import {
 } from './ecosystemCompatibilityModel';
 import { useEcosystemCompatibilityStore } from './ecosystemCompatibilityStore';
 import './EcosystemCompatibilityScene.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const AcpAgentsConfig = lazy(
   () => import('@/infrastructure/config/components/AcpAgentsConfig'),
@@ -766,7 +767,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
             placeholder={t('search.placeholder')}
             inputAriaLabel={t('search.label')}
           />
-          <button
+          <UiIconButton
             type="button"
             className="ecosystem-compatibility__host-card"
             aria-label={t('host.switchLabel')}
@@ -775,7 +776,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <span>{t('host.label')}</span>
             <strong title={currentHost}>{currentHost}</strong>
             <ChevronDown size={14} aria-hidden="true" />
-          </button>
+          </UiIconButton>
         </div>
 
         <div

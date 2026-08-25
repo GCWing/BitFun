@@ -10,6 +10,7 @@ import { Tooltip } from '@/component-library';
 import type { AnchorPosition } from '../types';
 import { LAYOUT_CONFIG, clampAnchorSize } from '../types';
 import './AnchorZone.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 export interface AnchorZoneProps {
   /** Position */
@@ -129,7 +130,7 @@ export const AnchorZone: React.FC<AnchorZoneProps> = ({
         <div className="canvas-anchor-zone__actions" data-bf-component="content-canvas" data-bf-part="anchorActions">
           {/* Collapse/expand */}
           <Tooltip content={isCollapsed ? t('tooltip.expand') : t('tooltip.collapse')}>
-            <button
+            <UiButton
               className="canvas-anchor-zone__action-btn"
               onClick={toggleCollapse}
             >
@@ -138,29 +139,29 @@ export const AnchorZone: React.FC<AnchorZoneProps> = ({
               ) : (
                 isBottom ? <ChevronDown size={14} /> : <ChevronDown size={14} />
               )}
-            </button>
+            </UiButton>
           </Tooltip>
 
           {/* Maximize */}
           {onToggleMaximize && (
             <Tooltip content={isMaximized ? t('windowControls.restore') : t('windowControls.maximize')}>
-              <button
+              <UiButton
                 className="canvas-anchor-zone__action-btn"
                 onClick={onToggleMaximize}
               >
                 {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-              </button>
+              </UiButton>
             </Tooltip>
           )}
 
           {/* Close */}
           <Tooltip content={t('tooltip.close')}>
-            <button
+            <UiButton
               className="canvas-anchor-zone__action-btn canvas-anchor-zone__close-btn"
               onClick={onClose}
             >
               <X size={14} />
-            </button>
+            </UiButton>
           </Tooltip>
         </div>
       </div>

@@ -32,6 +32,7 @@ import { createLogger } from '@/shared/utils/logger';
 import AssistantCard from './AssistantCard';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('NurseryGallery');
 const ASSISTANT_MODE_ID = 'Claw';
@@ -292,7 +293,7 @@ const NurseryGallery: React.FC = () => {
             </div>
           </div>
 
-          <button
+          <UiButton
             type="button"
             className="nursery-defaults__action"
             onClick={openDefaults}
@@ -307,7 +308,7 @@ const NurseryGallery: React.FC = () => {
               strokeWidth={1.8}
               aria-hidden="true"
             />
-          </button>
+          </UiButton>
         </section>
 
         <GalleryZone

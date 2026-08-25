@@ -14,6 +14,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { isRemoteWorkspace, type RelatedPath, type WorkspaceInfo } from '@/shared/types';
 import { FolderOpen, Link2, Plus, Trash2 } from 'lucide-react';
 import './WorkspaceRelatedPathsDialog.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('WorkspaceRelatedPathsDialog');
 
@@ -280,14 +281,14 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
                     <span className="workspace-related-paths-dialog__card-index">
                       {t('nav.workspaces.relatedPaths.dialog.itemLabel', { index: index + 1 })}
                     </span>
-                    <button
+                    <UiIconButton
                       type="button"
                       className="workspace-related-paths-dialog__remove"
                       onClick={() => handleRemoveDraft(draft.id)}
                       aria-label={t('actions.remove')}
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </UiIconButton>
                   </div>
 
                   <div data-bf-component="workspace-related-paths-dialog" data-bf-part="pathRow" className="workspace-related-paths-dialog__path-row">

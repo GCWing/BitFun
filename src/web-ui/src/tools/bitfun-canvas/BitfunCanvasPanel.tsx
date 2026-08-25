@@ -18,6 +18,7 @@ import {
   PEER_MODE_CANVAS_POLL_MS,
 } from '@/infrastructure/peer-device/peerModeFlag';
 import './BitfunCanvasPanel.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('BitfunCanvasPanel');
 
@@ -1009,7 +1010,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
         >
           <MousePointer2 size={15} />
         </button>
-        <button
+        <UiButton
           type="button"
           className="bitfun-canvas-panel__toolbar-button"
           title="Export HTML"
@@ -1018,7 +1019,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           onClick={handleExportHtml}
         >
           {exportingHtml ? <Loader2 size={15} className="bitfun-canvas-panel__toolbar-icon--spin" /> : <Download size={15} />}
-        </button>
+        </UiButton>
       </div>
       {isFrameReady && (
         <iframe

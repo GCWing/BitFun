@@ -52,6 +52,8 @@ import { useNotification } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountPanel.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('AccountPanel');
 
@@ -1190,14 +1192,14 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 <span className="account-panel__server-url" title={accountRelayUrl}>
                   {accountRelayUrl}
                 </span>
-                <button
+                <UiButton
                   type="button"
                   className="account-panel__copy-btn"
                   onClick={handleCopyRelayUrl}
                   title={t('accountLogin.copyServerUrl')}
                 >
                   {copiedServerUrl ? <Check size={13} /> : <Copy size={13} />}
-                </button>
+                </UiButton>
               </div>
             )}
             {syncStatus !== 'idle' && !relayError && (
@@ -1324,13 +1326,13 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     </span>
                     {isSelectable && <ChevronRight size={14} />}
                   </button>
-                  <button type="button" className="account-panel__device-remove"
+                  <UiIconButton type="button" className="account-panel__device-remove"
                     onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
                     title={removeLabel}
                     aria-label={`${removeLabel}: ${displayName}`}
                     disabled={loading}>
                     <X size={14} aria-hidden="true" />
-                  </button>
+                  </UiIconButton>
                 </div>
                 );
               })}
@@ -1339,7 +1341,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               <h3 className="account-panel__pages-section-title">
                 {t('accountLogin.pagesSectionTitle')}
               </h3>
-              <button
+              <UiIconButton
                 type="button"
                 className="account-panel__pages-entry"
                 data-bf-component="remote-account-panel"
@@ -1362,7 +1364,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 <span className="account-panel__pages-entry-arrow" aria-hidden="true">
                   <ChevronRight size={15} />
                 </span>
-              </button>
+              </UiIconButton>
             </div>
             <div className="account-panel__actions" data-bf-component="remote-account-panel" data-bf-part="actions">
               {relayError && (

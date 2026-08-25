@@ -14,6 +14,7 @@ import type {
 import type { AgentCompanionPetCommand } from '@/app/services/agentCompanionPetCommands';
 import { createLogger } from '@/shared/utils/logger';
 import './AgentCompanionDesktopPet.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('AgentCompanionDesktopPet');
 const DEFAULT_PET_SIZE = 96;
@@ -972,7 +973,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                             onChange={event => setComposerValue(event.target.value)}
                             onKeyDown={onComposerKeyDown}
                           />
-                          <button
+                          <UiIconButton
                             type="button"
                             className="bitfun-agent-companion-window__bubble-composer-cancel"
                             title={t('agentCompanion.composer.cancel')}
@@ -988,8 +989,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                                 strokeLinecap="round"
                               />
                             </svg>
-                          </button>
-                          <button
+                          </UiIconButton>
+                          <UiIconButton
                             type="button"
                             className="bitfun-agent-companion-window__bubble-composer-send"
                             title={t('agentCompanion.composer.send')}
@@ -1007,7 +1008,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                                 strokeLinejoin="round"
                               />
                             </svg>
-                          </button>
+                          </UiIconButton>
                         </div>
                       </div>
                     ) : (
@@ -1022,7 +1023,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                       </button>
                     )}
                     {task.canReply !== false && !isComposingTask && (
-                      <button
+                      <UiIconButton
                         type="button"
                         className="bitfun-agent-companion-window__bubble-compose"
                         title={t('agentCompanion.composer.openTitle')}
@@ -1039,7 +1040,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                             strokeLinejoin="round"
                           />
                         </svg>
-                      </button>
+                      </UiIconButton>
                     )}
                   </div>
                 );

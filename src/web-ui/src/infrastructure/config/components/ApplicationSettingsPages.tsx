@@ -35,6 +35,7 @@ import type {
   TerminalPanelPosition,
 } from '../types';
 import './ApplicationSettingsPages.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('ApplicationSettings');
 
@@ -530,14 +531,14 @@ function LoggingSection() {
                 {runtimeInfo?.sessionLogDir || '-'}
               </div>
               <Tooltip content={t('logging.actions.openFolderTooltip')} placement="top">
-                <button
+                <UiButton
                   type="button"
                   className="bitfun-logging-config__open-btn"
                   onClick={handleOpenFolder}
                   disabled={openingFolder || !runtimeInfo?.sessionLogDir}
                 >
                   <FolderOpen size={14} />
-                </button>
+                </UiButton>
               </Tooltip>
             </div>
           </ConfigPageRow>

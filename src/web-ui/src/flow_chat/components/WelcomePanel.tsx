@@ -18,6 +18,7 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './WelcomePanel.css';
 import './WelcomePanelSurface.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('WelcomePanel');
 
@@ -116,7 +117,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
         {parts.map(({ key, label, suffix }, i) => (
           <React.Fragment key={key}>
             {i > 0 && t('welcome.commaSeparator')}
-            <button
+            <UiButton
               type="button"
               data-bf-component="welcome-panel"
               data-bf-part="gitAction"
@@ -124,7 +125,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
               onClick={handleGitClick}
             >
               {label}
-            </button>
+            </UiButton>
             {' '}{suffix}
           </React.Fragment>
         ))}
@@ -247,7 +248,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
             ) : !hasWorkspace ? (
               <>
                 {t('welcome.noWorkspaceHint')}
-                <button
+                <UiButton
                   type="button"
                   data-bf-component="welcome-panel"
                   data-bf-part="openWorkspaceAction"
@@ -256,7 +257,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                   disabled={isSelectingWorkspace}
                 >
                   {t('welcome.openOne')}
-                </button>
+                </UiButton>
                 {' '}{t('welcome.toStart')}
               </>
             ) : (
@@ -344,7 +345,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                     {!isCoworkSession && gitState && (
                       <>
                         <span className="welcome-panel__context-sep">/</span>
-                        <button
+                        <UiButton
                           type="button"
                           data-bf-component="welcome-panel"
                           data-bf-part="gitAction"
@@ -353,7 +354,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                         >
                           <GitBranch size={13} className="welcome-panel__inline-icon" />
                           {gitState.currentBranch}
-                        </button>
+                        </UiButton>
                       </>
                     )}
                   </span>

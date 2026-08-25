@@ -9,6 +9,7 @@ import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
 import './ViewImageToolCard.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/png',
@@ -130,7 +131,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
                 {t('toolCards.default.failed')}
               </div>
             ) : (
-              <button
+              <UiIconButton
                 type="button"
                 data-bf-component="view-image-tool-card"
                 data-bf-part="preview"
@@ -151,7 +152,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
                   title={path ?? undefined}
                   onError={() => setImageFailed(true)}
                 />
-              </button>
+              </UiIconButton>
             )}
           </div>
         ) : null}

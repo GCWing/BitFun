@@ -10,6 +10,7 @@ import type {
 } from '../../../services/ContextRegistry';
 import { i18nService } from '@/infrastructure/i18n';
 import { getCodeSnippetLanguageAccent } from '@/infrastructure/appearance/appearanceDomainTokens';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 
 
@@ -143,12 +144,12 @@ export class CodeSnippetCardRenderer implements ContextCardRenderer<'code-snippe
         
         {interactive && (
           <div className="bitfun-context-card__actions">
-            <button 
+            <UiIconButton aria-label={i18nService.t('components:contextSystem.contextCard.viewFullCode')}
               className="bitfun-context-card__action-btn"
               title={i18nService.t('components:contextSystem.contextCard.viewFullCode')}
             >
               <Code size={14} />
-            </button>
+            </UiIconButton>
           </div>
         )}
       </div>

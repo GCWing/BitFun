@@ -229,6 +229,7 @@ import {
 import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('ChatInput');
 
@@ -5731,7 +5732,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             <Image size={14} />
                           </div>
                         )}
-                        <button
+                        <UiIconButton
                           type="button"
                           className="bitfun-chat-input__image-chip-remove"
                           data-bf-component="chat-input"
@@ -5743,7 +5744,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           }}
                         >
                           <X size={12} />
-                        </button>
+                        </UiIconButton>
                       </div>
                     );
                   })}
@@ -6218,7 +6219,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                           <span className="bitfun-chat-input__slash-command-current" data-bf-component="chat-input" data-bf-part="commandCurrent">{t('chatInput.current')}</span>
                                         )}
                                         <Tooltip content={defaultModeTooltip} placement="left">
-                                          <button
+                                          <UiIconButton
                                             type="button"
                                             className={`bitfun-chat-input__mode-default-button${isDefaultMode ? ' bitfun-chat-input__mode-default-button--active' : ''}`}
                                             data-bf-component="chat-input"
@@ -6235,7 +6236,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                             }}
                                           >
                                             <Star size={13} fill={isDefaultMode ? 'currentColor' : 'none'} />
-                                          </button>
+                                          </UiIconButton>
                                         </Tooltip>
                                       </span>
                                     </div>
@@ -6519,7 +6520,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         modeState.current}
                     </span>
                     {!isAcpTargetSession && (
-                      <button
+                      <UiIconButton
                         type="button"
                         className="bitfun-chat-input__agent-capsule-close"
                         data-bf-component="chat-input"
@@ -6532,7 +6533,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         }}
                       >
                         <X size={12} strokeWidth={2.5} />
-                      </button>
+                      </UiIconButton>
                     )}
                   </div>
                 )}

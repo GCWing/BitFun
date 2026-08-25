@@ -1,6 +1,7 @@
 import React from 'react';
 import { Minus } from 'lucide-react';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 type ExportableReviewData = React.ComponentProps<typeof CodeReviewReportExportActions>['reviewData'];
 
@@ -36,14 +37,14 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
         />
       )}
       <span className="deep-review-action-bar__controls-divider" />
-      <button
+      <UiIconButton
         type="button"
         className="deep-review-action-bar__controls-btn"
         onClick={onMinimize}
         aria-label={minimizeLabel}
       >
         <Minus size={14} />
-      </button>
+      </UiIconButton>
     </div>
 
     <div className="deep-review-action-bar__status" role="status" aria-live="polite">

@@ -6,6 +6,7 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { WorkspaceInfo } from '@/shared/types';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 interface AssistantSessionCreateMenuProps {
   assistants: WorkspaceInfo[];
@@ -90,7 +91,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
     >
       <div className={`bitfun-nav-panel__assistant-session-split-button${menuOpen ? ' is-active' : ''}`}>
         <Tooltip content={createPrimaryLabel} placement="right" followCursor>
-          <button
+          <UiIconButton
             type="button"
             className="bitfun-nav-panel__assistant-session-split-main"
             aria-label={createPrimaryLabel}
@@ -101,7 +102,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
             data-testid="nav-primary-assistant-session-add-btn"
           >
             <Plus size={13} />
-          </button>
+          </UiIconButton>
         </Tooltip>
         <Tooltip content={chooseAssistantLabel} placement="right" followCursor disabled={menuOpen}>
           <button

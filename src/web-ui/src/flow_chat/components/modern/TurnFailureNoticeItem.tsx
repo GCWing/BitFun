@@ -8,6 +8,7 @@ import {
   type AiErrorDetail,
 } from '@/shared/ai-errors/aiErrorPresenter';
 import './TurnFailureNoticeItem.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 interface TurnFailureNoticeItemProps {
   error: string;
@@ -96,7 +97,7 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
                 <div data-bf-component="turn-failure-notice" data-bf-part="rawHeader" className="turn-failure-notice__raw-error-header">
                   <span>{t('turnFailure.providerError')}</span>
                   <Tooltip content={copied ? t('turnFailure.copied') : t('turnFailure.copy')} placement="top">
-                    <button
+                    <UiButton
                       type="button"
                       data-bf-component="turn-failure-notice"
                       data-bf-part="copy"
@@ -105,7 +106,7 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
                       aria-label={t('turnFailure.copy')}
                     >
                       {copied ? <Check size={13} /> : <Copy size={13} />}
-                    </button>
+                    </UiButton>
                   </Tooltip>
                 </div>
                 <pre data-bf-component="turn-failure-notice" data-bf-part="code">{rawError}</pre>

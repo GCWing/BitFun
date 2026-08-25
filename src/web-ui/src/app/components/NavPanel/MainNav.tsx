@@ -48,6 +48,7 @@ import {
 import { useExternalAppAwareness } from '@/infrastructure/config/components/external-sources/useExternalAppAwareness';
 
 import './NavPanel.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 const log = createLogger('MainNav');
 
@@ -424,7 +425,7 @@ const MainNav: React.FC<MainNavProps> = ({
             </Tooltip>
           </div>
           <Tooltip content={createSessionLabel} placement="right" followCursor>
-            <button
+            <UiIconButton
               type="button"
               className="bitfun-nav-panel__utility-action"
               data-bf-component="nav-panel"
@@ -435,7 +436,7 @@ const MainNav: React.FC<MainNavProps> = ({
               data-testid="nav-new-session-btn"
             >
               <Plus size={15} aria-hidden="true" />
-            </button>
+            </UiIconButton>
           </Tooltip>
         </div>
       </div>
@@ -444,7 +445,7 @@ const MainNav: React.FC<MainNavProps> = ({
       <div ref={sectionsScrollRef} data-bf-component="nav-panel" data-bf-part="sections" className="bitfun-nav-panel__sections" data-testid="nav-sections">
         <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
           <Tooltip content={assistantManagerLabel} placement="right" followCursor>
-            <button
+            <UiIconButton
               type="button"
               className={[
                 'bitfun-nav-panel__top-action-btn',
@@ -462,7 +463,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 <User size={15} />
               </span>
               <span>{assistantManagerLabel}</span>
-            </button>
+            </UiIconButton>
           </Tooltip>
 
           <Tooltip content={t('nav.tooltips.todos')} placement="right" followCursor>
@@ -537,7 +538,7 @@ const MainNav: React.FC<MainNavProps> = ({
               data-testid="agent-skill-tabs"
             >
               <Tooltip content={agentsTooltip} placement="right" followCursor>
-                <button
+                <UiIconButton
                   type="button"
                   className={[
                     'bitfun-nav-panel__top-action-btn',
@@ -556,11 +557,11 @@ const MainNav: React.FC<MainNavProps> = ({
                     <Users size={15} />
                   </span>
                   <span>{t('nav.items.agents')}</span>
-                </button>
+                </UiIconButton>
               </Tooltip>
 
               <Tooltip content={skillsTooltip} placement="right" followCursor>
-                <button
+                <UiIconButton
                   type="button"
                   className={[
                     'bitfun-nav-panel__top-action-btn',
@@ -579,7 +580,7 @@ const MainNav: React.FC<MainNavProps> = ({
                     <Puzzle size={15} />
                   </span>
                   <span>{t('nav.items.skills')}</span>
-                </button>
+                </UiIconButton>
               </Tooltip>
 
               <Tooltip content={ecosystemCompatibilityTooltip} placement="right" followCursor>

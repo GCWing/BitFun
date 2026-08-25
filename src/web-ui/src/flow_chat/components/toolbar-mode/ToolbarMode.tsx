@@ -37,6 +37,8 @@ const log = createLogger('ToolbarMode');
 import ChatPane from '@/app/scenes/session/ChatPane';
 import { Tooltip } from '@/component-library';
 import './ToolbarMode.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
+import { Button as UiButton } from '@bitfun/ui';
 
 export const ToolbarMode: React.FC = () => {
   const { t } = useTranslation('flow-chat');
@@ -315,24 +317,24 @@ export const ToolbarMode: React.FC = () => {
             ) : (
               <div className="bitfun-toolbar-mode__header-collapsed-actions" data-bf-component="toolbar-mode" data-bf-part="collapsedActions">
                 <Tooltip content={t('toolCards.toolbar.expandChat')}>
-                  <button
+                  <UiIconButton
                     type="button"
                     className="toolbar-btn toolbar-btn--overflow"
                     onClick={() => void toggleExpanded()}
                     aria-label={t('toolCards.toolbar.expandChat')}
                   >
                     <PanelTopOpen size={14} />
-                  </button>
+                  </UiIconButton>
                 </Tooltip>
                 <Tooltip content={t('session.restoreMain')}>
-                  <button
+                  <UiIconButton
                     type="button"
                     className="toolbar-btn toolbar-btn--expand"
                     onClick={() => void handleExpand()}
                     aria-label={t('session.restoreMain')}
                   >
                     <Maximize2 size={14} />
-                  </button>
+                  </UiIconButton>
                 </Tooltip>
               </div>
             )}
@@ -380,23 +382,23 @@ export const ToolbarMode: React.FC = () => {
             {toolbarState.hasPendingConfirmation && (
               <>
                 <Tooltip content={t('toolCards.common.confirm')}>
-                  <button className="toolbar-btn toolbar-btn--confirm" onClick={handleConfirm}>
+                  <UiButton className="toolbar-btn toolbar-btn--confirm" onClick={handleConfirm}>
                     <Check size={16} />
-                  </button>
+                  </UiButton>
                 </Tooltip>
                 <Tooltip content={t('toolCards.common.cancel')}>
-                  <button className="toolbar-btn toolbar-btn--reject" onClick={handleReject}>
+                  <UiButton className="toolbar-btn toolbar-btn--reject" onClick={handleReject}>
                     <X size={16} />
-                  </button>
+                  </UiButton>
                 </Tooltip>
               </>
             )}
 
             {currentStreamState.isStreaming && !toolbarState.hasPendingConfirmation && (
               <Tooltip content={t('planner.cancel')}>
-                <button className="toolbar-btn toolbar-btn--cancel-compact" onClick={handleCancel}>
+                <UiButton className="toolbar-btn toolbar-btn--cancel-compact" onClick={handleCancel}>
                   <Square size={12} />
-                </button>
+                </UiButton>
               </Tooltip>
             )}
           </div>

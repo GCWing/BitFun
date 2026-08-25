@@ -7,6 +7,7 @@ import { Tooltip } from '@/component-library';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '../utils/sessionTitle';
 import './CurrentSessionTitle.scss';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 interface CurrentSessionTitleProps {
   onCreateSession?: () => void;
@@ -55,7 +56,7 @@ const CurrentSessionTitle: React.FC<CurrentSessionTitleProps> = ({ onCreateSessi
     <div data-bf-component="current-session-title" data-bf-part="root" className="bitfun-current-session-title">
       <span data-bf-component="current-session-title" data-bf-part="title" className="bitfun-current-session-title__text">{title}</span>
       <Tooltip content={newSessionLabel} placement="bottom">
-        <button
+        <UiIconButton
           data-bf-component="current-session-title"
           data-bf-part="create"
           className="bitfun-current-session-title__create-btn"
@@ -63,7 +64,7 @@ const CurrentSessionTitle: React.FC<CurrentSessionTitleProps> = ({ onCreateSessi
           aria-label={newSessionLabel}
         >
           <Plus size={16} />
-        </button>
+        </UiIconButton>
       </Tooltip>
     </div>
   );

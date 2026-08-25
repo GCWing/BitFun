@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import type { AnnouncementCard } from '../types';
 import { useAnnouncementStore } from '../store/announcementStore';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
+import { IconButton as UiIconButton } from '@bitfun/ui';
 
 interface Props {
   card: AnnouncementCard;
@@ -88,14 +89,14 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
                   style={{ animationDuration: `${autoDismissMs}ms` }} />
               </svg>
             )}
-            <button
+            <UiIconButton
               type="button"
               className="announcement-toast__close"
               onClick={handleDismiss}
               aria-label={t('announcements.common.close')}
             >
               <X strokeWidth={2} />
-            </button>
+            </UiIconButton>
           </div>
         )}
       </div>

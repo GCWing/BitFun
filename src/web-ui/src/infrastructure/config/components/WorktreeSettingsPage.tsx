@@ -46,6 +46,7 @@ import {
   ConfigPageSection,
 } from './common';
 import './WorktreeSettingsPage.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 const AUTO_DELETE_LIMIT_MIN = 1;
 const AUTO_DELETE_LIMIT_MAX = 100;
@@ -586,7 +587,7 @@ const WorktreeSettingsPage: React.FC = () => {
                 </span>
                 <span className="bitfun-worktree-settings__session-links">
                   {worktree.sessions.map(session => (
-                    <button
+                    <UiButton
                       key={session.sessionId}
                       type="button"
                       className="bitfun-worktree-settings__session-link"
@@ -612,7 +613,7 @@ const WorktreeSettingsPage: React.FC = () => {
                           {t('management.sessions.status.archived')}
                         </span>
                       )}
-                    </button>
+                    </UiButton>
                   ))}
                 </span>
               </div>

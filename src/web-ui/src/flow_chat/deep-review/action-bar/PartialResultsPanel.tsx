@@ -5,6 +5,7 @@ import type {
   PartialReviewData,
   ReviewerProgressSummary,
 } from '../../utils/deepReviewExperience';
+import { Button as UiButton } from '@bitfun/ui';
 
 interface PartialResultsPanelProps {
   progressSummary: ReviewerProgressSummary | null;
@@ -33,7 +34,7 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
               total: progressSummary.total,
             })}
           </span>
-          <button
+          <UiButton
             type="button"
             className="deep-review-action-bar__partial-link"
             onClick={onTogglePartialResults}
@@ -42,7 +43,7 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
             {showPartialResults
               ? t('deepReviewActionBar.hidePartialResults')
               : t('deepReviewActionBar.viewPartialResults')}
-          </button>
+          </UiButton>
         </div>
       )}
 

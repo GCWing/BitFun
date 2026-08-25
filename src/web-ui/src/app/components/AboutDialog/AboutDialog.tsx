@@ -36,6 +36,7 @@ import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStor
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
 import { GITHUB_STAR_URL } from '../NavPanel/components/githubStarCtaStorage';
 import './AboutDialog.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 const log = createLogger('AboutDialog');
 const ABOUT_DOT_MATRIX_COLUMNS = 13;
@@ -407,7 +408,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                   </span>
                   {version.gitCommit ? (
                     <Tooltip content={t('about.copy')}>
-                      <button
+                      <UiButton
                         type="button"
                         className="bitfun-about-dialog__copy-btn"
                         data-bf-component="about-dialog"
@@ -416,7 +417,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                         aria-label={t('about.copyCommit')}
                       >
                         {copiedItem === 'commit' ? <Check size={15} /> : <Copy size={15} />}
-                      </button>
+                      </UiButton>
                     </Tooltip>
                   ) : null}
                 </div>

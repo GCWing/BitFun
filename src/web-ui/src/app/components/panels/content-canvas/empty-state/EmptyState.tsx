@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import './EmptyState.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 export interface EmptyStateProps {
   onClose?: () => void;
@@ -28,12 +29,12 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onClose, children }) => 
       {onClose && (
         <div className="canvas-empty-state__toolbar" data-bf-component="content-canvas" data-bf-part="emptyToolbar">
           <Tooltip content={t('tabs.close')}>
-            <button
+            <UiButton
               className="canvas-empty-state__close-btn"
               onClick={handleClose}
             >
               <X size={14} />
-            </button>
+            </UiButton>
           </Tooltip>
         </div>
       )}

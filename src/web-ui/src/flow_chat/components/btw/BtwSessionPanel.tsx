@@ -86,6 +86,7 @@ function findReviewChildByRequestId(
   return null;
 }
 import './BtwSessionPanel.scss';
+import { Button as UiButton } from '@bitfun/ui';
 
 export interface BtwSessionPanelProps {
   childSessionId?: string;
@@ -1162,7 +1163,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           aria-hidden={!showMinimizedIndicator}
           {...(!showMinimizedIndicator ? { inert: '' } : {})}
         >
-            <button
+            <UiButton
               type="button"
               onClick={() => useReviewActionBarStore.getState().restore(childSessionId)}
               className="btw-session-panel__minimized-button"
@@ -1179,7 +1180,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                   {minimizedCountLabel}
                 </span>
               )}
-            </button>
+            </UiButton>
         </div>
 
         <PresenceBoundary active={showReviewActionBar}>

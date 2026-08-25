@@ -171,21 +171,18 @@
   "nativeControls": {
     "allowlist": [],
     "byFile": {
-      "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx": {
-        "button": 5,
+        "button": 2,
         "input": 1
       },
       "src/web-ui/src/app/components/MCPInteractionDialog/MCPInteractionDialog.tsx": {
         "textarea": 1
       },
       "src/web-ui/src/app/components/NavBar/NavBar.tsx": {
-        "button": 4
+        "button": 2
       },
       "src/web-ui/src/app/components/NavPanel/components/AssistantSessionCreateMenu.tsx": {
-        "button": 3
+        "button": 2
       },
       "src/web-ui/src/app/components/NavPanel/components/BranchQuickSwitch.tsx": {
         "input": 1
@@ -209,22 +206,13 @@
         "button": 1
       },
       "src/web-ui/src/app/components/NavPanel/MainNav.tsx": {
-        "button": 14
+        "button": 10
       },
       "src/web-ui/src/app/components/NavPanel/sections/sessions/SessionsSection.tsx": {
-        "button": 12
+        "button": 11
       },
       "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx": {
         "button": 30
-      },
-      "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceRelatedPathsDialog.tsx": {
-        "button": 1
-      },
-      "src/web-ui/src/app/components/panels/content-canvas/anchor-zone/AnchorZone.tsx": {
-        "button": 3
-      },
-      "src/web-ui/src/app/components/panels/content-canvas/empty-state/EmptyState.tsx": {
-        "button": 1
       },
       "src/web-ui/src/app/components/panels/content-canvas/mission-control/MissionControl.tsx": {
         "button": 1
@@ -248,13 +236,10 @@
         "button": 3
       },
       "src/web-ui/src/app/components/RemoteConnectDialog/AccountPanel.tsx": {
-        "button": 7
+        "button": 4
       },
       "src/web-ui/src/app/components/RemoteConnectDialog/RemoteConnectDialog.tsx": {
-        "button": 9
-      },
-      "src/web-ui/src/app/components/SceneBar/SceneBar.tsx": {
-        "button": 3
+        "button": 8
       },
       "src/web-ui/src/app/components/scheduled-jobs/DateTimePickerPopover.tsx": {
         "button": 1
@@ -263,13 +248,10 @@
         "button": 1
       },
       "src/web-ui/src/app/global-search/GlobalSearchRoot.tsx": {
-        "button": 5,
+        "button": 2,
         "input": 1
       },
       "src/web-ui/src/app/layout/FloatingMiniChat.tsx": {
-        "button": 1
-      },
-      "src/web-ui/src/app/layout/MiniAppBubbleWelcome.tsx": {
         "button": 1
       },
       "src/web-ui/src/app/scenes/agents/AgentsScene.test.tsx": {
@@ -277,7 +259,7 @@
         "input": 2
       },
       "src/web-ui/src/app/scenes/agents/AgentsScene.tsx": {
-        "button": 4
+        "button": 3
       },
       "src/web-ui/src/app/scenes/agents/components/CreateAgentPage.tsx": {
         "button": 3
@@ -295,7 +277,7 @@
         "input": 1
       },
       "src/web-ui/src/app/scenes/ecosystem-compatibility/EcosystemCompatibilityScene.tsx": {
-        "button": 2
+        "button": 1
       },
       "src/web-ui/src/app/scenes/git/GitNav.tsx": {
         "button": 1
@@ -316,7 +298,7 @@
         "button": 4
       },
       "src/web-ui/src/app/scenes/miniapps/views/MiniAppSubmissionsView.tsx": {
-        "button": 2,
+        "button": 1,
         "textarea": 2
       },
       "src/web-ui/src/app/scenes/my-agent/InsightsScene.tsx": {
@@ -333,19 +315,13 @@
       "src/web-ui/src/app/scenes/profile/views/AssistantAvatarPicker.tsx": {
         "button": 3
       },
-      "src/web-ui/src/app/scenes/profile/views/AssistantCard.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/app/scenes/profile/views/AssistantConfigPage.tsx": {
         "button": 1,
         "textarea": 1
       },
       "src/web-ui/src/app/scenes/profile/views/AssistantDefaultsPage.tsx": {
-        "button": 9,
+        "button": 4,
         "input": 1
-      },
-      "src/web-ui/src/app/scenes/profile/views/NurseryGallery.tsx": {
-        "button": 1
       },
       "src/web-ui/src/app/scenes/settings/components/ArchivedSessionsConfig.tsx": {
         "button": 1
@@ -372,7 +348,7 @@
         "button": 2
       },
       "src/web-ui/src/app/scenes/skills/SkillsScene.tsx": {
-        "button": 7
+        "button": 4
       },
       "src/web-ui/src/app/scenes/todos/components/TodoCalendar.tsx": {
         "button": 1
@@ -416,7 +392,7 @@
         "button": 1
       },
       "src/web-ui/src/features/ssh-remote/RemoteFileBrowser.tsx": {
-        "button": 6,
+        "button": 5,
         "input": 2
       },
       "src/web-ui/src/features/ssh-remote/SSHConnectionDialog.test.tsx": {
@@ -427,15 +403,12 @@
       "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.review-action.test.tsx": {
         "button": 1
       },
-      "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/flow_chat/components/btw/DeepReviewActionBar.test.tsx": {
         "button": 1,
         "input": 1
       },
       "src/web-ui/src/flow_chat/components/ChatInput.tsx": {
-        "button": 5
+        "button": 2
       },
       "src/web-ui/src/flow_chat/components/ChatInputApprovalBand.tsx": {
         "button": 1
@@ -444,20 +417,14 @@
         "button": 1
       },
       "src/web-ui/src/flow_chat/components/ChatInputWorkspaceStrip.tsx": {
-        "button": 11
+        "button": 9
       },
       "src/web-ui/src/flow_chat/components/CopyableTextPreview.test.tsx": {
-        "button": 1
-      },
-      "src/web-ui/src/flow_chat/components/CurrentSessionTitle.tsx": {
         "button": 1
       },
       "src/web-ui/src/flow_chat/components/DeepReviewConsentDialog.test.tsx": {
         "button": 3,
         "input": 1
-      },
-      "src/web-ui/src/flow_chat/components/FileMentionPicker.tsx": {
-        "button": 1
       },
       "src/web-ui/src/flow_chat/components/FileMentionPickerOverlay.test.tsx": {
         "button": 1
@@ -473,7 +440,7 @@
         "input": 1
       },
       "src/web-ui/src/flow_chat/components/modern/FlowChatHeader.tsx": {
-        "button": 6
+        "button": 5
       },
       "src/web-ui/src/flow_chat/components/modern/FlowChatTurnRail.tsx": {
         "button": 1
@@ -494,7 +461,7 @@
         "button": 3
       },
       "src/web-ui/src/flow_chat/components/modern/TurnFailureNoticeItem.tsx": {
-        "button": 2
+        "button": 1
       },
       "src/web-ui/src/flow_chat/components/modern/UserMessageItem.test.tsx": {
         "button": 1
@@ -505,14 +472,11 @@
       "src/web-ui/src/flow_chat/components/ReasoningPresetSelector.tsx": {
         "button": 3
       },
-      "src/web-ui/src/flow_chat/components/ScrollToLatestBar.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/flow_chat/components/session-menu/SessionMenu.tsx": {
         "button": 3
       },
       "src/web-ui/src/flow_chat/components/toolbar-mode/ToolbarMode.tsx": {
-        "button": 8
+        "button": 3
       },
       "src/web-ui/src/flow_chat/components/usage/SessionUsageComponents.test.tsx": {
         "button": 1
@@ -525,7 +489,7 @@
         "input": 1
       },
       "src/web-ui/src/flow_chat/components/WelcomePanel.tsx": {
-        "button": 6
+        "button": 3
       },
       "src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.test.tsx": {
         "button": 1
@@ -538,9 +502,6 @@
         "button": 2,
         "textarea": 1
       },
-      "src/web-ui/src/flow_chat/deep-review/action-bar/PartialResultsPanel.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/flow_chat/deep-review/action-bar/RemediationSelectionPanel.test.tsx": {
         "button": 1,
         "input": 1
@@ -551,9 +512,6 @@
       "src/web-ui/src/flow_chat/deep-review/action-bar/ReviewActionControls.test.tsx": {
         "button": 1,
         "input": 1
-      },
-      "src/web-ui/src/flow_chat/deep-review/action-bar/ReviewActionHeader.tsx": {
-        "button": 1
       },
       "src/web-ui/src/flow_chat/hooks/useSessionModeSelection.test.tsx": {
         "button": 3
@@ -583,7 +541,7 @@
         "button": 1
       },
       "src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx": {
-        "button": 2
+        "button": 1
       },
       "src/web-ui/src/flow_chat/tool-cards/GenerativeWidgetToolCard.tsx": {
         "button": 1
@@ -598,16 +556,13 @@
         "button": 1
       },
       "src/web-ui/src/flow_chat/tool-cards/TaskToolDisplay.tsx": {
-        "button": 2
+        "button": 1
       },
       "src/web-ui/src/flow_chat/tool-cards/ToolCardIconSlot.tsx": {
         "button": 1
       },
       "src/web-ui/src/flow_chat/tool-cards/ToolTimeoutIndicator.tsx": {
         "button": 4
-      },
-      "src/web-ui/src/flow_chat/tool-cards/ViewImageToolCard.tsx": {
-        "button": 1
       },
       "src/web-ui/src/flow_chat/tool-cards/WebFetchCard.test.tsx": {
         "button": 1
@@ -639,16 +594,10 @@
         "button": 1,
         "input": 1
       },
-      "src/web-ui/src/infrastructure/config/components/ApplicationSettingsPages.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/infrastructure/config/components/common/ConfigCollectionItem.test.tsx": {
         "button": 1
       },
       "src/web-ui/src/infrastructure/config/components/common/ConfigCollectionItem.tsx": {
-        "button": 1
-      },
-      "src/web-ui/src/infrastructure/config/components/external-sources/ExternalAppsOverview.tsx": {
         "button": 1
       },
       "src/web-ui/src/infrastructure/config/components/ExternalMcpOverview.tsx": {
@@ -697,9 +646,6 @@
       "src/web-ui/src/infrastructure/config/components/RuntimeSettingsPages.tsx": {
         "button": 1
       },
-      "src/web-ui/src/infrastructure/config/components/SkillsConfig.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/infrastructure/config/components/UsageStatisticsConfig.test.tsx": {
         "button": 2,
         "input": 1,
@@ -709,9 +655,6 @@
         "button": 4,
         "input": 3
       },
-      "src/web-ui/src/infrastructure/config/components/WorktreeSettingsPage.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/infrastructure/font-preference/components/FontPreferencePanel.tsx": {
         "button": 4,
         "input": 1
@@ -720,29 +663,20 @@
         "button": 2
       },
       "src/web-ui/src/infrastructure/peer-device/PeerDirectoryBrowser.tsx": {
-        "button": 5,
+        "button": 2,
         "input": 1
-      },
-      "src/web-ui/src/shared/announcement-system/components/AnnouncementToastItem.tsx": {
-        "button": 1
       },
       "src/web-ui/src/shared/announcement-system/components/FeatureModal.tsx": {
         "button": 1
       },
-      "src/web-ui/src/shared/context-system/components/ContextCard/ContextCard.tsx": {
-        "button": 1
-      },
       "src/web-ui/src/shared/context-system/components/ContextList/ContextList.test.tsx": {
-        "button": 1
-      },
-      "src/web-ui/src/shared/context-system/core/types/CodeSnippetContextImpl.tsx": {
         "button": 1
       },
       "src/web-ui/src/shared/notification-system/components/NotificationCenter.tsx": {
         "button": 4
       },
       "src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx": {
-        "button": 3
+        "button": 2
       },
       "src/web-ui/src/tools/bitfun-canvas/runtime/sdk/controls.tsx": {
         "select": 1
@@ -777,19 +711,13 @@
       "src/web-ui/src/tools/git/components/GitDiffView/GitDiffView.tsx": {
         "button": 2
       },
-      "src/web-ui/src/tools/git/components/GitGraphView/GitGraphView.tsx": {
-        "button": 2
-      },
       "src/web-ui/src/tools/git/components/PushButton/PushButton.tsx": {
-        "button": 2
-      },
-      "src/web-ui/src/tools/terminal/components/ConnectedTerminal.tsx": {
         "button": 2
       }
     },
-    "total": 526
+    "total": 445
   },
   "newLibrary": {
-    "moduleReferences": 172
+    "moduleReferences": 224
   }
 }
