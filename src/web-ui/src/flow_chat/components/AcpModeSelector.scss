@@ -1,4 +1,5 @@
 @use '../../component-library/styles/tokens' as *;
+@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .bitfun-acp-mode-selector {
   position: relative;
@@ -51,16 +52,14 @@
   }
 
   &__menu {
+    @include surfaces.floating-surface;
+
     --acp-mode-menu-offset: -4px;
 
     min-width: clamp(0px, 190px, calc(100vw - 16px));
     max-width: clamp(0px, 240px, calc(100vw - 16px));
     padding: 4px;
     overflow: hidden;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: 6px;
-    box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-50);
     z-index: $z-popover;
     transform-origin: center top;
     transition:
