@@ -102,6 +102,7 @@ import { AppShellState } from '../main/ets/pages/state/AppShellState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { RemoteCreateSessionState } from '../main/ets/pages/state/RemoteCreateSessionState';
+import { RemoteSessionViewModel } from '../main/ets/pages/viewmodel/RemoteSessionViewModel';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import {
   FilePreviewPhase,
@@ -1406,6 +1407,96 @@ export default function remoteControllersUnitTest() {
       expect(projection.sessions[0].id).assertEqual('session-2');
       expect(projection.sessions[1].id).assertEqual('session-3');
       expect(projection.hasMore).assertFalse();
+    });
+  });
+
+  describe('RemoteSessionViewModel', () => {
+    it('reconciles a created session with the workspace named by the response', 0, async () => {
+      const pageState = new RemotePageState();
+      pageState.workspacePath = '/current';
+      const sessionClient = new FakeRemoteSessionClient();
+      sessionClient.createdSession = {
+        sessionId: 'created-in-other',
+        title: 'Created in Other',
+        workspacePath: '/other',
+        agentType: 'code'
+      };
+      let busy = false;
+      const sessions = new RemoteSessionController(sessionClient, 8, {
+        onSessions: (_items: RemoteSession[], _hasMore: boolean) => {},
+        onActiveSession: (session: SessionSummary) => pageState.setActiveSession(session),
+        onStatusText: (_statusText: string) => {},
+        onBusy: (isBusy: boolean) => {
+          busy = isBusy;
+          pageState.setBusy(isBusy);
+        },
+        onLoading: (_isLoading: boolean) => {},
+        onSessionError: (_errorText: string) => {},
+        onReconnecting: () => {},
+        onConnected: () => {},
+        onConnectionFailed: (_err: Object) => {},
+        onStartHeartbeat: () => {}
+      });
+      const chat = new RemoteChatCommandController(new FakeRemoteChatCommandClient(), {
+        onMessagesLoaded: (_messages, _hasMoreMessages) => {},
+        onMessageCountKnown: (_pollVersion, _knownMessageCount) => {},
+        onTimelineReady: () => {},
+        onSendSucceeded: (_turnId, _pendingActiveId) => {},
+        onSendFailed: (_rawText, _images, _localMessageId, _pendingActiveId) => {},
+        onActiveSession: (_session) => {},
+        onSessionTitleChanged: (_sessionId, _title) => {},
+        onStatusText: (_statusText) => {},
+        onToast: (_message) => {},
+        onBusy: (_isBusy) => {},
+        onPollRequested: () => {}
+      }, inertRemoteChatCache());
+      const models = new RemoteModelController(
+        new FakeRemoteModelClient(),
+        new FakeRemoteModelPreferenceStore(),
+        (_catalog, _selectedModelId, _version) => {},
+        (_catalog, _selectedModelId, _version) => {},
+        (_statusText) => {},
+        (_isBusy) => {}
+      );
+      const files = new RemoteFileDownloadController(
+        new FakeRemoteFileDownloadClient(),
+        (_downloading, _downloaded, _status) => {},
+        () => {},
+        (_statusText) => {},
+        (_isBusy) => {},
+        2500,
+        new FakeRemoteFileDownloadScheduler(),
+        new FakeRemoteFileSaver()
+      );
+      const reconciled: SessionSummary[] = [];
+      const viewModel = new RemoteSessionViewModel(pageState, sessions, chat, models, files, {
+        remoteAvailable: (): boolean => true,
+        isConnected: (): boolean => true,
+        isBusy: (): boolean => busy,
+        onBusy: (isBusy: boolean): void => {
+          busy = isBusy;
+        },
+        onRouteChat: (_sessionId: string): void => {},
+        onRouteHome: (): void => {},
+        onStopPolling: (): void => {},
+        onStartPolling: (): void => {},
+        onResetTimeline: (_sessionId: string): void => {},
+        onClearRemoteFiles: (): void => {},
+        onKnownStateReset: (): void => {},
+        onLoadActiveMessages: async (): Promise<void> => {},
+        onCreatedSession: async (session: SessionSummary): Promise<void> => {
+          reconciled.push(session);
+        },
+        onRefreshSessions: async (): Promise<void> => {},
+        onSelectWorkspace: async (_path: string): Promise<void> => {}
+      });
+
+      await viewModel.createSessionInWorkspace('/other');
+
+      expect(reconciled.length).assertEqual(1);
+      expect(reconciled[0].sessionId).assertEqual('created-in-other');
+      expect(reconciled[0].workspacePath).assertEqual('/other');
+      expect(sessionClient.listRequests.length).assertEqual(0);
     });
   });
 

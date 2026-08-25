@@ -22,6 +22,7 @@ export interface RemoteSessionViewModelHooks {
   readonly onClearRemoteFiles: () => void;
   readonly onKnownStateReset: () => void;
   readonly onLoadActiveMessages: () => Promise<void>;
+  readonly onCreatedSession: (session: SessionSummary) => Promise<void>;
   readonly onRefreshSessions: () => Promise<void>;
   readonly onSelectWorkspace: (path: string) => Promise<void>;
 }
@@ -136,7 +137,7 @@ export class RemoteSessionViewModel {
         // the poll started here carries the catalog back with it.
         await this.hooks.onLoadActiveMessages();
         this.hooks.onStartPolling();
-        await this.refreshSessions();
+        await this.hooks.onCreatedSession(session);
       },
       instruction,
       modelId,

@@ -136,6 +136,7 @@ export abstract class AppRootRuntimeComposition {
   abstract openRemoteControlSettings(): void;
   abstract pickImages(): Promise<void>;
   abstract publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void;
+  abstract reconcileCreatedRemoteSession(session: SessionSummary): Promise<void>;
   abstract reconnect(): Promise<void>;
   abstract reconnectActiveRemote(): Promise<void>;
   abstract selectAssistant(path: string): Promise<void>;
@@ -629,6 +630,9 @@ export abstract class AppRootRuntimeComposition {
         onKnownStateReset: (): void => this.conversationController.resetKnownRemoteState(),
         onLoadActiveMessages: async (): Promise<void> => {
           await this.conversationController.loadRemoteMessages();
+        },
+        onCreatedSession: async (session: SessionSummary): Promise<void> => {
+          await this.reconcileCreatedRemoteSession(session);
         },
         onRefreshSessions: async (): Promise<void> => {
           await this.remoteSessionController.refresh(
