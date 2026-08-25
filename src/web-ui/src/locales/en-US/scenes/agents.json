@@ -105,6 +105,8 @@
     "toolsResetSuccess": "Reset to default tools",
     "toolsResetFailed": "Failed to reset tools",
     "toolToggleFailed": "Failed to toggle tool",
+    "toolsUnsupported": "The connected peer host does not expose a tool catalog.",
+    "toolsFailed": "Could not load the tool catalog. Try reopening the agent.",
     "skills": "Skills",
     "subagents": "Sub-Agents",
     "skillsCancel": "Cancel editing",

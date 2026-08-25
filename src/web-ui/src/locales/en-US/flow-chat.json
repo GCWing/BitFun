@@ -1651,7 +1651,8 @@
       "workingDirectory": "Working directory:",
       "exitCode": "Exit code: {{code}}",
       "commandInterrupted": "Command interrupted",
-      "executionFailed": "Command execution failed"
+      "executionFailed": "Command execution failed",
+      "interruptFailed": "Could not interrupt the command. The host may not support per-tool cancel, or the request failed."
     },
     "runCode": {
       "title": "Run Code",

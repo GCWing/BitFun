@@ -105,6 +105,8 @@
     "toolsResetSuccess": "已重置为默认工具",
     "toolsResetFailed": "重置工具失败",
     "toolToggleFailed": "工具切换失败",
+    "toolsUnsupported": "所连接的 Peer 主机未提供工具目录。",
+    "toolsFailed": "无法加载工具目录，请尝试重新打开此 Agent。",
     "skills": "Skills",
     "subagents": "Sub-Agents",
     "skillsCancel": "取消编辑",

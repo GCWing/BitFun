@@ -1,3 +1,5 @@
+import type { PeerHostCapabilities, PeerHostKind } from '@/infrastructure/peer-device/PeerConnectionManager';
+
 export type TerminalWaitingMessageKey =
   | 'toolCards.terminal.receivingParams'
   | 'toolCards.terminal.executingCommand';
@@ -87,6 +89,43 @@ function deriveDisplayPhase(params: {
     waitingMessageKey: null,
   };
 }
+
+/**
+ * Resolve whether the currently rendered surface can actually cancel a running
+ * tool, so the Terminal Interrupt button is only offered when it will work.
+ *
+ * - Local surface: always `true`.
+ * - `cancelTool === true`: advertised by the host → `true`.
+ * - `cancelTool === false`: host explicitly unsupported → `false`.
+ * - `cancelTool === null` (older host that did not advertise the field): resolve
+ *   by `hostKind`. An old Desktop always implemented `cancel_tool` (`true`); an
+ *   old CLI never did (`false`), so the button is hidden instead of failing
+ *   silently when the user clicks Interrupt. `hostKind === null` (truly
+ *   unknown / still probing) stays optimistic.
+ *
+ * See PR #2428 round 5 #1.
+ */
+export function resolveCanCancelTool(
+  peerActive: boolean,
+  capabilities: PeerHostCapabilities | null,
+): boolean {
+  if (!peerActive) {
+    return true;
+  }
+  if (capabilities === null) {
+    return true;
+  }
+  if (capabilities.cancelTool === true) {
+    return true;
+  }
+  if (capabilities.cancelTool === false) {
+    return false;
+  }
+  // cancelTool === null: older host, field absent — decide by host kind.
+  return capabilities.hostKind !== 'cli';
+}
+
+export type { PeerHostKind };
 
 export function getTerminalViewState(
   params: GetTerminalViewStateParams,

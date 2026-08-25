@@ -172,6 +172,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn peer_mode_ping_advertises_cli_host_type() {
+        // An older CLI did not advertise `cancel_tool`/`tool_catalog`; the
+        // `host_type: "cli"` field lets the controller resolve those missing
+        // capabilities as unsupported instead of optimistically invoking a
+        // command the CLI never implemented. See PR #2428 round 5 #1.
+        let resp = handle_host_invoke("peer_mode_ping", json!({})).await;
+        match resp {
+            RemoteResponse::HostInvokeResult {
+                ok: true,
+                value: Some(value),
+                error: None,
+            } => {
+                assert_eq!(value.get("host_type").and_then(|v| v.as_str()), Some("cli"));
+            }
+            other => panic!("unexpected response: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn local_only_commands_are_denied() {
         let resp = handle_host_invoke("account_logout", json!({})).await;
         match resp {

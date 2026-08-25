@@ -105,6 +105,8 @@
     "toolsResetSuccess": "已重設為默認工具",
     "toolsResetFailed": "重設工具失敗",
     "toolToggleFailed": "工具切換失敗",
+    "toolsUnsupported": "所連接的 Peer 主機未提供工具目錄。",
+    "toolsFailed": "無法載入工具目錄，請嘗試重新開啟此 Agent。",
     "skills": "Skills",
     "subagents": "Sub-Agents",
     "skillsCancel": "取消編輯",
