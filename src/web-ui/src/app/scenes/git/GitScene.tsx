@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { GitBranch, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useGitSceneStore } from './gitSceneStore';
@@ -123,10 +124,15 @@ const GitScene: React.FC<GitSceneProps> = ({
                 <h3>{t('trust.title')}</h3>
                 <p>{t('trust.required', { path: workspacePath })}</p>
               </div>
-              <button type="button" className="bitfun-git-scene__init-button" onClick={handleTrustRepository} disabled={isTrusting}>
-                <ShieldAlert size={14} />
-                <span>{t('trust.confirm')}</span>
-              </button>
+              <Button
+                variant="fill"
+                size="sm"
+                leadingIcon={<ShieldAlert />}
+                onClick={handleTrustRepository}
+                disabled={isTrusting}
+              >
+                {t('trust.confirm')}
+              </Button>
             </div>
           </div>
         </div>
@@ -152,10 +158,14 @@ const GitScene: React.FC<GitSceneProps> = ({
                 <h3>{t('init.title')}</h3>
                 <p>{t('init.notRepository')}</p>
               </div>
-              <button type="button" className="bitfun-git-scene__init-button" onClick={handleInitGitRepository}>
-                <Plus size={14} />
-                <span>{t('init.initButton')}</span>
-              </button>
+              <Button
+                variant="fill"
+                size="sm"
+                leadingIcon={<Plus />}
+                onClick={handleInitGitRepository}
+              >
+                {t('init.initButton')}
+              </Button>
             </div>
             <div className="bitfun-git-scene__init-decoration">
               <div className="bitfun-git-scene__init-line bitfun-git-scene__init-line--solid" />

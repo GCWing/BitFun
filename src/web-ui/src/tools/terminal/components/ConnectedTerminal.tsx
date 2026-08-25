@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
+import { Button } from '@bitfun/ui';
 import { AlertCircle, RefreshCw, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import Terminal, { TerminalRef, type TerminalOptions } from './Terminal';
 import { useTerminal } from '../hooks/useTerminal';
@@ -462,14 +463,15 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
         <div className="bitfun-terminal__error" data-testid="shell-command-status" data-command-status="error" data-bf-component="terminal-tool" data-bf-part="error">
           <AlertCircle className="bitfun-terminal__error-icon" size={32} />
           <span className="bitfun-terminal__error-message">{error}</span>
-          <button 
-            className="bitfun-terminal__error-retry"
+          <Button
+            variant="outline"
+            size="sm"
+            leadingIcon={<RefreshCw />}
             onClick={handleRetry}
             data-testid="shell-command-rerun"
           >
-            <RefreshCw size={14} />
-            <span>Retry</span>
-          </button>
+            Retry
+          </Button>
         </div>
       </div>
     );

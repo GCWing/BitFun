@@ -125,34 +125,6 @@
   align-items: center;
 }
 
-.bitfun-about-dialog__update-trigger,
-.bitfun-about-dialog__update-status-pill {
-  min-width: 0;
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-}
-
-.bitfun-about-dialog__update-status-pill svg {
-  color: var(--bf-appearance-token-color-success);
-}
-
-.bitfun-about-dialog__update-btn-icon {
-  flex-shrink: 0;
-  opacity: 0.85;
-
-  &--busy {
-    animation: about-update-spin 0.9s linear infinite;
-  }
-}
-
-@keyframes about-update-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .bitfun-about-dialog__update-feedback {
   width: 100%;
   margin-top: 10px;
@@ -420,16 +392,6 @@
 
 .bitfun-about-dialog__star-button {
   min-width: 132px;
-  border-radius: 999px;
-  white-space: nowrap;
-
-  svg {
-    transition: transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
-  }
-
-  &:hover svg {
-    transform: translateX(2px);
-  }
 }
 
 .bitfun-about-dialog__footer {
@@ -665,14 +627,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-about-dialog__update-btn-icon--busy,
   .bitfun-about-dialog__download-fill--indeterminate {
     animation: none;
     transform: none;
   }
 
-  .bitfun-about-dialog__copy-btn:active,
-  .bitfun-about-dialog__star-button:hover svg {
+  .bitfun-about-dialog__copy-btn:active {
     transform: none;
   }
 }

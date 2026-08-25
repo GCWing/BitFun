@@ -2,7 +2,6 @@
  * New Project Dialog Styles
  */
 @use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 // ==================== Dialog Container ====================
 
@@ -151,49 +150,8 @@
   }
 
   &__select-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 14px;
     min-width: 80px;
-    white-space: nowrap;
     flex-shrink: 0;
-    background: transparent;
-    border: 1px dashed var(--bf-appearance-token-border-subtle);
-    border-radius: 8px;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
-      background-color 150ms ease,
-      border-color 150ms ease,
-      color 150ms ease,
-      box-shadow 150ms ease;
-    
-    svg {
-      width: 14px;
-      height: 14px;
-      color: var(--bf-appearance-token-color-text-muted);
-      transition: color 0.2s ease;
-    }
-    
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      border-style: solid;
-      border-color: var(--bf-appearance-token-border-base);
-      color: var(--bf-appearance-token-color-text-primary);
-      
-      svg {
-        color: var(--bf-appearance-token-color-accent-500);
-      }
-    }
-    
-    &:active {
-      transform: scale(0.98);
-    }
   }
 
   // ==================== Project Name Input ====================
@@ -335,73 +293,6 @@
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
     background: transparent;
 
-    .btn.btn-sm {
-      height: 28px;
-      min-height: 28px;
-      padding: 0 10px;
-      font-size: 11px;
-    }
-
-    .btn-loading-icon {
-      width: 13px;
-      height: 13px;
-    }
-  }
-
-  &__btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    font-weight: 500;
-    border-radius: 6px;
-    cursor: pointer;
-    transition:
-      transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
-      background-color 150ms ease,
-      border-color 150ms ease,
-      color 150ms ease,
-      box-shadow 150ms ease;
-    
-    &--cancel {
-      background: transparent;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      color: var(--bf-appearance-token-color-text-secondary);
-      
-      &:hover:not(:disabled) {
-        background: var(--bf-appearance-token-element-bg-subtle);
-        border-color: var(--bf-appearance-token-border-base);
-        color: var(--bf-appearance-token-color-text-primary);
-      }
-    }
-    
-    &--confirm {
-      @include btn-primary.btn-primary-surface-default;
-      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 32%, transparent);
-
-      &:hover:not(:disabled) {
-        @include btn-primary.btn-primary-surface-hover;
-        border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 42%, transparent);
-      }
-
-      &:active:not(:disabled) {
-        @include btn-primary.btn-primary-surface-active;
-      }
-    }
-    
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    
-    &:active:not(:disabled) {
-      transform: scale(0.98);
-    }
-    
-    svg {
-      width: 12px;
-      height: 12px;
-    }
   }
 
   &__btn-spinner {
@@ -442,7 +333,6 @@
     
     &__select-btn {
       width: 100%;
-      padding: 10px;
     }
   }
 }

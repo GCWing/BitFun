@@ -265,10 +265,6 @@
 
   &__select {
     min-width: 84px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 90%, transparent);
-    border-radius: 8px;
-    background: transparent;
-    white-space: nowrap;
   }
 
   &__description .bitfun-textarea__field {
@@ -295,10 +291,6 @@
     justify-content: space-between;
     gap: 12px;
     padding-top: 2px;
-  }
-
-  &__add {
-    border-radius: 8px;
   }
 
   &__footer-actions {

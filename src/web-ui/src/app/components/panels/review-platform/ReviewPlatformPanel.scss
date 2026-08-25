@@ -611,31 +611,6 @@
     flex-wrap: wrap;
     justify-content: flex-end;
 
-    .btn {
-      gap: 5px;
-    }
-  }
-
-  &__panel-button.btn {
-    min-height: 28px;
-    border-radius: 6px;
-    border-color: color-mix(in srgb, var(--bf-appearance-token-border-base) 82%, transparent);
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 54%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    box-shadow: none;
-
-    &:hover:not(:disabled) {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 34%, var(--bf-appearance-token-border-base));
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, var(--bf-appearance-token-element-bg-soft));
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:disabled {
-      opacity: 0.48;
-      cursor: default;
-    }
   }
 
   &__fact-list {
@@ -716,7 +691,7 @@
       white-space: nowrap;
     }
 
-    .btn {
+    [data-bf-component='button'] {
       flex: 0 0 auto;
     }
   }
@@ -737,9 +712,8 @@
       font-weight: 650;
     }
 
-    .btn {
+    [data-bf-component='button'] {
       flex-shrink: 0;
-      gap: 5px;
     }
   }
 
@@ -1101,9 +1075,7 @@
     }
   }
 
-  &__file-add-button.btn {
-    min-height: 24px;
-    padding-inline: 8px;
+  &__file-add-button[data-bf-component='button'] {
     flex-shrink: 0;
   }
 
@@ -1693,7 +1665,7 @@
       justify-self: start;
     }
 
-    &__file-add-button.btn {
+    &__file-add-button[data-bf-component='button'] {
       justify-self: flex-start;
       margin-left: 98px;
     }

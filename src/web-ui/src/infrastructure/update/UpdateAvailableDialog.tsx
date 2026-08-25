@@ -2,8 +2,9 @@
  * Dialog when a remote update is available (daily prompt or manual check).
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useRef } from 'react';
-import { Modal, Button } from '@/component-library';
+import { Modal } from '@/component-library';
 import { Download } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
@@ -110,24 +111,24 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
         <div className="bitfun-update-available__actions" data-bf-component="update" data-bf-part="actions">
           {variant === 'daily' ? (
             <>
-              <Button variant="secondary" size="medium" onClick={onLater}>
+              <Button variant="outline" size="md" onClick={onLater}>
                 {t('update.later')}
               </Button>
               {onSkip ? (
-                <Button variant="ghost" size="medium" onClick={onSkip}>
+                <Button variant="outline" size="md" onClick={onSkip}>
                   {t('update.skipVersion')}
                 </Button>
               ) : null}
-              <Button variant="primary" size="medium" onClick={onInstall}>
+              <Button variant="fill" size="md" onClick={onInstall}>
                 {t('update.backgroundInstall')}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="secondary" size="medium" onClick={onLater}>
+              <Button variant="outline" size="md" onClick={onLater}>
                 {t('update.cancel')}
               </Button>
-              <Button variant="primary" size="medium" onClick={onInstall}>
+              <Button variant="fill" size="md" onClick={onInstall}>
                 {t('update.backgroundInstall')}
               </Button>
             </>

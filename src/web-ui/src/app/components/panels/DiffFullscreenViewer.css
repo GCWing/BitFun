@@ -114,69 +114,6 @@
   gap: 8px;
 }
 
-.header-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    color 0.2s ease,
-    opacity 0.2s ease,
-    transform 0.2s ease;
-  background: var(--bf-appearance-token-color-overlay-white-08);
-  color: var(--bf-appearance-token-color-overlay-white-80);
-  border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-}
-
-.header-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
-}
-
-.header-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-  transform: none;
-}
-
-.header-btn.accept-btn {
-  background: var(--bf-appearance-token-color-success-bg);
-  color: var(--bf-appearance-token-color-success);
-  border-color: var(--bf-appearance-token-color-success-border);
-}
-
-.header-btn.accept-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-success) 25%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 50%, transparent);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--bf-appearance-token-color-success) 20%, transparent);
-}
-
-.header-btn.reject-btn {
-  background: var(--bf-appearance-token-color-error-bg);
-  color: var(--bf-appearance-token-color-error);
-  border-color: var(--bf-appearance-token-color-error-border);
-}
-
-.header-btn.reject-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 50%, transparent);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
-}
-
-.header-btn.close-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
-  color: var(--bf-appearance-token-color-error);
-  border-color: var(--bf-appearance-token-color-error-border);
-}
-
 .header-divider {
   width: 1px;
   height: 20px;
@@ -294,11 +231,6 @@
   .header-actions {
     justify-content: center;
     flex-wrap: wrap;
-  }
-  
-  .header-btn {
-    padding: 6px 10px;
-    font-size: 12px;
   }
   
   .file-name {

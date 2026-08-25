@@ -2,12 +2,6 @@
 @use '../../../styles/surface-stagger';
 
 .miniapp-card {
-  --miniapp-card-action-bg: var(--bf-appearance-token-color-bg-elevated);
-  --miniapp-card-action-hover-bg: var(--bf-appearance-token-element-bg-base);
-  --miniapp-card-start-bg: var(--bf-appearance-token-element-bg-base);
-  --miniapp-card-inverse-bg: var(--bf-appearance-token-btn-primary-bg);
-  --miniapp-card-inverse-color: var(--bf-appearance-token-btn-primary-color);
-
   width: 100%;
   min-width: 0;
   min-height: 160px;
@@ -252,78 +246,11 @@
     display: flex;
     grid-column: 2;
     align-items: center;
+    gap: $size-gap-1;
     flex-shrink: 0;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    overflow: hidden;
-    background: var(--miniapp-card-action-bg);
-    box-shadow: var(--bf-appearance-token-shadow-xs);
     position: relative;
     z-index: 1;
   }
-
-  &__action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: $size-gap-1;
-    width: 36px;
-    height: 34px;
-    padding: 0;
-    border-radius: 0;
-    border: none;
-    background: var(--miniapp-card-action-bg);
-    color: var(--bf-appearance-token-color-text-secondary);
-    font: inherit;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-    transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-
-    & + & {
-      border-left: 1px solid var(--bf-appearance-token-border-subtle);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: -3px;
-    }
-
-    &--primary {
-      width: auto;
-      min-width: 78px;
-      padding-inline: $size-gap-2;
-      background: var(--miniapp-card-start-bg);
-      color: var(--bf-appearance-token-color-text-primary);
-
-      &:hover,
-      &:focus-visible,
-      &:active {
-        background: var(--miniapp-card-inverse-bg);
-        color: var(--miniapp-card-inverse-color);
-      }
-    }
-
-    &--danger:hover,
-    &--danger:focus-visible,
-    &--danger:active {
-      background: var(--miniapp-card-inverse-bg);
-      color: var(--miniapp-card-inverse-color);
-    }
-
-    &--stop:hover {
-      background: var(--miniapp-card-action-hover-bg);
-      color: var(--bf-appearance-token-color-success);
-    }
-  }
-}
-
-:root[data-bf-appearance='bitfun-light'] .miniapp-card,
-:root[data-bf-appearance='bitfun-monochrome'] .miniapp-card {
-  --miniapp-card-inverse-bg: var(--bf-appearance-token-color-static-black);
-  --miniapp-card-inverse-color: var(--bf-appearance-token-color-static-white);
 }
 
 @container miniapp-card (max-width: 519px) {

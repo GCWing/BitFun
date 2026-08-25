@@ -67,10 +67,16 @@
       })();
     </script>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+      @layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;
+
+      @layer bf.reset {
+        *,
+        *::before,
+        *::after {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
       }
 
       html, body {

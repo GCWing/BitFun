@@ -3,11 +3,11 @@
  * Custom modal for confirmation prompts
  */
 
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal } from '@/component-library';
-import { Button } from '@/component-library';
 import { AlertTriangle } from 'lucide-react';
+import { Modal } from '@/component-library';
 import './ConfirmDialog.scss';
 
 interface ConfirmDialogProps {
@@ -55,12 +55,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         )}
         <p className="ssh-remote-confirm-dialog__message" data-bf-component="ssh-remote" data-bf-part="confirmMessage">{message}</p>
         <div className="ssh-remote-confirm-dialog__actions" data-bf-component="ssh-remote" data-bf-part="confirmActions">
-          <Button variant="secondary" size="small" onClick={onCancel}>
+          <Button variant="outline" size="sm" onClick={onCancel}>
             {cancelText || t('actions.cancel')}
           </Button>
           <Button
-            variant={destructive ? 'danger' : 'primary'}
-            size="small"
+            variant="fill"
+            tone={destructive ? 'danger' : 'neutral'}
+            size="sm"
             onClick={handleConfirm}
           >
             {confirmText || t('actions.confirm')}

@@ -219,7 +219,7 @@ describe('builtin appearance preset output', () => {
         element: {
           subtle: 'rgba(16, 26, 39, 0.03)',
           soft: '#f3f3f5',
-          strong: 'rgba(16, 26, 39, 0.18)',
+          strong: 'rgba(0, 0, 0, 0.10)',
         },
         accent: {
           500: '#1c1c1f',
@@ -312,12 +312,12 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "e9bcb4147d483930dae32099a5af094e494e7dbd5d970db3bb1e7e13cf43551f",
+          "hash": "49defaefd305f5c2074477dfe386f44225588af0ed3e67b3dad71b42b68ec0f0",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "f14b9ef8e30626fc271d6ee54d9b8a47f4afbb2a8fa83f245eca92823b1c4aa2",
+          "hash": "a169c3f751392fc91588555f90ad206d53c5f95ecf5e2e3936f459082b13b26c",
           "id": "bitfun-monochrome",
           "type": "light",
         },

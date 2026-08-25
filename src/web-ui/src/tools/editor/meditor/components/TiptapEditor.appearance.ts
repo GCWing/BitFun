@@ -10,7 +10,6 @@ export const tiptapEditorAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'inlineAiPanel' },
     { id: 'composer' },
     { id: 'quickActions' },
-    { id: 'quickAction' },
     { id: 'footer' },
   ],
 };

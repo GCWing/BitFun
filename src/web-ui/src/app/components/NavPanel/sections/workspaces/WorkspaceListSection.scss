@@ -1,6 +1,7 @@
 @use '../../../../../component-library/styles/tokens.scss' as *;
 @use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
+@use '../../../../styles/workspace-shell-surfaces' as shell-surfaces;
 
 .bitfun-nav-panel {
   &__workspace-list {
@@ -862,12 +863,8 @@
     justify-content: stretch;
     padding-top: 2px;
 
-    .btn {
+    [data-bf-component='button'] {
       width: 100%;
-      min-height: 28px;
-      border-radius: 9px;
-      font-weight: 600;
-      box-shadow: none;
     }
   }
 
@@ -1059,7 +1056,7 @@
     }
 
     .bitfun-nav-panel__inline-item {
-      height: 28px;
+      height: 30px;
     }
 
     .bitfun-nav-panel__inline-empty {
@@ -1397,7 +1394,7 @@
     }
 
     .bitfun-nav-panel__inline-item {
-      height: 28px;
+      height: 30px;
     }
 
     .bitfun-nav-panel__inline-empty {
@@ -1420,16 +1417,14 @@
   }
 
   &__workspace-group {
-    gap: 2px;
+    gap: 0;
   }
 
   &__workspace-group-title {
-    min-height: 24px;
+    min-height: 22px;
     margin: 0 6px;
     padding: 0 $size-gap-2;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-weight: 600;
-    letter-spacing: 0.045em;
+    @include nav-font.nav-panel-text-group;
   }
 
   &__workspace-group-title-action {
@@ -1446,8 +1441,8 @@
 
   &__workspace-item,
   &__assistant-item {
-    gap: 1px;
-    padding: 1px 0;
+    gap: 0;
+    padding: 0;
     border-radius: $size-radius-base;
     transition:
       border-color 120ms ease,
@@ -1457,7 +1452,7 @@
 
   &__workspace-item-card,
   &__assistant-item-card {
-    border-radius: $size-radius-sm;
+    border-radius: $size-radius-base;
     background: transparent;
     box-shadow: none;
     transition:
@@ -1468,7 +1463,7 @@
 
   &__workspace-item.is-active &__workspace-item-card,
   &__assistant-item.is-active &__assistant-item-card {
-    background: var(--bf-appearance-token-element-bg-soft);
+    @include shell-surfaces.navigation-feedback;
     box-shadow: none;
   }
 
@@ -1486,12 +1481,12 @@
 
   &__workspace-item-label,
   &__assistant-item-label {
-    font-weight: 500;
+    font-weight: 400;
   }
 
   &__workspace-item.is-active &__workspace-item-label,
   &__assistant-item.is-active &__assistant-item-label {
-    font-weight: 600;
+    font-weight: 500;
   }
 
   &__workspace-item-collapse-btn,
@@ -1553,12 +1548,12 @@
 
   .bitfun-nav-panel__workspace-item-card:hover,
   .bitfun-nav-panel__assistant-item-card:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
+    @include shell-surfaces.navigation-feedback;
   }
 
   .bitfun-nav-panel__workspace-item.is-active .bitfun-nav-panel__workspace-item-card:hover,
   .bitfun-nav-panel__assistant-item.is-active .bitfun-nav-panel__assistant-item-card:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
+    @include shell-surfaces.navigation-feedback;
   }
 
   .bitfun-nav-panel__workspace-item.is-active:has(.bitfun-nav-panel__workspace-item-sessions .bitfun-nav-panel__inline-item.is-active) .bitfun-nav-panel__workspace-item-card:hover,
@@ -1585,15 +1580,10 @@
 }
 
 // Workspace and assistant rows follow the same hierarchy as session titles:
-// stronger names, quieter metadata, and a consistent 32px primary row.
+// ordinary 13px labels, quieter metadata, and a consistent 30px primary row.
 .bitfun-nav-panel {
   &__workspace-group-title {
-    @include nav-font.nav-panel-text-meta;
-
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 500;
-    letter-spacing: 0.015em;
-    line-height: 1.25;
+    @include nav-font.nav-panel-text-group;
   }
 
   &__workspace-item-card,
@@ -1602,7 +1592,7 @@
   &__assistant-item-collapse-btn,
   &__workspace-item-name-btn,
   &__assistant-item-name-btn {
-    min-height: 32px;
+    min-height: 30px;
   }
 
   &__workspace-item:not(.is-active) &__workspace-item-card,
@@ -1612,24 +1602,17 @@
 
   &__workspace-item-label,
   &__assistant-item-label {
-    @include nav-font.nav-panel-text-body;
-
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 500;
-    line-height: 1.25;
+    @include nav-font.nav-panel-text-row;
   }
 
   &__workspace-item.is-active &__workspace-item-label,
   &__assistant-item.is-active &__assistant-item-label {
-    @include nav-font.nav-panel-text-heading;
-
-    font-weight: 600;
+    @include nav-font.nav-panel-text-row-active;
   }
 
   &__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active) &__workspace-item-label,
   &__assistant-item.is-active:has(&__assistant-item-sessions &__inline-item.is-active) &__assistant-item-label {
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-weight: 500;
+    @include nav-font.nav-panel-text-row;
   }
 
   &__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active) &__workspace-item-icon,

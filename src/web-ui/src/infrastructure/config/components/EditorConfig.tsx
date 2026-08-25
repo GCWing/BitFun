@@ -1,8 +1,9 @@
  
 
+import { Button, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NumberInput, Select, Button, Switch, ConfigPageLoading, ConfigPageMessage } from '@/component-library';
+import { NumberInput, Select, ConfigPageLoading, ConfigPageMessage } from '@/component-library';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';
@@ -440,7 +441,6 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Switch
               checked={config.insertSpaces}
               onChange={(e) => updateConfig('insertSpaces', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.wordWrap')} align="center">
@@ -463,14 +463,12 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Switch
               checked={config.smoothScrolling}
               onChange={(e) => updateConfig('smoothScrolling', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.scrollBeyondLastLine')} description={t('behavior.scrollBeyondLastLineDesc')} align="center">
             <Switch
               checked={config.scrollBeyondLastLine}
               onChange={(e) => updateConfig('scrollBeyondLastLine', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -483,7 +481,6 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Switch
               checked={config.minimap.enabled}
               onChange={(e) => updateMinimapConfig('enabled', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           {config.minimap.enabled && (
@@ -532,35 +529,30 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Switch
               checked={config.semanticHighlighting}
               onChange={(e) => updateConfig('semanticHighlighting', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.bracketPairColorization')} description={t('advanced.bracketPairColorizationDesc')} align="center">
             <Switch
               checked={config.bracketPairColorization}
               onChange={(e) => updateConfig('bracketPairColorization', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.formatOnSave')} description={t('advanced.formatOnSaveDesc')} align="center">
             <Switch
               checked={config.formatOnSave}
               onChange={(e) => updateConfig('formatOnSave', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.formatOnPaste')} description={t('advanced.formatOnPasteDesc')} align="center">
             <Switch
               checked={config.formatOnPaste}
               onChange={(e) => updateConfig('formatOnPaste', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.trimAutoWhitespace')} description={t('advanced.trimAutoWhitespaceDesc')} align="center">
             <Switch
               checked={config.trimAutoWhitespace}
               onChange={(e) => updateConfig('trimAutoWhitespace', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -572,8 +564,8 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           <ConfigPageRow label={t('actions.reset')} description={t('messages.confirmReset')} align="center">
             <div className="bitfun-editor-config__actions" data-bf-component="editor-config" data-bf-part="actions">
               <Button
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={resetConfig}
                 disabled={isSaving}
               >

@@ -1,0 +1,17 @@
+@layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;
+
+@layer bf.reset {
+  [data-bf-design-system-root],
+  [data-bf-design-system-root] *,
+  [data-bf-design-system-root] *::before,
+  [data-bf-design-system-root] *::after {
+    box-sizing: border-box;
+  }
+
+  [data-bf-design-system-root] button,
+  [data-bf-design-system-root] input,
+  [data-bf-design-system-root] textarea,
+  [data-bf-design-system-root] select {
+    font: inherit;
+  }
+}

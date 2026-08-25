@@ -6,8 +6,8 @@
 
 .bitfun-config-page-header {
   flex-shrink: 0;
-  padding: 48px configLayout.$config-page-content-inline-padding 0;
-  margin-bottom: var(--bf-appearance-token-size-gap-6);
+  padding: var(--bf-appearance-token-size-gap-5) 0 0;
+  margin-bottom: 36px;
 }
 
 .bitfun-config-page-header__inner {
@@ -36,20 +36,19 @@
 }
 
 .bitfun-config-page-header__title {
-  margin: 0 0 4px 0;
-  font-size: calc(var(--bf-appearance-token-font-size-xl) * 1.5);
-  font-weight: var(--bf-appearance-token-font-weight-semibold);
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: var(--bf-appearance-token-line-height-tight);
+  line-height: 1.25;
   font-family: var(--bf-appearance-token-font-family-sans);
 }
 
 .bitfun-config-page-header__subtitle {
-  margin: 0;
-  margin-top: 2px;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  color: var(--bf-appearance-token-color-text-secondary);
-  line-height: var(--bf-appearance-token-line-height-relaxed);
+  margin: var(--bf-appearance-token-size-gap-2) 0 0;
+  font-size: var(--bf-appearance-token-font-size-lg);
+  color: var(--bf-appearance-token-color-text-primary);
+  line-height: 1.35;
   font-family: var(--bf-appearance-token-font-family-sans);
   max-width: 100%;
 }
@@ -105,16 +104,12 @@
 }
 
 @container config-panel (max-width: 900px) {
-  .bitfun-config-page-header {
-    padding-inline: var(--bf-appearance-token-size-gap-4);
-  }
-
-  .bitfun-config-page-header__inner {
-    width: calc(100% - (2 * var(--bf-appearance-token-size-gap-4)));
-  }
-
+  .bitfun-config-page-header__inner,
   .bitfun-config-page-header-divider {
-    width: calc(100% - (2 * var(--bf-appearance-token-size-gap-4)));
+    width: min(
+      calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
+      #{configLayout.$config-page-content-max-width}
+    );
   }
 }
 
@@ -123,7 +118,8 @@
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-page-header {
-    padding-top: var(--bf-appearance-token-size-gap-5);
+    padding-top: var(--bf-appearance-token-size-gap-4);
+    margin-bottom: var(--bf-appearance-token-size-gap-8);
   }
 
   .bitfun-config-page-header__inner {
@@ -138,12 +134,12 @@
   }
 
   .bitfun-config-page-header__title {
-    font-size: calc(var(--bf-appearance-token-font-size-lg) * 1.5);
-    margin-bottom: 2px;
+    font-size: var(--bf-appearance-token-font-size-3xl);
   }
 
   .bitfun-config-page-header__subtitle {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    margin-top: var(--bf-appearance-token-size-gap-1);
+    font-size: var(--bf-appearance-token-font-size-sm);
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;

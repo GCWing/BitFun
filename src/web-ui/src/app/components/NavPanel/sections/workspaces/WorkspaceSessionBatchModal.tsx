@@ -1,6 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Archive, Bot, FolderKanban, Loader2, MessageSquare, Trash2 } from 'lucide-react';
-import { Button, Checkbox, Modal } from '@/component-library';
+import { Checkbox, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionMetadata } from '@/shared/types/session-history';
@@ -334,8 +335,8 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
               <div data-bf-component="workspace-session-batch-modal" data-bf-part="toolbarActions" className="workspace-session-batch-modal__toolbar-actions">
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={handleInvertSelection}
                   disabled={isBusy || allSessionIds.length === 0}
                 >
@@ -360,7 +361,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
           ) : loadFailed ? (
             <div data-bf-component="workspace-session-batch-modal" data-bf-part="state" data-bf-state="error" className="workspace-session-batch-modal__state is-error">
               <span>{t('nav.sessions.batchLoadFailed')}</span>
-              <Button type="button" variant="secondary" size="small" onClick={() => { void loadSessions(); }}>
+              <Button type="button" variant="outline" size="sm" onClick={() => { void loadSessions(); }}>
                 {t('actions.retry')}
               </Button>
             </div>
@@ -422,27 +423,30 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
         </div>
 
         <div data-bf-component="workspace-session-batch-modal" data-bf-part="footer" className="workspace-session-batch-modal__footer">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={isBusy}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
             {t('actions.cancel')}
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             onClick={() => { void handleArchiveSelected(); }}
             disabled={isBusy || selectedCount === 0}
-            isLoading={actionKind === 'archive'}
+            loading={actionKind === 'archive'}
+            leadingIcon={<Archive size={14} />}
           >
-            <Archive size={14} />
+
             <span>{t('nav.sessions.archiveSelected')}</span>
           </Button>
           <Button
             type="button"
-            variant="danger"
+            variant="fill"
+            tone="danger"
             onClick={() => { void handleDeleteSelected(); }}
             disabled={isBusy || selectedCount === 0}
-            isLoading={actionKind === 'delete'}
+            loading={actionKind === 'delete'}
+            leadingIcon={<Trash2 size={14} />}
           >
-            <Trash2 size={14} />
+
             <span>{t('nav.sessions.deleteSelected')}</span>
           </Button>
         </div>

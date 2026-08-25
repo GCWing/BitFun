@@ -64,23 +64,6 @@
     color: var(--bf-appearance-token-color-text-muted);
   }
 
-  &__deploy-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--bf-appearance-token-color-accent-500);
-    font-size: 11px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-
-    &:hover:not(:disabled) { text-decoration: underline; }
-    &:disabled { opacity: 0.5; cursor: not-allowed; }
-  }
-
   &__server-line {
     display: flex;
     align-items: center;
@@ -133,12 +116,6 @@
     padding: 8px 16px;
     background: var(--bf-appearance-token-color-bg-primary);
 
-    .btn.btn-sm {
-      height: 28px;
-      min-height: 28px;
-      padding: 0 10px;
-      font-size: 11px;
-    }
   }
 
   &__device-list {
@@ -290,31 +267,6 @@
 
   &__sync-retry {
     flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 28px;
-    padding: 3px 8px;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: 5px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-primary);
-    font: inherit;
-    cursor: pointer;
-
-    &:hover:not(:disabled) {
-      border-color: var(--bf-appearance-token-color-accent-500);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: 1px;
-    }
-
-    &:disabled {
-      cursor: wait;
-      opacity: 0.6;
-    }
   }
 
   &__sync-progress-track {

@@ -23,29 +23,11 @@
     {
       "root": "src/web-ui/src",
       "domain": "themePreset",
-      "key": "#fdfdfd <-> #ffffff",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "The default Light navigation and app background intentionally uses the sampled near-white surface while secondary, elevated, editor, and scene surfaces remain pure white. These adjacent roles preserve the reference hierarchy without introducing a tinted canvas.",
-      "reevaluateWhen": "Only after a focused Light-theme surface review proves primary and elevated surfaces no longer need separate values."
-    },
-    {
-      "root": "src/web-ui/src",
-      "domain": "themePreset",
       "key": "#2b2d30 <-> #313335",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins",
       "reason": "Midnight background, tertiary surface, and editor lineHighlight are adjacent in the same dark theme. Merging would weaken surface and editor-row separation.",
       "reevaluateWhen": "Only after a Midnight surface-ramp redesign removes the adjacent role split."
-    },
-    {
-      "root": "src/web-ui/src",
-      "domain": "themePreset",
-      "key": "#f3f3f5 <-> #faf8f0",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is the default Light soft surface and a dark-theme primary button text stop. This is cross-theme and component identity, not a duplicate role.",
-      "reevaluateWhen": "Only after China Style paper identity is intentionally neutralized."
     },
     {
       "root": "src/web-ui/src",

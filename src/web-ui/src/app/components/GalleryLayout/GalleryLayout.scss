@@ -1,5 +1,4 @@
 @use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 $gutter: clamp(28px, 4vw, 64px);
 $content-max: 1360px;
@@ -208,7 +207,6 @@ $content-max: 1360px;
   }
 }
 
-.gallery-action-btn,
 .gallery-search-btn,
 .gallery-plain-icon-btn,
 .gallery-filter-chip,
@@ -222,8 +220,7 @@ $content-max: 1360px;
 }
 
 .gallery-search-btn,
-.gallery-plain-icon-btn,
-.gallery-action-btn {
+.gallery-plain-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -272,23 +269,6 @@ $content-max: 1360px;
   height: 28px;
   padding: 0;
   background: transparent;
-}
-
-.gallery-action-btn {
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
-
-  &--primary {
-    @include btn-primary.btn-primary-surface-default;
-
-    &:hover:not(:disabled) {
-      @include btn-primary.btn-primary-surface-hover;
-    }
-
-    &:active:not(:disabled) {
-      @include btn-primary.btn-primary-surface-active;
-    }
-  }
 }
 
 .gallery-anchor-bar,
@@ -485,7 +465,6 @@ $content-max: 1360px;
 @media (prefers-reduced-motion: reduce) {
   .gallery-search-btn,
   .gallery-plain-icon-btn,
-  .gallery-action-btn,
   .gallery-filter-chip,
   .gallery-anchor-btn,
   .gallery-cat-chip,

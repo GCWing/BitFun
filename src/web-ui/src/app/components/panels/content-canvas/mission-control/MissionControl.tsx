@@ -4,9 +4,11 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Button } from '@bitfun/ui';
 import { X, Merge } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
+import { IconButton } from '@/component-library';
 import { ThumbnailCard } from './ThumbnailCard';
 import { SearchFilter } from './SearchFilter';
 import { useCanvasStore } from '../stores';
@@ -198,21 +200,23 @@ export const MissionControl: React.FC<MissionControlProps> = ({
           <h2 className="canvas-mission-control__title">{t('tabs.missionControl')}</h2>
           <div data-bf-component="mission-control" data-bf-part="headerActions" className="canvas-mission-control__header-actions">
             {hasMultipleGroups && (
-              <button
-                className="canvas-mission-control__merge-btn"
+              <Button
+                variant="outline"
+                size="sm"
+                leadingIcon={<Merge />}
                 onClick={handleMergeAll}
                 title={t('canvas.mergeAllGroups')}
               >
-                <Merge size={14} />
-                <span>{t('canvas.mergeAll')}</span>
-              </button>
+                {t('canvas.mergeAll')}
+              </Button>
             )}
-            <button
-              className="canvas-mission-control__close-btn"
+            <IconButton
+              variant="ghost"
+              size="small"
               onClick={onClose}
             >
               <X size={14} />
-            </button>
+            </IconButton>
           </div>
         </div>
 

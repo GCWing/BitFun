@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { Badge } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -56,22 +57,22 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
       </details>
 
       <div className="bitfun-remote-disclaimer__actions" data-bf-component="remote-connect-disclaimer" data-bf-part="actions">
-        <button
-          type="button"
-          className="bitfun-remote-disclaimer__btn bitfun-remote-disclaimer__btn--secondary"
+        <Button
+          variant="outline"
+          size="md"
           onClick={onClose}
         >
           {canAgree ? t('remoteConnect.disclaimerDecline') : t('actions.close')}
-        </button>
+        </Button>
         {canAgree && (
-          <button
-            type="button"
-            className="bitfun-remote-disclaimer__btn bitfun-remote-disclaimer__btn--primary"
+          <Button
+            variant="fill"
+            size="md"
             onClick={onAgree}
             data-testid="remote-connect-disclaimer-agree"
           >
             {t('remoteConnect.disclaimerAgree')}
-          </button>
+          </Button>
         )}
       </div>
     </div>

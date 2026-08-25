@@ -344,9 +344,6 @@
     flex-wrap: wrap;
     padding: 0 $size-gap-3 $size-gap-3;
 
-    .btn {
-      gap: $size-gap-1;
-    }
   }
 
   &__error,
@@ -446,9 +443,6 @@
     padding: $size-gap-3;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
 
-    .btn {
-      gap: $size-gap-1;
-    }
   }
 
   &__busy {

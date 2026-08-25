@@ -1,14 +1,13 @@
 /* Component registry */
 import React from 'react';
 import type { ComponentCategory } from '../types';
-import { Button } from '@components/Button';
+import { Button } from '@bitfun/ui';
 import { IconButton } from '@components/IconButton';
 import { WindowControls } from '@components/WindowControls';
 import { Input } from '@components/Input';
 import { Search } from '@components/Search';
 import { Select } from '@components/Select';
 import { Checkbox } from '@components/Checkbox';
-import { Switch } from '@components/Switch';
 import { Textarea } from '@components/Textarea';
 import { Modal } from '@components/Modal';
 import { CubeLoading } from '@components/CubeLoading';
@@ -87,40 +86,6 @@ export const componentRegistry: ComponentCategory[] = [
     description: '常用的基础UI组件',
     layoutType: 'grid-4',
     components: [
-      {
-        id: 'button-primary',
-        name: 'Button - Primary',
-        description: '主要按钮',
-        category: 'basic',
-        component: () => <Button variant="primary">Primary Button</Button>,
-      },
-      {
-        id: 'button-secondary',
-        name: 'Button - Secondary',
-        description: '次要按钮',
-        category: 'basic',
-        component: () => <Button variant="secondary">Secondary Button</Button>,
-      },
-      {
-        id: 'button-ghost',
-        name: 'Button - Ghost',
-        description: '幽灵按钮',
-        category: 'basic',
-        component: () => <Button variant="ghost">Ghost Button</Button>,
-      },
-      {
-        id: 'button-sizes',
-        name: 'Button - Sizes',
-        description: 'Demo',
-        category: 'basic',
-        component: () => (
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <Button size="small">Small</Button>
-            <Button size="medium">Medium</Button>
-            <Button size="large">Large</Button>
-          </div>
-        ),
-      },
       {
         id: 'tag-demo',
         name: 'Tag - 演示',
@@ -335,7 +300,7 @@ export const componentRegistry: ComponentCategory[] = [
           const [isOpen, setIsOpen] = React.useState(false);
           return (
             <>
-              <Button onClick={() => setIsOpen(true)}>打开弹窗</Button>
+              <Button variant="fill" onClick={() => setIsOpen(true)}>打开弹窗</Button>
               <Modal
                 isOpen={isOpen}
                 onClose={() => setIsOpen(false)}
@@ -392,8 +357,8 @@ export const componentRegistry: ComponentCategory[] = [
                 />
               </div>
               <Button
-                size="small"
-                variant="secondary"
+                size="sm"
+                variant="outline"
                 onClick={() => setKey(prev => prev + 1)}
               >
                 重新播放
@@ -801,48 +766,6 @@ name: 'Search - Demo',
         },
       },
       {
-        id: 'switch-demo',
-        name: 'Switch - Demo',
-        description: 'Demo',
-        category: 'form',
-        component: () => {
-          const [checked, setChecked] = React.useState(false);
-          const [loading, setLoading] = React.useState(false);
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <Switch label="Option" />
-              <Switch
-                label="Option"
-                description="Description"
-                checked={checked}
-                onChange={(e) => setChecked(e.target.checked)}
-              />
-              <Switch
-                label="Loading"
-                loading={loading}
-                checked={loading}
-                onChange={(e) => {
-                  setLoading(true);
-                  setTimeout(() => setLoading(false), 2000);
-                }}
-              />
-              <Switch label="Option" disabled />
-              <Switch
-                checkedText="ON"
-                uncheckedText="OFF"
-                label="With labels"
-              />
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <Switch size="small" />
-                <Switch size="medium" />
-                <Switch size="large" />
-              </div>
-            </div>
-          );
-        },
-      },
-      {
         id: 'textarea-demo',
         name: 'Textarea - Demo',
         description: 'Demo',
@@ -1026,16 +949,16 @@ console.log(user.greet());`);
         component: () => (
           <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center', padding: '40px' }}>
             <Tooltip content="上方提示" placement="top">
-              <Button>Top</Button>
+              <Button variant="fill">Top</Button>
             </Tooltip>
             <Tooltip content="下方提示" placement="bottom">
-              <Button>Bottom</Button>
+              <Button variant="fill">Bottom</Button>
             </Tooltip>
             <Tooltip content="左侧提示" placement="left">
-              <Button>Left</Button>
+              <Button variant="fill">Left</Button>
             </Tooltip>
             <Tooltip content="右侧提示" placement="right">
-              <Button>Right</Button>
+              <Button variant="fill">Right</Button>
             </Tooltip>
           </div>
         ),

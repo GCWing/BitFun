@@ -1,7 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  Button,
   Modal,
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -466,12 +466,13 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   {t('dispatch.probeFailed')}
                 </span>
                 <Button
-                  variant="secondary"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   disabled={probing}
                   onClick={() => void runProbe()}
+                  leadingIcon={<RefreshCw size={14} aria-hidden />}
                 >
-                  <RefreshCw size={14} aria-hidden />
+
                   {t('dispatch.retryCheck')}
                 </Button>
               </div>
@@ -509,8 +510,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                     {t('dispatch.oneClickDeployDescription')}
                   </span>
                   <Button
-                    variant="primary"
-                    size="small"
+                    variant="fill"
+                    size="sm"
                     disabled={targetMutationInProgress || probing}
                     onClick={() => void prepareTarget()}
                   >
@@ -545,8 +546,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   {t('dispatch.retryProvisionDescription')}
                 </span>
                 <Button
-                  variant="secondary"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   disabled={targetMutationInProgress || probing}
                   onClick={() => void retryProvisioning()}
                 >
@@ -565,12 +566,13 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   {t('dispatch.deviceUpdateRequired')}
                 </span>
                 <Button
-                  variant="secondary"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   disabled={probing}
                   onClick={() => void runProbe()}
+                  leadingIcon={<RefreshCw size={14} aria-hidden />}
                 >
-                  <RefreshCw size={14} aria-hidden />
+
                   {t('dispatch.retryCheck')}
                 </Button>
               </div>
@@ -635,8 +637,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           data-bf-part="actions"
         >
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             disabled={
               preparationPhase === 'provisioning'
               || preparationPhase === 'cancelling'
@@ -654,8 +656,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                 : t('dispatch.cancel')}
           </Button>
           <Button
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             disabled={
               !ready
               || targetMutationInProgress

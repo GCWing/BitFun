@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Download, Image, Store, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, Check, Download, Image, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, Select, Tooltip, confirmDialog } from '@/component-library';
+import { Button } from '@bitfun/ui';
+import { IconButton, Tooltip, confirmDialog } from '@/component-library';
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,
@@ -11,6 +12,9 @@ import {
 } from '@/infrastructure/appearance';
 import { notificationService } from '@/shared/notification-system';
 import { AppearanceMarketDialog } from './AppearanceMarketDialog';
+import { ConfigPageSection } from './common';
+
+const DEFAULT_APPEARANCE_PREVIEW_SRC = '/assets/appearance/bitfun-default-preview.png';
 
 function downloadArchive(bytes: ArrayBuffer, filename: string): void {
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
@@ -77,16 +81,14 @@ export function AppearancePackageFailurePanel({
             <p>{t('package.diagnostics.validationHint', { count: validationError.issues.length })}</p>
           )}
         </div>
-        <Button
-          variant="ghost"
+        <IconButton
           size="small"
-          iconOnly
           title={t('package.diagnostics.dismiss')}
           aria-label={t('package.diagnostics.dismiss')}
           onClick={onDismiss}
         >
           <X size={14} />
-        </Button>
+        </IconButton>
       </div>
 
       {validationError ? (
@@ -140,18 +142,27 @@ export function AppearancePackageFailurePanel({
 function AppearancePackagePreview({
   appearanceId,
   appearanceName,
+  appearanceDescription,
   getPreviewAsset,
+  fallbackSrc,
 }: {
   appearanceId: string;
   appearanceName: string;
+  appearanceDescription: string;
   getPreviewAsset: ReturnType<typeof useAppearance>['getPreviewAsset'];
+  fallbackSrc?: string;
 }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(fallbackSrc ?? null);
 
   useEffect(() => {
     let disposed = false;
     let objectUrl: string | null = null;
-    setPreviewUrl(null);
+    setPreviewUrl(fallbackSrc ?? null);
+    if (fallbackSrc) {
+      return () => {
+        disposed = true;
+      };
+    }
     void getPreviewAsset(appearanceId)
       .then(asset => {
         if (!asset || disposed) return;
@@ -163,7 +174,7 @@ function AppearancePackagePreview({
       disposed = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [appearanceId, getPreviewAsset]);
+  }, [appearanceId, fallbackSrc, getPreviewAsset]);
 
   return (
     <Tooltip
@@ -183,18 +194,29 @@ function AppearancePackagePreview({
         </div>
       )}
     >
-      <span
-        className="appearance-package-config__preview"
-        role="img"
+      <article
+        className="appearance-package-config__card"
         aria-label={appearanceName}
-        data-testid="appearance-package-preview-thumbnail"
+        data-testid="appearance-package-card"
         data-bf-component="appearance-settings"
         data-bf-part="packagePreview"
+        data-bf-state="selected"
       >
-        {previewUrl
-          ? <img src={previewUrl} alt="" />
-          : <Image size={15} aria-hidden="true" />}
-      </span>
+        <div className="appearance-package-config__card-preview">
+          {previewUrl
+            ? <img src={previewUrl} alt="" />
+            : <Image size={32} aria-hidden="true" />}
+          {!fallbackSrc && (
+            <span className="appearance-package-config__selected-mark" aria-hidden="true">
+              <Check size={13} strokeWidth={2.5} />
+            </span>
+          )}
+        </div>
+        <div className="appearance-package-config__card-body">
+          <strong>{appearanceName}</strong>
+          <span>{appearanceDescription}</span>
+        </div>
+      </article>
     </Tooltip>
   );
 }
@@ -212,7 +234,6 @@ export function AppearancePackageConfigSection() {
     getPreviewAsset,
     importPackage,
     exportPackage,
-    activate,
     deletePackage,
     status,
   } = useAppearance();
@@ -223,22 +244,9 @@ export function AppearancePackageConfigSection() {
   const selectedAppearance = appearances.find(appearance => appearance.id === selectedAppearanceId);
   const selectedPackageId = selectedAppearance?.id ?? SYSTEM_APPEARANCE_ID;
   const selectedPackageName = selectedAppearance?.name ?? t('package.nativeName');
-  const packageOptions = useMemo(() => [
-    {
-      value: SYSTEM_APPEARANCE_ID,
-      label: t('package.nativeName'),
-      description: t('package.nativeDescription'),
-      testId: 'appearance-package-option',
-      testAttributes: { 'data-appearance-id': SYSTEM_APPEARANCE_ID },
-    },
-    ...appearances.map(appearance => ({
-      value: appearance.id,
-      label: appearance.name,
-      description: `${appearance.author || t('package.unknownAuthor')} · v${appearance.version}`,
-      testId: 'appearance-package-option',
-      testAttributes: { 'data-appearance-id': appearance.id },
-    })),
-  ], [appearances, t]);
+  const selectedPackageDescription = selectedAppearance
+    ? `${selectedAppearance.author || t('package.unknownAuthor')} · v${selectedAppearance.version}`
+    : t('package.nativeDescription');
   const busy = loading || status === 'applying';
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -276,34 +284,6 @@ export function AppearancePackageConfigSection() {
     }
   };
 
-  const handleActivate = async (id: string | null) => {
-    setLoading(true);
-    try {
-      if (id) await activate(id);
-      else await activate(SYSTEM_APPEARANCE_ID);
-      setFailure(null);
-    } catch (error) {
-      const validationError = getAppearancePackageValidationError(error);
-      setFailure({
-        operation: 'activate',
-        ...(validationError
-          ? { validationError }
-          : { message: error instanceof Error ? error.message : String(error) }),
-      });
-      notificationService.error(validationError
-        ? t('package.diagnostics.activateSummary', { count: validationError.issues.length })
-        : t('package.activateFailed'), { duration: 5000 });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelectionChange = (value: string | number | (string | number)[]) => {
-    if (Array.isArray(value)) return;
-    const nextId = String(value);
-    void handleActivate(nextId === SYSTEM_APPEARANCE_ID ? null : nextId);
-  };
-
   const handleDelete = async (id: string, name: string) => {
     const confirmed = await confirmDialog({
       title: t('package.deleteTitle'),
@@ -327,10 +307,57 @@ export function AppearancePackageConfigSection() {
   };
 
   return (
-    <div
+    <ConfigPageSection
       className="appearance-package-config"
-      role="group"
-      aria-label={t('package.title')}
+      title={t('package.title')}
+      description={t('package.description')}
+      mouseGlowSurface={false}
+      extra={(
+        <div
+          className="appearance-package-config__actions"
+          data-bf-component="appearance-settings"
+          data-bf-part="packageActions"
+        >
+          <Button
+            variant="fill"
+            size="md"
+            disabled={busy}
+            onClick={() => setMarketOpen(true)}
+          >
+            {t('package.market.open')}
+          </Button>
+          <Button
+            variant="fill"
+            size="md"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+          >
+            {t('package.import')}
+          </Button>
+          {selectedAppearance && (
+            <>
+              <IconButton
+                size="small"
+                title={t('package.export')}
+                aria-label={t('package.export')}
+                disabled={busy}
+                onClick={() => void handleExport(selectedAppearance.id)}
+              >
+                <Download size={14} />
+              </IconButton>
+              <IconButton
+                size="small"
+                title={t('package.delete')}
+                aria-label={t('package.delete')}
+                disabled={busy}
+                onClick={() => void handleDelete(selectedAppearance.id, selectedAppearance.name)}
+              >
+                <Trash2 size={14} />
+              </IconButton>
+            </>
+          )}
+        </div>
+      )}
       data-bf-component="appearance-settings"
       data-bf-part="packageSection"
       data-bf-package-type={selectedAppearance ? 'imported' : 'native'}
@@ -343,81 +370,15 @@ export function AppearancePackageConfigSection() {
         accept=".bitfun-appearance,.zip,application/zip"
         onChange={handleImport}
       />
-      <div className="appearance-package-config__inline-control">
+      <div className="appearance-package-config__gallery">
         <AppearancePackagePreview
+          key={selectedPackageId}
           appearanceId={selectedPackageId}
           appearanceName={selectedPackageName}
+          appearanceDescription={selectedPackageDescription}
           getPreviewAsset={getPreviewAsset}
+          fallbackSrc={selectedAppearance ? undefined : DEFAULT_APPEARANCE_PREVIEW_SRC}
         />
-        <div
-          className="appearance-package-config__select-control"
-          data-bf-component="appearance-settings"
-          data-bf-part="packageSelect"
-        >
-          <Select
-            size="small"
-            value={selectedPackageId}
-            options={packageOptions}
-            onChange={handleSelectionChange}
-            disabled={busy}
-            placement="bottom"
-            triggerTestId="appearance-package-select"
-          />
-        </div>
-        <div
-          className="appearance-package-config__actions"
-          data-bf-component="appearance-settings"
-          data-bf-part="packageActions"
-        >
-          <Button
-            variant="ghost"
-            size="small"
-            iconOnly
-            title={t('package.market.open')}
-            aria-label={t('package.market.open')}
-            disabled={busy}
-            onClick={() => setMarketOpen(true)}
-          >
-            <Store size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="small"
-            iconOnly
-            title={t('package.import')}
-            aria-label={t('package.import')}
-            disabled={busy}
-            onClick={() => inputRef.current?.click()}
-          >
-            <Upload size={14} />
-          </Button>
-          {selectedAppearance && (
-            <>
-              <Button
-                variant="ghost"
-                size="small"
-                iconOnly
-                title={t('package.export')}
-                aria-label={t('package.export')}
-                disabled={busy}
-                onClick={() => void handleExport(selectedAppearance.id)}
-              >
-                <Download size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="small"
-                iconOnly
-                title={t('package.delete')}
-                aria-label={t('package.delete')}
-                disabled={busy}
-                onClick={() => void handleDelete(selectedAppearance.id, selectedAppearance.name)}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </>
-          )}
-        </div>
       </div>
       <AppearanceMarketDialog isOpen={marketOpen} onClose={() => setMarketOpen(false)} />
       {failure && (
@@ -431,11 +392,11 @@ export function AppearancePackageConfigSection() {
         >
           <AlertTriangle size={16} aria-hidden="true" />
           <span>{t('package.missingSelection', { id: unavailableSelectionId })}</span>
-          <Button variant="secondary" size="small" onClick={() => setMarketOpen(true)}>
+          <Button variant="fill" size="md" onClick={() => setMarketOpen(true)}>
             {t('package.market.open')}
           </Button>
         </div>
       )}
-    </div>
+    </ConfigPageSection>
   );
 }

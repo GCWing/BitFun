@@ -15,10 +15,11 @@
  *   group), not an external README. See `src/features/relay-deploy/README.md`.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { Button, Input, Alert } from '@/component-library';
+import { Input, Alert } from '@/component-library';
 import {
   confirmDanger,
   confirmWarning,
@@ -1114,20 +1115,25 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               <p className="account-panel__security-note">{t('accountLogin.securityNote')}</p>
               <div className="account-panel__deploy-entry">
                 <span>{t('relayDeploy.entryHint')}</span>
-                <button
-                  type="button"
-                  className="account-panel__deploy-link"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leadingIcon={<Rocket />}
                   onClick={() => setShowRelayDeploy(true)}
                   disabled={loading}
                 >
-                  <Rocket size={13} />
                   {t('relayDeploy.entryAction')}
-                </button>
+                </Button>
               </div>
             </div>
             <div className="account-panel__actions" data-bf-component="remote-account-panel" data-bf-part="actions">
-              <Button variant="primary" size="small" onClick={handleLogin} disabled={loading}>
-                <LogIn size={14} />
+              <Button
+                variant="fill"
+                size="sm"
+                leadingIcon={<LogIn />}
+                onClick={handleLogin}
+                disabled={loading}
+              >
                 {loading ? t('accountLogin.processing') : t('accountLogin.login')}
               </Button>
             </div>
@@ -1169,7 +1175,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </button>
             </div>
             <div className="account-panel__actions" data-bf-component="remote-account-panel" data-bf-part="actions">
-              <Button variant="secondary" size="small" onClick={handleCancelOverwrite} disabled={loading}>
+              <Button variant="outline" size="sm" onClick={handleCancelOverwrite} disabled={loading}>
                 {t('accountLogin.disagree')}
               </Button>
             </div>
@@ -1211,15 +1217,16 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     {syncStatus === 'failed' && syncFailureMessage(t, lastSyncError)}
                   </span>
                   {syncStatus === 'failed' && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leadingIcon={<RefreshCw />}
                       className="account-panel__sync-retry"
                       onClick={handleRetrySync}
                       disabled={loading}
                     >
-                      <RefreshCw size={12} />
                       {t('accountLogin.retrySync')}
-                    </button>
+                    </Button>
                   )}
                   {syncStatus === 'syncing' && (
                     <span className="account-panel__sync-indicator-percent">
@@ -1359,18 +1366,28 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             </div>
             <div className="account-panel__actions" data-bf-component="remote-account-panel" data-bf-part="actions">
               {relayError && (
-                <Button variant="primary" size="small" onClick={handleRetryConnect} disabled={loading}>
-                  <RefreshCw size={14} />
+                <Button
+                  variant="fill"
+                  size="sm"
+                  leadingIcon={<RefreshCw />}
+                  onClick={handleRetryConnect}
+                  disabled={loading}
+                >
                   {t('accountLogin.retryConnect')}
                 </Button>
               )}
               {!relayError && (
-                <Button variant="secondary" size="small" onClick={refreshDevices} disabled={loading}>
-                  <RefreshCw size={14} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leadingIcon={<RefreshCw />}
+                  onClick={refreshDevices}
+                  disabled={loading}
+                >
                   {t('accountLogin.refreshDevices')}
                 </Button>
               )}
-              <Button variant="secondary" size="small" onClick={handleLogout} disabled={loading}>
+              <Button variant="outline" size="sm" onClick={handleLogout} disabled={loading}>
                 {t('accountLogin.logout')}
               </Button>
             </div>

@@ -5,6 +5,7 @@
  * @module components/MarkdownEditor
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
@@ -19,7 +20,7 @@ import {
   isPeerDeviceModeActive,
   PEER_MODE_FILE_SYNC_POLL_MS,
 } from '@/infrastructure/peer-device/peerModeFlag';
-import { CubeLoading, Button } from '@/component-library';
+import { CubeLoading, IconButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import CodeEditor from './CodeEditor';
 import {
@@ -638,7 +639,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           <AlertCircle className="error-icon" />
           <p>{error}</p>
           {filePath && (
-            <Button variant="secondary" size="small" onClick={loadFileContent}>
+            <Button variant="outline" size="sm" onClick={loadFileContent}>
               {t('editor.common.retry')}
             </Button>
           )}
@@ -654,9 +655,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
             <Button
               type="button"
-              size="small"
-              variant={unsafeViewMode === 'source' ? 'primary' : 'secondary'}
-              className="bitfun-markdown-editor__toolbar-button"
+              size="sm"
+              variant={unsafeViewMode === 'source' ? 'fill' : 'outline'}
               onClick={() => setUnsafeViewMode('source')}
               aria-pressed={unsafeViewMode === 'source'}
             >
@@ -664,9 +664,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             </Button>
             <Button
               type="button"
-              size="small"
-              variant={unsafeViewMode === 'preview' ? 'primary' : 'secondary'}
-              className="bitfun-markdown-editor__toolbar-button"
+              size="sm"
+              variant={unsafeViewMode === 'preview' ? 'fill' : 'outline'}
               onClick={() => setUnsafeViewMode('preview')}
               aria-pressed={unsafeViewMode === 'preview'}
             >
@@ -674,12 +673,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             </Button>
           </div>
           <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
-            <Button
+            <IconButton
               type="button"
               size="small"
-              variant="secondary"
-              iconOnly
-              className="bitfun-markdown-editor__toolbar-button bitfun-markdown-editor__copy-button"
               onClick={() => void handleCopyMarkdown()}
               aria-label={copied
                 ? t('editor.markdownEditor.copiedMarkdown')
@@ -689,7 +685,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
                 : t('editor.markdownEditor.copyMarkdown')}
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
-            </Button>
+            </IconButton>
           </div>
         </div>
         <div className="bitfun-markdown-editor__unsafe-body" data-bf-component="markdown-editor" data-bf-part="body">
@@ -751,9 +747,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
           <Button
             type="button"
-            size="small"
-            variant={viewMode === 'preview' ? 'primary' : 'secondary'}
-            className="bitfun-markdown-editor__toolbar-button"
+            size="sm"
+            variant={viewMode === 'preview' ? 'fill' : 'outline'}
             onClick={() => setViewMode('preview')}
             aria-pressed={viewMode === 'preview'}
           >
@@ -761,9 +756,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           </Button>
           <Button
             type="button"
-            size="small"
-            variant={viewMode === 'markdown' ? 'primary' : 'secondary'}
-            className="bitfun-markdown-editor__toolbar-button"
+            size="sm"
+            variant={viewMode === 'markdown' ? 'fill' : 'outline'}
             onClick={() => setViewMode('markdown')}
             aria-pressed={viewMode === 'markdown'}
           >
@@ -771,12 +765,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           </Button>
         </div>
         <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
-          <Button
+          <IconButton
             type="button"
             size="small"
-            variant="secondary"
-            iconOnly
-            className="bitfun-markdown-editor__toolbar-button bitfun-markdown-editor__copy-button"
             onClick={() => void handleCopyMarkdown()}
             aria-label={copied
               ? t('editor.markdownEditor.copiedMarkdown')
@@ -786,7 +777,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               : t('editor.markdownEditor.copyMarkdown')}
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
-          </Button>
+          </IconButton>
         </div>
       </div>
       <div className="bitfun-markdown-editor__body" data-bf-component="markdown-editor" data-bf-part="body">

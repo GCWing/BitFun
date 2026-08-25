@@ -76,32 +76,10 @@
   justify-content: flex-end;
   gap: $size-gap-2;
 
-  .btn {
+  [data-bf-component='button'] {
     min-width: 72px;
   }
 
-  .th-create-page__cancel-button {
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-secondary);
-  }
-
-  .th-create-page__submit-button {
-    border: 1px solid var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-color-text-primary);
-    color: var(--bf-appearance-token-color-bg-scene);
-    box-shadow: none;
-  }
-
-  .th-create-page__cancel-button:active:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-subtle);
-  }
-
-  .th-create-page__submit-button:active:not(:disabled) {
-    border-color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-color-text-primary);
-    color: var(--bf-appearance-token-color-bg-scene);
-  }
 }
 
 .th-create-page__form {
@@ -523,15 +501,8 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .th-create-page__actions .th-create-page__cancel-button:hover:not(:disabled),
   .th-create-page__panel .bitfun-input-wrapper--default .bitfun-input-container:hover {
     background: var(--bf-appearance-token-color-bg-scene);
-  }
-
-  .th-create-page__actions .th-create-page__submit-button:hover:not(:disabled) {
-    border-color: var(--bf-appearance-token-color-text-secondary);
-    background: var(--bf-appearance-token-color-text-secondary);
-    color: var(--bf-appearance-token-color-bg-scene);
   }
 
   .th-create-panel__prompt-textarea .bitfun-textarea__field:hover:not(:disabled) {
@@ -579,7 +550,7 @@
   .th-create-page__actions {
     width: 100%;
 
-    .btn {
+    [data-bf-component='button'] {
       flex: 1;
     }
   }

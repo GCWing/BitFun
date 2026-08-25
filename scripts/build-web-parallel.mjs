@@ -74,10 +74,26 @@ if (genTypesCode !== 0) {
   process.exit();
 }
 
-// Step 2: type-check and Vite build run in parallel.
+// Step 2: build the independently published design-system packages once before
+// the product type-check and Vite build consume their public `dist` exports.
+const designSystemCode = await runPrefixed(
+  'design-system',
+  'pnpm',
+  ['--dir', 'design-system', 'run', 'build:packages'],
+  ROOT_DIR,
+);
+if (designSystemCode !== 0) {
+  process.stderr.write('[build-web-parallel] design-system package build failed (see output above)\n');
+  process.exitCode = 1;
+  process.exit();
+}
+
+// Step 3: type-check and Vite build run in parallel. Use the raw tools here so
+// the web-ui package lifecycle hooks do not rebuild the same design-system
+// artifacts concurrently while TypeScript is reading them.
 const tasks = [
-  runPrefixed('type-check', 'pnpm', ['run', 'type-check:web'], ROOT_DIR),
-  runPrefixed('vite-build', 'pnpm', ['--dir', 'src/web-ui', 'build'], ROOT_DIR),
+  runPrefixed('type-check', 'pnpm', ['--dir', 'src/web-ui', 'exec', 'tsc', '--noEmit'], ROOT_DIR),
+  runPrefixed('vite-build', 'pnpm', ['--dir', 'src/web-ui', 'exec', 'vite', 'build'], ROOT_DIR),
 ];
 
 const buildCodes = await Promise.all(tasks);

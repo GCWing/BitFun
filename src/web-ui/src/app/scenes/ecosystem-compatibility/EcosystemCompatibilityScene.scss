@@ -373,10 +373,9 @@ $compatibility-sidebar-width: 236px;
       white-space: nowrap;
     }
 
-    .btn {
+    [data-bf-component='button'] {
       width: 100%;
       margin-top: $size-gap-3;
-      justify-content: center;
     }
   }
 
@@ -409,14 +408,8 @@ $compatibility-sidebar-width: 236px;
     border-radius: $size-radius-base;
     background: var(--bf-appearance-token-color-warning-bg);
 
-    button {
+    [data-bf-component='button'] {
       margin-left: auto;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      font: inherit;
-      font-weight: $font-weight-medium;
-      cursor: pointer;
     }
   }
 
@@ -461,7 +454,7 @@ $compatibility-sidebar-width: 236px;
         flex: 1;
       }
 
-      .btn {
+      [data-bf-component='button'] {
         flex: none;
       }
     }
@@ -629,7 +622,7 @@ $compatibility-sidebar-width: 236px;
   &__import-action {
     justify-self: end;
 
-    .btn {
+    [data-bf-component='button'] {
       min-width: 64px;
     }
   }
@@ -712,9 +705,8 @@ $compatibility-sidebar-width: 236px;
       border-left: 1px solid var(--bf-appearance-token-border-subtle);
     }
 
-    .btn {
+    [data-bf-component='button'] {
       align-self: center;
-      white-space: nowrap;
     }
   }
 
@@ -992,7 +984,7 @@ $compatibility-sidebar-width: 236px;
     &__section-heading--actions {
       flex-direction: column;
 
-      .btn {
+      [data-bf-component='button'] {
         align-self: flex-start;
       }
     }

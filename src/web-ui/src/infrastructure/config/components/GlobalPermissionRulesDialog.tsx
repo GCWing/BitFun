@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -8,7 +9,7 @@ import React, {
 } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@/component-library';
+import { IconButton, Input, Modal, Select, type SelectOption } from '@/component-library';
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 
@@ -357,12 +358,13 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
           <div data-bf-component="global-permission-rules-dialog" data-bf-part="sectionHeader" className="global-permission-rules-dialog__section-header">
             <span>{t('permissionPolicy.globalRulesTitle')}</span>
             <Button
-              size="small"
-              variant="secondary"
+              size="sm"
+              variant="outline"
               disabled={isSaving}
               onClick={handleAddRule}
+              leadingIcon={<Plus size={14} />}
             >
-              <Plus size={14} />
+
               {t('permissionPolicy.addGlobalRule')}
             </Button>
           </div>
@@ -477,7 +479,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
             <div data-bf-component="global-permission-rules-dialog" data-bf-part="footer" className="global-permission-rules-dialog__footer">
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 onClick={handleDiscard}
                 disabled={isSaving}
               >
@@ -485,12 +487,13 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
               </Button>
               <Button
                 type="button"
-                variant="primary"
-                isLoading={isSaving}
+                variant="fill"
+                loading={isSaving}
                 disabled={!rulesValid || isSaving}
                 onClick={() => void handleSave()}
+                leadingIcon={<Save size={14} />}
               >
-                <Save size={14} />
+
                 {t('permissionPolicy.saveGlobalRules')}
               </Button>
             </div>

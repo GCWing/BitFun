@@ -4,6 +4,7 @@
  * Uses settings/mcp-tools for page title/subtitle, settings/mcp for the MCP section.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,7 +20,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
-  Button,
   Textarea,
   IconButton,
   Modal,
@@ -1376,10 +1376,10 @@ const McpToolsConfig: React.FC = () => {
                 }
               />
               <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
-                <Button variant="secondary" onClick={() => setShowJsonEditor(false)}>
+                <Button variant="outline" onClick={() => setShowJsonEditor(false)}>
                   {tMcp('actions.cancel')}
                 </Button>
-                <Button variant="primary" onClick={handleSaveJsonConfig}>
+                <Button variant="fill" onClick={handleSaveJsonConfig}>
                   {tMcp('actions.saveConfig')}
                 </Button>
               </div>
@@ -1413,8 +1413,8 @@ const McpToolsConfig: React.FC = () => {
           {desktopConfigAvailable && !showJsonEditor && !mcpLoading
             && !serverLoadFailed && servers.length === 0 && (
             <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty">
-              <Button variant="dashed" size="small" onClick={() => setShowJsonEditor(true)}>
-                <FileJson size={14} />
+              <Button variant="outline" size="sm" onClick={() => setShowJsonEditor(true)} leadingIcon={<FileJson size={14} />}>
+
                 {tMcp('actions.jsonConfig')}
               </Button>
             </div>
@@ -1474,9 +1474,9 @@ const McpToolsConfig: React.FC = () => {
                 )}
                 <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
                   <Button
-                    variant="primary"
+                    variant="fill"
                     onClick={handleStartRemoteOAuth}
-                    isLoading={oauthStarting}
+                    loading={oauthStarting}
                     disabled={authSubmitting || oauthCancelling}
                   >
                     {getOAuthActionLabel(authDialogServer)}
@@ -1507,7 +1507,7 @@ const McpToolsConfig: React.FC = () => {
             />
             <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
               <Button
-                variant="secondary"
+                variant="outline"
                 onClick={handleCloseAuthDialog}
                 disabled={authSubmitting || oauthStarting || oauthCancelling}
               >
@@ -1516,9 +1516,9 @@ const McpToolsConfig: React.FC = () => {
                   : tMcp('actions.cancel')}
               </Button>
               <Button
-                variant="primary"
+                variant="fill"
                 onClick={handleSaveRemoteAuth}
-                isLoading={authSubmitting}
+                loading={authSubmitting}
                 disabled={oauthStarting || oauthCancelling}
               >
                 {tMcp('actions.saveRemoteAuth')}

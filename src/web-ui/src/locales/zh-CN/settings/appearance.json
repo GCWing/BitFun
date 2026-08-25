@@ -29,7 +29,7 @@
     "empty": "尚未导入外观包。",
     "missingSelection": "共享选择的外观 {{id}} 尚未安装在当前设备。请从 Skin 市场安装它以恢复选择。",
     "market": {
-      "open": "浏览 Skin 市场",
+      "open": "浏览市场",
       "title": "Skin 市场",
       "search": "搜索外观包",
       "modeFilter": "按外观模式筛选",

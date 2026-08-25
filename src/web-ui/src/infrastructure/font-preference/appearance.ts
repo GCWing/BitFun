@@ -11,7 +11,6 @@ export const fontPreferenceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'error' },
     { id: 'preview' },
     { id: 'flowChatControls' },
-    { id: 'resetButton' },
   ],
   facets: [
     { id: 'level', attribute: 'data-bf-level', values: ['compact', 'small', 'default', 'medium', 'large', 'custom'] },

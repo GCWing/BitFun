@@ -1,10 +1,9 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
 import {
-  Switch,
   NumberInput,
-  Button,
   IconButton,
   ConfigPageLoading,
   Modal,
@@ -852,7 +851,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
               <Switch
                 checked={settings.enable_agent_companion}
                 onChange={(e) => updateSetting('enable_agent_companion', e.target.checked)}
-                size="small"
               />
             </div>
           </ConfigPageRow>
@@ -900,13 +898,14 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     <RefreshCw size={14} />
                   </IconButton>
                   <Button
-                    size="small"
-                    variant="secondary"
+                    size="sm"
+                    variant="outline"
                     onClick={() => void handleImportCompanionPet()}
                     disabled={!IS_TAURI_DESKTOP || companionPetImporting}
                     title={t('features.pet.importHint')}
+                    leadingIcon={<Plus size={14} />}
                   >
-                    <Plus size={14} />
+
                     {companionPetImporting ? t('features.pet.importing') : t('features.pet.import')}
                   </Button>
                 </span>
@@ -1054,7 +1053,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
               <Switch
                 checked={settings.enable_workspace_search}
                 onChange={(e) => updateSetting('enable_workspace_search', e.target.checked)}
-                size="small"
               />
             </div>
           </ConfigPageRow>
@@ -1105,7 +1103,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 checked={showPermissionModeControl}
                 disabled={permissionModeControlVisibilitySaving}
                 onChange={event => void handlePermissionModeControlVisibilityChange(event.target.checked)}
-                size="small"
               />
             </div>
           </ConfigPageRow>
@@ -1117,8 +1114,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
               <Button
                 type="button"
-                size="small"
-                variant="secondary"
+                size="sm"
+                variant="outline"
                 disabled={permissionConfigSaving}
                 onClick={() => setIsGlobalPermissionRulesDialogOpen(true)}
               >
@@ -1224,7 +1221,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 checked={enableDeferredToolLoading}
                 onChange={(event) => handleDeferredToolLoadingChange(event.target.checked)}
                 disabled={deferredToolLoadingConfigSaving}
-                size="small"
               />
             </div>
           </ConfigPageRow>
@@ -1254,7 +1250,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     checked={computerUseEnabled}
                     onChange={(e) => handleComputerUseEnabledChange(e.target.checked)}
                     disabled={computerUseBusy || computerUseStatusLoading}
-                    size="small"
                   />
                 </div>
               </ConfigPageRow>
@@ -1296,8 +1291,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                   {platform === 'macos' && (
                     <Button
                       className="bitfun-runtime-settings__row-action-btn"
-                      size="small"
-                      variant="secondary"
+                      size="sm"
+                      variant="outline"
                       disabled={computerUseBusy || computerUseStatusLoading}
                       onClick={() => void handleComputerUseOpenSettings('accessibility')}
                     >
@@ -1344,8 +1339,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                   {platform === 'macos' && (
                     <Button
                       className="bitfun-runtime-settings__row-action-btn"
-                      size="small"
-                      variant="secondary"
+                      size="sm"
+                      variant="outline"
                       disabled={computerUseBusy || computerUseStatusLoading}
                       onClick={() => void handleComputerUseOpenSettings('screen_capture')}
                     >
@@ -1435,8 +1430,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     {!browserCdpAvailable && (
                       <Button
                         className="bitfun-runtime-settings__row-action-btn"
-                        size="small"
-                        variant="secondary"
+                        size="sm"
+                        variant="outline"
                         disabled={browserControlBusy || browserStatusLoading}
                         onClick={() => void handleBrowserControlEnableDefaultCdp()}
                       >
@@ -1459,7 +1454,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     <Switch
                       checked={browserAutoConnectOnStartup}
                       onChange={(e) => void handleBrowserAutoConnectChange(e.target.checked)}
-                      size="small"
                     />
                   </div>
                 </ConfigPageRow>
@@ -1515,8 +1509,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                   {!browserCdpAvailable && !browserDefaultCdpSupported && (
                     <Button
                       className="bitfun-runtime-settings__row-action-btn"
-                      size="small"
-                      variant="secondary"
+                      size="sm"
+                      variant="outline"
                       disabled={browserControlBusy || browserStatusLoading}
                       onClick={() => void handleBrowserControlLaunch()}
                     >
@@ -1547,16 +1541,16 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
           </div>
           <div className="bitfun-debug-config__modal-footer" data-bf-component="runtime-settings" data-bf-part="modalFooter">
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => setBrowserRestartPrompt(null)}
               disabled={browserControlBusy}
             >
               {t('browserControl.restartModal.cancel')}
             </Button>
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={() => void handleBrowserControlRestart()}
               disabled={browserControlBusy}
             >

@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,7 +11,6 @@ import {
 } from 'lucide-react';
 import {
   Badge,
-  Button,
   IconButton,
   Modal,
   confirmDanger,
@@ -377,8 +377,8 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
               >
                 {isUsable && !isSelected ? (
                   <Button
-                    variant="primary"
-                    size="small"
+                    variant="fill"
+                    size="sm"
                     onClick={() => void updateVoiceInput({
                       provider: 'local',
                       model_id: model.modelId,
@@ -391,22 +391,23 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
 
                 {isDownloading ? (
                   <Button
-                    variant="secondary"
-                    size="small"
+                    variant="outline"
+                    size="sm"
                     onClick={() => void handleCancelDownload(model)}
-                    isLoading={busyKey === 'cancel'}
+                    loading={busyKey === 'cancel'}
                     disabled={busyAction !== null && busyKey !== 'cancel'}
                   >
                     {t('model.cancel')}
                   </Button>
                 ) : canInstall ? (
                   <Button
-                    variant="primary"
-                    size="small"
+                    variant="fill"
+                    size="sm"
                     onClick={() => handleDownload(model)}
                     disabled={busyAction !== null || anyDownloading}
+                    leadingIcon={<Download size={14} />}
                   >
-                    <Download size={14} />
+
                     {needsRepair ? t('model.repair') : t('model.download')}
                   </Button>
                 ) : null}

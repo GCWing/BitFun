@@ -1,5 +1,4 @@
 @use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 @use '../../styles/surface-stagger';
 
 $skills-sidebar-width: 184px;
@@ -299,38 +298,6 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 }
 
-.skills-main__add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border: none;
-  border-radius: $size-radius-full;
-  @include btn-primary.btn-primary-surface-default;
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background $motion-fast $easing-standard,
-    border-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
-
-  &:hover {
-    @include btn-primary.btn-primary-surface-hover;
-  }
-
-  &:active {
-    @include btn-primary.btn-primary-surface-active;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
-    outline-offset: 2px;
-  }
-}
-
 // ── Suite Page ───────────────────────────────────────────────────────────────
 
 .skills-suite {
@@ -473,15 +440,6 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-suite__mode-reset {
   flex-shrink: 0;
   margin-bottom: 4px;
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  padding: 0;
-  border-radius: 999px;
-
-  &.btn-loading .btn-loading-text {
-    display: none;
-  }
 }
 
 .skills-suite__mode-hint {
@@ -919,48 +877,6 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-card__actions {
   justify-content: flex-end;
   gap: 4px;
-}
-
-.skills-card__details,
-.skills-card__delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: $size-radius-base;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
-  cursor: pointer;
-  transition:
-    background $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
-
-}
-
-.skills-card__details {
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
-    outline-offset: 1px;
-  }
-}
-
-.skills-card__delete {
-  &:hover {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, var(--bf-appearance-token-element-bg-medium));
-    color: var(--bf-appearance-token-color-error);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-error);
-    outline-offset: 1px;
-  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

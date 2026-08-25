@@ -1,7 +1,9 @@
  
 
 import React from 'react';
+import { Button } from '@bitfun/ui';
 import { X, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
+import { IconButton } from '@/component-library/components/IconButton';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
 import { notificationService } from '../services/NotificationService';
@@ -69,13 +71,15 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
         {actions && actions.length > 0 && (
           <div className="notification-item__actions" data-bf-component="notification" data-bf-part="itemActions">
             {actions.map((action, index) => (
-              <button
+              <Button
                 key={index}
-                className={`notification-item__action notification-item__action--${action.variant || 'secondary'}`}
+                variant={action.variant === 'primary' || action.variant === 'danger' ? 'fill' : 'outline'}
+                tone={action.variant === 'danger' ? 'danger' : 'neutral'}
+                size="sm"
                 onClick={() => handleAction(action.onClick)}
               >
                 {action.label}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -83,15 +87,16 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
 
       
       {closable && (
-        <button
-          className="notification-item__close"
+        <IconButton
+          variant="ghost"
+          size="xs"
           data-bf-component="notification"
           data-bf-part="itemClose"
           onClick={handleClose}
           aria-label={t('actions.close')}
         >
           <X size={14} />
-        </button>
+        </IconButton>
       )}
     </div>
   );

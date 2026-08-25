@@ -16,8 +16,7 @@ const sceneHarness = vi.hoisted(() => {
 
   return {
     state: {
-      openTabs: [{ id: 'session', openedAt: 0, lastUsed: 0 }],
-      retainedScenes: [],
+      openTabs: [{ id: 'session', lastUsed: 0 }],
       activeTabId: 'session',
       navigationMotion: 'instant',
       navigationSequence: 0,
@@ -107,10 +106,9 @@ describe('SceneViewport transitions', () => {
 
     sceneHarness.state = {
       openTabs: [
-        { id: 'session', openedAt: 0, lastUsed: 0 },
-        { id: 'agents', openedAt: 1, lastUsed: 1 },
+        { id: 'session', lastUsed: 0 },
+        { id: 'agents', lastUsed: 1 },
       ],
-      retainedScenes: [],
       activeTabId: 'agents',
       navigationMotion: 'pointer',
       navigationSequence: 1,
@@ -163,10 +161,12 @@ describe('SceneViewport transitions', () => {
     expect(container.querySelector('[data-scene-id="agents"]')?.hasAttribute('hidden')).toBe(false);
   });
 
-  it('keeps an auto-evicted MiniApp scene mounted and hidden', async () => {
+  it('keeps an inactive open MiniApp scene mounted and hidden', async () => {
     sceneHarness.state = {
-      openTabs: [{ id: 'session', openedAt: 0, lastUsed: 0 }],
-      retainedScenes: [{ id: 'miniapp:gomoku', openedAt: 1, lastUsed: 1 }],
+      openTabs: [
+        { id: 'session', lastUsed: 0 },
+        { id: 'miniapp:gomoku', lastUsed: 1 },
+      ],
       activeTabId: 'session',
       navigationMotion: 'instant',
       navigationSequence: 0,
@@ -177,11 +177,11 @@ describe('SceneViewport transitions', () => {
       await Promise.resolve();
     });
 
-    const retained = container.querySelector('[data-scene-id="miniapp:gomoku"]');
-    expect(retained).not.toBeNull();
-    expect(retained?.classList.contains('bitfun-scene-viewport__scene--visible')).toBe(false);
-    expect(retained?.getAttribute('aria-hidden')).toBe('true');
-    expect(retained?.hasAttribute('inert')).toBe(true);
-    expect(retained?.hasAttribute('hidden')).toBe(false);
+    const inactive = container.querySelector('[data-scene-id="miniapp:gomoku"]');
+    expect(inactive).not.toBeNull();
+    expect(inactive?.classList.contains('bitfun-scene-viewport__scene--visible')).toBe(false);
+    expect(inactive?.getAttribute('aria-hidden')).toBe('true');
+    expect(inactive?.hasAttribute('inert')).toBe(true);
+    expect(inactive?.hasAttribute('hidden')).toBe(false);
   });
 });

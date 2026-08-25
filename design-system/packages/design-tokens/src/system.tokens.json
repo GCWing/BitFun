@@ -1,0 +1,171 @@
+{
+  "$description": "Theme-independent system scales.",
+  "space": {
+    "$type": "dimension",
+    "0": { "$value": "0px" },
+    "1": { "$value": "4px" },
+    "2": { "$value": "8px" },
+    "3": { "$value": "12px" },
+    "4": { "$value": "16px" },
+    "5": { "$value": "20px" },
+    "6": { "$value": "24px" },
+    "8": { "$value": "32px" },
+    "10": { "$value": "40px" },
+    "12": { "$value": "48px" },
+    "16": { "$value": "64px" },
+    "component": {
+      "inline": { "$value": "12px" },
+      "block": { "$value": "8px" }
+    }
+  },
+  "font": {
+    "family": {
+      "sans": {
+        "$type": "fontFamily",
+        "$value": "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+      },
+      "control": {
+        "$type": "fontFamily",
+        "$value": "'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": "'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace"
+      }
+    },
+    "size": {
+      "$type": "dimension",
+      "xs": { "$value": "12px" },
+      "sm": { "$value": "13px" },
+      "base": { "$value": "14px" },
+      "lg": { "$value": "15px" },
+      "xl": { "$value": "16px" },
+      "2xl": { "$value": "18px" },
+      "3xl": { "$value": "22px" },
+      "4xl": { "$value": "26px" },
+      "caption": { "$value": "{font.size.xs}" },
+      "small": { "$value": "{font.size.sm}" },
+      "body": { "$value": "{font.size.base}" },
+      "label": { "$value": "{font.size.base}" },
+      "title": { "$value": "{font.size.2xl}" },
+      "display": { "$value": "{font.size.4xl}" }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": { "$value": 400 },
+      "medium": { "$value": 500 },
+      "semibold": { "$value": 600 },
+      "bold": { "$value": "{font.weight.semibold}" }
+    }
+  },
+  "lineHeight": {
+    "$type": "number",
+    "tight": { "$value": 1.2 },
+    "base": { "$value": 1.5 },
+    "body": { "$value": "{lineHeight.base}" },
+    "relaxed": { "$value": 1.6 }
+  },
+  "control": {
+    "height": {
+      "$type": "dimension",
+      "sm": { "$value": "32px" },
+      "md": { "$value": "40px" },
+      "lg": { "$value": "48px" }
+    },
+    "hitTarget": {
+      "$type": "dimension",
+      "$value": "40px"
+    },
+    "switch": {
+      "$type": "dimension",
+      "trackWidth": { "$value": "28px" },
+      "trackHeight": { "$value": "16px" },
+      "thumbSize": { "$value": "12px" },
+      "thumbInset": { "$value": "2px" },
+      "thumbTravel": { "$value": "12px" },
+      "thumbTravelReverse": { "$value": "-12px" }
+    },
+    "tabGroup": {
+      "$type": "dimension",
+      "gap": { "$value": "{space.2}" },
+      "itemGap": { "$value": "6px" },
+      "itemHeight": { "$value": "{control.height.md}" },
+      "itemIconSize": { "$value": "16px" },
+      "itemPaddingInline": { "$value": "{space.4}" },
+      "itemActionSize": { "$value": "{space.5}" },
+      "itemActionInset": { "$value": "{space.2}" },
+      "itemRadius": { "$value": "{radius.pill}" }
+    }
+  },
+  "layout": {
+    "$type": "dimension",
+    "splitView": {
+      "contentPanelRadius": {
+        "$description": "Corner radius for the content panel where it meets a companion navigation panel.",
+        "$value": "{radius.3xl}"
+      }
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "sm": { "$value": "6px" },
+    "base": { "$value": "8px" },
+    "md": { "$value": "{radius.base}" },
+    "lg": { "$value": "12px" },
+    "xl": { "$value": "16px" },
+    "2xl": { "$value": "20px" },
+    "3xl": { "$value": "24px" },
+    "pill": { "$value": "9999px" }
+  },
+  "border": {
+    "width": {
+      "$type": "dimension",
+      "default": { "$value": "1px" },
+      "strong": { "$value": "2px" }
+    }
+  },
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "instant": { "$value": "80ms" },
+      "fast": { "$value": "140ms" },
+      "base": { "$value": "220ms" },
+      "normal": { "$value": "{motion.duration.base}" },
+      "slow": { "$value": "420ms" },
+      "lazy": { "$value": "1s" },
+      "loop": { "$value": "720ms" }
+    },
+    "easing": {
+      "$type": "cubicBezier",
+      "standard": { "$value": "cubic-bezier(0.23, 1, 0.32, 1)" },
+      "decelerate": { "$value": "{motion.easing.standard}" },
+      "smooth": { "$value": "cubic-bezier(0.77, 0, 0.175, 1)" },
+      "accelerate": { "$value": "cubic-bezier(0.4, 0, 1, 1)" },
+      "enter": { "$value": "{motion.easing.standard}" },
+      "exit": { "$value": "cubic-bezier(0.3, 0, 1, 1)" }
+    }
+  },
+  "focus": {
+    "width": { "$type": "dimension", "$value": "2px" },
+    "offset": { "$type": "dimension", "$value": "2px" }
+  },
+  "layer": {
+    "$type": "number",
+    "base": { "$value": 0 },
+    "decoration": { "$value": 1 },
+    "content": { "$value": 2 },
+    "sticky": { "$value": 15 },
+    "floating": { "$value": 50 },
+    "dropdown": { "$value": 60 },
+    "overlay": { "$value": 100 },
+    "modal": { "$value": 200 },
+    "modalActive": { "$value": 250 },
+    "fullscreen": { "$value": 280 },
+    "overlayHost": { "$value": 300 },
+    "tooltip": { "$value": 350 },
+    "popover": { "$value": 360 },
+    "toast": { "$value": 400 },
+    "notification": { "$value": 400 },
+    "contextMenu": { "$value": 500 }
+  }
+}

@@ -7,145 +7,26 @@
   display: flex;
   gap: 8px;
   align-items: center;
-}
-
-.copy-output-button {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  background: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.7);
-  border: 1px solid var(--bf-appearance-token-color-overlay-white-20);
-  border-radius: 6px;
-  color: var(--bf-appearance-token-color-overlay-white-80);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-  font-weight: 500;
-  cursor: pointer;
   transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     opacity 140ms ease,
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    box-shadow 180ms ease;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  min-width: 60px;
-  justify-content: center;
+    transform 140ms ease;
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
-  font-family: var(--bf-appearance-token-font-family-sans);
 }
 
 /* Show buttons when parent is hovered */
-.copy-button-area:hover .copy-output-button,
-.flow-chat-dialog-turn:hover .copy-output-button {
+.copy-button-area:hover .copy-output-button-group,
+.flow-chat-dialog-turn:hover .copy-output-button-group,
+.copy-output-button-group[data-bf-state='copied'] {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
-}
-
-.copy-output-button:hover {
-  background: var(--bf-appearance-token-color-accent-700);
-  border-color: var(--bf-appearance-token-border-accent-strong);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--bf-appearance-token-border-accent-soft);
-}
-
-.copy-output-button:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 6px var(--bf-appearance-token-border-accent);
-}
-
-.copy-output-button.copied {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-success) 90%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 70%, transparent);
-  color: var(--bf-appearance-token-color-static-white);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.copy-output-button.copied:hover {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-success) 90%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 70%, transparent);
-  transform: translateY(0);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-success) 40%, transparent);
-}
-
-.button-icon {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  transition: transform 0.2s ease;
-}
-
-.copy-output-button:hover .button-icon {
-  transform: scale(1.1);
-}
-
-.button-text {
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-}
-
-@media (max-width: 768px) {
-  .copy-output-button {
-    padding: 5px 8px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    min-width: 50px;
-    bottom: 6px;
-    right: 8px;
-  }
-  
-  .button-text {
-    display: none;
-  }
-  
-  .copy-output-button {
-    min-width: 32px;
-    padding: 6px;
-  }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  .copy-output-button {
-    background: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.9);
-    border-color: var(--bf-appearance-token-color-overlay-white-60);
-    color: white;
-  }
-  
-  .copy-output-button:hover {
-    background: var(--bf-appearance-token-color-accent-600);
-    border-color: var(--bf-appearance-token-color-accent-600);
-  }
 }
 
 /* Reduced motion mode support */
 @media (prefers-reduced-motion: reduce) {
-  .copy-output-button {
+  .copy-output-button-group {
     transition: none;
   }
-  
-  .button-icon,
-  .button-text {
-    transition: none;
-  }
-  
-  .copy-output-button:hover .button-icon {
-    transform: none;
-  }
-}
-
-.copy-output-button.edit-button:hover {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 80%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 60%, transparent);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 30%, transparent);
-}
-
-.copy-output-button.edit-button:active {
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 40%, transparent);
 }

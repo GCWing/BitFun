@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -16,7 +17,6 @@ import {
 } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
 import {
-  Button,
   ConfigPageLoading,
   ConfigPageMessage,
   ConfigPageRefreshButton,
@@ -24,7 +24,6 @@ import {
   IconButton,
   Input,
   NumberInput,
-  Switch,
 } from '@/component-library';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -492,21 +491,23 @@ const WorktreeSettingsPage: React.FC = () => {
         </ConfigPageSection>
         <div className="bitfun-worktree-settings__actions">
           <Button
-            variant="ghost"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={() => setSettings(DEFAULT_SETTINGS)}
             disabled={saving}
+            leadingIcon={<RotateCcw size={14} aria-hidden />}
           >
-            <RotateCcw size={14} aria-hidden />
+
             {t('settings.reset')}
           </Button>
           <Button
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             onClick={() => void save()}
-            isLoading={saving}
+            loading={saving}
+            leadingIcon={<Save size={14} aria-hidden />}
           >
-            <Save size={14} aria-hidden />
+
             {t('settings.save')}
           </Button>
         </div>
@@ -759,8 +760,8 @@ const WorktreeSettingsPage: React.FC = () => {
           <ConfigPageMessage message={projectsMessage} />
           {projectsMessage?.type === 'error' && projects.length === 0 && (
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={() => void loadProjects()}
             >
               {t('management.retry')}

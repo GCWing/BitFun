@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -20,7 +21,7 @@ import {
   Webhook,
   Wrench,
 } from 'lucide-react';
-import { Button, Search, Switch, Textarea } from '@/component-library';
+import { Search, Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -514,8 +515,8 @@ const EcosystemCompatibilityScene: React.FC = () => {
                     </span>
                   ) : (
                     <Button
-                      size="small"
-                      variant="secondary"
+                      size="sm"
+                      variant="outline"
                       disabled={!ready || importing}
                       title={t(`import.states.${state}`)}
                       onClick={() => void handleImportItem(item)}
@@ -545,8 +546,8 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <p>{t('run.description', { name: selectedRuntime.spec.name })}</p>
           </div>
           <Button
-            size="small"
-            variant="secondary"
+            size="sm"
+            variant="outline"
             onClick={() => setOwnerSurface(ownerSurface === 'acp' ? null : 'acp')}
           >
             {t(ownerSurface === 'acp' ? 'run.hideManager' : 'run.openManager')}
@@ -596,8 +597,8 @@ const EcosystemCompatibilityScene: React.FC = () => {
                         <p>{t('run.session.description', { name: displayName })}</p>
                       </div>
                       <Button
-                        size="small"
-                        variant="primary"
+                        size="sm"
+                        variant="fill"
                         onClick={() => handleStartAcpClient(client)}
                       >
                         {t('run.startSession')}
@@ -621,8 +622,8 @@ const EcosystemCompatibilityScene: React.FC = () => {
                           : t('run.subagent.bestForFallback')}</small>
                       </div>
                       <Button
-                        size="small"
-                        variant="secondary"
+                        size="sm"
+                        variant="outline"
                         disabled={!profileSupported}
                         title={!profileSupported
                           ? t('run.subagent.states.unsupportedHost')
@@ -646,7 +647,6 @@ const EcosystemCompatibilityScene: React.FC = () => {
                         <label className="ecosystem-compatibility__subagent-toggle">
                           <span>{t('run.subagent.enabledLabel')}</span>
                           <Switch
-                            size="small"
                             checked={subagentDraft.enabled}
                             disabled={savingProfile}
                             aria-label={t('run.subagent.enabledLabel')}
@@ -696,17 +696,17 @@ const EcosystemCompatibilityScene: React.FC = () => {
                         </span>
                         <div>
                           <Button
-                            size="small"
-                            variant="ghost"
+                            size="sm"
+                            variant="outline"
                             disabled={savingProfile}
                             onClick={() => setEditingSubagentClientId(null)}
                           >
                             {t('run.subagent.cancelAction')}
                           </Button>
                           <Button
-                            size="small"
-                            variant="primary"
-                            isLoading={savingProfile}
+                            size="sm"
+                            variant="fill"
+                            loading={savingProfile}
                             onClick={() => void handleSaveSubagent(client)}
                           >
                             {t(savingProfile
@@ -877,8 +877,8 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <span>{t('header.checksLabel')}</span>
             <strong title={headerCheckSummary}>{headerCheckSummary}</strong>
             <Button
-              size="small"
-              variant="secondary"
+              size="sm"
+              variant="outline"
               onClick={() => setOwnerSurface(
                 ownerSurface === 'external-sources' ? null : 'external-sources',
               )}
@@ -908,9 +908,9 @@ const EcosystemCompatibilityScene: React.FC = () => {
                 sources: loadIssues.includes('externalSources') ? t('loadAreas.externalSources') : '',
                 acp: loadIssues.includes('acpClients') ? t('loadAreas.acpClients') : '',
               })}</span>
-              <button type="button" onClick={() => void loadCompatibility(true)}>
+              <Button variant="outline" size="sm" onClick={() => void loadCompatibility(true)}>
                 {t('retry')}
-              </button>
+              </Button>
             </div>
           ) : null}
           {ownerSurface === 'external-sources' ? (

@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { Code2, RotateCcw, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -113,24 +114,25 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
           </span>
         </div>
         <div className="bitfun-generative-widget-panel__toolbar-actions" data-bf-component="generative-widget" data-bf-part="toolbarActions">
-          <button
-            type="button"
-            className="bitfun-generative-widget-panel__button"
+          <Button
+            variant="outline"
+            size="sm"
+            leadingIcon={<RotateCcw size={14} />}
             onClick={handleReset}
             disabled={draftCode === savedCodeRef.current}
           >
-            <RotateCcw size={14} />
-            <span>{t('toolCards.generativeUI.reset')}</span>
-          </button>
-          <button
-            type="button"
-            className="bitfun-generative-widget-panel__button bitfun-generative-widget-panel__button--primary"
+            {t('toolCards.generativeUI.reset')}
+          </Button>
+          <Button
+            variant="fill"
+            size="sm"
+            leadingIcon={<Save size={14} />}
+            loading={saveState === 'saving'}
             onClick={handleSaveNow}
-            disabled={saveState === 'saving' || draftCode === savedCodeRef.current}
+            disabled={draftCode === savedCodeRef.current}
           >
-            <Save size={14} />
-            <span>{t('toolCards.generativeUI.saveNow')}</span>
-          </button>
+            {t('toolCards.generativeUI.saveNow')}
+          </Button>
         </div>
       </div>
 

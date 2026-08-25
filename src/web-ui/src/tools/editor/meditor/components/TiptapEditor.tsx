@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { Button } from '@bitfun/ui';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details';
@@ -18,7 +19,7 @@ import type { Editor as TiptapEditorInstance, JSONContent } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Selection } from '@tiptap/pm/state';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input } from '@/component-library';
+import { IconButton, Input } from '@/component-library';
 import { editorAiAPI } from '@/infrastructure/api/service-api/EditorAiAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -1285,17 +1286,20 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                   suffix={(
                     <div className="m-editor-inline-ai__composer-actions">
                       <span className="m-editor-inline-ai__page-chip">{t('editor.meditor.inlineAi.currentPage')}</span>
-                      <button
+                      <IconButton
                         type="button"
-                        className="m-editor-inline-ai__send"
+                        variant="primary"
+                        size="xs"
+                        shape="circle"
                         onClick={() => {
                           void handleContinueWriting();
                         }}
                         disabled={!canSubmitInlinePrompt}
+                        tooltip={t('editor.meditor.inlineAi.askSubmit')}
                         aria-label={t('editor.meditor.inlineAi.askSubmit')}
                       >
                         <ArrowUp size={13} strokeWidth={2.1} />
-                      </button>
+                      </IconButton>
                     </div>
                   )}
                 />
@@ -1310,51 +1314,45 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                 data-bf-component="tiptap-editor"
                 data-bf-part="quickActions"
               >
-                <button
+                <Button
                   type="button"
-                  className="m-editor-inline-ai__quick-action m-editor-inline-ai__quick-action--primary"
-                  data-bf-component="tiptap-editor"
-                  data-bf-part="quickAction"
+                  variant="fill"
+                  size="sm"
+                  className="m-editor-inline-ai__quick-action"
+                  leadingIcon={<PenLine size={14} strokeWidth={1.75} />}
                   data-testid="md-inline-ai-continue"
                   onClick={() => {
                     handleInlineAiQuickAction('continue', '');
                   }}
                 >
-                  <span className="m-editor-inline-ai__quick-action-icon">
-                    <PenLine size={14} strokeWidth={1.75} />
-                  </span>
-                  <span>{t('editor.meditor.inlineAi.continueMode')}</span>
-                </button>
-                <button
+                  {t('editor.meditor.inlineAi.continueMode')}
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   className="m-editor-inline-ai__quick-action"
-                  data-bf-component="tiptap-editor"
-                  data-bf-part="quickAction"
+                  leadingIcon={<FileText size={14} strokeWidth={1.75} />}
                   data-testid="md-inline-ai-summary"
                   onClick={() => {
                     handleInlineAiQuickAction('summary', t('editor.meditor.inlineAi.summaryDirection'));
                   }}
                 >
-                  <span className="m-editor-inline-ai__quick-action-icon">
-                    <FileText size={14} strokeWidth={1.75} />
-                  </span>
-                  <span>{t('editor.meditor.inlineAi.summaryAction')}</span>
-                </button>
-                <button
+                  {t('editor.meditor.inlineAi.summaryAction')}
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   className="m-editor-inline-ai__quick-action"
-                  data-bf-component="tiptap-editor"
-                  data-bf-part="quickAction"
+                  leadingIcon={<ListTodo size={14} strokeWidth={1.75} />}
                   data-testid="md-inline-ai-todo"
                   onClick={() => {
                     handleInlineAiQuickAction('todo', t('editor.meditor.inlineAi.todoDirection'));
                   }}
                 >
-                  <span className="m-editor-inline-ai__quick-action-icon">
-                    <ListTodo size={14} strokeWidth={1.75} />
-                  </span>
-                  <span>{t('editor.meditor.inlineAi.todoAction')}</span>
-                </button>
+                  {t('editor.meditor.inlineAi.todoAction')}
+                </Button>
               </div>
 
               <div
@@ -1362,13 +1360,14 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                 data-bf-component="tiptap-editor"
                 data-bf-part="footer"
               >
-                <button
+                <Button
                   type="button"
-                  className="m-editor-inline-ai__footer-dismiss"
+                  variant="outline"
+                  size="sm"
                   onClick={handleRejectInlineContinue}
                 >
                   {t('editor.meditor.inlineAi.cancel')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

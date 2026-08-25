@@ -187,33 +187,6 @@
     font-weight: 600;
   }
 
-  &__policy-summary {
-    color: inherit;
-  }
-
-  &__policy-summary button {
-    padding: 0;
-    border: 0;
-    color: inherit;
-    background: transparent;
-    font: inherit;
-    text-align: left;
-    text-decoration: underline;
-    text-decoration-color: transparent;
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      color: var(--bf-appearance-token-color-text-primary);
-      text-decoration-color: currentColor;
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: 2px;
-    }
-  }
-
   &__inherited-badge,
   &__override-badge,
   &__limited-badge {
@@ -264,7 +237,7 @@
       }
     }
 
-    .bitfun-button {
+    [data-bf-component='button'] {
       margin-left: auto;
     }
   }
@@ -483,6 +456,7 @@
   }
 
   &__source-member {
+    display: inline-flex;
     flex-direction: row-reverse;
     align-items: center;
     justify-content: space-between;
@@ -499,25 +473,26 @@
       border-color: var(--bf-appearance-token-color-accent-500);
     }
 
-    .bitfun-switch__wrapper {
-      margin-top: 0;
-    }
+  }
 
-    .bitfun-switch__content {
-      min-width: 0;
-      gap: 0;
-      text-align: left;
-    }
+  &__source-member-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 0;
+    text-align: left;
+  }
 
-    .bitfun-switch__label {
-      font-size: 12px;
-      line-height: 15px;
-    }
+  &__source-member-label {
+    font-size: 12px;
+    line-height: 15px;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
 
-    .bitfun-switch__description {
-      font-size: 12px;
-      line-height: 13px;
-    }
+  &__source-member-description {
+    font-size: 12px;
+    line-height: 13px;
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__source-description,
@@ -778,8 +753,8 @@
       grid-template-columns: 1fr;
     }
 
-    &__scope-bar .bitfun-button,
-    &__policy-recovery .bitfun-button {
+    &__scope-bar [data-bf-component='button'],
+    &__policy-recovery [data-bf-component='button'] {
       width: 100%;
       margin-left: 0;
     }

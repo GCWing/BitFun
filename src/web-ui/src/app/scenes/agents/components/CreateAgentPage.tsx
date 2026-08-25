@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -9,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Switch, Textarea, Tooltip } from '@/component-library';
+import { Input, Textarea, Tooltip } from '@/component-library';
 import {
   CustomAgentAPI,
   type CustomAgentKind,
@@ -484,10 +485,14 @@ const CreateAgentPage: React.FC = () => {
     return (
       <div className="tv" data-bf-component="create-agent-page" data-bf-part="root" data-bf-state="loading">
         <div className="tv__editor-bar" data-bf-component="create-agent-page" data-bf-part="editorBar">
-          <button className="tv__back-btn" onClick={openHome} type="button" data-bf-component="create-agent-page" data-bf-part="back">
-            <ArrowLeft size={14} />
-            <span>{t('agentsOverview.backToOverview')}</span>
-          </button>
+          <Button
+            variant="outline"
+            size="sm"
+            leadingIcon={<ArrowLeft />}
+            onClick={openHome}
+          >
+            {t('agentsOverview.backToOverview')}
+          </Button>
         </div>
         <div className="th__list-body" data-bf-component="create-agent-page" data-bf-part="body">
           <div className="th__list-inner">
@@ -502,15 +507,19 @@ const CreateAgentPage: React.FC = () => {
     return (
       <div className="tv" data-bf-component="create-agent-page" data-bf-part="root" data-bf-state="error">
         <div className="tv__editor-bar" data-bf-component="create-agent-page" data-bf-part="editorBar">
-          <button className="tv__back-btn" onClick={openHome} type="button" data-bf-component="create-agent-page" data-bf-part="back">
-            <ArrowLeft size={14} />
-            <span>{t('agentsOverview.backToOverview')}</span>
-          </button>
+          <Button
+            variant="outline"
+            size="sm"
+            leadingIcon={<ArrowLeft />}
+            onClick={openHome}
+          >
+            {t('agentsOverview.backToOverview')}
+          </Button>
         </div>
         <div className="th__list-body" data-bf-component="create-agent-page" data-bf-part="body">
           <div className="th__list-inner">
             <p className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error" role="alert">{detailError}</p>
-            <Button variant="secondary" size="small" onClick={openHome}>
+            <Button variant="outline" size="sm" onClick={openHome}>
               {t('agentsOverview.form.cancel')}
             </Button>
           </div>
@@ -531,9 +540,8 @@ const CreateAgentPage: React.FC = () => {
             <div className="th-create-page__actions" data-bf-component="create-agent-page" data-bf-part="actions">
               <Button
                 type="button"
-                variant="secondary"
-                size="small"
-                className="th-create-page__cancel-button"
+                variant="outline"
+                size="sm"
                 onClick={openHome}
                 disabled={submitting}
               >
@@ -542,9 +550,8 @@ const CreateAgentPage: React.FC = () => {
               <Button
                 type="submit"
                 form="custom-agent-form"
-                variant="primary"
-                size="small"
-                className="th-create-page__submit-button"
+                variant="fill"
+                size="sm"
                 disabled={submitting || toolsEditing}
                 aria-busy={submitting}
               >
@@ -718,7 +725,6 @@ const CreateAgentPage: React.FC = () => {
                         checked={readonly}
                         disabled={kind === 'subagent' && review}
                         onChange={(event) => handleReadonlyChange(event.target.checked)}
-                        size="small"
                         aria-label={t('agentsOverview.form.readonly')}
                       />
                     </div>
@@ -730,7 +736,6 @@ const CreateAgentPage: React.FC = () => {
                         <Switch
                           checked={review}
                           onChange={(event) => handleReviewChange(event.target.checked)}
-                          size="small"
                           aria-label={t('agentsOverview.form.review')}
                         />
                       </div>
@@ -761,8 +766,8 @@ const CreateAgentPage: React.FC = () => {
                           <div className="th-create-panel__tool-edit-actions">
                             <Button
                               type="button"
-                              variant="ghost"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               onClick={() => {
                                 setToolsEditing(false);
                                 setPendingTools(null);
@@ -773,8 +778,8 @@ const CreateAgentPage: React.FC = () => {
                             </Button>
                             <Button
                               type="button"
-                              variant="secondary"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               onClick={() => {
                                 setSelectedTools(new Set(pendingTools ?? selectedTools));
                                 setToolsEditing(false);
@@ -788,15 +793,16 @@ const CreateAgentPage: React.FC = () => {
                         ) : (
                           <Button
                             type="button"
-                            variant="ghost"
-                            size="small"
+                            variant="outline"
+                            size="sm"
                             onClick={() => {
                               setPendingTools(new Set(selectedTools));
                               setToolsEditing(true);
                             }}
                             disabled={submitting}
+                            leadingIcon={<Settings2 size={14} aria-hidden="true" />}
                           >
-                            <Settings2 size={14} aria-hidden="true" />
+
                             {t('agentsOverview.toolsEdit')}
                           </Button>
                         )}

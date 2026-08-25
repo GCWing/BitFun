@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { Puzzle, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/component-library';
@@ -522,18 +523,18 @@ const ExternalMcpOverview: React.FC = () => {
                 })}
               </ul>
               <div className="bitfun-mcp-tools__import-actions" data-bf-component="external-mcp-overview" data-bf-part="importActions">
-                <button type="button" disabled={importBusy || selectedImportItems.length === 0} onClick={() => void applyImport()}>
+                <Button variant="fill" size="sm" disabled={importBusy || selectedImportItems.length === 0} onClick={() => void applyImport()}>
                   {t('external.import.apply')}
-                </button>
-                <button type="button" disabled={importBusy} onClick={cancelImport}>
+                </Button>
+                <Button variant="outline" size="sm" disabled={importBusy} onClick={cancelImport}>
                   {t('external.import.cancel')}
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
-            <button type="button" disabled={importBusy} onClick={() => void previewImport()}>
+            <Button variant="fill" size="sm" disabled={importBusy} onClick={() => void previewImport()}>
               {t('external.import.preview')}
-            </button>
+            </Button>
           )}
           {importNotice ? <p role="status">{t(`external.import.${importNotice}`)}</p> : null}
         </div>

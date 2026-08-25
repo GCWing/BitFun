@@ -1,5 +1,6 @@
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Modal, Textarea } from '@/component-library';
+import { Input, Modal, Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -302,8 +303,9 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
                     <Button
                       type="button"
                       className="workspace-related-paths-dialog__select"
-                      variant="secondary"
-                      size="small"
+                      variant="outline"
+                      size="sm"
+                      leadingIcon={<FolderOpen />}
                       onClick={() =>
                         remoteWorkspace
                           ? setBrowsingIndex(index)
@@ -311,8 +313,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
                       }
                       disabled={saving || (remoteWorkspace && !connectionId)}
                     >
-                      <FolderOpen size={14} />
-                      <span>{t('actions.select')}</span>
+                      {t('actions.select')}
                     </Button>
                   </div>
 
@@ -411,21 +412,20 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
           <div data-bf-component="workspace-related-paths-dialog" data-bf-part="footer" className="workspace-related-paths-dialog__footer">
             <Button
               type="button"
-              className="workspace-related-paths-dialog__add"
-              variant="dashed"
-              size="small"
+              variant="outline"
+              size="sm"
+              leadingIcon={<Plus />}
               onClick={handleAddDraft}
               disabled={saving}
             >
-              <Plus size={14} />
-              <span>{t('nav.workspaces.relatedPaths.dialog.add')}</span>
+              {t('nav.workspaces.relatedPaths.dialog.add')}
             </Button>
 
             <div data-bf-component="workspace-related-paths-dialog" data-bf-part="footerActions" className="workspace-related-paths-dialog__footer-actions">
               <Button
                 type="button"
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={onClose}
                 disabled={saving}
               >
@@ -433,8 +433,8 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
               </Button>
               <Button
                 type="button"
-                variant="primary"
-                size="small"
+                variant="fill"
+                size="sm"
                 onClick={() => void handleSave()}
                 disabled={saving || hasInvalidDraft || isUnchanged}
               >

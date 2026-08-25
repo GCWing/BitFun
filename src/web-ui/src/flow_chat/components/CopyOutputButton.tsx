@@ -4,11 +4,11 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, Edit } from 'lucide-react';
 import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../types/flow-chat';
 import { createMarkdownEditorTab } from '@/shared/utils/tabUtils';
-import { Tooltip } from '@/component-library';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
@@ -144,40 +144,31 @@ export const CopyOutputButton: React.FC<CopyOutputButtonProps> = ({
 
   return (
     <div data-bf-component="copy-output-button" data-bf-part="root" data-bf-state={copied ? 'copied' : ''} className={`copy-output-button-group ${className}`}>
-      <button
-        data-bf-component="copy-output-button"
-        data-bf-part="action"
+      <Button
+        type="button"
+        variant={copied ? 'fill' : 'outline'}
+        size="sm"
+        leadingIcon={copied ? <Check size={14} /> : <Copy size={14} />}
         data-bf-action="copy"
-        className={`copy-output-button ${copied ? 'copied' : ''}`}
         onClick={handleCopy}
         title={copied ? t('copyOutput.copiedOutputContent') : t('copyOutput.copyOutputContent')}
         aria-label={copied ? t('copyOutput.copiedOutputContent') : t('copyOutput.copyOutputContent')}
       >
-        <span data-bf-component="copy-output-button" data-bf-part="icon" className="button-icon">
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-        </span>
-        <span data-bf-component="copy-output-button" data-bf-part="text" className="button-text">
-          {copied ? t('copyOutput.copied') : t('copyOutput.copy')}
-        </span>
-      </button>
+        {copied ? t('copyOutput.copied') : t('copyOutput.copy')}
+      </Button>
       
-      <Tooltip content={t('copyOutput.openInEditor')}>
-        <button
-          data-bf-component="copy-output-button"
-          data-bf-part="action"
-          data-bf-action="edit"
-          className="copy-output-button edit-button"
-          onClick={handleOpenInEditor}
-          aria-label={t('copyOutput.openInEditor')}
-        >
-          <span data-bf-component="copy-output-button" data-bf-part="icon" className="button-icon">
-            <Edit size={14} />
-          </span>
-          <span data-bf-component="copy-output-button" data-bf-part="text" className="button-text">
-            {t('copyOutput.edit')}
-          </span>
-        </button>
-      </Tooltip>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        leadingIcon={<Edit size={14} />}
+        data-bf-action="edit"
+        onClick={handleOpenInEditor}
+        title={t('copyOutput.openInEditor')}
+        aria-label={t('copyOutput.openInEditor')}
+      >
+        {t('copyOutput.edit')}
+      </Button>
     </div>
   );
 };

@@ -3,10 +3,11 @@
  * Shows a branch's commits and supports cherry-pick when applicable.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, RefreshCw, ChevronDown, ChevronUp, GitBranch, Square, CheckSquare } from 'lucide-react';
-import { Search, IconButton, Select, Button } from '@/component-library';
+import { Search, IconButton, Select } from '@/component-library';
 import { gitAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
 import type { GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
@@ -305,7 +306,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
       <div className={`git-branch-history-view git-branch-history-view--error ${className}`} data-bf-component="git-branch-history" data-bf-part="root" data-bf-state="error">
         <div data-bf-component="git-branch-history" data-bf-part="error" className="git-branch-history-view__error">
           <p>{t('branchHistory.loadFailedWithMessage', { error })}</p>
-          <Button variant="secondary" size="small" onClick={loadCommits}>
+          <Button variant="outline" size="sm" onClick={loadCommits}>
             {t('branchHistory.retry')}
           </Button>
         </div>
@@ -370,24 +371,16 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
         <div data-bf-component="git-branch-history" data-bf-part="headerRight" className="git-branch-history-view__header-right">
           {canCherryPick && (
             <Button
-              size="small"
-              variant="primary"
+              size="sm"
+              variant="fill"
               onClick={handleCherryPick}
               disabled={isCherryPicking || selectedCommits.size === 0}
-              className="git-branch-history-view__cherry-pick-btn"
+              loading={isCherryPicking}
+              leadingIcon={<GitBranch size={14} />}
             >
-              {isCherryPicking ? (
-                <>
-                  <div className="git-branch-history-view__spinner git-branch-history-view__spinner--small" />
-                  {t('branchHistory.cherryPickRunning')}
-                </>
-              ) : (
-                <>
-                  <GitBranch size={14} />
-                  {t('branchHistory.cherryPick')}
-                  {selectedCommits.size > 0 ? ` (${selectedCommits.size})` : ''}
-                </>
-              )}
+              {isCherryPicking
+                ? t('branchHistory.cherryPickRunning')
+                : `${t('branchHistory.cherryPick')}${selectedCommits.size > 0 ? ` (${selectedCommits.size})` : ''}`}
             </Button>
           )}
           

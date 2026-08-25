@@ -1,16 +1,23 @@
-import React, { useCallback, useMemo } from 'react';
+import { Switch } from '@bitfun/ui';
+import React, { useCallback, useMemo, useState } from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
 import { useMouseGlowPreference } from '@/infrastructure/mouse-glow';
 import { useTranslation } from 'react-i18next';
-import { Select, Switch } from '@/component-library';
+import { Select } from '@/component-library';
 import {
   SYSTEM_APPEARANCE_ID,
+  getAppearancePackageValidationError,
   useAppearance,
   type AppearanceCatalogEntry,
 } from '@/infrastructure/appearance';
 import { useLanguageSelector } from '@/infrastructure/i18n';
 import type { LocaleId } from '@/infrastructure/i18n/types';
-import { AppearancePackageConfigSection } from './AppearancePackageConfigSection';
+import { notificationService } from '@/shared/notification-system';
+import {
+  AppearancePackageConfigSection,
+  AppearancePackageFailurePanel,
+  type AppearancePackageFailure,
+} from './AppearancePackageConfigSection';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -24,11 +31,15 @@ import './AppearanceSettingsPage.scss';
 function AppearanceSelectionSection() {
   const { t } = useTranslation('settings/application');
   const { t: tAppearance } = useTranslation('settings/appearance');
+  const [packageActivationFailure, setPackageActivationFailure] = useState<
+    AppearancePackageFailure | null
+  >(null);
   const { enabled: mouseGlowEnabled, setEnabled: setMouseGlowEnabled } = useMouseGlowPreference();
   const {
     selectedAppearanceId,
     appearances,
     select,
+    activate,
     initialized,
     status,
   } = useAppearance();
@@ -77,6 +88,52 @@ function AppearanceSelectionSection() {
     ],
     [appearances, t, getAppearanceDisplayDescription, getAppearanceDisplayName]
   );
+  const packageAppearances = useMemo(
+    () => appearances.filter(appearance => appearance.source === 'imported'),
+    [appearances],
+  );
+  const selectedPackage = packageAppearances.find(
+    appearance => appearance.id === selectedAppearanceId,
+  );
+  const selectedPackageId = selectedPackage?.id ?? SYSTEM_APPEARANCE_ID;
+  const packageOptions = useMemo(() => [
+    {
+      value: SYSTEM_APPEARANCE_ID,
+      label: tAppearance('package.nativeName'),
+      description: tAppearance('package.nativeDescription'),
+      testId: 'appearance-package-option',
+      testAttributes: { 'data-appearance-id': SYSTEM_APPEARANCE_ID },
+    },
+    ...packageAppearances.map(appearance => ({
+      value: appearance.id,
+      label: appearance.name,
+      description: `${appearance.author || tAppearance('package.unknownAuthor')} · v${appearance.version}`,
+      testId: 'appearance-package-option',
+      testAttributes: { 'data-appearance-id': appearance.id },
+    })),
+  ], [packageAppearances, tAppearance]);
+
+  const handlePackageChange = async (value: string | number | (string | number)[]) => {
+    if (Array.isArray(value)) return;
+    try {
+      await activate(String(value));
+      setPackageActivationFailure(null);
+    } catch (error) {
+      const validationError = getAppearancePackageValidationError(error);
+      setPackageActivationFailure({
+        operation: 'activate',
+        ...(validationError
+          ? { validationError }
+          : { message: error instanceof Error ? error.message : String(error) }),
+      });
+      notificationService.error(
+        validationError
+          ? tAppearance('package.diagnostics.activateSummary', { count: validationError.issues.length })
+          : tAppearance('package.activateFailed'),
+        { duration: 5000 },
+      );
+    }
+  };
 
   return (
     <div
@@ -102,6 +159,7 @@ function AppearanceSelectionSection() {
               data-bf-part="language"
             >
               <Select
+                size="small"
                 value={currentLanguage}
                 onChange={(value) =>
                   selectLanguage(String(Array.isArray(value) ? value[0] ?? '' : value) as LocaleId)
@@ -136,6 +194,7 @@ function AppearanceSelectionSection() {
                 data-bf-part="paletteSelect"
               >
                 <Select
+                  size="small"
                   value={selectedAppearanceId}
                   onChange={(value) => handleAppearanceChange(value as string)}
                   disabled={!initialized || status === 'applying'}
@@ -158,15 +217,6 @@ function AppearanceSelectionSection() {
             </div>
           </ConfigPageRow>
           <ConfigPageRow
-            className="appearance-settings__package-row"
-            label={tAppearance('package.title')}
-            description={tAppearance('package.description')}
-            align="center"
-            balanced
-          >
-            <AppearancePackageConfigSection />
-          </ConfigPageRow>
-          <ConfigPageRow
             label={tAppearance('effects.mouseGlow.label')}
             description={tAppearance('effects.mouseGlow.description')}
             align="center"
@@ -176,10 +226,38 @@ function AppearanceSelectionSection() {
               onChange={(event) => setMouseGlowEnabled(event.target.checked)}
               aria-label={tAppearance('effects.mouseGlow.label')}
               data-testid="appearance-mouse-glow-switch"
-              size="small"
             />
           </ConfigPageRow>
+          <ConfigPageRow
+            className="appearance-settings__package-row"
+            label={tAppearance('package.title')}
+            description={tAppearance('package.description')}
+            align="center"
+          >
+            <div
+              className="appearance-settings__package-select"
+              data-bf-component="appearance-settings"
+              data-bf-part="packageSelect"
+            >
+              <Select
+                size="small"
+                value={selectedPackageId}
+                options={packageOptions}
+                onChange={handlePackageChange}
+                disabled={!initialized || status === 'applying'}
+                placement="bottom"
+                triggerTestId="appearance-package-select"
+              />
+            </div>
+          </ConfigPageRow>
         </ConfigPageSection>
+        {packageActivationFailure && (
+          <AppearancePackageFailurePanel
+            failure={packageActivationFailure}
+            onDismiss={() => setPackageActivationFailure(null)}
+          />
+        )}
+        <AppearancePackageConfigSection />
       </div>
     </div>
   );

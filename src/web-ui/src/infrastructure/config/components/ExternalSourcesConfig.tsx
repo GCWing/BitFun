@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -14,11 +15,9 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import {
-  Button,
   ConfigPageLoading,
   ConfirmDialog,
   Select,
-  Switch,
   Tooltip,
 } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -1399,37 +1398,48 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
           ? group.displayName
           : t(`policy.capability.${member.capability}`);
         const scopeLabel = sourceScopeLabel(member.scope, t);
+        const memberBusy = busyKey === member.stableKey;
         return (
-          <Switch
+          <label
             key={member.stableKey}
             className="bitfun-external-sources-config__source-member"
-            size="small"
-            label={capabilityLabel}
-            description={group.scopes.length > 1 ? scopeLabel : undefined}
-            checked={member.enabled}
-            disabled={!policyCompatible
-              || !member.mutable
-              || !hostCapabilities.canManageSources}
-            loading={busyKey === member.stableKey}
-            aria-label={t('sources.toggleLabel', {
-              name: [
-                group.displayName,
-                capabilityLabel,
-                scopeLabel,
-                t(`lifecycle.${member.lifecycle}`),
-              ].join(' · '),
-            })}
-            onChange={(event) => void setEnabled(
-              member.stableKey,
-              event.currentTarget.checked,
-            )}
           >
-            {member.lifecycle !== 'available' ? (
-              <span className={`bitfun-external-sources-config__state is-${member.lifecycle}`} data-bf-component="external-sources-config" data-bf-part="state">
-                {t(`lifecycle.${member.lifecycle}`)}
+            <span className="bitfun-external-sources-config__source-member-copy">
+              <span className="bitfun-external-sources-config__source-member-label">
+                {capabilityLabel}
               </span>
-            ) : null}
-          </Switch>
+              {group.scopes.length > 1 ? (
+                <span className="bitfun-external-sources-config__source-member-description">
+                  {scopeLabel}
+                </span>
+              ) : null}
+              {member.lifecycle !== 'available' ? (
+                <span className={`bitfun-external-sources-config__state is-${member.lifecycle}`} data-bf-component="external-sources-config" data-bf-part="state">
+                  {t(`lifecycle.${member.lifecycle}`)}
+                </span>
+              ) : null}
+            </span>
+            <Switch
+              checked={member.enabled}
+              disabled={!policyCompatible
+                || !member.mutable
+                || !hostCapabilities.canManageSources
+                || memberBusy}
+              aria-busy={memberBusy}
+              aria-label={t('sources.toggleLabel', {
+                name: [
+                  group.displayName,
+                  capabilityLabel,
+                  scopeLabel,
+                  t(`lifecycle.${member.lifecycle}`),
+                ].join(' · '),
+              })}
+              onChange={(event) => void setEnabled(
+                member.stableKey,
+                event.currentTarget.checked,
+              )}
+            />
+          </label>
         );
       })}
     </div>
@@ -1471,10 +1481,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       description={safeModeEnabled ? undefined : t('safeMode.description')}
       extra={(
         <Switch
-          size="small"
           checked={safeModeEnabled}
           disabled={busyKey !== null || !canSetSafeMode}
-          loading={busyKey === 'external-safe-mode'}
+          aria-busy={busyKey === 'external-safe-mode'}
           aria-label={t('safeMode.toggleLabel')}
           onChange={(event) => void setSafeMode(event.currentTarget.checked)}
         />
@@ -1510,8 +1519,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
             placement="top"
           >
             <Button
-              variant="ghost"
-              size="small"
+              variant="outline"
+              size="sm"
               aria-label={refreshing ? t('actions.refreshing') : t('actions.refresh')}
               disabled={refreshing
                 || (hostUnavailable
@@ -1540,8 +1549,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 {hostUnavailableCanRetry ? (
                   <div className="bitfun-external-sources-config__recovery-actions">
                     <Button
-                      size="small"
-                      variant="secondary"
+                      size="sm"
+                      variant="outline"
                       onClick={() => void loadSnapshot(true, true)}
                     >
                       {t('recoveryActions.retry')}
@@ -1571,8 +1580,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         return (
                           <Button
                             key={action.type}
-                            size="small"
-                            variant="secondary"
+                            size="sm"
+                            variant="outline"
                             onClick={() => void loadSnapshot(true, true)}
                           >
                             {t(`recoveryActions.${action.type}`)}
@@ -1583,8 +1592,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         return (
                           <Button
                             key={action.type}
-                            size="small"
-                            variant="secondary"
+                            size="sm"
+                            variant="outline"
                             onClick={() => {
                               if (error.kind === 'load') {
                                 void loadSnapshot(true, true);
@@ -1601,8 +1610,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         return (
                           <Button
                             key={action.type}
-                            size="small"
-                            variant="secondary"
+                            size="sm"
+                            variant="outline"
                             onClick={() => void setSafeMode(false)}
                           >
                             {t('recoveryActions.exit_safe_mode')}
@@ -1613,8 +1622,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         return (
                           <Button
                             key={action.type}
-                            size="small"
-                            variant="secondary"
+                            size="sm"
+                            variant="outline"
                             onClick={() => scrollToFirstAttentionItem()}
                           >
                             {t(`recoveryActions.${action.type}`)}
@@ -1631,8 +1640,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         action.type === 'refresh' || action.type === 'retry'
                       )) ? (
                         <Button
-                          size="small"
-                          variant="secondary"
+                          size="sm"
+                          variant="outline"
                           onClick={() => void loadSnapshot(true, true)}
                         >
                           {t('recoveryActions.retry')}
@@ -1707,24 +1716,27 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 data-bf-part="policyCard"
                 title={t('policy.title')}
                 description={externalAttentionCount > 0 ? (
-                  <span className="bitfun-external-sources-config__policy-summary" data-bf-component="external-sources-config" data-bf-part="policySummary">
-                    <button
+                  <span data-bf-component="external-sources-config" data-bf-part="policySummary">
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="sm"
                       aria-controls="external-integration-attention-region"
                       onClick={() => scrollToFirstAttentionItem()}
                     >
                       {t('policy.attentionSummary', {
                         count: externalAttentionCount,
                       })}
-                    </button>
+                    </Button>
                   </span>
                 ) : undefined}
                 extra={(
                   <Switch
-                    size="small"
                     checked={selectedPolicyEnabled}
-                    disabled={!policyCompatible || !hostCapabilities.canMutatePolicy}
-                    loading={busyKey === `integration-policy:${policyScope}`}
+                    disabled={!policyCompatible
+                      || !hostCapabilities.canMutatePolicy
+                      || busyKey === `integration-policy:${policyScope}`}
+                    aria-busy={busyKey === `integration-policy:${policyScope}`}
                     aria-label={t('policy.enabledLabel')}
                     onChange={(event) => void updatePolicy({
                       operation: 'set_enabled',
@@ -1744,8 +1756,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     <AlertTriangle size={16} aria-hidden="true" />
                     <span>{t('policy.recoveryRequired')}</span>
                     <Button
-                      variant="secondary"
-                      size="small"
+                      variant="outline"
+                      size="sm"
                       disabled={busyKey !== null || !hostCapabilities.canMutatePolicy}
                       onClick={() => setResetPolicyConfirmation({
                         requestScope,
@@ -1818,8 +1830,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   ) : null}
                   {policyScope === 'workspace' && policy.workspaceOverride ? (
                     <Button
-                      variant="secondary"
-                      size="small"
+                      variant="outline"
+                      size="sm"
                       disabled={busyKey !== null || !policyCompatible
                         || !hostCapabilities.canMutatePolicy}
                       onClick={() => void updatePolicy({ operation: 'reset_workspace' })}
@@ -2296,8 +2308,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     </div>
                     <div className="bitfun-external-sources-config__tool-actions" data-bf-component="external-sources-config" data-bf-part="toolActions">
                       <Button
-                        variant="secondary"
-                        size="small"
+                        variant="outline"
+                        size="sm"
                         disabled={!policyCompatible || busyKey !== null
                           || !hostCapabilities.canApproveRuntime}
                         onClick={() => void decideMcpServer(
@@ -2309,8 +2321,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         {t('mcpApprovals.keepDisabled')}
                       </Button>
                       <Button
-                        variant="primary"
-                        size="small"
+                        variant="fill"
+                        size="sm"
                         aria-describedby={reviewRiskId}
                         disabled={!policyCompatible || busyKey !== null
                           || !hostCapabilities.canApproveRuntime}
@@ -2335,11 +2347,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 extra={(
                   <div className="bitfun-external-sources-config__tool-actions" data-bf-bulk-capability="mcp">
                     {(snapshot?.mcpApprovalRequests?.length ?? 0) > 0 ? (
-                      <Button variant="primary" size="small" aria-describedby="external-mcp-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(true)}>
+                      <Button variant="fill" size="sm" aria-describedby="external-mcp-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(true)}>
                         {t('bulkActions.enablePending', { count: snapshot?.mcpApprovalRequests?.length ?? 0 })}
                       </Button>
                     ) : null}
-                    <Button variant="secondary" size="small" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(false)}>
+                    <Button variant="outline" size="sm" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(false)}>
                       {t('bulkActions.disableAll')}
                     </Button>
                   </div>
@@ -2387,8 +2399,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             {t(`mcpState.${state}`)}
                           </span>
                           <Button
-                            variant="secondary"
-                            size="small"
+                            variant="outline"
+                            size="sm"
                             aria-expanded={reviewing}
                             onClick={() => setReviewingMcpKey(reviewing ? null : server.candidateId)}
                           >
@@ -2396,8 +2408,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           </Button>
                           {canDisable ? (
                             <Button
-                              variant="secondary"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               disabled={!policyCompatible || busyKey !== null
                                 || !hostCapabilities.canApproveRuntime}
                               onClick={() => void decideMcpServer(
@@ -2466,8 +2478,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           {canEnable ? (
                             <div className="bitfun-external-sources-config__tool-actions" data-bf-component="external-sources-config" data-bf-part="toolActions">
                               <Button
-                                variant="primary"
-                                size="small"
+                                variant="fill"
+                                size="sm"
                                 disabled={!policyCompatible || busyKey !== null
                                   || !hostCapabilities.canApproveRuntime}
                                 onClick={() => void decideMcpServer(
@@ -2530,8 +2542,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         return (
                           <div className="bitfun-external-sources-config__candidate" data-bf-component="external-sources-config" data-bf-part="candidate" key={candidate.candidateId}>
                             <Button
-                              variant={selected ? 'primary' : 'secondary'}
-                              size="small"
+                              variant={selected ? 'fill' : 'outline'}
+                              size="sm"
                               disabled={!policyCompatible || busyKey !== null || !candidate.available
                                 || !hostCapabilities.canApproveRuntime}
                               aria-pressed={selected}
@@ -2633,8 +2645,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                 {reviewingExternal && !selected && candidate.available ? (
                                   <div className="bitfun-external-sources-config__tool-actions" data-bf-component="external-sources-config" data-bf-part="toolActions">
                                     <Button
-                                      variant="primary"
-                                      size="small"
+                                      variant="fill"
+                                      size="sm"
                                       disabled={!policyCompatible || busyKey !== null
                                         || !hostCapabilities.canApproveRuntime}
                                       aria-describedby={detailId}
@@ -2784,11 +2796,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 extra={(
                   <div className="bitfun-external-sources-config__tool-actions" data-bf-bulk-capability="subagent">
                     {(snapshot?.pendingSubagentApprovals?.length ?? 0) > 0 ? (
-                      <Button variant="primary" size="small" aria-describedby="external-subagent-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(true)}>
+                      <Button variant="fill" size="sm" aria-describedby="external-subagent-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(true)}>
                         {t('bulkActions.enablePending', { count: snapshot?.pendingSubagentApprovals?.length ?? 0 })}
                       </Button>
                     ) : null}
-                    <Button variant="secondary" size="small" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(false)}>
+                    <Button variant="outline" size="sm" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(false)}>
                       {t('bulkActions.disableAll')}
                     </Button>
                   </div>
@@ -2848,8 +2860,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             {t(`agentState.${state}`)}
                           </span>
                           <Button
-                            variant="secondary"
-                            size="small"
+                            variant="outline"
+                            size="sm"
                             aria-expanded={reviewing}
                             onClick={() => setReviewingAgentKey(reviewing ? null : agent.candidateId)}
                           >
@@ -2857,8 +2869,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           </Button>
                           {canDisable ? (
                             <Button
-                              variant="secondary"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               disabled={!policyCompatible || busyKey !== null
                                 || !hostCapabilities.canApproveRuntime}
                               onClick={() => void decideAgent(agent.candidateId, agent.decisionKey, false)}
@@ -2934,16 +2946,16 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           ) : null}
                           <div className="bitfun-external-sources-config__tool-actions" data-bf-component="external-sources-config" data-bf-part="toolActions">
                             <Button
-                              variant="secondary"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               onClick={() => setReviewingAgentKey(null)}
                             >
                               {t('common.close')}
                             </Button>
                             {canEnable ? (
                               <Button
-                                variant="primary"
-                                size="small"
+                                variant="fill"
+                                size="sm"
                                 disabled={!policyCompatible || busyKey !== null
                                   || !hostCapabilities.canApproveRuntime}
                                 onClick={() => void decideAgent(
@@ -3000,8 +3012,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         return (
                           <div className="bitfun-external-sources-config__candidate" data-bf-component="external-sources-config" data-bf-part="candidate" key={candidate.candidateId}>
                             <Button
-                              variant={selected ? 'primary' : 'secondary'}
-                              size="small"
+                              variant={selected ? 'fill' : 'outline'}
+                              size="sm"
                               disabled={!policyCompatible || busyKey !== null
                                 || !hostCapabilities.canApproveRuntime}
                               aria-pressed={selected}
@@ -3065,9 +3077,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       })}
                       <Button
                         variant={conflict.selectedCandidateId === DISABLED_SUBAGENT_CONFLICT_CHOICE
-                          ? 'primary'
-                          : 'secondary'}
-                        size="small"
+                          ? 'fill'
+                          : 'outline'}
+                        size="sm"
                         disabled={!policyCompatible || busyKey !== null
                           || !hostCapabilities.canApproveRuntime}
                         aria-pressed={
@@ -3173,8 +3185,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       </div>
                       <div className="bitfun-external-sources-config__tool-actions" data-bf-component="external-sources-config" data-bf-part="toolActions">
                         <Button
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
                         disabled={!policyCompatible || busyKey === request.decisionKey
                           || !hostCapabilities.canApproveRuntime}
                           onClick={() => void decideToolTarget(
@@ -3186,8 +3198,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           {t('toolApprovals.keepDisabled')}
                         </Button>
                         <Button
-                          variant="primary"
-                          size="small"
+                          variant="fill"
+                          size="sm"
                           disabled={!policyCompatible || busyKey === request.decisionKey
                             || !hostCapabilities.canApproveRuntime}
                           onClick={() => void decideToolTarget(
@@ -3217,11 +3229,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 extra={(
                   <div className="bitfun-external-sources-config__tool-actions" data-bf-bulk-capability="tool">
                     {(snapshot?.toolApprovalRequests?.length ?? 0) > 0 ? (
-                      <Button variant="primary" size="small" aria-describedby="external-tool-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(true)}>
+                      <Button variant="fill" size="sm" aria-describedby="external-tool-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(true)}>
                         {t('bulkActions.enablePending', { count: snapshot?.toolApprovalRequests?.length ?? 0 })}
                       </Button>
                     ) : null}
-                    <Button variant="secondary" size="small" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(false)}>
+                    <Button variant="outline" size="sm" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(false)}>
                       {t('bulkActions.disableAll')}
                     </Button>
                   </div>
@@ -3272,8 +3284,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             {t(`toolState.${tool.activation.state}`)}
                           </span>
                           <Button
-                            variant="secondary"
-                            size="small"
+                            variant="outline"
+                            size="sm"
                             aria-expanded={reviewing}
                             onClick={() => setReviewingToolKey(reviewing ? null : toolKey)}
                           >
@@ -3281,8 +3293,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           </Button>
                           {disableable ? (
                             <Button
-                              variant="secondary"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               disabled={!policyCompatible || busyKey === tool.decisionKey
                                 || !hostCapabilities.canApproveRuntime}
                               onClick={() => void decideToolTarget(
@@ -3359,8 +3371,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           ) : null}
                           <div className="bitfun-external-sources-config__tool-actions" data-bf-component="external-sources-config" data-bf-part="toolActions">
                             <Button
-                              variant="secondary"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               disabled={!policyCompatible || busyKey === tool.decisionKey
                                 || !hostCapabilities.canApproveRuntime}
                               onClick={() => setReviewingToolKey(null)}
@@ -3369,8 +3381,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             </Button>
                             {enableable ? (
                               <Button
-                                variant="primary"
-                                size="small"
+                                variant="fill"
+                                size="sm"
                                 disabled={!policyCompatible || busyKey === tool.decisionKey
                                   || !hostCapabilities.canApproveRuntime}
                                 onClick={() => void decideToolTarget(
@@ -3447,8 +3459,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         return (
                           <div className="bitfun-external-sources-config__candidate" data-bf-component="external-sources-config" data-bf-part="candidate" key={candidate.candidateId}>
                             <Button
-                              variant={selected ? 'primary' : 'secondary'}
-                              size="small"
+                              variant={selected ? 'fill' : 'outline'}
+                              size="sm"
                               disabled={!policyCompatible || busyKey === conflict.conflictKey
                                 || !hostCapabilities.canApproveRuntime}
                               aria-pressed={selected}

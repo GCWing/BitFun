@@ -15,6 +15,7 @@
 
 本治理覆盖：
 
+- `design-system` 的共享系统 Token、BitFun 默认语义主题和独立组件消费契约。
 - `src/web-ui` 的 Appearance 包、CSS 变量投影、组件样式和专用渲染色板。
 - `src/mobile-web` 的移动端主题与运行时变量。
 - `BitFun-Installer/src` 的安装器主题、首屏静态变量和流程组件。
@@ -29,7 +30,8 @@
 
 | 范围 | 权威 owner | 消费或产物路径 | 约束 |
 |---|---|---|---|
-| Web UI Appearance | `src/web-ui/src/infrastructure/appearance` | 运行时 CSS、组件/Scene 契约与 renderer adapter | 拥有包 schema、内置包、校验、编译、导入导出和唯一运行时；Rust 不复制 |
+| 共享设计系统 Token | `design-system/packages/design-tokens` 与 `design-system/packages/theme-bitfun` | `@bitfun/ui`、Design Lab、Web UI 的 canonical CSS 变量 | 前者拥有主题无关名称和系统尺度，后者拥有可替换的 BitFun 默认语义值；不得依赖产品 route、store、locale、Tauri 或专用渲染域 |
+| Web UI Appearance | `src/web-ui/src/infrastructure/appearance` | 运行时 CSS、组件/Scene 契约与 renderer adapter | 拥有包 schema、运行时选择、导入导出、历史包兼容、产品/component Token 和专用域投影；默认 light/dark 共享值从 `@bitfun/theme-bitfun` 取得，Rust 不复制 |
 | Desktop 首屏 | Web UI builtin Appearance 与 `scripts/generate-startup-appearance-bootstrap.mjs` | `src/apps/desktop/src/generated/startup_appearance_bootstrap.json` | 只保存 JS 加载前必要字段；生成产物不能反向定义 Appearance |
 | 生成式 UI 提示 | Web UI builtin Appearance 与 `scripts/generate-startup-appearance-bootstrap.mjs` | `src/crates/assembly/core/src/agentic/tools/implementations/generated/appearance_prompt_snapshots.json` | 只读生成产物；Rust 不手写第二套内置 palette |
 | Mobile Web | `src/mobile-web/src/theme` | Mobile 运行时变量与组件 | 不从 Desktop 或 Web UI 运行时偷读内部变量 |
@@ -43,15 +45,21 @@
 
 ```mermaid
 flowchart LR
-  Source["TS builtin Appearance 与契约"] --> Runtime["AppearanceRuntime"]
+  System["@bitfun/design-tokens<br/>共享名称与系统尺度"] --> Theme["@bitfun/theme-bitfun<br/>BitFun 默认语义值"]
+  System --> Components["@bitfun/ui"]
+  Theme --> Source["Web UI builtin Appearance<br/>产品与专用域组合"]
+  Source --> Runtime["AppearanceRuntime"]
   Source --> Generator["Appearance 生成器"]
   Generator --> Bootstrap["Desktop 首屏 bootstrap"]
   Generator --> Prompt["生成式 UI 提示快照"]
+  Runtime --> Canonical["canonical --bf-* 投影"]
+  Runtime --> Compatibility["兼容 --bf-appearance-token-*"]
   Runtime --> Projection["GUI 插件语义色投影"]
 ```
 
-生成产物、Rust bootstrap、插件投影和消费组件均不能反向定义 Appearance。Desktop 和 Web UI
-只持久化并解析 `appearance.selection`。旧 `theme`、`themes` 和 Skin 数据不兼容、不迁移。
+共享设计系统包不能反向依赖 Appearance；生成产物、Rust bootstrap、插件投影和消费组件也不能反向定义
+Appearance。Desktop 和 Web UI 只持久化并解析 `appearance.selection`。旧 `theme`、`themes` 和 Skin 数据
+不兼容、不迁移。
 
 ## Token 分层
 
@@ -87,6 +95,10 @@ semantic token；仅当某个 Appearance 需要让“信息块面”和“表单
 
 ## CSS 变量与运行时边界
 
+- 新设计系统组件只消费包生成的 canonical `--bf-*` 变量。`--bf-appearance-token-*` 仍是现有 Appearance
+  包和产品代码的兼容输入，不是新公共组件 API。
+- `CssTokenAppearanceAdapter` 在同一次原子应用中写入历史变量，并通过显式 allowlist 把共享部分投影到
+  canonical 变量。投影表由产品基础设施拥有，不能移入 `@bitfun/ui` 或让独立包识别 Appearance schema。
 - 普通组件优先消费运行时 CSS 变量；不得用 SCSS 编译期颜色复制动态主题语义。
 - `tokens.scss` 可以保留尺寸、字体、动效、root Token 和少量兼容 mixin，不应成为第二套产品颜色源。
 - 动态 CSS 变量族必须在 `theme-css-var-contract.mjs` 登记 owner、前缀和消费范围。
@@ -133,7 +145,8 @@ GUI、Mobile、Installer 和 CLI/TUI 可以选择不同主题集合，但共享�
 
 1. 确认变更所属 surface、主题 owner、用户语义和相邻视觉状态。
 2. 优先复用现有 semantic token；新增 Token 时选择最窄层级和 namespace。
-3. 更新 TS Appearance 源、校验器、compiler、运行时和真实消费方。
+3. 共享名称或默认 BitFun 值更新对应 design-system owner；运行时、导入兼容或产品/专用域更新 Web UI
+   Appearance owner、校验器、compiler、投影和真实消费方。
 4. 仅在 JS 加载前确有需要时重新生成 Desktop bootstrap；生成式 UI 提示按同一 Appearance 源更新。
 5. 涉及动态变量、别名、专用域或跨 root 时，同步更新对应可执行 contract。
 6. 运行自动检查，并对受影响 surface、light/dark/system、交互状态和无障碍对比做 focused review。
@@ -162,6 +175,7 @@ pnpm run generate-startup-appearance-bootstrap
 
 - 每个普通组件颜色都能追溯到稳定语义 Token。
 - 每个专用色板都有清楚 owner 和边界。
-- 完整主题只有一个权威源，生成物不反向定义契约。
+- 每层主题事实只有一个权威 owner：共享名称与默认值属于 design-system，运行时选择与产品/专用域组合属于
+  Appearance；生成物不反向定义契约。
 - 新主题和产品定制不需要复制 Rust/React/TUI 实现。
 - 审计 baseline 默认只下降；确需合理增长时，必须经独立评审且有真实消费方。

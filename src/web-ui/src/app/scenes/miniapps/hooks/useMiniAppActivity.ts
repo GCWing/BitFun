@@ -8,14 +8,9 @@ export function useMiniAppActivity() {
   const apps = useMiniAppStore((state) => state.apps);
   const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
   const openTabs = useSceneStore((state) => state.openTabs);
-  const retainedScenes = useSceneStore((state) => state.retainedScenes);
-  const mountedScenes = useMemo(
-    () => [...openTabs, ...retainedScenes],
-    [openTabs, retainedScenes],
-  );
 
   return useMemo(
-    () => projectMiniAppActivity(apps, mountedScenes, runningWorkerIds),
-    [apps, mountedScenes, runningWorkerIds],
+    () => projectMiniAppActivity(apps, openTabs, runningWorkerIds),
+    [apps, openTabs, runningWorkerIds],
   );
 }

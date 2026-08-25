@@ -2,11 +2,11 @@
  * WorkspaceBody — main workspace container.
  *
  * Left-right layout:
- *   .nav-area   (240px, flex-column)
- *     NavBar        (38px — back/forward + drag + WindowControls)
+ *   .nav-area   (216px default, flex-column)
+ *     NavBar        (35px — back/forward + drag + WindowControls)
  *     NavPanel      (flex:1 — navigation sidebar)
  *   .scene-area (flex:1, flex-column)
- *     SceneBar      (38px — scene tab strip)
+ *     SceneBar      (scene tab strip inside the scene surface)
  *     SceneViewport (flex:1 — active scene content)
  */
 
@@ -20,8 +20,8 @@ import TerminalActionBridge from '../scenes/terminal/TerminalActionBridge';
 import { useApp } from '../hooks/useApp';
 import './WorkspaceBody.scss';
 
-const NAV_DEFAULT_WIDTH = 240;
-const NAV_MIN_WIDTH = 240;
+const NAV_DEFAULT_WIDTH = 216;
+const NAV_MIN_WIDTH = 216;
 const NAV_MAX_WIDTH = 480;
 const COLLAPSE_THRESHOLD = 64;
 
@@ -173,18 +173,24 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         />
       )}
 
-      {/* Right: scene tab bar + scene content */}
+      {/* Right: visual scene surface + any shell-level overlay */}
       <div className="bitfun-workspace-body__scene-area" data-bf-scene="workbench" data-bf-part="sceneArea">
-        <SceneBar
-          onMinimize={onMinimize}
-          onMaximize={onMaximize}
-          onClose={onClose}
-          isMaximized={isMaximized}
-        />
-        <SceneViewport
-          workspacePath={currentWorkspace?.rootPath}
-          isEntering={isEntering}
-        />
+        <div
+          className="bitfun-workspace-body__scene-surface"
+          data-bf-scene="workbench"
+          data-bf-part="sceneSurface"
+        >
+          <SceneBar
+            onMinimize={onMinimize}
+            onMaximize={onMaximize}
+            onClose={onClose}
+            isMaximized={isMaximized}
+          />
+          <SceneViewport
+            workspacePath={currentWorkspace?.rootPath}
+            isEntering={isEntering}
+          />
+        </div>
         {sceneOverlay}
       </div>
     </div>

@@ -6,6 +6,7 @@
  * scheduled without knowing which workspace it runs in.
  */
 
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bot,
@@ -17,7 +18,7 @@ import {
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
-import { Button, Input, Select, Switch, Textarea } from '@/component-library';
+import { Input, Select, Textarea } from '@/component-library';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
@@ -401,15 +402,17 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
             data-bf-scene="todos"
             data-bf-part="editorRuntime"
           >
-            <Switch
-              size="medium"
-              className="bf-todos__editor-enable"
-              checked={draft.enabled}
-              label={t('editor.enabled.title')}
-              description={t('editor.enabled.description')}
-              aria-label={t('editor.enabled.title')}
-              onChange={(event) => updateDraft({ enabled: event.currentTarget.checked })}
-            />
+            <label className="bf-todos__editor-enable">
+              <Switch
+                checked={draft.enabled}
+                aria-label={t('editor.enabled.title')}
+                onChange={(event) => updateDraft({ enabled: event.currentTarget.checked })}
+              />
+              <span className="bf-todos__editor-enable-copy">
+                <strong>{t('editor.enabled.title')}</strong>
+                <span>{t('editor.enabled.description')}</span>
+              </span>
+            </label>
             <span className="bf-todos__editor-runtime-divider" aria-hidden="true" />
             <div className="bf-todos__editor-smart">
               <span className="bf-todos__editor-smart-icon" aria-hidden="true">
@@ -532,8 +535,8 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
       >
         <Button
           type="button"
-          size="medium"
-          variant="secondary"
+          size="md"
+          variant="outline"
           onClick={onCancel}
           disabled={saving}
         >
@@ -541,9 +544,9 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
         </Button>
         <Button
           type="submit"
-          size="medium"
-          variant="inverse"
-          isLoading={saving}
+          size="md"
+          variant="fill"
+          loading={saving}
           disabled={workspaceOptions.length === 0 || !selectedWorkspaceId}
           data-testid="todos-editor-save"
         >

@@ -44,7 +44,10 @@ describe('NotificationItem accessibility', () => {
       timestamp: 1,
       duration: 0,
       closable: true,
-      actions: [{ label: 'Retry', onClick: vi.fn() }],
+      actions: [
+        { label: 'Retry', onClick: vi.fn() },
+        { label: 'Delete', onClick: vi.fn(), variant: 'danger' },
+      ],
       status: 'active',
     };
 
@@ -54,6 +57,11 @@ describe('NotificationItem accessibility', () => {
     expect(item?.getAttribute('role')).toBe('alert');
     expect(item?.getAttribute('aria-live')).toBe('assertive');
     expect(item?.getAttribute('aria-atomic')).toBe('true');
-    expect(container.querySelector('button.notification-item__action')?.textContent).toBe('Retry');
+    expect(container.querySelector('.notification-item__actions [data-bf-component="button"]')?.textContent).toBe('Retry');
+    const dangerAction = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.notification-item__actions [data-bf-component="button"]'),
+    ).find(button => button.textContent === 'Delete');
+    expect(dangerAction?.getAttribute('data-bf-variant')).toBe('fill');
+    expect(dangerAction?.getAttribute('data-bf-tone')).toBe('danger');
   });
 });

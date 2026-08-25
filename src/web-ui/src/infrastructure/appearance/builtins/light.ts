@@ -15,24 +15,28 @@ import {
   STATIC_BLACK,
   STATIC_WHITE,
 } from './paletteHelpers';
+import {
+  getDesignSystemThemeNumber,
+  getDesignSystemThemeString,
+} from './designSystemThemeValues';
 
-const LIGHT_NAVY = '#101a27';
-const LIGHT_TEXT_PRIMARY = '#1c1c1f';
-const LIGHT_TEXT_SECONDARY = '#555555';
-const LIGHT_TEXT_MUTED = '#6a6a6a';
-const LIGHT_TEXT_DISABLED = '#9a9a9a';
-const LIGHT_NAVY_HOVER = LIGHT_TEXT_PRIMARY;
+const LIGHT_NAVY = getDesignSystemThemeString('light', 'color.accent.default');
+const LIGHT_TEXT_PRIMARY = getDesignSystemThemeString('light', 'color.content.primary');
+const LIGHT_TEXT_SECONDARY = getDesignSystemThemeString('light', 'color.content.secondary');
+const LIGHT_TEXT_MUTED = getDesignSystemThemeString('light', 'color.content.muted');
+const LIGHT_TEXT_DISABLED = getDesignSystemThemeString('light', 'color.content.disabled');
+const LIGHT_NAVY_HOVER = getDesignSystemThemeString('light', 'color.accent.hover');
 const LIGHT_PURPLE = '#7c6b99';
 const LIGHT_PURPLE_HOVER = '#655680';
-const LIGHT_SUCCESS = '#247344';
-const LIGHT_SUCCESS_BG = '#e1fbe9';
-const LIGHT_WARNING = '#9a651f';
-const LIGHT_ERROR = '#a74352';
-const LIGHT_ERROR_BG = rgbaFromHex(LIGHT_ERROR, 0.12);
-const LIGHT_BACKGROUND_PRIMARY = '#fdfdfd';
-const LIGHT_SURFACE_SUBTLE = rgbaFromHex(LIGHT_NAVY, 0.03);
-const LIGHT_SURFACE_SOFT = '#f3f3f5';
-const LIGHT_BORDER_BASE = rgbaFromHex(LIGHT_NAVY, 0.15);
+const LIGHT_SUCCESS = getDesignSystemThemeString('light', 'color.status.success.content');
+const LIGHT_SUCCESS_BG = getDesignSystemThemeString('light', 'color.status.success.surface');
+const LIGHT_WARNING = getDesignSystemThemeString('light', 'color.status.warning.content');
+const LIGHT_ERROR = getDesignSystemThemeString('light', 'color.status.danger.content');
+const LIGHT_ERROR_BG = getDesignSystemThemeString('light', 'color.status.danger.surface');
+const LIGHT_BACKGROUND_PRIMARY = getDesignSystemThemeString('light', 'color.surface.canvas');
+const LIGHT_SURFACE_SUBTLE = getDesignSystemThemeString('light', 'color.surface.subtle');
+const LIGHT_SURFACE_SOFT = getDesignSystemThemeString('light', 'color.action.quiet.hover');
+const LIGHT_BORDER_BASE = getDesignSystemThemeString('light', 'color.border.default');
 
 const lightNavy = (alpha: number | string) => rgbaFromHex(LIGHT_NAVY, alpha);
 const lightNavyHover = (alpha: number | string) => rgbaFromHex(LIGHT_NAVY_HOVER, alpha);
@@ -102,20 +106,22 @@ export const bitfunLightPalette: AppearancePalette = {
       borderAlpha: 0.25,
       overrides: {
         successBg: LIGHT_SUCCESS_BG,
-        successBorder: LIGHT_SUCCESS,
+        successBorder: getDesignSystemThemeString('light', 'color.status.success.border'),
+        warningBg: getDesignSystemThemeString('light', 'color.status.warning.surface'),
+        warningBorder: getDesignSystemThemeString('light', 'color.status.warning.border'),
         errorBg: LIGHT_ERROR_BG,
-        errorBorder: rgbaFromHex(LIGHT_ERROR, 0.36),
-        infoBg: LIGHT_SURFACE_SOFT,
-        infoBorder: LIGHT_BORDER_BASE,
+        errorBorder: getDesignSystemThemeString('light', 'color.status.danger.border'),
+        infoBg: getDesignSystemThemeString('light', 'color.status.info.surface'),
+        infoBorder: getDesignSystemThemeString('light', 'color.status.info.border'),
       },
     }),
 
 
     border: {
-      subtle: lightNavy(0.08),
+      subtle: getDesignSystemThemeString('light', 'color.border.subtle'),
       base: LIGHT_BORDER_BASE,
       medium: lightNavy(0.24),
-      strong: lightNavy(0.34),
+      strong: getDesignSystemThemeString('light', 'color.border.strong'),
       prominent: lightNavy(0.48),
     },
 
@@ -123,9 +129,9 @@ export const bitfunLightPalette: AppearancePalette = {
     element: {
       subtle: LIGHT_SURFACE_SUBTLE,
       soft: LIGHT_SURFACE_SOFT,
-      base: lightNavy(0.09),
-      medium: lightNavy(0.13),
-      strong: lightNavy(0.18),
+      base: getDesignSystemThemeString('light', 'color.action.neutral.surface'),
+      medium: getDesignSystemThemeString('light', 'color.action.neutral.surfaceHover'),
+      strong: getDesignSystemThemeString('light', 'color.action.neutral.surfacePressed'),
     },
 
 
@@ -141,18 +147,17 @@ export const bitfunLightPalette: AppearancePalette = {
 
   effects: {
     shadow: {
-
-      xs: `0 1px 2px ${lightNavy(0.04)}`,
-      sm: `0 2px 4px ${lightNavy(0.055)}`,
-      base: `0 4px 8px ${lightNavy(0.07)}`,
-      lg: `0 8px 16px ${lightNavy(0.09)}`,
-      xl: `0 12px 24px ${lightNavy(0.11)}`,
+      xs: getDesignSystemThemeString('light', 'shadow.xs'),
+      sm: getDesignSystemThemeString('light', 'shadow.sm'),
+      base: getDesignSystemThemeString('light', 'shadow.base'),
+      lg: getDesignSystemThemeString('light', 'shadow.lg'),
+      xl: getDesignSystemThemeString('light', 'shadow.xl'),
     },
 
 
     blur: {
-      subtle: 'blur(4px) saturate(1.02)',
-      base: 'blur(8px) saturate(1.05)',
+      subtle: getDesignSystemThemeString('light', 'effect.blur.subtle'),
+      base: getDesignSystemThemeString('light', 'effect.blur.base'),
     },
 
     radius: createStandardRadius(),
@@ -160,9 +165,9 @@ export const bitfunLightPalette: AppearancePalette = {
     spacing: createStandardSpacing(),
 
     opacity: {
-      disabled: 0.55,
-      hover: 0.75,
-      focus: 0.9,
+      disabled: getDesignSystemThemeNumber('light', 'opacity.disabled'),
+      hover: getDesignSystemThemeNumber('light', 'opacity.hover'),
+      focus: getDesignSystemThemeNumber('light', 'opacity.focus'),
     },
   },
 
@@ -189,21 +194,21 @@ export const bitfunLightPalette: AppearancePalette = {
 
       primary: {
         default: {
-          background: LIGHT_NAVY,
-          color: STATIC_WHITE,
+          background: getDesignSystemThemeString('light', 'color.action.primary.background'),
+          color: getDesignSystemThemeString('light', 'color.action.primary.content'),
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
-          background: LIGHT_NAVY_HOVER,
-          color: STATIC_WHITE,
+          background: getDesignSystemThemeString('light', 'color.action.primary.hover'),
+          color: getDesignSystemThemeString('light', 'color.action.primary.content'),
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
-          background: STATIC_BLACK,
-          color: STATIC_WHITE,
+          background: getDesignSystemThemeString('light', 'color.action.primary.pressed'),
+          color: getDesignSystemThemeString('light', 'color.action.primary.content'),
           border: 'transparent',
           shadow: 'none',
           transform: 'none',

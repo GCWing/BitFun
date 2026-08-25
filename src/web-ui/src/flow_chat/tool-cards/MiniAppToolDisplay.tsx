@@ -2,6 +2,7 @@
  * MiniAppToolDisplay — InitMiniApp result; layout aligned with GitToolDisplay (BaseToolCard).
  */
 import React, { useCallback, useMemo, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { AppWindow, ExternalLink } from 'lucide-react';
 import { CubeLoading } from '../../component-library';
@@ -155,19 +156,18 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           ))}
         </div>
         <div data-bf-component="mini-app-tool-display" data-bf-part="footer" className="miniapp-result-footer miniapp-action-buttons">
-          <button
+          <Button
             type="button"
-            data-bf-component="mini-app-tool-display"
-            data-bf-part="open"
-            className="miniapp-open-btn"
+            variant="outline"
+            size="sm"
+            leadingIcon={<ExternalLink size={12} />}
             data-testid="chat-miniapp-open-btn"
             data-app-id={appId}
             onClick={() => openScene(`miniapp:${appId}`)}
             title={t('toolCards.initMiniApp.openInMiniAppTitle')}
           >
-            <ExternalLink size={12} />
-            <span>{t('toolCards.initMiniApp.openInMiniApp')}</span>
-          </button>
+            {t('toolCards.initMiniApp.openInMiniApp')}
+          </Button>
         </div>
       </div>
     );

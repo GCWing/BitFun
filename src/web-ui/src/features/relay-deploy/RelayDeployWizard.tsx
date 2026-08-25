@@ -10,9 +10,10 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal, Button, Input, Select, Alert, IconButton } from '@/component-library';
+import { Modal, Input, Select, Alert, IconButton } from '@/component-library';
 import {
   Server, User, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine,
   CheckCircle2, XCircle, AlertTriangle, RefreshCw, Eye, EyeOff, Search,
@@ -764,7 +765,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                     {conn.username}@{conn.host}:{conn.port}
                   </span>
                 </div>
-                <Button size="small" variant="primary" disabled={connecting}
+                <Button size="sm" variant="fill" disabled={connecting}
                   onClick={(e) => { e.stopPropagation(); handleQuickConnect(conn); }}>
                   <Play size={12} />
                 </Button>
@@ -808,9 +809,10 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                     {entry.user || ''}@{entry.hostname || entry.host}:{entry.port || 22}
                   </span>
                 </div>
-                <Button size="small" variant="ghost" disabled={connecting}
-                  onClick={(e) => { e.stopPropagation(); handleFillFromConfig(entry); }}>
-                  <ArrowDownToLine size={12} />
+                <Button size="sm" variant="outline" disabled={connecting}
+                  onClick={(e) => { e.stopPropagation(); handleFillFromConfig(entry); }}
+                  leadingIcon={<ArrowDownToLine size={12} />}>
+
                   {t('ssh.remote.fillForm')}
                 </Button>
               </div>
@@ -899,10 +901,10 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       </div>
 
       <div className="relay-deploy-wizard__actions">
-        <Button variant="secondary" size="small" onClick={onClose} disabled={connecting}>
+        <Button variant="outline" size="sm" onClick={onClose} disabled={connecting}>
           {t('actions.cancel')}
         </Button>
-        <Button variant="primary" size="small" onClick={handleFormConnect}
+        <Button variant="fill" size="sm" onClick={handleFormConnect}
           disabled={connecting || !formData.host.trim() || !formData.username.trim()}>
           {connecting ? (
             <><Loader2 size={14} className="spinning" />{t('ssh.remote.connecting')}</>
@@ -1081,13 +1083,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             <div className="relay-deploy-wizard__actions">
               {alreadyDeployed ? (
                 <>
-                  <Button variant="secondary" size="small" onClick={handleStartDeploy} disabled={taskRunning}>
-                    <Rocket size={14} />
+                  <Button variant="outline" size="sm" onClick={handleStartDeploy} disabled={taskRunning} leadingIcon={<Rocket size={14} />}>
+
                     {t('relayDeploy.redeploy')}
                   </Button>
                   <Button
-                    variant="primary"
-                    size="small"
+                    variant="fill"
+                    size="sm"
                     onClick={() => {
                       // Account creation must hit the running relay, not the
                       // (possibly different) redeploy listen port.
@@ -1097,23 +1099,25 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                       setStep('register');
                     }}
                     disabled={taskRunning || !pf.relayHealthy}
+                    leadingIcon={<User size={14} />}
                   >
-                    <User size={14} />
+
                     {t('relayDeploy.skipToRegister')}
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button variant="secondary" size="small" onClick={handleBackToPreflight} disabled={taskRunning || preflightLoading}>
-                    <ChevronLeft size={14} />
+                  <Button variant="outline" size="sm" onClick={handleBackToPreflight} disabled={taskRunning || preflightLoading} leadingIcon={<ChevronLeft size={14} />}>
+
                     {t('relayDeploy.back')}
                   </Button>
                   {!pf.dockerInstalled && !canInstallDocker && !taskRunning && (
                     <span className="relay-deploy-wizard__hint">{t('relayDeploy.dockerManualHint')}</span>
                   )}
-                  <Button variant="primary" size="small" onClick={handleStartDeploy}
-                    disabled={!canDeploy || taskRunning}>
-                    <Rocket size={14} />
+                  <Button variant="fill" size="sm" onClick={handleStartDeploy}
+                    disabled={!canDeploy || taskRunning}
+                    leadingIcon={<Rocket size={14} />}>
+
                     {t('relayDeploy.startDeploy')}
                   </Button>
                 </>
@@ -1175,14 +1179,15 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         </div>
       )}
       <div className="relay-deploy-wizard__actions">
-        <Button variant="secondary" size="small" onClick={handleBackToPreflight}
-          disabled={taskStatus === 'running'}>
-          <ChevronLeft size={14} />
+        <Button variant="outline" size="sm" onClick={handleBackToPreflight}
+          disabled={taskStatus === 'running'}
+          leadingIcon={<ChevronLeft size={14} />}>
+
           {t('relayDeploy.back')}
         </Button>
         {taskStatus === 'failed' && (
-          <Button variant="primary" size="small" onClick={handleStartDeploy}>
-            <RefreshCw size={14} />
+          <Button variant="fill" size="sm" onClick={handleStartDeploy} leadingIcon={<RefreshCw size={14} />}>
+
             {t('relayDeploy.retry')}
           </Button>
         )}
@@ -1250,12 +1255,12 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         )}
       </div>
       <div className="relay-deploy-wizard__actions">
-        <Button variant="secondary" size="small" onClick={handleBackToPreflight} disabled={regLoading}>
-          <ChevronLeft size={14} />
+        <Button variant="outline" size="sm" onClick={handleBackToPreflight} disabled={regLoading} leadingIcon={<ChevronLeft size={14} />}>
+
           {t('relayDeploy.back')}
         </Button>
         {regMode === 'create' ? (
-          <Button variant="primary" size="small" onClick={handleRegister}
+          <Button variant="fill" size="sm" onClick={handleRegister}
             disabled={regLoading || !regUsername.trim() || !regPassword || !regConfirm}>
             {regLoading ? (
               <><Loader2 size={14} className="spinning" />{t('relayDeploy.creatingAccount')}</>
@@ -1264,9 +1269,10 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             )}
           </Button>
         ) : (
-          <Button variant="primary" size="small" onClick={handleUseExisting}
-            disabled={regLoading || !regUsername.trim() || !regPassword}>
-            <CheckCircle2 size={14} />
+          <Button variant="fill" size="sm" onClick={handleUseExisting}
+            disabled={regLoading || !regUsername.trim() || !regPassword}
+            leadingIcon={<CheckCircle2 size={14} />}>
+
             {t('relayDeploy.finishAndLogin')}
           </Button>
         )}
@@ -1288,8 +1294,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         )}
       </div>
       <div className="relay-deploy-wizard__actions">
-        <Button variant="primary" size="small" onClick={handleFinish}>
-          <CheckCircle2 size={14} />
+        <Button variant="fill" size="sm" onClick={handleFinish} leadingIcon={<CheckCircle2 size={14} />}>
+
           {t('relayDeploy.finishAndLogin')}
         </Button>
       </div>

@@ -2,9 +2,9 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@bitfun/ui';
 import { ConfigPageHeader } from './ConfigPageHeader';
 import { ConfigPageLayout, ConfigPageContent } from './ConfigPageLayout';
-import { Button } from '../../../../component-library/components';
 
  
 export const BasicHeaderExample: React.FC = () => {
@@ -47,10 +47,10 @@ export const HeaderWithActionsExample: React.FC = () => {
         subtitle={t('configPageHeaderExample.learning.subtitle')}
         extra={
           <>
-            <Button variant="secondary" size="sm">
+            <Button variant="outline" size="sm">
               {t('configPageHeaderExample.learning.import')}
             </Button>
-            <Button variant="primary" size="sm">
+            <Button variant="fill" size="sm">
               {t('configPageHeaderExample.learning.addMemory')}
             </Button>
           </>
@@ -73,7 +73,7 @@ export const CompleteConfigPageExample: React.FC = () => {
         title={t('configPageHeaderExample.agents.title')}
         subtitle={t('configPageHeaderExample.agents.subtitle')}
         extra={
-          <Button variant="primary" size="sm">
+          <Button variant="fill" size="sm">
             {t('configPageHeaderExample.agents.create')}
           </Button>
         }
@@ -105,10 +105,10 @@ export const AppearanceConfigExample: React.FC = () => {
         subtitle={t('configPageHeaderExample.appearance.subtitle')}
         extra={
           <>
-            <Button variant="secondary" size="sm">
+            <Button variant="outline" size="sm">
               {t('configPageHeaderExample.appearance.import')}
             </Button>
-            <Button variant="secondary" size="sm">
+            <Button variant="outline" size="sm">
               {t('configPageHeaderExample.appearance.export')}
             </Button>
           </>

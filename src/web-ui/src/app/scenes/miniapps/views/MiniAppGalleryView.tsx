@@ -17,7 +17,7 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Search, ConfirmDialog } from '@/component-library';
+import { Search, ConfirmDialog, IconButton } from '@/component-library';
 import {
   GalleryEmpty,
   GalleryGrid,
@@ -372,10 +372,9 @@ const MiniAppGalleryView: React.FC = () => {
           <>
             <Search value={search} onChange={setSearch} placeholder={t('searchPlaceholder')} size="small" />
             <span className="miniapp-gallery__import-anchor">
-              <button
+              <IconButton
                 ref={importTriggerRef}
-                type="button"
-                className="gallery-action-btn"
+                size="medium"
                 onClick={() => setImportMenuOpen(open => !open)}
                 disabled={loading}
                 title={t('importAction')}
@@ -385,7 +384,7 @@ const MiniAppGalleryView: React.FC = () => {
                 data-testid="miniapp-import-action"
               >
                 <FolderPlus size={15} />
-              </button>
+              </IconButton>
               {importMenuOpen ? createPortal(
                 <div
                   ref={importMenuRef}
@@ -430,9 +429,9 @@ const MiniAppGalleryView: React.FC = () => {
                 getAppearanceOverlayHost(),
               ) : null}
             </span>
-            <button
-              type="button"
-              className="gallery-action-btn gallery-action-btn--primary"
+            <IconButton
+              size="medium"
+              variant="primary"
               onClick={() => {
                 closeImportMenu();
                 setCreationModeNoticeOpen(true);
@@ -442,7 +441,7 @@ const MiniAppGalleryView: React.FC = () => {
               data-testid="miniapp-create-action"
             >
               <PackagePlus size={15} />
-            </button>
+            </IconButton>
           </>
         )}
       />

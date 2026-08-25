@@ -13,8 +13,11 @@
 
   display: flex;
   flex-direction: column;
+  gap: $size-gap-4;
   width: 100%;
   height: 100%;
+  padding: $size-gap-2;
+  box-sizing: border-box;
   overflow: hidden;
   line-height: 1.35;
 
@@ -24,14 +27,13 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    padding: 0 $size-gap-3;
-    height: 40px;
+    min-height: 18px;
   }
 
   &__title {
     @include nav-font.nav-panel-text-heading;
 
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-lg);
     font-weight: 600;
     line-height: 1.25;
     white-space: nowrap;
@@ -43,7 +45,6 @@
 
   &__search {
     flex-shrink: 0;
-    padding: 0 $size-gap-3 $size-gap-2;
   }
 
   /** Component-library `Search` — compact settings navigation capsule. */
@@ -51,10 +52,10 @@
     width: 100%;
 
     .search__wrapper {
-      height: 32px;
-      min-height: 32px;
-      padding: 0 $size-gap-2;
-      gap: $size-gap-2;
+      height: 30px;
+      min-height: 30px;
+      padding: 0 10px;
+      gap: $size-gap-1;
       border: none;
       border-radius: $size-radius-full;
       background: var(--bf-appearance-token-color-bg-scene);
@@ -94,8 +95,7 @@
   &__search-results {
     display: flex;
     flex-direction: column;
-    padding: 2px 6px;
-    gap: 2px;
+    gap: 0;
   }
 
   &__search-result-item {
@@ -106,7 +106,8 @@
     align-items: flex-start;
     gap: 2px;
     min-height: auto;
-    padding: $size-gap-2;
+    min-height: 30px;
+    padding: 7px $size-gap-2;
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
@@ -164,7 +165,7 @@
   &__search-empty {
     @include nav-font.nav-panel-text-meta;
 
-    padding: $size-gap-3 $size-gap-3;
+    padding: $size-gap-3 $size-gap-2;
     font-size: var(--bf-appearance-token-font-size-sm);
     text-align: center;
   }
@@ -184,38 +185,42 @@
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-5;
+    gap: $size-gap-4;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: $size-gap-2 0;
+    padding: 0;
 
-    &::-webkit-scrollbar { width: 3px; }
+    &::-webkit-scrollbar { width: 6px; }
     &::-webkit-scrollbar-track { background: transparent; }
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-border-subtle);
-      border-radius: 2px;
+      background: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 10%, transparent);
+      border-radius: $size-radius-full;
     }
   }
 
   // ── Category group ─────────────────────────────────────
 
+  &__category {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
   &__category-header {
     display: flex;
     align-items: center;
-    width: auto;
-    height: 28px;
-    margin: 0 6px;
+    width: 100%;
+    height: 22px;
+    margin: 0;
     padding: 0 $size-gap-2;
   }
 
   &__category-label {
     @include nav-font.nav-panel-text-meta;
 
-    font-size: calc(var(--bf-appearance-token-font-size-xs) - 1px);
+    font-size: 11px;
     font-weight: 500;
-    letter-spacing: 0.015em;
     line-height: 1.25;
-    text-transform: uppercase;
     transition: color $motion-fast $easing-standard;
   }
 
@@ -224,8 +229,7 @@
   &__items {
     display: flex;
     flex-direction: column;
-    padding: 2px 6px;
-    gap: 2px;
+    gap: 0;
   }
 
   &__item-label {
@@ -244,10 +248,10 @@
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-2;
-    height: 32px;
+    height: 30px;
     padding: 0 $size-gap-2;
     border: none;
-    border-radius: $size-radius-sm;
+    border-radius: $size-radius-base;
     background: transparent;
     cursor: pointer;
     text-align: left;
@@ -278,18 +282,6 @@
       background: var(--bf-appearance-token-element-bg-soft);
       font-weight: 600;
       box-shadow: none;
-
-      &::before {
-        content: '';
-        position: absolute;
-        left: 3px;
-        top: 50%;
-        width: 2px;
-        height: 14px;
-        border-radius: $size-radius-full;
-        background: var(--bf-appearance-token-btn-primary-bg);
-        transform: translateY(-50%);
-      }
     }
 
     &:focus-visible {

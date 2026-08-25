@@ -1,5 +1,5 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
-import { Button } from '@/component-library';
 import type { ExternalSourceCatalogSnapshot } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { ConfigPageSection } from '../common';
 import { abbreviatedLocation, sourceScopeLabel } from './presentation';
@@ -65,8 +65,8 @@ export const ExternalCommandConflicts: React.FC<ExternalCommandConflictsProps> =
                   key={candidate.candidateId}
                 >
                   <Button
-                    variant={selected ? 'primary' : 'secondary'}
-                    size="small"
+                    variant={selected ? 'fill' : 'outline'}
+                    size="sm"
                     disabled={!policyCompatible || busyKey === conflict.conflictKey || !available
                       || !hostCapabilities.canManageSources}
                     aria-pressed={selected}

@@ -144,21 +144,6 @@
     transition: opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
-  &__delete-btn {
-    &:hover {
-      color: var(--bf-appearance-token-color-error);
-    }
-  }
-
-  &__delete-all-btn {
-    color: var(--bf-appearance-token-color-error);
-
-    &:hover {
-      color: var(--bf-appearance-token-color-error);
-      background: var(--bf-appearance-token-color-error-bg);
-    }
-  }
-
   &__header-actions {
     display: flex;
     align-items: center;

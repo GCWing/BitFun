@@ -165,70 +165,6 @@
   flex-shrink: 0;
 }
 
-.snapshot-card__action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: tokens.$size-radius-sm;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    background-color tokens.$motion-base tokens.$easing-standard,
-    border-color tokens.$motion-base tokens.$easing-standard,
-    color tokens.$motion-base tokens.$easing-standard,
-    opacity tokens.$motion-base tokens.$easing-standard;
-  padding: 0;
-
-  svg {
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-  }
-
-  &:disabled {
-    opacity: tokens.$opacity-disabled;
-    cursor: default;
-  }
-
-  &:hover:not(:disabled) {
-    background: var(--bf-appearance-token-color-overlay-white-12);
-  }
-}
-
-.snapshot-card__action-btn--accept {
-  color: var(--bf-appearance-token-color-success);
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-git-color-staged) 30%, transparent);
-
-  &:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--bf-appearance-token-git-color-staged) 15%, transparent);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-git-color-staged) 50%, transparent);
-  }
-}
-
-.snapshot-card__action-btn--reject {
-  color: var(--bf-appearance-token-color-error);
-  border: 1px solid var(--bf-appearance-token-color-error-border);
-
-  &:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 15%, transparent);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 50%, transparent);
-  }
-}
-
-.snapshot-card__action-btn--fullscreen {
-  color: var(--bf-appearance-token-color-text-secondary);
-  border: 1px solid rgba(var(--private-snapshot-card-neutral-rgb), 0.3);
-
-  &:hover:not(:disabled) {
-    background: rgba(var(--private-snapshot-card-neutral-rgb), 0.15);
-    border-color: rgba(var(--private-snapshot-card-neutral-rgb), 0.5);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-}
-
 
 .snapshot-card--standard,
 .snapshot-card--detailed {
@@ -306,29 +242,7 @@
 }
 
 .snapshot-card__button {
-  @include shared.liquid-button('default');
-  display: inline-flex;
-  align-items: center;
-  gap: tokens.$size-gap-2;
   flex: 1;
-  justify-content: center;
-
-  &:disabled {
-    opacity: tokens.$opacity-disabled;
-    cursor: default;
-  }
-}
-
-.snapshot-card__button--accept {
-  @include shared.liquid-button('success');
-}
-
-.snapshot-card__button--reject {
-  @include shared.liquid-button('error');
-}
-
-.snapshot-card__button--view {
-  @include shared.liquid-button('primary');
 }
 
 .snapshot-card__processing {

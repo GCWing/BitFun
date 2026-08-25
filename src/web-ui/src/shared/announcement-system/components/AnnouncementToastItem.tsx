@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { X } from 'lucide-react';
 import type { AnnouncementCard } from '../types';
 import { useAnnouncementStore } from '../store/announcementStore';
@@ -104,13 +105,13 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
 
       {/* Row 3: action buttons */}
       <div className="announcement-toast__actions">
-        <button
-          type="button"
-          className="announcement-toast__btn announcement-toast__btn--primary"
+        <Button
+          variant="fill"
+          size="sm"
           onClick={handleAction}
         >
           {actionLabel}
-        </button>
+        </Button>
       </div>
 
     </div>

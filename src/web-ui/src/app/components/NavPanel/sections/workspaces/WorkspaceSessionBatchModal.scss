@@ -285,11 +285,6 @@
     background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 92%, transparent) 36%);
   }
 
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
 }
 
 @media (max-width: 720px) {

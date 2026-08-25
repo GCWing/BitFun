@@ -135,27 +135,6 @@
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
-  .miniapp-open-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
-    padding: 0.32rem var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    border-radius: 4px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      border-color: var(--bf-appearance-token-border-base);
-    }
-  }
-
   .error-content {
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-size-gap-4);
     background: var(--bf-appearance-token-glass-red-subtle);

@@ -2,8 +2,9 @@
  * Full-screen style modal showing download progress for in-app updates.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useMemo } from 'react';
-import { Modal, Alert, Button } from '@/component-library';
+import { Modal, Alert } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { UpdateDownloadProgressPayload } from './installUpdateWithProgress';
 import { formatUpdateInstallError } from './updateErrorMessage';
@@ -75,10 +76,10 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
           />
         </div>
         <div className="bitfun-update-progress__actions" data-bf-component="update" data-bf-part="actions">
-          <Button variant="secondary" size="medium" onClick={onCloseInstalled}>
+          <Button variant="outline" size="md" onClick={onCloseInstalled}>
             {t('update.restartLater')}
           </Button>
-          <Button variant="primary" size="medium" onClick={onRestart}>
+          <Button variant="fill" size="md" onClick={onRestart}>
             {t('update.restartNow')}
           </Button>
         </div>

@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -14,7 +15,7 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { Badge, Button, Input, Select } from '@/component-library';
+import { Badge, Input, Select } from '@/component-library';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
 import { MarketAccountControls } from '@/features/market-account';
@@ -272,8 +273,8 @@ const MiniAppSubmissionsView: React.FC = () => {
         subtitle={t('market.submissions.subtitle')}
         actions={(
           <div className="miniapp-submissions__header-actions">
-            <Button size="small" variant="ghost" onClick={() => void refresh()} disabled={busy}>
-              <RefreshCw size={14} />
+            <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={busy} leadingIcon={<RefreshCw size={14} />}>
+
               {t('market.submissions.refresh')}
             </Button>
             <MarketAccountControls />
@@ -346,22 +347,24 @@ const MiniAppSubmissionsView: React.FC = () => {
             <div className="miniapp-submissions__screenshots-actions">
               <Button
                 type="button"
-                size="small"
-                variant="secondary"
+                size="sm"
+                variant="outline"
                 disabled={busy || localActionsDisabled}
                 onClick={() => void chooseScreenshots()}
+                leadingIcon={<FileImage size={14} />}
               >
-                <FileImage size={14} />
+
                 {t('market.submissions.choose')}
               </Button>
               <Button
                 type="button"
-                size="small"
-                variant="secondary"
+                size="sm"
+                variant="outline"
                 disabled={busy || localActionsDisabled || !selectedApp}
                 onClick={() => void captureCurrentApp()}
+                leadingIcon={<Camera size={14} />}
               >
-                <Camera size={14} />
+
                 {t('market.submissions.capture')}
               </Button>
             </div>
@@ -526,7 +529,7 @@ const MiniAppSubmissionsView: React.FC = () => {
 
           <Button
             type="submit"
-            variant="primary"
+            variant="fill"
             disabled={busy || localActionsDisabled || apps.length === 0}
           >
             {busy ? <Loader2 size={15} className="gallery-spinning" /> : <Send size={15} />}
@@ -569,8 +572,8 @@ const MiniAppSubmissionsView: React.FC = () => {
                     </Badge>
                     {(submission.status === 'draft' || submission.status === 'submitted') ? (
                       <Button
-                        size="small"
-                        variant="ghost"
+                        size="sm"
+                        variant="outline"
                         disabled={busy}
                         onClick={() => void withdraw(submission.submissionId)}
                       >

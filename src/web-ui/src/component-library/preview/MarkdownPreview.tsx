@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { Markdown } from '@components/Markdown';
-import { Button } from '@components/Button';
+import { Button } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import './markdown-preview.css';
 
@@ -24,8 +24,8 @@ export const MarkdownPreview: React.FC = () => {
         </div>
         <div className="header-right">
           <Button
-            variant="ghost"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={() => window.location.href = '/preview.html'}
           >
             {t('componentLibrary.markdownPreview.backToLibrary')}
@@ -38,22 +38,22 @@ export const MarkdownPreview: React.FC = () => {
           <label>{t('componentLibrary.markdownPreview.controls.variantLabel')}</label>
           <div className="button-group">
             <Button
-              variant={variant === 'default' ? 'primary' : 'secondary'}
-              size="small"
+              variant={variant === 'default' ? 'fill' : 'outline'}
+              size="sm"
               onClick={() => setVariant('default')}
             >
               {t('componentLibrary.markdownPreview.variants.default')}
             </Button>
             <Button
-              variant={variant === 'bordered' ? 'primary' : 'secondary'}
-              size="small"
+              variant={variant === 'bordered' ? 'fill' : 'outline'}
+              size="sm"
               onClick={() => setVariant('bordered')}
             >
               {t('componentLibrary.markdownPreview.variants.bordered')}
             </Button>
             <Button
-              variant={variant === 'minimal' ? 'primary' : 'secondary'}
-              size="small"
+              variant={variant === 'minimal' ? 'fill' : 'outline'}
+              size="sm"
               onClick={() => setVariant('minimal')}
             >
               {t('componentLibrary.markdownPreview.variants.minimal')}
@@ -65,15 +65,15 @@ export const MarkdownPreview: React.FC = () => {
           <label>{t('componentLibrary.markdownPreview.controls.modeLabel')}</label>
           <div className="button-group">
             <Button
-              variant={activeTab === 'preview' ? 'primary' : 'secondary'}
-              size="small"
+              variant={activeTab === 'preview' ? 'fill' : 'outline'}
+              size="sm"
               onClick={() => setActiveTab('preview')}
             >
               {t('componentLibrary.markdownPreview.controls.preview')}
             </Button>
             <Button
-              variant={activeTab === 'edit' ? 'primary' : 'secondary'}
-              size="small"
+              variant={activeTab === 'edit' ? 'fill' : 'outline'}
+              size="sm"
               onClick={() => setActiveTab('edit')}
             >
               {t('componentLibrary.markdownPreview.controls.edit')}
@@ -83,8 +83,8 @@ export const MarkdownPreview: React.FC = () => {
 
         <div className="control-group">
           <Button
-            variant="ghost"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={() => setContent(getSampleMarkdown())}
           >
             {t('componentLibrary.markdownPreview.controls.reset')}

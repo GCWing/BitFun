@@ -1,7 +1,8 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, RefreshCw } from 'lucide-react';
-import { Button, ConfigPageLoading, ConfirmDialog, Modal, Switch } from '@/component-library';
+import { ConfigPageLoading, ConfirmDialog, Modal } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
 import { useNotification } from '@/shared/notification-system';
@@ -361,13 +362,14 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
           description={config.enabled ? t('imports.description') : t('imports.masterDisabled')}
           extra={remoteWorkspace ? null : (
             <Button
-              variant="secondary"
-              size="small"
-              isLoading={importLoading}
+              variant="outline"
+              size="sm"
+              loading={importLoading}
               disabled={busyKey !== null}
               onClick={() => void refreshImports()}
+              leadingIcon={<RefreshCw size={14} />}
             >
-              <RefreshCw size={14} />
+
               {t('imports.refresh')}
             </Button>
           )}
@@ -402,16 +404,17 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
                     )}
                   />
                   <Button
-                    variant="secondary"
-                    size="small"
+                    variant="outline"
+                    size="sm"
                     disabled={busyKey !== null || item.state === 'source_missing'}
                     onClick={() => void previewImport(item.source)}
                   >
                     {t('imports.update')}
                   </Button>
                   <Button
-                    variant="danger"
-                    size="small"
+                    variant="fill"
+                    tone="danger"
+                    size="sm"
                     disabled={busyKey !== null}
                     onClick={() => setConfirmation({ kind: 'remove', importId: item.importId })}
                   >
@@ -430,9 +433,9 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
                       align="center"
                     >
                       <Button
-                        variant="secondary"
-                        size="small"
-                        isLoading={busyKey === key}
+                        variant="outline"
+                        size="sm"
+                        loading={busyKey === key}
                         disabled={busyKey !== null || source.health === 'unavailable'}
                         onClick={() => void previewImport(source)}
                       >
@@ -454,8 +457,9 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
                       align="center"
                     >
                       <Button
-                        variant="danger"
-                        size="small"
+                        variant="fill"
+                        tone="danger"
+                        size="sm"
                         disabled={busyKey !== null}
                         onClick={() => setConfirmation({ kind: 'reset', scope })}
                       >
@@ -490,8 +494,8 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
             label={t('compatibility.reference.label')}
             align="center"
           >
-            <Button variant="secondary" size="small" onClick={openCodexHooksDoc}>
-              <ExternalLink size={14} />
+            <Button variant="outline" size="sm" onClick={openCodexHooksDoc} leadingIcon={<ExternalLink size={14} />}>
+
               {t('compatibility.reference.open')}
             </Button>
           </ConfigPageRow>
@@ -539,7 +543,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
               </p>
             ))}
             <Button
-              variant="secondary"
+              variant="outline"
               disabled={busyKey === 'apply'}
               onClick={() => {
                 setReviewPlan(null);
@@ -548,8 +552,8 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
             >
               {t('imports.cancel')}
             </Button>
-            <Button
-              isLoading={busyKey === 'apply'}
+            <Button variant="fill"
+              loading={busyKey === 'apply'}
               disabled={reviewPlan.handlers.length === 0}
               onClick={() => void applyReviewedPlan()}
             >

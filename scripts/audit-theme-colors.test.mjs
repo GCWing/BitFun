@@ -11,6 +11,7 @@ import {
   COLOR_DOMAIN_RULES,
   DYNAMIC_VAR_FAMILY_CONTRACTS,
   FALLBACK_VAR_CONTRACTS,
+  PACKAGE_CSS_VAR_DEFINITION_CONTRACTS,
   SURFACE_TOKEN_RENAME_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS,
@@ -129,6 +130,26 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
       assert.match(contract.canonicalPrefix, /^--[a-z0-9-]+-$/);
     }
   }
+
+  const packageVariableNames = PACKAGE_CSS_VAR_DEFINITION_CONTRACTS
+    .flatMap(contract => contract.variables);
+  assert.equal(
+    new Set(packageVariableNames).size,
+    packageVariableNames.length,
+    'independent package CSS variable contracts must not overlap',
+  );
+  for (const contract of PACKAGE_CSS_VAR_DEFINITION_CONTRACTS) {
+    assert.match(contract.packageName, /^@bitfun\/[a-z0-9-]+$/);
+    assert.ok(contract.owner.startsWith('design-system/packages/'));
+    assert.ok(contract.variables.length > 0, `${contract.packageName} must expose variables`);
+    assert.equal(
+      contract.variables.every(name => /^--bf-[a-z0-9-]+$/.test(name)),
+      true,
+      `${contract.packageName} must expose canonical --bf-* variables only`,
+    );
+  }
+  assert.ok(packageVariableNames.includes('--bf-space-1'));
+  assert.ok(packageVariableNames.includes('--bf-color-surface-canvas'));
 
   const domainContractKeys = new Set(COLOR_DOMAIN_CONTRACTS.map(contract => contract.key));
   assert.equal(

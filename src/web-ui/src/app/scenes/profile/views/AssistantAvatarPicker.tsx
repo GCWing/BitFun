@@ -1,8 +1,9 @@
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Pencil, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, IconButton, Input } from '@/component-library';
+import { IconButton, Input } from '@/component-library';
 import {
   AssistantAvatar,
   ASSISTANT_AVATAR_PRESETS,
@@ -209,8 +210,8 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
             />
             <Button
               type="submit"
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               disabled={!normalizedCustomValue || normalizedCustomValue === displayedValue}
             >
               {t('identity.avatarApply')}

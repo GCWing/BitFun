@@ -1,0 +1,118 @@
+{
+  "$description": "BitFun light semantic theme migrated from the built-in light Appearance.",
+  "color": {
+    "surface": {
+      "canvas": { "$type": "color", "$value": "{ref.color.neutral.50}" },
+      "panel": { "$type": "color", "$value": "{ref.color.neutral.0}" },
+      "raised": { "$type": "color", "$value": "{ref.color.neutral.0}" },
+      "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.03)" }
+    },
+    "content": {
+      "primary": { "$type": "color", "$value": "{ref.color.neutral.900}" },
+      "secondary": { "$type": "color", "$value": "{ref.color.neutral.750}" },
+      "muted": { "$type": "color", "$value": "{ref.color.neutral.650}" },
+      "disabled": { "$type": "color", "$value": "{ref.color.neutral.450}" },
+      "inverse": { "$type": "color", "$value": "{ref.color.neutral.0}" }
+    },
+    "accent": {
+      "default": { "$type": "color", "$value": "{ref.color.navy.950}" },
+      "hover": { "$type": "color", "$value": "{ref.color.neutral.900}" }
+    },
+    "border": {
+      "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.08)" },
+      "default": { "$type": "color", "$value": "rgba(16, 26, 39, 0.15)" },
+      "strong": { "$type": "color", "$value": "rgba(16, 26, 39, 0.34)" }
+    },
+    "action": {
+      "neutral": {
+        "border": { "$type": "color", "$value": "rgba(0, 0, 0, 0.05)" },
+        "content": { "$type": "color", "$value": "rgba(0, 0, 0, 0.80)" },
+        "contentDisabled": { "$type": "color", "$value": "rgba(0, 0, 0, 0.30)" },
+        "fillBorder": { "$type": "color", "$value": "{color.action.neutral.surface}" },
+        "surface": { "$type": "color", "$value": "rgba(0, 0, 0, 0.05)" },
+        "surfaceHover": { "$type": "color", "$value": "rgba(0, 0, 0, 0.10)" },
+        "surfacePressed": { "$type": "color", "$value": "rgba(0, 0, 0, 0.10)" }
+      },
+      "primary": {
+        "background": { "$type": "color", "$value": "{ref.color.navy.950}" },
+        "hover": { "$type": "color", "$value": "{ref.color.neutral.900}" },
+        "pressed": { "$type": "color", "$value": "{ref.color.neutral.1000}" },
+        "content": { "$type": "color", "$value": "{ref.color.neutral.0}" }
+      },
+      "secondary": {
+        "background": { "$type": "color", "$value": "{ref.color.neutral.100}" },
+        "hover": { "$type": "color", "$value": "rgba(16, 26, 39, 0.09)" },
+        "pressed": { "$type": "color", "$value": "rgba(16, 26, 39, 0.13)" },
+        "content": { "$type": "color", "$value": "{ref.color.neutral.900}" }
+      },
+      "quiet": {
+        "hover": { "$type": "color", "$value": "{ref.color.neutral.100}" },
+        "pressed": { "$type": "color", "$value": "rgba(16, 26, 39, 0.09)" },
+        "content": { "$type": "color", "$value": "{ref.color.neutral.750}" }
+      }
+    },
+    "field": {
+      "background": { "$type": "color", "$value": "{ref.color.neutral.0}" },
+      "backgroundHover": { "$type": "color", "$value": "{ref.color.neutral.50}" },
+      "border": { "$type": "color", "$value": "rgba(16, 26, 39, 0.15)" },
+      "borderHover": { "$type": "color", "$value": "rgba(16, 26, 39, 0.24)" },
+      "borderFocus": { "$type": "color", "$value": "{ref.color.navy.950}" }
+    },
+    "control": {
+      "switch": {
+        "track": { "$type": "color", "$value": "{ref.color.neutral.250}" },
+        "trackChecked": { "$type": "color", "$value": "{ref.color.green.500}" },
+        "thumb": { "$type": "color", "$value": "{ref.color.neutral.0}" }
+      }
+    },
+    "focus": {
+      "ring": { "$type": "color", "$value": "{ref.color.neutral.650}" }
+    },
+    "status": {
+      "info": {
+        "content": { "$type": "color", "$value": "{ref.color.neutral.750}" },
+        "surface": { "$type": "color", "$value": "{ref.color.neutral.100}" },
+        "border": { "$type": "color", "$value": "rgba(16, 26, 39, 0.15)" }
+      },
+      "success": {
+        "content": { "$type": "color", "$value": "{ref.color.green.700}" },
+        "surface": { "$type": "color", "$value": "{ref.color.green.100}" },
+        "border": { "$type": "color", "$value": "{ref.color.green.700}" }
+      },
+      "warning": {
+        "content": { "$type": "color", "$value": "{ref.color.amber.700}" },
+        "surface": { "$type": "color", "$value": "rgba(154, 101, 31, 0.08)" },
+        "border": { "$type": "color", "$value": "rgba(154, 101, 31, 0.25)" }
+      },
+      "danger": {
+        "content": { "$type": "color", "$value": "{ref.color.red.700}" },
+        "surface": { "$type": "color", "$value": "rgba(167, 67, 82, 0.12)" },
+        "border": { "$type": "color", "$value": "rgba(167, 67, 82, 0.36)" }
+      }
+    }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "xs": { "$value": "0 1px 2px rgba(16, 26, 39, 0.04)" },
+    "sm": { "$value": "0 2px 4px rgba(16, 26, 39, 0.055)" },
+    "base": { "$value": "0 4px 8px rgba(16, 26, 39, 0.07)" },
+    "lg": { "$value": "0 8px 16px rgba(16, 26, 39, 0.09)" },
+    "xl": { "$value": "0 12px 24px rgba(16, 26, 39, 0.11)" },
+    "raised": { "$value": "{shadow.sm}" },
+    "overlay": { "$value": "{shadow.lg}" }
+  },
+  "effect": {
+    "blur": {
+      "subtle": { "$type": "filter", "$value": "blur(4px) saturate(1.02)" },
+      "base": { "$type": "filter", "$value": "blur(8px) saturate(1.05)" },
+      "medium": { "$type": "filter", "$value": "blur(12px) saturate(1.2)" }
+    }
+  },
+  "opacity": {
+    "$type": "number",
+    "disabled": { "$value": 0.55 },
+    "hover": { "$value": 0.75 },
+    "focus": { "$value": 0.9 },
+    "muted": { "$value": "{opacity.hover}" }
+  }
+}

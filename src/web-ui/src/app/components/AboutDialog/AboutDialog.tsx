@@ -4,9 +4,10 @@
  * persistent GitHub repository entry point.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Alert, Button, Modal, Tooltip } from '@/component-library';
+import { Alert, Modal, Tooltip } from '@/component-library';
 import {
   ArrowRight,
   CalendarDays,
@@ -253,32 +254,24 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                     >
                       {manualCheckStatus === 'latest' && updateStatus === 'idle' ? (
                         <Button
-                          variant="secondary"
-                          size="small"
-                          className="bitfun-about-dialog__update-status-pill"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<CheckCircle2 size={15} aria-hidden="true" />}
                           onClick={() => void handleCheckForUpdates()}
                           data-testid="about-check-updates"
                         >
-                          <CheckCircle2 size={15} aria-hidden="true" />
                           {t('update.noUpdate')}
                         </Button>
                       ) : (
                         <Button
-                          variant="secondary"
-                          size="small"
-                          className="bitfun-about-dialog__update-trigger"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<RefreshCw size={14} aria-hidden="true" />}
+                          loading={manualCheckBusy}
                           disabled={updateBusy}
-                          aria-busy={manualCheckBusy}
                           onClick={() => void handleCheckForUpdates()}
                           data-testid="about-check-updates"
                         >
-                          <RefreshCw
-                            size={14}
-                            className={manualCheckBusy
-                              ? 'bitfun-about-dialog__update-btn-icon bitfun-about-dialog__update-btn-icon--busy'
-                              : 'bitfun-about-dialog__update-btn-icon'}
-                            aria-hidden="true"
-                          />
                           {manualCheckBusy ? t('update.checking') : t('update.checkForUpdates')}
                         </Button>
                       )}
@@ -339,7 +332,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                             <CheckCircle2 size={14} aria-hidden="true" />
                             <span>{t('update.installedMessage')}</span>
                           </div>
-                          <Button variant="primary" size="small" onClick={onRestart}>
+                          <Button variant="fill" size="sm" onClick={onRestart}>
                             {t('update.restartNow')}
                           </Button>
                         </div>
@@ -489,14 +482,14 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             </div>
             <span className="bitfun-about-dialog__star-rule" aria-hidden="true" />
             <Button
-              variant="inverse"
-              size="medium"
+              variant="fill"
+              size="md"
               className="bitfun-about-dialog__star-button"
+              trailingIcon={<ArrowRight size={18} aria-hidden="true" />}
               onClick={handleGithubStar}
               data-testid="about-github-star"
             >
-              <span>{t('about.githubStarAction')}</span>
-              <ArrowRight size={18} aria-hidden="true" />
+              {t('about.githubStarAction')}
             </Button>
           </section>
 

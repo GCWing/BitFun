@@ -1,7 +1,8 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Copy, Eye, Play, RotateCcw } from 'lucide-react';
-import { Button, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import type { ReviewActionPhase } from '../../store/deepReviewActionBarStore';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
 
@@ -79,13 +80,14 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
     <div className="deep-review-action-bar__actions">
       {phase === 'review_completed' && isDeepReview && retryableSliceCount > 0 && (
         <Button
-          variant="secondary"
-          size="small"
-          isLoading={activeAction === 'retry'}
+          variant="outline"
+          size="sm"
+          loading={activeAction === 'retry'}
           disabled={activeAction !== null}
           onClick={() => void onRetryIncompleteSlices()}
+          leadingIcon={<RotateCcw size={14} />}
         >
-          <RotateCcw size={14} />
+
           {t('deepReviewActionBar.retryIncompleteSlices', {
             count: retryableSliceCount,
           })}
@@ -94,9 +96,9 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
       {phase === 'review_completed' && remediationItemCount > 0 && (
         <>
           <Button
-            variant="primary"
-            size="small"
-            isLoading={activeAction === 'fix'}
+            variant="fill"
+            size="sm"
+            loading={activeAction === 'fix'}
             disabled={isFixDisabled}
             onClick={() => void onStartFixing()}
           >
@@ -104,8 +106,8 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
           </Button>
           <Tooltip content={t('deepReviewActionBar.fillBackInputHint')}>
             <Button
-              variant="ghost"
-              size="small"
+              variant="outline"
+              size="sm"
               disabled={isFixDisabled}
               onClick={() => void onFillBackInput()}
             >
@@ -133,12 +135,13 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
           ) && (
             <Button
               variant={followUpReviewState === 'running' || followUpReviewState === 'completed'
-                ? 'primary'
-                : 'secondary'}
-              size="small"
+                ? 'fill'
+                : 'outline'}
+              size="sm"
               onClick={onOpenFollowUpReview}
+              leadingIcon={<Eye size={14} />}
             >
-              <Eye size={14} />
+
               {t(followUpReviewState === 'running'
                 ? 'deepReviewActionBar.reviewFixesInProgress'
                 : followUpReviewState === 'available'
@@ -155,13 +158,14 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             followUpReviewState !== 'available' &&
             followUpReviewState !== 'completed' && (
             <Button
-              variant="primary"
-              size="small"
-              isLoading={activeAction === 'review' || followUpReviewState === 'launching'}
+              variant="fill"
+              size="sm"
+              loading={activeAction === 'review' || followUpReviewState === 'launching'}
               disabled={activeAction !== null || followUpReviewState === 'launching'}
               onClick={() => void onReviewFixes()}
+              leadingIcon={<RotateCcw size={14} />}
             >
-              <RotateCcw size={14} />
+
               {t(followUpReviewState === 'retry' ||
                 followUpReviewState === 'failed' ||
                 followUpReviewState === 'cancelled'
@@ -183,19 +187,20 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
       {hasInterruption && (
         <>
           <Button
-            variant="primary"
-            size="small"
-            isLoading={activeAction === 'resume'}
+            variant="fill"
+            size="sm"
+            loading={activeAction === 'resume'}
             disabled={activeAction !== null || isResumeRunning}
             onClick={() => void onContinueReview()}
+            leadingIcon={<Play size={14} />}
           >
-            <Play size={14} />
+
             {t('deepReviewActionBar.resumeReview')}
           </Button>
           {modelRecoveryAction && (
             <Button
-              variant="secondary"
-              size="small"
+              variant="outline"
+              size="sm"
               disabled={activeAction !== null}
               onClick={() => void onOpenModelSettings()}
             >
@@ -205,20 +210,22 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             </Button>
           )}
           <Button
-            variant="ghost"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={() => void onCopyDiagnostics()}
+            leadingIcon={<Copy size={14} />}
           >
-            <Copy size={14} />
+
             {t('deepReviewActionBar.copyDiagnostics')}
           </Button>
           {partialResultsAvailable && (
             <Button
-              variant="ghost"
-              size="small"
+              variant="outline"
+              size="sm"
               onClick={onViewPartialResults}
+              leadingIcon={<Eye size={14} />}
             >
-              <Eye size={14} />
+
               {t('deepReviewActionBar.viewPartialResults')}
             </Button>
           )}
@@ -237,19 +244,20 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
           </div>
           {remainingFixIds.length > 0 && (
             <Button
-              variant="primary"
-              size="small"
+              variant="fill"
+              size="sm"
               onClick={() => void onContinueFix()}
+              leadingIcon={<Play size={14} />}
             >
-              <Play size={14} />
+
               {t('deepReviewActionBar.continueFix', {
                 count: remainingFixIds.length,
               })}
             </Button>
           )}
           <Button
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={onSkipRemainingFixes}
           >
             {t('deepReviewActionBar.skipRemaining')}
@@ -259,8 +267,8 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
 
       {(phase === 'fix_completed' || phase === 'fix_failed' || phase === 'fix_timeout' || phase === 'review_error') && (
         <Button
-          variant="ghost"
-          size="small"
+          variant="outline"
+          size="sm"
           onClick={onMinimize}
         >
           {t('deepReviewActionBar.minimize')}

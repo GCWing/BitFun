@@ -462,47 +462,6 @@
   }
 }
 
-/* ========== Submit button ========== */
-.submit-button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  background: var(--bf-appearance-token-element-bg-base);
-  color: var(--bf-appearance-token-color-text-primary);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 150ms ease,
-    border-color 150ms ease,
-    opacity 150ms ease;
-  white-space: nowrap;
-
-  &:hover:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-medium);
-    border-color: var(--bf-appearance-token-border-medium);
-  }
-
-  &:active:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-strong);
-  }
-
-  &:disabled {
-    opacity: var(--bf-appearance-token-opacity-disabled);
-    cursor: default;
-  }
-
-  svg {
-    width: 13px;
-    height: 13px;
-    opacity: 0.8;
-  }
-}
-
 /* ========== Completed state - collapsed summary ========== */
 .completed-summary {
   display: flex;

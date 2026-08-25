@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -16,7 +17,6 @@ import {
 } from 'lucide-react';
 import {
   Badge,
-  Button,
   ConfirmDialog,
   Search,
   Select,
@@ -334,8 +334,8 @@ const MiniAppMarketView: React.FC = () => {
               isError
               message={t('market.messages.catalogFailed', { error })}
               action={(
-                <Button size="small" variant="secondary" onClick={() => void loadCatalog(false)}>
-                  <RefreshCw size={14} />
+                <Button size="sm" variant="outline" onClick={() => void loadCatalog(false)} leadingIcon={<RefreshCw size={14} />}>
+
                   {t('scene.retry')}
                 </Button>
               )}
@@ -397,8 +397,8 @@ const MiniAppMarketView: React.FC = () => {
               {nextCursor ? (
                 <div className="miniapp-market-native__load-more">
                   <Button
-                    size="small"
-                    variant="secondary"
+                    size="sm"
+                    variant="outline"
                     disabled={loadingMore}
                     onClick={() => void loadCatalog(true)}
                   >
@@ -435,8 +435,8 @@ const MiniAppMarketView: React.FC = () => {
         ) : null}
         actions={detail ? (
           <>
-            <Button size="small" variant="secondary" onClick={() => void toggleFavorite()} disabled={actionBusy}>
-              <Heart size={14} fill={detail.isFavorited ? 'currentColor' : 'none'} />
+            <Button size="sm" variant="outline" onClick={() => void toggleFavorite()} disabled={actionBusy} leadingIcon={<Heart size={14} fill={detail.isFavorited ? 'currentColor' : 'none'} />}>
+
               {formatNumber(detail.favoriteCount)}
             </Button>
             {/* Installed and up to date: nothing left to install, so say so and let "Open" lead. */}
@@ -448,19 +448,20 @@ const MiniAppMarketView: React.FC = () => {
             ) : null}
             {installed ? (
               <Button
-                size="small"
-                variant={canUpdate ? 'secondary' : 'primary'}
+                size="sm"
+                variant={canUpdate ? 'outline' : 'fill'}
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => openInstalledApp(installed.appId)}
+                leadingIcon={<ArrowUpRight size={14} />}
               >
-                <ArrowUpRight size={14} />
+
                 {t('market.detail.open')}
               </Button>
             ) : null}
             {!installed || canUpdate ? (
               <Button
-                size="small"
-                variant="primary"
+                size="sm"
+                variant="fill"
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => setInstallPrompt(true)}
               >
@@ -562,11 +563,12 @@ const MiniAppMarketView: React.FC = () => {
             </section>
             {detail.repositoryUrl ? (
               <Button
-                size="small"
-                variant="ghost"
+                size="sm"
+                variant="outline"
                 onClick={() => void systemAPI.openExternal(detail.repositoryUrl!)}
+                leadingIcon={<ExternalLink size={14} />}
               >
-                <ExternalLink size={14} />
+
                 {t('market.detail.repository')}
               </Button>
             ) : null}

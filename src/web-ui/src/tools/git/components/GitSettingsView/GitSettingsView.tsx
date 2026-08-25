@@ -1,5 +1,6 @@
 /** Git settings view. */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -12,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { Button, IconButton, Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
+import { IconButton, Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -331,7 +332,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           <Settings size={48} />
           <h3>{t('settingsView.loadFailedTitle')}</h3>
           <p className="bitfun-git-settings-view__error-message">{error}</p>
-          <Button onClick={loadConfig} variant="primary">
+          <Button onClick={loadConfig} variant="fill">
             {t('settingsView.retry')}
           </Button>
         </div>
@@ -360,9 +361,10 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           <Button 
             onClick={saveConfig}
             disabled={saving}
-            variant="primary"
+            variant="fill"
+            leadingIcon={<Save size={16} />}
           >
-            <Save size={16} />
+
             {saving ? t('settingsView.saving') : t('settingsView.save')}
           </Button>
         </div>

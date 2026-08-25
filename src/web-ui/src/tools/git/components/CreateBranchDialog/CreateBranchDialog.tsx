@@ -3,10 +3,11 @@
  * Provides a consistent UI for creating a new branch from an existing base branch.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GitBranch } from 'lucide-react';
-import { Button, Modal, Input } from '@/component-library';
+import { Modal, Input } from '@/component-library';
 import './CreateBranchDialog.scss';
 
 export interface CreateBranchDialogProps {
@@ -163,21 +164,22 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
 
         <div className="bitfun-create-branch-dialog__actions">
           <Button 
-            variant="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={handleCancel}
             disabled={isCreating}
           >
             {t('dialog.createNewBranch.cancel')}
           </Button>
           <Button 
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             onClick={handleConfirm}
             disabled={!canSubmit}
-            isLoading={isCreating}
+            loading={isCreating}
+            leadingIcon={<GitBranch size={14} />}
           >
-            <GitBranch size={14} />
+
             {t('dialog.createNewBranch.confirm')}
           </Button>
         </div>

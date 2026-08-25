@@ -7,6 +7,7 @@
  * the Account group works without a workspace.
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
@@ -897,9 +898,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       <div data-bf-component="remote-connect-dialog" data-bf-part="error" className="bitfun-remote-connect__error-group">
         <p className="bitfun-remote-connect__error">{error}</p>
         {isNgrokErr && (
-          <button type="button" className="bitfun-remote-connect__error-action" onClick={handleOpenNgrokSetup}>
+          <Button variant="outline" size="sm" onClick={handleOpenNgrokSetup}>
             {t('remoteConnect.openNgrokSetup')}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -919,9 +920,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         )}
       </div>
       <p className="bitfun-remote-connect__hint">{t('remoteConnect.connectedHint')}</p>
-      <button type="button" className="bitfun-remote-connect__btn bitfun-remote-connect__btn--disconnect" onClick={onDisconnect}>
+      <Button variant="outline" size="md" onClick={onDisconnect}>
         {t('remoteConnect.disconnect')}
-      </button>
+      </Button>
     </div>
   );
 
@@ -974,9 +975,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               ? t('remoteConnect.scanHint')
               : t('remoteConnect.stateWaiting')}
         </p>
-        <button type="button" className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel" onClick={handleCancelConnect}>
+        <Button variant="outline" size="md" onClick={handleCancelConnect}>
           {t('remoteConnect.cancel')}
-        </button>
+        </Button>
       </div>
     );
   };
@@ -1094,13 +1095,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           />
         )}
         {renderErrorBlock()}
-        <button
-          type="button"
-          className="bitfun-remote-connect__btn bitfun-remote-connect__btn--connect"
-          onClick={handleConnect} disabled={loading}
+        <Button
+          variant="fill"
+          size="md"
+          loading={loading}
+          onClick={handleConnect}
         >
           {loading ? t('remoteConnect.connecting') : t('remoteConnect.connect')}
-        </button>
+        </Button>
       </div>
     );
   };
@@ -1135,13 +1137,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               {t('remoteConnect.botVerboseMode')}
             </button>
           </div>
-          <button
-            type="button"
-            className="bitfun-remote-connect__btn bitfun-remote-connect__btn--disconnect"
+          <Button
+            variant="outline"
+            size="md"
             onClick={handleDisconnectBot}
           >
             {t('remoteConnect.disconnect')}
-          </button>
+          </Button>
         </div>
       );
     }
@@ -1256,25 +1258,25 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                   </div>
                 )}
                 <p className="bitfun-remote-connect__hint">{t('remoteConnect.botWeixinPolling')}</p>
-                <button
-                  type="button"
-                  className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel"
+                <Button
+                  variant="outline"
+                  size="md"
                   onClick={handleCancelWeixinQr}
                 >
                   {t('remoteConnect.botWeixinQrCancel')}
-                </button>
+                </Button>
               </div>
             )}
             {weixinQrSessionKey && !weixinQrImageUrl && weixinAwaitingPhoneConfirm && (
               <div className="bitfun-remote-connect__weixin-qr bitfun-remote-connect__weixin-qr--await">
                 <p className="bitfun-remote-connect__hint">{t('remoteConnect.botWeixinAwaitingPhoneConfirm')}</p>
-                <button
-                  type="button"
-                  className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel"
+                <Button
+                  variant="outline"
+                  size="md"
                   onClick={handleCancelWeixinQr}
                 >
                   {t('remoteConnect.botWeixinQrCancel')}
-                </button>
+                </Button>
               </div>
             )}
             {weixinQrSessionKey && !weixinQrImageUrl && weixinNeedsVerifyCode && (
@@ -1294,38 +1296,39 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 <p className="bitfun-remote-connect__hint">
                   {t('remoteConnect.botWeixinVerifyCodeHint')}
                 </p>
-                <button
-                  type="button"
-                  className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel"
+                <Button
+                  variant="outline"
+                  size="md"
                   onClick={handleSubmitWeixinVerifyCode}
                   disabled={!weixinVerifyCode.trim()}
                 >
                   {t('remoteConnect.botWeixinVerifyCodeSubmit')}
-                </button>
+                </Button>
               </div>
             )}
             {!weixinQrSessionKey && !weixinQrImageUrl && !weixinNeedsVerifyCode && (
-              <button
-                type="button"
-                className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel"
+              <Button
+                variant="outline"
+                size="md"
+                loading={loading}
                 onClick={handleStartWeixinQr}
-                disabled={loading}
               >
                 {t('remoteConnect.botWeixinQrButton')}
-              </button>
+              </Button>
             )}
           </div>
         )}
         {renderErrorBlock()}
         {botTab !== 'weixin' && (
-          <button
-            type="button"
-            className="bitfun-remote-connect__btn bitfun-remote-connect__btn--connect"
+          <Button
+            variant="fill"
+            size="md"
+            loading={loading}
             onClick={handleConnect}
-            disabled={loading || (botTab === 'telegram' ? !tgToken : !feishuAppId)}
+            disabled={botTab === 'telegram' ? !tgToken : !feishuAppId}
           >
             {loading ? t('remoteConnect.connecting') : t('remoteConnect.connect')}
-          </button>
+          </Button>
         )}
       </div>
     );

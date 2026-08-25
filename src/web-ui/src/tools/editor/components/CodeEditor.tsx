@@ -5,6 +5,7 @@
  * @module components/CodeEditor
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { AlertCircle } from 'lucide-react';
 import type * as monaco from 'monaco-editor';
@@ -2191,13 +2192,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <div className="code-editor-tool__error-overlay" data-bf-component="editor-tool" data-bf-part="error">
           <AlertCircle className="code-editor-tool__error-icon" />
           <p className="code-editor-tool__error-message">{error}</p>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={loadFileContent}
-            className="code-editor-tool__error-retry-btn"
-            type="button"
           >
             {t('editor.common.retry')}
-          </button>
+          </Button>
         </div>
       )}
 

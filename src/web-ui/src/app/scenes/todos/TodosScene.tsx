@@ -11,6 +11,7 @@
  * broadcast on the shared change event so those views stay in step.
  */
 
+import { Button } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -26,7 +27,7 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react';
-import { Button, IconButton, Modal, PresenceBoundary, confirmDanger } from '@/component-library';
+import { IconButton, Modal, PresenceBoundary, confirmDanger } from '@/component-library';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -450,23 +451,23 @@ const TodosScene: React.FC = () => {
             </IconButton>
           </div>
           <Button
-            size="small"
-            variant="secondary"
+            size="sm"
+            variant="outline"
             className="bf-todos__today-button"
             onClick={showCurrentMonth}
           >
             {t('calendar.today')}
           </Button>
           <Button
-            size="small"
-            variant="inverse"
+            size="sm"
+            variant="fill"
             className="bf-todos__new-button"
+            leadingIcon={<Plus />}
             onClick={handleCreateNew}
             disabled={workspaceOptions.length === 0}
             data-testid="todos-new"
           >
-            <Plus size={14} />
-            <span>{t('actions.newTodo')}</span>
+            {t('actions.newTodo')}
           </Button>
         </div>
       </header>
@@ -639,8 +640,8 @@ const TodosScene: React.FC = () => {
                       : t('calendar.dayDetailTitle')}
                   </h4>
                   <Button
-                    size="small"
-                    variant="ghost"
+                    size="sm"
+                    variant="outline"
                     onClick={clearSelectedDay}
                     data-testid="todos-day-clear"
                   >

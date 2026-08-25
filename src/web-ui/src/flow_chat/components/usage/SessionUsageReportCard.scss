@@ -153,44 +153,6 @@
     }
   }
 
-  &__details-button {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    height: 26px;
-    padding: 0 7px 0 8px;
-    border: 0;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 650;
-    line-height: 1;
-    white-space: nowrap;
-    cursor: pointer;
-
-    &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 78%, transparent);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 70%, transparent);
-      outline-offset: 2px;
-    }
-
-    &:disabled {
-      opacity: 0.52;
-      cursor: default;
-    }
-
-    svg {
-      flex: 0 0 auto;
-    }
-  }
-
   &__coverage {
     display: inline-flex;
     align-items: center;
@@ -315,40 +277,6 @@
     min-width: 0;
     font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     font-weight: 600;
-  }
-
-  &__mini-list-more {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    flex: 0 0 auto;
-    min-width: 0;
-    height: 20px;
-    padding: 0 4px;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    cursor: pointer;
-
-    &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 72%, transparent);
-    }
-
-    &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 70%, transparent);
-      outline-offset: 2px;
-    }
-
-    span {
-      white-space: nowrap;
-    }
-
-    svg {
-      flex: 0 0 auto;
-    }
   }
 
   &__mini-list-empty {
@@ -568,15 +496,6 @@
   width: 30px;
   height: 30px;
   color: var(--bf-appearance-token-color-text-primary);
-}
-
-.session-usage-report-card--compact .session-usage-report-card__details-button {
-  height: 30px;
-  padding: 0 2px 0 7px;
-  gap: 6px;
-  color: var(--bf-appearance-token-color-text-primary);
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .session-usage-report-card__compact-overview {
@@ -799,14 +718,6 @@
   font-size: 17px;
   font-weight: 680;
   line-height: 1.2;
-}
-
-.session-usage-report-card__compact-tools-more {
-  height: 27px;
-  padding: 0 2px 0 7px;
-  gap: 5px;
-  color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 12px;
 }
 
 .session-usage-report-card__compact-tool-list {

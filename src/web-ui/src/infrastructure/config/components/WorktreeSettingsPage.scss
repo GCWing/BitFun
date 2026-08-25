@@ -431,7 +431,7 @@
     &__actions {
       justify-content: stretch;
 
-      .btn {
+      [data-bf-component='button'] {
         flex: 1;
       }
     }

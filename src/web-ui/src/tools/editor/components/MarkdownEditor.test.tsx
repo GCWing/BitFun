@@ -14,16 +14,21 @@ vi.mock('lucide-react', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  Button: ({
+  IconButton: ({
     children,
-    className,
     ...props
   }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button type="button" className={className} {...props}>
+    <button type="button" data-component="icon-button" {...props}>
       {children}
     </button>
   ),
   CubeLoading: ({ text }: { text: string }) => <div>{text}</div>,
+}));
+
+vi.mock('@bitfun/ui', () => ({
+  Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...props}>{children}</button>
+  ),
 }));
 
 vi.mock('../meditor', () => ({
@@ -96,7 +101,7 @@ describe('MarkdownEditor', () => {
 
     expect(html).toContain('aria-label="Copy Markdown"');
     expect(html).toContain('data-icon="copy"');
-    expect(html).toContain('bitfun-markdown-editor__toolbar-button');
+    expect(html).toContain('data-component="icon-button"');
   });
 
   it('uses preview mode for markdown rendering', () => {

@@ -1,0 +1,37 @@
+import type { ComponentMeta } from "../../registry.types";
+
+export const buttonMeta = {
+  category: "action",
+  description: "A compact neutral pill action with outline and filled presentation variants.",
+  maturity: "stable",
+  name: "Button",
+  props: [
+    { defaultValue: "outline", name: "variant", type: "outline | fill" },
+    { defaultValue: "md", name: "size", type: "sm | md | lg" },
+    { defaultValue: "neutral", name: "tone", type: "neutral | danger" },
+    { defaultValue: "false", name: "loading", type: "boolean" },
+    { name: "leadingIcon", type: "ReactNode" },
+    { name: "trailingIcon", type: "ReactNode" },
+  ],
+  states: ["default", "hover", "active", "disabled"],
+  tokens: [
+    "color.action.neutral.border",
+    "color.action.neutral.content",
+    "color.action.neutral.contentDisabled",
+    "color.action.neutral.surface",
+    "color.action.neutral.surfaceHover",
+    "color.action.neutral.surfacePressed",
+    "color.focus.ring",
+    "color.status.danger.border",
+    "color.status.danger.content",
+    "color.status.danger.surface",
+    "control.height.sm",
+    "control.height.md",
+    "control.height.lg",
+    "font.family.control",
+    "font.size.small",
+    "font.weight.regular",
+    "font.weight.semibold",
+    "radius.pill",
+  ],
+} as const satisfies ComponentMeta;

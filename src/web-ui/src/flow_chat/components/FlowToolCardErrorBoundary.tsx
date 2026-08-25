@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Component, type ReactNode } from 'react';
 import { CompactToolCard, CompactToolCardHeader } from '../tool-cards/CompactToolCard';
@@ -95,24 +96,15 @@ function RenderFallback({
             </div>
 
             <div>
-              <button
+              <Button
                 onClick={onRetry}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 10px',
-                  borderRadius: 8,
-                  border: '1px solid var(--bf-appearance-token-border-base)',
-                  background: 'var(--bf-appearance-token-element-bg-soft)',
-                  color: 'var(--bf-appearance-token-color-text-primary)',
-                  cursor: 'pointer',
-                }}
                 type="button"
+                variant="outline"
+                size="sm"
+                leadingIcon={<RefreshCw size={12} />}
               >
-                <RefreshCw size={12} />
                 Retry render
-              </button>
+              </Button>
             </div>
 
             <details>

@@ -3,13 +3,14 @@
  * Displays multiple questions, collects user answers and submits them
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
 import { Loader2, AlertCircle, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Button, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
 import {
@@ -554,21 +555,18 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
           <div className="card-footer-row" data-bf-component="ask-user-question-card" data-bf-part="footer">
             <div className="footer-actions">
               <Button
-                variant="primary"
-                size="small"
-                className="submit-button"
+                variant="fill"
+                size="sm"
+                leadingIcon={<ArrowUp size={14} />}
                 onClick={handleSubmit}
                 disabled={!isAllAnswered() || isSubmitting || isSubmitted || Boolean(isParamsStreaming)}
-                isLoading={isSubmitting}
+                loading={isSubmitting}
                 title={!isAllAnswered() ? t('toolCards.askUser.answerAllBeforeSubmit') : ""}
               >
                 {isSubmitting ? (
                   <span>{t('toolCards.askUser.submitting')}</span>
                 ) : (
-                  <>
-                    <ArrowUp size={14} />
-                    <span>{t('toolCards.askUser.submit')}</span>
-                  </>
+                  <span>{t('toolCards.askUser.submit')}</span>
                 )}
               </Button>
               <div className="tool-status" data-bf-component="ask-user-question-card" data-bf-part="status">

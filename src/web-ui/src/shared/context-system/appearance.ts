@@ -8,7 +8,6 @@ export const contextListAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'header' },
     { id: 'title' },
     { id: 'count' },
-    { id: 'clear' },
     { id: 'items' },
     { id: 'item' },
     { id: 'card' },

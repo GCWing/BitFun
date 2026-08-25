@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useMemo, useRef } from 'react';
 import {
   AppWindow,
@@ -15,7 +16,7 @@ import {
   Terminal,
   Trash2,
 } from 'lucide-react';
-import { Button, Modal } from '@/component-library';
+import { Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
@@ -282,34 +283,37 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
           <div className="miniapp-detail-modal__actions" data-bf-component="mini-app-detail-modal" data-bf-part="actions">
             {snapshot.isActive && onStop ? (
               <Button
-                variant="secondary"
-                size="medium"
+                variant="outline"
+                size="md"
                 className="miniapp-detail-modal__stop"
                 onClick={() => void onStop(displayedApp.id)}
                 data-testid="miniapp-detail-stop"
+                leadingIcon={<Square size={17} />}
               >
-                <Square size={17} />
+
                 {t('detail.stop')}
               </Button>
             ) : null}
             <Button
-              variant="inverse"
-              size="medium"
+              variant="fill"
+              size="md"
               className="miniapp-detail-modal__primary"
               onClick={() => onOpen(displayedApp.id)}
               data-testid="miniapp-detail-primary-action"
+              leadingIcon={<Play size={18} fill="currentColor" strokeWidth={0} />}
             >
-              <Play size={18} fill="currentColor" strokeWidth={0} />
+
               {snapshot.isActive ? t('detail.open') : t('detail.start')}
             </Button>
             <Button
-              variant="secondary"
-              size="medium"
+              variant="outline"
+              size="md"
               className="miniapp-detail-modal__delete"
               onClick={() => onDelete(displayedApp.id)}
               data-testid="miniapp-detail-delete"
+              leadingIcon={<Trash2 size={18} />}
             >
-              <Trash2 size={18} />
+
               {t('detail.delete')}
             </Button>
           </div>

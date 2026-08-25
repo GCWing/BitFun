@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -25,7 +26,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { Button, IconButton, Input, MarkdownRenderer, Modal, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
+import { IconButton, Input, MarkdownRenderer, Modal, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -1744,12 +1745,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           <span>{selectedRemote.platform === 'github' ? 'CLI authorization' : 'Required scopes'}: {authChallengeScopes(authChallenge)}</span>
         </div>
         <div className="review-platform__auth-gate-actions" data-bf-component="review-platform" data-bf-part="authActions">
-          <Button className="review-platform__panel-button" size="small" variant="primary" onClick={handleOpenAuthModal} disabled={authSaving}>
-            <KeyRound size={13} />
+          <Button size="sm" variant="fill" onClick={handleOpenAuthModal} disabled={authSaving} leadingIcon={<KeyRound size={13} />}>
+
             {selectedRemote.platform === 'github' ? 'Authenticate' : authChallenge.state === 'missing' ? 'Add token' : 'Update token'}
           </Button>
-          <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => refreshAuthSnapshot(selectedRemote.id)} disabled={authSaving || loading}>
-            <RefreshCw size={13} />
+          <Button size="sm" variant="outline" onClick={() => refreshAuthSnapshot(selectedRemote.id)} disabled={authSaving || loading} leadingIcon={<RefreshCw size={13} />}>
+
             Retry
           </Button>
         </div>
@@ -1980,7 +1981,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               <div className="review-platform__error-state" data-bf-component="review-platform" data-bf-part="errorState">
                 <XCircle size={16} />
                 <span>{error}</span>
-                <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}>
+                <Button size="sm" variant="outline" onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}>
                   Retry
                 </Button>
               </div>
@@ -2084,12 +2085,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               <XCircle size={24} />
               <span>{detailError || error}</span>
               <div className="review-platform__detail-empty-actions">
-                <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleRetryDetail}>
+                <Button size="sm" variant="outline" onClick={handleRetryDetail}>
                   Retry
                 </Button>
                 {selectedRemote && selectedRemote.platform !== 'unknown' && (
-                  <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleOpenAuthModal} disabled={authSaving}>
-                    <KeyRound size={13} />
+                  <Button size="sm" variant="outline" onClick={handleOpenAuthModal} disabled={authSaving} leadingIcon={<KeyRound size={13} />}>
+
                     {selectedRemote.platform === 'github' ? 'Authenticate' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
                   </Button>
                 )}
@@ -2106,21 +2107,20 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               </span>
               <div className="review-platform__detail-empty-actions">
                 <Button
-                  className="review-platform__panel-button"
-                  size="small"
-                  variant="secondary"
+                  size="sm"
+                  variant="outline"
                   onClick={() => void loadSnapshot(undefined, { force: true })}
                 >
                   Retry
                 </Button>
                 {initialPullRequestUrl && (
                   <Button
-                    className="review-platform__panel-button"
-                    size="small"
-                    variant="secondary"
+                    size="sm"
+                    variant="outline"
                     onClick={handleOpenExternal}
+                    leadingIcon={<ExternalLink size={13} />}
                   >
-                    <ExternalLink size={13} />
+
                     Open in browser
                   </Button>
                 )}
@@ -2155,9 +2155,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <Tooltip content={!parentSession ? 'Open or create a chat first' : 'Start Review'}>
                     <span>
                       <Button
-                        className="review-platform__panel-button"
-                        size="small"
-                        variant="primary"
+                        size="sm"
+                        variant="fill"
                         onClick={handleStartReview}
                         disabled={
                           !parentSession ||
@@ -2167,15 +2166,16 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                           detailLoading ||
                           latestCurrentReview?.lifecycle === 'running'
                         }
-                        isLoading={reviewLaunching}
+                        loading={reviewLaunching}
+                        leadingIcon={<Sparkles size={13} />}
                       >
-                        <Sparkles size={13} />
+
                         {latestCurrentReview?.lifecycle === 'running' ? 'Review running' : 'Review'}
                       </Button>
                     </span>
                   </Tooltip>
-                  <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleOpenExternal} disabled={!selectedPr.webUrl && !initialPullRequestUrl}>
-                    <Link2 size={13} />
+                  <Button size="sm" variant="outline" onClick={handleOpenExternal} disabled={!selectedPr.webUrl && !initialPullRequestUrl} leadingIcon={<Link2 size={13} />}>
+
                     Open
                   </Button>
                   {detailOnly && selectedRemote && selectedRemote.platform !== 'unknown' && (
@@ -2238,7 +2238,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <div className="review-platform__fact-value review-platform__fact-value--review">
                     <span>{reviewStatusText}</span>
                     {(latestCurrentReview || latestStaleReview || latestUnknownReview) && (
-                      <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleOpenLatestReview}>
+                      <Button size="sm" variant="outline" onClick={handleOpenLatestReview}>
                         Open Review
                       </Button>
                     )}
@@ -2258,8 +2258,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     <section className="review-platform__detail-section" data-bf-component="review-platform" data-bf-part="section">
                       <div className="review-platform__detail-section-heading" data-bf-component="review-platform" data-bf-part="sectionHeading">
                         <span>Description</span>
-                        <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleFillPrContext} disabled={!selectedPr}>
-                          <MessageSquareText size={13} />
+                        <Button size="sm" variant="outline" onClick={handleFillPrContext} disabled={!selectedPr} leadingIcon={<MessageSquareText size={13} />}>
+
                           Add to chat
                         </Button>
                       </div>
@@ -2267,7 +2267,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                         <div className="review-platform__detail-error">
                           <XCircle size={14} />
                           <span>{detailError}</span>
-                          <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleRetryDetail}>
+                          <Button size="sm" variant="outline" onClick={handleRetryDetail}>
                             Retry
                           </Button>
                         </div>
@@ -2289,8 +2289,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                           <span className="review-platform__section-count">
                             {ciTotal ? `${ciTotal} items · ${checksText}` : checksStatusText}
                           </span>
-                          <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddCiPageContext} disabled={!selectedPr || !detail || detailLoading}>
-                            <MessageSquareText size={13} />
+                          <Button size="sm" variant="outline" onClick={handleAddCiPageContext} disabled={!selectedPr || !detail || detailLoading} leadingIcon={<MessageSquareText size={13} />}>
+
                             Add page
                           </Button>
                         </div>
@@ -2363,7 +2363,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                   <div className="review-platform__detail-error">
                                     <XCircle size={14} />
                                     <span>{ciLogError}</span>
-                                    <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadCiLog(item)}>Retry</Button>
+                                    <Button size="sm" variant="outline" onClick={() => void loadCiLog(item)}>Retry</Button>
                                   </div>
                                 )}
                                 {!ciLogLoading && !ciLogError && (ciLog?.log || item.log) && <pre className="review-platform__ci-log-block">{ciLog?.log || item.log}</pre>}
@@ -2382,8 +2382,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                         <span>Comments</span>
                         <div className="review-platform__detail-section-actions" data-bf-component="review-platform" data-bf-part="sectionActions">
                           <span className="review-platform__section-count">{reviewItemCount}</span>
-                          <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddReviewsContext} disabled={!selectedPr || !detail}>
-                            <MessageSquareText size={13} />
+                          <Button size="sm" variant="outline" onClick={handleAddReviewsContext} disabled={!selectedPr || !detail} leadingIcon={<MessageSquareText size={13} />}>
+
                             Add to chat
                           </Button>
                         </div>
@@ -2441,7 +2441,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       <div className="review-platform__detail-error">
                         <XCircle size={14} />
                         <span>{detailError}</span>
-                        <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleRetryDetail}>
+                        <Button size="sm" variant="outline" onClick={handleRetryDetail}>
                           Retry
                         </Button>
                       </div>
@@ -2473,8 +2473,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                 <span className="review-platform__deletions">-{file.deletions}</span>
                               </span>
                             </button>
-                            <Button className="review-platform__panel-button review-platform__file-add-button" size="small" variant="ghost" onClick={() => void handleAddFileDiffContext(file)} disabled={!selectedPr}>
-                              <MessageSquareText size={13} />
+                            <Button className="review-platform__file-add-button" size="sm" variant="outline" onClick={() => void handleAddFileDiffContext(file)} disabled={!selectedPr} leadingIcon={<MessageSquareText size={13} />}>
+
                               Add
                             </Button>
                           </div>
@@ -2505,8 +2505,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <section className="review-platform__tab-content review-platform__timeline">
                     <div className="review-platform__section-heading">
                       <span>Commits</span>
-                      <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddCommitsContext} disabled={!selectedPr || !detail}>
-                        <MessageSquareText size={13} />
+                      <Button size="sm" variant="outline" onClick={handleAddCommitsContext} disabled={!selectedPr || !detail} leadingIcon={<MessageSquareText size={13} />}>
+
                         Add to chat
                       </Button>
                     </div>
@@ -2514,7 +2514,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       <div className="review-platform__detail-error">
                         <XCircle size={14} />
                         <span>{detailError}</span>
-                        <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleRetryDetail}>
+                        <Button size="sm" variant="outline" onClick={handleRetryDetail}>
                           Retry
                         </Button>
                       </div>
@@ -2590,9 +2590,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           <div className="review-platform__auth-actions">
             <Button
               type="button"
-              className="review-platform__panel-button"
-              size="small"
-              variant="ghost"
+              size="sm"
+              variant="outline"
               disabled={authSaving}
               onClick={() => {
                 setAuthModalOpen(false);
@@ -2605,34 +2604,33 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               <>
                 <Button
                   type="button"
-                  className="review-platform__panel-button"
-                  size="small"
-                  variant="secondary"
+                  size="sm"
+                  variant="outline"
                   disabled={authSaving}
                   onClick={() => void handleCopyGithubAuthCommand()}
+                  leadingIcon={<Copy size={13} />}
                 >
-                  <Copy size={13} />
+
                   Copy
                 </Button>
                 <Button
                   type="button"
-                  className="review-platform__panel-button"
-                  size="small"
-                  variant="primary"
-                  isLoading={authSaving}
+                  size="sm"
+                  variant="fill"
+                  loading={authSaving}
                   onClick={() => void handleOpenGithubAuthTerminal()}
+                  leadingIcon={<Terminal size={13} />}
                 >
-                  <Terminal size={13} />
+
                   Open terminal
                 </Button>
               </>
             ) : (
               <Button
                 type="submit"
-                className="review-platform__panel-button"
-                size="small"
-                variant="primary"
-                isLoading={authSaving}
+                size="sm"
+                variant="fill"
+                loading={authSaving}
                 disabled={!authToken.trim()}
               >
                 Save

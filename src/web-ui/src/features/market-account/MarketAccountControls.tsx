@@ -1,7 +1,8 @@
+import { Button } from '@bitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Github, Loader2, LogOut } from 'lucide-react';
-import { Avatar, Button, Modal } from '@/component-library';
+import { Avatar, Modal } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import {
@@ -219,8 +220,8 @@ export function MarketAccountControls({
         </div>
       ) : (
         <Button
-          size="small"
-          variant="secondary"
+          size="sm"
+          variant="outline"
           disabled={!account.resolved || account.status === 'authorizing'}
           onClick={() => setLoginOpen(true)}
         >
@@ -278,11 +279,11 @@ export function MarketAccountControls({
             data-bf-component="market-account-controls"
             data-bf-part="actions"
           >
-            <Button variant="ghost" onClick={closeLogin}>
+            <Button variant="outline" onClick={closeLogin}>
               {t('market.account.cancel')}
             </Button>
             <Button
-              variant="primary"
+              variant="fill"
               disabled={account.status === 'authorizing'}
               onClick={() => void signIn()}
             >

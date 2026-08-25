@@ -1,7 +1,8 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw } from 'lucide-react';
-import { Button, ConfigPageLoading, NumberInput } from '@/component-library';
+import { ConfigPageLoading, NumberInput } from '@/component-library';
 import { ConfigPageRow, ConfigPageSection } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isTauriRuntime } from '@/infrastructure/runtime';
@@ -75,8 +76,8 @@ const ReviewCapacitySection: React.FC = () => {
   if (!team) {
     return (
       <ConfigPageSection title={t('error.title')} description={loadError ?? t('messages.loadFailed')}>
-        <Button variant="secondary" size="small" onClick={() => void loadData()}>
-          <RotateCcw size={14} />
+        <Button variant="outline" size="sm" onClick={() => void loadData()} leadingIcon={<RotateCcw size={14} />}>
+
           {t('error.retry')}
         </Button>
       </ConfigPageSection>

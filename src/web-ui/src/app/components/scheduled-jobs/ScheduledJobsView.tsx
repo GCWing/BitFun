@@ -5,14 +5,13 @@
  * job list at top, inline editor expands below the selected job.
  */
 
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import {
-  Button,
   IconButton,
   Input,
   Select,
-  Switch,
   Textarea,
   confirmDanger,
 } from '@/component-library';
@@ -610,8 +609,8 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
         ) : null}
         <Button
           type="button"
-          size="small"
-          variant="secondary"
+          size="sm"
+          variant="outline"
           className="asv__new-job"
           onClick={handleCreateNew}
           disabled={assistantWorkspaceMode ? !workspaceRef : targetKind === 'session' ? !canSave : !workspaceRef}
@@ -663,7 +662,6 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                           role="presentation"
                         >
                           <Switch
-                            size="small"
                             checked={job.enabled}
                             onChange={e => {
                               void handleToggleEnabled(job, e.currentTarget.checked);
@@ -783,7 +781,6 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <div className="asv__toggle-card" data-bf-component="scheduled-jobs-view" data-bf-part="toggle">
                 <span className="asv__toggle-label">{t('nav.scheduledJobs.fields.enabled')}</span>
                 <Switch
-                  size="small"
                   checked={draft.enabled}
                   onChange={e => {
                     const enabled = e.currentTarget.checked;
@@ -1011,20 +1008,20 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
 
         <div className="asv__form-actions" data-bf-component="scheduled-jobs-view" data-bf-part="formActions">
           <Button
-            size="small"
-            className="asv__action-btn asv__action-btn--ghost"
-            variant="ghost"
+            size="sm"
+            className="asv__action-btn"
+            variant="outline"
             onClick={handleCloseEditor}
           >
             {t('nav.scheduledJobs.actions.cancel')}
           </Button>
           <Button
-            size="small"
-            className="asv__action-btn asv__action-btn--primary"
-            variant="primary"
+            size="sm"
+            className="asv__action-btn"
+            variant="fill"
             onClick={() => { void handleSave(); }}
             disabled={!canSave}
-            isLoading={saving}
+            loading={saving}
           >
             {selectedJobId
               ? t('nav.scheduledJobs.actions.save')

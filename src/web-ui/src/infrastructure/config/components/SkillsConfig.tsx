@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp } from 'lucide-react';
-import { Select, Input, Button, Search, IconButton, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
+import { Select, Input, Search, IconButton, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
@@ -272,12 +273,12 @@ const SkillsConfig: React.FC = () => {
           )}
         </div>
         <div className="bitfun-collection-form__footer">
-          <Button variant="secondary" size="small" onClick={resetForm}>
+          <Button variant="outline" size="sm" onClick={resetForm}>
             {t('form.actions.cancel')}
           </Button>
           <Button
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             onClick={handleAdd}
             disabled={!validationResult?.valid || isAdding}
           >
@@ -472,8 +473,8 @@ const SkillsConfig: React.FC = () => {
                   {isInstalled ? (
                     <Tooltip content={installedTooltipText}>
                       <span>
-                        <Button variant="primary" size="small" disabled>
-                          <CheckCircle2 size={14} />
+                        <Button variant="fill" size="sm" disabled leadingIcon={<CheckCircle2 size={14} />}>
+
                           {t('market.item.installed')}
                         </Button>
                       </span>
@@ -484,12 +485,13 @@ const SkillsConfig: React.FC = () => {
                         <Tooltip content={projectTooltipText}>
                           <span>
                             <Button
-                              variant="primary"
-                              size="small"
+                              variant="fill"
+                              size="sm"
                               onClick={() => handleDownload(skill, 'project')}
                               disabled={isDownloading || !hasWorkspace}
+                              leadingIcon={<Download size={14} />}
                             >
-                              <Download size={14} />
+
                               {isDownloading ? t('market.item.downloading') : t('market.item.downloadProject')}
                             </Button>
                           </span>
@@ -498,12 +500,13 @@ const SkillsConfig: React.FC = () => {
                       <Tooltip content={userTooltipText}>
                         <span>
                           <Button
-                            variant={isRemote ? 'primary' : 'secondary'}
-                            size="small"
+                            variant={isRemote ? 'fill' : 'outline'}
+                            size="sm"
                             onClick={() => handleDownload(skill, 'user')}
                             disabled={isDownloading}
+                            leadingIcon={<Download size={14} />}
                           >
-                            <Download size={14} />
+
                             {isDownloading ? t('market.item.downloading') : t('market.item.downloadUser')}
                           </Button>
                         </span>
@@ -663,8 +666,8 @@ const SkillsConfig: React.FC = () => {
           {renderAddForm('user')}
           {userSkills.length === 0 && !(showAddForm && formLevel === 'user') ? (
             <div className="bitfun-collection-empty" data-bf-component="skills-config" data-bf-part="empty">
-              <Button variant="dashed" size="small" onClick={() => { setFormLevel('user'); setShowAddForm(true); }}>
-                <Plus size={14} />
+              <Button variant="outline" size="sm" onClick={() => { setFormLevel('user'); setShowAddForm(true); }} leadingIcon={<Plus size={14} />}>
+
                 {t('toolbar.addTooltip')}
               </Button>
             </div>
@@ -681,8 +684,8 @@ const SkillsConfig: React.FC = () => {
             <div className="bitfun-collection-empty" data-bf-component="skills-config" data-bf-part="empty">
               {!hasWorkspace && <p>{t('messages.noWorkspace')}</p>}
               {hasWorkspace && (
-                <Button variant="dashed" size="small" onClick={() => { setFormLevel('project'); setShowAddForm(true); }}>
-                  <Plus size={14} />
+                <Button variant="outline" size="sm" onClick={() => { setFormLevel('project'); setShowAddForm(true); }} leadingIcon={<Plus size={14} />}>
+
                   {t('toolbar.addTooltip')}
                 </Button>
               )}

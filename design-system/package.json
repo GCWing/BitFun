@@ -1,0 +1,21 @@
+{
+  "name": "@bitfun/design-system-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build:tokens": "pnpm --filter @bitfun/design-tokens run build",
+    "build:theme": "pnpm --filter @bitfun/theme-bitfun run build",
+    "build:ui": "pnpm --filter @bitfun/ui run build",
+    "build:lab": "pnpm --filter @bitfun/design-lab run build",
+    "build:packages": "pnpm run build:tokens && pnpm run build:theme && pnpm run build:ui",
+    "prepare:consumer-dev": "pnpm run build:tokens && pnpm run build:theme",
+    "build": "pnpm run build:packages && pnpm run build:lab",
+    "dev": "pnpm run build:tokens && pnpm run build:theme && pnpm --filter @bitfun/design-lab run dev",
+    "test": "pnpm run build:tokens && pnpm run build:theme && pnpm --filter @bitfun/token-engine run test && pnpm --filter @bitfun/design-tokens run test && pnpm --filter @bitfun/theme-bitfun run test && pnpm --filter @bitfun/ui run test && pnpm --filter @bitfun/package-contract run test && pnpm --filter @bitfun/design-lab run test",
+    "check": "pnpm run build && pnpm run test"
+  }
+}

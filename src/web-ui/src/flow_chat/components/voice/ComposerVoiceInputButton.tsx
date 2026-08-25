@@ -1,6 +1,7 @@
+import { Button } from '@bitfun/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, Download, Loader2, Mic, VolumeX, X } from 'lucide-react';
-import { Button, IconButton } from '@/component-library';
+import { IconButton } from '@/component-library';
 import type { ComposerVoiceInputController } from './useComposerVoiceInput';
 
 const VOICE_TIMELINE_SAMPLE_COUNT = 32;
@@ -126,8 +127,8 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="install">
               <Button
                 className="bitfun-chat-input__voice-setup-action"
-                variant="primary"
-                size="small"
+                variant="fill"
+                size="sm"
                 onClick={(event) => {
                   event.stopPropagation();
                   controller.installAndStart();

@@ -1,5 +1,9 @@
 import type { AppearanceRendererAdapter, CssTokenAppearanceSettings } from '../types';
 import { APPEARANCE_CSS_TOKEN_NAMES } from '../builtins/catalog';
+import {
+  DESIGN_SYSTEM_APPEARANCE_TOKEN_NAMES,
+  projectDesignSystemAppearanceTokens,
+} from '@/infrastructure/design-system/appearanceTokenProjection';
 
 const ALLOWED_TOKEN_NAMES = new Set(APPEARANCE_CSS_TOKEN_NAMES);
 
@@ -30,9 +34,11 @@ function validateToken(name: string, value: unknown): string | null {
 }
 
 function removeTokens(settings: Readonly<CssTokenAppearanceSettings> | undefined): void {
-  if (!isSettings(settings)) return;
   const rootStyle = document.documentElement.style;
-  Object.keys(settings.tokens).forEach(name => rootStyle.removeProperty(name));
+  if (isSettings(settings)) {
+    Object.keys(settings.tokens).forEach(name => rootStyle.removeProperty(name));
+  }
+  DESIGN_SYSTEM_APPEARANCE_TOKEN_NAMES.forEach(name => rootStyle.removeProperty(name));
 }
 
 export const cssTokenAppearanceAdapter: AppearanceRendererAdapter<'css-tokens'> = {
@@ -56,6 +62,8 @@ export const cssTokenAppearanceAdapter: AppearanceRendererAdapter<'css-tokens'> 
     }
     const rootStyle = document.documentElement.style;
     Object.entries(next.tokens).forEach(([name, value]) => rootStyle.setProperty(name, value));
+    Object.entries(projectDesignSystemAppearanceTokens(next.tokens))
+      .forEach(([name, value]) => rootStyle.setProperty(name, value));
     rootStyle.backgroundColor = next.background;
     if (document.body) document.body.style.backgroundColor = next.background;
   },

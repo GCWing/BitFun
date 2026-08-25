@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -10,7 +11,7 @@ import {
   Store,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, confirmDialog, Modal, Search, Select } from '@/component-library';
+import { confirmDialog, Modal, Search, Select } from '@/component-library';
 import { MarketAccountControls } from '@/features/market-account';
 import {
   appearanceMarketAPI,
@@ -293,8 +294,8 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
         data-bf-component="appearance-settings"
         data-bf-part="marketDetail"
       >
-        <Button variant="ghost" size="small" onClick={() => setDetail(null)}>
-          <ArrowLeft size={14} />
+        <Button variant="outline" size="sm" onClick={() => setDetail(null)} leadingIcon={<ArrowLeft size={14} />}>
+
           {t('package.market.back')}
         </Button>
         <div
@@ -404,7 +405,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               && !updateAvailable
               && !linkedToOtherListing ? (
               <Button
-                variant={active ? 'secondary' : 'primary'}
+                variant={active ? 'outline' : 'fill'}
                 disabled={active
                   || unsupported
                   || incompatibleVersion
@@ -417,7 +418,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               </Button>
             ) : (
               <Button
-                variant="primary"
+                variant="fill"
                 disabled={installDisabled}
                 onClick={() => release && void handleInstall(release)}
               >
@@ -546,7 +547,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               >
                 <AlertTriangle size={16} />
                 <span>{error}</span>
-                <Button variant="ghost" size="small" onClick={() => void loadPage()}>
+                <Button variant="outline" size="sm" onClick={() => void loadPage()}>
                   {t('package.market.retry')}
                 </Button>
               </div>
@@ -659,9 +660,9 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               {nextCursor && !showSkeletons && (
                 <div className="appearance-market__load-more">
                   <Button
-                    variant="secondary"
-                    size="small"
-                    isLoading={appending}
+                    variant="outline"
+                    size="sm"
+                    loading={appending}
                     disabled={loading}
                     onClick={() => void loadPage(nextCursor, true)}
                   >

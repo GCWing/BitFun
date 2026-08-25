@@ -31,8 +31,8 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.id).toBe(bitfunDarkPalette.id);
     expect(snapshot.revision).toBe(3);
     expect(snapshot.cssText).toContain('--bf-appearance-colors-bg-primary');
-    expect(snapshot.cssText).toContain('[data-bf-component="button"][data-bf-part="root"]');
-    expect(snapshot.cssText).toContain('[data-bf-variant="primary"]:hover:not(:disabled)');
+    expect(snapshot.cssText).toContain('[data-bf-component="card"][data-bf-part="root"]');
+    expect(snapshot.cssText).toContain('[data-bf-variant="elevated"]');
     expect(snapshot.cssText).not.toContain('@layer');
     expect(snapshot.cssText).not.toContain(' !important;');
     expect(snapshot.cssText).not.toContain('.btn-primary');
@@ -94,6 +94,73 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).not.toContain('[data-bf-component="appearance-config"]');
   });
 
+  it('drops retired product action parts from older appearance packages', () => {
+    const visible = { kind: 'number', value: 0.9 } as const;
+    const retired = { kind: 'number', value: 0.4 } as const;
+    const pkg: AppearancePackage = {
+      schema: 'bitfun.appearance',
+      schemaVersion: 1,
+      id: 'test.retired-product-actions',
+      name: 'Retired Product Actions',
+      version: '1.0.0',
+      mode: 'dark',
+      components: {
+        'copy-output-button': {
+          parts: {
+            root: { base: { opacity: visible } },
+            action: { base: { opacity: retired } },
+          },
+        },
+        'sessions-section': {
+          parts: {
+            root: { base: { opacity: visible } },
+            retry: { base: { opacity: retired } },
+          },
+        },
+      },
+      scenes: {
+        skills: {
+          parts: {
+            root: { base: { opacity: visible } },
+            addAction: { base: { opacity: retired } },
+          },
+        },
+      },
+    };
+
+    const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
+    expect(snapshot.cssText).toContain('[data-bf-component="copy-output-button"][data-bf-part="root"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="sessions-section"][data-bf-part="root"]');
+    expect(snapshot.cssText).toContain('[data-bf-scene="skills"][data-bf-part="root"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-part="action"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-part="retry"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-part="addAction"]');
+  });
+
+  it('drops component surfaces retired after controls moved to the independent UI package', () => {
+    const visible = { kind: 'number', value: 0.9 } as const;
+    const pkg: AppearancePackage = {
+      schema: 'bitfun.appearance',
+      schemaVersion: 1,
+      id: 'test.retired-component-surfaces',
+      name: 'Retired Component Surfaces',
+      version: '1.0.0',
+      mode: 'dark',
+      components: {
+        button: { parts: { root: { base: { opacity: visible } } } },
+        switch: { parts: { root: { base: { opacity: visible } } } },
+        card: { parts: { root: { base: { opacity: visible } } } },
+      },
+    };
+
+    const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
+    expect(snapshot.cssText).toContain('[data-bf-component="card"][data-bf-part="root"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-component="button"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-component="switch"]');
+    expect(snapshot.components).not.toHaveProperty('button');
+    expect(snapshot.components).not.toHaveProperty('switch');
+  });
+
   it('compiles canonical Settings surface ids', () => {
     const accent = { kind: 'hex', value: '#4488ff' } as const;
     const pkg: AppearancePackage = {
@@ -151,7 +218,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'light',
       components: {
-        button: {
+        card: {
           parts: {
             root: {
               base: {
@@ -178,7 +245,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'dark',
       components: {
-        button: {
+        card: {
           parts: {
             root: {
               cascade: 'override',
@@ -234,7 +301,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'light',
       components: {
-        button: {
+        card: {
           parts: {
             root: {
               base: {
@@ -283,7 +350,7 @@ describe('AppearanceCompiler', () => {
         },
       },
       components: {
-        button: {
+        card: {
           parts: {
             root: {
               materials: ['surface', 'accent'],
@@ -309,7 +376,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'light',
       components: {
-        button: {
+        card: {
           parts: {
             root: {
               cascade: 'override',

@@ -97,26 +97,6 @@
   line-height: var(--bf-appearance-token-flowchat-support-line-height);
 }
 
-.history-session-placeholder__retry {
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
-  padding: 0 var(--bf-appearance-token-size-gap-3);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: 6px;
-  color: var(--bf-appearance-token-color-text-primary);
-  background: var(--bf-appearance-token-element-bg-hover);
-  font: inherit;
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  cursor: pointer;
-}
-
-.history-session-placeholder__retry:hover {
-  background: var(--bf-appearance-token-color-overlay-white-12);
-}
-
 .modern-flowchat-container__history-overlay {
   position: absolute;
   inset: 0;

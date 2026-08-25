@@ -86,38 +86,6 @@
     }
   }
 
-  &__init-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border: 1px solid var(--bf-appearance-token-btn-primary-border);
-    border-radius: 8px;
-    background: var(--bf-appearance-token-btn-primary-bg);
-    color: var(--bf-appearance-token-btn-primary-color);
-    box-shadow: var(--bf-appearance-token-btn-primary-shadow);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-
-    &:hover {
-      background: var(--bf-appearance-token-btn-primary-hover-bg);
-      color: var(--bf-appearance-token-btn-primary-hover-color);
-      border-color: var(--bf-appearance-token-btn-primary-hover-border);
-      box-shadow: var(--bf-appearance-token-btn-primary-hover-shadow);
-      transform: var(--bf-appearance-token-btn-primary-hover-transform);
-    }
-
-    &:active {
-      background: var(--bf-appearance-token-btn-primary-active-bg);
-      color: var(--bf-appearance-token-btn-primary-active-color);
-      border-color: var(--bf-appearance-token-btn-primary-active-border);
-      box-shadow: var(--bf-appearance-token-btn-primary-active-shadow);
-      transform: var(--bf-appearance-token-btn-primary-active-transform);
-    }
-  }
-
   &__init-hint {
     font-size: 11px;
     color: var(--bf-appearance-token-color-text-muted);

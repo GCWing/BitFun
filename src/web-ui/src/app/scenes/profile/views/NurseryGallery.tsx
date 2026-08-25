@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,7 +20,6 @@ import {
   GalleryGrid,
   GallerySkeleton,
 } from '@/app/components';
-import { Button } from '@/component-library';
 import { confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useApp } from '@/app/hooks/useApp';
@@ -229,9 +229,8 @@ const NurseryGallery: React.FC = () => {
         actions={(
           <Button
             type="button"
-            variant="inverse"
-            size="small"
-            className="nursery-gallery__create-button"
+            variant="fill"
+            size="sm"
             onClick={handleCreateAssistant}
             disabled={creating}
             aria-busy={creating}
@@ -347,12 +346,13 @@ const NurseryGallery: React.FC = () => {
               action={(
                 <Button
                   type="button"
-                  variant="primary"
-                  size="small"
+                  variant="fill"
+                  size="sm"
                   onClick={handleCreateAssistant}
                   disabled={creating}
+                  leadingIcon={<Plus size={15} aria-hidden="true" />}
                 >
-                  <Plus size={15} aria-hidden="true" />
+
                   {t('nursery.gallery.newAssistant')}
                 </Button>
               )}

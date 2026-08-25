@@ -1,4 +1,5 @@
 import { Component, ReactNode } from 'react';
+import { Button } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
 import { buildReactCrashLogPayload } from '@/shared/utils/reactProductionError';
@@ -67,19 +68,13 @@ export class AppErrorBoundary extends Component<Props, State> {
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{title}</h2>
           <p style={{ margin: '12px 0 0', opacity: 0.9 }}>{firstLine}</p>
           <div style={{ marginTop: 16 }}>
-            <button
+            <Button
+              variant="fill"
+              size="sm"
               onClick={this.handleReload}
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bf-appearance-token-color-accent-600)',
-                color: 'var(--bf-appearance-token-color-static-white)',
-                border: 'none',
-                borderRadius: 8,
-                cursor: 'pointer',
-              }}
             >
               {reloadLabel}
-            </button>
+            </Button>
           </div>
           {import.meta.env.DEV && this.state.error && (
             <details style={{ marginTop: 16 }}>

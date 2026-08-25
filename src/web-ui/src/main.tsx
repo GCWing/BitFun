@@ -1,4 +1,8 @@
 import ReactDOM from "react-dom/client";
+// Register the design-system layer order before any product module can import
+// component CSS. CSS layers keep their first-seen order for the document.
+import "@bitfun/theme-bitfun/default.css";
+import "@bitfun/ui/styles.css";
 import App from "./app/App";
 import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet";
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
@@ -8,6 +12,7 @@ import { PeerDeviceProvider } from "./infrastructure/peer-device/PeerDeviceConte
 import { PeerHostInvokeBridge } from "./infrastructure/peer-device/PeerHostInvokeBridge";
 import { PeerDirectoryPickerHost } from "./infrastructure/peer-device/PeerDirectoryPickerHost";
 import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
+import { DesignSystemThemeBridge } from "./infrastructure/design-system";
 import { mouseGlowService } from "./infrastructure/mouse-glow/core/MouseGlowService";
 import "./app/styles/index.scss";
 
@@ -347,9 +352,11 @@ async function startApplication(): Promise<void> {
   if (isAgentCompanionWindow) {
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <AppErrorBoundary>
-        <I18nProvider>
-          <AgentCompanionDesktopPet />
-        </I18nProvider>
+        <DesignSystemThemeBridge>
+          <I18nProvider>
+            <AgentCompanionDesktopPet />
+          </I18nProvider>
+        </DesignSystemThemeBridge>
       </AppErrorBoundary>
     );
     logElapsed(log, 'Startup step completed', renderStartedAt, {
@@ -367,15 +374,17 @@ async function startApplication(): Promise<void> {
 
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <AppErrorBoundary>
-      <I18nProvider>
-        <WorkspaceProvider>
-          <PeerDeviceProvider>
-            <PeerHostInvokeBridge />
-            <PeerDirectoryPickerHost />
-            <App />
-          </PeerDeviceProvider>
-        </WorkspaceProvider>
-      </I18nProvider>
+      <DesignSystemThemeBridge>
+        <I18nProvider>
+          <WorkspaceProvider>
+            <PeerDeviceProvider>
+              <PeerHostInvokeBridge />
+              <PeerDirectoryPickerHost />
+              <App />
+            </PeerDeviceProvider>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </DesignSystemThemeBridge>
     </AppErrorBoundary>
   );
   logElapsed(log, 'Startup step completed', renderStartedAt, {

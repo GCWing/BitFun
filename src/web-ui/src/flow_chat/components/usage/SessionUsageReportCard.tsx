@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -270,17 +271,18 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
               </IconButton>
             </Tooltip>
             <Tooltip content={t('usage.actions.openDetails')}>
-              <button
+              <Button
                 type="button"
-                className="session-usage-report-card__details-button"
+                variant="outline"
+                size="sm"
+                trailingIcon={<ChevronRight size={15} aria-hidden />}
                 onClick={handleOpenDetails}
                 disabled={!onOpenDetails}
                 data-testid="session-usage-details"
                 aria-label={t('usage.actions.openDetails')}
               >
-                <span>{t('usage.actions.viewDetails')}</span>
-                <ChevronRight size={15} aria-hidden />
-              </button>
+                {t('usage.actions.viewDetails')}
+              </Button>
             </Tooltip>
           </div>
         </div>
@@ -340,16 +342,17 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
             <h4>{t('usage.sections.tools')}</h4>
             {showAllTools && (
               <Tooltip content={showAllTools.ariaLabel}>
-                <button
+                <Button
                   type="button"
-                  className="session-usage-report-card__mini-list-more session-usage-report-card__compact-tools-more"
+                  variant="outline"
+                  size="sm"
+                  trailingIcon={<ChevronRight size={14} aria-hidden />}
                   onClick={showAllTools.onClick}
                   data-testid="session-usage-tools-details"
                   aria-label={showAllTools.ariaLabel}
                 >
-                  <span>{showAllTools.label}</span>
-                  <ChevronRight size={14} aria-hidden />
-                </button>
+                  {showAllTools.label}
+                </Button>
               </Tooltip>
             )}
           </div>
@@ -478,16 +481,17 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
               </IconButton>
             </Tooltip>
             <Tooltip content={t('usage.actions.openDetails')}>
-              <button
+              <Button
                 type="button"
-                className="session-usage-report-card__details-button"
+                variant="outline"
+                size="sm"
+                trailingIcon={<ChevronRight size={13} aria-hidden />}
                 onClick={handleOpenDetails}
                 disabled={!onOpenDetails}
                 aria-label={t('usage.actions.openDetails')}
               >
-                <span>{t('usage.actions.viewDetails')}</span>
-                <ChevronRight size={13} aria-hidden />
-              </button>
+                {t('usage.actions.viewDetails')}
+              </Button>
             </Tooltip>
           </div>
         </div>
@@ -762,15 +766,16 @@ function UsageMiniList({ title, showAll, items, emptyLabel, emptyDescription }: 
         <div className="session-usage-report-card__mini-list-title">{title}</div>
         {showAll && (
           <Tooltip content={showAll.ariaLabel}>
-            <button
+            <Button
               type="button"
-              className="session-usage-report-card__mini-list-more"
+              variant="outline"
+              size="sm"
+              trailingIcon={<ChevronRight size={12} aria-hidden />}
               onClick={showAll.onClick}
               aria-label={showAll.ariaLabel}
             >
-              <span>{showAll.label}</span>
-              <ChevronRight size={12} aria-hidden />
-            </button>
+              {showAll.label}
+            </Button>
           </Tooltip>
         )}
       </div>

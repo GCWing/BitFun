@@ -16,9 +16,9 @@ This directory contains:
 
 Current component folders include:
 
-- **Actions & window controls**: `Button`, `IconButton`, `WindowControls`
+- **Actions & window controls**: `IconButton`, `WindowControls`
 - **Dialogs & overlays**: `Modal`, `InputDialog`, `ConfirmDialog`, `Tooltip`
-- **Form inputs**: `Input`, `NumberInput`, `Search`, `Select`, `Checkbox`, `Switch`, `Textarea`
+- **Form inputs**: `Input`, `NumberInput`, `Search`, `Select`, `Checkbox`, `Textarea`
 - **Display & content**: `Alert`, `Badge`, `Tag`, `Avatar`, `Card`, `Empty`, `Markdown`, `Tabs`
 - **Editors & text**: `CodeEditor`, `StreamText`
 - **Visual utilities**: `CubeLoading`, `CubeLogo`, `DotMatrixLoader`, `TextStrokeEffect`
@@ -33,13 +33,14 @@ Current component folders include:
 ## Usage
 
 ```tsx
-import { Button, Card, Input, Markdown } from '@components';
+import { Button } from '@bitfun/ui';
+import { Card, Input, Markdown } from '@components';
 
 function Example() {
   return (
     <Card>
       <Input placeholder="Search project files" />
-      <Button variant="primary">Run</Button>
+      <Button variant="fill">Run</Button>
       <Markdown># Preview</Markdown>
     </Card>
   );

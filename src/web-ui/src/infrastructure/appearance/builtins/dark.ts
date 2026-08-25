@@ -13,23 +13,26 @@ import {
   createStandardRadius,
   createStandardSpacing,
   createStandardTypography,
-  overlayBlack,
   overlayWhite,
   rgbFromHex,
   STATIC_WHITE,
 } from './paletteHelpers';
+import {
+  getDesignSystemThemeNumber,
+  getDesignSystemThemeString,
+} from './designSystemThemeValues';
 
-const DARK_BACKGROUND_PRIMARY = '#0e0e10';
-const DARK_BACKGROUND_SECONDARY = '#1c1c1f';
-const DARK_TEXT_PRIMARY = '#e8e8e8';
+const DARK_BACKGROUND_PRIMARY = getDesignSystemThemeString('dark', 'color.surface.canvas');
+const DARK_BACKGROUND_SECONDARY = getDesignSystemThemeString('dark', 'color.surface.panel');
+const DARK_TEXT_PRIMARY = getDesignSystemThemeString('dark', 'color.content.primary');
 const DARK_BUTTON_TEXT = '#c8c8c8';
-const DARK_ACCENT = '#60a5fa';
-const DARK_ACCENT_HOVER = '#3b82f6';
+const DARK_ACCENT = getDesignSystemThemeString('dark', 'color.accent.default');
+const DARK_ACCENT_HOVER = getDesignSystemThemeString('dark', 'color.accent.hover');
 const DARK_PURPLE = '#8b5cf6';
 const DARK_PURPLE_HOVER = '#7c3aed';
-const DARK_SUCCESS = '#34d399';
-const DARK_WARNING = '#f59e0b';
-const DARK_ERROR = '#ef4444';
+const DARK_SUCCESS = getDesignSystemThemeString('dark', 'color.status.success.content');
+const DARK_WARNING = getDesignSystemThemeString('dark', 'color.status.warning.content');
+const DARK_ERROR = getDesignSystemThemeString('dark', 'color.status.danger.content');
 
 export const bitfunDarkPalette: AppearancePalette = {
 
@@ -53,9 +56,9 @@ export const bitfunDarkPalette: AppearancePalette = {
 
     text: {
       primary: DARK_TEXT_PRIMARY,
-      secondary: '#b0b0b0',
-      muted: '#858585',
-      disabled: '#555555',
+      secondary: getDesignSystemThemeString('dark', 'color.content.secondary'),
+      muted: getDesignSystemThemeString('dark', 'color.content.muted'),
+      disabled: getDesignSystemThemeString('dark', 'color.content.disabled'),
     },
 
     accent: createAccentScale({ base: DARK_ACCENT, hover: DARK_ACCENT_HOVER }),
@@ -68,14 +71,32 @@ export const bitfunDarkPalette: AppearancePalette = {
       error: DARK_ERROR,
       info: '#a1a1aa',
       overrides: {
-        infoBg: overlayWhite(0.08),
-        infoBorder: overlayWhite(0.24),
+        successBg: getDesignSystemThemeString('dark', 'color.status.success.surface'),
+        successBorder: getDesignSystemThemeString('dark', 'color.status.success.border'),
+        warningBg: getDesignSystemThemeString('dark', 'color.status.warning.surface'),
+        warningBorder: getDesignSystemThemeString('dark', 'color.status.warning.border'),
+        errorBg: getDesignSystemThemeString('dark', 'color.status.danger.surface'),
+        errorBorder: getDesignSystemThemeString('dark', 'color.status.danger.border'),
+        infoBg: getDesignSystemThemeString('dark', 'color.status.info.surface'),
+        infoBorder: getDesignSystemThemeString('dark', 'color.status.info.border'),
       },
     }),
 
-    border: createDarkNeutralBorder(),
+    border: {
+      ...createDarkNeutralBorder(),
+      subtle: getDesignSystemThemeString('dark', 'color.border.subtle'),
+      base: getDesignSystemThemeString('dark', 'color.border.default'),
+      strong: getDesignSystemThemeString('dark', 'color.border.strong'),
+    },
 
-    element: createDarkNeutralElement(),
+    element: {
+      ...createDarkNeutralElement(),
+      subtle: getDesignSystemThemeString('dark', 'color.surface.subtle'),
+      soft: getDesignSystemThemeString('dark', 'color.action.quiet.hover'),
+      base: getDesignSystemThemeString('dark', 'color.action.neutral.surface'),
+      medium: getDesignSystemThemeString('dark', 'color.action.neutral.surfaceHover'),
+      strong: getDesignSystemThemeString('dark', 'color.action.neutral.surfacePressed'),
+    },
 
     git: createGitColors({
       branch: '#a1a1aa',
@@ -91,16 +112,16 @@ export const bitfunDarkPalette: AppearancePalette = {
 
   effects: {
     shadow: {
-      xs: `0 1px 2px ${overlayBlack(0.9)}`,
-      sm: `0 2px 4px ${overlayBlack(0.8)}`,
-      base: `0 4px 8px ${overlayBlack(0.7)}`,
-      lg: `0 8px 16px ${overlayBlack(0.6)}`,
-      xl: `0 12px 24px ${overlayBlack(0.5)}`,
+      xs: getDesignSystemThemeString('dark', 'shadow.xs'),
+      sm: getDesignSystemThemeString('dark', 'shadow.sm'),
+      base: getDesignSystemThemeString('dark', 'shadow.base'),
+      lg: getDesignSystemThemeString('dark', 'shadow.lg'),
+      xl: getDesignSystemThemeString('dark', 'shadow.xl'),
     },
 
     blur: {
-      subtle: 'blur(4px) saturate(1.05)',
-      base: 'blur(8px) saturate(1.1)',
+      subtle: getDesignSystemThemeString('dark', 'effect.blur.subtle'),
+      base: getDesignSystemThemeString('dark', 'effect.blur.base'),
     },
 
     radius: createStandardRadius(),
@@ -108,9 +129,9 @@ export const bitfunDarkPalette: AppearancePalette = {
     spacing: createStandardSpacing(),
 
     opacity: {
-      disabled: 0.6,
-      hover: 0.8,
-      focus: 0.9,
+      disabled: getDesignSystemThemeNumber('dark', 'opacity.disabled'),
+      hover: getDesignSystemThemeNumber('dark', 'opacity.hover'),
+      focus: getDesignSystemThemeNumber('dark', 'opacity.focus'),
     },
   },
 
@@ -137,20 +158,20 @@ export const bitfunDarkPalette: AppearancePalette = {
 
       primary: {
         default: {
-          background: overlayWhite(0.16),
-          color: '#f3f3f5',
+          background: getDesignSystemThemeString('dark', 'color.action.primary.background'),
+          color: getDesignSystemThemeString('dark', 'color.action.primary.content'),
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
-          background: overlayWhite(0.24),
+          background: getDesignSystemThemeString('dark', 'color.action.primary.hover'),
           color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
-          background: overlayWhite(0.2),
+          background: getDesignSystemThemeString('dark', 'color.action.primary.pressed'),
           color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',

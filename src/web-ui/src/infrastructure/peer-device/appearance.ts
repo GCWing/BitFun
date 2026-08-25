@@ -26,7 +26,6 @@ export const peerDeviceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'switcherMenu' },
     { id: 'switcherItem' },
     { id: 'switcherStatusDot' },
-    { id: 'switcherDisconnect' },
   ],
   states: [
     { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },

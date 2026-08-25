@@ -40,25 +40,6 @@
         margin: 0;
       }
 
-      .retry-button {
-        padding: 8px 16px;
-        font-size: 13px;
-        color: var(--bf-appearance-token-color-text-primary);
-        background: var(--bf-appearance-token-color-bg-tertiary);
-        border: 1px solid var(--bf-appearance-token-border-base);
-        border-radius: 6px;
-        cursor: pointer;
-        transition:
-          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-          background-color 140ms ease,
-          border-color 140ms ease,
-          color 140ms ease;
-
-        &:hover {
-          background: var(--bf-appearance-token-element-bg-hover);
-          border-color: var(--bf-appearance-token-border-medium);
-        }
-      }
     }
   }
 
@@ -160,96 +141,6 @@
         letter-spacing: 0.2px;
       }
 
-      .edit-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        padding: 0;
-        color: var(--bf-appearance-token-color-text-muted);
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 4px;
-        cursor: pointer;
-        transition:
-          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-          background-color 140ms ease,
-          border-color 140ms ease,
-          color 140ms ease;
-
-        &:hover {
-          color: var(--bf-appearance-token-color-text-primary);
-          background: var(--bf-appearance-token-color-bg-tertiary);
-          border-color: var(--bf-appearance-token-border-medium);
-        }
-
-        &--active {
-          color: var(--bf-appearance-token-color-info);
-          background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent);
-          border-color: var(--bf-appearance-token-color-info);
-
-          &:hover {
-            color: var(--bf-appearance-token-color-info);
-            background: var(--bf-appearance-token-border-accent-subtle);
-          }
-        }
-      }
-    }
-  }
-
-  // Build button styles (for header)
-  .build-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--bf-appearance-token-color-static-white);
-    background: linear-gradient(135deg, var(--bf-appearance-token-color-warning) 0%, var(--bf-appearance-token-color-warning) 100%);
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition:
-      transform 0.15s ease,
-      background-color 0.15s ease,
-      box-shadow 0.15s ease,
-      opacity 0.15s ease;
-    box-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-12);
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, var(--bf-appearance-token-color-warning) 0%, var(--bf-appearance-token-color-warning) 100%);
-      box-shadow: 0 2px 4px var(--bf-appearance-token-color-warning-border);
-    }
-
-    &:active:not(:disabled) {
-      transform: translateY(1px);
-    }
-
-    &:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
-
-    svg {
-      width: 14px;
-      height: 14px;
-    }
-
-    &--building {
-      background: linear-gradient(135deg, var(--bf-appearance-token-color-warning) 0%, var(--bf-appearance-token-color-warning) 100%);
-      cursor: wait;
-    }
-
-    &--built {
-      background: linear-gradient(135deg, var(--bf-appearance-token-color-success) 0%, var(--bf-appearance-token-color-success) 100%);
-      cursor: default;
-
-      &:hover {
-        background: linear-gradient(135deg, var(--bf-appearance-token-color-success) 0%, var(--bf-appearance-token-color-success) 100%);
-        box-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-12);
-      }
     }
   }
 
@@ -271,34 +162,6 @@
         margin-bottom: 0;
       }
 
-      .edit-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 22px;
-        height: 22px;
-        padding: 0;
-        color: var(--bf-appearance-token-color-text-muted);
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 4px;
-        cursor: pointer;
-        transition:
-          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-          background-color 140ms ease,
-          border-color 140ms ease,
-          color 140ms ease;
-
-        &:hover {
-          color: var(--bf-appearance-token-color-text-primary);
-          background: var(--bf-appearance-token-color-bg-tertiary);
-          border-color: var(--bf-appearance-token-border-base);
-        }
-
-        &--confirm {
-          color: var(--bf-appearance-token-color-success);
-        }
-      }
     }
 
     // YAML editor section
@@ -400,30 +263,6 @@
 
         &:focus {
           border-color: var(--bf-appearance-token-color-info);
-        }
-      }
-
-      .todo-delete-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 22px;
-        height: 22px;
-        border: 1px solid transparent;
-        border-radius: 4px;
-        background: transparent;
-        color: var(--bf-appearance-token-color-text-muted);
-        cursor: pointer;
-        transition:
-          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-          background-color 140ms ease,
-          border-color 140ms ease,
-          color 140ms ease;
-
-        &:hover {
-          color: var(--bf-appearance-token-color-error);
-          background: var(--bf-appearance-token-color-error-bg);
-          border-color: var(--bf-appearance-token-color-error-border);
         }
       }
 

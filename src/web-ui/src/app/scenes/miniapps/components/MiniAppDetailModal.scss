@@ -263,16 +263,6 @@
     flex-shrink: 0;
   }
 
-  &__stop.btn,
-  &__delete.btn {
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    background: transparent;
-  }
-
-  &__delete.btn:hover:not(:disabled) {
-    border-color: var(--bf-appearance-token-color-error-border);
-    color: var(--bf-appearance-token-color-error);
-  }
 }
 
 @media (max-width: 900px) {
@@ -356,13 +346,13 @@
       width: 100%;
     }
 
-    &__primary.btn,
-    &__stop.btn,
-    &__delete.btn {
+    &__primary[data-bf-component='button'],
+    &__stop[data-bf-component='button'],
+    &__delete[data-bf-component='button'] {
       width: 100%;
     }
 
-    &__primary.btn {
+    &__primary[data-bf-component='button'] {
       grid-column: 1 / -1;
       grid-row: 1;
     }

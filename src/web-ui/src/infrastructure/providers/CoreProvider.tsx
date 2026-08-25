@@ -1,5 +1,6 @@
  
 import React, { useEffect, useState, ReactNode } from 'react';
+import { Button } from '@bitfun/ui';
 import { initializeCore, destroyCore } from '../index';
 import { globalEventBus } from '../event-bus';
 import { createLogger } from '@/shared/utils/logger';
@@ -88,19 +89,13 @@ export const CoreProvider: React.FC<CoreProviderProps> = ({ children }) => {
       }}>
         <h2>{tErrors('core.initializationFailed')}</h2>
         <p>{error}</p>
-        <button 
+        <Button
+          variant="fill"
+          size="sm"
           onClick={() => window.location.reload()}
-          style={{
-            padding: '8px 16px',
-            background: 'var(--bf-appearance-token-color-accent-500)',
-            color: 'var(--bf-appearance-token-color-static-white)',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
         >
           {tCommon('actions.reload')}
-        </button>
+        </Button>
       </div>
     );
   }

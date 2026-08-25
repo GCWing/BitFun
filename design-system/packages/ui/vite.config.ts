@@ -1,0 +1,32 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+const packageDirectory = path.dirname(fileURLToPath(import.meta.url));
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    cssCodeSplit: false,
+    lib: {
+      cssFileName: "styles",
+      entry: {
+        index: path.resolve(packageDirectory, "src/index.ts"),
+        registry: path.resolve(packageDirectory, "src/registry.ts"),
+      },
+      formats: ["es"],
+    },
+    rollupOptions: {
+      external: [
+        "react",
+        "react-dom",
+        "react/jsx-runtime",
+      ],
+      output: {
+        entryFileNames: "[name].js",
+      },
+    },
+    sourcemap: true,
+  },
+});

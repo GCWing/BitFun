@@ -5,13 +5,17 @@
  */
 
 @use '../../component-library/styles/tokens.scss' as *;
+@use '../styles/workspace-shell-surfaces' as shell-surfaces;
 
-$_nav-width: 240px;
+$_nav-width: 216px;
 $_nav-collapsed-width: 76px;
-$_workbench-gap: 6px;
+$_nav-bar-height: 35px;
+$_resize-target-width: 6px;
 
 .bitfun-workspace-body {
   --nav-width: #{$_nav-width};
+
+  @include shell-surfaces.sidebar-background;
 
   position: relative;
   isolation: isolate;
@@ -22,13 +26,14 @@ $_workbench-gap: 6px;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
-  background: var(--bf-appearance-token-chrome-bg-primary);
   color: var(--bf-appearance-token-color-text-primary);
-  padding: 0 $size-gap-2 $size-gap-2 $size-gap-2;
-  gap: $size-gap-2;
+  padding: 0;
+  gap: 0;
 }
 
 .bitfun-workspace-body__nav-area {
+  @include shell-surfaces.sidebar-background;
+
   position: relative;
   z-index: 3;
   display: flex;
@@ -50,51 +55,23 @@ $_workbench-gap: 6px;
 .bitfun-workspace-body__collapsed-nav {
   position: absolute;
   top: 0;
-  left: $_workbench-gap;
+  left: 0;
   z-index: $z-dropdown;
   width: $_nav-collapsed-width;
-  height: 38px;
+  height: $_nav-bar-height;
 }
 
 .bitfun-workspace-body__nav-divider {
   position: absolute;
   top: 0;
-  bottom: $_workbench-gap;
-  // Anchor the resize target to the scene surface edge. The target extends
-  // into the scene so it never covers the navigation scrollbar immediately
-  // to its left.
-  left: calc(#{$_workbench-gap} + var(--nav-width) + #{$_workbench-gap});
+  bottom: 0;
+  // Center the resize hit target on the navigation / scene boundary. The
+  // scene surface owns the visual feedback so the hit target stays invisible.
+  left: calc(var(--nav-width) - #{$_resize-target-width * 0.5});
   z-index: 10;
-  width: $_workbench-gap;
+  width: $_resize-target-width;
   cursor: ew-resize;
   background: transparent;
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 38px auto 0 0;
-    width: 1px;
-    border-radius: $size-radius-full;
-    background: var(--bf-appearance-token-chrome-border-subtle);
-    opacity: 0;
-    transform: translateX(-50%);
-    transition: opacity 120ms cubic-bezier(0.23, 1, 0.32, 1);
-    pointer-events: none;
-  }
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .bitfun-workspace-body__nav-divider:hover::after {
-    opacity: 1;
-  }
-}
-
-// Active resizing state — keep line visible while dragging
-.bitfun-is-resizing-nav .bitfun-workspace-body__nav-divider::after {
-  width: 2px;
-  opacity: 1;
-  background: var(--bf-appearance-token-chrome-accent-500);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--bf-appearance-token-chrome-accent-500) 36%, transparent);
 }
 
 .bitfun-workspace-body__scene-area {
@@ -103,32 +80,78 @@ $_workbench-gap: 6px;
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 0;
   min-width: 0;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
+}
 
-  :root[data-bf-appearance-mode='light'] & {
-    // The scene viewport clips its own content; allow only its shadow to reach
-    // the surrounding shell without elevating the tab bar and window controls.
-    overflow: visible;
+.bitfun-workspace-body__scene-surface {
+  --_scene-surface-radius: var(--bf-layout-split-view-content-panel-radius);
+
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: $size-gap-5;
+  min-width: 0;
+  min-height: 0;
+  padding: $size-gap-4 $size-gap-4 $size-gap-5;
+  overflow: hidden;
+  border-radius: var(--_scene-surface-radius) 0 0 var(--_scene-surface-radius);
+  background: var(--bf-appearance-token-color-bg-scene);
+  box-shadow: -4px 0 12px -6px var(--bf-appearance-token-color-overlay-slate-08);
+
+  :root[data-bf-appearance-mode='dark'] & {
+    box-shadow: -5px 0 16px -7px var(--bf-appearance-token-color-overlay-black-30);
   }
+
+  // Resize feedback follows only the rounded boundary shared with navigation.
+  // Matching the marker width to the radius leaves no horizontal top/bottom
+  // runs, so this paints one continuous curve-edge-curve rather than a box.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: $z-decoration;
+    box-sizing: border-box;
+    width: var(--_scene-surface-radius);
+    border: 1px solid transparent;
+    border-right: 0;
+    border-radius: var(--_scene-surface-radius) 0 0 var(--_scene-surface-radius);
+    opacity: 0;
+    transition: opacity 120ms cubic-bezier(0.23, 1, 0.32, 1);
+    pointer-events: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-workspace-body__nav-divider:hover ~ .bitfun-workspace-body__scene-area {
+    .bitfun-workspace-body__scene-surface::after {
+      border-color: var(--bf-appearance-token-border-subtle);
+      opacity: 1;
+    }
+  }
+}
+
+.bitfun-is-resizing-nav .bitfun-workspace-body__scene-surface::after {
+  border-color: var(--bf-appearance-token-border-base);
+  opacity: 1;
 }
 
 // The compact toolbar remains reachable when the navigation panel is hidden.
 .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-scene-bar {
+  .bitfun-workspace-body__scene-surface .bitfun-scene-bar {
     padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1});
   }
 }
 
 .bitfun-app-layout--macos .bitfun-workspace-body__collapsed-nav {
-  left: calc(#{$_workbench-gap} + 72px);
+  left: 72px;
 }
 
 .bitfun-app-layout--macos .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-scene-bar {
+  .bitfun-workspace-body__scene-surface .bitfun-scene-bar {
     padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1} + 72px);
   }
 }
@@ -138,11 +161,8 @@ $_workbench-gap: 6px;
 }
 
 .bitfun-workspace-body__nav-panel {
-  // The workbench keeps a visual gap between navigation and scene. Let the
-  // panel fill that gap so native scrollbars terminate at the visible scene
-  // border without changing the logical resize width or moving the scene.
-  width: calc(100% + #{$_workbench-gap});
-  max-width: none;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -152,7 +172,7 @@ $_workbench-gap: 6px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-workspace-body__nav-divider::after {
+  .bitfun-workspace-body__scene-surface::after {
     transition: none;
   }
 }

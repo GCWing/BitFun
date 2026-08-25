@@ -1,3 +1,4 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,11 +11,9 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
-  Button,
   IconButton,
   Input,
   Modal,
-  Switch,
   confirmDanger,
 } from '@/component-library';
 import type { UserToolGroup } from '@/infrastructure/config/types';
@@ -324,10 +323,10 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
               </div>
             </div>
             <div className="tool-group-manager__footer">
-              <Button variant="ghost" size="small" onClick={closeEditor} disabled={saving}>
+              <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
                 {t('agentsOverview.cancel')}
               </Button>
-              <Button variant="primary" size="small" onClick={() => void saveEditor()} isLoading={saving}>
+              <Button variant="fill" size="sm" onClick={() => void saveEditor()} loading={saving}>
                 {isEditing && editingGroup
                   ? t('agentsOverview.toolGroups.saveGroup')
                   : t('agentsOverview.toolGroups.createGroup')}
@@ -338,8 +337,8 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
           <>
             <div className="tool-group-manager__head">
               <span>{t('agentsOverview.toolGroups.manageSubtitle')}</span>
-              <Button variant="secondary" size="small" onClick={startCreate} disabled={saving}>
-                <Plus size={14} />
+              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Plus size={14} />}>
+
                 {t('agentsOverview.toolGroups.createGroup')}
               </Button>
             </div>
@@ -450,12 +449,13 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
           {t('agentsOverview.toolGroups.selectedCount', { count: selectedCount })}
         </span>
         <Button
-          variant="ghost"
-          size="small"
+          variant="outline"
+          size="sm"
           onClick={() => setIsManagerOpen(true)}
           disabled={disabled}
+          leadingIcon={<Settings2 size={14} />}
         >
-          <Settings2 size={14} />
+
           {t('agentsOverview.toolGroups.manageGroups')}
         </Button>
       </div>
@@ -478,8 +478,8 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
                     <div className="tool-group-picker__group-actions" data-bf-component="tool-group-picker" data-bf-part="groupActions">
                       {selectedInGroup > 0 && !allSelected ? (
                         <Button
-                          variant="ghost"
-                          size="small"
+                          variant="outline"
+                          size="sm"
                           onClick={() => onSelectionChange(
                             setToolGroupSelection(selectedToolNames, groupToolNames(group), false),
                           )}
@@ -489,7 +489,6 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
                         </Button>
                       ) : null}
                       <Switch
-                        size="small"
                         checked={allSelected}
                         onChange={(event) => onSelectionChange(
                           setToolGroupSelection(

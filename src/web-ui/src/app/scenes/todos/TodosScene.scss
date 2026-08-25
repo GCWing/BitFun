@@ -96,11 +96,6 @@ $todos-compact-breakpoint: 720px;
 
   &__today-button {
     min-width: 64px;
-    background: var(--bf-appearance-token-element-bg-soft);
-  }
-
-  &__new-button {
-    white-space: nowrap;
   }
 
   // ── Main board ────────────────────────────────────────────────────────────
@@ -847,7 +842,11 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__editor-enable {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
     min-width: 0;
+    cursor: pointer;
   }
 
   &__editor-runtime-divider {
@@ -875,6 +874,7 @@ $todos-compact-breakpoint: 720px;
     color: var(--bf-appearance-token-color-text-primary);
   }
 
+  &__editor-enable-copy,
   &__editor-smart-copy {
     display: flex;
     flex-direction: column;
@@ -982,11 +982,11 @@ $todos-compact-breakpoint: 720px;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
     background: transparent;
 
-    > .btn {
+    > [data-bf-component='button'] {
       min-width: 104px;
     }
 
-    > .btn-inverse {
+    > [data-bf-component='button'][data-bf-variant='fill'] {
       min-width: 120px;
     }
   }

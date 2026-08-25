@@ -138,62 +138,6 @@
     gap: $size-gap-2;
   }
 
-  &__nav-btn {
-    padding: 6px 18px;
-    border-radius: $size-radius-sm;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    border: none;
-    cursor: pointer;
-    transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard,
-      color $motion-base $easing-standard,
-      opacity $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
-
-    &--prev {
-      background: transparent;
-      color: var(--bf-appearance-token-color-text-secondary);
-      border: 1px solid var(--bf-appearance-token-border-base);
-
-      @media (hover: hover) and (pointer: fine) {
-        &:hover {
-          background: var(--bf-appearance-token-color-bg-secondary);
-          color: var(--bf-appearance-token-color-text-primary);
-        }
-      }
-    }
-
-    &--next,
-    &--done {
-      background: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-static-white);
-      padding: 6px 22px;
-
-      @media (hover: hover) and (pointer: fine) {
-        &:hover { opacity: 0.9; }
-      }
-      &:active { transform: scale(0.97); }
-    }
-  }
-
-  // ─── "Don't show again" subtle link ────────────────────────────────────────
-  &__never {
-    font-size: 11px;
-    color: var(--bf-appearance-token-color-text-muted);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    letter-spacing: 0.01em;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-
-    @media (hover: hover) and (pointer: fine) {
-      &:hover { color: var(--bf-appearance-token-color-text-secondary); }
-    }
-  }
 }
 
 // ─── Single page: news/editorial typography ───────────────────────────────────

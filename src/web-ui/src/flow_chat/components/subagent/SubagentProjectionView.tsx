@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { FlowChatState, FlowItem, FlowTextItem, FlowThinkingItem, FlowToolItem } from '../../types/flow-chat';
 import { FlowTextBlock } from '../FlowTextBlock';
@@ -72,15 +73,15 @@ const SubagentProjectionTextBlock = React.memo<{ textItem: FlowTextItem; classNa
         <span data-bf-component="subagent-projection" data-bf-part="message" className="subagent-projection-text__message">
           {t('subagent.showingLines', { shown: SUBAGENT_TEXT_TRUNCATE_LINES, total: lines.length })}
         </span>
-        <button
+        <Button
           type="button"
-          data-bf-component="subagent-projection"
-          data-bf-part="expandAction"
+          variant="outline"
+          size="sm"
           className="subagent-projection-text__expand-btn"
           onClick={() => setIsExpanded(true)}
         >
           {t('subagent.showAll')}
-        </button>
+        </Button>
       </div>
     </div>
   );

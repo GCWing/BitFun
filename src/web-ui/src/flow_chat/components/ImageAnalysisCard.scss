@@ -123,21 +123,9 @@
   
   &.error {
     color: var(--image-analysis-error);
-    
-    .retry-btn {
+
+    > [data-bf-component='button'] {
       margin-left: 8px;
-      padding: 2px 8px;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      background: var(--image-analysis-error);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      
-      &:hover {
-        opacity: 0.8;
-      }
     }
   }
 }
@@ -179,23 +167,8 @@
   }
 }
 
-.image-analysis-card__expand-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.image-analysis-card__content > [data-bf-component='button'] {
   margin-top: 8px;
-  padding: 4px 8px;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
-  color: var(--image-analysis-primary);
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.2s;
-  
-  &:hover {
-    background: rgba(var(--image-analysis-primary-rgb) / 0.1);
-  }
 }
 
 // Detailed content

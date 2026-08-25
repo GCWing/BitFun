@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   AppWindow,
@@ -179,16 +180,16 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
           {permissionDenied ? (
             <div data-bf-component="computer-use-tool-card" data-bf-part="permissionDenied" className="computer-use-tool-card__permission-denied">
               <p>{t('toolCards.computerUse.permissionDeniedHint')}</p>
-              <button
+              <Button
                 type="button"
-                data-bf-component="computer-use-tool-card"
-                data-bf-part="settingsButton"
+                variant="fill"
+                size="sm"
+                leadingIcon={<Settings size={12} />}
                 className="computer-use-tool-card__settings-button"
                 onClick={(event) => void handleOpenSettings(event)}
               >
-                <Settings size={12} />
-                <span>{t('toolCards.computerUse.openSettings')}</span>
-              </button>
+                {t('toolCards.computerUse.openSettings')}
+              </Button>
             </div>
           ) : (
             <pre>{errorMessage}</pre>

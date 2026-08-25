@@ -6,6 +6,7 @@
  */
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2, Check, X, Bot, MoreHorizontal, Loader2, Archive, Clock3, Copy, FileDown, ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { IconButton, Input, PresenceBoundary, Tooltip } from '@/component-library';
@@ -1435,17 +1436,16 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         )
       : aggregateLoadState.failedScopeCount > 0
         ? (
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               className="bitfun-nav-panel__inline-action"
-              data-bf-component="sessions-section"
-              data-bf-part="aggregateRetry"
               data-bf-state="partial"
               data-testid="nav-session-aggregate-retry"
               onClick={() => setAggregateReloadRequestId(current => current + 1)}
             >
-              <span>{t('nav.sessions.partialLoadFailedRetry')}</span>
-            </button>
+              {t('nav.sessions.partialLoadFailedRetry')}
+            </Button>
           )
         : null
     : null;
@@ -1471,17 +1471,16 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     if (metadataPageState.loadError) {
       return (
         <div data-bf-component="sessions-section" data-bf-part="root" className={sessionListClassName}>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             className="bitfun-nav-panel__inline-action"
-            data-bf-component="sessions-section"
-            data-bf-part="retry"
             onClick={() => {
               void loadInitialMetadataPage('sessions_nav_manual_retry');
             }}
           >
-            <span>{t('nav.sessions.loadFailedRetry')}</span>
-          </button>
+            {t('nav.sessions.loadFailedRetry')}
+          </Button>
         </div>
       );
     }

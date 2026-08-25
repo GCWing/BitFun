@@ -16,6 +16,7 @@ import {
   DYNAMIC_VAR_FAMILY_CONTRACTS,
   EXCEPTION_PATH_PARTS,
   FALLBACK_VAR_CONTRACTS,
+  PACKAGE_CSS_VAR_DEFINITION_CONTRACTS,
   REGISTERED_DYNAMIC_VAR_PREFIXES,
   RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS,
   STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS,
@@ -930,6 +931,17 @@ function audit(options) {
       fallbackOccurrences += 1;
       incrementMap(fallbackTokenCounts, match[1]);
       addToSetMap(fallbackTokenFiles, match[1], relativePath);
+    }
+  }
+
+  if (checksFullThemeSourceRoot) {
+    for (const contract of PACKAGE_CSS_VAR_DEFINITION_CONTRACTS) {
+      for (const name of contract.variables) {
+        incrementMap(varDefinitionCounts, name);
+        addToSetMap(varDefinitionKinds, name, 'package-contract');
+        addToSetMap(varDefinitionFiles, name, contract.owner);
+        contractVarDefinitions.add(name);
+      }
     }
   }
 

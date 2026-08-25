@@ -5,9 +5,10 @@
  * several rows with different times.
  */
 
+import { Switch } from '@bitfun/ui';
 import React from 'react';
 import { CalendarClock, Pencil, Trash2 } from 'lucide-react';
-import { IconButton, Switch } from '@/component-library';
+import { IconButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { CronJob } from '@/infrastructure/api';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -147,7 +148,6 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
         role="presentation"
       >
         <Switch
-          size="small"
           checked={job.enabled}
           aria-label={t('actions.toggleEnabled')}
           onChange={(event) => onToggleEnabled(job, event.currentTarget.checked)}

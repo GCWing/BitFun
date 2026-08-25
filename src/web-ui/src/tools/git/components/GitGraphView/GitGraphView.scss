@@ -27,19 +27,6 @@
       color: var(--bf-appearance-token-color-text-secondary);
     }
 
-    button {
-      padding: 8px 16px;
-      background: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-static-white);
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-
-      &:hover {
-        opacity: 0.9;
-      }
-    }
   }
 
   &__spinner {

@@ -227,35 +227,6 @@ $ins-label:   12px;
   white-space: nowrap;
 }
 
-// Shared button base
-%ins-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: $ins-xs;
-  padding: 4px 11px;
-  border: none;
-  border-radius: $ins-r-sm;
-  font-size: $ins-small;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.12s, opacity 0.12s;
-  &:disabled { opacity: 0.4; cursor: not-allowed; }
-}
-
-.insights-scene__generate-btn {
-  @extend %ins-btn;
-  background: $ins-blue-bg;
-  color: $ins-blue;
-  &:hover { background: var(--bf-appearance-token-color-accent-200); }
-}
-
-.insights-scene__cancel-btn {
-  @extend %ins-btn;
-  background: $ins-red-bg;
-  color: $ins-red;
-  &:hover { background: var(--bf-appearance-token-color-error-border); }
-}
-
 // Error / progress
 .insights-scene__error {
   display: flex;
@@ -269,11 +240,6 @@ $ins-label:   12px;
   color: $ins-red;
 
   span { flex: 1; }
-  button {
-    background: none; border: none; color: inherit;
-    cursor: pointer; font-size: 14px; padding: 0; opacity: 0.6;
-    &:hover { opacity: 1; }
-  }
 }
 
 .insights-generation {
@@ -719,35 +685,6 @@ $ins-label:   12px;
   border-bottom: 1px solid $ins-border;
   flex-shrink: 0;
 
-  &__back {
-    display: inline-flex;
-    align-items: center;
-    gap: $ins-xs;
-    padding: 3px $ins-sm;
-    border: none;
-    border-radius: $ins-r-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: $ins-small;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-    flex-shrink: 0;
-    white-space: nowrap;
-
-    &:hover { background: $ins-surface-hover; color: var(--bf-appearance-token-color-text-primary); }
-  }
-
-  // Thin vertical separator after back button
-  &__back::after {
-    content: '';
-    display: block;
-    width: 1px;
-    height: 14px;
-    background: $ins-border;
-    margin-left: $ins-md;
-    flex-shrink: 0;
-  }
-
   &__meta {
     display: flex;
     align-items: center;
@@ -766,22 +703,6 @@ $ins-label:   12px;
 
   &__actions { flex-shrink: 0; }
 
-  &__html-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: $ins-xs;
-    padding: 3px 10px;
-    border: none;
-    border-radius: $ins-r-sm;
-    background: $ins-surface;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: $ins-small;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-
-    &:hover:not(:disabled) { background: $ins-surface-hover; color: var(--bf-appearance-token-color-text-primary); }
-    &:disabled { opacity: 0.35; cursor: not-allowed; }
-  }
 }
 
 // Legacy title/subtitle - hidden (merged into header chrome)

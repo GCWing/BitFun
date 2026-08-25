@@ -1006,7 +1006,7 @@
         flex: 1 1 100%;
       }
 
-      > .bitfun-switch,
+      > [data-bf-component='switch'],
       > .bitfun-checkbox {
         width: auto;
         max-width: none;
@@ -1197,8 +1197,7 @@
       min-width: 0;
     }
 
-    > .btn,
-    > .btn-action {
+    > [data-bf-component='button'] {
       width: auto;
       align-self: flex-end;
     }
@@ -1305,12 +1304,9 @@
       min-width: 0;
     }
 
-    > .btn,
-    > .btn-action {
+    > [data-bf-component='button'] {
       width: auto;
       align-self: stretch;
-      height: 35px;
-      min-height: 35px;
     }
   }
 
@@ -1512,7 +1508,7 @@
     &--switch {
       align-items: flex-start;
 
-      .bitfun-switch {
+      [data-bf-component='switch'] {
         align-self: flex-start;
         flex-shrink: 0;
       }

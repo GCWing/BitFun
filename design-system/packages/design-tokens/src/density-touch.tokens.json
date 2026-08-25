@@ -1,0 +1,17 @@
+{
+  "$description": "Touch-first density overrides.",
+  "space": {
+    "component": {
+      "inline": { "$type": "dimension", "$value": "16px" },
+      "block": { "$type": "dimension", "$value": "12px" }
+    }
+  },
+  "control": {
+    "height": {
+      "sm": { "$type": "dimension", "$value": "40px" },
+      "md": { "$type": "dimension", "$value": "48px" },
+      "lg": { "$type": "dimension", "$value": "56px" }
+    },
+    "hitTarget": { "$type": "dimension", "$value": "48px" }
+  }
+}

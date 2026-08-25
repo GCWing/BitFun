@@ -171,13 +171,13 @@
       "max": 0
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 8
+      "max": 6
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
-      "max": 5
+      "max": 3
     },
     "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
       "max": 0
@@ -252,10 +252,10 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 153
+      "max": 130
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 111
+      "max": 101
     },
     "colorDomainScopes.themeRuntime.occurrences": {
       "max": 0

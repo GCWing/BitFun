@@ -3,8 +3,9 @@
  * Supports editing terminal name and startup command
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Input, Button } from '@/component-library';
+import { Modal, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './TerminalEditModal.scss';
 
@@ -116,10 +117,10 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
       </div>
 
       <div data-bf-component="terminal-edit-modal" data-bf-part="footer" className="terminal-edit-dialog__footer">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="outline" onClick={onClose}>
           {t('dialog.editTerminal.cancel')}
         </Button>
-        <Button variant="primary" onClick={handleSave} disabled={!canSave}>
+        <Button variant="fill" onClick={handleSave} disabled={!canSave}>
           {t('dialog.editTerminal.save')}
         </Button>
       </div>

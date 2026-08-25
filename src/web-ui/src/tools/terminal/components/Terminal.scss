@@ -84,23 +84,6 @@
 
     &-retry {
       margin-top: 8px;
-      padding: 6px 16px;
-      background: var(--bf-appearance-token-element-bg-soft);
-      border: 1px solid var(--bf-appearance-token-border-base);
-      border-radius: 4px;
-      color: var(--bf-appearance-token-color-text-secondary);
-      font-size: 13px;
-      cursor: pointer;
-      transition:
-        transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-        background-color 140ms ease,
-        border-color 140ms ease,
-        color 140ms ease;
-
-      &:hover {
-        background: var(--bf-appearance-token-element-bg-base);
-        border-color: var(--bf-appearance-token-border-medium);
-      }
     }
   }
 

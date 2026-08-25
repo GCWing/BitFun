@@ -87,30 +87,6 @@
   
   &__cancel {
     flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-    transition:
-      background-color $motion-base $easing-standard,
-      color $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:active {
-      transform: scale(0.9);
-    }
   }
 }
 

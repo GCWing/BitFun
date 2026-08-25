@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordInteractionModality } from '@/shared/utils/motionPreference';
 import { useSceneStore } from './sceneStore';
 
@@ -6,6 +6,10 @@ describe('sceneStore transition snapshots', () => {
   beforeEach(() => {
     recordInteractionModality('programmatic');
     useSceneStore.getState().resetForPeerSwitch();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('publishes the first scene switch atomically without a blank active scene', () => {
@@ -36,71 +40,82 @@ describe('sceneStore transition snapshots', () => {
     expect(useSceneStore.getState().navigationMotion).toBe('instant');
   });
 
-  it('retains an auto-evicted MiniApp Runner while keeping the visible tab cap', () => {
+  it('keeps every explicitly opened scene instead of evicting older tabs', () => {
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().openScene('terminal');
+    useSceneStore.getState().openScene('git');
     useSceneStore.getState().openScene('miniapps');
     useSceneStore.getState().openScene('miniapp:first');
     useSceneStore.getState().openScene('miniapp:second');
 
     expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
       'session',
-      'miniapp:first',
-      'miniapp:second',
-    ]);
-    expect(useSceneStore.getState().retainedScenes).toEqual([]);
-
-    useSceneStore.getState().openScene('miniapps');
-
-    expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
-      'session',
-      'miniapp:second',
+      'settings',
+      'terminal',
+      'git',
       'miniapps',
-    ]);
-    expect(useSceneStore.getState().retainedScenes.map(scene => scene.id)).toEqual([
       'miniapp:first',
+      'miniapp:second',
     ]);
+    expect(useSceneStore.getState().activeTabId).toBe('miniapp:second');
   });
 
-  it('restores a retained MiniApp without remounting it twice', () => {
-    useSceneStore.getState().openScene('miniapps');
-    useSceneStore.getState().openScene('miniapp:first');
-    useSceneStore.getState().openScene('miniapp:second');
-    useSceneStore.getState().openScene('miniapps');
-
-    useSceneStore.getState().openScene('miniapp:first');
+  it('activates an existing tab without changing its order or duplicating it', () => {
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().openScene('terminal');
+    useSceneStore.getState().openScene('settings');
 
     const state = useSceneStore.getState();
     expect(state.openTabs.map(tab => tab.id)).toEqual([
       'session',
-      'miniapps',
-      'miniapp:first',
+      'settings',
+      'terminal',
     ]);
-    expect(state.retainedScenes.map(scene => scene.id)).toEqual(['miniapp:second']);
-    expect([
-      ...state.openTabs,
-      ...state.retainedScenes,
-    ].filter(scene => scene.id === 'miniapp:first')).toHaveLength(1);
+    expect(state.openTabs.filter(tab => tab.id === 'settings')).toHaveLength(1);
+    expect(state.activeTabId).toBe('settings');
   });
 
-  it('explicitly closes a retained MiniApp Runner', () => {
-    useSceneStore.getState().openScene('miniapps');
-    useSceneStore.getState().openScene('miniapp:first');
-    useSceneStore.getState().openScene('miniapp:second');
-    useSceneStore.getState().openScene('miniapps');
+  it('keeps the pinned session tab when close is requested', () => {
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().closeScene('session');
 
-    useSceneStore.getState().closeScene('miniapp:first');
-
-    expect(useSceneStore.getState().retainedScenes).toEqual([]);
+    expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
+      'session',
+      'settings',
+    ]);
   });
 
-  it('clears retained MiniApp Runners when switching the peer host', () => {
-    useSceneStore.getState().openScene('miniapps');
-    useSceneStore.getState().openScene('miniapp:first');
-    useSceneStore.getState().openScene('miniapp:second');
-    useSceneStore.getState().openScene('miniapps');
-    expect(useSceneStore.getState().retainedScenes).toHaveLength(1);
+  it('preserves close fallback and history navigation across many open tabs', () => {
+    let now = 1;
+    vi.spyOn(Date, 'now').mockImplementation(() => now++);
+
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().openScene('terminal');
+    useSceneStore.getState().openScene('git');
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().closeScene('settings');
+
+    const state = useSceneStore.getState();
+    expect(state.openTabs.map(tab => tab.id)).toEqual(['session', 'terminal', 'git']);
+    expect(state.activeTabId).toBe('git');
+    expect(state.navHistory).not.toContain('settings');
+
+    useSceneStore.getState().goBack();
+    expect(useSceneStore.getState().activeTabId).toBe('terminal');
+  });
+
+  it('resets an expanded tab set when the peer host changes', () => {
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().openScene('terminal');
+    useSceneStore.getState().openScene('git');
+    expect(useSceneStore.getState().openTabs).toHaveLength(4);
 
     useSceneStore.getState().resetForPeerSwitch();
 
-    expect(useSceneStore.getState().retainedScenes).toEqual([]);
+    const state = useSceneStore.getState();
+    expect(state.openTabs.map(tab => tab.id)).toEqual(['welcome']);
+    expect(state.activeTabId).toBe('welcome');
+    expect(state.navHistory).toEqual(['welcome']);
+    expect(state.navCursor).toBe(0);
   });
 });

@@ -97,6 +97,102 @@ importers:
         specifier: ^7.0.4
         version: 7.3.1(@types/node@22.19.7)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  design-system: {}
+
+  design-system/apps/design-lab:
+    dependencies:
+      '@bitfun/design-tokens':
+        specifier: workspace:^
+        version: link:../../packages/design-tokens
+      '@bitfun/theme-bitfun':
+        specifier: workspace:^
+        version: link:../../packages/theme-bitfun
+      '@bitfun/ui':
+        specifier: workspace:^
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.541.0
+        version: 0.541.0(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@bitfun/token-engine':
+        specifier: workspace:*
+        version: link:../../tooling/token-engine
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.37
+      '@types/react':
+        specifier: ^18.3.0
+        version: 18.3.27
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.27)
+      '@vitejs/plugin-react':
+        specifier: ^4.6.0
+        version: 4.7.0(vite@7.3.1(@types/node@20.19.37)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      typescript:
+        specifier: ~5.8.3
+        version: 5.8.3
+      vite:
+        specifier: ^7.0.4
+        version: 7.3.1(@types/node@20.19.37)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  design-system/packages/design-tokens:
+    devDependencies:
+      '@bitfun/token-engine':
+        specifier: workspace:*
+        version: link:../../tooling/token-engine
+
+  design-system/packages/theme-bitfun:
+    dependencies:
+      '@bitfun/design-tokens':
+        specifier: workspace:^
+        version: link:../design-tokens
+    devDependencies:
+      '@bitfun/token-engine':
+        specifier: workspace:*
+        version: link:../../tooling/token-engine
+
+  design-system/packages/ui:
+    dependencies:
+      '@bitfun/design-tokens':
+        specifier: workspace:^
+        version: link:../design-tokens
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.37
+      '@types/react':
+        specifier: ^18.3.0
+        version: 18.3.27
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.27)
+      '@vitejs/plugin-react':
+        specifier: ^4.6.0
+        version: 4.7.0(vite@7.3.1(@types/node@20.19.37)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      typescript:
+        specifier: ~5.8.3
+        version: 5.8.3
+      vite:
+        specifier: ^7.0.4
+        version: 7.3.1(@types/node@20.19.37)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  design-system/tooling/package-contract: {}
+
+  design-system/tooling/token-engine: {}
+
   sdk/typescript:
     devDependencies:
       '@types/node':
@@ -225,6 +321,15 @@ importers:
 
   src/web-ui:
     dependencies:
+      '@bitfun/design-tokens':
+        specifier: workspace:^
+        version: link:../../design-system/packages/design-tokens
+      '@bitfun/theme-bitfun':
+        specifier: workspace:^
+        version: link:../../design-system/packages/theme-bitfun
+      '@bitfun/ui':
+        specifier: workspace:^
+        version: link:../../design-system/packages/ui
       '@monaco-editor/react':
         specifier: ^4.6.0
         version: 4.7.0(monaco-editor@0.52.2)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -3197,6 +3302,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'

@@ -54,8 +54,7 @@ describe('MiniAppEntry activity', () => {
       customizingAppIds: [],
     });
     useSceneStore.setState({
-      openTabs: [{ id: 'miniapp:scene-only', openedAt: 1, lastUsed: 1 }],
-      retainedScenes: [],
+      openTabs: [{ id: 'miniapp:scene-only', lastUsed: 1 }],
       activeTabId: 'miniapp:scene-only',
       navHistory: ['miniapp:scene-only'],
       navCursor: 0,
@@ -67,8 +66,7 @@ describe('MiniAppEntry activity', () => {
     container.remove();
     useMiniAppStore.setState({ apps: [], runningWorkerIds: [], customizingAppIds: [] });
     useSceneStore.setState({
-      openTabs: [{ id: 'welcome', openedAt: 1, lastUsed: 1 }],
-      retainedScenes: [],
+      openTabs: [{ id: 'welcome', lastUsed: 1 }],
       activeTabId: 'welcome',
       navHistory: ['welcome'],
       navCursor: 0,
@@ -96,10 +94,12 @@ describe('MiniAppEntry activity', () => {
     expect(activity?.classList.contains('is-active')).toBe(true);
   });
 
-  it('keeps an auto-evicted Runner visible as background activity', () => {
+  it('keeps an inactive open Runner visible as background activity', () => {
     useSceneStore.setState({
-      openTabs: [{ id: 'miniapps', openedAt: 2, lastUsed: 2 }],
-      retainedScenes: [{ id: 'miniapp:scene-only', openedAt: 1, lastUsed: 1 }],
+      openTabs: [
+        { id: 'miniapp:scene-only', lastUsed: 1 },
+        { id: 'miniapps', lastUsed: 2 },
+      ],
       activeTabId: 'miniapps',
       navHistory: ['miniapps'],
       navCursor: 0,

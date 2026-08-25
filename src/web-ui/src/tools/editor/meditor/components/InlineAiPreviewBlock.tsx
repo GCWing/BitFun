@@ -1,6 +1,6 @@
+import { Button } from '@bitfun/ui';
 import React from 'react';
 import { Check, RotateCcw, X } from 'lucide-react';
-import { Button } from '@/component-library';
 import { InlineMarkdownPreview } from './InlineMarkdownPreview';
 
 type InlineAiPreviewStatus = 'submitting' | 'streaming' | 'ready' | 'error';
@@ -81,35 +81,38 @@ export const InlineAiPreviewBlock: React.FC<InlineAiPreviewBlockProps> = ({
         {canAccept && (
           <Button
             type="button"
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             disabled={!canAccept}
             data-testid="md-inline-ai-accept"
             onClick={onAccept}
+            leadingIcon={<Check size={14} strokeWidth={2} />}
           >
-            <Check size={14} strokeWidth={2} />
+
             <span>{labels.accept}</span>
           </Button>
         )}
         <Button
           type="button"
-          variant="ghost"
-          size="small"
+          variant="outline"
+          size="sm"
           data-testid="md-inline-ai-reject"
           onClick={onReject}
+          leadingIcon={<X size={14} strokeWidth={2} />}
         >
-          <X size={14} strokeWidth={2} />
+
           <span>{labels.reject}</span>
         </Button>
         {(status === 'ready' || status === 'error') && (
           <Button
             type="button"
-            variant="ghost"
-            size="small"
+            variant="outline"
+            size="sm"
             data-testid="md-inline-ai-retry"
             onClick={onRetry}
+            leadingIcon={<RotateCcw size={14} strokeWidth={2} />}
           >
-            <RotateCcw size={14} strokeWidth={2} />
+
             <span>{labels.retry}</span>
           </Button>
         )}

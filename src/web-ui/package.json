@@ -5,6 +5,14 @@
   "description": "BitFun Web UI - 支持 Desktop 和 Server 两种部署方式",
   "type": "module",
   "scripts": {
+    "prepare:design-system:dev": "pnpm --dir ../../design-system run prepare:consumer-dev",
+    "prepare:design-system:build": "pnpm --dir ../../design-system run build:packages",
+    "predev": "pnpm run prepare:design-system:dev",
+    "predev:force": "pnpm run prepare:design-system:dev",
+    "prebuild": "pnpm run prepare:design-system:build",
+    "prebuild:desktop": "pnpm run prepare:design-system:build",
+    "prebuild:web": "pnpm run prepare:design-system:build",
+    "pretype-check": "pnpm run prepare:design-system:build",
     "dev": "vite",
     "dev:force": "vite --force",
     "gen:types": "node scripts/gen-api-barrel.mjs --clean && cargo test --locked --package bitfun-app-server-protocol --no-default-features --features ts --lib export -- --nocapture && node scripts/gen-api-barrel.mjs",
@@ -20,6 +28,9 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@bitfun/design-tokens": "workspace:^",
+    "@bitfun/theme-bitfun": "workspace:^",
+    "@bitfun/ui": "workspace:^",
     "@monaco-editor/react": "^4.6.0",
     "@tanstack/react-virtual": "^3.13.23",
     "@tauri-apps/api": "^2.10.1",

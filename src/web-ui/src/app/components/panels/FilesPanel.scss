@@ -391,29 +391,6 @@
     margin-top: $size-gap-1;
   }
 
-  &__transfer-stop {
-    flex-shrink: 0;
-    height: 20px;
-    padding: 0 $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-border-medium);
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 18px;
-    cursor: pointer;
-    transition:
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      border-color: var(--bf-appearance-token-color-error);
-      color: var(--bf-appearance-token-color-error);
-    }
-  }
-
   &__transfer-track {
     height: 4px;
     border-radius: $size-radius-full;
@@ -488,28 +465,6 @@
     p {
       font-size: var(--bf-appearance-token-font-size-sm);
       margin: 0 0 $size-gap-3 0;
-    }
-  }
-
-  &__retry-button {
-    padding: $size-gap-1 $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-    transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard,
-      color $motion-base $easing-standard,
-      opacity $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
-    font-size: var(--bf-appearance-token-font-size-xs);
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -606,10 +561,6 @@
       }
     }
 
-    &__retry-button {
-      padding: 3px 8px;
-      font-size: 10px;
-    }
   }
 }
 
@@ -675,10 +626,6 @@
       }
     }
 
-    &__retry-button {
-      padding: $size-gap-2 $size-gap-4;
-      font-size: var(--bf-appearance-token-font-size-sm);
-    }
   }
 }
 

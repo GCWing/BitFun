@@ -1,0 +1,17 @@
+{
+  "$description": "Compact desktop density overrides.",
+  "space": {
+    "component": {
+      "inline": { "$type": "dimension", "$value": "10px" },
+      "block": { "$type": "dimension", "$value": "6px" }
+    }
+  },
+  "control": {
+    "height": {
+      "sm": { "$type": "dimension", "$value": "28px" },
+      "md": { "$type": "dimension", "$value": "36px" },
+      "lg": { "$type": "dimension", "$value": "44px" }
+    },
+    "hitTarget": { "$type": "dimension", "$value": "36px" }
+  }
+}

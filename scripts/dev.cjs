@@ -497,7 +497,17 @@ async function startDesktopPreview() {
     printInfo(`Reusing web UI dev server on http://localhost:${DEV_SERVER_PORT}`);
   } else {
     printInfo(`Starting web UI dev server on http://localhost:${DEV_SERVER_PORT}`);
-    const viteArgs = ['--dir', 'src/web-ui', 'exec', 'vite', '--host', 'localhost', '--port', String(DEV_SERVER_PORT)];
+    const viteArgs = [
+      '--dir',
+      'src/web-ui',
+      'run',
+      'dev',
+      '--',
+      '--host',
+      'localhost',
+      '--port',
+      String(DEV_SERVER_PORT),
+    ];
     const viteEnv = {
       ...process.env,
       TAURI_DEV_HOST: 'localhost',
@@ -773,7 +783,7 @@ async function main() {
       await ensureDesktopDebugBinaryForPreview(forceDesktopPreviewRebuild);
       await startDesktopPreview();
     } else {
-      await runCommand('pnpm exec vite', path.join(ROOT_DIR, 'src/web-ui'));
+      await runCommand('pnpm run dev', path.join(ROOT_DIR, 'src/web-ui'));
     }
   } catch (error) {
     printError('Dev server failed to start');

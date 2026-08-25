@@ -8,6 +8,7 @@
 @use '../../../../../component-library/styles/tokens.scss' as *;
 @use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
+@use '../../../../styles/workspace-shell-surfaces' as shell-surfaces;
 
 .bitfun-nav-panel {
   &__inline-list {
@@ -34,32 +35,9 @@
   }
 
   &__inline-action {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    height: 24px;
-    padding: 0 $size-gap-1;
-    border: 1px dashed var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    cursor: pointer;
     flex: 1;
     min-width: 0;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard,
-                border-color $motion-fast $easing-standard;
-
-    svg { flex-shrink: 0; }
-
-    span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
+    width: 100%;
   }
 
   &__inline-empty {
@@ -791,8 +769,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-nav-panel {
-    &__inline-item,
-    &__inline-action {
+    &__inline-item {
       transition: none;
     }
   }
@@ -822,22 +799,6 @@
   &__inline-list {
     margin: 0 6px 0 $size-gap-3;
     padding: 2px 0;
-  }
-
-  &__inline-action {
-    height: 26px;
-    border-style: solid;
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-muted);
-    transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      border-color 120ms ease,
-      background 120ms ease,
-      color 120ms ease;
-
-    &:active {
-      transform: scale(0.985);
-    }
   }
 
   &__inline-item {
@@ -924,7 +885,6 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-nav-panel__inline-action:hover,
   .bitfun-nav-panel__inline-item:hover {
     background: var(--bf-appearance-token-element-bg-soft);
   }
@@ -936,32 +896,41 @@
   }
 }
 
-// Match the primary navigation's readable text scale and 32px row rhythm while
+// Match the primary navigation's readable text scale and 30px row rhythm while
 // retaining the existing nested/flat session geometry.
 .bitfun-nav-panel {
   &__inline-list {
-    padding-block: 3px;
+    padding-block: 0;
     // Rail for this rhythm: rows previously hard-coded `padding: 0 6px`.
-    --bf-nav-session-rail: 6px;
+    --bf-nav-session-rail: 8px;
   }
 
   &__inline-item {
-    height: 32px;
-    @include nav-font.nav-panel-text-body;
-
-    font-size: var(--bf-appearance-token-font-size-sm);
-    line-height: 1.25;
+    height: 30px;
+    gap: $size-gap-2;
+    padding-right: $size-gap-2;
+    border-radius: $size-radius-base;
+    @include nav-font.nav-panel-text-row;
 
     &:hover,
     &:focus-visible,
-    &.is-active,
     &.is-menu-open {
       @include nav-font.nav-panel-text-heading;
     }
 
+    &:hover,
+    &.is-active {
+      @include shell-surfaces.navigation-feedback;
+    }
+
+    &.is-active {
+      @include nav-font.nav-panel-text-row-active;
+    }
+
     &.is-child {
-      height: 28px;
-      font-size: var(--bf-appearance-token-font-size-xs);
+      height: 30px;
+      margin-top: 0;
+      font-size: 13px;
     }
 
     &.is-assistant-session {
@@ -970,13 +939,14 @@
   }
 
   &__inline-item-label {
-    font-weight: 400;
-    line-height: 1.25;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
   }
 
   &__inline-item.is-active &__inline-item-label {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 600;
+    font-weight: inherit;
   }
 
   &__inline-item-assistant-name,

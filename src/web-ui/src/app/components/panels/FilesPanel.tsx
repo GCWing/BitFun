@@ -3,6 +3,7 @@
  * Displays the file explorer for the current workspace
  */
 
+import { Button } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List } from 'lucide-react';
@@ -1188,12 +1189,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               {searchError && (
                 <div className="bitfun-files-panel__error" data-bf-component="files-panel" data-bf-part="error">
                   <p>❌ {searchError}</p>
-                  <button 
-                    className="bitfun-files-panel__retry-button"
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setSearchQuery(searchQuery)}
                   >
                     {t('actions.retry')}
-                  </button>
+                  </Button>
                 </div>
               )}
               
@@ -1233,12 +1235,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           ) : error ? (
             <div className="bitfun-files-panel__error" data-bf-component="files-panel" data-bf-part="error">
               <p>❌ {error}</p>
-              <button 
-                className="bitfun-files-panel__retry-button"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => loadFileTree()}
               >
                 {t('actions.retry')}
-              </button>
+              </Button>
             </div>
           ) : (
             <FileExplorer
@@ -1325,13 +1328,15 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                     {formatBytes(tp.bytesTotal)}
                   </span>
                 ) : <span />}
-                <button
-                  className="bitfun-files-panel__transfer-stop"
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => handleStopTransfer(id)}
                   title={t('transfer.stop')}
                 >
                   {t('transfer.stop')}
-                </button>
+                </Button>
               </div>
             </div>
           ))}

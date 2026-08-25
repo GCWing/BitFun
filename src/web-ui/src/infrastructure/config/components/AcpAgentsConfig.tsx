@@ -1,3 +1,4 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,7 +17,7 @@ import {
   Server,
   Terminal,
 } from 'lucide-react';
-import { Button, IconButton, Input, Select, Textarea } from '@/component-library';
+import { IconButton, Input, Select, Textarea } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -1063,9 +1064,13 @@ const AcpAgentsConfig: React.FC = () => {
         title={t('title')}
         subtitle={t('subtitle')}
         extra={(
-          <Button variant="ghost" size="small" onClick={openLearnMore}>
+          <Button
+            variant="outline"
+            size="sm"
+            trailingIcon={<ExternalLink />}
+            onClick={openLearnMore}
+          >
             {t('actions.learnMore')}
-            <ExternalLink size={14} />
           </Button>
         )}
       />
@@ -1099,21 +1104,21 @@ const AcpAgentsConfig: React.FC = () => {
                 size="small"
               />
               <Button
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
+                leadingIcon={<FileJson />}
                 onClick={() => setShowJsonEditor(prev => !prev)}
               >
-                <FileJson size={14} />
                 {showJsonEditor ? t('actions.closeJson') : t('actions.editJson')}
               </Button>
               {dirty && (
                 <Button
-                  variant="primary"
-                  size="small"
+                  variant="fill"
+                  size="sm"
+                  leadingIcon={<Save />}
                   onClick={() => { void saveConfig(); }}
-                  isLoading={saving}
+                  loading={saving}
                 >
-                  <Save size={14} />
                   {t('actions.save')}
                 </Button>
               )}
@@ -1157,10 +1162,10 @@ const AcpAgentsConfig: React.FC = () => {
                 data-bf-component="acp-agents-config"
                 data-bf-part="jsonActions"
               >
-                <Button variant="secondary" size="small" onClick={() => setJsonConfig(formatConfig(config))}>
+                <Button variant="outline" size="sm" onClick={() => setJsonConfig(formatConfig(config))}>
                   {t('actions.revert')}
                 </Button>
-                <Button variant="primary" size="small" onClick={() => { void saveJsonConfig(); }} isLoading={saving}>
+                <Button variant="fill" size="sm" onClick={() => { void saveJsonConfig(); }} loading={saving}>
                   {t('actions.saveJson')}
                 </Button>
               </div>
@@ -1171,12 +1176,12 @@ const AcpAgentsConfig: React.FC = () => {
             title={t('registry.title')}
             extra={(
               <Button
-                variant="secondary"
-                size="small"
+                variant="outline"
+                size="sm"
+                leadingIcon={<RefreshCw />}
                 onClick={() => { void refreshRequirementProbes({ force: true }); }}
-                isLoading={probingRequirements}
+                loading={probingRequirements}
               >
-                <RefreshCw size={14} />
                 {t('actions.refresh')}
               </Button>
             )}
@@ -1306,41 +1311,38 @@ const AcpAgentsConfig: React.FC = () => {
                         />
                       ) : canInstallCli ? (
                         <Button
-                          className="bitfun-acp-agents__add-button"
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<Download />}
                           onClick={() => { void installPresetClient(preset); }}
-                          isLoading={installing}
+                          loading={installing}
                         >
-                          <Download size={14} />
                           {t('actions.installCli')}
                         </Button>
                       ) : canConfigureAcp ? (
                         <Button
-                          className="bitfun-acp-agents__add-button"
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<FileJson />}
                           onClick={() => { void configurePresetClient(preset); }}
-                          isLoading={configuring}
+                          loading={configuring}
                         >
-                          <FileJson size={14} />
                           {t('actions.configureAcp')}
                         </Button>
                       ) : selfManagedCliMissing && hasConfigEntry && selfManagedInstallInfo ? (
                         <Button
-                          className="bitfun-acp-agents__add-button"
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<CircleAlert />}
                           onClick={() => showSelfManagedInstallInfo(selfManagedInstallInfo)}
                         >
-                          <CircleAlert size={14} />
                           {t('actions.viewInstructions')}
                         </Button>
                       ) : canViewError ? (
                         <Button
-                          className="bitfun-acp-agents__add-button"
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<CircleAlert />}
                           onClick={() => {
                             notifyError(
                               statusTitle || t('registry.configInvalidDetail'),
@@ -1348,19 +1350,17 @@ const AcpAgentsConfig: React.FC = () => {
                             );
                           }}
                         >
-                          <CircleAlert size={14} />
                           {t('actions.viewError')}
                         </Button>
                       ) : !hasConfigEntry ? (
                         <Button
-                          className="bitfun-acp-agents__add-button"
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<Plus />}
                           onClick={() => addPresetClient(preset, {
                             manualCliRequired: selfManagedCliMissing,
                           })}
                         >
-                          <Plus size={14} />
                           {selfManagedCliMissing ? t('actions.addConfig') : t('actions.add')}
                         </Button>
                       ) : (
@@ -1468,9 +1468,9 @@ const AcpAgentsConfig: React.FC = () => {
                         />
                       ) : canViewError ? (
                         <Button
-                          className="bitfun-acp-agents__add-button"
-                          variant="secondary"
-                          size="small"
+                          variant="outline"
+                          size="sm"
+                          leadingIcon={<CircleAlert />}
                           onClick={() => {
                             notifyError(
                               statusTitle || t('registry.configInvalidDetail'),
@@ -1478,7 +1478,6 @@ const AcpAgentsConfig: React.FC = () => {
                             );
                           }}
                         >
-                          <CircleAlert size={14} />
                           {t('actions.viewError')}
                         </Button>
                       ) : null}
@@ -1495,8 +1494,8 @@ const AcpAgentsConfig: React.FC = () => {
             description={t('remote.description')}
             extra={hiddenRemoteConnectionRows.length > 0 ? (
               <Button
-                variant="ghost"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={() => setShowHiddenRemoteConnections(visible => !visible)}
                 aria-expanded={showHiddenRemoteConnections}
               >
@@ -1626,17 +1625,17 @@ const AcpAgentsConfig: React.FC = () => {
                         </div>
                         <div className="bitfun-acp-agents__remote-actions">
                           <Button
-                            variant="secondary"
-                            size="small"
+                            variant="outline"
+                            size="sm"
+                            leadingIcon={<RefreshCw />}
                             onClick={() => {
                               loadedRemoteProbeIdsRef.current.delete(connection.id);
                               void refreshRemoteRequirementProbes(connection.id, {
                                 force: true,
                               });
                             }}
-                            isLoading={probingRemote}
+                            loading={probingRemote}
                           >
-                            <RefreshCw size={14} />
                             {t('remote.refreshDetection')}
                           </Button>
                           <IconButton
@@ -1745,27 +1744,25 @@ const AcpAgentsConfig: React.FC = () => {
                               >
                                 {canInstallCli ? (
                                   <Button
-                                    className="bitfun-acp-agents__add-button"
-                                    variant="secondary"
-                                    size="small"
+                                    variant="outline"
+                                    size="sm"
+                                    leadingIcon={<Download />}
                                     onClick={() => {
                                       void installPresetClient(row.preset!, {
                                         remoteConnectionId: connection.id,
                                       });
                                     }}
-                                    isLoading={row.installingRemote}
+                                    loading={row.installingRemote}
                                   >
-                                    <Download size={14} />
                                     {t('actions.installCli')}
                                   </Button>
                                 ) : selfManagedCliMissing && row.selfManagedInstallInfo ? (
                                   <Button
-                                    className="bitfun-acp-agents__add-button"
-                                    variant="secondary"
-                                    size="small"
+                                    variant="outline"
+                                    size="sm"
+                                    leadingIcon={<CircleAlert />}
                                     onClick={() => showSelfManagedInstallInfo(row.selfManagedInstallInfo!)}
                                   >
-                                    <CircleAlert size={14} />
                                     {t('actions.viewInstructions')}
                                   </Button>
                                 ) : row.status === 'enabled' || row.status === 'ready' ? (
@@ -1781,20 +1778,19 @@ const AcpAgentsConfig: React.FC = () => {
                                     />
                                   ) : row.preset ? (
                                   <Button
-                                    className="bitfun-acp-agents__add-button"
-                                    variant="secondary"
-                                    size="small"
+                                    variant="outline"
+                                    size="sm"
+                                    leadingIcon={<Plus />}
                                     onClick={() => addPresetClient(row.preset!)}
                                   >
-                                    <Plus size={14} />
                                     {t('actions.add')}
                                   </Button>
                                   ) : null
                                 ) : canViewError ? (
                                   <Button
-                                    className="bitfun-acp-agents__add-button"
-                                    variant="secondary"
-                                    size="small"
+                                    variant="outline"
+                                    size="sm"
+                                    leadingIcon={<CircleAlert />}
                                     onClick={() => {
                                       notifyError(
                                         statusTitle || t('registry.configInvalidDetail'),
@@ -1802,7 +1798,6 @@ const AcpAgentsConfig: React.FC = () => {
                                       );
                                     }}
                                   >
-                                    <CircleAlert size={14} />
                                     {t('actions.viewError')}
                                   </Button>
                                 ) : (

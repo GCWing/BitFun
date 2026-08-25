@@ -1,0 +1,190 @@
+@layer bf.components {
+  .button {
+    --_button-background: transparent;
+    --_button-background-hover: var(--bf-color-action-neutral-surface);
+    --_button-background-active: var(--bf-color-action-neutral-surface);
+    --_button-border: var(--bf-color-action-neutral-border);
+    --_button-content: var(--bf-color-action-neutral-content);
+    --_button-font-size: var(--bf-font-size-small);
+    --_button-height: var(--bf-control-height-md);
+    --_button-leading-icon-size: 16px;
+    --_button-padding-block: var(--bf-space-component-block);
+    --_button-padding-inline: var(--bf-space-5);
+    --_button-trailing-icon-size: 14px;
+
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+    block-size: var(--_button-height);
+    padding-block: var(--_button-padding-block);
+    padding-inline: var(--_button-padding-inline);
+    border: var(--bf-border-width-default) solid var(--_button-border);
+    border-radius: var(--bf-radius-pill);
+    color: var(--_button-content);
+    background: var(--_button-background);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--_button-font-size);
+    font-weight: var(--bf-font-weight-regular);
+    letter-spacing: normal;
+    line-height: var(--bf-line-height-tight);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .button:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
+    background: var(--_button-background-hover);
+  }
+
+  .button:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
+    background: var(--_button-background-active);
+    font-weight: var(--bf-font-weight-semibold);
+  }
+
+  .button:focus-visible {
+    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline-offset: var(--bf-focus-offset);
+  }
+
+  .button:disabled {
+    color: var(--bf-color-action-neutral-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .button[data-bf-variant="fill"] {
+    --_button-background: var(--bf-color-action-neutral-surface);
+    --_button-background-hover: var(--bf-color-action-neutral-surface-hover);
+    --_button-background-active: var(--bf-color-action-neutral-surface-pressed);
+    --_button-border: transparent;
+  }
+
+  .button[data-bf-variant="fill"]:disabled {
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  .button[data-bf-tone="danger"] {
+    --_button-background-hover: var(--bf-color-status-danger-surface);
+    --_button-background-active: var(--bf-color-status-danger-surface);
+    --_button-border: var(--bf-color-status-danger-border);
+    --_button-content: var(--bf-color-status-danger-content);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="fill"] {
+    --_button-background: var(--bf-color-status-danger-surface);
+    --_button-border: var(--bf-color-status-danger-border);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="fill"]:disabled {
+    background: var(--bf-color-status-danger-surface);
+  }
+
+  .button[data-size="sm"] {
+    --_button-font-size: var(--bf-font-size-caption);
+    --_button-height: var(--bf-control-height-sm);
+    --_button-leading-icon-size: 12px;
+    --_button-padding-block: var(--bf-space-1);
+    --_button-padding-inline: var(--bf-space-4);
+    --_button-trailing-icon-size: 10px;
+  }
+
+  .button[data-size="lg"] {
+    --_button-font-size: var(--bf-font-size-label);
+    --_button-height: var(--bf-control-height-lg);
+    --_button-leading-icon-size: 20px;
+    --_button-padding-inline: var(--bf-space-6);
+    --_button-trailing-icon-size: 16px;
+  }
+
+  .content {
+    display: inline-flex;
+    align-items: center;
+    min-inline-size: 0;
+    gap: var(--bf-space-1);
+  }
+
+  .label {
+    display: inline-flex;
+    align-items: center;
+    min-inline-size: 0;
+    gap: var(--bf-space-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .label > :where(svg, img) {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  .icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
+  }
+
+  .icon > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .leadingIcon {
+    inline-size: var(--_button-leading-icon-size);
+    block-size: var(--_button-leading-icon-size);
+  }
+
+  .trailingIcon {
+    inline-size: var(--_button-trailing-icon-size);
+    block-size: var(--_button-trailing-icon-size);
+  }
+
+  .progress {
+    position: absolute;
+    inline-size: 16px;
+    block-size: 16px;
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  .button[data-loading="true"] .content {
+    opacity: 0;
+  }
+
+  .button[data-loading="true"] .progress {
+    opacity: 1;
+    animation: bf-button-progress var(--bf-motion-duration-loop) linear infinite;
+  }
+
+  @keyframes bf-button-progress {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .button[data-loading="true"] .progress {
+      animation: none;
+      border-inline-end-color: currentColor;
+      opacity: 0.72;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .button {
+      border-color: ButtonText;
+    }
+
+    .button:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+}

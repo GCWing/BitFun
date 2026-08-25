@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { PopupCloseButton } from '@/component-library';
 import { useAnnouncementStore } from '../store/announcementStore';
 import FeatureModalPage from './FeatureModalPage';
@@ -165,39 +166,39 @@ const FeatureModal: React.FC = () => {
           {/* Navigation buttons */}
           <div className="feature-modal__nav" data-bf-component="announcement" data-bf-part="modalNavigation">
             {modal.completion_action === 'never_show_again' && isLast && (
-              <button
-                type="button"
-                className="feature-modal__never"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => triggerClose(true)}
               >
                 {t('announcements.common.never_show_again')}
-              </button>
+              </Button>
             )}
             {!isFirst && (
-              <button
-                type="button"
-                className="feature-modal__nav-btn feature-modal__nav-btn--prev"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage(currentPage - 1)}
               >
                 {t('announcements.common.prev')}
-              </button>
+              </Button>
             )}
             {!isLast ? (
-              <button
-                type="button"
-                className="feature-modal__nav-btn feature-modal__nav-btn--next"
+              <Button
+                variant="fill"
+                size="sm"
                 onClick={() => setPage(currentPage + 1)}
               >
                 {t('announcements.common.next')}
-              </button>
+              </Button>
             ) : (
-              <button
-                type="button"
-                className="feature-modal__nav-btn feature-modal__nav-btn--done"
+              <Button
+                variant="fill"
+                size="sm"
                 onClick={() => triggerClose()}
               >
                 {t('announcements.common.done')}
-              </button>
+              </Button>
             )}
           </div>
         </div>

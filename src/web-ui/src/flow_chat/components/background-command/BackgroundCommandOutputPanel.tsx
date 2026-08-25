@@ -1,6 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ClipboardCopy, Copy, Keyboard, Loader2, Terminal } from 'lucide-react';
-import { Button, Checkbox, IconButton, Textarea, Tooltip } from '@/component-library';
+import { Checkbox, IconButton, Textarea, Tooltip } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { agentAPI } from '@/infrastructure/api';
 import type {
@@ -445,8 +446,8 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
               <div data-bf-component="background-command-output-panel" data-bf-part="inputActions" className="background-command-output-panel__input-editor-actions">
                 <Button
                   type="button"
-                  variant="secondary"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={handleCloseInputEditor}
                   disabled={isSendingInput}
                 >
@@ -454,9 +455,9 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
                 </Button>
                 <Button
                   type="submit"
-                  variant="primary"
-                  size="small"
-                  isLoading={isSendingInput}
+                  variant="fill"
+                  size="sm"
+                  loading={isSendingInput}
                   disabled={!canSubmitInput}
                 >
                   {t('backgroundCommandInput.send')}

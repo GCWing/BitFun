@@ -78,20 +78,8 @@
     color: var(--bf-appearance-token-color-text-muted);
   }
 
-  &__new-job.btn {
+  &__new-job[data-bf-component='button'] {
     flex-shrink: 0;
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-primary);
-
-    &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-strong);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:active:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
   }
 
   &__spin {
@@ -360,13 +348,8 @@
     white-space: nowrap;
     min-width: 126px;
 
-    .bitfun-switch {
-      align-items: center;
-      gap: 0;
-    }
-
-    .bitfun-switch__wrapper {
-      margin-top: 0;
+    [data-bf-component='switch'] {
+      align-self: center;
     }
   }
 
@@ -459,15 +442,8 @@
     border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 70%, transparent);
   }
 
-  &__action-btn.btn {
+  &__action-btn[data-bf-component='button'] {
     min-width: 92px;
-    font-size: 13px;
-    font-weight: $font-weight-medium;
-    letter-spacing: 0;
-  }
-
-  &__action-btn--ghost.btn {
-    color: var(--bf-appearance-token-color-text-secondary);
   }
 }
 

@@ -1,6 +1,7 @@
  
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { AlertCircle, X } from 'lucide-react';
 import { useContextStore, selectContexts } from '../../../stores/contextStore';
 import { ContextCard } from '../ContextCard/ContextCard';
@@ -121,17 +122,17 @@ export const ContextList: React.FC<ContextListProps> = ({
           </span>
         </div>
         
-        <button
-          className="bitfun-context-list__clear-btn"
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          leadingIcon={<X size={14} />}
           onClick={handleClearAll}
           disabled={leavingContextIds.size > 0}
           title={t('contextSystem.contextList.clearAllTitle')}
-          data-bf-component="context-list"
-          data-bf-part="clear"
         >
-          <X size={14} />
-          <span>{t('contextSystem.contextList.clearAll')}</span>
-        </button>
+          {t('contextSystem.contextList.clearAll')}
+        </Button>
       </div>
       
       

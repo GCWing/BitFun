@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
@@ -49,6 +51,30 @@ describe('ConfigPageLayout', () => {
     expect(contentInner?.firstElementChild).toBe(stack);
     expect(stack?.classList.contains('bitfun-config-page-section-stack')).toBe(true);
     expect(stack?.querySelectorAll(':scope > .bitfun-config-page-section')).toHaveLength(2);
+  });
+
+  it('keeps the compact 680px settings geometry from the shared layout contract', () => {
+    const tokens = readFileSync(
+      resolve(process.cwd(), 'src/infrastructure/config/components/common/config-page-layout.tokens.scss'),
+      'utf8',
+    );
+    const layout = readFileSync(
+      resolve(process.cwd(), 'src/infrastructure/config/components/common/ConfigPageLayout.scss'),
+      'utf8',
+    );
+    const header = readFileSync(
+      resolve(process.cwd(), 'src/infrastructure/config/components/common/ConfigPageHeader.scss'),
+      'utf8',
+    );
+
+    expect(tokens).toContain('$config-page-content-max-width: 680px;');
+    expect(layout).toContain('--config-page-section-gap: 36px;');
+    expect(layout).toContain('--row-grid-cols: minmax(0, 1fr) minmax(0, 150px);');
+    expect(layout).toContain('gap: 40px;');
+    expect(layout).toContain('background: var(--bf-appearance-token-config-page-section-bg);\n  border: 0;');
+    expect(layout).toContain('overflow: visible;\n  box-shadow: none;');
+    expect(header).toContain('margin-bottom: 36px;');
+    expect(header).toContain('font-size: 24px;');
   });
 
   it('strips the body surface chrome when the section opts out of the mouse glow', () => {

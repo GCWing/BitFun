@@ -55,35 +55,6 @@ $assistant-defaults-row-columns:
     }
   }
 
-  &__back,
-  &__reset,
-  &__warning button {
-    font: inherit;
-  }
-
-  &__back {
-    display: inline-flex;
-    width: 26px;
-    height: 26px;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-    transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-  }
-
   &__scope {
     display: inline-flex;
     min-height: 26px;
@@ -117,37 +88,6 @@ $assistant-defaults-row-columns:
 
     &--error {
       color: var(--bf-appearance-token-color-error);
-    }
-  }
-
-  &__reset {
-    display: inline-flex;
-    min-height: 32px;
-    align-items: center;
-    justify-content: center;
-    gap: $size-gap-2;
-    padding: 0 $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-    transition:
-      background $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-
-    &:hover:not(:disabled) {
-      border-color: var(--bf-appearance-token-border-medium);
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-
-    &:disabled {
-      color: var(--bf-appearance-token-color-text-muted);
-      cursor: not-allowed;
-      opacity: 0.68;
     }
   }
 
@@ -201,14 +141,6 @@ $assistant-defaults-row-columns:
       flex: 1;
     }
 
-    button {
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: var(--bf-appearance-token-color-text-primary);
-      font-weight: $font-weight-medium;
-      cursor: pointer;
-    }
   }
 
   &__footer {
@@ -790,16 +722,6 @@ $assistant-defaults-row-columns:
     line-height: $line-height-relaxed;
   }
 
-  button {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--bf-appearance-token-color-accent-500);
-    font: inherit;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-  }
 }
 
 .assistant-defaults-detail {
@@ -1013,7 +935,7 @@ $assistant-defaults-row-columns:
   }
 }
 
-.assistant-defaults button:focus-visible,
+.assistant-defaults button:not([data-bf-component='button']):focus-visible,
 .assistant-defaults input:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 62%, transparent);
   outline-offset: 2px;

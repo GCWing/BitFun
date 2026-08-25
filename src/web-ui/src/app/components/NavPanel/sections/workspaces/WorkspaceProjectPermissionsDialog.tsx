@@ -1,6 +1,7 @@
+import { Button } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { Button, IconButton, Input, Modal, Select, confirmDanger, type SelectOption } from '@/component-library';
+import { IconButton, Input, Modal, Select, confirmDanger, type SelectOption } from '@/component-library';
 import {
   permissionAPI,
   type PermissionGrant,
@@ -248,12 +249,13 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
             <span>{t('projectPermissions.grantsTitle')}</span>
             {permissionGrants.length > 0 ? (
               <Button
-                size="small"
-                variant="secondary"
+                size="sm"
+                variant="outline"
                 onClick={() => void handleClearPermissionGrants()}
                 disabled={isBusy}
+                leadingIcon={<Trash2 size={14} />}
               >
-                <Trash2 size={14} />
+
                 {t('projectPermissions.clearGrants')}
               </Button>
             ) : null}
@@ -294,12 +296,13 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
           <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="sectionHeader" className="workspace-project-permissions-dialog__section-header">
             <span>{t('projectPermissions.rulesTitle')}</span>
             <Button
-              size="small"
-              variant="secondary"
+              size="sm"
+              variant="outline"
               disabled={isBusy || rulesRevision === null}
               onClick={() => setDraftRules((rules) => [...rules, toDraftRule({ action: '', resource: '', effect: 'ask' })])}
+              leadingIcon={<Plus size={14} />}
             >
-              <Plus size={14} />
+
               {t('projectPermissions.addRule')}
             </Button>
           </div>
@@ -387,17 +390,18 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
 
           {rulesDirty ? (
             <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="footer" className="workspace-project-permissions-dialog__footer">
-              <Button type="button" variant="ghost" onClick={handleDiscardRules} disabled={isBusy}>
+              <Button type="button" variant="outline" onClick={handleDiscardRules} disabled={isBusy}>
                 {t('projectPermissions.cancel')}
               </Button>
               <Button
                 type="button"
-                variant="primary"
-                isLoading={rulesSaving}
+                variant="fill"
+                loading={rulesSaving}
                 disabled={!rulesValid || rulesRevision === null || isBusy}
                 onClick={() => void handleSaveRules()}
+                leadingIcon={<Save size={14} />}
               >
-                <Save size={14} />
+
                 {t('projectPermissions.saveRules')}
               </Button>
             </div>

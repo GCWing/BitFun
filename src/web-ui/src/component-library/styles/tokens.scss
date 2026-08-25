@@ -3,65 +3,64 @@
  * This module intentionally owns no visual values.
  */
 
-$badge-border-radius: var(--bf-appearance-token-size-radius-sm);
-$badge-font-weight: var(--bf-appearance-token-font-weight-medium);
-$badge-padding-x: var(--bf-appearance-token-size-gap-2);
+$badge-border-radius: var(--bf-radius-sm);
+$badge-font-weight: var(--bf-font-weight-medium);
+$badge-padding-x: var(--bf-space-2);
 $badge-padding-y: var(--bf-appearance-token-badge-padding-y);
 
-$blur-base: var(--bf-appearance-token-blur-base);
-$blur-medium: var(--bf-appearance-token-blur-medium);
-$blur-subtle: var(--bf-appearance-token-blur-subtle);
-$button-bg-hover: var(--bf-appearance-token-button-bg-hover);
-$color-accent-500: var(--bf-appearance-token-color-accent-500);
+$blur-base: var(--bf-effect-blur-base);
+$blur-medium: var(--bf-effect-blur-medium);
+$blur-subtle: var(--bf-effect-blur-subtle);
+$color-accent-500: var(--bf-color-focus-ring);
 
-$easing-accelerate: var(--bf-appearance-token-easing-accelerate);
-$easing-decelerate: var(--bf-appearance-token-easing-decelerate);
-$easing-smooth: var(--bf-appearance-token-easing-smooth);
-$easing-standard: var(--bf-appearance-token-easing-standard);
+$easing-accelerate: var(--bf-motion-easing-accelerate);
+$easing-decelerate: var(--bf-motion-easing-decelerate);
+$easing-smooth: var(--bf-motion-easing-smooth);
+$easing-standard: var(--bf-motion-easing-standard);
 
-$font-family-mono: var(--bf-appearance-token-font-family-mono);
-$font-family-sans: var(--bf-appearance-token-font-family-sans);
-$font-weight-bold: var(--bf-appearance-token-font-weight-bold);
-$font-weight-medium: var(--bf-appearance-token-font-weight-medium);
-$font-weight-normal: var(--bf-appearance-token-font-weight-normal);
-$font-weight-semibold: var(--bf-appearance-token-font-weight-semibold);
+$font-family-mono: var(--bf-font-family-mono);
+$font-family-sans: var(--bf-font-family-sans);
+$font-weight-bold: var(--bf-font-weight-bold);
+$font-weight-medium: var(--bf-font-weight-medium);
+$font-weight-normal: var(--bf-font-weight-regular);
+$font-weight-semibold: var(--bf-font-weight-semibold);
 
 $glow-shadow-blue: var(--bf-appearance-token-glow-shadow-blue);
 $inner-glow-top: var(--bf-appearance-token-inner-glow-top);
 $inner-glow-top-hover: var(--bf-appearance-token-inner-glow-top-hover);
 
-$line-height-base: var(--bf-appearance-token-line-height-base);
-$line-height-relaxed: var(--bf-appearance-token-line-height-relaxed);
-$line-height-tight: var(--bf-appearance-token-line-height-tight);
+$line-height-base: var(--bf-line-height-base);
+$line-height-relaxed: var(--bf-line-height-relaxed);
+$line-height-tight: var(--bf-line-height-tight);
 
-$motion-base: var(--bf-appearance-token-motion-base);
-$motion-fast: var(--bf-appearance-token-motion-fast);
-$motion-instant: var(--bf-appearance-token-motion-instant);
-$motion-lazy: var(--bf-appearance-token-motion-lazy);
-$motion-slow: var(--bf-appearance-token-motion-slow);
+$motion-base: var(--bf-motion-duration-base);
+$motion-fast: var(--bf-motion-duration-fast);
+$motion-instant: var(--bf-motion-duration-instant);
+$motion-lazy: var(--bf-motion-duration-lazy);
+$motion-slow: var(--bf-motion-duration-slow);
 
-$opacity-disabled: var(--bf-appearance-token-opacity-disabled);
-$opacity-hover: var(--bf-appearance-token-opacity-hover);
+$opacity-disabled: var(--bf-opacity-disabled);
+$opacity-hover: var(--bf-opacity-hover);
 $overlay-white-24: var(--bf-appearance-token-color-overlay-white-24);
-$shadow-sm: var(--bf-appearance-token-shadow-sm);
-$shadow-xs: var(--bf-appearance-token-shadow-xs);
+$shadow-sm: var(--bf-shadow-sm);
+$shadow-xs: var(--bf-shadow-xs);
 
-$size-gap-1: var(--bf-appearance-token-size-gap-1);
-$size-gap-2: var(--bf-appearance-token-size-gap-2);
-$size-gap-3: var(--bf-appearance-token-size-gap-3);
-$size-gap-4: var(--bf-appearance-token-size-gap-4);
-$size-gap-5: var(--bf-appearance-token-size-gap-5);
-$size-gap-6: var(--bf-appearance-token-size-gap-6);
-$size-gap-8: var(--bf-appearance-token-size-gap-8);
-$size-gap-10: var(--bf-appearance-token-size-gap-10);
-$size-gap-12: var(--bf-appearance-token-size-gap-12);
-$size-gap-16: var(--bf-appearance-token-size-gap-16);
+$size-gap-1: var(--bf-space-1);
+$size-gap-2: var(--bf-space-2);
+$size-gap-3: var(--bf-space-3);
+$size-gap-4: var(--bf-space-4);
+$size-gap-5: var(--bf-space-5);
+$size-gap-6: var(--bf-space-6);
+$size-gap-8: var(--bf-space-8);
+$size-gap-10: var(--bf-space-10);
+$size-gap-12: var(--bf-space-12);
+$size-gap-16: var(--bf-space-16);
 
-$size-radius-sm: var(--bf-appearance-token-size-radius-sm);
-$size-radius-base: var(--bf-appearance-token-size-radius-base);
-$size-radius-lg: var(--bf-appearance-token-size-radius-lg);
-$size-radius-xl: var(--bf-appearance-token-size-radius-xl);
-$size-radius-full: var(--bf-appearance-token-size-radius-full);
+$size-radius-sm: var(--bf-radius-sm);
+$size-radius-base: var(--bf-radius-base);
+$size-radius-lg: var(--bf-radius-lg);
+$size-radius-xl: var(--bf-radius-xl);
+$size-radius-full: var(--bf-radius-pill);
 
 // Stacking order is a host interaction invariant, not package-controlled styling.
 $z-base: 0;

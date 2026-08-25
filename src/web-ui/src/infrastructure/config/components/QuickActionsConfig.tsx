@@ -1,12 +1,11 @@
+import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Zap, GitCommitHorizontal, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
 import {
-  Button,
   ConfigPageLoading,
   IconButton,
   Modal,
-  Switch,
   Input,
   Textarea,
 } from '@/component-library';
@@ -126,16 +125,17 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
         </div>
 
         <div data-bf-component="quick-actions-config" data-bf-part="dialogFooter" className="quick-actions-config__modal-footer">
-          <Button variant="ghost" size="small" onClick={onClose}>
+          <Button variant="outline" size="sm" onClick={onClose}>
             {t('modal.cancel')}
           </Button>
           <Button
-            variant="primary"
-            size="small"
+            variant="fill"
+            size="sm"
             onClick={() => onSubmit(label.trim(), prompt.trim())}
             disabled={!canSubmit}
+            leadingIcon={<Check size={14} />}
           >
-            <Check size={14} />
+
             {isEdit ? t('modal.saveEdit') : t('modal.confirmAdd')}
           </Button>
         </div>
@@ -173,7 +173,6 @@ const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelet
         <Switch
           checked={action.enabled}
           onChange={() => onToggle(action.id)}
-          size="small"
         />
         <IconButton
           type="button"
@@ -311,11 +310,12 @@ const QuickActionsConfig: React.FC = () => {
           title={t('sections.custom.title')}
           extra={
             <Button
-              size="small"
-              variant="secondary"
+              size="sm"
+              variant="outline"
               onClick={() => setModalTarget(null)}
+              leadingIcon={<Plus size={14} />}
             >
-              <Plus size={14} />
+
               {t('add.button')}
             </Button>
           }
@@ -326,11 +326,12 @@ const QuickActionsConfig: React.FC = () => {
                 <Zap size={20} className="quick-actions-config__empty-icon" />
                 <p>{t('sections.custom.empty')}</p>
                 <Button
-                  size="small"
-                  variant="secondary"
+                  size="sm"
+                  variant="outline"
                   onClick={() => setModalTarget(null)}
+                  leadingIcon={<Plus size={14} />}
                 >
-                  <Plus size={14} />
+
                   {t('add.button')}
                 </Button>
               </div>
