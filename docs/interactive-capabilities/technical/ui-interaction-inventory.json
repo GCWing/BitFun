@@ -5,9 +5,9 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "8980f64657dbf746a0fedc1b4c06603a693c8e6ba0755a28438a9986bba9dabb",
+  "digest": "d511650db87877fceee0d9af349434cd0143a271b1f35526afc9b122bfd576d7",
   "fileCount": 367,
-  "interactionCount": 4423,
+  "interactionCount": 4433,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -866,8 +866,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ModelSelector.tsx",
-      "interactionCount": 41,
-      "digest": "9b4e294e5e4cb4f76dba9102b202b2cdfb9fb0a1413d19c7defe7b89f4d58427"
+      "interactionCount": 51,
+      "digest": "4ed5c1325e9a0badcecef22b8cefbbb24d0e9dd3e1a118840199ab3a203abf1e"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/PendingQueuePanel.tsx",

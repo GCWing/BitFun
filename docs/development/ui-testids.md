@@ -191,6 +191,8 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat model selector button | `chat-model-selector-btn` | Opens the session model selector. |
 | Chat model selector menu | `chat-model-selector-menu` | Model selector dropdown root. |
 | Chat model selector option | `chat-model-selector-option` | Repeated item. Pair with `data-model-id`, `data-model-name`, and `data-selected`. |
+| Chat model selector provider | `chat-model-selector-provider` | Repeated item. First-level provider row that opens its models. Pair with `data-provider-key` and `data-selected`. |
+| Chat model selector back | `chat-model-selector-back` | Returns from one provider's models to the provider list. |
 | Chat user message | `chat-user-message` | Repeated user message. Pair with `data-turn-id`, `data-status`, and `data-failed`. |
 | Chat user message content | `chat-user-message-content` | User message text content. Pair with `data-turn-id`. |
 | Chat assistant message | `chat-assistant-message` | Repeated model round container. Pair with `data-turn-id`, `data-round-id`, `data-status`, `data-model-id`, `data-model-alias`, and `data-streaming`. |

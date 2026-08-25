@@ -192,6 +192,8 @@
 | Chat 模型选择按钮 | `chat-model-selector-btn` | 打开当前会话的模型选择器。 |
 | Chat 模型选择菜单 | `chat-model-selector-menu` | 模型选择下拉菜单根节点。 |
 | Chat 模型选择项 | `chat-model-selector-option` | 重复项。配合 `data-model-id`、`data-model-name` 和 `data-selected` 使用。 |
+| Chat 模型选择供应商项 | `chat-model-selector-provider` | 重复项。第一层的供应商行，点击后展开其模型。配合 `data-provider-key` 和 `data-selected` 使用。 |
+| Chat 模型选择返回按钮 | `chat-model-selector-back` | 从某个供应商的模型列表返回供应商列表。 |
 | Chat 用户消息 | `chat-user-message` | 重复的用户消息。配合 `data-turn-id`、`data-status` 和 `data-failed` 使用。 |
 | Chat 用户消息内容 | `chat-user-message-content` | 用户消息文本内容。配合 `data-turn-id` 使用。 |
 | Chat assistant 消息 | `chat-assistant-message` | 重复的模型轮次容器。配合 `data-turn-id`、`data-round-id`、`data-status`、`data-model-id`、`data-model-alias` 和 `data-streaming` 使用。 |

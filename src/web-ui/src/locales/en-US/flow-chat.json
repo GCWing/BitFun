@@ -2511,6 +2511,8 @@
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
+    "providerModelCount": "{{total}} models",
+    "backToProviders": "Back to providers",
     "fastMode": "Fast mode",
     "fastModeDescription": "1.5x speed with higher credit usage",
     "acpMode": "Mode",
