@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -445,8 +446,7 @@ function UsageRowAnchorLink({
 
   const jumpHelp = t('usage.actions.jumpToTurn');
   const node = (
-    <button
-      type="button"
+    <Button
       className="session-usage-panel__row-anchor-link"
       onClick={() => {
         const request: FlowChatFocusItemRequest = {
@@ -465,9 +465,10 @@ function UsageRowAnchorLink({
         globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'SessionUsagePanel');
       }}
       aria-label={`${jumpHelp}: ${label}`}
+      variant="text"
     >
       {label}
-    </button>
+    </Button>
   );
 
   return (
@@ -522,14 +523,14 @@ function UsageFileTurnIndexesValue({
         const displayTurnText = formatUsageNumber(displayTurnIndex, t);
         return (
           <Tooltip key={rawTurnIndex} content={t('usage.actions.jumpToTurn')}>
-            <button
-              type="button"
+            <Button
               className="session-usage-panel__turn-index-link"
               onClick={() => onJumpToTurn(file, rawTurnIndex)}
               aria-label={`${t('usage.actions.jumpToTurn')}: ${displayTurnText}`}
+              variant="text"
             >
               {displayTurnText}
-            </button>
+            </Button>
           </Tooltip>
         );
       })}
@@ -1147,14 +1148,14 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
               node: (
                 <div className="session-usage-panel__slow-span">
                   <Tooltip content={spanHelp ? `${spanHelp} ${jumpHelp}` : jumpHelp}>
-                    <button
-                      type="button"
+                    <Button
                       className="session-usage-panel__turn-link"
                       onClick={() => handleJumpToSpan(span)}
                       aria-label={`${jumpHelp}: ${spanLabel}`}
+                      variant="text"
                     >
                       {spanLabel}
-                    </button>
+                    </Button>
                   </Tooltip>
                   {detailRows.length > 0 && (
                     <dl className="session-usage-panel__slow-span-details">
@@ -1319,15 +1320,16 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
               total: rows.length,
             })}
           </span>
-          <button
-            type="button"
+          <Button
             className="session-usage-panel__table-expand"
             onClick={() => setExpanded(value => !value)}
+            size="sm"
+            variant="text"
           >
             {expanded
               ? t('usage.table.showFewerRows', { count: MAX_USAGE_TABLE_ROWS })
               : t('usage.table.showAllRows', { count: rows.length })}
-          </button>
+          </Button>
         </div>
       )}
     </>

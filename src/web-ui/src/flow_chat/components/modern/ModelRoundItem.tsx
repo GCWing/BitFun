@@ -8,6 +8,7 @@
  */
 
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { Button, IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, CircleAlert } from 'lucide-react';
@@ -177,17 +178,17 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
 
   const renderCopyButton = (value: string, valueKey: string) => (
     <Tooltip content={copiedValue === valueKey ? t('modelRound.attemptDiagnostics.copied') : t('modelRound.attemptDiagnostics.copy')} placement="top">
-      <button
-        type="button"
+      <IconButton
         className="model-round-item__attempt-diagnostic-copy"
         data-bf-component="model-round-item"
         data-bf-part="action"
         data-bf-state={copiedValue === valueKey ? 'copied' : undefined}
         onClick={() => void copyValue(value, valueKey)}
         aria-label={t('modelRound.attemptDiagnostics.copy')}
+        size="sm"
       >
         {copiedValue === valueKey ? <Check size={13} /> : <Copy size={13} />}
-      </button>
+      </IconButton>
     </Tooltip>
   );
 
@@ -196,8 +197,7 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
   return (
     <>
       <Tooltip content={isOpen ? t('modelRound.attemptDiagnostics.hide') : t('modelRound.attemptDiagnostics.show')} placement="top">
-        <button
-          type="button"
+        <IconButton
           className="model-round-item__attempt-diagnostic-toggle"
           data-bf-component="model-round-item"
           data-bf-part="diagnosticToggle"
@@ -206,9 +206,10 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
           aria-expanded={isOpen}
           aria-controls={detailsId}
           aria-label={isOpen ? t('modelRound.attemptDiagnostics.hide') : t('modelRound.attemptDiagnostics.show')}
+          size="sm"
         >
           <CircleAlert size={13} aria-hidden="true" />
-        </button>
+        </IconButton>
       </Tooltip>
 
       {isOpen && (
@@ -615,18 +616,19 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {historyRounds.length > 0 && (
           <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
-            <button
-              type="button"
+            <Button
               className="model-round-item__retry-toggle"
               data-bf-component="model-round-item"
               data-bf-part="retryToggle"
               data-bf-state={showRoundHistory ? 'expanded' : undefined}
               onClick={() => setShowRoundHistory(current => !current)}
+              size="sm"
+              variant="text"
             >
               {showRoundHistory
                 ? t('modelRound.roundHistoryHide')
                 : t('modelRound.roundHistoryShow', { count: historyRounds.length })}
-            </button>
+            </Button>
 
             {showRoundHistory && historyRounds.map((historyRound, historyIndex) => {
               const historyAttempts = sortRoundAttempts(historyRound.attempts ?? []);
@@ -651,18 +653,19 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   </div>
                   {historyOlderAttempts.length > 0 && (
                     <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
-                      <button
-                        type="button"
+                      <Button
                         className="model-round-item__retry-toggle"
                         data-bf-component="model-round-item"
                         data-bf-part="retryToggle"
                         data-bf-state={showHistoryRoundAttempts ? 'expanded' : undefined}
                         onClick={() => toggleHistoryRoundAttempts(historyRound.id)}
+                        size="sm"
+                        variant="text"
                       >
                         {showHistoryRoundAttempts
                           ? t('modelRound.retryHistoryHide')
                           : t('modelRound.retryHistoryShow', { count: historyOlderAttempts.length })}
-                      </button>
+                      </Button>
 
                       {showHistoryRoundAttempts && historyOlderAttempts.map((attempt) => {
                         const attemptGroups = buildModelRoundItemGroups({
@@ -701,18 +704,19 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {historicalAttempts.length > 0 && (
           <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
-            <button
-              type="button"
+            <Button
               className="model-round-item__retry-toggle"
               data-bf-component="model-round-item"
               data-bf-part="retryToggle"
               data-bf-state={showRetryHistory ? 'expanded' : undefined}
               onClick={() => setShowRetryHistory(current => !current)}
+              size="sm"
+              variant="text"
             >
               {showRetryHistory
                 ? t('modelRound.retryHistoryHide')
                 : t('modelRound.retryHistoryShow', { count: historicalAttempts.length })}
-            </button>
+            </Button>
 
             {showRetryHistory && historicalAttempts.map((attempt) => {
               const attemptGroups = buildModelRoundItemGroups({
@@ -773,7 +777,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
             {allowTranscriptExport && <div className="model-round-item__copy-menu-anchor">
               <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
-                <button
+                <IconButton
+                  aria-label={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')}
                   ref={copyButtonRef}
                   className={`model-round-item__action-btn model-round-item__copy-btn ${copied ? 'copied' : ''}`}
                   onClick={() => setIsCopyMenuOpen(current => !current)}
@@ -781,11 +786,11 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   disabled={!shouldRevealFooter}
                   aria-haspopup="menu"
                   aria-expanded={isCopyMenuOpen}
-                  aria-label={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')}
+                  size="sm"
                   data-testid="model-round-copy-btn"
                  data-bf-component="model-round-item" data-bf-part="action" data-bf-state={copied ? 'copied' : undefined}>
                   {copied ? <Check size={14} /> : <Copy size={14} />}
-                </button>
+                </IconButton>
               </Tooltip>
 
               {isCopyMenuOpen && createPortal(

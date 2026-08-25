@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { Button } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import {
   AlertCircle,
@@ -214,7 +215,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
 
       {canControlTimeout && (
         <div data-bf-component="tool-timeout-indicator" data-bf-part="controls" className="timeout-control-wrapper" ref={controlRef}>
-          <button
+          <Button
             ref={triggerRef}
             type="button"
             data-bf-component="tool-timeout-indicator"
@@ -230,14 +231,16 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
                 ? t('toolCards.timeout.enableTooltip')
                 : t('toolCards.timeout.disableTooltip')
             }
+            leadingIcon={<InfinityIcon size={12} />}
+            size="sm"
+            variant={isTimeoutDisabled ? 'fill' : 'outline'}
           >
-            <InfinityIcon size={12} />
             <span className="timeout-ignore-btn__label">
               {isTimeoutDisabled
                 ? t('toolCards.timeout.enableLabel')
                 : t('toolCards.timeout.disableLabel')}
             </span>
-          </button>
+          </Button>
 
           {isPopoverOpen && createPortal(
             <div

@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Button, IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import {
   ChevronDown,
@@ -20,7 +21,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { Tooltip, IconButton, Input } from '@/component-library';
+import { Tooltip, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
@@ -520,10 +521,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       >
         <IconButton
           className="flowchat-header__background-command-menu-button"
-          variant="ghost"
-          size="xs"
+          size="sm"
           onClick={(event) => handleCommandMenuToggle(event, command)}
-          tooltip={t('flowChatHeader.backgroundCommandActions')}
+          title={t('flowChatHeader.backgroundCommandActions')}
           aria-label={t('flowChatHeader.backgroundCommandActions')}
           aria-haspopup="menu"
           aria-expanded={openBackgroundCommandMenuId === command.execSessionKey}
@@ -716,26 +716,26 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       : null}
                   </span>
                   <span className="flowchat-header__search-nav">
-                    <button
+                    <IconButton
+                      aria-label={t('flowChatHeader.searchPrevious')}
                       className="flowchat-header__search-nav-btn"
                       onClick={onSearchPrev}
                       disabled={searchMatchCount === 0}
                       title={t('flowChatHeader.searchPrevious')}
-                      aria-label={t('flowChatHeader.searchPrevious')}
-                      type="button"
+                      size="sm"
                     >
                       <ChevronUp size={10} />
-                    </button>
-                    <button
+                    </IconButton>
+                    <IconButton
+                      aria-label={t('flowChatHeader.searchNext')}
                       className="flowchat-header__search-nav-btn"
                       onClick={onSearchNext}
                       disabled={searchMatchCount === 0}
                       title={t('flowChatHeader.searchNext')}
-                      aria-label={t('flowChatHeader.searchNext')}
-                      type="button"
+                      size="sm"
                     >
                       <ChevronDown size={10} />
-                    </button>
+                    </IconButton>
                   </span>
                 </span>
               }
@@ -749,10 +749,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             />
             <IconButton
               className="flowchat-header__search-close"
-              variant="ghost"
-              size="xs"
+              size="sm"
               onClick={handleCloseSearch}
-              tooltip={t('flowChatHeader.searchClose')}
+              title={t('flowChatHeader.searchClose')}
               aria-label={t('flowChatHeader.searchClose')}
             >
               <X size={14} />
@@ -761,10 +760,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         ) : (
           <IconButton
             className="flowchat-header__search-btn"
-            variant="ghost"
-            size="xs"
+            size="sm"
             onClick={handleOpenSearch}
-            tooltip={t('flowChatHeader.searchOpen')}
+            title={t('flowChatHeader.searchOpen')}
             aria-label={t('flowChatHeader.searchOpen')}
             data-testid="flowchat-header-search"
           >
@@ -790,10 +788,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               isSessionOverviewOpen ? 'open' : null,
               hasSessionActivity ? 'active' : null,
             ].filter(Boolean).join(' ') || undefined}
-            variant="ghost"
-            size="xs"
+            size="sm"
             onClick={handleToggleSessionOverview}
-            tooltip={sessionOverviewLabel}
+            title={sessionOverviewLabel}
             aria-label={sessionOverviewLabel}
             aria-expanded={isSessionOverviewOpen}
             aria-haspopup="dialog"
@@ -901,10 +898,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       {hasBackgroundCommands && onStopAllBackgroundCommands ? (
                         <IconButton
                           className="flowchat-header__background-command-menu-button"
-                          variant="ghost"
-                          size="xs"
+                          size="sm"
                           onClick={handleCommandSectionMenuToggle}
-                          tooltip={t('flowChatHeader.backgroundCommandActions')}
+                          title={t('flowChatHeader.backgroundCommandActions')}
                           aria-label={t('flowChatHeader.backgroundCommandActions')}
                           aria-haspopup="menu"
                           aria-expanded={isBackgroundCommandSectionMenuOpen}
@@ -1021,14 +1017,15 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       {t('flowChatHeader.pullRequestLoading')}
                     </div>
                   ) : pullRequestOverview.status === 'error' ? (
-                    <button
-                      type="button"
+                    <Button
                       className="flowchat-header__session-overview-empty-state flowchat-header__session-overview-empty-state--action flowchat-header__session-overview-empty-state--error"
                       data-bf-state="error"
                       onClick={() => void loadPullRequestOverview()}
+                      size="sm"
+                      variant="text"
                     >
                       {t('flowChatHeader.pullRequestLoadFailed')}
-                    </button>
+                    </Button>
                   ) : pullRequestOverview.status === 'not-git' ? (
                     <div
                       className="flowchat-header__session-overview-empty-state"
@@ -1085,10 +1082,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             data-bf-component="flow-chat-header"
             data-bf-part="rightPanelTrigger"
             data-bf-state={isRightPanelOpen ? 'open' : 'collapsed'}
-            variant="ghost"
-            size="xs"
+            size="sm"
             onClick={onToggleRightPanel}
-            tooltip={rightPanelLabel}
+            title={rightPanelLabel}
             aria-label={rightPanelLabel}
             aria-pressed={isRightPanelOpen}
             data-testid="flowchat-header-right-panel"

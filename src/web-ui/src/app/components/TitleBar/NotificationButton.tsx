@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useEffect, useState } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { Bell, BellDot, BellRing } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -106,7 +107,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
 
   return (
     <Tooltip content={t('nav.notifications')} placement="right" disabled={!!activeNotification}>
-    <button data-bf-component="notification-button" data-bf-part="root"
+    <IconButton data-bf-component="notification-button" data-bf-part="root"
       ref={buttonRef}
       className={[
         'bitfun-notification-btn',
@@ -118,6 +119,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
       onClick={handleActivate}
       type="button"
       aria-label={t('nav.notifications')}
+      size="sm"
       data-testid="notification-button"
     >
       {activeNotification ? (
@@ -197,7 +199,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
           ? <BellDot size={14} className="bitfun-notification-btn__icon--has-message" />
           : <Bell size={14} />
       )}
-    </button>
+    </IconButton>
     </Tooltip>
   );
 };

@@ -108,7 +108,7 @@
       "filterPillAppearanceDescriptor": 1,
       "flowChatCardAppearanceDescriptor": 1,
       "HarnessCreativeIcon": 2,
-      "IconButton": 82,
+      "IconButton": 81,
       "iconButtonAppearanceDescriptor": 1,
       "iconCatalogAppearanceDescriptor": 1,
       "Input": 42,
@@ -263,7 +263,7 @@
         "button": 1
       },
       "src/web-ui/src/app/components/TitleBar/NotificationButton.tsx": {
-        "button": 2
+        "button": 1
       },
       "src/web-ui/src/app/global-search/GlobalSearchRoot.tsx": {
         "button": 5,
@@ -479,13 +479,13 @@
         "input": 1
       },
       "src/web-ui/src/flow_chat/components/modern/FlowChatHeader.tsx": {
-        "button": 9
+        "button": 6
       },
       "src/web-ui/src/flow_chat/components/modern/FlowChatTurnRail.tsx": {
         "button": 1
       },
       "src/web-ui/src/flow_chat/components/modern/ModelRoundItem.tsx": {
-        "button": 8
+        "button": 2
       },
       "src/web-ui/src/flow_chat/components/modern/SessionFileModificationsBar.tsx": {
         "button": 1
@@ -508,9 +508,6 @@
       "src/web-ui/src/flow_chat/components/modern/UserMessageItem.test.tsx": {
         "button": 1
       },
-      "src/web-ui/src/flow_chat/components/modern/UserMessageItem.tsx": {
-        "button": 5
-      },
       "src/web-ui/src/flow_chat/components/PendingQueuePanel.tsx": {
         "textarea": 1
       },
@@ -530,7 +527,7 @@
         "button": 1
       },
       "src/web-ui/src/flow_chat/components/usage/SessionUsagePanel.tsx": {
-        "button": 5,
+        "button": 1,
         "input": 1
       },
       "src/web-ui/src/flow_chat/components/usage/SessionUsageReportCard.tsx": {
@@ -619,7 +616,7 @@
         "button": 1
       },
       "src/web-ui/src/flow_chat/tool-cards/ToolTimeoutIndicator.tsx": {
-        "button": 5
+        "button": 4
       },
       "src/web-ui/src/flow_chat/tool-cards/ViewImageToolCard.tsx": {
         "button": 1
@@ -805,9 +802,9 @@
         "button": 2
       }
     },
-    "total": 567
+    "total": 547
   },
   "newLibrary": {
-    "moduleReferences": 163
+    "moduleReferences": 169
   }
 }

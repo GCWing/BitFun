@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
+import { Copy, Check, RotateCcw, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
@@ -597,49 +598,53 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               </>
             )}
             <div className="user-message-item__actions" data-bf-component="user-message-item" data-bf-part="actions">
-              <button
+              <IconButton
+                aria-label={copied ? t('message.copyFailed') : t('message.copy')}
                 className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
                 onClick={handleCopy}
+                size="sm"
                 title={copied ? t('message.copyFailed') : t('message.copy')}
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
-              </button>
+              </IconButton>
               {canShowEditAction && (
                 <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
-                  <button
-                    type="button"
+                  <IconButton
+                    aria-label={canEdit ? t('message.edit') : editDisabledReason}
                     className="user-message-item__edit-btn"
                     onClick={handleBeginEdit}
                     disabled={!canEdit}
+                    size="sm"
                     title={canEdit ? t('message.edit') : editDisabledReason}
                   >
                     <Pencil size={14} />
-                  </button>
+                  </IconButton>
                 </Tooltip>
               )}
               {isFailed ? (
                 <Tooltip content={t('message.fillToInput')}>
-                  <button
+                  <IconButton
+                    aria-label={t('message.fillToInput')}
                     className="user-message-item__copy-btn"
                     onClick={handleFillToInput}
+                    size="sm"
                   >
                     <ArrowDownToLine size={14} />
-                  </button>
+                  </IconButton>
                 </Tooltip>
               ) : canShowRollbackAction && !steeringStatus ? (
                 <Tooltip content={rollbackTooltip}>
-                  <button
+                  <IconButton
+                    aria-label={rollbackTooltip}
                     className="user-message-item__rollback-btn"
                     onClick={handleRollback}
                     disabled={!canRollback}
+                    loading={sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId}
+                    size="sm"
                     title={rollbackTooltip}
                   >
-                    {sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId ? (
-                      <Loader2 size={14} className="user-message-item__rollback-spinner" />
-                    ) : (
-                      <RotateCcw size={14} />
-                    )}
-                  </button>
+                    <RotateCcw size={14} />
+                  </IconButton>
                 </Tooltip>
               ) : null}
             </div>
@@ -662,9 +667,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
         {lightboxImage && createPortal(
           <div className="user-message-item__lightbox" onClick={() => setLightboxImage(null)} data-bf-component="user-message-item" data-bf-part="lightbox">
-            <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
+            <IconButton
+              aria-label={t('common:actions.close')}
+              className="user-message-item__lightbox-close"
+              onClick={() => setLightboxImage(null)}
+              size="md"
+            >
               <X size={20} />
-            </button>
+            </IconButton>
             <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
           </div>,
           getAppearanceOverlayHost(),
