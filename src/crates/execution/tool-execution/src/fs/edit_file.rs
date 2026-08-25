@@ -135,34 +135,28 @@ fn find_actual_string(file_content: &str, search_string: &str) -> Option<String>
         return Some(search_string.to_string());
     }
 
-    let file_chars: Vec<char> = normalized_file.chars().collect();
-    let search_chars: Vec<char> = normalized_search.chars().collect();
-    if search_chars.is_empty() || file_chars.len() < search_chars.len() {
-        return None;
-    }
-
-    let normalized_search_chars: Vec<char> = search_chars
-        .iter()
-        .copied()
+    // Quote normalization maps one char to one char, so a match in the
+    // quote-normalized text starts at the same char offset in the original and
+    // spans the same number of chars.  Normalizing both sides once lets
+    // `str::find` locate it, instead of comparing every window by hand — that
+    // comparison is quadratic when the file holds long runs of one character.
+    let quoted_file: String = normalized_file.chars().map(normalize_quote_char).collect();
+    let quoted_search: String = normalized_search
+        .chars()
         .map(normalize_quote_char)
         .collect();
 
-    for start in 0..=file_chars.len() - search_chars.len() {
-        let window_matches = file_chars[start..start + search_chars.len()]
-            .iter()
-            .copied()
-            .map(normalize_quote_char)
-            .eq(normalized_search_chars.iter().copied());
-        if window_matches {
-            return Some(
-                file_chars[start..start + search_chars.len()]
-                    .iter()
-                    .collect(),
-            );
-        }
-    }
+    let match_start = quoted_file.find(&quoted_search)?;
+    let chars_before = quoted_file[..match_start].chars().count();
+    let match_chars = quoted_search.chars().count();
 
-    None
+    Some(
+        normalized_file
+            .chars()
+            .skip(chars_before)
+            .take(match_chars)
+            .collect(),
+    )
 }
 
 /// Replace every tab with `tab_width` spaces.
@@ -509,7 +503,7 @@ mod tests {
     };
     use std::fs;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     fn write_temp_file(contents: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -796,6 +790,42 @@ mod tests {
         assert_eq!(
             result.new_content,
             "fn main() {\r\n    msg := \"hi\"\r\n}\r\n"
+        );
+    }
+
+    #[test]
+    fn apply_edit_matches_curly_quotes_after_multibyte_content() {
+        // Quote normalization maps one char to one char but changes byte
+        // length, so a match that sits behind multibyte text has to be located
+        // by char offset, not byte offset.
+        let content = "// \u{5909}\u{6570}\u{306e}\u{8aac}\u{660e} \u{2014} \u{3b1}\u{3b2}\u{3b3}\nmsg := \u{201c}hello\u{201d}\n";
+        let result = apply_edit_to_content(content, "msg := \"hello\"", "msg := \"hi\"", false)
+            .expect("curly-quote edit after multibyte content should succeed");
+
+        assert_eq!(
+            result.new_content,
+            "// \u{5909}\u{6570}\u{306e}\u{8aac}\u{660e} \u{2014} \u{3b1}\u{3b2}\u{3b3}\nmsg := \"hi\"\n"
+        );
+    }
+
+    #[test]
+    fn apply_edit_scans_long_repeated_runs_without_hanging() {
+        // A file that is one long run of a single character makes every
+        // candidate window share a long prefix with the search string, the
+        // worst case for comparing windows one at a time.  This input took
+        // over 20 seconds before find_actual_string searched with str::find.
+        let content = format!("\t{}\n", " ".repeat(256 * 1024));
+        let old_string = format!("\t{}X", " ".repeat(2000));
+
+        let started = Instant::now();
+        let error = apply_edit_to_content(&content, &old_string, "replacement", false)
+            .expect_err("old_string is not present in the file");
+
+        assert!(error.contains("old_string not found in file"));
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "scan took {:?}, expected the linear search path",
+            started.elapsed()
         );
     }
 }
