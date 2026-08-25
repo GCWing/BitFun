@@ -6,7 +6,7 @@
       "../../../component-library/components/Input": 1,
       "../../component-library": 26,
       "../component-library": 1,
-      "@/component-library": 300,
+      "@/component-library": 299,
       "@/component-library/components": 1,
       "@/component-library/components/Alert/appearance": 1,
       "@/component-library/components/Avatar/appearance": 1,
@@ -108,7 +108,7 @@
       "filterPillAppearanceDescriptor": 1,
       "flowChatCardAppearanceDescriptor": 1,
       "HarnessCreativeIcon": 2,
-      "IconButton": 81,
+      "IconButton": 80,
       "iconButtonAppearanceDescriptor": 1,
       "iconCatalogAppearanceDescriptor": 1,
       "Input": 42,
@@ -166,7 +166,7 @@
       "WindowControls": 1,
       "windowControlsAppearanceDescriptor": 1
     },
-    "moduleReferences": 423
+    "moduleReferences": 422
   },
   "nativeControls": {
     "allowlist": [],
@@ -231,9 +231,6 @@
       },
       "src/web-ui/src/app/components/panels/content-canvas/mission-control/ThumbnailCard.tsx": {
         "button": 2
-      },
-      "src/web-ui/src/app/components/panels/content-canvas/quick-look/QuickLook.tsx": {
-        "button": 3
       },
       "src/web-ui/src/app/components/panels/content-canvas/tab-bar/Tab.tsx": {
         "button": 1
@@ -419,16 +416,13 @@
         "button": 1
       },
       "src/web-ui/src/features/ssh-remote/RemoteFileBrowser.tsx": {
-        "button": 11,
+        "button": 6,
         "input": 2
       },
       "src/web-ui/src/features/ssh-remote/SSHConnectionDialog.test.tsx": {
         "button": 2,
         "input": 1,
         "select": 1
-      },
-      "src/web-ui/src/features/ssh-remote/SSHConnectionDialog.tsx": {
-        "button": 3
       },
       "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.review-action.test.tsx": {
         "button": 1
@@ -501,9 +495,6 @@
       },
       "src/web-ui/src/flow_chat/components/modern/TurnFailureNoticeItem.tsx": {
         "button": 2
-      },
-      "src/web-ui/src/flow_chat/components/modern/UserMessageEditComposer.tsx": {
-        "button": 4
       },
       "src/web-ui/src/flow_chat/components/modern/UserMessageItem.test.tsx": {
         "button": 1
@@ -578,9 +569,6 @@
       },
       "src/web-ui/src/flow_chat/tool-cards/CodeReviewReportExportActions.test.tsx": {
         "button": 1
-      },
-      "src/web-ui/src/flow_chat/tool-cards/CodeReviewReportExportActions.tsx": {
-        "button": 3
       },
       "src/web-ui/src/flow_chat/tool-cards/CodeReviewToolCard.tsx": {
         "button": 3
@@ -762,9 +750,6 @@
       "src/web-ui/src/tools/bitfun-canvas/runtime/sdk/data-display.tsx": {
         "button": 3
       },
-      "src/web-ui/src/tools/editor/components/DiffEditor.tsx": {
-        "button": 3
-      },
       "src/web-ui/src/tools/editor/components/EditorBreadcrumb.tsx": {
         "button": 1
       },
@@ -802,9 +787,9 @@
         "button": 2
       }
     },
-    "total": 547
+    "total": 526
   },
   "newLibrary": {
-    "moduleReferences": 169
+    "moduleReferences": 172
   }
 }

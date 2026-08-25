@@ -1,6 +1,7 @@
 /** Monaco diff editor wrapper (side-by-side/inline). */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { IconButton } from '@bitfun/ui';
 import type * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
 import { monacoApi } from '../services/monacoRuntime';
@@ -517,33 +518,39 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
         
         <div className="diff-editor-toolbar__actions" data-bf-component="diff-editor" data-bf-part="toolbarActions">
           <Tooltip content={t('editor.diffEditor.prevChange')} placement="top">
-            <button
+            <IconButton
+              aria-label={t('editor.diffEditor.previousChange')}
               className="diff-editor-toolbar__btn"
               onClick={navigateToPrevChange}
               disabled={changes.length === 0}
+              size="sm"
             >
               ↑
-            </button>
+            </IconButton>
           </Tooltip>
           <Tooltip content={t('editor.diffEditor.nextChange')} placement="top">
-            <button
+            <IconButton
+              aria-label={t('editor.diffEditor.nextChange')}
               className="diff-editor-toolbar__btn"
               onClick={navigateToNextChange}
               disabled={changes.length === 0}
+              size="sm"
             >
               ↓
-            </button>
+            </IconButton>
           </Tooltip>
           <Tooltip
             content={renderSideBySide ? t('editor.diffEditor.switchToInline') : t('editor.diffEditor.switchToSideBySide')}
             placement="top"
           >
-            <button
+            <IconButton
+              aria-label={renderSideBySide ? t('editor.diffEditor.switchToInline') : t('editor.diffEditor.switchToSideBySide')}
               className="diff-editor-toolbar__btn"
               onClick={toggleViewMode}
+              size="sm"
             >
               {renderSideBySide ? '⊟' : '⊞'}
-            </button>
+            </IconButton>
           </Tooltip>
         </div>
       </div>

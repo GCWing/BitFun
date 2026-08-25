@@ -14,6 +14,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, Pin, ExternalLink } from 'lucide-react';
@@ -166,30 +167,38 @@ export const QuickLook: React.FC<QuickLookProps> = ({
           <span>{content.title}</span>
           {content.data?.filePath && (
             <Tooltip content={t('canvas.openFileLocation')}>
-              <button className="canvas-quick-look__open-btn">
+              <IconButton
+                aria-label={t('canvas.openFileLocation')}
+                className="canvas-quick-look__open-btn"
+                size="sm"
+              >
                 <ExternalLink size={12} />
-              </button>
+              </IconButton>
             </Tooltip>
           )}
         </div>
         
         <div className="canvas-quick-look__actions" data-bf-component="content-canvas" data-bf-part="quickLookActions">
           <Tooltip content={t('canvas.pinAsTab')}>
-            <button
+            <IconButton
+              aria-label={t('canvas.pinAsTab')}
               className="canvas-quick-look__action-btn canvas-quick-look__pin-btn"
               onClick={onPin}
+              size="sm"
             >
               <Pin size={14} />
-            </button>
+            </IconButton>
           </Tooltip>
           
           <Tooltip content={t('canvas.closeEsc')}>
-            <button
+            <IconButton
+              aria-label={t('canvas.closeEsc')}
               className="canvas-quick-look__action-btn canvas-quick-look__close-btn"
               onClick={onClose}
+              size="sm"
             >
               <X size={14} />
-            </button>
+            </IconButton>
           </Tooltip>
         </div>
       </div>

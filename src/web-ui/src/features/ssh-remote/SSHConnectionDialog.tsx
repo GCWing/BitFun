@@ -3,7 +3,7 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
@@ -11,7 +11,6 @@ import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthP
 import { Input, Modal } from '@/component-library';
 import { Select } from '@/component-library';
 import { Alert } from '@/component-library';
-import { IconButton } from '@/component-library';
 import {
   ArrowDownToLine,
   CheckCircle2,
@@ -779,7 +778,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     <div className="ssh-connection-dialog__saved-actions">
                       <IconButton
                         type="button"
-                        size="small"
+                        size="sm"
                         onClick={(e) => handleEditConnection(e, conn)}
                         disabled={isConnecting}
                         title={t('actions.edit') || 'Edit'}
@@ -789,8 +788,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       </IconButton>
                       <IconButton
                         type="button"
-                        size="small"
-                        variant="danger"
+                        size="sm"
+                        tone="danger"
                         onClick={(e) => handleDeleteConnection(e, conn.id)}
                         disabled={isConnecting}
                         title={t('actions.delete') || 'Delete'}
@@ -800,8 +799,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       </IconButton>
                       <IconButton
                         type="button"
-                        size="small"
-                        variant="primary"
+                        size="sm"
+                        tone="primary"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleQuickConnect(conn);
@@ -1074,9 +1073,15 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   prefix={<Lock size={16} />}
                   size="medium"
                   suffix={
-                    <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassword(s => !s)} tabIndex={-1}>
+                    <IconButton
+                      aria-label={t(showPassword ? 'accountLogin.hidePassword' : 'accountLogin.showPassword')}
+                      className="bitfun-input-toggle"
+                      onClick={() => setShowPassword(s => !s)}
+                      size="sm"
+                      tabIndex={-1}
+                    >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
+                    </IconButton>
                   }
                 />
               </div>
@@ -1095,10 +1100,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     suffix={
                       <IconButton
                         type="button"
-                        variant="ghost"
-                        size="small"
+                        size="sm"
                         className="ssh-connection-dialog__browse-key"
-                        tooltip={t('ssh.remote.browsePrivateKey')}
+                        title={t('ssh.remote.browsePrivateKey')}
                         aria-label={t('ssh.remote.browsePrivateKey')}
                         disabled={isConnecting || status === 'connecting'}
                         onClick={() => void handleBrowsePrivateKey()}
@@ -1118,9 +1122,15 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     placeholder={t('ssh.remote.passphraseOptional')}
                     size="medium"
                     suffix={
-                      <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassphrase(s => !s)} tabIndex={-1}>
+                      <IconButton
+                        aria-label={t(showPassphrase ? 'accountLogin.hidePassword' : 'accountLogin.showPassword')}
+                        className="bitfun-input-toggle"
+                        onClick={() => setShowPassphrase(s => !s)}
+                        size="sm"
+                        tabIndex={-1}
+                      >
                         {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
+                      </IconButton>
                     }
                   />
                 </div>
@@ -1133,10 +1143,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     suffix={
                       <IconButton
                         type="button"
-                        variant="ghost"
-                        size="small"
+                        size="sm"
                         className="ssh-connection-dialog__browse-key"
-                        tooltip={t('ssh.remote.browseCertificate')}
+                        title={t('ssh.remote.browseCertificate')}
                         aria-label={t('ssh.remote.browseCertificate')}
                         disabled={isConnecting || status === 'connecting'}
                         onClick={() => void handleBrowseCertificate()}
@@ -1201,24 +1210,25 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             )}
 
             <div className="ssh-connection-dialog__advanced">
-              <button
-                type="button"
+              <Button
                 className="ssh-connection-dialog__advanced-toggle"
                 aria-expanded={showAdvancedSettings}
                 onClick={() => setShowAdvancedSettings((visible) => !visible)}
+                trailingIcon={(
+                  <ChevronDown
+                    size={16}
+                    className={[
+                      'ssh-connection-dialog__advanced-chevron',
+                      showAdvancedSettings
+                        ? 'ssh-connection-dialog__advanced-chevron--expanded'
+                        : '',
+                    ].filter(Boolean).join(' ')}
+                  />
+                )}
+                variant="text"
               >
                 <span>{t('ssh.remote.advancedSettings')}</span>
-                <ChevronDown
-                  size={16}
-                  aria-hidden="true"
-                  className={[
-                    'ssh-connection-dialog__advanced-chevron',
-                    showAdvancedSettings
-                      ? 'ssh-connection-dialog__advanced-chevron--expanded'
-                      : '',
-                  ].filter(Boolean).join(' ')}
-                />
-              </button>
+              </Button>
 
               {showAdvancedSettings && (
                 <div className="ssh-connection-dialog__advanced-panel">

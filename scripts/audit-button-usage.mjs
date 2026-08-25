@@ -32,9 +32,13 @@ function attributeValue(attribute) {
   if (
     ts.isJsxExpression(attribute.initializer)
     && attribute.initializer.expression
-    && ts.isStringLiteral(attribute.initializer.expression)
   ) {
-    return attribute.initializer.expression.text;
+    if (ts.isStringLiteral(attribute.initializer.expression)) {
+      return attribute.initializer.expression.text;
+    }
+    if (ts.isTemplateExpression(attribute.initializer.expression)) {
+      return attribute.initializer.expression.head.text;
+    }
   }
   return undefined;
 }
@@ -65,7 +69,9 @@ function classifyButton(attributes, children) {
     || hasAttribute(attributes, 'aria-haspopup')
     || hasAttribute(attributes, 'aria-expanded')
     || hasAttribute(attributes, 'aria-pressed')
-    || /(?:menuitem|option|tab)/i.test(ownerPart ?? '')
+    || hasAttribute(attributes, 'aria-current')
+    || /(?:badge|card|filter|header|item|menu|nav|option|select|summary|tab|toggle|trigger)/i.test(ownerPart ?? '')
+    || /__(?:badge|card|filter|header|item|nav|option|select|summary|tab|toggle|trigger)(?:\b|[_-])/i.test(className ?? '')
     || /(?:menu|dropdown|popover|context)[_-].*item|item[_-].*(?:menu|dropdown)/i.test(className ?? '')
   ) {
     return 'compound';

@@ -1,6 +1,6 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Check, Copy, Download, FilePenLine, Loader2 } from 'lucide-react';
+import { Check, Copy, Download, FilePenLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { notificationService } from '@/shared/notification-system';
@@ -202,39 +202,40 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
     <div className="code-review-report-actions" onClick={(event) => event.stopPropagation()}>
       {visibleActions.has('copy') && (
         <Tooltip content={t('toolCards.codeReview.export.copyMarkdown')} placement="top">
-          <button
-            type="button"
+          <IconButton
             className="code-review-report-actions__button"
             onClick={handleCopy}
             aria-label={t('toolCards.codeReview.export.copyMarkdown')}
+            size="sm"
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
-          </button>
+          </IconButton>
         </Tooltip>
       )}
       {visibleActions.has('open') && (
         <Tooltip content={t('toolCards.codeReview.export.openMarkdown')} placement="top">
-          <button
-            type="button"
+          <IconButton
             className="code-review-report-actions__button"
             onClick={handleOpenInEditor}
             aria-label={t('toolCards.codeReview.export.openMarkdown')}
+            size="sm"
           >
             <FilePenLine size={14} />
-          </button>
+          </IconButton>
         </Tooltip>
       )}
       {visibleActions.has('save') && (
         <Tooltip content={t('toolCards.codeReview.export.saveMarkdown')} placement="top">
-          <button
-            type="button"
+          <IconButton
             className="code-review-report-actions__button"
             onClick={handleSave}
             disabled={saving}
             aria-label={t('toolCards.codeReview.export.saveMarkdown')}
+            loading={saving}
+            size="sm"
           >
-            {saving ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
-          </button>
+            <Download size={14} />
+          </IconButton>
         </Tooltip>
       )}
     </div>

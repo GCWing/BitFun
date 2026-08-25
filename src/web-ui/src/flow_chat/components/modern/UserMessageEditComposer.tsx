@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Loader2, X } from 'lucide-react';
+import { IconButton } from '@bitfun/ui';
+import { Check, X } from 'lucide-react';
 import { Textarea } from '@/component-library';
 import { useImeOwnedKeyGuard } from '@/flow_chat/hooks/useImeOwnedKeyGuard';
 import type { ContextItem } from '@/shared/types/context';
@@ -144,32 +145,34 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
         />
       </div>
       <div className="user-message-edit-composer__actions" data-bf-component="user-message-edit-composer" data-bf-part="actions">
-        <button
+        <IconButton
           data-bf-component="user-message-edit-composer"
           data-bf-part="action"
           data-bf-action="cancel"
-          type="button"
           onClick={onCancel}
           disabled={isSubmitting}
           className="user-message-edit-composer__icon-button"
           title={cancelLabel}
           aria-label={cancelLabel}
+          size="sm"
         >
           <X size={14} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
           data-bf-component="user-message-edit-composer"
           data-bf-part="action"
           data-bf-action="submit"
-          type="button"
           onClick={handleSubmit}
           disabled={!canSubmit}
           className="user-message-edit-composer__icon-button user-message-edit-composer__icon-button--confirm"
           title={submitLabel}
           aria-label={submitLabel}
+          loading={isSubmitting}
+          size="sm"
+          tone="primary"
         >
-          {isSubmitting ? <Loader2 size={14} className="user-message-edit-composer__spinner" data-bf-component="user-message-edit-composer" data-bf-part="spinner" /> : <Check size={14} />}
-        </button>
+          <Check size={14} />
+        </IconButton>
       </div>
     </div>
   );
@@ -262,32 +265,34 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
         className="user-message-edit-composer__textarea"
       />
       <div className="user-message-edit-composer__actions" data-bf-component="user-message-edit-composer" data-bf-part="actions">
-        <button
+        <IconButton
           data-bf-component="user-message-edit-composer"
           data-bf-part="action"
           data-bf-action="cancel"
-          type="button"
           onClick={onCancel}
           disabled={isSubmitting}
           className="user-message-edit-composer__icon-button"
           title={cancelLabel}
           aria-label={cancelLabel}
+          size="sm"
         >
           <X size={14} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
           data-bf-component="user-message-edit-composer"
           data-bf-part="action"
           data-bf-action="submit"
-          type="button"
           onClick={handleSubmit}
           disabled={!canSubmit}
           className="user-message-edit-composer__icon-button user-message-edit-composer__icon-button--confirm"
           title={submitLabel}
           aria-label={submitLabel}
+          loading={isSubmitting}
+          size="sm"
+          tone="primary"
         >
-          {isSubmitting ? <Loader2 size={14} className="user-message-edit-composer__spinner" data-bf-component="user-message-edit-composer" data-bf-part="spinner" /> : <Check size={14} />}
-        </button>
+          <Check size={14} />
+        </IconButton>
       </div>
     </div>
   );

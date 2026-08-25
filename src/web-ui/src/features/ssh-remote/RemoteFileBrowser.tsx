@@ -3,7 +3,7 @@
  * Used to browse and select remote directory as workspace
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -461,15 +461,18 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
 
         {/* Toolbar */}
         <div className="remote-file-browser__toolbar" data-bf-component="ssh-remote" data-bf-part="toolbar">
-          <button
+          <IconButton
+            aria-label={t('actions.refresh')}
             className="remote-file-browser__toolbar-btn"
             onClick={() => loadDirectory(currentPath)}
             title={t('actions.refresh')}
             disabled={transferBusy}
+            size="sm"
           >
             <RefreshCw size={16} />
-          </button>
-          <button
+          </IconButton>
+          <IconButton
+            aria-label="Go up"
             className="remote-file-browser__toolbar-btn"
             onClick={() => {
               const p = getRemoteParentPath(currentPath);
@@ -477,18 +480,20 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             }}
             title="Go up"
             disabled={getRemoteParentPath(currentPath) === null || transferBusy}
+            size="sm"
           >
             <ArrowLeft size={16} />
-          </button>
-          <button
-            type="button"
+          </IconButton>
+          <IconButton
+            aria-label={t('ssh.remote.upload')}
             className="remote-file-browser__toolbar-btn"
             onClick={() => void handleUploadToCurrentDir()}
             title={t('ssh.remote.upload')}
             disabled={transferBusy}
+            size="sm"
           >
             <Upload size={16} />
-          </button>
+          </IconButton>
         </div>
 
         {transferBusy && (
@@ -503,15 +508,16 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           {error && (
             <div className="remote-file-browser__error">
               <span>{error}</span>
-              <button
-                type="button"
+              <IconButton
+                aria-label={t('actions.retry') || 'Retry'}
                 onClick={() => loadDirectory(currentPath)}
                 title={t('actions.retry') || 'Retry'}
                 style={{ marginLeft: 'auto', marginRight: 8 }}
+                size="sm"
               >
                 <RefreshCw size={14} />
-              </button>
-              <button onClick={() => setError(null)}>×</button>
+              </IconButton>
+              <IconButton aria-label={t('actions.close')} onClick={() => setError(null)} size="sm">×</IconButton>
             </div>
           )}
 
