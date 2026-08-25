@@ -43,6 +43,10 @@ export interface PeerHostCapabilities {
   readonly idempotentDialogSubmit: boolean;
   readonly targetedSessionRollback: boolean;
   readonly tokenUsageStatistics: boolean;
+  /** Host implements `cancel_tool` (per-tool interrupt). Gates the Terminal Interrupt button. */
+  readonly cancelTool: boolean;
+  /** Host implements `get_all_tools_info` (read-only tool catalog). Gates the Agents/Assistant tool list. */
+  readonly toolCatalog: boolean;
 }
 
 /** Immutable view of one connection; safe to hold in component state. */
@@ -104,6 +108,8 @@ interface PeerModePingResult {
     idempotent_dialog_submit?: boolean;
     targeted_session_rollback?: boolean;
     token_usage_statistics?: boolean;
+    cancel_tool?: boolean;
+    tool_catalog?: boolean;
   };
 }
 
@@ -111,6 +117,8 @@ const NO_CAPABILITIES: PeerHostCapabilities = {
   idempotentDialogSubmit: false,
   targetedSessionRollback: false,
   tokenUsageStatistics: false,
+  cancelTool: false,
+  toolCatalog: false,
 };
 
 interface ConnectionEntry {
@@ -359,6 +367,8 @@ export class PeerConnectionManager {
       idempotentDialogSubmit: result?.capabilities?.idempotent_dialog_submit === true,
       targetedSessionRollback: result?.capabilities?.targeted_session_rollback === true,
       tokenUsageStatistics: result?.capabilities?.token_usage_statistics === true,
+      cancelTool: result?.capabilities?.cancel_tool === true,
+      toolCatalog: result?.capabilities?.tool_catalog === true,
     };
   }
 

@@ -31,6 +31,7 @@ pub(crate) use catalog::{
     resolve_product_resolved_visible_tools, ProductGetToolSpecRuntime, ProductToolCatalogProvider,
 };
 pub use catalog::{ResolvedToolManifest, ResolvedVisibleTools};
+pub use catalog::{build_all_tools_info, build_tool_info, ToolInfoDto};
 pub use get_tool_spec_tool::GetToolSpecTool;
 pub(crate) use loaded_spec_state::collect_product_loaded_deferred_tool_specs;
 

@@ -27,6 +27,7 @@ import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { useNurseryStore } from '../nurseryStore';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import './NurseryView.scss';
 
 const log = createLogger('AssistantDefaultsPage');
@@ -82,6 +83,19 @@ function formatSkillDisplayName(
 const AssistantDefaultsPage: React.FC = () => {
   const { t } = useTranslation('scenes/profile');
   const { openGallery } = useNurseryStore();
+  const peerDevice = usePeerDeviceModeOptional();
+  // Whether the current host advertises the `tool_catalog` capability. Local
+  // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
+  // While the capability is still being probed (null) we stay optimistic so the
+  // tool list doesn't disappear then reappear — a CLI Peer Host now implements
+  // get_all_tools_info, so the optimistic default is correct in the common case.
+  const canQueryToolCatalog = (() => {
+    if (!peerDevice || !peerDevice.peerMode.active) {
+      return true;
+    }
+    const capabilities = peerDevice.currentPeerCapabilities;
+    return capabilities === null ? true : capabilities.toolCatalog;
+  })();
 
   const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
@@ -184,9 +198,19 @@ const AssistantDefaultsPage: React.FC = () => {
     (async () => {
       setLoading(true);
       try {
+        // Skip the tool catalog invoke when the peer host cannot answer it,
+        // instead of swallowing the unsupported error as an empty list. The
+        // empty list then means "this host doesn't expose a catalog", not
+        // "the runtime has no tools".
+        const toolsPromise = canQueryToolCatalog
+          ? api.invoke<ToolInfo[]>('get_all_tools_info').catch((error) => {
+              log.error('Failed to load tool catalog', { error });
+              return [] as ToolInfo[];
+            })
+          : Promise.resolve([] as ToolInfo[]);
         const [modeConf, tools, skillList, servers] = await Promise.all([
           configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
-          api.invoke<ToolInfo[]>('get_all_tools_info').catch(() => [] as ToolInfo[]),
+          toolsPromise,
           configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
           MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
         ]);
@@ -200,7 +224,7 @@ const AssistantDefaultsPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [canQueryToolCatalog]);
 
   useEffect(() => {
     if (!detail) return;

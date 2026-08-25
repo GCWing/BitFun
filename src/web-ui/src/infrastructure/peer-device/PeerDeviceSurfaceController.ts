@@ -180,6 +180,7 @@ export class PeerDeviceSurfaceController {
         deviceName: connection.deviceName,
         health: connection.health,
         lostReason: connection.lostReason,
+        capabilities: connection.capabilities,
       })),
     };
   }
