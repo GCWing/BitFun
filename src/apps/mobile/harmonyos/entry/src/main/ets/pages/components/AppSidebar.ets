@@ -12,6 +12,7 @@ import {
 import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
 import { SidebarGlyph } from './SidebarGlyphs';
+import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionActionPolicy';
 
 /**
  * How many conversations show before the rest go behind an overflow row.
@@ -91,7 +92,7 @@ export struct AppSidebar {
           }
           .width('100%')
           .alignItems(HorizontalAlign.Start)
-          .padding({ bottom: this.isAccountAuthenticated() ? 84 : 120 })
+          .padding({ bottom: this.usesCompactFooter() ? 84 : 120 })
         }
         .width('100%')
         .height('100%')
@@ -104,7 +105,7 @@ export struct AppSidebar {
         // visually sliced by the chat button sitting on top of it.
         Column()
           .width('100%')
-          .height(this.isAccountAuthenticated() ? 92 : 120)
+          .height(this.usesCompactFooter() ? 92 : 120)
           .hitTestBehavior(HitTestMode.None)
           .linearGradient({
             angle: 180,
@@ -349,23 +350,25 @@ export struct AppSidebar {
   @Builder
   private SignedOutFooter() {
     Column({ space: 8 }) {
-      Button() {
-        Text(RemoteI18n.t('sidebar.scanToConnect'))
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Clip })
+      if (SidebarConnectionActionPolicy.shouldShowScan(this.connectionState)) {
+        Button() {
+          Text(RemoteI18n.t('sidebar.scanToConnect'))
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(INK)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Clip })
+        }
+          .width('100%')
+          .height(48)
+          .padding(0)
+          .backgroundColor(CARD)
+          .border({ width: 1, color: LINE })
+          .borderRadius(16)
+          .onClick(() => {
+            this.onScanDesktop();
+          })
       }
-        .width('100%')
-        .height(48)
-        .padding(0)
-        .backgroundColor(CARD)
-        .border({ width: 1, color: LINE })
-        .borderRadius(16)
-        .onClick(() => {
-          this.onScanDesktop();
-        })
 
       Button() {
         Text(RemoteI18n.t('sidebar.signInBitFunAccount'))
@@ -717,5 +720,10 @@ export struct AppSidebar {
 
   private isAccountAuthenticated(): boolean {
     return this.accountUserId.trim().length > 0;
+  }
+
+  private usesCompactFooter(): boolean {
+    return this.isAccountAuthenticated() ||
+      !SidebarConnectionActionPolicy.shouldShowScan(this.connectionState);
   }
 }

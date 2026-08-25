@@ -74,7 +74,7 @@ export interface SidebarPresentationActions {
   readonly enterCode: () => void;
   /** Opens the QR scanner directly from sidebar device actions. */
   readonly scanDesktop: () => void;
-  /** Offers sign-in or QR pairing from the device-section add button. */
+  /** Opens the QR scanner from the device-section add button. */
   readonly addDesktop: () => void;
   readonly settings: () => void;
   readonly openAccount: () => void;
