@@ -53,6 +53,8 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
 /// Product composition roots call this before configuration canonicalization;
 /// later initialization verifies the same profile and rejects replacement.
 pub fn select_agentic_system_profile(delivery_profile: DeliveryProfile) -> Result<()> {
+    crate::agentic::agents::initialize_global_agent_registry_for_profile(delivery_profile)
+        .map_err(anyhow::Error::msg)?;
     tools::registry::initialize_global_tool_registry_for_profile(delivery_profile)
         .map(|_| ())
         .map_err(anyhow::Error::msg)

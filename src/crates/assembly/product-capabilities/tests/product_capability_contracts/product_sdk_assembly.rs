@@ -80,10 +80,6 @@ async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun
         "SDK and Headless CLI currently select the same assembly-plan ceiling without sharing product identity"
     );
     assert!(parts.missing_service_requirements().is_empty());
-    assert_eq!(
-        parts.harness_registry().provider_ids(),
-        vec!["core.deep_review", "core.deep_research", "core.miniapp"]
-    );
     for capability in [
         RuntimeServiceCapability::Terminal,
         RuntimeServiceCapability::Git,
@@ -92,12 +88,11 @@ async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun
         assert!(parts.services().has_capability(capability));
     }
 
-    let (services, harness_registry, plugin_runtime) = parts.into_runtime_parts();
+    let (services, plugin_runtime) = parts.into_runtime_parts();
     let provider = Arc::new(ProductSdkAgentProvider::default());
     let runtime = AgentRuntimeBuilder::new()
         .with_submission_port(provider)
         .with_services(services)
-        .with_harness_registry(Arc::new(harness_registry))
         .with_plugin_runtime(plugin_runtime)
         .build()
         .expect("SDK profile parts should build a runtime from the shared owner contracts");
@@ -113,10 +108,6 @@ async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun
     assert_eq!(handle.session_id, "product-sdk-session");
     assert_eq!(handle.turn_id, "product-sdk-turn");
     assert!(handle.accepted);
-    assert_eq!(
-        runtime.harness_provider_ids(),
-        vec!["core.deep_review", "core.deep_research", "core.miniapp"]
-    );
 }
 
 #[tokio::test]
@@ -131,13 +122,12 @@ async fn product_runtime_parts_can_build_agent_runtime_sdk_without_core() {
     assert_eq!(parts.plan().profile(), DeliveryProfile::Cli);
     assert!(parts.missing_service_requirements().is_empty());
 
-    let (services, harness_registry, plugin_runtime) = parts.into_runtime_parts();
+    let (services, plugin_runtime) = parts.into_runtime_parts();
     let provider = Arc::new(ProductSdkAgentProvider::default());
     let events = AgentEventStream::new();
     let runtime = AgentRuntimeBuilder::new()
         .with_submission_port(provider.clone())
         .with_services(services)
-        .with_harness_registry(Arc::new(harness_registry))
         .with_plugin_runtime(plugin_runtime)
         .with_event_stream(events.clone())
         .build()
@@ -149,10 +139,6 @@ async fn product_runtime_parts_can_build_agent_runtime_sdk_without_core() {
     assert!(runtime_services.has_capability(RuntimeServiceCapability::Terminal));
     assert!(runtime_services.has_capability(RuntimeServiceCapability::Git));
     assert!(runtime_services.has_capability(RuntimeServiceCapability::Network));
-    assert_eq!(
-        runtime.harness_provider_ids(),
-        vec!["core.deep_review", "core.deep_research", "core.miniapp"]
-    );
 
     let handle = runtime
         .run(

@@ -796,7 +796,6 @@ dependencies = [
  "bitfun-agent-tools",
  "bitfun-core-types",
  "bitfun-events",
- "bitfun-harness",
  "bitfun-runtime-ports",
  "bitfun-runtime-services",
  "dashmap",
@@ -865,6 +864,13 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "bitfun-agent-workflows"
+version = "0.2.19"
+dependencies = [
+ "regex",
 ]
 
 [[package]]
@@ -1056,6 +1062,7 @@ dependencies = [
  "bitfun-agent-runtime",
  "bitfun-agent-stream",
  "bitfun-agent-tools",
+ "bitfun-agent-workflows",
  "bitfun-ai-adapters",
  "bitfun-claude-code-adapter",
  "bitfun-codex-adapter",
@@ -1063,7 +1070,6 @@ dependencies = [
  "bitfun-dsh-adapter",
  "bitfun-events",
  "bitfun-external-sources",
- "bitfun-harness",
  "bitfun-opencode-adapter",
  "bitfun-opencode-plugin-host",
  "bitfun-plugin-runtime-client",
@@ -1250,15 +1256,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitfun-harness"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "thiserror 2.0.19",
- "tokio",
-]
-
-[[package]]
 name = "bitfun-miniapp-market-server"
 version = "0.2.19"
 dependencies = [
@@ -1370,7 +1367,6 @@ version = "0.2.19"
 dependencies = [
  "async-trait",
  "bitfun-agent-runtime",
- "bitfun-harness",
  "bitfun-runtime-ports",
  "bitfun-runtime-services",
  "bitfun-tool-packs",
@@ -1587,6 +1583,7 @@ dependencies = [
  "base64 0.22.1",
  "bitfun-agent-runtime",
  "bitfun-agent-tools",
+ "bitfun-agent-workflows",
  "bitfun-core-types",
  "bitfun-events",
  "bitfun-product-domains",

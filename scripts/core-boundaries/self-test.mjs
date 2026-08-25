@@ -638,7 +638,6 @@ export function runManifestParserSelfTest({
         'bitfun-core/agent-runtime',
         'bitfun-core/document-read',
         'bitfun-core/subscription-auth',
-        'bitfun-core/deep-research',
         'bitfun-core/lsp',
         'bitfun-core/external-sources',
         'bitfun-core/tools-basic',
@@ -647,8 +646,6 @@ export function runManifestParserSelfTest({
         'bitfun-core/tools-browser-web',
         'bitfun-core/tools-computer-use',
         'bitfun-core/tools-image-analysis',
-        'bitfun-core/tools-miniapp',
-        'bitfun-core/tools-canvas',
         'bitfun-core/tools-agent-control',
       ],
     ],
@@ -2681,7 +2678,6 @@ export function runManifestParserSelfTest({
         'AgentRuntimeSdkCompatibility',
         'impl AgentRuntimeSdkCompatibility',
         'bitfun_agent_tools',
-        'bitfun_harness',
         'bitfun_runtime_services',
         'PortResult',
         'RuntimeServicePort',
@@ -2743,7 +2739,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'sdk_facade_exposes_versioned_preview_compatibility_contract',
         'sdk_facade_runs_with_fake_provider_and_local_event_stream',
-        'sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core',
+        'sdk_facade_accepts_fake_services_tools_and_hooks_without_core',
       ],
     },
     {
@@ -3396,8 +3392,6 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/product-capabilities/src/lib.rs',
       contracts: [
-        'HarnessProviderDescriptor',
-        'build_descriptor_harness_registry',
         'ProductCapabilityAssembly',
         'ProductFeatureGroup',
         'ProductRuntimeAssembly',
@@ -3411,7 +3405,6 @@ export function runManifestParserSelfTest({
       contracts: [
         'product_assembly_plan_exposes_build_feature_groups_explicitly',
         'product_runtime_assembly_reports_runtime_service_capability_gaps',
-        'product_harness_provider_plans_legacy_facade_without_execution',
       ],
     },
     {
@@ -3970,7 +3963,7 @@ export function runManifestParserSelfTest({
         'create_product_tool_registry_from_plan',
         'product_assembly_plan_for_profile',
         'product_tool_runtime_owner_preserves_registry_contract',
-        'product_tool_runtime_registry_preserves_provider_plan_order',
+        'product_tool_runtime_provider_plan_covers_registry_without_owning_order',
         'product_tool_runtime_keeps_no_direct_core_profiles_empty',
         'DeliveryProfile::Sdk',
       ],
@@ -4011,6 +4004,8 @@ export function runManifestParserSelfTest({
         'StaticToolProviderFactory',
         'create_registry_from_static_provider_entries',
         'create_product_tool_registry_from_plan',
+        'PRODUCT_TOOL_REGISTRATION_ORDER',
+        'MissingRegistrationOrder',
         'unavailable_feature_groups',
         'materialize_tool',
         'GetToolSpecTool',
@@ -4370,11 +4365,11 @@ export function runManifestParserSelfTest({
       contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'renumber_research_report', 'report.md', 'citations.md', 'display_map', 'REJECTED'],
     },
     {
-      path: 'src/crates/execution/agent-runtime/src/deep_research.rs',
+      path: 'src/crates/execution/agent-workflows/src/deep_research.rs',
       contracts: ['renumber_research_report', 'ResearchCitationRenumberOutput', 'ResearchCitationDisplayMapEntry', 'rejected_index_rows_dropped', 'should_post_process_research_report'],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
+      path: 'src/crates/execution/agent-workflows/tests/deep_research_contracts.rs',
       contracts: ['deep_research_citation_renumber_owner_preserves_report_and_display_map_contracts', 'deep_research_citation_renumber_owner_is_idempotent_without_citations'],
     },
     {

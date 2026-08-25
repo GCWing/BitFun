@@ -6,10 +6,6 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use bitfun_harness::{
-    build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
-    HarnessRegistry, HarnessRegistryBuildError, HarnessWorkflow,
-};
 use bitfun_runtime_ports::{
     PluginRuntimeAvailability, PluginRuntimeBinding, PluginRuntimeUnavailableReason,
     RuntimeServiceCapability,
@@ -122,7 +118,7 @@ pub struct ProductCapabilityPack {
     id: ProductCapabilityId,
     required_services: &'static [RuntimeServiceCapability],
     tool_provider_group_ids: &'static [&'static str],
-    harness_provider_descriptors: &'static [HarnessProviderDescriptor],
+    agent_ids: &'static [&'static str],
 }
 
 impl ProductCapabilityPack {
@@ -130,13 +126,13 @@ impl ProductCapabilityPack {
         id: ProductCapabilityId,
         required_services: &'static [RuntimeServiceCapability],
         tool_provider_group_ids: &'static [&'static str],
-        harness_provider_descriptors: &'static [HarnessProviderDescriptor],
+        agent_ids: &'static [&'static str],
     ) -> Self {
         Self {
             id,
             required_services,
             tool_provider_group_ids,
-            harness_provider_descriptors,
+            agent_ids,
         }
     }
 
@@ -152,8 +148,8 @@ impl ProductCapabilityPack {
         self.tool_provider_group_ids
     }
 
-    pub const fn harness_provider_descriptors(self) -> &'static [HarnessProviderDescriptor] {
-        self.harness_provider_descriptors
+    pub const fn agent_ids(self) -> &'static [&'static str] {
+        self.agent_ids
     }
 }
 
@@ -371,10 +367,10 @@ impl ProductServiceCapabilityRequirement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductCapabilityAssembly {
     capability_ids: Vec<ProductCapabilityId>,
+    agent_ids: Vec<&'static str>,
     feature_groups: Vec<ProductFeatureGroup>,
     service_requirements: Vec<ProductServiceCapabilityRequirement>,
     tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
-    harness_provider_descriptors: Vec<HarnessProviderDescriptor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -438,6 +434,10 @@ impl ProductAssemblyPlan {
         &self.capability_assembly
     }
 
+    pub fn agent_ids(&self) -> &[&'static str] {
+        self.capability_assembly.agent_ids()
+    }
+
     pub fn extension_capabilities(&self) -> &ProductExtensionCapabilitySet {
         &self.extension_capabilities
     }
@@ -478,10 +478,6 @@ impl ProductAssemblyPlan {
                 ProductServiceCapabilityAvailability::new(requirement, status)
             })
             .collect()
-    }
-
-    pub fn build_harness_registry(&self) -> Result<HarnessRegistry, HarnessRegistryBuildError> {
-        self.capability_assembly.build_harness_registry()
     }
 
     pub fn tool_plan(&self) -> ProductToolPlan {
@@ -557,7 +553,6 @@ impl ProductAssemblyInput {
 pub struct ProductRuntimeParts {
     plan: ProductAssemblyPlan,
     services: RuntimeServices,
-    harness_registry: HarnessRegistry,
     plugin_runtime: PluginRuntimeBinding,
     service_availability: Vec<ProductServiceCapabilityAvailability>,
     missing_service_requirements: Vec<ProductServiceCapabilityRequirement>,
@@ -570,10 +565,6 @@ impl ProductRuntimeParts {
 
     pub fn services(&self) -> &RuntimeServices {
         &self.services
-    }
-
-    pub fn harness_registry(&self) -> &HarnessRegistry {
-        &self.harness_registry
     }
 
     pub fn plugin_runtime(&self) -> &PluginRuntimeBinding {
@@ -589,8 +580,8 @@ impl ProductRuntimeParts {
     }
 
     /// Consume the assembled product output into runtime-builder inputs.
-    pub fn into_runtime_parts(self) -> (RuntimeServices, HarnessRegistry, PluginRuntimeBinding) {
-        (self.services, self.harness_registry, self.plugin_runtime)
+    pub fn into_runtime_parts(self) -> (RuntimeServices, PluginRuntimeBinding) {
+        (self.services, self.plugin_runtime)
     }
 }
 
@@ -599,10 +590,6 @@ pub enum ProductAssemblyError {
     MissingRuntimeServices {
         profile: DeliveryProfile,
         missing: Vec<ProductServiceCapabilityRequirement>,
-    },
-    HarnessRegistry {
-        profile: DeliveryProfile,
-        source: HarnessRegistryBuildError,
     },
     UnsupportedPluginRuntime {
         profile: DeliveryProfile,
@@ -618,12 +605,6 @@ impl fmt::Display for ProductAssemblyError {
                     f,
                     "delivery profile {profile} is missing {} runtime service requirements",
                     missing.len()
-                )
-            }
-            Self::HarnessRegistry { profile, source } => {
-                write!(
-                    f,
-                    "delivery profile {profile} failed to build harness registry: {source}"
                 )
             }
             Self::UnsupportedPluginRuntime {
@@ -663,13 +644,6 @@ impl ProductAssembler {
             });
         }
 
-        let harness_registry = assembly.plan().build_harness_registry().map_err(|source| {
-            ProductAssemblyError::HarnessRegistry {
-                profile: input.profile,
-                source,
-            }
-        })?;
-
         let plugin_runtime = input
             .plugin_runtime
             .unwrap_or_else(|| default_plugin_runtime_binding_for_profile(input.profile));
@@ -697,7 +671,6 @@ impl ProductAssembler {
         Ok(ProductRuntimeParts {
             plan,
             services: input.services,
-            harness_registry,
             plugin_runtime,
             service_availability,
             missing_service_requirements,
@@ -731,22 +704,26 @@ fn default_plugin_runtime_binding_for_profile(profile: DeliveryProfile) -> Plugi
 impl ProductCapabilityAssembly {
     fn new(
         capability_ids: Vec<ProductCapabilityId>,
+        agent_ids: Vec<&'static str>,
         feature_groups: Vec<ProductFeatureGroup>,
         service_requirements: Vec<ProductServiceCapabilityRequirement>,
         tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
-        harness_provider_descriptors: Vec<HarnessProviderDescriptor>,
     ) -> Self {
         Self {
             capability_ids,
+            agent_ids,
             feature_groups,
             service_requirements,
             tool_provider_group_plan,
-            harness_provider_descriptors,
         }
     }
 
     pub fn capability_ids(&self) -> &[ProductCapabilityId] {
         &self.capability_ids
+    }
+
+    pub fn agent_ids(&self) -> &[&'static str] {
+        &self.agent_ids
     }
 
     pub fn feature_groups(&self) -> &[ProductFeatureGroup] {
@@ -799,14 +776,6 @@ impl ProductCapabilityAssembly {
             self.feature_groups.clone(),
             self.tool_provider_group_plan.clone(),
         )
-    }
-
-    pub fn harness_provider_descriptors(&self) -> &[HarnessProviderDescriptor] {
-        &self.harness_provider_descriptors
-    }
-
-    pub fn build_harness_registry(&self) -> Result<HarnessRegistry, HarnessRegistryBuildError> {
-        build_descriptor_harness_registry(self.harness_provider_descriptors.iter().copied())
     }
 }
 
@@ -868,6 +837,19 @@ impl ProductCapabilityRegistry {
         provider_ids
     }
 
+    pub fn agent_ids(self) -> Vec<&'static str> {
+        let mut seen = HashSet::new();
+        let mut agent_ids = Vec::new();
+        for pack in self.packs {
+            for agent_id in pack.agent_ids() {
+                if seen.insert(*agent_id) {
+                    agent_ids.push(*agent_id);
+                }
+            }
+        }
+        agent_ids
+    }
+
     pub fn try_tool_provider_group_plan(
         self,
     ) -> Result<Vec<ToolProviderGroupPlan>, ProductCapabilityBuildError> {
@@ -894,23 +876,6 @@ impl ProductCapabilityRegistry {
             .expect("product capability packs must reference known tool provider groups")
     }
 
-    pub fn harness_provider_descriptors(self) -> Vec<HarnessProviderDescriptor> {
-        let mut seen = HashSet::new();
-        let mut descriptors = Vec::new();
-        for pack in self.packs {
-            for descriptor in pack.harness_provider_descriptors() {
-                if seen.insert(descriptor.provider_id()) {
-                    descriptors.push(*descriptor);
-                }
-            }
-        }
-        descriptors
-    }
-
-    pub fn build_harness_registry(self) -> Result<HarnessRegistry, HarnessRegistryBuildError> {
-        build_descriptor_harness_registry(self.harness_provider_descriptors())
-    }
-
     pub fn try_build_assembly(
         self,
     ) -> Result<ProductCapabilityAssembly, ProductCapabilityBuildError> {
@@ -919,10 +884,10 @@ impl ProductCapabilityRegistry {
             feature_groups_from_tool_provider_group_plan(&tool_provider_group_plan);
         Ok(ProductCapabilityAssembly::new(
             self.capability_ids(),
+            self.agent_ids(),
             feature_groups,
             self.service_requirements(),
             tool_provider_group_plan,
-            self.harness_provider_descriptors(),
         ))
     }
 
@@ -1003,6 +968,8 @@ const CODE_AGENT_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Events,
     RuntimeServiceCapability::Clock,
     RuntimeServiceCapability::Terminal,
+    RuntimeServiceCapability::Git,
+    RuntimeServiceCapability::Network,
 ];
 const DEEP_REVIEW_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Workspace,
@@ -1026,96 +993,78 @@ const CANVAS_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Events,
 ];
 
-const CODE_AGENT_TOOL_GROUPS: &[&str] = &["core.basic", "core.agent", "core.session"];
-const INTEGRATION_TOOL_GROUPS: &[&str] = &["core.integration"];
+const CODE_AGENT_TOOL_GROUPS: &[&str] = &[
+    "core.basic",
+    "core.agent",
+    "core.session",
+    "core.git",
+    "core.web",
+    "core.mcp",
+    "core.computer-use",
+];
+const DEEP_REVIEW_TOOL_GROUPS: &[&str] = &["core.review"];
+const DEEP_RESEARCH_TOOL_GROUPS: &[&str] = &["core.web", "core.mcp"];
+const MINIAPP_TOOL_GROUPS: &[&str] = &["core.miniapp"];
 const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
 
-const DEEP_REVIEW_HARNESS_CAPABILITIES: &[HarnessCapability] = &[
-    HarnessCapability::Plan,
-    HarnessCapability::ReviewGate,
-    HarnessCapability::PostProcessor,
+const CODE_AGENT_IDS: &[&str] = &[
+    "agentic",
+    "Cowork",
+    "debug",
+    "Multitask",
+    "Plan",
+    "Claw",
+    "Team",
+    "ComputerUse",
+    "Explore",
+    "GeneralPurpose",
+    "FileFinder",
+    "GenerateDoc",
+    "MemoryPhase2",
 ];
-const DEEP_RESEARCH_HARNESS_CAPABILITIES: &[HarnessCapability] =
-    &[HarnessCapability::Plan, HarnessCapability::PostProcessor];
-const MINIAPP_HARNESS_CAPABILITIES: &[HarnessCapability] =
-    &[HarnessCapability::Plan, HarnessCapability::Artifact];
-
-pub const CORE_DEEP_REVIEW_HARNESS_PROVIDER_ID: &str = "core.deep_review";
-pub const CORE_DEEP_RESEARCH_HARNESS_PROVIDER_ID: &str = "core.deep_research";
-pub const CORE_MINIAPP_HARNESS_PROVIDER_ID: &str = "core.miniapp";
-
-const DEEP_REVIEW_HARNESS_PROVIDER: HarnessProviderDescriptor =
-    HarnessProviderDescriptor::legacy_facade(
-        CORE_DEEP_REVIEW_HARNESS_PROVIDER_ID,
-        HarnessWorkflow::DeepReview,
-        DEEP_REVIEW_HARNESS_CAPABILITIES,
-        "bitfun-core::agentic::deep_review",
-    );
-const DEEP_RESEARCH_HARNESS_PROVIDER: HarnessProviderDescriptor =
-    HarnessProviderDescriptor::legacy_facade(
-        CORE_DEEP_RESEARCH_HARNESS_PROVIDER_ID,
-        HarnessWorkflow::DeepResearch,
-        DEEP_RESEARCH_HARNESS_CAPABILITIES,
-        "bitfun-core::agentic::agents::definitions::modes::deep_research",
-    );
-const MINIAPP_HARNESS_PROVIDER: HarnessProviderDescriptor =
-    HarnessProviderDescriptor::legacy_facade(
-        CORE_MINIAPP_HARNESS_PROVIDER_ID,
-        HarnessWorkflow::MiniApp,
-        MINIAPP_HARNESS_CAPABILITIES,
-        "bitfun-core::miniapp",
-    );
-
-const NO_HARNESS_PROVIDERS: &[HarnessProviderDescriptor] = &[];
-const DEEP_REVIEW_HARNESS_PROVIDERS: &[HarnessProviderDescriptor] = &[DEEP_REVIEW_HARNESS_PROVIDER];
-const DEEP_RESEARCH_HARNESS_PROVIDERS: &[HarnessProviderDescriptor] =
-    &[DEEP_RESEARCH_HARNESS_PROVIDER];
-const MINIAPP_HARNESS_PROVIDERS: &[HarnessProviderDescriptor] = &[MINIAPP_HARNESS_PROVIDER];
+const DEEP_REVIEW_AGENT_IDS: &[&str] = &[
+    "ReviewWorker",
+    "ReviewJudge",
+    "ReviewFixer",
+    "CodeReview",
+    "DeepReview",
+];
+const DEEP_RESEARCH_AGENT_IDS: &[&str] = &["DeepResearch", "ResearchSpecialist"];
+const NO_PRODUCT_AGENTS: &[&str] = &[];
 
 const CODE_AGENT_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::CodeAgent,
     CODE_AGENT_SERVICES,
     CODE_AGENT_TOOL_GROUPS,
-    NO_HARNESS_PROVIDERS,
+    CODE_AGENT_IDS,
 );
 const DEEP_REVIEW_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::DeepReview,
     DEEP_REVIEW_SERVICES,
-    INTEGRATION_TOOL_GROUPS,
-    DEEP_REVIEW_HARNESS_PROVIDERS,
+    DEEP_REVIEW_TOOL_GROUPS,
+    DEEP_REVIEW_AGENT_IDS,
 );
 const DEEP_RESEARCH_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::DeepResearch,
     DEEP_RESEARCH_SERVICES,
-    INTEGRATION_TOOL_GROUPS,
-    DEEP_RESEARCH_HARNESS_PROVIDERS,
+    DEEP_RESEARCH_TOOL_GROUPS,
+    DEEP_RESEARCH_AGENT_IDS,
 );
 const MINIAPP_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::MiniApp,
     MINIAPP_SERVICES,
-    INTEGRATION_TOOL_GROUPS,
-    MINIAPP_HARNESS_PROVIDERS,
+    MINIAPP_TOOL_GROUPS,
+    NO_PRODUCT_AGENTS,
 );
 const CANVAS_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::Canvas,
     CANVAS_SERVICES,
     CANVAS_TOOL_GROUPS,
-    NO_HARNESS_PROVIDERS,
+    NO_PRODUCT_AGENTS,
 );
-const VOICE_INPUT_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
-    ProductCapabilityId::VoiceInput,
-    &[],
-    &[],
-    NO_HARNESS_PROVIDERS,
-);
+const VOICE_INPUT_CAPABILITY_PACK: ProductCapabilityPack =
+    ProductCapabilityPack::new(ProductCapabilityId::VoiceInput, &[], &[], NO_PRODUCT_AGENTS);
 
-const CORE_COMPATIBILITY_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
-    CODE_AGENT_CAPABILITY_PACK,
-    DEEP_REVIEW_CAPABILITY_PACK,
-    DEEP_RESEARCH_CAPABILITY_PACK,
-    MINIAPP_CAPABILITY_PACK,
-    CANVAS_CAPABILITY_PACK,
-];
 const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
     CODE_AGENT_CAPABILITY_PACK,
     DEEP_REVIEW_CAPABILITY_PACK,
@@ -1135,12 +1084,15 @@ pub fn default_product_capability_assembly() -> ProductCapabilityAssembly {
 }
 
 pub fn agent_runtime_baseline_tool_plan() -> ProductToolPlan {
+    let tool_provider_group_plan =
+        try_product_tool_provider_group_plan_for_ids(&["core.basic", "core.agent", "core.session"])
+            .expect("Agent Runtime baseline tool groups must exist");
     ProductToolPlan::new(
         vec![
             ProductFeatureGroup::Basic,
             ProductFeatureGroup::AgentControl,
         ],
-        bitfun_tool_packs::product_tool_provider_group_plan().to_vec(),
+        tool_provider_group_plan,
     )
 }
 
@@ -1152,23 +1104,13 @@ pub fn default_product_assembly_plan() -> ProductAssemblyPlan {
     product_assembly_plan_for_profile(DeliveryProfile::ProductFull)
 }
 
-pub fn product_harness_registry_for_profile(
-    profile: DeliveryProfile,
-) -> Result<HarnessRegistry, HarnessRegistryBuildError> {
-    product_assembly_plan_for_profile(profile).build_harness_registry()
-}
-
-pub fn default_product_harness_registry() -> Result<HarnessRegistry, HarnessRegistryBuildError> {
-    product_harness_registry_for_profile(DeliveryProfile::ProductFull)
-}
-
 fn product_capability_registry_for_profile(profile: DeliveryProfile) -> ProductCapabilityRegistry {
     match profile {
         DeliveryProfile::ProductFull | DeliveryProfile::Desktop => {
             default_product_capability_registry()
         }
         DeliveryProfile::Cli | DeliveryProfile::Acp | DeliveryProfile::Sdk => {
-            ProductCapabilityRegistry::new(CORE_COMPATIBILITY_CAPABILITY_PACKS)
+            ProductCapabilityRegistry::new(&[CODE_AGENT_CAPABILITY_PACK])
         }
         DeliveryProfile::Server
         | DeliveryProfile::Remote

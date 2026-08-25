@@ -53,7 +53,7 @@ impl SdkHostRuntime {
         .context("Failed to initialize agentic system")?;
         bind_core_execution_ports(&agentic_system);
         let scheduler = ensure_product_dialog_scheduler(&agentic_system);
-        let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
+        let (services, _disabled_plugin_runtime) = parts.into_runtime_parts();
         let agent_event_queue_owner =
             CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
         let agent_runtime = CoreProductAgentRuntime::build_sdk_host(
@@ -62,7 +62,6 @@ impl SdkHostRuntime {
             agentic_system.token_usage_service,
             agent_event_queue_owner.runtime_source(),
             services,
-            harness_registry,
         )
         .map_err(anyhow::Error::msg)
         .context("Failed to build Agent SDK runtime")?;

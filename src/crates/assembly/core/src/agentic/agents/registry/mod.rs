@@ -228,15 +228,65 @@ impl bitfun_agent_runtime::sdk::RuntimeAgentRegistry for AgentRegistry {
     }
 }
 
+struct GlobalAgentRegistry {
+    profile: Option<bitfun_product_capabilities::DeliveryProfile>,
+    registry: Arc<AgentRegistry>,
+}
+
 // Global agent registry singleton
-static GLOBAL_AGENT_REGISTRY: OnceLock<Arc<AgentRegistry>> = OnceLock::new();
+static GLOBAL_AGENT_REGISTRY: OnceLock<GlobalAgentRegistry> = OnceLock::new();
+
+pub(crate) fn initialize_global_agent_registry_for_profile(
+    profile: bitfun_product_capabilities::DeliveryProfile,
+) -> Result<Arc<AgentRegistry>, String> {
+    if let Some(global) = GLOBAL_AGENT_REGISTRY.get() {
+        return if global.profile == Some(profile) {
+            Ok(global.registry.clone())
+        } else {
+            Err(format!(
+                "Global agent registry already uses {}; cannot replace it with {}",
+                global
+                    .profile
+                    .map(|selected| selected.to_string())
+                    .unwrap_or_else(|| "the compatibility catalog".to_string()),
+                profile
+            ))
+        };
+    }
+
+    let _ = GLOBAL_AGENT_REGISTRY.set(GlobalAgentRegistry {
+        profile: Some(profile),
+        registry: Arc::new(AgentRegistry::for_profile(profile)),
+    });
+    let global = GLOBAL_AGENT_REGISTRY
+        .get()
+        .expect("global agent registry must be initialized");
+    if global.profile != Some(profile) {
+        return Err(format!(
+            "Global agent registry concurrently selected {}; requested {}",
+            global
+                .profile
+                .map(|selected| selected.to_string())
+                .unwrap_or_else(|| "the compatibility catalog".to_string()),
+            profile
+        ));
+    }
+    Ok(global.registry.clone())
+}
 
 /// Get the global agent registry
 pub fn get_agent_registry() -> Arc<AgentRegistry> {
     GLOBAL_AGENT_REGISTRY
         .get_or_init(|| {
             debug!("Initializing global agent registry");
-            Arc::new(AgentRegistry::new())
+            GlobalAgentRegistry {
+                #[cfg(feature = "product-full")]
+                profile: Some(bitfun_product_capabilities::DeliveryProfile::ProductFull),
+                #[cfg(not(feature = "product-full"))]
+                profile: None,
+                registry: Arc::new(AgentRegistry::new()),
+            }
         })
+        .registry
         .clone()
 }

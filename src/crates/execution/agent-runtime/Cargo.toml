@@ -17,7 +17,6 @@ required-features = ["agent-runtime"]
 
 [features]
 default = []
-deep-research = ["dep:regex"]
 native-hook-settings = ["dep:regex", "dep:serde_json"]
 native-hook-runtime = [
     "native-hook-settings",
@@ -38,7 +37,6 @@ agent-runtime = [
     "dep:bitfun-agent-tools",
     "dep:bitfun-core-types",
     "dep:bitfun-events",
-    "dep:bitfun-harness",
     "dep:bitfun-runtime-ports",
     "dep:bitfun-runtime-services",
     "dep:dashmap",
@@ -64,7 +62,6 @@ bitfun-agent-stream = { path = "../agent-stream", optional = true }
 bitfun-agent-tools = { path = "../tool-contracts", optional = true }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-events = { path = "../../contracts/events", optional = true }
-bitfun-harness = { path = "../harness", optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true, features = ["agent-api", "git-port", "permission", "plugin-runtime", "remote-workspace-ports", "runtime-event-port", "terminal-port", "workspace-ports"] }
 bitfun-runtime-services = { path = "../runtime-services", optional = true }
 dashmap = { workspace = true, optional = true }
@@ -104,11 +101,6 @@ required-features = ["agent-runtime"]
 name = "native_hook_execution_contracts"
 path = "tests/native_hook_execution_contracts.rs"
 required-features = ["native-hook-runtime"]
-
-[[test]]
-name = "deep_research_contracts"
-path = "tests/deep_research_contracts.rs"
-required-features = ["deep-research"]
 
 [[test]]
 name = "native_hook_settings_contracts"

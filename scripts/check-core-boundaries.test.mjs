@@ -121,7 +121,6 @@ test('Agent Runtime leaf capabilities have one managed feature and source contra
   assert.ok(rule, 'bitfun-agent-runtime must be a managed capability target');
   assert.deepEqual(Object.keys(rule.featureProfiles).sort(), [
     'agent-runtime',
-    'deep-research',
     'default',
     'native-hook-runtime',
     'native-hook-settings',
@@ -803,7 +802,15 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
         'tests/product_capability_contracts/plugin_product_shape.rs',
         'tests/product_capability_contracts/product_capabilities.rs',
         'tests/product_capability_contracts/product_sdk_assembly.rs',
+        'tests/product_capability_contracts/runtime_boundary.rs',
       ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(topology.agentWorkflowsIntegrationTestTargets, [
+    {
+      name: 'deep_research_contracts',
+      path: 'tests/deep_research_contracts.rs',
       forbidRequiredFeatures: true,
     },
   ]);
@@ -1528,7 +1535,6 @@ const SDK_HOST_REVIEWED_CORE_FEATURES = [
   'agent-runtime',
   'document-read',
   'subscription-auth',
-  'deep-research',
   'lsp',
   'external-sources',
   'tools-basic',
@@ -1537,8 +1543,6 @@ const SDK_HOST_REVIEWED_CORE_FEATURES = [
   'tools-browser-web',
   'tools-computer-use',
   'tools-image-analysis',
-  'tools-miniapp',
-  'tools-canvas',
   'tools-agent-control',
 ];
 
@@ -1748,13 +1752,13 @@ test('App Server reviewed Core capability closure remains independently valid', 
   );
 });
 
-test('ACP Core capability closure must retain its Canvas tool owner', () => {
+test('ACP Core capability closure rejects the Canvas product tool owner', () => {
   const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
   const acp = packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml', [
     pathDependency('src/crates/assembly/core', {
       name: 'bitfun-core',
       usesDefaultFeatures: false,
-      features: ACP_REVIEWED_CORE_FEATURES.filter((feature) => feature !== 'tools-canvas'),
+      features: [...ACP_REVIEWED_CORE_FEATURES, 'tools-canvas'],
     }),
   ]);
 
@@ -1764,7 +1768,7 @@ test('ACP Core capability closure must retain its Canvas tool owner', () => {
   );
 
   assert.equal(violations.length, 1);
-  assert.match(violations[0].message, /must include tools-canvas/);
+  assert.match(violations[0].message, /must not include unreviewed feature tools-canvas/);
 });
 
 test('ACP Core capability closure validation cannot be disabled by removing an owner', () => {
@@ -2436,7 +2440,7 @@ test('ACP active closure cannot be expanded by a reviewed owner definition', () 
     ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
     features: {
       ...Object.fromEntries(reviewedFeatures.map((feature) => [feature, []])),
-      'tools-canvas': ['plugin-runtime'],
+      'tools-git': ['plugin-runtime'],
       'plugin-runtime': [],
     },
   };

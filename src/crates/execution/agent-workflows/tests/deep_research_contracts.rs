@@ -1,7 +1,5 @@
 //! DeepResearch report and citation contracts.
-#![cfg(feature = "deep-research")]
-
-use bitfun_agent_runtime::deep_research::renumber_research_report;
+use bitfun_agent_workflows::deep_research::renumber_research_report;
 
 #[test]
 fn deep_research_citation_renumber_owner_preserves_report_and_display_map_contracts() {

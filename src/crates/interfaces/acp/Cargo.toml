@@ -28,7 +28,6 @@ server = [
     "bitfun-core/agent-runtime",
     "bitfun-core/document-read",
     "bitfun-core/subscription-auth",
-    "bitfun-core/deep-research",
     "bitfun-core/lsp",
     "bitfun-core/external-sources",
     "bitfun-core/tools-basic",
@@ -37,8 +36,6 @@ server = [
     "bitfun-core/tools-browser-web",
     "bitfun-core/tools-computer-use",
     "bitfun-core/tools-image-analysis",
-    "bitfun-core/tools-miniapp",
-    "bitfun-core/tools-canvas",
     "bitfun-core/tools-agent-control",
 ]
 

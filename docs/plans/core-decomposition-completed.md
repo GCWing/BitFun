@@ -17,7 +17,7 @@
 
 - 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一事实源。
 - 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约；LSP protocol DTO 和 plugin manifest DTO 已进入 `bitfun-core-types`。
-- 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-harness`、`bitfun-product-domains`、`bitfun-product-capabilities` 等归属 crate。
+- 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-product-domains`、`bitfun-product-capabilities` 等归属 crate。早期 `bitfun-harness` 描述符原型没有真实执行消费方，后续已删除；命名工作流策略改由最小的 `bitfun-agent-workflows` 承载。
 - `src/crates` 已按 `interfaces / assembly / adapters / services / execution / contracts` 六层布局整理，DeepReview path classifier、边界规则、Cargo workspace 路径和根/层级 AGENTS 已同步。
 - Cargo metadata 实际解析图检查已覆盖 workspace 与独立 manifest 的 normal、build、dev 依赖及 optional/target 变体；未知 crate 层级与反向依赖会直接失败。
 

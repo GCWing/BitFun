@@ -13,8 +13,6 @@ pub mod context_profile;
 pub mod custom_agent;
 #[cfg(feature = "agent-runtime")]
 pub mod custom_subagent;
-#[cfg(feature = "deep-research")]
-pub mod deep_research;
 #[cfg(feature = "agent-runtime")]
 pub mod deep_review;
 #[cfg(feature = "agent-runtime")]

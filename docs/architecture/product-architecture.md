@@ -156,7 +156,7 @@ block-beta
 
   block:ExecutionLayer
     columns 10
-    ExecutionTitle["5 · Execution"] AgentRuntime["Agent<br/>Runtime"] AgentStream["Agent<br/>Stream"] Harness["Harness"] PluginClient["Plugin<br/>Client"] RuntimeServices["Runtime<br/>Services"] ToolContracts["Tool<br/>Contracts"] ToolGroups["Tool<br/>Groups"] ToolExecution["Tool<br/>Execution"] JSONRepair["JSON<br/>Repair"]
+    ExecutionTitle["5 · Execution"] AgentRuntime["Agent<br/>Runtime"] AgentWorkflows["Agent<br/>Workflows"] AgentStream["Agent<br/>Stream"] PluginClient["Plugin<br/>Client"] RuntimeServices["Runtime<br/>Services"] ToolContracts["Tool<br/>Contracts"] ToolGroups["Tool<br/>Groups"] ToolExecution["Tool<br/>Execution"] JSONRepair["JSON<br/>Repair"]
   end
 
   block:ContractsLayer
@@ -172,7 +172,7 @@ block-beta
 
   classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717
   classDef sectionTitle fill:transparent,stroke:transparent,color:#171717,font-size:12px,font-weight:600
-  class ProductApps,WebUI,MobileUI,Interfaces,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,AIAdapters,SourceAdapters,HookSupport,Transport,WebDriver,CoreServices,Integrations,RelayService,PageRuntime,Terminal,AgentRuntime,AgentStream,Harness,PluginClient,RuntimeServices,ToolContracts,ToolGroups,ToolExecution,JSONRepair,CoreTypes,Events,RuntimePorts,ProductDomains module
+  class ProductApps,WebUI,MobileUI,Interfaces,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,AIAdapters,SourceAdapters,HookSupport,Transport,WebDriver,CoreServices,Integrations,RelayService,PageRuntime,Terminal,AgentRuntime,AgentWorkflows,AgentStream,PluginClient,RuntimeServices,ToolContracts,ToolGroups,ToolExecution,JSONRepair,CoreTypes,Events,RuntimePorts,ProductDomains module
   class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle sectionTitle
 
   style AppsLayer fill:#f8fafc,stroke:#334155,stroke-width:2px
@@ -195,7 +195,7 @@ block-beta
 | Assembly | `src/crates/assembly/*` | `agent-content`、`core`、`external-sources`、`product-capabilities` |
 | Adapters | `src/crates/adapters/*` | `agent-runtime-ipc`、`ai-adapters`、`claude-code-adapter`、`codex-adapter`、`dsh-adapter`、`opencode-adapter`、`static-hook-support`、`transport`、`webdriver` |
 | Services | `src/crates/services/*` | `services-core`、`services-integrations`、`miniapp-market-service`、`skin-market-service`、`relay-service`、`page-function-runtime`、`terminal` |
-| Execution | `src/crates/execution/*` | `agent-runtime`、`agent-stream`、`harness`、`plugin-runtime-client`、`runtime-services`、`tool-contracts`、`tool-provider-groups`、`tool-execution`、`tool-call-jsonrepair` |
+| Execution | `src/crates/execution/*` | `agent-runtime`、`agent-workflows`、`agent-stream`、`plugin-runtime-client`、`runtime-services`、`tool-contracts`、`tool-provider-groups`、`tool-execution`、`tool-call-jsonrepair` |
 | Contracts | `src/crates/contracts/*` | `core-types`、`events`、`runtime-ports`、`product-domains` |
 
 Installer、E2E 以及 MiniApp/Skin market server 和对应 service 在 Level 0 图中分别归入交付入口、测试范围或 Services 家族，不作为独立架构模块。
@@ -211,6 +211,35 @@ Logical 与 Development 的主要映射如下，映射是多对多关系：
 | Contracts | 为多个逻辑职责提供稳定事实与 port；不构成独立逻辑模块 |
 
 Assembly 是唯一组装根，只选择下层能力和实现，不能反向依赖 app。每个生态 adapter 独立保留外部格式和顺序语义，再映射到 BitFun owner；生态 adapter 之间不能形成兄弟依赖。
+
+各层的静态职责按下表执行。层间只允许由上向下依赖；同层依赖必须有明确的单向 owner 关系，不能为了复用方便形成环。
+
+| 层 | 负责 | 不负责 |
+|---|---|---|
+| Apps & Interfaces | 选择一个交付入口，提交唯一 Delivery Profile，转换 UI / CLI / ACP / SDK Host 协议 | 复制 Session、Agent loop、权限或工具执行状态 |
+| Assembly | 选择能力包、Agent 清单、原子工具组和具体 provider，校验组装结果 | 执行产品工作流、持有协议连接或读取 app 状态 |
+| Adapters | 把外部协议、生态格式和提供方请求转换为 BitFun contracts | 决定产品能力、写入 Runtime 权威状态 |
+| Services | 实现文件系统、Git、终端、网络、MCP、远端和平台 I/O | 读取 Delivery Profile、依赖 Assembly 或产品入口 |
+| Execution | 提供可移植 Runtime 语义、命名工作流策略、工具契约与执行原语 | 选择产品形态、包含 UI/协议/平台实现 |
+| Contracts | 定义稳定事实、DTO、事件和 port | 持有运行时行为或依赖任何上层 |
+
+#### Agent Runtime 与命名工作流边界
+
+`agent-runtime` 的合理范围是所有交付形态都需要的一套通用执行语义：Agent / Session / Turn 生命周期，调度、取消和恢复，Context → Model → Tool 循环，权限与人工交互，事件、用量、checkpoint，以及通用 Tool、Hook、Skill、Custom Agent 扩展接口。
+
+以下内容不属于 Agent Runtime：
+
+- Deep Review、Deep Research 等按名称定义的产品工作流、提示词和报告策略；
+- MiniApp、Canvas 等产物产品及其发布、市场或界面生命周期；
+- CLI、ACP、SDK Host、Tauri、HTTP/WebSocket 等入口和协议；
+- 文件系统、Git、终端、网络、MCP、远端与 AI 提供方的具体实现；
+- Delivery Profile 和某个产品应该装载哪些 Agent / Tool 的选择。
+
+命名工作流的无 I/O 决策归 `agent-workflows`；具体 I/O 归 Services；`product-capabilities` 只选择工作流能力、Agent ID 和原子工具组。依赖方向固定为 `Assembly → agent-workflows → agent-runtime / contracts`，`agent-runtime` 禁止反向依赖 `agent-workflows`。当前 `agent-workflows` 的 DeepResearch 报告后处理不需要 Runtime 类型，因此直接依赖基础库；这不改变上述长期方向。
+
+原子逻辑模块应满足三个条件：一个明确 owner、一个可独立测试的输入输出契约、一个变化原因。`core.basic`、`core.agent`、`core.session`、`core.git`、`core.web`、`core.mcp`、`core.computer-use`、`core.review`、`core.miniapp`、`core.canvas` 分别表达实际工具职责；不得重新合成 `core.integration` 这类同时包含网络、Git、MCP、产品工具和平台能力的大组。
+
+当前生产循环仍由 `assembly/core` 的 `ConversationCoordinator → Scheduler → ExecutionEngine → RoundExecutor → ToolPipeline` 持有；`agent-runtime` 已拥有可移植决策与 Rust preview facade，但尚未独立拥有完整循环。`assembly/core` 因此仍是过渡期兼容组装与实际 owner，不能被描述成只有 wiring。后续迁移必须逐条切换真实调用方、保留行为等价测试并删除旧写入方；移动 DTO、增加 feature 或 re-export 均不算 owner 迁移。当前仍位于 Runtime/Core 的 DeepReview 兼容逻辑只允许迁出和修复，不继续承接新的产品行为。
 
 `assembly/agent-content` 只持有随产品发布的不可变内置 Agent prompt 字节和兼容 key；选择、渲染、模式策略、
 Memory/Insights 工作流与运行时状态仍由 Core 的既有 owner 持有。该 crate 不是通用 prompt registry，也不加载
@@ -743,7 +772,7 @@ flowchart LR
   唯一 profile、消费组装结果和统一能力可用性，并通过入口级行为验证后，才能把该 profile 标为已接入。
 - 产品入口向组装根提交唯一 Delivery Profile；组装根只校验并派生静态计划，不在内部再次选择交付形态。
 - 入口必须在任何配置规范化或全局工具 registry 首次读取之前提交 Delivery Profile，避免进程级 registry 被兼容默认值提前锁定。Desktop 提交 `Desktop`；当前 loopback Server Host 仍承载完整兼容能力，因此提交 `ProductFull`，空的 `Server` profile 仍表示尚未交付的独立 Server 产品形态。
-- Agent Runtime 的最小工具计划不是 Delivery Profile。Product Assembly 单独生成 `ProductToolPlan`，显式列出工具 owner；基线只选择 `Basic` 与 `AgentControl`，完整交付计划由已提交的 Delivery Profile 派生。
+- Agent Runtime 的最小工具计划不是 Delivery Profile。Product Assembly 单独生成 `ProductToolPlan`，显式列出工具 owner；基线只选择 `core.basic`、`core.agent` 与 `core.session`，完整交付计划由已提交的 Delivery Profile 派生。
 - Runtime Configuration 承载用户、项目、工作区和本次运行的可变配置；不能启用产品定义
   未组装的能力，也不能放宽产品或组织策略。
 - Capability Availability 是根据产品计划、服务健康和当前策略计算出的能力状态；所有入口读取同一状态，
@@ -801,9 +830,9 @@ flowchart LR
 | 当前入口 | 已有能力 | 明确边界 |
 |---|---|---|
 | Desktop | 使用 `product-full`；Settings 从现有来源目录和 integration policy 生成简短应用概览，具体审批与冲突仍进入 Tool、Agent、MCP 或 Hook owner | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
-| CLI / TUI | 使用显式 Core owner closure：`agent-runtime` 基线、实际 service owner（包括 Remote Connect、DeepResearch、LSP、external/plugin source 与 SSH）以及九组 `tools-*`；`/extensions` 只提供状态、启停和刷新，`/hooks`、`/tools`、`/agent` 和 `/mcp` 处理各自能力 | `agent-runtime` 不再隐式携带完整 MCP/Remote/Browser/Web/Git/LSP/模型目录闭包；非交互不等待权限输入，生态解析仍在适配器，远程能力未接入时不回退本机 |
-| ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts、`agent-runtime` 基线、所需 service owner 与九组 `tools-*`，但不选择 CLI 的 plugin runtime 和 Remote Connect owner | load 成功后才发布活动状态；close 排空后再卸载；完整历史、Canvas 工具物化、兼容指令来源和配置仍由 Core/ACP 管理；未选择的能力不得借 Cargo feature union 偶然出现 |
-| SDK Host（preview） | 使用 `DeliveryProfile::Sdk`、Runtime Parts 和与当前本机协议能力一致的显式 Core owner closure；TLS provider 由 Host 进程入口安装 | 当前协议不暴露远程 workspace/SSH 执行，因此不选择 Remote Connect、SSH 或 Function Agent owner；未来远程 SDK 必须复用 Server/Remote 的认证和执行域，不能回退到本机执行 |
+| CLI / TUI | 使用 `DeliveryProfile::Cli` 和显式 Core owner closure；Runtime 只注册 Code Agent 清单及 `basic / agent / session / git / web / mcp / computer-use` 七个原子工具组，外部来源、插件和 Remote/SSH 仍由各自 owner 按入口需要装配 | 不注册 DeepReview、DeepResearch、MiniApp 或 Canvas Agent / Tool；非交互不等待权限输入，远程能力未接入时不回退本机 |
+| ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts、Code Agent 清单与同一组七个原子工具组，不选择 CLI 的 plugin runtime 和 Remote Connect owner | load 成功后才发布活动状态；完整历史和兼容配置仍由 Core/ACP 管理；未选择的产品工作流不得借 Cargo feature union 偶然注册 |
+| SDK Host（preview） | 使用 `DeliveryProfile::Sdk`、Runtime Parts、Code Agent 清单和七个原子工具组；TLS provider 由 Host 进程入口安装 | 不注册 DeepReview、DeepResearch、MiniApp 或 Canvas；当前协议也不暴露远程 workspace/SSH，未来远程 SDK 必须复用 Server/Remote 的认证和执行域 |
 | Peer / Server | Peer Host 执行真实工作区操作；通用 HTTP Server 未绑定可信 workspace owner 时明确返回不支持 | 控制端不替远端发现或执行；loopback 单用户边界不扩展到远程/多用户；SSH Remote 未接入时返回不支持 |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |

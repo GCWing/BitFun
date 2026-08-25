@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 7;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -64,10 +64,6 @@ pub use bitfun_core_types::SessionUsageReport;
 // on `bitfun-events` directly. These are the exact types the runtime's event
 // subscribers receive; the app-server forwards them as `agent/event` notifications.
 pub use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
-pub use bitfun_harness::{
-    build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
-    HarnessRegistry, HarnessWorkflow,
-};
 pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentContextReloadPort, AgentDialogSteerRequest,
     AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRecoveryOutcome,
@@ -307,11 +303,6 @@ impl AgentRuntimeBuilder {
         self
     }
 
-    pub fn with_harness_registry(mut self, registry: Arc<HarnessRegistry>) -> Self {
-        self.inner = self.inner.with_harness_registry(registry);
-        self
-    }
-
     pub fn with_hook_registry(mut self, registry: RuntimeHookRegistry) -> Self {
         self.inner = self.inner.with_hook_registry(registry);
         self
@@ -435,10 +426,6 @@ impl AgentRuntime {
 
     pub fn registered_tool_names(&self) -> Vec<String> {
         self.inner.registered_tool_names()
-    }
-
-    pub fn harness_provider_ids(&self) -> Vec<&str> {
-        self.inner.harness_provider_ids()
     }
 
     pub fn hook_registry(&self) -> &RuntimeHookRegistry {

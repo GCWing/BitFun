@@ -29,7 +29,6 @@ pub(crate) struct CliProductRuntimeState {
     plan: ProductAssemblyPlan,
     service_availability: Vec<ProductServiceCapabilityAvailability>,
     plugin_runtime: PluginRuntimeAvailability,
-    harness_provider_ids: Vec<String>,
 }
 
 impl CliProductRuntimeState {
@@ -43,10 +42,6 @@ impl CliProductRuntimeState {
 
     pub(crate) const fn plugin_runtime(&self) -> PluginRuntimeAvailability {
         self.plugin_runtime
-    }
-
-    pub(crate) fn harness_provider_ids(&self) -> &[String] {
-        &self.harness_provider_ids
     }
 }
 
@@ -81,14 +76,8 @@ impl CliRuntimeContext {
             plan: parts.plan().clone(),
             service_availability: parts.service_availability().to_vec(),
             plugin_runtime: parts.plugin_runtime().availability(),
-            harness_provider_ids: parts
-                .harness_registry()
-                .provider_ids()
-                .into_iter()
-                .map(ToOwned::to_owned)
-                .collect(),
         };
-        let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
+        let (services, _disabled_plugin_runtime) = parts.into_runtime_parts();
         let agent_event_queue_owner =
             CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
         let agent_runtime = CoreProductAgentRuntime::build_with_event_source(
@@ -97,7 +86,6 @@ impl CliRuntimeContext {
             agentic_system.token_usage_service.clone(),
             agent_event_queue_owner.runtime_source(),
             services.clone(),
-            harness_registry,
         )
         .map_err(anyhow::Error::msg)
         .context("Failed to build CLI Agent Runtime SDK")?;
@@ -106,15 +94,6 @@ impl CliRuntimeContext {
         let account = build_account_runtime(compatibility.clone());
         let local_workspace_snapshot = CoreLocalWorkspaceSnapshot::build();
         let token_usage_service = agentic_system.token_usage_service.clone();
-
-        debug_assert_eq!(
-            agent_runtime.harness_provider_ids(),
-            product
-                .harness_provider_ids
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-        );
 
         Ok(Self {
             workspace_root,
@@ -192,7 +171,7 @@ impl AcpRuntimeContext {
         let (_, services) = build_local_runtime_services(workspace_root, RUNTIME_EVENT_BUFFER)?;
         let parts = assemble_acp_runtime_parts(services)
             .context("Failed to assemble ACP product runtime")?;
-        let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
+        let (services, _disabled_plugin_runtime) = parts.into_runtime_parts();
         let agent_event_queue_owner =
             CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
         let agent_runtime = CoreProductAgentRuntime::build_acp(
@@ -200,7 +179,6 @@ impl AcpRuntimeContext {
             scheduler.clone(),
             agent_event_queue_owner.runtime_source(),
             services,
-            harness_registry,
         )
         .map_err(anyhow::Error::msg)
         .context("Failed to build ACP Agent Runtime SDK")?;
@@ -242,7 +220,7 @@ impl AppServerRuntimeContext {
         let (_, services) = build_local_runtime_services(workspace_root, RUNTIME_EVENT_BUFFER)?;
         let parts = assemble_cli_runtime_parts(services)
             .context("Failed to assemble CLI product runtime")?;
-        let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
+        let (services, _disabled_plugin_runtime) = parts.into_runtime_parts();
         let agent_event_queue_owner =
             CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
         let agent_runtime = CoreProductAgentRuntime::build_with_event_source(
@@ -251,7 +229,6 @@ impl AppServerRuntimeContext {
             agentic_system.token_usage_service.clone(),
             agent_event_queue_owner.runtime_source(),
             services,
-            harness_registry,
         )
         .map_err(anyhow::Error::msg)
         .context("Failed to build App Server Agent Runtime SDK")?;
