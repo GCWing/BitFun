@@ -209,7 +209,7 @@ function syncOne(languageTag) {
     'locales',
     localeDir,
     'settings',
-    'ai-model.json'
+    'models.json'
   );
   const sourceComponentsPath = path.join(
     PROJECT_ROOT,

@@ -25,7 +25,7 @@ function writeJson(filePath, data) {
 }
 
 function extractThemeNames(source, sourceLabel) {
-  // Theme preset names live under settings/basics.json → appearance.presets (formerly theme.json → theme.presets).
+  // Theme preset names live under settings/application.json → appearance.presets (formerly theme.json → theme.presets).
   const presets = source?.appearance?.presets;
   if (!presets || typeof presets !== "object") {
     throw new Error(`Invalid appearance.presets in ${sourceLabel}`);
@@ -63,7 +63,7 @@ function main() {
     "locales",
     "en-US",
     "settings",
-    "basics.json"
+    "application.json"
   );
   const sourceZhPath = path.join(
     PROJECT_ROOT,
@@ -73,7 +73,7 @@ function main() {
     "locales",
     "zh-CN",
     "settings",
-    "basics.json"
+    "application.json"
   );
 
   const targetEnPath = path.join(

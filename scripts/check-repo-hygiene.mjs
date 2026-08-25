@@ -15,7 +15,7 @@
  *   comment-only lines and Rust inline test blocks inside non-test source files.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 function runGit(args) {
@@ -40,6 +40,7 @@ function hasCommit(ref) {
 }
 
 const trackedFiles = runGit(['ls-files']);
+const trackedFileSet = new Set(trackedFiles.map(normalizePath));
 const untrackedFiles = runGit(['ls-files', '--others', '--exclude-standard']);
 const repositoryFiles = uniqueFiles([...trackedFiles, ...untrackedFiles]);
 const localChangedFiles = uniqueFiles([
@@ -211,6 +212,14 @@ function getRustInlineTestSkipLines(lines) {
 for (const file of repositoryFiles) {
   const normalized = normalizePath(file);
   const basename = path.posix.basename(normalized).toLowerCase();
+
+  if (
+    trackedFileSet.has(normalized)
+    && existsSync(file)
+    && normalized === 'BitFun-Installer/src-tauri/Cargo.lock'
+  ) {
+    addViolation(file, null, 'is a generated Installer lockfile and must not be tracked.');
+  }
 
   if (
     temporaryPromptNames.has(basename) ||

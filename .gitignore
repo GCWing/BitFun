@@ -29,6 +29,9 @@ sdk/typescript/src/internal/wire-validators.ts
 # The deployable Rust services use the workspace lockfile for reproducible
 # container builds.
 !Cargo.lock
+# The standalone Installer resolves against the shared source tree and owns a
+# generated lockfile that must not be committed.
+/BitFun-Installer/src-tauri/Cargo.lock
 
 # Monaco Editor - copied from node_modules
 public/monaco-editor/
