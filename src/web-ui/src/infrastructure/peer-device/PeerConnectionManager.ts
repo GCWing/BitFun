@@ -39,6 +39,8 @@ export type PeerConnectionHealth = 'connecting' | 'ready' | 'degraded' | 'lost';
 
 export type PeerConnectionLostReason = 'keepalive' | 'presence';
 
+export type PeerHostKind = 'desktop' | 'cli';
+
 export interface PeerHostCapabilities {
   readonly idempotentDialogSubmit: boolean;
   readonly targetedSessionRollback: boolean;
@@ -50,17 +52,25 @@ export interface PeerHostCapabilities {
   /**
    * Host implements `cancel_tool` (per-tool interrupt). Gates the Terminal
    * Interrupt button. `null` = the host's `peer_mode_ping` did not advertise
-   * the field (older host): consumers treat `null` as optimistic-supported so
-   * an older Desktop that actually implements cancel_tool keeps a working
-   * button, while an older CLI that doesn't returns unsupported on invoke.
+   * the field (older host): resolve via `hostKind` — an older Desktop always
+   * implemented cancel_tool (keep the button), an older CLI never did (hide it).
    */
   readonly cancelTool: boolean | null;
   /**
    * Host implements `get_all_tools_info` (read-only tool catalog). Gates the
    * Agents/Assistant tool list. `null` = the host did not advertise the field
-   * (older host); consumers treat `null` as optimistic-supported.
+   * (older host); resolve via `hostKind` the same way as `cancelTool`.
    */
   readonly toolCatalog: boolean | null;
+  /**
+   * Which kind of host answered `peer_mode_ping` (`"desktop"` | `"cli"`).
+   * `null` = the host did not advertise `host_type` (even older host, or the
+   * field is genuinely absent). Lets a controller resolve a `null` capability
+   * for an older host: an old Desktop (always implemented cancel_tool/tool
+   * catalog) stays optimistic, an old CLI (never did) is treated as
+   * unsupported. See PR #2428 round 5 #1.
+   */
+  readonly hostKind: PeerHostKind | null;
 }
 
 /** Immutable view of one connection; safe to hold in component state. */
@@ -118,6 +128,7 @@ interface HostInvokeEnvelope {
 }
 
 interface PeerModePingResult {
+  host_type?: string;
   capabilities?: {
     idempotent_dialog_submit?: boolean;
     targeted_session_rollback?: boolean;
@@ -141,7 +152,16 @@ const NO_CAPABILITIES: PeerHostCapabilities = {
   // Consumers treat `null` optimistically so an unprobed host is not gated off.
   cancelTool: null,
   toolCatalog: null,
+  // Host kind is unknown until the first `peer_mode_ping` resolves. Consumers
+  // treat `null` optimistically. See PR #2428 round 5 #1.
+  hostKind: null,
 };
+
+function parseHostKind(value: string | undefined): PeerHostKind | null {
+  if (value === 'desktop') return 'desktop';
+  if (value === 'cli') return 'cli';
+  return null;
+}
 
 interface ConnectionEntry {
   deviceId: string;
@@ -390,8 +410,9 @@ export class PeerConnectionManager {
     // `null` (unknown) rather than coercing to `false`: an older Desktop that
     // does not advertise the field but does implement the command would
     // otherwise have its working capability hidden. `null` lets consumers
-    // stay optimistic; an older CLI that truly lacks the command returns
-    // unsupported on invoke, which the UI already handles. See PR #2428 #4.
+    // stay optimistic; an older CLI that truly lacks the command is resolved
+    // via `hostKind` (cli → unsupported) instead of failing on invoke. See
+    // PR #2428 #4 + round 5 #1.
     const caps = result?.capabilities;
     return {
       idempotentDialogSubmit: caps?.idempotent_dialog_submit === true,
@@ -403,6 +424,7 @@ export class PeerConnectionManager {
         caps?.product_control_presentation_v1 === true,
       cancelTool: caps?.cancel_tool === undefined ? null : caps.cancel_tool === true,
       toolCatalog: caps?.tool_catalog === undefined ? null : caps.tool_catalog === true,
+      hostKind: parseHostKind(result?.host_type),
     };
   }
 
@@ -632,7 +654,8 @@ function capabilitiesEqual(
     a.targetedSessionRollback === b.targetedSessionRollback &&
     a.tokenUsageStatistics === b.tokenUsageStatistics &&
     a.cancelTool === b.cancelTool &&
-    a.toolCatalog === b.toolCatalog;
+    a.toolCatalog === b.toolCatalog &&
+    a.hostKind === b.hostKind;
 }
 
 /** Window-wide instance; peer links outlive any component that renders them. */

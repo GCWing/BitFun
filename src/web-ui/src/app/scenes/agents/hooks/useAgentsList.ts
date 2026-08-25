@@ -23,6 +23,7 @@ import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamSer
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { isRemoteWorkspace } from '@/shared/types';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { canQueryToolCatalogOnSurface } from '@/infrastructure/peer-device/peerCapabilityResolution';
 import { createLogger } from '@/shared/utils/logger';
 
 const toolLog = createLogger('useAgentsList');
@@ -195,20 +196,12 @@ export function useAgentsList({
   // Peer Host now implements it). When a peer does not support the catalog we
   // skip the invoke instead of swallowing the unsupported error as an empty
   // list — the UI can then show "no tools" without masking a transport failure.
-  const canQueryToolCatalog = (() => {
-    if (!peerDevice || !peerDevice.peerMode.active) {
-      return true;
-    }
-    const capabilities = peerDevice.currentPeerCapabilities;
-    // null capabilities = host not yet probed → optimistic. A probed host may
-    // also report `null` for this field (older host that didn't advertise it):
-    // stay optimistic so an older Desktop that does implement get_all_tools_info
-    // keeps its list. An older CLI that lacks it returns unsupported on invoke,
-    // which the catch path surfaces. See PR #2428 #4.
-    return capabilities === null || capabilities.toolCatalog === null
-      ? true
-      : capabilities.toolCatalog;
-  })();
+  // An older CLI that didn't advertise the field is resolved via `hostKind`
+  // (cli → unsupported) by the shared helper. See PR #2428 round 5 #1.
+  const canQueryToolCatalog = canQueryToolCatalogOnSurface(
+    Boolean(peerDevice?.peerMode.active),
+    peerDevice?.currentPeerCapabilities ?? null,
+  );
   const [allAgents, setAllAgents] = useState<AgentWithCapabilities[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);

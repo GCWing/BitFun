@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import type { PeerHostCapabilities } from '@/infrastructure/peer-device/PeerConnectionManager';
 
-import { getTerminalViewState } from './terminalToolCardState';
+import { getTerminalViewState, resolveCanCancelTool } from './terminalToolCardState';
+
+function caps(overrides: Partial<PeerHostCapabilities>): PeerHostCapabilities {
+  return {
+    idempotentDialogSubmit: false,
+    targetedSessionRollback: false,
+    tokenUsageStatistics: false,
+    cancelTool: null,
+    toolCatalog: null,
+    hostKind: null,
+    ...overrides,
+  };
+}
 
 describe('terminalToolCardState', () => {
   it('shows receiving params while bash input is still streaming', () => {
@@ -87,5 +100,36 @@ describe('terminalToolCardState', () => {
       canCancelTool: true,
     });
     expect(withCapability.showInterruptButton).toBe(true);
+  });
+});
+
+describe('resolveCanCancelTool', () => {
+  it('is always cancellable on the local (controller) surface', () => {
+    expect(resolveCanCancelTool(false, null)).toBe(true);
+    expect(resolveCanCancelTool(false, caps({ cancelTool: false }))).toBe(true);
+  });
+
+  it('stays optimistic while peer capabilities are still being probed', () => {
+    expect(resolveCanCancelTool(true, null)).toBe(true);
+  });
+
+  it('honors an explicitly advertised cancel_tool flag', () => {
+    expect(resolveCanCancelTool(true, caps({ cancelTool: true }))).toBe(true);
+    expect(resolveCanCancelTool(true, caps({ cancelTool: false }))).toBe(false);
+  });
+
+  it('resolves a null cancel_tool by host kind (old CLI hides the button, old Desktop keeps it)', () => {
+    // An older host did not advertise cancel_tool; cancelTool parses to null.
+    // host_type still discriminates: an old Desktop always implemented it, an
+    // old CLI never did — hide the button so Interrupt doesn't silently fail.
+    // See PR #2428 round 5 #1.
+    expect(resolveCanCancelTool(true, caps({ hostKind: 'cli' }))).toBe(false);
+    expect(resolveCanCancelTool(true, caps({ hostKind: 'desktop' }))).toBe(true);
+    expect(resolveCanCancelTool(true, caps({ hostKind: null }))).toBe(true);
+  });
+
+  it('an explicitly advertised false beats hostKind', () => {
+    expect(resolveCanCancelTool(true, caps({ cancelTool: false, hostKind: 'desktop' }))).toBe(false);
+    expect(resolveCanCancelTool(true, caps({ cancelTool: true, hostKind: 'cli' }))).toBe(true);
   });
 });
