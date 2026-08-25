@@ -109,6 +109,10 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   handleNavigationBack(route: AppRoute): boolean {
+    if (this.appShellState.showConnectSheet) {
+      this.appShellState.setConnectSheetVisible(false);
+      return true;
+    }
     if (this.filePreviewState.visible) {
       this.filePreviewController.close();
       return true;
@@ -130,6 +134,10 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   handleRootBack(): boolean {
+    if (this.appShellState.showConnectSheet) {
+      this.appShellState.setConnectSheetVisible(false);
+      return true;
+    }
     if (!this.filePreviewState.visible) {
       return false;
     }

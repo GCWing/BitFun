@@ -5,7 +5,7 @@ import {
   DeviceDirectoryState,
   emptyDeviceDirectoryEntry
 } from '../state/DeviceDirectoryState';
-import { INK, MUTED, SUBTLE } from './Theme';
+import { CARD, INK, LINE, MUTED } from './Theme';
 import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
 
@@ -24,6 +24,7 @@ export struct SidebarWorkspaceSection {
   @Param workspacePath: string = '';
   @Param workspaceKind: string = 'normal';
   @Param connectionState: string = 'idle';
+  @Param controlTargetType: string = 'none';
   @Param controlTargetDeviceId: string = '';
   @Param controlTargetDeviceName: string = '';
   @Param selectedSessionId: string = '';
@@ -37,7 +38,7 @@ export struct SidebarWorkspaceSection {
     (_deviceId: string, _path: string) => {};
   @Event onToggleDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onRetryDevice: (deviceId: string) => void = (_deviceId: string) => {};
-  @Event onConnect: () => void = () => {};
+  @Event onScan: () => void = () => {};
   @Local visibleDeviceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
   private readonly unpairedEntry: DeviceDirectoryEntry = emptyDeviceDirectoryEntry('', '', false);
 
@@ -45,7 +46,7 @@ export struct SidebarWorkspaceSection {
     Column() {
       this.SectionHeader()
       if (this.deviceEntries().length === 0 && !this.isConnected()) {
-        this.ConnectRow()
+        this.EmptyConnectionState()
       } else if (this.deviceEntries().length === 0) {
         Text(RemoteI18n.t('sidebar.emptyWorkspaces'))
           .fontSize(14)
@@ -101,23 +102,19 @@ export struct SidebarWorkspaceSection {
         .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
       Blank()
-      if (!this.isConnected() && this.deviceEntries().length === 0) {
-        Text(RemoteI18n.t('sidebar.workspacesOffline'))
-          .fontSize(12)
-          .fontColor(SUBTLE)
-          .margin({ right: 8 })
+      if (this.deviceEntries().length > 0) {
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.plus'))
+            .fontSize(17)
+            .fontColor([MUTED])
+        }
+        .width(32)
+        .height(32)
+        .accessibilityText(RemoteI18n.t('sidebar.addConnection'))
+        .onClick(() => {
+          this.onScan();
+        })
       }
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.plus'))
-          .fontSize(17)
-          .fontColor([MUTED])
-      }
-      .width(32)
-      .height(32)
-      .accessibilityText(RemoteI18n.t('sidebar.addConnection'))
-      .onClick(() => {
-        this.onConnect();
-      })
     }
     .width('100%')
     .height(38)
@@ -125,28 +122,46 @@ export struct SidebarWorkspaceSection {
   }
 
   @Builder
-  private ConnectRow() {
-    Row({ space: 10 }) {
-      SymbolGlyph($r('sys.symbol.desktop'))
-        .fontSize(20)
-        .fontColor([MUTED])
-        .width(22)
-        .height(22)
-      Text(RemoteI18n.t('sidebar.connectDesktop'))
-        .fontSize(15)
+  private EmptyConnectionState() {
+    Column({ space: 0 }) {
+      Row({ space: 10 }) {
+        SymbolGlyph($r('sys.symbol.desktop'))
+          .fontSize(20)
+          .fontColor([MUTED])
+          .width(22)
+          .height(22)
+        Text(RemoteI18n.t('sidebar.noConnectedDevice'))
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(INK)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Text(RemoteI18n.t('sidebar.scanConnectHint'))
+        .fontSize(12)
+        .lineHeight(17)
+        .fontColor(MUTED)
+        .width('100%')
+        .margin({ top: 8 })
+
+      Button(RemoteI18n.t('sidebar.scanToConnect'))
+        .width('100%')
+        .height(42)
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
         .fontColor(INK)
-        .layoutWeight(1)
-      SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(13)
-        .fontColor([MUTED])
+        .backgroundColor(CARD)
+        .border({ width: 1, color: LINE })
+        .borderRadius(12)
+        .margin({ top: 12 })
+        .onClick(() => {
+          this.onScan();
+        })
     }
     .width('100%')
-    .height(46)
-    .padding({ left: 10, right: 8 })
-    .borderRadius(10)
-    .onClick(() => {
-      this.onConnect();
-    })
+    .padding({ left: 10, right: 8, top: 6, bottom: 8 })
+    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -172,6 +187,9 @@ export struct SidebarWorkspaceSection {
   private deviceEntries(): DeviceDirectoryEntry[] {
     if (this.directoryState.devices.length > 0) {
       return this.directoryState.devices;
+    }
+    if (!this.isConnected() && this.controlTargetType === 'none') {
+      return [];
     }
     if (!this.isConnected() && this.recentWorkspaces.length === 0 && this.sessions.length === 0) {
       return [];
