@@ -6,6 +6,7 @@ use super::types::ToolTask;
 use crate::agentic::core::ToolExecutionState;
 use crate::agentic::events::AgenticEvent;
 use bitfun_agent_stream::StreamEventSink;
+use bitfun_agent_tools::ValidationResult;
 use dashmap::DashMap;
 use log::debug;
 use std::sync::Arc;
@@ -91,12 +92,17 @@ impl ToolStateManager {
         self.tasks.get(tool_id).map(|t| t.clone())
     }
 
-    /// Replace a task's effective tool arguments before execution.
-    /// Used by PreToolUse hook `updatedInput` rewrites; later readers
-    /// (validation, permission planning, execution) observe the new value.
-    pub fn update_task_arguments(&self, tool_id: &str, arguments: serde_json::Value) -> bool {
+    /// Apply a PreToolUse `updatedInput` proposal and preserve any rejection
+    /// raised by non-relaxable validation of the original effective input.
+    pub fn apply_hook_input_rewrite(
+        &self,
+        tool_id: &str,
+        arguments: serde_json::Value,
+        rejection: Option<ValidationResult>,
+    ) -> bool {
         if let Some(mut task) = self.tasks.get_mut(tool_id) {
             task.invocation.effective_arguments = arguments;
+            task.input_rewrite_rejection = rejection;
             true
         } else {
             false

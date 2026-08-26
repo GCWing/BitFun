@@ -134,8 +134,10 @@ pub async fn dispatch_user_prompt_submit(
     decision
 }
 
-/// PreToolUse hooks run after tool-input validation and before permission
-/// evaluation. They may deny the call, pre-approve it, or rewrite its input.
+/// PreToolUse hooks run before final tool-input validation and permission
+/// evaluation. They may deny the call, pre-approve it, or propose rewritten
+/// input. The tool pipeline independently prevents a rewrite from relaxing
+/// non-relaxable validation constraints.
 pub async fn dispatch_pre_tool_use(
     facts: NativeHookSessionFacts<'_>,
     tool_name: &str,

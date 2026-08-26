@@ -6,7 +6,7 @@ use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
-use bitfun_agent_tools::ResolvedToolInvocation;
+use bitfun_agent_tools::{ResolvedToolInvocation, ValidationResult};
 use bitfun_runtime_ports::{
     DelegationPolicy, PermissionDelegationContext, RemoteExecPort, ResolvedPermissionPolicy,
     TerminalPort,
@@ -118,6 +118,12 @@ pub struct ToolTask {
     /// round. Permission requests inherit this value as their order key.
     pub tool_call_order: u32,
     pub invocation: ResolvedToolInvocation,
+    /// Effective arguments before any Native PreToolUse hook rewrite. This
+    /// remains immutable so validation and audit can compare both inputs.
+    pub original_effective_arguments: serde_json::Value,
+    /// A non-relaxable validation rejection found on the original input while
+    /// applying a hook rewrite. Final validation still checks rewritten input.
+    pub input_rewrite_rejection: Option<ValidationResult>,
     pub invocation_resolution_error: Option<String>,
     pub context: ToolExecutionContext,
     pub options: ToolExecutionOptions,
@@ -147,10 +153,13 @@ impl ToolTask {
         context: ToolExecutionContext,
         options: ToolExecutionOptions,
     ) -> Self {
+        let original_effective_arguments = invocation.effective_arguments.clone();
         Self {
             tool_call,
             tool_call_order: 0,
             invocation,
+            original_effective_arguments,
+            input_rewrite_rejection: None,
             invocation_resolution_error,
             context,
             options,

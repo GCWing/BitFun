@@ -501,6 +501,27 @@ fn find_violation_returns_first_match() {
 }
 
 #[test]
+fn guard_rejections_are_non_relaxable_by_input_rewrites() {
+    let protected = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+    let rejection = decision_result(
+        None,
+        "Write",
+        "write",
+        "tests/existing_test.rs",
+        "deny",
+        false,
+        None,
+        Some(&protected),
+        Some("protected test file".to_string()),
+        Some(403),
+    )
+    .expect("guard rejection");
+
+    assert!(rejection.blocks_input_rewrite());
+    assert_eq!(rejection.error_code, Some(403));
+}
+
+#[test]
 fn new_files_are_exempt_only_from_test_file_constraints() {
     let test_only = EditConstraintState {
         constraints: vec![constraint(
