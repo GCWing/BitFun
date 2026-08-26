@@ -2,7 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const userMessageEditComposerAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'user-message-edit-composer',
-  parts: [{ id: 'root' }, { id: 'input' }, { id: 'actions' }, { id: 'action' }, { id: 'spinner' }],
+  parts: [{ id: 'root' }, { id: 'input' }, { id: 'actions' }, { id: 'action' }],
   facets: [
     { id: 'mode', attribute: 'data-bf-mode', values: ['rich', 'plain'] },
     { id: 'action', attribute: 'data-bf-action', values: ['cancel', 'submit'] },

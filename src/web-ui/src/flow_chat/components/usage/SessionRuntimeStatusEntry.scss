@@ -19,11 +19,7 @@
     color: var(--bf-appearance-token-color-text-primary);
   }
 
-  > svg {
-    flex: 0 0 auto;
-  }
-
-  span {
+  & [data-bf-component='session-runtime-status-entry'][data-bf-part='label'] {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -34,7 +30,7 @@
     max-width: 28px;
     padding: 0 6px;
 
-    span {
+    & [data-bf-component='session-runtime-status-entry'][data-bf-part='label'] {
       display: none;
     }
   }
