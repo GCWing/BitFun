@@ -1,15 +1,15 @@
 import type { ComponentMeta } from "../../registry.types";
 
-export const inputMeta = {
+export const searchMeta = {
   category: "form",
-  description: "A pill-shaped single-line text field matching the Figma normal input scene.",
+  description: "A compact search field matching the Figma search scene, with an intrinsic search icon and optional trailing content.",
   figma: {
     fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["133:6776"],
-    sourceNames: ["input/normal"],
+    nodeIds: ["2:66"],
+    sourceNames: ["input/scene3 (search)"],
   },
   maturity: "stable",
-  name: "Input",
+  name: "Search",
   props: [
     { name: "leadingIcon", type: "ReactNode" },
     { name: "trailingContent", type: "ReactNode" },
@@ -25,11 +25,12 @@ export const inputMeta = {
     "color.content.primary",
     "color.content.muted",
     "color.content.disabled",
-    "control.height.md",
-    "control.input.iconSize",
-    "control.input.gap",
-    "control.input.paddingInline",
-    "control.input.radius",
-    "shadow.sm",
+    "control.search.height",
+    "control.search.iconSize",
+    "control.search.contentGap",
+    "control.search.trailingGap",
+    "control.search.paddingBlock",
+    "control.search.paddingInline",
+    "control.search.radius",
   ],
 } as const satisfies ComponentMeta;

@@ -101,6 +101,7 @@ test("new Figma foundations remain visible as state matrices in Design Lab", asy
   for (const component of [
     "heading",
     "input",
+    "search",
     "key-hint",
     "list-item",
     "media-thumbnail",
@@ -125,4 +126,15 @@ test("Figma chat input maps to PromptComposer instead of overloading native Inpu
   assert.match(source, /startControls=/);
   assert.match(source, /endControls=/);
   assert.match(source, /How can I help you/);
+});
+
+test("Figma normal, search, and chat input scenes have separate public previews", async () => {
+  const source = await readFile(detailSource, "utf8");
+
+  assert.match(source, /component\.name === "Input"/);
+  assert.match(source, /component\.name === "Search"/);
+  assert.match(source, /component\.name === "PromptComposer"/);
+  assert.match(source, /defaultValue="BitFun is an AI-driven programming environment\."/);
+  assert.match(source, /<Search/);
+  assert.doesNotMatch(source, /variant="search"/);
 });

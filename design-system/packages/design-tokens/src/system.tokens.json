@@ -96,10 +96,19 @@
     },
     "input": {
       "$type": "dimension",
-      "searchHeight": { "$value": "30px" },
       "iconSize": { "$value": "14px" },
       "gap": { "$value": "{space.1}" },
-      "paddingInline": { "$value": "{space.2}" },
+      "paddingInline": { "$value": "{space.3}" },
+      "radius": { "$value": "{radius.pill}" }
+    },
+    "search": {
+      "$type": "dimension",
+      "height": { "$value": "30px" },
+      "iconSize": { "$value": "14px" },
+      "contentGap": { "$value": "{space.1}" },
+      "trailingGap": { "$value": "{space.5}" },
+      "paddingBlock": { "$value": "7px" },
+      "paddingInline": { "$value": "10px" },
       "radius": { "$value": "{radius.pill}" }
     },
     "keyHint": {

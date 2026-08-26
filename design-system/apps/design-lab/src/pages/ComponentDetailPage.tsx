@@ -9,7 +9,6 @@ import {
   MessageCircle,
   Mic,
   Plus,
-  Search,
   Send,
   User,
 } from "lucide-react";
@@ -24,6 +23,7 @@ import {
   NavigationList,
   NavigationListSection,
   PromptComposer,
+  Search,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -191,6 +191,7 @@ export function ComponentDetailPage({
       case "KeyHint":
         return ["default"] as const;
       case "Input":
+      case "Search":
         return ["default", "hover", "focus", "disabled"] as const;
       case "ListItem":
         return ["default", "hover", "active", "disabled"] as const;
@@ -231,7 +232,10 @@ export function ComponentDetailPage({
       return `import { Heading } from "@bitfun/ui";\n\n<Heading\n  description="Interface language and visual appearance"\n  title="Appearance"\n  variant="section"\n/>`;
     }
     if (component.name === "Input") {
-      return `import { Input, KeyHint } from "@bitfun/ui";\nimport { Search } from "lucide-react";\n\n<Input\n  aria-label="Search"\n  leadingIcon={<Search />}\n  placeholder="Search"\n  trailingContent={<KeyHint>⌘ K</KeyHint>}\n  variant="search"\n/>`;
+      return `import { Input } from "@bitfun/ui";\n\n<Input\n  aria-label="Description"\n  defaultValue="BitFun is an AI-driven programming environment."\n/>`;
+    }
+    if (component.name === "Search") {
+      return `import { KeyHint, Search } from "@bitfun/ui";\n\n<Search\n  aria-label="Search"\n  placeholder="Search"\n  trailingContent={<KeyHint>⌘ K</KeyHint>}\n/>`;
     }
     if (component.name === "KeyHint") {
       return `import { KeyHint } from "@bitfun/ui";\nimport { Keyboard } from "lucide-react";\n\n<KeyHint leadingIcon={<Keyboard />}>K</KeyHint>`;
@@ -348,13 +352,22 @@ export function ComponentDetailPage({
     if (component.name === "Input") {
       return (
         <Input
+          aria-label="Description"
+          data-bf-preview-state={state === "hover" || state === "focus" ? state : undefined}
+          defaultValue="BitFun is an AI-driven programming environment."
+          disabled={state === "disabled"}
+        />
+      );
+    }
+
+    if (component.name === "Search") {
+      return (
+        <Search
           aria-label="Search"
           data-bf-preview-state={state === "hover" || state === "focus" ? state : undefined}
           disabled={state === "disabled"}
-          leadingIcon={<Search aria-hidden="true" />}
           placeholder="Search"
           trailingContent={<KeyHint>⌘ K</KeyHint>}
-          variant="search"
         />
       );
     }
@@ -398,12 +411,10 @@ export function ComponentDetailPage({
           ) : undefined}
           header={homepage ? (
             <div className="component-navigation-list-preview__search">
-              <Input
+              <Search
                 aria-label="Search"
-                leadingIcon={<Search aria-hidden="true" />}
                 placeholder="Search"
                 trailingContent={<KeyHint>⌘ K</KeyHint>}
-                variant="search"
               />
               <IconButton aria-label="New session"><Plus aria-hidden="true" /></IconButton>
             </div>
@@ -706,6 +717,25 @@ export function ComponentDetailPage({
                     </span>
                   ))}
                   <span className="component-preview-matrix__row-label">Input</span>
+                  {states.map((state) => (
+                    <div className="component-preview-matrix__cell" key={state}>
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
+              ) : component.name === "Search" ? (
+                <div className="component-preview-matrix" data-component="search">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {getOptionLabel(state)}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">Search</span>
                   {states.map((state) => (
                     <div className="component-preview-matrix__cell" key={state}>
                       {renderPreview(state)}

@@ -5,14 +5,14 @@
     align-items: center;
     min-inline-size: 0;
     inline-size: 100%;
-    block-size: var(--bf-control-height-md);
-    gap: var(--bf-control-input-gap);
-    padding-inline: var(--bf-control-input-padding-inline);
+    block-size: var(--bf-control-search-height);
+    gap: var(--bf-control-search-trailing-gap);
+    padding-block: var(--bf-control-search-padding-block);
+    padding-inline: var(--bf-control-search-padding-inline);
     border: var(--bf-border-width-default) solid var(--bf-color-field-border);
-    border-radius: var(--bf-control-input-radius);
+    border-radius: var(--bf-control-search-radius);
     color: var(--bf-color-content-primary);
     background: var(--bf-color-field-background);
-    box-shadow: var(--bf-shadow-sm);
     transition:
       background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -34,6 +34,14 @@
     color: var(--bf-color-content-disabled);
     cursor: not-allowed;
     opacity: var(--bf-opacity-disabled);
+  }
+
+  .content {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+    gap: var(--bf-control-search-content-gap);
   }
 
   .input {
@@ -59,6 +67,10 @@
     cursor: not-allowed;
   }
 
+  .input::-webkit-search-cancel-button {
+    display: none;
+  }
+
   .icon,
   .trailing {
     display: inline-flex;
@@ -69,8 +81,8 @@
   }
 
   .icon {
-    inline-size: var(--bf-control-input-icon-size);
-    block-size: var(--bf-control-input-icon-size);
+    inline-size: var(--bf-control-search-icon-size);
+    block-size: var(--bf-control-search-icon-size);
   }
 
   .icon > :where(svg, img) {

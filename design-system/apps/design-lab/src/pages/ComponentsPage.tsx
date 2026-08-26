@@ -9,7 +9,7 @@ import {
   MessageSquareText,
   PanelTop,
   PanelLeft,
-  Search,
+  Search as SearchIcon,
   ToggleLeft,
   Type,
   User,
@@ -25,6 +25,7 @@ import {
   NavigationList,
   NavigationListSection,
   PromptComposer,
+  Search,
   Stack,
   Switch,
   TabGroup,
@@ -55,12 +56,13 @@ const componentIcons = {
   Button: MousePointerClick,
   Heading: Type,
   IconButton: List,
-  Input: Search,
+  Input: Type,
   KeyHint: Keyboard,
   ListItem: User,
   MediaThumbnail: ImageIcon,
   NavigationList: PanelLeft,
   PromptComposer: MessageSquareText,
+  Search: SearchIcon,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
 } as const;
@@ -94,11 +96,16 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
     case "Input":
       return (
         <Input
+          aria-label="Description"
+          defaultValue="BitFun is an AI-driven programming environment."
+        />
+      );
+    case "Search":
+      return (
+        <Search
           aria-label="Search"
-          leadingIcon={<Search aria-hidden="true" />}
           placeholder="Search"
           trailingContent={<KeyHint>⌘ K</KeyHint>}
-          variant="search"
         />
       );
     case "KeyHint":

@@ -10,7 +10,7 @@ test("component names remain unique", () => {
 test("registry exposes only the formal stable components", () => {
   assert.deepEqual(
     componentRegistry.map((component) => component.name),
-    ["Button", "IconButton", "Heading", "Input", "KeyHint", "ListItem", "MediaThumbnail", "NavigationList", "PromptComposer", "Switch", "TabGroup"],
+    ["Button", "IconButton", "Heading", "Input", "KeyHint", "ListItem", "MediaThumbnail", "NavigationList", "PromptComposer", "Search", "Switch", "TabGroup"],
   );
   assert.equal(
     componentRegistry.every((component) => component.maturity === "stable"),
@@ -26,10 +26,17 @@ test("every registered component records its remote Figma source", () => {
   }
 });
 
-test("remote Figma component-set inventory has an explicit local disposition", () => {
+test("registered components do not claim the same Figma implementation node", () => {
+  const implementationNodeIds = componentRegistry.flatMap((component) => component.figma.nodeIds);
+  assert.equal(new Set(implementationNodeIds).size, implementationNodeIds.length);
+});
+
+test("remote Figma source inventory has an explicit local disposition", () => {
   const expectedNodeIds = [
     "2:22",
+    "2:66",
     "2:130",
+    "4:5420",
     "4:5332",
     "4:5355",
     "61:568",
@@ -39,6 +46,7 @@ test("remote Figma component-set inventory has an explicit local disposition", (
     "98:1062",
     "131:6340",
     "133:6763",
+    "133:6776",
     "142:11871",
     "142:12284",
     "149:12404",

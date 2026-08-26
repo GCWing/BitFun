@@ -12,20 +12,29 @@ import {
   NavigationList,
   NavigationListSection,
   PromptComposer,
+  Search,
 } from "../dist/index.js";
 
-test("Input preserves native input semantics and composes Figma adornments", () => {
+test("Input preserves native input semantics for the Figma normal scene", () => {
   const markup = renderToStaticMarkup(createElement(Input, {
-    "aria-label": "Search",
-    leadingIcon: createElement("svg", { "data-icon": "search" }),
-    placeholder: "Search",
-    trailingContent: createElement(KeyHint, null, "⌘ K"),
-    variant: "search",
+    "aria-label": "Description",
+    defaultValue: "BitFun is an AI-driven programming environment.",
   }));
 
   assert.match(markup, /data-bf-component="input"/);
-  assert.match(markup, /data-variant="search"/);
-  assert.match(markup, /<input[^>]+aria-label="Search"/);
+  assert.match(markup, /<input[^>]+aria-label="Description"/);
+  assert.doesNotMatch(markup, /data-variant="search"/);
+});
+
+test("Search owns the Figma search scene and composes its shortcut label", () => {
+  const markup = renderToStaticMarkup(createElement(Search, {
+    "aria-label": "Search",
+    placeholder: "Search",
+    trailingContent: createElement(KeyHint, null, "⌘ K"),
+  }));
+
+  assert.match(markup, /data-bf-component="search"/);
+  assert.match(markup, /<input[^>]+aria-label="Search"[^>]+type="search"/);
   assert.match(markup, /data-bf-part="leadingIcon"/);
   assert.match(markup, /data-bf-component="key-hint"/);
 });
@@ -104,7 +113,7 @@ test("new Figma foundations consume generated semantic tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   for (const token of [
-    "--bf-control-input-search-height",
+    "--bf-control-search-height",
     "--bf-control-key-hint-icon-size",
     "--bf-control-list-item-height",
     "--bf-control-media-thumbnail-width",

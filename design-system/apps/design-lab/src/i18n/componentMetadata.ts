@@ -22,6 +22,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   MediaThumbnail: "component.MediaThumbnail.description",
   NavigationList: "component.NavigationList.description",
   PromptComposer: "component.PromptComposer.description",
+  Search: "component.Search.description",
   Switch: "component.Switch.description",
   TabGroup: "component.TabGroup.description",
 };

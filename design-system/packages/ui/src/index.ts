@@ -18,7 +18,7 @@ export {
   type HeadingProps,
   type HeadingVariant,
 } from "./components/Heading";
-export { Input, type InputProps, type InputVariant } from "./components/Input";
+export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";
 export { ListItem, type ListItemProps } from "./components/ListItem";
 export {
@@ -33,6 +33,7 @@ export {
   type NavigationListSectionProps,
 } from "./components/NavigationList";
 export { PromptComposer, type PromptComposerProps } from "./components/PromptComposer";
+export { Search, type SearchProps } from "./components/Search";
 export { Switch, type SwitchProps } from "./components/Switch";
 export {
   TabGroup,

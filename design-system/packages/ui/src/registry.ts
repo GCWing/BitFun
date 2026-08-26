@@ -7,6 +7,7 @@ import { listItemMeta } from "./components/ListItem/ListItem.meta";
 import { mediaThumbnailMeta } from "./components/MediaThumbnail/MediaThumbnail.meta";
 import { navigationListMeta } from "./components/NavigationList/NavigationList.meta";
 import { promptComposerMeta } from "./components/PromptComposer/PromptComposer.meta";
+import { searchMeta } from "./components/Search/Search.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
 import type { ComponentMeta } from "./registry.types";
@@ -27,6 +28,7 @@ export const componentRegistry = [
   mediaThumbnailMeta,
   navigationListMeta,
   promptComposerMeta,
+  searchMeta,
   switchMeta,
   tabGroupMeta,
 ] as const satisfies readonly ComponentMeta[];
@@ -48,6 +50,12 @@ export const figmaSourceInventory: readonly FigmaSourceInventoryEntry[] = [
     nodeId,
     sourceName: component.figma.sourceNames[index] ?? component.name,
   }))),
+  {
+    disposition: "reference-only",
+    nodeId: "133:6763",
+    reason: "The mixed input component set is implemented through its normal, search, and chat variant nodes so each production component has one explicit source boundary.",
+    sourceName: "input",
+  },
   {
     disposition: "asset-catalog",
     nodeId: "2:22",

@@ -5,7 +5,7 @@ export const promptComposerMeta = {
   description: "A multiline prompt field with start and end control areas matching the Figma chat input composition.",
   figma: {
     fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["133:6763"],
+    nodeIds: ["4:5420"],
     sourceNames: ["input/chat"],
   },
   maturity: "stable",

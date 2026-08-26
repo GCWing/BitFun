@@ -6,14 +6,11 @@ import {
 import { classNames } from "../../internal/classNames";
 import styles from "./Input.module.css";
 
-export type InputVariant = "default" | "search";
-
 export interface InputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   containerClassName?: string;
   leadingIcon?: ReactNode;
   trailingContent?: ReactNode;
-  variant?: InputVariant;
   "data-bf-preview-state"?: "focus" | "hover";
 }
 
@@ -24,7 +21,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
   leadingIcon,
   trailingContent,
   type = "text",
-  variant = "default",
   "data-bf-preview-state": previewState,
   ...props
 }, ref) {
@@ -35,7 +31,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
       data-bf-part="root"
       data-bf-preview-state={previewState}
       data-disabled={disabled || undefined}
-      data-variant={variant}
     >
       {leadingIcon && (
         <span aria-hidden="true" className={styles.icon} data-bf-part="leadingIcon">

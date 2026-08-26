@@ -3170,6 +3170,7 @@ input.lab-force-focus {
 }
 
 .component-preview-matrix[data-component="input"],
+.component-preview-matrix[data-component="search"],
 .component-preview-matrix[data-component="list-item"] {
   grid-template-columns: 96px repeat(4, minmax(168px, 1fr));
   grid-template-rows: 48px 112px;
@@ -3177,6 +3178,7 @@ input.lab-force-focus {
 }
 
 .component-preview-matrix[data-component="input"] [data-bf-component="input"],
+.component-preview-matrix[data-component="search"] [data-bf-component="search"],
 .component-preview-matrix[data-component="list-item"] [data-bf-component="list-item"] {
   width: 100%;
   max-width: 208px;
