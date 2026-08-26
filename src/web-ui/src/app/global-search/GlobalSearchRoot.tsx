@@ -7,6 +7,7 @@ import React, {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { KeyHint } from '@bitfun/ui';
 import {
   BarChart3,
   Blocks,
@@ -49,6 +50,7 @@ import { globalSearchRegistry } from './globalSearchRegistry';
 import {
   getGlobalSearchShortcutLabel,
   GLOBAL_SEARCH_SHORTCUT,
+  splitGlobalSearchShortcutLabel,
   subscribeGlobalSearchShortcut,
 } from './globalSearchShortcut';
 import { useGlobalSearchStore } from './globalSearchStore';
@@ -172,6 +174,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
     getGlobalSearchShortcutLabel,
     getGlobalSearchShortcutLabel,
   );
+  const searchShortcutHint = splitGlobalSearchShortcutLabel(searchShortcutLabel);
 
   useEffect(() => {
     if (!active) return;
@@ -377,7 +380,9 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                 <X size={14} aria-hidden="true" />
               </button>
             ) : variant === 'modal' ? (
-              <kbd className="global-search__shortcut" aria-hidden="true">{searchShortcutLabel}</kbd>
+              <KeyHint aria-hidden="true" icon={searchShortcutHint.modifier}>
+                {searchShortcutHint.key}
+              </KeyHint>
             ) : null}
           </div>
 
@@ -553,11 +558,11 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
             </span>
           ) : null}
           <span className="global-search__footer-keys" aria-hidden="true">
-            <kbd>↑↓</kbd> {tCommon('nav.search.footer.navigate')}
-            <kbd>↵</kbd> {tCommon('nav.search.footer.open')}
+            <KeyHint>↑↓</KeyHint> {tCommon('nav.search.footer.navigate')}
+            <KeyHint>↵</KeyHint> {tCommon('nav.search.footer.open')}
             {variant === 'modal' || drilldownGroup ? (
               <>
-                <kbd>Esc</kbd>{' '}
+                <KeyHint>Esc</KeyHint>{' '}
                 {tCommon(drilldownGroup ? 'nav.search.footer.back' : 'nav.search.footer.close')}
               </>
             ) : null}

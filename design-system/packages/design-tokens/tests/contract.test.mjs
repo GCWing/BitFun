@@ -125,12 +125,14 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
   assert.equal(tokens["font.family.control"].includes("'Noto Sans SC'"), true);
   assert.equal(tokens["font.family.sans"].startsWith("'Noto Sans SC'"), true);
   assert.equal(tokens["font.family.mono"].startsWith("'JetBrains Mono'"), true);
+  assert.equal(tokens["font.size.micro"], "10px");
   assert.equal(tokens["font.size.xs"], "12px");
   assert.equal(tokens["font.size.small"], "13px");
   assert.equal(tokens["font.size.4xl"], "26px");
   assert.equal(tokens["font.weight.regular"], 400);
   assert.equal(tokens["font.weight.bold"], 600);
   assert.equal(tokens["lineHeight.base"], 1.5);
+  assert.equal(tokens["radius.xs"], "4px");
   assert.equal(tokens["radius.sm"], "6px");
   assert.equal(tokens["radius.2xl"], "20px");
   assert.equal(tokens["radius.3xl"], "24px");

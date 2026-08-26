@@ -1,26 +1,32 @@
 @layer bf.components {
   .root {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     min-inline-size: 0;
+    margin: 0;
     gap: calc(var(--bf-space-1) / 2);
     padding-block: calc(var(--bf-space-1) / 2);
     padding-inline: var(--bf-space-1);
     border: 0;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--bf-radius-xs, calc(var(--bf-radius-sm) - 2px));
     color: var(--bf-color-content-muted);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-key-hint-background, var(--bf-color-action-neutral-surface));
     font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-caption);
+    font-size: var(--bf-font-size-micro, calc(var(--bf-font-size-caption) - 2px));
     font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-tight);
+    letter-spacing: normal;
+    line-height: 1;
+    text-decoration: none;
+    vertical-align: middle;
     white-space: nowrap;
   }
 
   .icon,
   .label {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     min-inline-size: 0;

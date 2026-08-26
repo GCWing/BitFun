@@ -210,6 +210,7 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.action.neutral.surface"], "rgba(0, 0, 0, 0.05)");
   assert.equal(themes.light["color.action.neutral.surfaceHover"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.action.neutral.surfacePressed"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.05)");
   assert.equal(themes.light["color.control.switch.track"], "#dddddd");
   assert.equal(themes.light["color.control.switch.trackChecked"], "#34c78c");
   assert.equal(themes.light["color.control.switch.thumb"], "#ffffff");
@@ -218,6 +219,7 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["opacity.disabled"], 0.55);
   assert.equal(themes.dark["color.surface.canvas"], "#0e0e10");
   assert.equal(themes.dark["color.content.primary"], "#e8e8e8");
+  assert.equal(themes.dark["color.keyHint.background"], "rgba(255, 255, 255, 0.1)");
   assert.equal(themes.dark["color.action.primary.background"], "rgba(255, 255, 255, 0.16)");
   assert.equal(themes.dark["color.action.neutral.surface"], "rgba(255, 255, 255, 0.1)");
   assert.equal(themes.dark["shadow.base"], "0 4px 8px rgba(0, 0, 0, 0.7)");

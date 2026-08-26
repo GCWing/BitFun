@@ -110,6 +110,7 @@ const requiredSemanticTokens = [
   "color.content.primary",
   "color.content.secondary",
   "color.content.disabled",
+  "color.keyHint.background",
   "color.border.default",
   "color.action.primary.background",
   "color.action.primary.hover",
