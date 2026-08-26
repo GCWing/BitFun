@@ -1,7 +1,9 @@
 import {
   ArrowRight,
   Check,
+  Command,
   Eye,
+  Keyboard,
   List,
   MessageCircle,
   MousePointerClick,
@@ -13,6 +15,7 @@ import {
   Button,
   IconButton,
   Input,
+  KeyHint,
   SearchField,
   Stack,
   Switch,
@@ -43,6 +46,7 @@ const componentIcons = {
   Button: MousePointerClick,
   IconButton: List,
   Input: Eye,
+  KeyHint: Keyboard,
   SearchField: SearchIcon,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
@@ -83,13 +87,15 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           trailing={<Eye aria-hidden="true" />}
         />
       );
+    case "KeyHint":
+      return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
     case "SearchField":
       return (
         <SearchField
           aria-label={t("components.preview.searchLabel")}
           leadingIcon={<SearchIcon aria-hidden="true" />}
           placeholder={t("components.preview.searchPlaceholder")}
-          shortcut="⌘K"
+          shortcut={<KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>}
         />
       );
     case "Switch":

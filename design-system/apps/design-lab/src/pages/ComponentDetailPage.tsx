@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  Command,
   Eye,
   List,
   MessageCircle,
@@ -12,6 +13,7 @@ import {
   Button,
   IconButton,
   Input,
+  KeyHint,
   SearchField,
   Switch,
   TabGroup,
@@ -157,6 +159,8 @@ export function ComponentDetailPage({
       case "Input":
       case "SearchField":
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
+      case "KeyHint":
+        return ["default"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
       default:
@@ -190,13 +194,16 @@ export function ComponentDetailPage({
           : "";
       return `import { Input } from "@bitfun/ui";\nimport { Eye } from "lucide-react";\n\n<Input\n  aria-label="${t("components.preview.inputLabel")}"\n  placeholder="${t("components.preview.inputPlaceholder")}"\n  trailing={<Eye />}${stateProps}\n/>`;
     }
+    if (component.name === "KeyHint") {
+      return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
+    }
     if (component.name === "SearchField") {
       const stateProps = previewState === "disabled"
         ? " disabled"
         : previewState === "invalid"
           ? " invalid"
           : "";
-      return `import { SearchField } from "@bitfun/ui";\nimport { Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut="⌘K"${stateProps}\n/>`;
+      return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
@@ -299,6 +306,10 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "KeyHint") {
+      return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    }
+
     if (component.name === "SearchField") {
       const previewClassName = state === "hover"
         ? "lab-force-hover"
@@ -313,7 +324,7 @@ export function ComponentDetailPage({
           invalid={state === "invalid"}
           leadingIcon={<SearchIcon aria-hidden="true" />}
           placeholder={t("components.preview.searchPlaceholder")}
-          shortcut="⌘K"
+          shortcut={<KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>}
         />
       );
     }
@@ -454,8 +465,15 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "Input" || component.name === "SearchField" ? (
-                <div className="component-preview-matrix" data-component={component.name === "Input" ? "input" : "search-field"}>
+              ) : component.name === "Input" || component.name === "KeyHint" || component.name === "SearchField" ? (
+                <div
+                  className="component-preview-matrix"
+                  data-component={component.name === "Input"
+                    ? "input"
+                    : component.name === "KeyHint"
+                      ? "key-hint"
+                      : "search-field"}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span

@@ -8,12 +8,14 @@ const categoryKeys: Readonly<Record<string, MessageKey>> = {
   feedback: "meta.category.feedback",
   form: "meta.category.form",
   navigation: "meta.category.navigation",
+  primitive: "meta.category.primitive",
 };
 
 const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   Button: "component.Button.description",
   IconButton: "component.IconButton.description",
   Input: "component.Input.description",
+  KeyHint: "component.KeyHint.description",
   SearchField: "component.SearchField.description",
   Switch: "component.Switch.description",
   TabGroup: "component.TabGroup.description",
