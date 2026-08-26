@@ -422,6 +422,29 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
 
   const hovered = hoverIndex !== null ? points[hoverIndex] : null;
 
+  // The hit-rate series has real gaps: a bucket with no cache telemetry
+  // (no records, or the provider never reported cached tokens) carries
+  // `cacheHitRate: null`. Split the series into contiguous segments so the
+  // chart never draws a line ACROSS a gap — bridging e.g. a 97% bucket to a
+  // 100% bucket over an idle stretch made the chart look like cache hits
+  // continued while every token counter sat at zero.
+  const hitRateSegments: Array<Array<{ x: number; y: number }>> = [];
+  {
+    let current: Array<{ x: number; y: number }> = [];
+    for (let index = 0; index < points.length; index += 1) {
+      const y = rateFor(points[index].cacheHitRate);
+      if (y === null) {
+        if (current.length > 0) {
+          hitRateSegments.push(current);
+          current = [];
+        }
+        continue;
+      }
+      current.push({ x: xFor(index), y });
+    }
+    if (current.length > 0) hitRateSegments.push(current);
+  }
+
   return (
     <div className="bitfun-usage-stats__trend">
       <svg
@@ -481,22 +504,30 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
           />
         ))}
 
-        {/* Cache hit rate (right axis, dashed) */}
-        <polyline
-          points={points
-            .map((point, index) => {
-              const y = rateFor(point.cacheHitRate);
-              return y === null ? '' : `${xFor(index)},${y}`;
-            })
-            .filter(Boolean)
-            .join(' ')}
-          fill="none"
-          stroke={SERIES_COLORS.cacheHitRate}
-          strokeWidth="2"
-          strokeDasharray="4 4"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
+        {/* Cache hit rate (right axis, dashed) — broken at buckets without
+            telemetry so gaps stay visible instead of being bridged. */}
+        {hitRateSegments.map((segment, segmentIndex) =>
+          segment.length === 1 ? (
+            <circle
+              key={`rate-gap-${segmentIndex}`}
+              cx={segment[0].x}
+              cy={segment[0].y}
+              r="2.5"
+              fill={SERIES_COLORS.cacheHitRate}
+            />
+          ) : (
+            <polyline
+              key={`rate-gap-${segmentIndex}`}
+              points={segment.map((p) => `${p.x},${p.y}`).join(' ')}
+              fill="none"
+              stroke={SERIES_COLORS.cacheHitRate}
+              strokeWidth="2"
+              strokeDasharray="4 4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          ),
+        )}
 
         {/* Hover capture */}
         <rect
@@ -521,6 +552,31 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
               y2={PAD_TOP + plotHeight}
               className="bitfun-usage-stats__trend-cursor"
             />
+            {/* Hover markers: one dot per series so small values stay visible
+                where a zero-baseline token axis would otherwise flatten them
+                (e.g. 276K next to a 20M peak). The rate dot only appears when
+                the bucket actually has cache telemetry. */}
+            {TREND_SERIES.map((series) => (
+              <circle
+                key={`hover-dot-${series.key}`}
+                cx={xFor(hoverIndex)}
+                cy={yFor(hovered[series.key])}
+                r="3.5"
+                fill={series.color}
+                stroke="var(--bf-appearance-token-element-bg-soft)"
+                strokeWidth="1"
+              />
+            ))}
+            {hovered.cacheHitRate !== null && (
+              <circle
+                cx={xFor(hoverIndex)}
+                cy={PAD_TOP + plotHeight - hovered.cacheHitRate * plotHeight}
+                r="3.5"
+                fill={SERIES_COLORS.cacheHitRate}
+                stroke="var(--bf-appearance-token-element-bg-soft)"
+                strokeWidth="1"
+              />
+            )}
             <g className="bitfun-usage-stats__trend-tooltip">
               <rect
                 x={Math.min(Math.max(xFor(hoverIndex) - 92, PAD_LEFT), CHART_WIDTH - PAD_RIGHT - 184)}
@@ -542,8 +598,9 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                 { label: t('trend.legend.cacheRead'), value: hovered.cacheReadTokens, color: SERIES_COLORS.cacheRead },
                 {
                   label: t('trend.legend.cacheHitRate'),
-                  value: hovered.cacheHitRate === null ? null : `${Math.round(hovered.cacheHitRate * 100)}%`,
+                  value: hovered.cacheHitRate,
                   color: SERIES_COLORS.cacheHitRate,
+                  isRate: true,
                 },
               ].map((row, index) => (
                 <text
@@ -553,7 +610,12 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                   className="bitfun-usage-stats__trend-tooltip-row"
                 >
                   <tspan fill={row.color}>● </tspan>
-                  {row.label}: {row.value === null ? '–' : formatTokens(row.value as number)}
+                  {row.label}:{' '}
+                  {row.isRate
+                    ? formatHitRate(row.value as number | null)
+                    : row.value === null
+                      ? '–'
+                      : formatTokens(row.value as number)}
                 </text>
               ))}
             </g>
