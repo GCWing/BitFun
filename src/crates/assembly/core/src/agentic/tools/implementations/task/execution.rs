@@ -301,13 +301,18 @@ impl TaskTool {
             }
         }
         if let Some(target_session_id) = target_session_id.as_deref() {
-            let target_agent_type = coordinator
+            let target_agent_type = match coordinator
                 .get_session_manager()
                 .get_session(target_session_id)
-                .map(|session| session.agent_type)
-                .ok_or_else(|| {
-                    BitFunError::tool("Target agent session was not found".to_string())
-                })?;
+            {
+                Some(session) => session.agent_type,
+                None => {
+                    coordinator
+                        .ensure_subagent_session_loaded_for_reuse(target_session_id, &session_id)
+                        .await?
+                        .agent_type
+                }
+            };
             let target_is_swarm = is_swarm_delegate_agent_type(&target_agent_type);
             if parent_is_swarm_planner != target_is_swarm {
                 return Err(BitFunError::tool(
