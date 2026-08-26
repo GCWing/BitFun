@@ -275,6 +275,7 @@ export type LoopxTaskState =
   | 'retry_wait'
   | 'cancelling'
   | 'stopped'
+| 'aborted'
   | 'recovery_required'
   | 'completed'
   | 'failed'
@@ -302,6 +303,8 @@ export type LoopxPhase =
 export interface LoopxTaskIdentity {
   item: LoopxIssueKey;
   attempt: number;
+  /** Issue / PR title captured at task creation; empty for legacy records. */
+  title?: string;
 }
 
 export interface LoopxSettlementSummary {
@@ -439,7 +442,10 @@ export interface LoopxCreateTaskResponse {
 
 export type LoopxActionKind =
   | 'pause'
+| 'abort'
   | 'resume'
+  | 'resume_repository'
+  | 'reset_all'
   | 'approve'
   | 'reject'
   | 'archive'
@@ -448,6 +454,7 @@ export type LoopxActionKind =
 
 export interface LoopxActionRequest {
   taskId?: string;
+  repository?: LoopxRepositoryKey;
   action: LoopxActionKind;
   clientRequestId: string;
   expectedRevision: number;
@@ -478,6 +485,50 @@ export interface LoopxEventsSinceResponse {
   events: LoopxEvent[];
   nextCursor: number;
   hasMore: boolean;
+}
+
+export type LoopxTurnOutputStatus =
+  | 'current'
+  | 'task_not_found'
+  | 'not_running'
+  | 'stale_turn'
+  | 'output_unavailable';
+
+export type LoopxTurnOutputEventKind =
+  | 'text'
+  | 'thinking'
+  | 'model_round_started'
+  | 'model_round_completed'
+  | 'tool';
+
+export interface LoopxTurnOutputEvent {
+  cursor: number;
+  turnId: string;
+  roundId: string | null;
+  kind: LoopxTurnOutputEventKind;
+  text: string | null;
+  toolName: string | null;
+  toolState: string | null;
+  isEnd: boolean;
+}
+
+export interface LoopxTurnOutputSinceRequest {
+  taskId: string;
+  turnId?: string;
+  streamId?: string;
+  afterCursor: number;
+  limit?: number;
+}
+
+export interface LoopxTurnOutputSinceResponse {
+  status: LoopxTurnOutputStatus;
+  taskId: string;
+  turnId: string | null;
+  streamId: string | null;
+  events: LoopxTurnOutputEvent[];
+  nextCursor: number;
+  hasMore: boolean;
+  message: string | null;
 }
 
 export interface LoopxExistingTask {
@@ -1046,6 +1097,23 @@ export class MiniAppAPI {
       throw createTauriCommandError('miniapp_loopx_events_since', error, {
         appId,
         streamId: request.streamId,
+        afterCursor: request.afterCursor,
+      });
+    }
+  }
+
+  async loopxTurnOutputSince(
+    appId: string,
+    request: LoopxTurnOutputSinceRequest,
+  ): Promise<LoopxTurnOutputSinceResponse> {
+    try {
+      return await api.invoke('miniapp_loopx_turn_output_since', {
+        request: { appId, ...request },
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_loopx_turn_output_since', error, {
+        appId,
+        taskId: request.taskId,
         afterCursor: request.afterCursor,
       });
     }

@@ -22,9 +22,9 @@ use tokio::process::Command;
 use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
 
-pub const LOOPX_PINNED_VERSION: &str = "0.2.13";
-pub const LOOPX_PINNED_VERSION_TAG: &str = "v0.2.13";
-pub const LOOPX_PINNED_VERSION_OUTPUT: &str = "loopx 0.2.13";
+pub const LOOPX_PINNED_VERSION: &str = "0.5.1";
+pub const LOOPX_PINNED_VERSION_TAG: &str = "v0.5.1";
+pub const LOOPX_PINNED_VERSION_OUTPUT: &str = "loopx 0.5.1";
 pub const LOOPX_BUNDLE_MANIFEST_SCHEMA: u32 = 1;
 pub const LOOPX_COMMAND_REFERENCE_SCHEMA: &str = "loopx_command_reference_v0";
 
@@ -151,6 +151,7 @@ pub enum LoopxProcessError {
     #[error("LoopX process exited with status {code:?}")]
     Exited {
         code: Option<i32>,
+        stdout_tail: Vec<String>,
         stderr_tail: Vec<String>,
     },
     #[error("LoopX process timed out after {deadline_ms} ms")]
@@ -305,6 +306,7 @@ impl LoopxProcessRunner for SystemLoopxProcessRunner {
                 if !status.success() {
                     return Err(LoopxProcessError::Exited {
                         code: status.code(),
+                        stdout_tail: output_tail(&stdout_capture.bytes),
                         stderr_tail,
                     });
                 }
@@ -827,10 +829,10 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                     },
                     identity: match verified.source {
                         LoopxCommandSource::PackagedBundle => {
-                            "bitfun-bundled-loopx-v0.2.13".to_string()
+                            "bitfun-bundled-loopx-v0.5.1".to_string()
                         }
                         LoopxCommandSource::FixedSystemCommand => {
-                            "fixed-system-loopx-v0.2.13".to_string()
+                            "fixed-system-loopx-v0.5.1".to_string()
                         }
                     },
                     path: Some(verified.executable.to_string_lossy().into_owned()),
@@ -1129,7 +1131,20 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 &observer,
             )
             .await?;
-            project_goal_snapshot(&request.goal_id, &output.payload, operation_id)
+            let mut snapshot =
+                project_goal_snapshot(&request.goal_id, &output.payload, operation_id)?;
+            if snapshot.run_decision == loopx_contract::LoopxCliRunDecision::WaitingForUser {
+                let todos = run_port_command(
+                    self,
+                    &request.context,
+                    list_todos_args(&request.goal_id),
+                    &observer,
+                )
+                .await?;
+                snapshot.pending_user_gate =
+                    Some(project_pending_user_gate(&todos.payload, operation_id)?);
+            }
+            Ok(snapshot)
         })
     }
 
@@ -1471,6 +1486,18 @@ async fn run_port_command(
 }
 
 fn plan_item_args(request: &loopx_contract::LoopxCliPlanItemRequest) -> Vec<OsString> {
+    let kind = match request.item.kind {
+        loopx_contract::LoopxItemKind::Issue => "issue",
+        loopx_contract::LoopxItemKind::PullRequest => "pull_request",
+    };
+    let metadata = serde_json::json!({
+        "number": request.item.number,
+        "state": "open",
+        "title": request.title,
+        "labels": [],
+        "kind": kind,
+    })
+    .to_string();
     [
         "issue-fix".to_string(),
         "workflow-plan".to_string(),
@@ -1478,9 +1505,8 @@ fn plan_item_args(request: &loopx_contract::LoopxCliPlanItemRequest) -> Vec<OsSt
         request.item.canonical_url(),
         "--repo-path".to_string(),
         request.context.worktree_path.clone(),
-        "--fetch-metadata".to_string(),
-        "--fetch-timeout-seconds".to_string(),
-        "20".to_string(),
+        "--metadata-json".to_string(),
+        metadata,
     ]
     .into_iter()
     .map(OsString::from)
@@ -1561,7 +1587,7 @@ fn add_todo_args(
         return Err(port_error(
             loopx_contract::LoopxCliErrorKind::InvalidInput,
             operation_id,
-            "todo task_class is not supported by LoopX v0.2.13",
+            "todo task_class is not supported by LoopX v0.5.1",
             false,
         ));
     }
@@ -1702,6 +1728,7 @@ fn project_goal_snapshot(
     let user_action_required = envelope
         .pointer("/user/action_required")
         .and_then(Value::as_bool)
+        .or_else(|| envelope.get("action_required").and_then(Value::as_bool))
         == Some(true);
     let state_text = envelope
         .get("state")
@@ -1713,7 +1740,7 @@ fn project_goal_snapshot(
         .unwrap_or_default();
     let run_decision = if should_run {
         loopx_contract::LoopxCliRunDecision::RunNow
-    } else if user_action_required || state_text.contains("waiting") {
+    } else if user_action_required {
         loopx_contract::LoopxCliRunDecision::WaitingForUser
     } else if matches!(state_text, "completed" | "complete" | "closed") {
         loopx_contract::LoopxCliRunDecision::Complete
@@ -1757,6 +1784,7 @@ fn project_goal_snapshot(
             .unwrap_or_default()
             .try_into()
             .unwrap_or(u32::MAX),
+        pending_user_gate: None,
         last_turn_id: payload
             .get("turn_instance_id")
             .and_then(Value::as_str)
@@ -1776,6 +1804,56 @@ fn project_goal_snapshot(
                     .collect()
             })
             .unwrap_or_default(),
+    })
+}
+
+fn project_pending_user_gate(
+    payload: &Value,
+    operation_id: &str,
+) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxCliUserGate> {
+    require_payload_ok(payload, operation_id)?;
+    let todos = payload
+        .get("todos")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            port_error(
+                loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                operation_id,
+                "todo list response did not contain todos",
+                false,
+            )
+        })?;
+    let gate = todos
+        .iter()
+        .find(|todo| {
+            let status = todo
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            todo.get("role").and_then(Value::as_str) == Some("user")
+                && todo.get("task_class").and_then(Value::as_str) == Some("user_gate")
+                && todo.get("done").and_then(Value::as_bool) != Some(true)
+                && !matches!(
+                    status,
+                    "completed" | "closed" | "done" | "archived" | "cancelled"
+                )
+        })
+        .ok_or_else(|| {
+            port_error(
+                loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                operation_id,
+                "LoopX requested a user decision without an open typed user gate",
+                false,
+            )
+        })?;
+    Ok(loopx_contract::LoopxCliUserGate {
+        gate_id: required_json_string(gate, "todo_id", operation_id)?,
+        message: truncate_message(&required_json_string(gate, "text", operation_id)?),
+        action_kind: gate
+            .get("action_kind")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_string),
     })
 }
 
@@ -1918,7 +1996,7 @@ fn validate_github_item(
         return Err(port_error(
             loopx_contract::LoopxCliErrorKind::InvalidInput,
             operation_id,
-            "LoopX v0.2.13 issue-fix planning requires a canonical GitHub item",
+            "LoopX v0.5.1 issue-fix planning requires a canonical GitHub item",
             false,
         ));
     }
@@ -1997,7 +2075,25 @@ fn map_port_error(
         }
         LoopxCliAdapterError::Process(_) => (loopx_contract::LoopxCliErrorKind::Process, true),
     };
-    port_error(kind, operation_id, error.to_string(), retryable)
+    let message = match &error {
+        LoopxCliAdapterError::Process(LoopxProcessError::Exited {
+            code,
+            stdout_tail,
+            stderr_tail,
+        }) if !stderr_tail.is_empty() || !stdout_tail.is_empty() => {
+            let details = if stderr_tail.is_empty() {
+                stdout_tail
+            } else {
+                stderr_tail
+            };
+            format!(
+                "LoopX process exited with status {code:?}: {}",
+                process_error_detail(details)
+            )
+        }
+        _ => error.to_string(),
+    };
+    port_error(kind, operation_id, message, retryable)
 }
 
 fn port_error(
@@ -2038,6 +2134,26 @@ fn now_unix_ms() -> i64 {
 
 fn truncate_message(message: &str) -> String {
     message.chars().take(500).collect()
+}
+
+fn output_tail(bytes: &[u8]) -> Vec<String> {
+    let lines = String::from_utf8_lossy(bytes)
+        .lines()
+        .rev()
+        .take(20)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    lines.into_iter().rev().collect()
+}
+
+fn process_error_detail(lines: &[String]) -> String {
+    let detail = lines
+        .iter()
+        .rev()
+        .find(|line| line.contains("\"error\""))
+        .cloned()
+        .unwrap_or_else(|| lines.join(" | "));
+    truncate_message(&detail)
 }
 
 fn is_public_token(value: &str) -> bool {

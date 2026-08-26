@@ -619,6 +619,55 @@ async function ensureFlashgrepBundleResource() {
 }
 
 /**
+ * Ensure the bundled, compiled loopx CLI sidecar exists for desktop dev.
+ *
+ * The runtime prefers this sidecar (`CARGO_MANIFEST_DIR/resources/loopx`,
+ * see desktop app_state::resolve_bundled_loopx_dir), so desktop:dev mirrors
+ * the packaging build instead of silently falling back to a system `loopx`
+ * command. The staged manifest.json carries the exact pin and a sha256 of the
+ * binary: when both match (and the checksum is intact) the build is skipped in
+ * seconds; a pin change or corruption triggers a rebuild. A build failure is a
+ * warning, never a dev-start blocker — the existing system-command fallback in
+ * loopx_cli.rs stays as the degraded path.
+ */
+async function ensureLoopxSidecar() {
+  const helperUrl = pathToFileURL(path.join(__dirname, 'build-loopx.mjs')).href;
+  const helper = await import(helperUrl);
+  const loopxDir = path.join(ROOT_DIR, 'src', 'apps', 'desktop', 'resources', 'loopx');
+  const manifestPath = path.join(loopxDir, 'manifest.json');
+  const binaryName = process.platform === 'win32' ? 'loopx.exe' : 'loopx';
+  const binaryPath = path.join(loopxDir, binaryName);
+
+  try {
+    if (fs.existsSync(manifestPath) && fs.existsSync(binaryPath)) {
+      const { createHash } = require('node:crypto');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      const expected = (manifest.sha256 || '').replace(/^sha256:/, '');
+      const actual = createHash('sha256').update(fs.readFileSync(binaryPath)).digest('hex');
+      if (manifest.version === helper.LOOPX_VERSION && expected && actual === expected) {
+        printInfo(
+          `loopx sidecar up to date (v${helper.LOOPX_VERSION}${manifest.commit ? ` @ ${manifest.commit}` : ''})`
+        );
+        return { ok: true, code: 0, error: null };
+      }
+      printInfo('loopx sidecar pin or checksum changed; rebuilding...');
+    } else {
+      printInfo(
+        'loopx sidecar missing; building bundled CLI (first desktop:dev run may take a while)...'
+      );
+    }
+    await helper.buildLoopx();
+    printSuccess(`loopx sidecar ready (v${helper.LOOPX_VERSION})`);
+    return { ok: true, code: 0, error: null };
+  } catch (error) {
+    printWarning(
+      `loopx sidecar build skipped (${error.message}); dev will fall back to a system loopx command`
+    );
+    return { ok: true, code: 0, error: null };
+  }
+}
+
+/**
  * Main entry
  */
 async function main() {
@@ -656,7 +705,7 @@ async function main() {
     currentStep++,
     totalSteps,
     desktopMode
-      ? 'Prepare resources (parallel: monaco, version, mobile-web, flashgrep)'
+      ? 'Prepare resources (parallel: monaco, version, mobile-web, flashgrep, loopx)'
       : 'Prepare resources (parallel: monaco, version)'
   );
 
@@ -680,6 +729,10 @@ async function main() {
     prepTasks.push({
       name: 'Build mobile-web',
       promise: runCommandPrefixed('mobile-web', 'node', ['scripts/mobile-web-build.cjs', '--install']),
+    });
+    prepTasks.push({
+      name: 'Prepare loopx CLI sidecar',
+      promise: ensureLoopxSidecar(),
     });
     prepTasks.push({
       name: 'Prepare workspace search daemon',

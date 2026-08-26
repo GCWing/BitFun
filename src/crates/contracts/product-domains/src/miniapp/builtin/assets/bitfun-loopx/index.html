@@ -47,10 +47,16 @@
         </button>
       </form>
 
-      <button id="sync-button" class="icon-button" type="button" title="刷新状态" data-i18n-title="refresh">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>
-        <span class="sr-only" data-i18n="refresh">刷新状态</span>
-      </button>
+      <div class="header-actions">
+        <button id="reset-loopx" class="icon-button" type="button" title="重置 LoopX" data-i18n-title="resetLoopx">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 14h10l1-14"/><path d="M10 11v6M14 11v6"/></svg>
+          <span class="sr-only" data-i18n="resetLoopx">重置 LoopX</span>
+        </button>
+        <button id="sync-button" class="icon-button" type="button" title="刷新状态" data-i18n-title="refresh">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>
+          <span class="sr-only" data-i18n="refresh">刷新状态</span>
+        </button>
+      </div>
     </header>
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -96,6 +102,7 @@
           <div>
             <h2 data-i18n="tasks">任务</h2>
             <span id="task-count" class="count-badge">0</span>
+            <span id="decision-count" class="count-badge count-badge--attention" role="status" aria-live="polite" hidden></span>
           </div>
           <button id="collapse-tasks" class="icon-button icon-button--small" type="button" aria-expanded="true" title="收起任务栏" data-i18n-title="collapseTasks">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -103,14 +110,11 @@
           </button>
         </div>
         <nav id="task-list" class="task-list" aria-label="LoopX 任务">
-          <button id="all-activity" class="task-item task-item--all is-selected" type="button">
-            <span class="task-item__icon" aria-hidden="true">#</span>
-            <span class="task-item__main">
-              <strong data-i18n="allActivity">全部活动</strong>
-              <small id="all-activity-meta">0</small>
-            </span>
-          </button>
           <div id="task-items"></div>
+          <div id="repository-actions" class="repository-actions" hidden>
+            <button id="resume-repository" class="primary-button" type="button"></button>
+            <span id="repository-actions-meta" data-i18n="repositorySerial">同仓库串行执行</span>
+          </div>
         </nav>
         <div id="task-empty" class="task-empty">
           <span aria-hidden="true">#</span>
@@ -118,19 +122,28 @@
         </div>
       </aside>
 
+      <div id="rail-splitter" class="rail-splitter" role="separator" aria-orientation="vertical" aria-label="调整任务栏宽度" title="调整任务栏宽度" data-i18n-title="resizeTasks" tabindex="0"></div>
+
       <main class="log-workspace" aria-labelledby="log-title">
         <header class="log-header">
           <div class="log-title-block">
             <div class="log-title-row">
+              <button id="show-all-events" class="icon-button icon-button--small task-back-button" type="button" hidden title="全部活动" data-i18n-title="allActivity">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                <span class="sr-only" data-i18n="allActivity">全部活动</span>
+              </button>
               <h1 id="log-title" data-i18n="activity">运行日志</h1>
               <span id="selected-state" class="state-pill" hidden></span>
+              <div id="task-actions" class="task-actions"></div>
             </div>
-            <p id="selected-summary" data-i18n="allTaskEvents">所有任务的关键事件</p>
+            <p id="selected-summary" data-i18n="allTaskEvents">所有任务的实时日志和阶段进度</p>
+            <a id="liveness-item" class="liveness-item" hidden target="_blank" rel="noopener noreferrer"></a>
           </div>
           <div class="log-controls">
-            <div class="segmented" role="radiogroup" aria-label="日志密度">
-              <button id="mode-key" type="button" role="radio" aria-checked="true" class="is-active" data-i18n="keyEvents">关键事件</button>
-              <button id="mode-full" type="button" role="radio" aria-checked="false" data-i18n="fullLog">完整日志</button>
+            <div class="segmented" role="radiogroup" aria-label="日志视图">
+              <button id="mode-key" type="button" role="radio" aria-checked="false" data-i18n="keyEvents">关键事件</button>
+              <button id="mode-full" type="button" role="radio" aria-checked="true" class="is-active" data-i18n="fullLog">完整日志</button>
+              <button id="mode-output" type="button" role="radio" aria-checked="false" data-i18n="liveOutput">实时输出</button>
             </div>
             <label class="search-field" for="log-search">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -157,10 +170,15 @@
             <span id="liveness-turn" hidden></span>
             <span id="liveness-tool" hidden></span>
             <span id="liveness-deadline" hidden></span>
+            <span id="liveness-goal" class="liveness-goal" hidden></span>
             <span id="liveness-error" class="error-text" hidden></span>
           </div>
-          <div id="task-actions" class="task-actions"></div>
         </section>
+
+        <details id="issue-description-panel" class="issue-description-panel" hidden open>
+          <summary data-i18n="issueDescription">Issue 描述</summary>
+          <p id="liveness-description" class="liveness-description"></p>
+        </details>
 
         <div id="log-scroll" class="log-scroll">
           <div id="log-empty" class="log-empty">
@@ -171,11 +189,6 @@
         </div>
         <button id="new-events" class="new-events" type="button" hidden data-i18n="newEvents">查看新事件</button>
 
-        <footer class="stream-status">
-          <span id="stream-state" data-i18n="notConnected">未连接</span>
-          <span id="stream-cursor">--</span>
-          <span id="visible-log-count">0</span>
-        </footer>
       </main>
     </div>
   </div>
@@ -203,6 +216,10 @@
           <div class="section-heading">
             <h3 id="candidate-title" data-i18n="items">Issue / PR</h3>
             <span id="candidate-count">0</span>
+            <label class="candidate-select-all">
+              <input id="candidate-select-all" type="checkbox" />
+              <span data-i18n="selectAll">全选</span>
+            </label>
           </div>
           <div id="candidate-list" class="candidate-list"></div>
         </section>
@@ -261,6 +278,43 @@
           <button id="gate-reject" class="danger-button" type="button" data-i18n="reject">拒绝</button>
           <button id="gate-approve" class="primary-button" type="submit" data-i18n="approve">批准</button>
         </div>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="repository-resume-dialog" class="dialog" aria-labelledby="repository-resume-title">
+    <form method="dialog">
+      <header class="dialog__header">
+        <div>
+          <span class="eyebrow" data-i18n="batchAction">批量操作</span>
+          <h2 id="repository-resume-title" data-i18n="resumeRepositoryTitle">继续此仓库的任务</h2>
+        </div>
+      </header>
+      <div class="dialog__body">
+        <p id="repository-resume-message"></p>
+      </div>
+      <footer class="dialog__footer">
+        <button id="repository-resume-cancel" class="text-button" type="button" data-i18n="cancel">取消</button>
+        <button id="repository-resume-confirm" class="primary-button" type="submit" data-i18n="confirmContinue">确认继续</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="reset-loopx-dialog" class="dialog" aria-labelledby="reset-loopx-title">
+    <form method="dialog">
+      <header class="dialog__header">
+        <div>
+          <span class="eyebrow" data-i18n="destructiveAction">危险操作</span>
+          <h2 id="reset-loopx-title" data-i18n="resetLoopxTitle">清空并重新开始</h2>
+        </div>
+      </header>
+      <div class="dialog__body">
+        <p id="reset-loopx-message"></p>
+        <p class="dialog-note" data-i18n="resetLoopxRetained">模型配置、GitHub 登录和 MiniApp 设置会保留。</p>
+      </div>
+      <footer class="dialog__footer">
+        <button id="reset-loopx-cancel" class="text-button" type="button" data-i18n="cancel">取消</button>
+        <button id="reset-loopx-confirm" class="danger-button" type="submit" data-i18n="resetLoopxConfirm">清空并重新开始</button>
       </footer>
     </form>
   </dialog>

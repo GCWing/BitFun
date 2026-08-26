@@ -1,16 +1,17 @@
 use super::{LoopxPersistedState, LoopxStateStore, LoopxTaskRuntimeRecord};
 use bitfun_product_domains::miniapp::loopx::*;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
 const DEFAULT_AGENT_ID: &str = "bitfun-agent";
 const EVENT_CHANNEL_CAPACITY: usize = 256;
+const INTAKE_PREVIEW_TTL_MS: i64 = 5 * 60 * 1000;
+const MAX_INTAKE_PREVIEWS: usize = 64;
 
 struct ScheduledTask {
     task_id: String,
-    delay: Duration,
 }
 
 #[derive(Default)]
@@ -44,6 +45,7 @@ pub struct LoopxController {
     state: RwLock<LoopxPersistedState>,
     mutation_lock: Mutex<()>,
     previews: RwLock<HashMap<String, LoopxIntakePreview>>,
+    active_tasks: Mutex<HashMap<String, bool>>,
     active_repositories: Mutex<HashMap<String, String>>,
     event_sender: broadcast::Sender<LoopxEvent>,
     task_sender: mpsc::UnboundedSender<ScheduledTask>,
@@ -74,6 +76,7 @@ impl LoopxController {
             state: RwLock::new(persisted),
             mutation_lock: Mutex::new(()),
             previews: RwLock::new(HashMap::new()),
+            active_tasks: Mutex::new(HashMap::new()),
             active_repositories: Mutex::new(HashMap::new()),
             event_sender,
             task_sender,
@@ -87,14 +90,27 @@ impl LoopxController {
         let task_runner = Arc::clone(&controller);
         tokio::spawn(async move {
             while let Some(scheduled) = task_receiver.recv().await {
-                if !scheduled.delay.is_zero() {
-                    tokio::time::sleep(scheduled.delay).await;
-                }
-                if let Err(error) = task_runner.drive_task(scheduled.task_id.clone()).await {
-                    let _ = task_runner.fail_task(&scheduled.task_id, error).await;
-                }
+                let task_runner = Arc::clone(&task_runner);
+                tokio::spawn(async move {
+                    if !task_runner.reserve_scheduled_task(&scheduled.task_id).await {
+                        return;
+                    }
+                    loop {
+                        let result = task_runner.drive_task(scheduled.task_id.clone()).await;
+                        if let Err(error) = result {
+                            let _ = task_runner.fail_task(&scheduled.task_id, error).await;
+                        }
+                        if !task_runner.release_scheduled_task(&scheduled.task_id).await {
+                            break;
+                        }
+                        if !task_runner.reserve_scheduled_task(&scheduled.task_id).await {
+                            break;
+                        }
+                    }
+                });
             }
         });
+        controller.enqueue_ready_tasks_after_load().await;
         controller
     }
 
@@ -131,41 +147,133 @@ impl LoopxController {
         )
     }
 
+    pub async fn turn_output_since(
+        &self,
+        request: LoopxTurnOutputSinceRequest,
+    ) -> LoopxTurnOutputSinceResponse {
+        let (task, runtime) = {
+            let state = self.state.read().await;
+            let Some(task) = state
+                .tasks
+                .iter()
+                .find(|task| task.task_id == request.task_id)
+            else {
+                return LoopxTurnOutputSinceResponse {
+                    status: LoopxTurnOutputStatus::TaskNotFound,
+                    task_id: request.task_id,
+                    message: Some("LoopX task was not found".to_string()),
+                    ..LoopxTurnOutputSinceResponse::default()
+                };
+            };
+            let runtime = state.runtime.get(&task.task_id).cloned().unwrap_or_default();
+            (task.clone(), runtime)
+        };
+
+        if task.state != LoopxTaskState::Running || task.phase != LoopxPhase::AgentRunning {
+            return LoopxTurnOutputSinceResponse {
+                status: LoopxTurnOutputStatus::NotRunning,
+                task_id: task.task_id,
+                turn_id: task.current_turn_id,
+                message: Some("LoopX task does not have an active Agent turn".to_string()),
+                ..LoopxTurnOutputSinceResponse::default()
+            };
+        }
+        let Some(session_id) = runtime.session_id else {
+            return LoopxTurnOutputSinceResponse {
+                status: LoopxTurnOutputStatus::OutputUnavailable,
+                task_id: task.task_id,
+                turn_id: task.current_turn_id,
+                message: Some("LoopX Agent session output is unavailable".to_string()),
+                ..LoopxTurnOutputSinceResponse::default()
+            };
+        };
+        let Some(turn_id) = runtime
+            .agent_turn_id
+            .clone()
+            .or_else(|| task.current_turn_id.clone())
+        else {
+            return LoopxTurnOutputSinceResponse {
+                status: LoopxTurnOutputStatus::OutputUnavailable,
+                task_id: task.task_id,
+                message: Some("LoopX Agent turn output is unavailable".to_string()),
+                ..LoopxTurnOutputSinceResponse::default()
+            };
+        };
+        if request
+            .turn_id
+            .as_deref()
+            .is_some_and(|requested| requested != turn_id)
+        {
+            return LoopxTurnOutputSinceResponse {
+                status: LoopxTurnOutputStatus::StaleTurn,
+                task_id: task.task_id,
+                turn_id: Some(turn_id),
+                message: Some("LoopX task moved to a different Agent turn".to_string()),
+                ..LoopxTurnOutputSinceResponse::default()
+            };
+        }
+
+        match self
+            .agent
+            .output_since(LoopxAgentOutputSinceRequest {
+                operation_id: format!("output-agent-{}", uuid::Uuid::new_v4()),
+                session_id,
+                turn_id: turn_id.clone(),
+                stream_id: request.stream_id,
+                after_cursor: request.after_cursor,
+                limit: request.limit,
+            })
+            .await
+        {
+            Ok(page) => LoopxTurnOutputSinceResponse {
+                status: LoopxTurnOutputStatus::Current,
+                task_id: task.task_id,
+                turn_id: Some(turn_id),
+                stream_id: page.stream_id,
+                events: page.events,
+                next_cursor: page.next_cursor,
+                has_more: page.has_more,
+                message: None,
+            },
+            Err(error) => LoopxTurnOutputSinceResponse {
+                status: LoopxTurnOutputStatus::OutputUnavailable,
+                task_id: task.task_id,
+                turn_id: Some(turn_id),
+                message: Some(error.to_string()),
+                ..LoopxTurnOutputSinceResponse::default()
+            },
+        }
+    }
+
     pub async fn refresh_environment(self: &Arc<Self>) -> Result<(), String> {
         self.ensure_writable().await?;
-        let operation_id = format!("environment-{}", uuid::Uuid::new_v4());
-        self.update_environment(LoopxEnvironmentStatus::Checking, None, None)
-            .await?;
+        let probe_id = uuid::Uuid::new_v4();
+        self.mark_environment_checking().await?;
         let progress = BufferedProgress::default();
-        let handshake = self
-            .cli
-            .handshake(
-                LoopxCliHandshakeRequest {
-                    call: LoopxCliCallContext {
-                        operation_id,
-                        deadline_at: None,
-                    },
-                    ..LoopxCliHandshakeRequest::default()
+        let handshake = self.cli.handshake(
+            LoopxCliHandshakeRequest {
+                call: LoopxCliCallContext {
+                    operation_id: format!("environment-sidecar-{probe_id}"),
+                    deadline_at: None,
                 },
-                &progress,
-            )
-            .await;
+                ..LoopxCliHandshakeRequest::default()
+            },
+            &progress,
+        );
+        let workspace = self.workspace.probe(LoopxWorkspaceProbeRequest {
+            operation_id: format!("environment-workspace-{probe_id}"),
+            repository: None,
+        });
+        let agent = self.agent.probe(LoopxAgentProbeRequest {
+            operation_id: format!("environment-agent-{probe_id}"),
+            model_id: Some("auto".to_string()),
+        });
+        let github_auth = self.probe_github_auth();
+        let (handshake, workspace, agent, github_auth) =
+            tokio::join!(handshake, workspace, agent, github_auth);
         self.record_progress(progress.take()).await?;
-        match handshake {
-            Ok(manifest) => {
-                let github_auth = self.probe_github_auth().await;
-                self.update_environment(
-                    LoopxEnvironmentStatus::Ready,
-                    Some(manifest),
-                    Some(github_auth),
-                )
-                .await
-            }
-            Err(error) => {
-                self.update_environment_error(error.to_string()).await?;
-                Err(error.to_string())
-            }
-        }
+        self.commit_environment(handshake, workspace, agent, github_auth)
+            .await
     }
 
     async fn probe_github_auth(&self) -> LoopxGithubAuthProbe {
@@ -195,24 +303,33 @@ impl LoopxController {
     ) -> Result<LoopxResolveIntakeResponse, String> {
         self.ensure_writable().await?;
         let target = parse_loopx_intake(&request.input).map_err(|error| error.to_string())?;
-        let operation_id = format!("resolve-{}", uuid::Uuid::new_v4());
+        let probe_id = uuid::Uuid::new_v4();
+        let repository = target.repository().clone();
+        let model_id = request.model_id;
         let progress = BufferedProgress::default();
-        let resolved = self
-            .cli
-            .resolve_intake(
-                LoopxCliResolveIntakeRequest {
-                    call: LoopxCliCallContext {
-                        operation_id,
-                        deadline_at: None,
-                    },
-                    input: request.input,
-                    target: target.clone(),
+        let resolved = self.cli.resolve_intake(
+            LoopxCliResolveIntakeRequest {
+                call: LoopxCliCallContext {
+                    operation_id: format!("resolve-metadata-{probe_id}"),
+                    deadline_at: None,
                 },
-                &progress,
-            )
-            .await
-            .map_err(|error| error.to_string())?;
+                input: request.input,
+                target: target.clone(),
+            },
+            &progress,
+        );
+        let workspace_probe = self.workspace.probe(LoopxWorkspaceProbeRequest {
+            operation_id: format!("resolve-workspace-{probe_id}"),
+            repository: Some(repository),
+        });
+        let agent_probe = self.agent.probe(LoopxAgentProbeRequest {
+            operation_id: format!("resolve-agent-{probe_id}"),
+            model_id: Some(model_id.clone()),
+        });
+        let (resolved, workspace_probe, agent_probe) =
+            tokio::join!(resolved, workspace_probe, agent_probe);
         self.record_progress(progress.take()).await?;
+        let resolved = resolved.map_err(|error| error.to_string())?;
         let scopes = vec![
             LoopxPermissionScope::WorkspaceRead,
             LoopxPermissionScope::WorkspaceWrite,
@@ -220,15 +337,38 @@ impl LoopxController {
             LoopxPermissionScope::GithubRead,
             LoopxPermissionScope::AgentExecution,
         ];
-        let model = LoopxModelCapability {
-            model_id: request.model_id,
-            available: true,
-            supports_images: false,
+        let model = match agent_probe {
+            Ok(probe) => LoopxModelCapability {
+                model_id,
+                available: true,
+                supports_images: probe.supports_images,
+                detail: Some(format!("Resolved Agent model: {}", probe.model_id)),
+            },
+            Err(error) => LoopxModelCapability {
+                model_id,
+                available: false,
+                supports_images: false,
+                detail: Some(error.to_string()),
+            },
         };
-        let workspace = LoopxWorkspacePreview {
-            disposition: LoopxWorkspaceDisposition::CloneRequired,
-            path: None,
-            repository_verified: false,
+        let workspace = match workspace_probe {
+            Ok(probe) => LoopxWorkspacePreview {
+                disposition: LoopxWorkspaceDisposition::CloneRequired,
+                path: None,
+                repository_verified: probe.repository_verified,
+                detail: Some(format!(
+                    "{}; repository access verified",
+                    probe
+                        .git_version
+                        .unwrap_or_else(|| "Git available".to_string())
+                )),
+            },
+            Err(error) => LoopxWorkspacePreview {
+                disposition: LoopxWorkspaceDisposition::Unavailable,
+                path: None,
+                repository_verified: false,
+                detail: Some(error.to_string()),
+            },
         };
         let fingerprint = build_intake_fingerprint(
             &resolved.target,
@@ -237,6 +377,12 @@ impl LoopxController {
             &model.model_id,
             &scopes,
         );
+        let preview_resolved_at = if resolved.resolved_at > 0 {
+            resolved.resolved_at
+        } else {
+            now_ms()
+        };
+        let expires_at = preview_resolved_at.saturating_add(INTAKE_PREVIEW_TTL_MS);
         let preview = LoopxIntakePreview {
             fingerprint: fingerprint.clone(),
             target: resolved.target,
@@ -246,13 +392,13 @@ impl LoopxController {
             truncated: resolved.truncated,
             model,
             permission_scopes: scopes,
-            resolved_at: resolved.resolved_at,
-            expires_at: None,
+            resolved_at: preview_resolved_at,
+            expires_at: Some(expires_at),
         };
-        self.previews
-            .write()
-            .await
-            .insert(fingerprint, preview.clone());
+        let mut previews = self.previews.write().await;
+        prune_intake_previews(&mut previews, now_ms());
+        previews.insert(fingerprint, preview.clone());
+        prune_intake_previews(&mut previews, now_ms());
         Ok(LoopxResolveIntakeResponse { preview })
     }
 
@@ -264,13 +410,6 @@ impl LoopxController {
         if request.client_request_id.trim().is_empty() {
             return Err("clientRequestId is required".to_string());
         }
-        let preview = self
-            .previews
-            .read()
-            .await
-            .get(&request.preview_fingerprint)
-            .cloned()
-            .ok_or_else(|| "Intake preview is missing or stale; resolve it again".to_string())?;
         let selected = request
             .selected_items
             .iter()
@@ -279,6 +418,32 @@ impl LoopxController {
         if selected.is_empty() {
             return Err("Select at least one issue or pull request".to_string());
         }
+        {
+            let state = self.state.read().await;
+            if state.has_processed_request(&request.client_request_id) {
+                return Ok(LoopxCreateTaskResponse {
+                    outcomes: existing_outcomes(&state, &selected),
+                    snapshot_revision: state.revision,
+                });
+            }
+        }
+        let preview = match {
+            let mut previews = self.previews.write().await;
+            prune_intake_previews(&mut previews, now_ms());
+            previews.get(&request.preview_fingerprint).cloned()
+        } {
+            Some(preview) => preview,
+            None => {
+                let state = self.state.read().await;
+                if state.has_processed_request(&request.client_request_id) {
+                    return Ok(LoopxCreateTaskResponse {
+                        outcomes: existing_outcomes(&state, &selected),
+                        snapshot_revision: state.revision,
+                    });
+                }
+                return Err("Intake preview is missing or stale; resolve it again".to_string());
+            }
+        };
         if selected.iter().any(|key| {
             !preview
                 .candidates
@@ -286,6 +451,20 @@ impl LoopxController {
                 .any(|candidate| &candidate.key == key)
         }) {
             return Err("Selected item was not present in the intake preview".to_string());
+        }
+        if preview.workspace.disposition == LoopxWorkspaceDisposition::Unavailable
+            || !preview.workspace.repository_verified
+        {
+            return Err(preview.workspace.detail.clone().unwrap_or_else(|| {
+                "The repository workspace did not pass live Git verification".to_string()
+            }));
+        }
+        if !preview.model.available {
+            return Err(preview
+                .model
+                .detail
+                .clone()
+                .unwrap_or_else(|| "The selected Agent model is unavailable".to_string()));
         }
         if request.granted_scopes.iter().any(|scope| {
             !preview.permission_scopes.contains(scope) || !intake_scope_is_pregrantable(*scope)
@@ -361,6 +540,8 @@ impl LoopxController {
                         identity: LoopxTaskIdentity {
                             item: key.clone(),
                             attempt,
+                            title: candidate.title.clone(),
+                            description: candidate.description.clone(),
                         },
                         generation: 1,
                         revision: 1,
@@ -434,6 +615,12 @@ impl LoopxController {
                 ..LoopxActionResponse::default()
             });
         }
+        if request.action == LoopxActionKind::ResumeRepository {
+            return self.resume_repository(&request).await;
+        }
+        if request.action == LoopxActionKind::ResetAll {
+            return self.reset_all(&request).await;
+        }
         let task_id = request
             .task_id
             .clone()
@@ -458,6 +645,22 @@ impl LoopxController {
                 .find(|task| task.task_id == task_id)
                 .cloned()
                 .ok_or_else(|| "LoopX task not found".to_string())?;
+            if request.action == LoopxActionKind::Resume
+                && matches!(
+                    task.state,
+                    LoopxTaskState::Preparing
+                        | LoopxTaskState::Queued
+                        | LoopxTaskState::Running
+                        | LoopxTaskState::RetryWait
+                )
+            {
+                return Ok(LoopxActionResponse {
+                    status: LoopxActionStatus::Duplicate,
+                    current_revision: task.revision,
+                    task: Some(task),
+                    message: Some("Task is already queued or running".to_string()),
+                });
+            }
             if task.revision != request.expected_revision {
                 return Ok(LoopxActionResponse {
                     status: LoopxActionStatus::RevisionConflict,
@@ -477,18 +680,30 @@ impl LoopxController {
                 self.pause_task(&task, &runtime, &request.client_request_id)
                     .await
             }
+            LoopxActionKind::Abort => {
+                self.abort_task(&task, &runtime, &request.client_request_id)
+                    .await
+            }
             LoopxActionKind::Resume => self.resume_task(&task, &request.client_request_id).await,
+            LoopxActionKind::ResumeRepository | LoopxActionKind::ResetAll => unreachable!(),
             LoopxActionKind::Approve | LoopxActionKind::Reject => {
                 self.answer_gate(&task, &runtime, &request).await
             }
             LoopxActionKind::Archive => {
-                self.transition_action(
-                    &task_id,
-                    LoopxTaskState::Archived,
-                    LoopxPhase::Finished,
-                    &request.client_request_id,
-                )
-                .await
+                let response = self
+                    .transition_action(
+                        &task_id,
+                        LoopxTaskState::Archived,
+                        LoopxPhase::Finished,
+                        &request.client_request_id,
+                    )
+                    .await?;
+                // Explicit user action: archive is the only workflow that
+                // destroys the task worktree (and its bare repository when
+                // the last worktree is gone). Terminal states keep their
+                // worktrees so the user can inspect agent output first.
+                self.dispose_task_workspace(&task).await;
+                Ok(response)
             }
             LoopxActionKind::Restore => {
                 self.transition_action(
@@ -508,6 +723,7 @@ impl LoopxController {
         turn_id: &str,
         status: LoopxAgentTurnStatus,
         summary: Option<String>,
+        blocks_repository: bool,
     ) -> Result<(), String> {
         let (task, runtime) = {
             let state = self.state.read().await;
@@ -551,7 +767,7 @@ impl LoopxController {
                         .clone()
                         .unwrap_or_default(),
                     agent_status: status,
-                    agent_summary: summary,
+                    agent_summary: summary.clone(),
                 },
                 &progress,
             )
@@ -575,7 +791,16 @@ impl LoopxController {
             Ok(LoopxAgentFinishResult::default())
         };
         match (result, finish_result) {
-            (Ok(settlement), Ok(_)) => self.apply_settlement(&task, settlement).await,
+            (Ok(settlement), Ok(_)) => {
+                self.apply_settlement(
+                    &task,
+                    settlement,
+                    status,
+                    summary.as_deref(),
+                    blocks_repository,
+                )
+                .await
+            }
             (Err(error), _) => self.fail_task(&task.task_id, error.to_string()).await,
             (Ok(_), Err(error)) => self.fail_task(&task.task_id, error).await,
         }
@@ -621,6 +846,12 @@ impl LoopxController {
 
     async fn drive_task(self: &Arc<Self>, task_id: String) -> Result<(), String> {
         let task = self.task(&task_id).await?;
+        if !matches!(
+            task.state,
+            LoopxTaskState::Preparing | LoopxTaskState::Queued
+        ) {
+            return Ok(());
+        }
         if !self.reserve_repository(&task).await {
             self.transition_task(
                 &task_id,
@@ -647,6 +878,9 @@ impl LoopxController {
         self.bind_workspace(&task_id, task.generation, &workspace)
             .await?;
         let task = self.task(&task_id).await?;
+        if task_has_bound_goal(&task) {
+            return self.drive_turn(task_id).await;
+        }
         let runtime = self.runtime(&task_id).await;
         let progress = BufferedProgress::default();
         let intake = self
@@ -655,6 +889,7 @@ impl LoopxController {
                 LoopxCliPlanItemRequest {
                     context: goal_context(&task, &runtime),
                     item: task.identity.item.clone(),
+                    title: task.identity.title.clone(),
                 },
                 &progress,
             )
@@ -727,13 +962,35 @@ impl LoopxController {
                 Ok(())
             }
             LoopxCliRunDecision::WaitingForUser => {
+                let gate = inspected.pending_user_gate.ok_or_else(|| {
+                    "LoopX requested a user decision without an answerable gate".to_string()
+                })?;
+                let LoopxCliUserGate {
+                    gate_id,
+                    message,
+                    action_kind,
+                } = gate;
                 self.release_repository(&task).await;
-                self.transition_task(
-                    &task_id,
-                    task.generation,
-                    LoopxTaskState::WaitingForUser,
-                    LoopxPhase::WaitingForApproval,
-                    "LoopX requires an explicit user decision",
+                let updated = self
+                    .transition_task(
+                        &task_id,
+                        task.generation,
+                        LoopxTaskState::WaitingForUser,
+                        LoopxPhase::WaitingForApproval,
+                        "LoopX requires an explicit user decision",
+                    )
+                    .await?;
+                let mut details = BTreeMap::new();
+                details.insert("gateId".to_string(), gate_id);
+                if let Some(action_kind) = action_kind {
+                    details.insert("actionKind".to_string(), action_kind);
+                }
+                self.append_task_event_with_details(
+                    &updated,
+                    LoopxEventKind::ApprovalRequired,
+                    &message,
+                    true,
+                    details,
                 )
                 .await?;
                 self.schedule_next_for_repository(
@@ -808,6 +1065,59 @@ impl LoopxController {
         }
     }
 
+    /// Best-effort teardown of a task's agent run (cancel then finish). A stale
+    /// session — for example one persisted before a host restart — must not
+    /// abort pause or reset: the controller's persisted state is the task
+    /// lifecycle source of truth, so teardown failures are logged and the
+    /// operation continues.
+    async fn teardown_agent_run(
+        self: &Arc<Self>,
+        task: &LoopxTaskSnapshot,
+        runtime: &LoopxTaskRuntimeRecord,
+    ) {
+        let (Some(session_id), Some(turn_id)) =
+            (runtime.session_id.as_ref(), runtime.agent_turn_id.as_ref())
+        else {
+            return;
+        };
+        if let Err(error) = self
+            .agent
+            .cancel(LoopxAgentCancelRequest {
+                operation_id: format!("teardown-agent-{}", uuid::Uuid::new_v4()),
+                target_operation_id: runtime.operation_id.clone(),
+                task_id: task.task_id.clone(),
+                generation: task.generation,
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+            })
+            .await
+        {
+            log::warn!(
+                "LoopX agent cancel skipped for task {}: {}",
+                task.task_id,
+                error
+            );
+        }
+        if let Err(error) = self
+            .agent
+            .finish(LoopxAgentFinishRequest {
+                operation_id: format!("teardown-agent-finish-{}", uuid::Uuid::new_v4()),
+                task_id: task.task_id.clone(),
+                generation: task.generation,
+                worktree_path: task.workspace_path.clone().unwrap_or_default(),
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+            })
+            .await
+        {
+            log::warn!(
+                "LoopX agent finish skipped for task {}: {}",
+                task.task_id,
+                error
+            );
+        }
+    }
+
     async fn pause_task(
         self: &Arc<Self>,
         task: &LoopxTaskSnapshot,
@@ -822,30 +1132,7 @@ impl LoopxController {
             "Cancelling the active LoopX task",
         )
         .await?;
-        if let (Some(session_id), Some(turn_id)) = (&runtime.session_id, &runtime.agent_turn_id) {
-            self.agent
-                .cancel(LoopxAgentCancelRequest {
-                    operation_id: format!("cancel-agent-{}", uuid::Uuid::new_v4()),
-                    target_operation_id: runtime.operation_id.clone(),
-                    task_id: task.task_id.clone(),
-                    generation: task.generation,
-                    session_id: session_id.clone(),
-                    turn_id: turn_id.clone(),
-                })
-                .await
-                .map_err(|error| error.to_string())?;
-            self.agent
-                .finish(LoopxAgentFinishRequest {
-                    operation_id: format!("finish-paused-agent-{}", uuid::Uuid::new_v4()),
-                    task_id: task.task_id.clone(),
-                    generation: task.generation,
-                    worktree_path: task.workspace_path.clone().unwrap_or_default(),
-                    session_id: session_id.clone(),
-                    turn_id: turn_id.clone(),
-                })
-                .await
-                .map_err(|error| error.to_string())?;
-        }
+        self.teardown_agent_run(task, runtime).await;
         let progress = BufferedProgress::default();
         let _ = self
             .cli
@@ -866,6 +1153,53 @@ impl LoopxController {
             .transition_action(
                 &task.task_id,
                 LoopxTaskState::Stopped,
+                LoopxPhase::Finished,
+                request_id,
+            )
+            .await?;
+        self.schedule_next_for_repository(
+            &task.identity.item.repository.canonical_id(),
+            Some(&task.task_id),
+        )
+        .await;
+        Ok(response)
+    }
+
+    async fn abort_task(
+        self: &Arc<Self>,
+        task: &LoopxTaskSnapshot,
+        runtime: &LoopxTaskRuntimeRecord,
+        request_id: &str,
+    ) -> Result<LoopxActionResponse, String> {
+        self.transition_task(
+            &task.task_id,
+            task.generation,
+            LoopxTaskState::Cancelling,
+            LoopxPhase::Cancelling,
+            "Aborting the active LoopX task",
+        )
+        .await?;
+        self.teardown_agent_run(task, runtime).await;
+        let progress = BufferedProgress::default();
+        let _ = self
+            .cli
+            .cancel(
+                LoopxCliCancelRequest {
+                    call: LoopxCliCallContext {
+                        operation_id: format!("abort-cli-{}", uuid::Uuid::new_v4()),
+                        deadline_at: None,
+                    },
+                    target_operation_id: runtime.operation_id.clone(),
+                },
+                &progress,
+            )
+            .await;
+        self.record_progress(progress.take()).await?;
+        self.release_repository(task).await;
+        let response = self
+            .transition_action(
+                &task.task_id,
+                LoopxTaskState::Aborted,
                 LoopxPhase::Finished,
                 request_id,
             )
@@ -917,6 +1251,223 @@ impl LoopxController {
         Ok(LoopxActionResponse {
             current_revision: updated.revision,
             task: Some(updated),
+            ..LoopxActionResponse::default()
+        })
+    }
+
+    async fn resume_repository(
+        self: &Arc<Self>,
+        request: &LoopxActionRequest,
+    ) -> Result<LoopxActionResponse, String> {
+        let repository = request
+            .repository
+            .as_ref()
+            .ok_or_else(|| "repository is required for resume_repository".to_string())?;
+        let repository_id = repository.canonical_id();
+        let _mutation = self.mutation_lock.lock().await;
+        let mut state = self.state.write().await;
+        if state.has_processed_request(&request.client_request_id) {
+            return Ok(LoopxActionResponse {
+                status: LoopxActionStatus::Duplicate,
+                current_revision: state.revision,
+                message: Some("Repository resume was already applied".to_string()),
+                ..LoopxActionResponse::default()
+            });
+        }
+        if state.revision != request.expected_revision {
+            return Ok(LoopxActionResponse {
+                status: LoopxActionStatus::RevisionConflict,
+                current_revision: state.revision,
+                message: Some(
+                    "Task list changed; refresh before resuming the repository".to_string(),
+                ),
+                ..LoopxActionResponse::default()
+            });
+        }
+
+        let task_indexes = state
+            .tasks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, task)| {
+                is_repository_recovery_candidate(task, &repository_id).then_some(index)
+            })
+            .collect::<Vec<_>>();
+        let start_cursor = state.cursor;
+        let now = now_ms();
+        let mut task_ids = Vec::with_capacity(task_indexes.len());
+        for task_index in task_indexes {
+            let task_id = state.tasks[task_index].task_id.clone();
+            let mut runtime = state.runtime.remove(&task_id).unwrap_or_default();
+            {
+                let task = &mut state.tasks[task_index];
+                task.generation = task.generation.saturating_add(1);
+                task.revision = task.revision.saturating_add(1);
+                task.state = LoopxTaskState::Queued;
+                task.phase = LoopxPhase::Recovering;
+                task.current_turn_id = None;
+                task.error = None;
+                task.updated_at = now;
+                runtime.operation_id = format!("resume-{}-{}", task.task_id, task.generation);
+                runtime.session_id = None;
+                runtime.agent_turn_id = None;
+                runtime.loopx_turn_id = None;
+                runtime.settlement_token = None;
+                runtime.expected_durable_revision = None;
+            }
+            let updated = state.tasks[task_index].clone();
+            state.runtime.insert(task_id.clone(), runtime);
+            state.revision = state.revision.saturating_add(1);
+            state.append_event(LoopxEvent {
+                task_id: Some(task_id.clone()),
+                generation: Some(updated.generation),
+                revision: Some(updated.revision),
+                kind: LoopxEventKind::StateChanged,
+                source: LoopxEventSource::Controller,
+                phase: Some(LoopxPhase::Recovering),
+                message: "Task queued by repository resume".to_string(),
+                occurred_at: now,
+                ..LoopxEvent::default()
+            });
+            task_ids.push(task_id);
+        }
+        state.record_processed_request(request.client_request_id.clone());
+        let resumed_count = task_ids.len();
+        let current_revision = state.revision;
+        let persisted = state.clone();
+        drop(state);
+        self.store.save(&persisted).await?;
+        drop(_mutation);
+        self.broadcast_new_events(&persisted, start_cursor);
+        for task_id in task_ids {
+            self.enqueue_task(task_id, Duration::ZERO)?;
+        }
+        Ok(LoopxActionResponse {
+            current_revision,
+            message: Some(format!("Queued {resumed_count} repository tasks")),
+            ..LoopxActionResponse::default()
+        })
+    }
+
+    async fn reset_all(
+        self: &Arc<Self>,
+        request: &LoopxActionRequest,
+    ) -> Result<LoopxActionResponse, String> {
+        let (tasks, runtimes, previous_stream_id) = {
+            let _mutation = self.mutation_lock.lock().await;
+            let mut state = self.state.write().await;
+            if state.has_processed_request(&request.client_request_id) {
+                return Ok(LoopxActionResponse {
+                    status: LoopxActionStatus::Duplicate,
+                    current_revision: state.revision,
+                    message: Some("LoopX reset was already applied".to_string()),
+                    ..LoopxActionResponse::default()
+                });
+            }
+            if state.revision != request.expected_revision {
+                return Ok(LoopxActionResponse {
+                    status: LoopxActionStatus::RevisionConflict,
+                    current_revision: state.revision,
+                    message: Some("LoopX state changed; refresh before resetting".to_string()),
+                    ..LoopxActionResponse::default()
+                });
+            }
+            let tasks = state.tasks.clone();
+            let runtimes = state.runtime.clone();
+            for task in &mut state.tasks {
+                if matches!(
+                    task.state,
+                    LoopxTaskState::Preparing
+                        | LoopxTaskState::Queued
+                        | LoopxTaskState::Running
+                        | LoopxTaskState::RetryWait
+                        | LoopxTaskState::Cancelling
+                ) {
+                    task.state = LoopxTaskState::Cancelling;
+                    task.phase = LoopxPhase::Cancelling;
+                    task.revision = task.revision.saturating_add(1);
+                    task.updated_at = now_ms();
+                }
+            }
+            state.record_processed_request(request.client_request_id.clone());
+            state.revision = state.revision.saturating_add(1);
+            let persisted = state.clone();
+            let previous_stream_id = state.stream_id.clone();
+            drop(state);
+            self.store.save(&persisted).await?;
+            (tasks, runtimes, previous_stream_id)
+        };
+
+        for task in &tasks {
+            let runtime = runtimes.get(&task.task_id).cloned().unwrap_or_default();
+            self.teardown_agent_run(task, &runtime).await;
+            if !runtime.operation_id.trim().is_empty() {
+                let progress = BufferedProgress::default();
+                let _ = self
+                    .cli
+                    .cancel(
+                        LoopxCliCancelRequest {
+                            call: LoopxCliCallContext {
+                                operation_id: format!("reset-cli-{}", uuid::Uuid::new_v4()),
+                                deadline_at: None,
+                            },
+                            target_operation_id: runtime.operation_id.clone(),
+                        },
+                        &progress,
+                    )
+                    .await;
+            }
+            let _ = self
+                .workspace
+                .cancel(LoopxWorkspaceCancelRequest {
+                    operation_id: format!("reset-workspace-{}", uuid::Uuid::new_v4()),
+                    target_operation_id: format!("workspace-{}-{}", task.task_id, task.generation),
+                    task_id: task.task_id.clone(),
+                })
+                .await;
+        }
+
+        self.workspace
+            .reset(LoopxWorkspaceResetRequest {
+                operation_id: format!("reset-workspaces-{}", uuid::Uuid::new_v4()),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        self.agent
+            .reset(LoopxAgentResetRequest {
+                operation_id: format!("reset-history-{}", uuid::Uuid::new_v4()),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+
+        let fresh = LoopxPersistedState::new(now_ms());
+        self.store.clear().await?;
+        {
+            let _mutation = self.mutation_lock.lock().await;
+            *self.state.write().await = fresh.clone();
+            self.active_tasks.lock().await.clear();
+            self.active_repositories.lock().await.clear();
+            self.previews.write().await.clear();
+        }
+        let _ = self.event_sender.send(LoopxEvent {
+            stream_id: fresh.stream_id,
+            cursor: 0,
+            kind: LoopxEventKind::SnapshotInvalidated,
+            level: LoopxEventLevel::Info,
+            source: LoopxEventSource::Controller,
+            message: format!("LoopX reset replaced stream {previous_stream_id}"),
+            occurred_at: now_ms(),
+            ..LoopxEvent::default()
+        });
+        // The fresh state starts with an unknown environment; validate it again
+        // so the UI can re-enable intake after "clear and start over".
+        self.refresh_environment().await?;
+        Ok(LoopxActionResponse {
+            current_revision: fresh.revision,
+            message: Some(format!(
+                "Cleared {} LoopX tasks, managed workspaces, and persisted controller state",
+                tasks.len()
+            )),
             ..LoopxActionResponse::default()
         })
     }
@@ -990,17 +1541,26 @@ impl LoopxController {
         self: &Arc<Self>,
         task: &LoopxTaskSnapshot,
         settlement: LoopxCliSettleTurnResult,
+        agent_status: LoopxAgentTurnStatus,
+        failure_summary: Option<&str>,
+        blocks_repository: bool,
     ) -> Result<(), String> {
-        let final_state = match settlement.status {
-            LoopxCliSettlementStatus::GoalCompleted => LoopxTaskState::Completed,
-            LoopxCliSettlementStatus::Settled | LoopxCliSettlementStatus::AlreadySettled => {
-                LoopxTaskState::Queued
+        let final_state = if agent_status == LoopxAgentTurnStatus::Failed {
+            LoopxTaskState::RecoveryRequired
+        } else {
+            match settlement.status {
+                LoopxCliSettlementStatus::GoalCompleted => LoopxTaskState::Completed,
+                LoopxCliSettlementStatus::Settled | LoopxCliSettlementStatus::AlreadySettled => {
+                    LoopxTaskState::Queued
+                }
+                LoopxCliSettlementStatus::NoDurableProgress
+                | LoopxCliSettlementStatus::RetryRequired => LoopxTaskState::RecoveryRequired,
             }
-            LoopxCliSettlementStatus::NoDurableProgress
-            | LoopxCliSettlementStatus::RetryRequired => LoopxTaskState::RecoveryRequired,
         };
         let phase = if final_state == LoopxTaskState::Completed {
             LoopxPhase::Finished
+        } else if final_state == LoopxTaskState::RecoveryRequired {
+            LoopxPhase::Recovering
         } else {
             LoopxPhase::Queued
         };
@@ -1011,6 +1571,8 @@ impl LoopxController {
                 task.revision = task.revision.saturating_add(1);
                 task.current_turn_id = None;
                 task.deadline_at = None;
+                task.error = (agent_status == LoopxAgentTurnStatus::Failed)
+                    .then(|| failure_summary.unwrap_or("Agent turn failed").to_string());
                 task.settlement = LoopxSettlementSummary {
                     turn_id: Some(settlement.turn_id.clone()),
                     receipt_id: Some(settlement.receipt_id.clone()),
@@ -1023,16 +1585,117 @@ impl LoopxController {
             })
             .await?;
         self.release_repository(&updated).await;
-        self.schedule_next_for_repository(
-            &updated.identity.item.repository.canonical_id(),
-            Some(&updated.task_id),
-        )
-        .await;
+        if agent_status == LoopxAgentTurnStatus::Failed {
+            let reason = failure_summary.unwrap_or("Agent turn failed");
+            self.append_task_event(&updated, LoopxEventKind::StateChanged, reason, true)
+                .await?;
+            if blocks_repository {
+                self.pause_repository_after_failure(&updated, reason)
+                    .await?;
+            }
+        } else {
+            let (kind, message, important) = match final_state {
+                LoopxTaskState::Completed => (
+                    LoopxEventKind::SettlementRecorded,
+                    "LoopX goal completed",
+                    false,
+                ),
+                LoopxTaskState::RecoveryRequired => (
+                    LoopxEventKind::StateChanged,
+                    "LoopX turn requires recovery after settlement",
+                    true,
+                ),
+                _ => (
+                    LoopxEventKind::SettlementRecorded,
+                    "LoopX turn settlement recorded",
+                    false,
+                ),
+            };
+            self.append_task_event(&updated, kind, message, important)
+                .await?;
+            self.schedule_next_for_repository(
+                &updated.identity.item.repository.canonical_id(),
+                Some(&updated.task_id),
+            )
+            .await;
+        }
         if final_state == LoopxTaskState::Queued {
             let task_id = task.task_id.clone();
             let delay = settlement.scheduler_hint_ms.unwrap_or(0);
             self.enqueue_task(task_id, Duration::from_millis(delay))?;
         }
+        Ok(())
+    }
+
+    async fn pause_repository_after_failure(
+        &self,
+        failed_task: &LoopxTaskSnapshot,
+        reason: &str,
+    ) -> Result<(), String> {
+        let repository_id = failed_task.identity.item.repository.canonical_id();
+        let message = format!(
+            "Repository queue paused after Issue #{} failed: {}",
+            failed_task.identity.item.number,
+            reason.chars().take(700).collect::<String>()
+        );
+        let _mutation = self.mutation_lock.lock().await;
+        let mut state = self.state.write().await;
+        let start_cursor = state.cursor;
+        let now = now_ms();
+        let mut paused = Vec::new();
+        for task in &mut state.tasks {
+            if task.task_id == failed_task.task_id
+                || task.identity.item.repository.canonical_id() != repository_id
+                || task.state != LoopxTaskState::Queued
+            {
+                continue;
+            }
+            task.state = LoopxTaskState::RecoveryRequired;
+            task.phase = LoopxPhase::Recovering;
+            task.error = Some(message.clone());
+            task.current_turn_id = None;
+            task.deadline_at = None;
+            task.revision = task.revision.saturating_add(1);
+            task.updated_at = now;
+            paused.push(task.clone());
+        }
+        for task in &paused {
+            state.revision = state.revision.saturating_add(1);
+            state.append_event(LoopxEvent {
+                task_id: Some(task.task_id.clone()),
+                generation: Some(task.generation),
+                revision: Some(task.revision),
+                kind: LoopxEventKind::StateChanged,
+                level: LoopxEventLevel::Error,
+                source: LoopxEventSource::Controller,
+                phase: Some(LoopxPhase::Recovering),
+                message: message.clone(),
+                important: true,
+                occurred_at: now,
+                ..LoopxEvent::default()
+            });
+        }
+        state.environment.core.agent_model.status = LoopxEnvironmentFactStatus::Degraded;
+        state.environment.core.agent_model.detail = Some(reason.to_string());
+        state.environment.core.agent_model.checked_at = Some(now);
+        state.environment.status =
+            derive_environment_status(&state.environment.core, &state.environment.optional);
+        state.environment.revision = state.environment.revision.saturating_add(1);
+        state.revision = state.revision.saturating_add(1);
+        state.append_event(LoopxEvent {
+            kind: LoopxEventKind::EnvironmentChanged,
+            level: LoopxEventLevel::Error,
+            source: LoopxEventSource::System,
+            message: "Agent model runtime failed; repository queue paused".to_string(),
+            important: true,
+            occurred_at: now,
+            ..LoopxEvent::default()
+        });
+        let persisted = state.clone();
+        drop(state);
+        self.store.save(&persisted).await?;
+        drop(_mutation);
+        self.broadcast_new_events(&persisted, start_cursor);
         Ok(())
     }
 
@@ -1056,39 +1719,22 @@ impl LoopxController {
         }
     }
 
-    async fn update_environment(
-        &self,
-        status: LoopxEnvironmentStatus,
-        manifest: Option<LoopxCliManifest>,
-        github_auth: Option<LoopxGithubAuthProbe>,
-    ) -> Result<(), String> {
+    async fn mark_environment_checking(&self) -> Result<(), String> {
         let _mutation = self.mutation_lock.lock().await;
         let mut state = self.state.write().await;
+        let checked_at = Some(now_ms());
         state.environment.revision = state.environment.revision.saturating_add(1);
-        state.environment.status = status;
-        state.environment.checked_at = Some(now_ms());
-        if let Some(manifest) = manifest {
-            state.environment.core.sidecar = LoopxEnvironmentFact {
-                status: LoopxEnvironmentFactStatus::Available,
-                version: Some(manifest.loopx_version),
-                detail: Some(manifest.executable.identity),
-                checked_at: state.environment.checked_at,
-                ..LoopxEnvironmentFact::default()
-            };
-        }
-        if let Some(github_auth) = github_auth {
-            state.environment.optional.github_auth = LoopxEnvironmentFact {
-                status: github_auth_fact_status(&github_auth),
-                detail: github_auth.detail,
-                checked_at: state.environment.checked_at,
-                ..LoopxEnvironmentFact::default()
-            };
-        }
+        state.environment.status = LoopxEnvironmentStatus::Checking;
+        state.environment.checked_at = checked_at;
+        state.environment.core.sidecar = checking_environment_fact(checked_at);
+        state.environment.core.git_worktree = checking_environment_fact(checked_at);
+        state.environment.core.agent_model = checking_environment_fact(checked_at);
+        state.environment.optional.github_auth = checking_environment_fact(checked_at);
         state.revision = state.revision.saturating_add(1);
         state.append_event(LoopxEvent {
             kind: LoopxEventKind::EnvironmentChanged,
             source: LoopxEventSource::System,
-            message: format!("LoopX environment status changed to {status:?}"),
+            message: "LoopX environment validation started".to_string(),
             occurred_at: now_ms(),
             ..LoopxEvent::default()
         });
@@ -1102,25 +1748,73 @@ impl LoopxController {
         Ok(())
     }
 
-    async fn update_environment_error(&self, error: String) -> Result<(), String> {
+    async fn commit_environment(
+        &self,
+        handshake: LoopxCliResult<LoopxCliManifest>,
+        workspace: LoopxHostResult<LoopxWorkspaceProbeResult>,
+        agent: LoopxHostResult<LoopxAgentProbeResult>,
+        github_auth: LoopxGithubAuthProbe,
+    ) -> Result<(), String> {
         let _mutation = self.mutation_lock.lock().await;
         let mut state = self.state.write().await;
-        state.environment.revision = state.environment.revision.saturating_add(1);
-        state.environment.status = LoopxEnvironmentStatus::Blocked;
-        state.environment.checked_at = Some(now_ms());
-        state.environment.core.sidecar = LoopxEnvironmentFact {
-            status: LoopxEnvironmentFactStatus::Unavailable,
-            detail: Some(error.clone()),
-            checked_at: state.environment.checked_at,
+        let checked_at = Some(now_ms());
+        let sidecar = match handshake {
+            Ok(manifest) => LoopxEnvironmentFact {
+                status: LoopxEnvironmentFactStatus::Available,
+                version: Some(manifest.loopx_version),
+                detail: Some(manifest.executable.identity),
+                checked_at,
+                ..LoopxEnvironmentFact::default()
+            },
+            Err(error) => unavailable_environment_fact(error.to_string(), checked_at),
+        };
+        let git_worktree = match workspace {
+            Ok(probe) => LoopxEnvironmentFact {
+                status: LoopxEnvironmentFactStatus::Available,
+                version: probe.git_version,
+                detail: Some(format!("Writable workspace root: {}", probe.workspace_root)),
+                checked_at,
+                ..LoopxEnvironmentFact::default()
+            },
+            Err(error) => unavailable_environment_fact(error.to_string(), checked_at),
+        };
+        let agent_model = match agent {
+            Ok(probe) => LoopxEnvironmentFact {
+                status: LoopxEnvironmentFactStatus::Available,
+                version: Some(probe.model_id),
+                detail: Some("Configured Agent model is enabled for text chat".to_string()),
+                checked_at,
+                ..LoopxEnvironmentFact::default()
+            },
+            Err(error) => unavailable_environment_fact(error.to_string(), checked_at),
+        };
+        let github_auth = LoopxEnvironmentFact {
+            status: github_auth_fact_status(&github_auth),
+            detail: github_auth.detail,
+            checked_at,
             ..LoopxEnvironmentFact::default()
         };
+
+        state.environment.revision = state.environment.revision.saturating_add(1);
+        state.environment.checked_at = checked_at;
+        state.environment.core.sidecar = sidecar;
+        state.environment.core.git_worktree = git_worktree;
+        state.environment.core.agent_model = agent_model;
+        state.environment.optional.github_auth = github_auth;
+        state.environment.status =
+            derive_environment_status(&state.environment.core, &state.environment.optional);
+        let status = state.environment.status;
         state.revision = state.revision.saturating_add(1);
         state.append_event(LoopxEvent {
             kind: LoopxEventKind::EnvironmentChanged,
-            level: LoopxEventLevel::Error,
+            level: if status == LoopxEnvironmentStatus::Blocked {
+                LoopxEventLevel::Error
+            } else {
+                LoopxEventLevel::Info
+            },
             source: LoopxEventSource::System,
-            message: error,
-            important: true,
+            message: format!("LoopX environment validation finished with status {status:?}"),
+            important: status == LoopxEnvironmentStatus::Blocked,
             occurred_at: now_ms(),
             ..LoopxEvent::default()
         });
@@ -1142,6 +1836,9 @@ impl LoopxController {
         let mut state = self.state.write().await;
         let start_cursor = state.cursor;
         for item in progress {
+            if is_normal_process_lifecycle_message(&item.message) {
+                continue;
+            }
             state.append_event(LoopxEvent {
                 task_id: item.task_id,
                 kind: LoopxEventKind::Progress,
@@ -1224,17 +1921,24 @@ impl LoopxController {
         task: &LoopxTaskSnapshot,
         run: LoopxAgentStartResult,
     ) -> Result<(), String> {
-        self.mutate_task(&task.task_id, None, |task, runtime| {
-            task.state = LoopxTaskState::Running;
-            task.phase = LoopxPhase::AgentRunning;
-            task.current_turn_id = Some(run.turn_id.clone());
-            task.last_output_at = Some(now_ms());
-            task.revision = task.revision.saturating_add(1);
-            runtime.session_id = Some(run.session_id.clone());
-            runtime.agent_turn_id = Some(run.turn_id.clone());
-        })
+        let updated = self
+            .mutate_task(&task.task_id, None, |task, runtime| {
+                task.state = LoopxTaskState::Running;
+                task.phase = LoopxPhase::AgentRunning;
+                task.current_turn_id = Some(run.turn_id.clone());
+                task.last_output_at = Some(now_ms());
+                task.revision = task.revision.saturating_add(1);
+                runtime.session_id = Some(run.session_id.clone());
+                runtime.agent_turn_id = Some(run.turn_id.clone());
+            })
+            .await?;
+        self.append_task_event(
+            &updated,
+            LoopxEventKind::StateChanged,
+            "Agent turn started",
+            false,
+        )
         .await
-        .map(|_| ())
     }
 
     async fn transition_task(
@@ -1244,7 +1948,7 @@ impl LoopxController {
         state: LoopxTaskState,
         phase: LoopxPhase,
         message: &str,
-    ) -> Result<(), String> {
+    ) -> Result<LoopxTaskSnapshot, String> {
         let updated = self
             .mutate_task(task_id, None, |task, _| {
                 if task.generation != generation {
@@ -1261,7 +1965,8 @@ impl LoopxController {
             message,
             state == LoopxTaskState::RecoveryRequired,
         )
-        .await
+        .await?;
+        Ok(updated)
     }
 
     async fn transition_action(
@@ -1308,8 +2013,19 @@ impl LoopxController {
     async fn fail_task(self: &Arc<Self>, task_id: &str, error: String) -> Result<(), String> {
         let updated = self
             .mutate_task(task_id, None, |task, _| {
-                task.state = LoopxTaskState::RecoveryRequired;
-                task.phase = LoopxPhase::Recovering;
+                let workspace_was_never_prepared = task.workspace_path.is_none()
+                    && task.goal_id.is_none()
+                    && task.current_turn_id.is_none();
+                task.state = if workspace_was_never_prepared {
+                    LoopxTaskState::Failed
+                } else {
+                    LoopxTaskState::RecoveryRequired
+                };
+                task.phase = if workspace_was_never_prepared {
+                    LoopxPhase::Finished
+                } else {
+                    LoopxPhase::Recovering
+                };
                 task.error = Some(error.clone());
                 task.deadline_at = None;
                 task.revision = task.revision.saturating_add(1);
@@ -1324,6 +2040,40 @@ impl LoopxController {
         )
         .await;
         Ok(())
+    }
+
+    /// Best-effort cleanup of the task's on-disk worktree. Called only from
+    /// the explicit Archive action; failure is recorded as an event, never
+    /// fatal to the transition.
+    async fn dispose_task_workspace(self: &Arc<Self>, task: &LoopxTaskSnapshot) {
+        if task.workspace_path.is_none() {
+            return;
+        }
+        let progress = BufferedProgress::default();
+        let result = self
+            .workspace
+            .dispose(LoopxWorkspaceDisposeRequest {
+                operation_id: format!("dispose-{}", uuid::Uuid::new_v4()),
+                task_id: task.task_id.clone(),
+                item: task.identity.item.clone(),
+            })
+            .await
+            .map_err(|error| error.message.clone());
+        self.record_progress(progress.take()).await.ok();
+        let important = result.is_err();
+        let message = match result {
+            Ok(disposed) if disposed.removed => {
+                "Archived task worktree cleaned up (disk space released)".to_string()
+            }
+            Ok(_) => "Archived task had no managed worktree to clean up".to_string(),
+            Err(error) => {
+                // Keep the archive transition; surface cleanup failure.
+                format!("Failed to clean up archived task worktree: {error}")
+            }
+        };
+        let _ = self
+            .append_task_event(task, LoopxEventKind::StateChanged, &message, important)
+            .await;
     }
 
     async fn schedule_next_for_repository(
@@ -1348,10 +2098,58 @@ impl LoopxController {
         }
     }
 
+    async fn enqueue_ready_tasks_after_load(&self) {
+        if self.load_error.read().await.is_some() {
+            return;
+        }
+        let task_ids = {
+            let state = self.state.read().await;
+            state
+                .tasks
+                .iter()
+                .filter(|task| task.state == LoopxTaskState::Queued)
+                .map(|task| task.task_id.clone())
+                .collect::<Vec<_>>()
+        };
+        for task_id in task_ids {
+            let _ = self.enqueue_task(task_id, Duration::ZERO);
+        }
+    }
+
     fn enqueue_task(&self, task_id: String, delay: Duration) -> Result<(), String> {
+        if !delay.is_zero() {
+            let sender = self.task_sender.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(delay).await;
+                let _ = sender.send(ScheduledTask { task_id });
+            });
+            return Ok(());
+        }
         self.task_sender
-            .send(ScheduledTask { task_id, delay })
+            .send(ScheduledTask { task_id })
             .map_err(|_| "LoopX controller task runner is unavailable".to_string())
+    }
+
+    async fn reserve_scheduled_task(&self, task_id: &str) -> bool {
+        let mut active = self.active_tasks.lock().await;
+        match active.get_mut(task_id) {
+            Some(pending) => {
+                *pending = true;
+                false
+            }
+            None => {
+                active.insert(task_id.to_string(), false);
+                true
+            }
+        }
+    }
+
+    async fn release_scheduled_task(&self, task_id: &str) -> bool {
+        self.active_tasks
+            .lock()
+            .await
+            .remove(task_id)
+            .unwrap_or(false)
     }
 
     async fn mutate_task(
@@ -1389,6 +2187,18 @@ impl LoopxController {
         message: &str,
         important: bool,
     ) -> Result<(), String> {
+        self.append_task_event_with_details(task, kind, message, important, BTreeMap::new())
+            .await
+    }
+
+    async fn append_task_event_with_details(
+        &self,
+        task: &LoopxTaskSnapshot,
+        kind: LoopxEventKind,
+        message: &str,
+        important: bool,
+        details: BTreeMap<String, String>,
+    ) -> Result<(), String> {
         let _mutation = self.mutation_lock.lock().await;
         let mut state = self.state.write().await;
         state.append_event(LoopxEvent {
@@ -1396,7 +2206,9 @@ impl LoopxController {
             generation: Some(task.generation),
             revision: Some(task.revision),
             kind,
-            level: if important {
+            level: if kind == LoopxEventKind::ApprovalRequired {
+                LoopxEventLevel::Warning
+            } else if important {
                 LoopxEventLevel::Error
             } else {
                 LoopxEventLevel::Info
@@ -1405,6 +2217,7 @@ impl LoopxController {
             phase: Some(task.phase),
             message: message.to_string(),
             important,
+            details,
             occurred_at: now_ms(),
             ..LoopxEvent::default()
         });
@@ -1462,6 +2275,27 @@ impl LoopxController {
     }
 }
 
+fn is_normal_process_lifecycle_message(message: &str) -> bool {
+    matches!(
+        message,
+        "Starting LoopX process" | "LoopX process exited successfully"
+    )
+}
+
+fn task_has_bound_goal(task: &LoopxTaskSnapshot) -> bool {
+    task.goal_id
+        .as_deref()
+        .is_some_and(|goal_id| !goal_id.trim().is_empty())
+}
+
+fn is_repository_recovery_candidate(task: &LoopxTaskSnapshot, repository_id: &str) -> bool {
+    task.identity.item.repository.canonical_id() == repository_id
+        && matches!(
+            task.state,
+            LoopxTaskState::Failed | LoopxTaskState::RecoveryRequired
+        )
+}
+
 fn goal_context(task: &LoopxTaskSnapshot, runtime: &LoopxTaskRuntimeRecord) -> LoopxCliGoalContext {
     LoopxCliGoalContext {
         call: LoopxCliCallContext {
@@ -1515,6 +2349,30 @@ fn existing_outcomes(
         .collect()
 }
 
+fn prune_intake_previews(previews: &mut HashMap<String, LoopxIntakePreview>, now: i64) {
+    previews.retain(|_, preview| intake_preview_is_fresh(preview, now));
+    if previews.len() <= MAX_INTAKE_PREVIEWS {
+        return;
+    }
+
+    let mut by_age = previews
+        .iter()
+        .map(|(fingerprint, preview)| (fingerprint.clone(), preview.resolved_at))
+        .collect::<Vec<_>>();
+    by_age.sort_by_key(|(_, resolved_at)| *resolved_at);
+    let excess = previews.len().saturating_sub(MAX_INTAKE_PREVIEWS);
+    for (fingerprint, _) in by_age.into_iter().take(excess) {
+        previews.remove(&fingerprint);
+    }
+}
+
+fn intake_preview_is_fresh(preview: &LoopxIntakePreview, now: i64) -> bool {
+    match preview.expires_at {
+        Some(expires_at) => expires_at > now,
+        None => false,
+    }
+}
+
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1529,6 +2387,26 @@ fn github_auth_fact_status(probe: &LoopxGithubAuthProbe) -> LoopxEnvironmentFact
         LoopxEnvironmentFactStatus::Degraded
     } else {
         LoopxEnvironmentFactStatus::Unavailable
+    }
+}
+
+fn checking_environment_fact(checked_at: Option<i64>) -> LoopxEnvironmentFact {
+    LoopxEnvironmentFact {
+        status: LoopxEnvironmentFactStatus::Checking,
+        checked_at,
+        ..LoopxEnvironmentFact::default()
+    }
+}
+
+fn unavailable_environment_fact(
+    detail: impl Into<String>,
+    checked_at: Option<i64>,
+) -> LoopxEnvironmentFact {
+    LoopxEnvironmentFact {
+        status: LoopxEnvironmentFactStatus::Unavailable,
+        detail: Some(detail.into()),
+        checked_at,
+        ..LoopxEnvironmentFact::default()
     }
 }
 
@@ -1549,7 +2427,72 @@ mod tests {
                 number: 42,
             },
             attempt: 2,
+            ..Default::default()
         };
         assert_eq!(goal_id_for(&identity), "bfx-owner-repo-issue-42-2");
+    }
+
+    #[test]
+    fn repository_recovery_excludes_intentionally_stopped_tasks() {
+        let repository = LoopxRepositoryKey {
+            host: "github.com".to_string(),
+            owner: "owner".to_string(),
+            repository: "repo".to_string(),
+        };
+        let task = |state| LoopxTaskSnapshot {
+            identity: LoopxTaskIdentity {
+                item: LoopxIssueKey {
+                    repository: repository.clone(),
+                    kind: LoopxItemKind::Issue,
+                    number: 42,
+                },
+                ..LoopxTaskIdentity::default()
+            },
+            state,
+            ..LoopxTaskSnapshot::default()
+        };
+        let repository_id = repository.canonical_id();
+
+        assert!(is_repository_recovery_candidate(
+            &task(LoopxTaskState::RecoveryRequired),
+            &repository_id,
+        ));
+        assert!(is_repository_recovery_candidate(
+            &task(LoopxTaskState::Failed),
+            &repository_id,
+        ));
+        assert!(!is_repository_recovery_candidate(
+            &task(LoopxTaskState::Stopped),
+            &repository_id,
+        ));
+    }
+
+    #[test]
+    fn successful_process_lifecycle_messages_are_not_persisted_as_task_events() {
+        assert!(is_normal_process_lifecycle_message(
+            "Starting LoopX process"
+        ));
+        assert!(is_normal_process_lifecycle_message(
+            "LoopX process exited successfully"
+        ));
+        assert!(!is_normal_process_lifecycle_message(
+            "LoopX process exited with an error"
+        ));
+        assert!(!is_normal_process_lifecycle_message(
+            "Building an idempotent external-host LoopX turn"
+        ));
+    }
+
+    #[test]
+    fn resumed_tasks_with_a_goal_skip_intake_and_goal_creation() {
+        assert!(task_has_bound_goal(&LoopxTaskSnapshot {
+            goal_id: Some("goal-42".to_string()),
+            ..LoopxTaskSnapshot::default()
+        }));
+        assert!(!task_has_bound_goal(&LoopxTaskSnapshot::default()));
+        assert!(!task_has_bound_goal(&LoopxTaskSnapshot {
+            goal_id: Some("  ".to_string()),
+            ..LoopxTaskSnapshot::default()
+        }));
     }
 }

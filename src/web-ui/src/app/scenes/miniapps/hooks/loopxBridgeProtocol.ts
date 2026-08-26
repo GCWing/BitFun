@@ -8,6 +8,7 @@ import type {
   LoopxItemKind,
   LoopxPermissionScope,
   LoopxResolveIntakeRequest,
+  LoopxTurnOutputSinceRequest,
 } from '@/infrastructure/api/service-api/MiniAppAPI';
 
 export const LOOPX_BUILTIN_APP_ID = 'builtin-bitfun-loopx';
@@ -18,7 +19,8 @@ type LoopxBridgeCall =
   | { kind: 'resolveIntake'; request: LoopxResolveIntakeRequest }
   | { kind: 'createTask'; request: LoopxCreateTaskRequest }
   | { kind: 'action'; request: LoopxActionRequest }
-  | { kind: 'eventsSince'; request: LoopxEventsSinceRequest };
+  | { kind: 'eventsSince'; request: LoopxEventsSinceRequest }
+  | { kind: 'turnOutputSince'; request: LoopxTurnOutputSinceRequest };
 
 const LOOPX_METHODS = new Set([
   'loopx.attach',
@@ -27,6 +29,7 @@ const LOOPX_METHODS = new Set([
   'loopx.createTask',
   'loopx.action',
   'loopx.eventsSince',
+  'loopx.turnOutputSince',
 ]);
 
 const HOST_CONTROLLED_KEYS = new Set([
@@ -59,7 +62,10 @@ const PERMISSION_SCOPES = new Set<LoopxPermissionScope>([
 ]);
 const ACTION_KINDS = new Set<LoopxActionKind>([
   'pause',
+'abort',
   'resume',
+  'resume_repository',
+  'reset_all',
   'approve',
   'reject',
   'archive',
@@ -142,8 +148,6 @@ function requiredBoolean(value: unknown, path: string): boolean {
 function parseIssueKey(value: unknown, path: string): LoopxIssueKey {
   const item = asRecord(value, path);
   assertAllowedKeys(item, ['repository', 'kind', 'number'], path);
-  const repository = asRecord(item.repository, `${path}.repository`);
-  assertAllowedKeys(repository, ['host', 'owner', 'repository'], `${path}.repository`);
 
   const kind = item.kind;
   if (typeof kind !== 'string' || !ITEM_KINDS.has(kind as LoopxItemKind)) {
@@ -151,13 +155,19 @@ function parseIssueKey(value: unknown, path: string): LoopxIssueKey {
   }
 
   return {
-    repository: {
-      host: requiredString(repository.host, `${path}.repository.host`),
-      owner: requiredString(repository.owner, `${path}.repository.owner`),
-      repository: requiredString(repository.repository, `${path}.repository.repository`),
-    },
+    repository: parseRepositoryKey(item.repository, `${path}.repository`),
     kind: kind as LoopxItemKind,
     number: unsignedInteger(item.number, `${path}.number`),
+  };
+}
+
+function parseRepositoryKey(value: unknown, path: string) {
+  const repository = asRecord(value, path);
+  assertAllowedKeys(repository, ['host', 'owner', 'repository'], path);
+  return {
+    host: requiredString(repository.host, `${path}.host`),
+    owner: requiredString(repository.owner, `${path}.owner`),
+    repository: requiredString(repository.repository, `${path}.repository`),
   };
 }
 
@@ -245,6 +255,7 @@ export function parseLoopxBridgeCall(
   if (method === 'loopx.action') {
     assertAllowedKeys(rawParams, [
       'taskId',
+      'repository',
       'action',
       'clientRequestId',
       'expectedRevision',
@@ -261,6 +272,9 @@ export function parseLoopxBridgeCall(
       kind: 'action',
       request: {
         taskId: optionalString(rawParams.taskId, 'params.taskId'),
+        repository: rawParams.repository == null
+          ? undefined
+          : parseRepositoryKey(rawParams.repository, 'params.repository'),
         action: rawParams.action as LoopxActionKind,
         clientRequestId: requiredString(rawParams.clientRequestId, 'params.clientRequestId'),
         expectedRevision: unsignedInteger(rawParams.expectedRevision, 'params.expectedRevision'),
@@ -270,11 +284,25 @@ export function parseLoopxBridgeCall(
     };
   }
 
-  assertAllowedKeys(rawParams, ['streamId', 'afterCursor', 'limit'], 'params');
+  if (method === 'loopx.eventsSince') {
+    assertAllowedKeys(rawParams, ['streamId', 'afterCursor', 'limit'], 'params');
+    return {
+      kind: 'eventsSince',
+      request: {
+        streamId: requiredString(rawParams.streamId, 'params.streamId'),
+        afterCursor: unsignedInteger(rawParams.afterCursor, 'params.afterCursor'),
+        limit: optionalUnsignedInteger(rawParams.limit, 'params.limit'),
+      },
+    };
+  }
+
+  assertAllowedKeys(rawParams, ['taskId', 'turnId', 'streamId', 'afterCursor', 'limit'], 'params');
   return {
-    kind: 'eventsSince',
+    kind: 'turnOutputSince',
     request: {
-      streamId: requiredString(rawParams.streamId, 'params.streamId'),
+      taskId: requiredString(rawParams.taskId, 'params.taskId'),
+      turnId: optionalString(rawParams.turnId, 'params.turnId'),
+      streamId: optionalString(rawParams.streamId, 'params.streamId'),
       afterCursor: unsignedInteger(rawParams.afterCursor, 'params.afterCursor'),
       limit: optionalUnsignedInteger(rawParams.limit, 'params.limit'),
     },

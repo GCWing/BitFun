@@ -5,14 +5,14 @@ use bitfun_product_domains::miniapp::loopx::{
     decide_task_restart, decide_task_transition, derive_environment_status,
     intake_scope_is_pregrantable, parse_loopx_intake, task_state_after_restart, LoopxActionKind,
     LoopxActionRequest, LoopxActionStatus, LoopxAgentFinishRequest, LoopxAgentPort,
-    LoopxAgentStartRequest, LoopxCliAnswerGateRequest, LoopxCliGateDecision,
+    LoopxAgentStartRequest, LoopxCliAnswerGateRequest, LoopxCliGateDecision, LoopxCliGoalSnapshot,
     LoopxCliHandshakeRequest, LoopxCliPort, LoopxCoreEnvironmentFacts, LoopxCreateTaskRequest,
     LoopxDedupDecision, LoopxEnvironmentFact, LoopxEnvironmentFactStatus, LoopxEnvironmentStatus,
     LoopxEventsPageStatus, LoopxExistingTask, LoopxIntakeCandidate, LoopxIntakeParseErrorKind,
-    LoopxIntakeTarget, LoopxIssueKey, LoopxItemKind, LoopxOptionalEnvironmentFacts,
-    LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey, LoopxResolveIntakeRequest,
-    LoopxRestartDecision, LoopxSnapshot, LoopxTaskIdentity, LoopxTaskState,
-    LoopxTransitionDecision, LoopxWorkspacePort, LoopxWorkspacePrepareRequest,
+    LoopxIntakePreview, LoopxIntakeTarget, LoopxIssueKey, LoopxItemKind,
+    LoopxOptionalEnvironmentFacts, LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey,
+    LoopxResolveIntakeRequest, LoopxRestartDecision, LoopxSnapshot, LoopxTaskIdentity,
+    LoopxTaskState, LoopxTransitionDecision, LoopxWorkspacePort, LoopxWorkspacePrepareRequest,
     LOOPX_CLI_SCHEMA_VERSION, LOOPX_PINNED_VERSION,
 };
 
@@ -36,7 +36,11 @@ fn existing(
 ) -> LoopxExistingTask {
     LoopxExistingTask {
         task_id: task_id.to_string(),
-        identity: LoopxTaskIdentity { item: key, attempt },
+        identity: LoopxTaskIdentity {
+            item: key,
+            attempt,
+            ..Default::default()
+        },
         state,
     }
 }
@@ -157,15 +161,18 @@ fn resolved_remote_item_is_a_successful_noop() {
 }
 
 #[test]
-fn restart_never_resumes_inflight_work_implicitly() {
-    for state in [
-        LoopxTaskState::Preparing,
-        LoopxTaskState::Queued,
-        LoopxTaskState::Running,
-        LoopxTaskState::WaitingForUser,
-        LoopxTaskState::RetryWait,
-        LoopxTaskState::Cancelling,
-    ] {
+fn restart_requeues_safe_pending_work_and_recovers_inflight_work() {
+    for state in [LoopxTaskState::Preparing, LoopxTaskState::RetryWait] {
+        assert_eq!(
+            decide_task_restart(state),
+            LoopxRestartDecision::Preserve {
+                state: LoopxTaskState::Queued
+            }
+        );
+        assert_eq!(task_state_after_restart(state), LoopxTaskState::Queued);
+    }
+
+    for state in [LoopxTaskState::Running, LoopxTaskState::Cancelling] {
         assert_eq!(
             decide_task_restart(state),
             LoopxRestartDecision::RequireRecovery
@@ -177,6 +184,8 @@ fn restart_never_resumes_inflight_work_implicitly() {
     }
 
     for state in [
+        LoopxTaskState::Queued,
+        LoopxTaskState::WaitingForUser,
         LoopxTaskState::RecoveryRequired,
         LoopxTaskState::Stopped,
         LoopxTaskState::Completed,
@@ -249,6 +258,30 @@ fn additive_snapshot_fields_deserialize_with_safe_legacy_defaults() {
     let encoded = serde_json::to_value(&snapshot).unwrap();
     assert_eq!(encoded["tasks"][0]["state"], "recovery_required");
     assert_eq!(encoded["executionSupport"], "unsupported_execution_domain");
+
+    let preview: LoopxIntakePreview = serde_json::from_value(serde_json::json!({
+        "fingerprint": "legacy-preview",
+        "workspace": {
+            "disposition": "clone_required",
+            "repositoryVerified": false
+        },
+        "model": {
+            "modelId": "auto",
+            "available": true,
+            "supportsImages": false
+        }
+    }))
+    .unwrap();
+    assert_eq!(preview.workspace.detail, None);
+    assert_eq!(preview.model.detail, None);
+
+    let goal: LoopxCliGoalSnapshot = serde_json::from_value(serde_json::json!({
+        "goalId": "legacy-goal",
+        "state": "waiting_for_user",
+        "runDecision": "waiting_for_user"
+    }))
+    .unwrap();
+    assert_eq!(goal.pending_user_gate, None);
 }
 
 #[test]
@@ -269,6 +302,15 @@ fn action_and_create_requests_use_idempotency_and_revision_fields() {
     assert_eq!(action.action, LoopxActionKind::RetryEnvironment);
     assert_eq!(action.client_request_id, "request-1");
     assert_eq!(action.expected_revision, 17);
+
+    let reset: LoopxActionRequest = serde_json::from_value(serde_json::json!({
+        "action": "reset_all",
+        "clientRequestId": "request-reset",
+        "expectedRevision": 18
+    }))
+    .unwrap();
+    assert_eq!(reset.action, LoopxActionKind::ResetAll);
+    assert_eq!(reset.task_id, None);
 
     let create: LoopxCreateTaskRequest = serde_json::from_value(serde_json::json!({
         "clientRequestId": "request-2",

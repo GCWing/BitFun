@@ -1,8 +1,8 @@
 //! Narrow service boundary for the pinned LoopX CLI adapter.
 
 use super::types::{
-    LoopxIntakeCandidate, LoopxIntakeTarget, LoopxIssueKey, LoopxPermissionScope,
-    LoopxRepositoryKey,
+    LoopxEventCursor, LoopxIntakeCandidate, LoopxIntakeTarget, LoopxIssueKey,
+    LoopxPermissionScope, LoopxRepositoryKey, LoopxTurnOutputEvent,
 };
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -227,6 +227,9 @@ pub struct LoopxCliPlanItemRequest {
     #[serde(flatten)]
     pub context: LoopxCliGoalContext,
     pub item: LoopxIssueKey,
+    /// Public title already resolved by the host intake adapter. The LoopX
+    /// process receives this as inline metadata and must not refetch it.
+    pub title: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -290,6 +293,14 @@ pub enum LoopxCliRunDecision {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliUserGate {
+    pub gate_id: String,
+    pub message: String,
+    pub action_kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LoopxCliGoalSnapshot {
     pub goal_id: String,
     pub state: LoopxCliGoalState,
@@ -298,6 +309,7 @@ pub struct LoopxCliGoalSnapshot {
     pub scheduler_hint_ms: Option<u64>,
     pub open_todo_count: u32,
     pub waiting_user_todo_count: u32,
+    pub pending_user_gate: Option<LoopxCliUserGate>,
     pub last_turn_id: Option<String>,
     pub settlement_receipt_ids: Vec<String>,
 }
@@ -535,6 +547,22 @@ pub struct LoopxWorkspacePrepareRequest {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceProbeRequest {
+    pub operation_id: String,
+    /// When present, also verifies that Git can read the canonical repository.
+    pub repository: Option<super::types::LoopxRepositoryKey>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceProbeResult {
+    pub git_version: Option<String>,
+    pub workspace_root: String,
+    pub repository_verified: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LoopxWorkspacePrepareResult {
     pub worktree_path: String,
     pub registry_path: String,
@@ -575,8 +603,42 @@ pub struct LoopxWorkspaceCancelResult {
     pub cancelled: bool,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceDisposeRequest {
+    pub operation_id: String,
+    pub task_id: String,
+    pub item: LoopxIssueKey,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceDisposeResult {
+    /// The worktree (and, when it was the last reference, the shared bare
+    /// repository) was removed from disk.
+    pub removed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceResetRequest {
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceResetResult {
+    /// The managed LoopX workspace root was removed from disk.
+    pub removed: bool,
+}
+
 /// Creates or reuses an isolated worktree for exactly one canonical item.
 pub trait LoopxWorkspacePort: Send + Sync {
+    fn probe(
+        &self,
+        request: LoopxWorkspaceProbeRequest,
+    ) -> LoopxHostFuture<'_, LoopxWorkspaceProbeResult>;
+
     fn prepare(
         &self,
         request: LoopxWorkspacePrepareRequest,
@@ -591,6 +653,19 @@ pub trait LoopxWorkspacePort: Send + Sync {
         &self,
         request: LoopxWorkspaceCancelRequest,
     ) -> LoopxHostFuture<'_, LoopxWorkspaceCancelResult>;
+
+    /// Removes the task worktree after terminal settlement. With the shared
+    /// bare-repository layout this also removes the bare repo once its last
+    /// worktree is gone. The caller must guarantee the task is terminal.
+    fn dispose(
+        &self,
+        request: LoopxWorkspaceDisposeRequest,
+    ) -> LoopxHostFuture<'_, LoopxWorkspaceDisposeResult>;
+
+    /// Removes every managed LoopX workspace and goal registry under the
+    /// service-owned root. This is reserved for explicit full-reset actions.
+    fn reset(&self, request: LoopxWorkspaceResetRequest)
+        -> LoopxHostFuture<'_, LoopxWorkspaceResetResult>;
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -619,6 +694,21 @@ pub struct LoopxAgentStartRequest {
 pub struct LoopxAgentStartResult {
     pub session_id: String,
     pub turn_id: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxAgentProbeRequest {
+    pub operation_id: String,
+    /// `None`, `auto`, and `primary` all validate the configured primary model.
+    pub model_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxAgentProbeResult {
+    pub model_id: String,
+    pub supports_images: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -657,8 +747,42 @@ pub struct LoopxAgentFinishResult {
     pub discarded: bool,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxAgentResetRequest {
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxAgentResetResult {
+    pub removed_runtime_event_logs: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxAgentOutputSinceRequest {
+    pub operation_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub stream_id: Option<String>,
+    pub after_cursor: LoopxEventCursor,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxAgentOutputSinceResult {
+    pub stream_id: Option<String>,
+    pub events: Vec<LoopxTurnOutputEvent>,
+    pub next_cursor: LoopxEventCursor,
+    pub has_more: bool,
+}
+
 /// Starts fresh transient Agent sessions bound to the prepared worktree.
 pub trait LoopxAgentPort: Send + Sync {
+    fn probe(&self, request: LoopxAgentProbeRequest) -> LoopxHostFuture<'_, LoopxAgentProbeResult>;
+
     fn start(&self, request: LoopxAgentStartRequest) -> LoopxHostFuture<'_, LoopxAgentStartResult>;
 
     fn cancel(
@@ -671,4 +795,16 @@ pub trait LoopxAgentPort: Send + Sync {
         &self,
         request: LoopxAgentFinishRequest,
     ) -> LoopxHostFuture<'_, LoopxAgentFinishResult>;
+
+    /// Removes LoopX-owned transient Agent diagnostics after every active
+    /// session has been cancelled and discarded.
+    fn reset(&self, request: LoopxAgentResetRequest) -> LoopxHostFuture<'_, LoopxAgentResetResult>;
+
+    /// Reads the in-flight Agent turn output projection. Completed turns may
+    /// already have handed their data back to session persistence and discarded
+    /// this transient projection.
+    fn output_since(
+        &self,
+        request: LoopxAgentOutputSinceRequest,
+    ) -> LoopxHostFuture<'_, LoopxAgentOutputSinceResult>;
 }

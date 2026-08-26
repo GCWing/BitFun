@@ -1282,6 +1282,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "miniapp_loopx_turn_output_since",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "miniapp_loopx_list_models",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),

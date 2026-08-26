@@ -110,7 +110,7 @@ function controllerSnapshot(now, task) {
       revision: 4,
       status: 'degraded',
       core: {
-        sidecar: available('0.2.13', 'Pinned adapter ready'),
+        sidecar: available('0.5.1', 'Pinned adapter ready'),
         gitWorktree: available('2.51.0', 'Worktree service ready'),
         agentModel: available('primary', 'Model available'),
       },
@@ -252,6 +252,18 @@ test('thin client boots from host state and completes the confirmed intake flow'
         hasMore: false,
       };
     },
+    async turnOutputSince() {
+      return {
+        status: 'current',
+        taskId: task.taskId,
+        turnId: task.currentTurnId,
+        streamId: 'output-stream-1',
+        events: [],
+        nextCursor: 0,
+        hasMore: false,
+        message: null,
+      };
+    },
     async resolveIntake(request) {
       resolveRequests.push(request);
       return { preview: structuredClone(preview) };
@@ -300,9 +312,9 @@ test('thin client boots from host state and completes the confirmed intake flow'
     }]);
     assert.equal(window.document.querySelector('#loopx-app').getAttribute('aria-busy'), 'false');
     assert.equal(window.document.querySelector('#task-count').textContent, '1');
-    assert.match(window.document.querySelector('#task-items').textContent, /GCWing\/BitFun Issue #2382/);
+    assert.match(window.document.querySelector('#task-items').textContent, /GCWing\/BitFun · Issue #2382/);
     assert.equal(window.document.querySelector('#environment-status').textContent, 'Degraded');
-    assert.match(window.document.querySelector('#core-environment-list').textContent, /0\.2\.13/);
+    assert.match(window.document.querySelector('#core-environment-list').textContent, /0\.5\.1/);
     assert.match(window.document.querySelector('#log-list').textContent, /Agent turn is running/);
 
     assert.equal(typeof eventListener, 'function');
@@ -327,6 +339,38 @@ test('thin client boots from host state and completes the confirmed intake flow'
       () => /Validation produced one warning/.test(window.document.querySelector('#log-list').textContent),
       'stream event rendering',
     );
+
+    const connectionChanges = [];
+    const connectionObserver = new window.MutationObserver(() => {
+      connectionChanges.push(window.document.querySelector('#connection-label').textContent);
+    });
+    connectionObserver.observe(window.document.querySelector('#connection-label'), {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    eventListener({
+      event: {
+        streamId: snapshot.streamId,
+        cursor: 4,
+        taskId: task.taskId,
+        generation: 2,
+        revision: 8,
+        kind: 'state_changed',
+        level: 'info',
+        source: 'controller',
+        phase: 'queued',
+        message: 'Task returned to the queue',
+        important: false,
+        details: {},
+        occurredAt: now,
+      },
+    });
+    await waitFor(() => attachRequests.length === 2, 'background snapshot refresh');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    connectionObserver.disconnect();
+    assert.equal(window.document.querySelector('#connection-label').textContent, 'Connected');
+    assert.ok(!connectionChanges.includes('Resynchronizing'));
 
     const input = window.document.querySelector('#intake-input');
     input.value = 'https://github.com/GCWing/BitFun/issues/2382';
@@ -370,6 +414,157 @@ test('thin client boots from host state and completes the confirmed intake flow'
     assert.ok(createRequests[0].clientRequestId);
     assert.match(window.document.querySelector('#notice').textContent, /existing task.*duplicate/i);
     assert.deepEqual(forbiddenAccesses, []);
+    assert.deepEqual(jsdomErrors, []);
+  } finally {
+    window.close();
+  }
+});
+
+test('task rail prioritizes user decisions and keeps single failures out of repository bulk recovery', async () => {
+  const [html, ui] = await Promise.all([
+    readAsset('index.html'),
+    readAsset('ui.js'),
+  ]);
+  const virtualConsole = new VirtualConsole();
+  const jsdomErrors = [];
+  virtualConsole.on('jsdomError', (error) => jsdomErrors.push(error));
+  const dom = new JSDOM(html, {
+    url: 'https://miniapp.invalid/builtin-bitfun-loopx/',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+    virtualConsole,
+  });
+  const { window } = dom;
+  installBrowserShims(window);
+
+  const now = Date.now();
+  const makeTask = (taskId, number, state, phase, overrides = {}) => ({
+    ...taskSnapshot(now),
+    taskId,
+    identity: {
+      item: issueKey(number),
+      attempt: 1,
+      title: `Issue ${number}`,
+      description: '',
+    },
+    state,
+    phase,
+    currentTurnId: null,
+    currentTool: null,
+    error: null,
+    ...overrides,
+  });
+  const waiting = makeTask('task-waiting', 42, 'waiting_for_user', 'waiting_for_approval');
+  const failed = makeTask('task-failed', 43, 'recovery_required', 'recovering', {
+    error: 'LoopX process exited with status 1',
+  });
+  const running = makeTask('task-running', 44, 'running', 'agent_running');
+  const queued = makeTask('task-queued', 45, 'queued', 'queued');
+  const snapshot = controllerSnapshot(now, running);
+  snapshot.tasks = [queued, running, failed, waiting];
+  snapshot.cursor = 1;
+  snapshot.revision = 24;
+  const events = [{
+    streamId: snapshot.streamId,
+    cursor: 1,
+    taskId: waiting.taskId,
+    generation: waiting.generation,
+    revision: waiting.revision,
+    kind: 'approval_required',
+    level: 'warning',
+    source: 'controller',
+    phase: 'waiting_for_approval',
+    message: 'Approve creating the draft pull request',
+    important: true,
+    details: { gateId: 'todo_release_approval', actionKind: 'gate' },
+    occurredAt: now - 1000,
+  }];
+  let eventListener = null;
+  window.app = {
+    locale: 'en-US',
+    loopx: {
+      onEvent(listener) {
+        eventListener = listener;
+      },
+      offEvent(listener) {
+        assert.equal(listener, eventListener);
+      },
+      async attach() {
+        return { snapshot: structuredClone(snapshot) };
+      },
+      async eventsSince() {
+        return {
+          status: 'current',
+          streamId: snapshot.streamId,
+          events: structuredClone(events),
+          nextCursor: snapshot.cursor,
+          hasMore: false,
+        };
+      },
+      async turnOutputSince() {
+        return {
+          status: 'current',
+          taskId: running.taskId,
+          turnId: running.currentTurnId,
+          streamId: 'output-stream-1',
+          events: [],
+          nextCursor: 0,
+          hasMore: false,
+          message: null,
+        };
+      },
+      async resolveIntake() {
+        return { preview: { candidates: [] } };
+      },
+      async action() {
+        assert.fail('this test must not submit a decision');
+      },
+    },
+    onLocaleChange() {},
+    onActivate() {},
+  };
+
+  try {
+    window.eval(ui);
+    await waitFor(
+      () => window.document.querySelectorAll('#task-items .task-group').length === 4,
+      'priority task groups',
+    );
+
+    const groups = [...window.document.querySelectorAll('#task-items .task-group')]
+      .map((group) => group.dataset.group);
+    assert.deepEqual(groups, ['decision', 'error', 'active', 'queued']);
+    assert.equal(window.document.querySelector('#decision-count').hidden, false);
+    assert.equal(window.document.querySelector('#decision-count').textContent, '1');
+    assert.equal(window.document.querySelector('[data-group="queued"]').open, false);
+    assert.equal(window.document.querySelector('#repository-actions').hidden, true);
+    assert.match(
+      window.document.querySelector('[data-task-id="task-waiting"]').textContent,
+      /Review and decide/,
+    );
+    assert.match(
+      window.document.querySelector('[data-task-id="task-failed"]').textContent,
+      /View error/,
+    );
+    window.document.querySelector('#reset-loopx').click();
+    assert.equal(window.document.querySelector('#reset-loopx-dialog').open, true);
+    assert.match(window.document.querySelector('#reset-loopx-message').textContent, /4 tasks, 1 log event/);
+    window.document.querySelector('#reset-loopx-cancel').click();
+    assert.equal(window.document.querySelector('#reset-loopx-dialog').open, false);
+
+    window.document.querySelector('[data-task-id="task-waiting"]').click();
+    await waitFor(
+      () => /temporarily unavailable/.test(window.document.querySelector('#liveness-description').textContent),
+      'selected task metadata refresh',
+    );
+    const decisionButton = window.document.querySelector('#task-actions button');
+    assert.equal(decisionButton.textContent, 'Review and decide');
+    decisionButton.click();
+    assert.equal(window.document.querySelector('#gate-dialog').open, true);
+    assert.match(
+      window.document.querySelector('#gate-message').textContent,
+      /Approve creating the draft pull request/,
+    );
     assert.deepEqual(jsdomErrors, []);
   } finally {
     window.close();

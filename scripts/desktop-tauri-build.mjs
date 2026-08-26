@@ -327,8 +327,9 @@ function injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary) {
 // The compiled loopx CLI sidecar is staged under resources/loopx/ and injected
 // only when a real bundle is requested. tauri-build validates every resource
 // path at cargo-build time, so a missing directory must never appear in the
-// generated config (the bitfun-loopx MiniApp falls back to vendor/pip at
-// runtime when the sidecar is absent, e.g. in dev builds).
+// generated config. Desktop dev keeps the same layout via ensureLoopxSidecar
+// in scripts/dev.cjs; when the sidecar is absent the runtime degrades to the
+// fixed system `loopx` command (ExactPinned) instead of vendor/pip.
 function injectLoopxResource(config, loopxResourceDir) {
   const resources = { ...(config.bundle?.resources || {}) };
   delete resources['resources/loopx/'];

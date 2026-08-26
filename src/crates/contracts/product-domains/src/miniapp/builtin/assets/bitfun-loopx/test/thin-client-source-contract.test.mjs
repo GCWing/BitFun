@@ -38,6 +38,7 @@ test('LoopX UI is a thin client of the host-owned controller', async () => {
     'createTask',
     'action',
     'eventsSince',
+    'turnOutputSince',
   ];
 
   for (const method of requiredMethods) {
@@ -53,6 +54,7 @@ test('LoopX UI is a thin client of the host-owned controller', async () => {
 
   const allowedLoopxMethods = new Set([
     ...requiredMethods,
+    'listModels',
     'onEvent',
     'offEvent',
   ]);

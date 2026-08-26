@@ -2,6 +2,7 @@ use bitfun_product_domains::miniapp::loopx::{
     task_state_after_restart, LoopxEnvironmentSnapshot, LoopxEvent, LoopxEventKind,
     LoopxEventLevel, LoopxEventSource, LoopxEventsPageStatus, LoopxEventsSinceResponse,
     LoopxExecutionDomain, LoopxExecutionSupport, LoopxPhase, LoopxSnapshot, LoopxTaskSnapshot,
+    LoopxTaskState,
 };
 use bitfun_services_core::json_store::JsonFileStore;
 use serde::{Deserialize, Serialize};
@@ -90,13 +91,23 @@ impl LoopxPersistedState {
 
     pub fn apply_restart_policy(&mut self, now_ms: i64) -> bool {
         let mut changed = false;
+        let mut recovery_required = 0usize;
+        let mut requeued = 0usize;
         for task in &mut self.tasks {
             let restarted = task_state_after_restart(task.state);
             if restarted == task.state {
                 continue;
             }
             task.state = restarted;
-            task.phase = LoopxPhase::Recovering;
+            task.phase = if restarted == LoopxTaskState::RecoveryRequired {
+                recovery_required = recovery_required.saturating_add(1);
+                LoopxPhase::Recovering
+            } else if restarted == LoopxTaskState::Queued {
+                requeued = requeued.saturating_add(1);
+                LoopxPhase::Queued
+            } else {
+                task.phase
+            };
             task.revision = task.revision.saturating_add(1);
             task.updated_at = now_ms;
             task.current_tool = None;
@@ -105,15 +116,31 @@ impl LoopxPersistedState {
             changed = true;
         }
         if changed {
+            let needs_recovery = recovery_required > 0;
+            let message = match (needs_recovery, requeued > 0) {
+                (true, true) => {
+                    "Host restarted; interrupted LoopX tasks require recovery and pending tasks were requeued"
+                }
+                (true, false) => "Host restarted; interrupted LoopX tasks require explicit recovery",
+                (false, true) => "Host restarted; pending LoopX tasks were requeued",
+                (false, false) => "Host restarted; LoopX task state was refreshed",
+            };
             self.revision = self.revision.saturating_add(1);
             self.append_event(LoopxEvent {
                 kind: LoopxEventKind::SnapshotInvalidated,
-                level: LoopxEventLevel::Warning,
+                level: if needs_recovery {
+                    LoopxEventLevel::Warning
+                } else {
+                    LoopxEventLevel::Info
+                },
                 source: LoopxEventSource::Controller,
-                phase: Some(LoopxPhase::Recovering),
-                message: "Host restarted; unfinished LoopX tasks require explicit recovery"
-                    .to_string(),
-                important: true,
+                phase: Some(if needs_recovery {
+                    LoopxPhase::Recovering
+                } else {
+                    LoopxPhase::Queued
+                }),
+                message: message.to_string(),
+                important: needs_recovery,
                 occurred_at: now_ms,
                 ..LoopxEvent::default()
             });
@@ -219,6 +246,14 @@ impl LoopxStateStore {
             .await
             .map_err(|error| format!("Failed to persist LoopX task state: {error}"))
     }
+
+    pub async fn clear(&self) -> Result<(), String> {
+        match tokio::fs::remove_file(&self.path).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!("Failed to remove LoopX task state: {error}")),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -227,7 +262,7 @@ mod tests {
     use bitfun_product_domains::miniapp::loopx::{LoopxTaskState, LoopxTaskSnapshot};
 
     #[tokio::test]
-    async fn restart_requires_explicit_recovery_and_round_trips() {
+    async fn restart_requeues_pending_work_and_recovers_inflight_work() {
         let root = tempfile::tempdir().expect("tempdir");
         let store = LoopxStateStore::new(root.path().join("loopx-state.json"));
         let mut state = LoopxPersistedState::new(10);
@@ -240,12 +275,26 @@ mod tests {
             updated_at: 2,
             ..LoopxTaskSnapshot::default()
         });
+        state.tasks.push(LoopxTaskSnapshot {
+            task_id: "task-2".to_string(),
+            state: LoopxTaskState::RetryWait,
+            phase: LoopxPhase::RetryBackoff,
+            revision: 5,
+            created_at: 1,
+            updated_at: 2,
+            retry_at: Some(30),
+            ..LoopxTaskSnapshot::default()
+        });
         assert!(state.apply_restart_policy(20));
         store.save(&state).await.expect("save");
 
         let loaded = store.load().await.expect("load").expect("state");
         assert_eq!(loaded.tasks[0].state, LoopxTaskState::RecoveryRequired);
         assert_eq!(loaded.tasks[0].revision, 4);
+        assert_eq!(loaded.tasks[1].state, LoopxTaskState::Queued);
+        assert_eq!(loaded.tasks[1].phase, LoopxPhase::Queued);
+        assert_eq!(loaded.tasks[1].retry_at, None);
+        assert_eq!(loaded.tasks[1].revision, 6);
         assert_eq!(loaded.events[0].kind, LoopxEventKind::SnapshotInvalidated);
     }
 

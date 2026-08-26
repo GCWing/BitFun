@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   loopxCreateTask: vi.fn(),
   loopxAction: vi.fn(),
   loopxEventsSince: vi.fn(),
+  loopxTurnOutputSince: vi.fn(),
   apiListen: vi.fn(),
   openMainSession: vi.fn(),
   addExternalSession: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock('@/infrastructure/api/service-api/MiniAppAPI', () => ({
     loopxCreateTask: mocks.loopxCreateTask,
     loopxAction: mocks.loopxAction,
     loopxEventsSince: mocks.loopxEventsSince,
+    loopxTurnOutputSince: mocks.loopxTurnOutputSince,
   },
 }));
 
@@ -507,6 +509,21 @@ describe('useMiniAppBridge LoopX controller routing', () => {
       streamId: 'stream-1',
       afterCursor: 4,
       limit: 50,
+    });
+
+    await dispatchRpc(iframe, 6, 'loopx.turnOutputSince', {
+      taskId: 'task-1',
+      turnId: 'turn-1',
+      streamId: 'stream-1',
+      afterCursor: 9,
+      limit: 25,
+    });
+    expect(mocks.loopxTurnOutputSince).toHaveBeenCalledWith('builtin-bitfun-loopx', {
+      taskId: 'task-1',
+      turnId: 'turn-1',
+      streamId: 'stream-1',
+      afterCursor: 9,
+      limit: 25,
     });
   });
 

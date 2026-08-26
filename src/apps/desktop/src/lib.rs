@@ -838,9 +838,19 @@ pub async fn run() {
         Arc::new(
             bitfun_services_integrations::miniapp::loopx_workspace::LoopxWorkspaceService::new(
                 bitfun_services_integrations::miniapp::loopx_workspace::LoopxWorkspaceServiceConfig::new(
-                    path_manager
-                        .miniapp_dir(bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID)
-                        .join("workspaces"),
+                    // Prefer a short home-based root: target repositories can
+                    // contain paths near the Windows MAX_PATH limit, and a
+                    // deep AppData prefix made worktree checkouts fail with
+                    // "Filename too long" -> "Could not reset index file".
+                    dirs::home_dir()
+                        .map(|home| home.join(".bitfun").join("loopx-workspaces"))
+                        .unwrap_or_else(|| {
+                            path_manager
+                                .miniapp_dir(
+                                    bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID,
+                                )
+                                .join("workspaces")
+                        }),
                     std::path::PathBuf::from("git"),
                 ),
             ),
@@ -2042,6 +2052,7 @@ pub async fn run() {
             api::miniapp_loopx_api::miniapp_loopx_create_task,
             api::miniapp_loopx_api::miniapp_loopx_action,
             api::miniapp_loopx_api::miniapp_loopx_events_since,
+            api::miniapp_loopx_api::miniapp_loopx_turn_output_since,
             api::miniapp_export_api::miniapp_render_slide_page,
             // Browser API (embedded webview)
             api::browser_api::browser_webview_eval,

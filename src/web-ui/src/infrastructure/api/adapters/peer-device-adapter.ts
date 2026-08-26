@@ -85,6 +85,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'miniapp_loopx_create_task',
   'miniapp_loopx_action',
   'miniapp_loopx_events_since',
+  'miniapp_loopx_turn_output_since',
   // Detached dispatch uses this controller's SSH credentials and observer index.
   'dispatch_list_targets',
   'dispatch_probe_target',

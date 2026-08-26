@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 // Keep in sync with LOOPX_VENDOR_REF in the bitfun-loopx MiniApp worker.js:
 // loopx's CLI JSON contract is the app's interface surface, so the bundled
 // binary and the runtime vendor fallback must pin the same version.
-const LOOPX_VERSION = process.env.LOOPX_VERSION || 'v0.2.13';
+export const LOOPX_VERSION = process.env.LOOPX_VERSION || 'v0.5.1';
 const LOOPX_REPO = 'https://github.com/huangruiteng/loopx.git';
 const OUT_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

@@ -195,6 +195,7 @@ miniapp-loopx = [
     "bitfun-product-domains/miniapp",
     "bitfun-services-core/process-runtime",
     "dep:bitfun-product-domains",
+    "dunce",
     "hex",
     "reqwest",
     "reqwest/json",

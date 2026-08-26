@@ -210,6 +210,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "miniapp_loopx_create_task",
     "miniapp_loopx_action",
     "miniapp_loopx_events_since",
+    "miniapp_loopx_turn_output_since",
 ];
 
 static PENDING: OnceLock<Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeResult>>>> =

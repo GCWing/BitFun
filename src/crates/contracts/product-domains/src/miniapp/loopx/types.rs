@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const LOOPX_BUILTIN_APP_ID: &str = "builtin-bitfun-loopx";
-pub const LOOPX_PINNED_VERSION: &str = "0.2.13";
+pub const LOOPX_PINNED_VERSION: &str = "0.5.1";
 pub const LOOPX_CLI_SCHEMA_VERSION: u32 = 1;
 
 pub type LoopxEventCursor = u64;
@@ -112,6 +112,10 @@ pub struct LoopxIntakeCandidate {
     pub key: LoopxIssueKey,
     pub url: String,
     pub title: String,
+    /// Bounded plain-text excerpt of the issue/PR body, kept for task
+    /// surfaces. The projection intentionally never retains the full remote
+    /// body (only this trimmed excerpt) to bound snapshot size.
+    pub description: String,
     pub state: LoopxRemoteItemState,
     pub state_reason: Option<String>,
     pub from_repository: bool,
@@ -136,6 +140,7 @@ pub struct LoopxWorkspacePreview {
     pub disposition: LoopxWorkspaceDisposition,
     pub path: Option<String>,
     pub repository_verified: bool,
+    pub detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +149,7 @@ pub struct LoopxModelCapability {
     pub model_id: String,
     pub available: bool,
     pub supports_images: bool,
+    pub detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -246,6 +252,7 @@ pub enum LoopxTaskState {
     RetryWait,
     Cancelling,
     Stopped,
+    Aborted,
     Completed,
     Failed,
     Archived,
@@ -258,20 +265,12 @@ impl LoopxTaskState {
     pub fn is_terminal(self) -> bool {
         matches!(
             self,
-            Self::Stopped | Self::Completed | Self::Failed | Self::Archived
+            Self::Stopped | Self::Aborted | Self::Completed | Self::Failed | Self::Archived
         )
     }
 
     pub fn was_executing_at_shutdown(self) -> bool {
-        matches!(
-            self,
-            Self::Preparing
-                | Self::Queued
-                | Self::Running
-                | Self::WaitingForUser
-                | Self::RetryWait
-                | Self::Cancelling
-        )
+        matches!(self, Self::Running | Self::Cancelling)
     }
 }
 
@@ -304,6 +303,12 @@ pub enum LoopxPhase {
 pub struct LoopxTaskIdentity {
     pub item: LoopxIssueKey,
     pub attempt: u32,
+    /// Issue / PR title captured at task creation, so task surfaces can show
+    /// content instead of only the item number. Empty for legacy records.
+    pub title: String,
+    /// Bounded plain-text excerpt of the issue/PR description captured at
+    /// task creation. Empty for legacy records.
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -546,7 +551,10 @@ pub struct LoopxCreateTaskResponse {
 pub enum LoopxActionKind {
     #[default]
     Pause,
+    Abort,
     Resume,
+    ResumeRepository,
+    ResetAll,
     Approve,
     Reject,
     Archive,
@@ -558,6 +566,7 @@ pub enum LoopxActionKind {
 #[serde(default, rename_all = "camelCase")]
 pub struct LoopxActionRequest {
     pub task_id: Option<String>,
+    pub repository: Option<LoopxRepositoryKey>,
     pub action: LoopxActionKind,
     pub client_request_id: String,
     pub expected_revision: u64,
@@ -608,6 +617,64 @@ pub struct LoopxEventsSinceResponse {
     pub events: Vec<LoopxEvent>,
     pub next_cursor: LoopxEventCursor,
     pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopxTurnOutputStatus {
+    #[default]
+    Current,
+    TaskNotFound,
+    NotRunning,
+    StaleTurn,
+    OutputUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopxTurnOutputEventKind {
+    #[default]
+    Text,
+    Thinking,
+    ModelRoundStarted,
+    ModelRoundCompleted,
+    Tool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxTurnOutputEvent {
+    pub cursor: LoopxEventCursor,
+    pub turn_id: String,
+    pub round_id: Option<String>,
+    pub kind: LoopxTurnOutputEventKind,
+    pub text: Option<String>,
+    pub tool_name: Option<String>,
+    pub tool_state: Option<String>,
+    pub is_end: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxTurnOutputSinceRequest {
+    pub task_id: String,
+    pub turn_id: Option<String>,
+    pub stream_id: Option<String>,
+    pub after_cursor: LoopxEventCursor,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxTurnOutputSinceResponse {
+    pub status: LoopxTurnOutputStatus,
+    pub task_id: String,
+    pub turn_id: Option<String>,
+    pub stream_id: Option<String>,
+    pub events: Vec<LoopxTurnOutputEvent>,
+    pub next_cursor: LoopxEventCursor,
+    pub has_more: bool,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

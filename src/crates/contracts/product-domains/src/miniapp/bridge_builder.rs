@@ -142,6 +142,7 @@ pub fn build_bridge_script(
       createTask:    (opts) => _rpc('loopx.createTask', opts || {{}}),
       action:        (opts) => _rpc('loopx.action', opts || {{}}),
       eventsSince:   (opts) => _rpc('loopx.eventsSince', opts || {{}}),
+      turnOutputSince: (opts) => _rpc('loopx.turnOutputSince', opts || {{}}),
       onEvent:       (fn) => app.on('loopx:event', fn),
       offEvent:      (fn) => app.off('loopx:event', fn),
     }},

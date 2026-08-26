@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -18,6 +19,11 @@ use url::Url;
 
 const WORKSPACE_MARKER_SCHEMA: u32 = 1;
 const WORKSPACE_MARKER_NAME: &str = "bitfun-loopx-workspace.json";
+static WORKSPACE_PROBE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+fn git_compatible_path(path: &Path) -> PathBuf {
+    dunce::simplified(path).to_path_buf()
+}
 
 #[derive(Debug, Clone)]
 pub struct LoopxWorkspaceServiceConfig {
@@ -46,6 +52,10 @@ pub struct LoopxWorkspaceLayout {
     pub repository_hash: String,
     pub task_hash: String,
     pub worktree_path: PathBuf,
+    /// Shared bare repository for this repository. All tasks of one repository
+    /// share a single object database via `git worktree add`; it is removed
+    /// once the last worktree is disposed.
+    pub bare_repo_path: PathBuf,
     pub registry_path: PathBuf,
     pub branch_name: String,
     pub clone_url: String,
@@ -68,11 +78,13 @@ pub fn plan_workspace_layout(
     let repository_identity = item.repository.canonical_id().to_lowercase();
     let repository_hash = sha256_prefix(repository_identity.as_bytes(), 20);
     let task_hash = sha256_prefix(task_id.as_bytes(), 20);
-    let worktree_path = root_dir.join(&repository_hash).join(&task_hash);
+    let repository_dir = root_dir.join(&repository_hash);
+    let worktree_path = repository_dir.join(&task_hash);
     Ok(LoopxWorkspaceLayout {
         repository_identity,
         repository_hash,
         task_hash: task_hash.clone(),
+        bare_repo_path: repository_dir.join("bare.git"),
         registry_path: worktree_path.join(".loopx").join("registry.json"),
         worktree_path,
         branch_name: format!("bitfun-loopx/{task_hash}"),
@@ -100,11 +112,106 @@ pub fn plan_git_clone_command(
         args: vec![
             OsString::from("clone"),
             OsString::from("--no-checkout"),
+            OsString::from("--config"),
+            // The target repository may contain paths beyond the Windows
+            // 260-character limit once joined with the workspace root; keep
+            // git capable of long paths inside every created repository.
+            OsString::from("core.longpaths=true"),
             OsString::from("--origin"),
             OsString::from("origin"),
             OsString::from("--"),
             OsString::from(&layout.clone_url),
             layout.worktree_path.as_os_str().to_owned(),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: None,
+    }
+}
+
+/// Shared bare clone for one repository. All tasks of the repository add
+/// linked worktrees from this single object database.
+pub fn plan_git_bare_clone_command(
+    git_executable: &Path,
+    layout: &LoopxWorkspaceLayout,
+) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git_executable.to_path_buf(),
+        args: vec![
+            OsString::from("clone"),
+            OsString::from("--bare"),
+            OsString::from("--config"),
+            // Long-path support must travel with the shared bare repository so
+            // linked worktree checkouts can write files whose joined path
+            // exceeds the Windows 260-character limit.
+            OsString::from("core.longpaths=true"),
+            OsString::from("--origin"),
+            OsString::from("origin"),
+            OsString::from("--"),
+            OsString::from(&layout.clone_url),
+            layout.bare_repo_path.as_os_str().to_owned(),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: None,
+    }
+}
+
+/// Adds a linked worktree from the shared bare repository, checking out the
+/// task branch. Equivalent to the old per-task full clone + branch checkout
+/// but shares the object database across all tasks of the repository.
+pub fn plan_git_worktree_add_command(
+    git_executable: &Path,
+    layout: &LoopxWorkspaceLayout,
+) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git_executable.to_path_buf(),
+        args: vec![
+            OsString::from("-C"),
+            layout.bare_repo_path.as_os_str().to_owned(),
+            OsString::from("worktree"),
+            OsString::from("add"),
+            OsString::from("-b"),
+            OsString::from(&layout.branch_name),
+            layout.worktree_path.as_os_str().to_owned(),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: None,
+    }
+}
+
+/// Removes a task worktree (and its registration) from the shared bare repo.
+pub fn plan_git_worktree_remove_command(
+    git_executable: &Path,
+    layout: &LoopxWorkspaceLayout,
+) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git_executable.to_path_buf(),
+        args: vec![
+            OsString::from("-C"),
+            layout.bare_repo_path.as_os_str().to_owned(),
+            OsString::from("worktree"),
+            OsString::from("remove"),
+            OsString::from("--force"),
+            layout.worktree_path.as_os_str().to_owned(),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: None,
+    }
+}
+
+/// Porcelain worktree list of the shared bare repo. Used after dispose to
+/// decide whether the last worktree is gone and the bare repo can be deleted.
+pub fn plan_git_worktree_list_command(
+    git_executable: &Path,
+    layout: &LoopxWorkspaceLayout,
+) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git_executable.to_path_buf(),
+        args: vec![
+            OsString::from("-C"),
+            layout.bare_repo_path.as_os_str().to_owned(),
+            OsString::from("worktree"),
+            OsString::from("list"),
+            OsString::from("--porcelain"),
         ],
         environment: git_noninteractive_environment(),
         current_dir: None,
@@ -163,6 +270,74 @@ impl LoopxWorkspaceService {
         }
     }
 
+    async fn probe_inner(
+        &self,
+        request: &loopx_contract::LoopxWorkspaceProbeRequest,
+        cancellation: CancellationToken,
+    ) -> loopx_contract::LoopxHostResult<loopx_contract::LoopxWorkspaceProbeResult> {
+        if request.operation_id.trim().is_empty() {
+            return Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+                &request.operation_id,
+                "operation_id is required",
+                false,
+            ));
+        }
+        tokio::fs::create_dir_all(&self.config.root_dir)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to create LoopX workspace root: {error}"),
+                    true,
+                )
+            })?;
+        let canonical_root = tokio::fs::canonicalize(&self.config.root_dir)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to resolve LoopX workspace root: {error}"),
+                    true,
+                )
+            })?;
+        verify_workspace_root_writable(&canonical_root, &request.operation_id).await?;
+
+        let version = self
+            .run_git(
+                &request.operation_id,
+                git_version_plan(&self.config.git_executable),
+                self.config.command_deadline,
+                cancellation.clone(),
+            )
+            .await?;
+        let git_version = version.stdout.trim().to_string();
+
+        let repository_verified = if let Some(repository) = &request.repository {
+            validate_repository(&request.operation_id, repository)?;
+            self.run_git(
+                &request.operation_id,
+                git_repository_probe_plan(&self.config.git_executable, repository),
+                self.config.command_deadline,
+                cancellation,
+            )
+            .await?;
+            true
+        } else {
+            false
+        };
+
+        Ok(loopx_contract::LoopxWorkspaceProbeResult {
+            git_version: (!git_version.is_empty()).then_some(git_version),
+            workspace_root: git_compatible_path(&canonical_root)
+                .to_string_lossy()
+                .into_owned(),
+            repository_verified,
+        })
+    }
+
     async fn prepare_inner(
         &self,
         request: &loopx_contract::LoopxWorkspacePrepareRequest,
@@ -189,7 +364,11 @@ impl LoopxWorkspaceService {
                     true,
                 )
             })?;
-        let layout = plan_workspace_layout(&canonical_root, &request.task_id, &request.item)?;
+        let layout = plan_workspace_layout(
+            &git_compatible_path(&canonical_root),
+            &request.task_id,
+            &request.item,
+        )?;
         let repository_parent = layout
             .worktree_path
             .parent()
@@ -230,23 +409,38 @@ impl LoopxWorkspaceService {
             return Ok(workspace_result(&layout, true));
         }
 
-        let clone = plan_git_clone_command(&self.config.git_executable, &layout);
+        // Shared-object-database layout: ensure the bare repository exists once
+        // per repository, then add a linked worktree for this task. Older
+        // per-task full clones on disk keep working (they take the reuse path
+        // above); only brand-new workspaces get the shared bare repo.
+        if !tokio::fs::try_exists(&layout.bare_repo_path)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to probe shared bare repository: {error}"),
+                    true,
+                )
+            })?
+        {
+            self.run_git(
+                &request.operation_id,
+                plan_git_bare_clone_command(&self.config.git_executable, &layout),
+                self.config.clone_deadline,
+                cancellation.clone(),
+            )
+            .await?;
+        }
         self.run_git(
             &request.operation_id,
-            clone,
+            plan_git_worktree_add_command(&self.config.git_executable, &layout),
             self.config.clone_deadline,
             cancellation.clone(),
         )
         .await?;
         self.verify_remote(&layout, &request.operation_id, cancellation.clone())
             .await?;
-        self.run_git(
-            &request.operation_id,
-            git_checkout_plan(&self.config.git_executable, &layout),
-            self.config.command_deadline,
-            cancellation,
-        )
-        .await?;
         write_workspace_marker(&layout, &request.task_id, &request.operation_id).await?;
         Ok(workspace_result(&layout, false))
     }
@@ -265,7 +459,11 @@ impl LoopxWorkspaceService {
                 )))
             }
         };
-        let layout = plan_workspace_layout(&canonical_root, &request.task_id, &request.item)?;
+        let layout = plan_workspace_layout(
+            &git_compatible_path(&canonical_root),
+            &request.task_id,
+            &request.item,
+        )?;
         if Path::new(&request.worktree_path) != layout.worktree_path
             || Path::new(&request.registry_path) != layout.registry_path
         {
@@ -407,9 +605,220 @@ impl LoopxWorkspaceService {
             },
         ))
     }
+
+    /// Removes the task worktree after terminal settlement, then removes the
+    /// shared bare repository once its last linked worktree is gone.
+    ///
+    /// - Shared layout: `git worktree remove --force` (linked worktree), then
+    ///   `git worktree list --porcelain`; when only the bare repository itself
+    ///   remains, the bare directory is removed too.
+    /// - Legacy layout (per-task full clone, `.git` is a directory): the whole
+    ///   worktree directory is removed directly. Upgraded installs keep their
+    ///   existing clones working; only new workspaces use the shared layout.
+    async fn dispose_inner(
+        &self,
+        request: &loopx_contract::LoopxWorkspaceDisposeRequest,
+        cancellation: CancellationToken,
+    ) -> loopx_contract::LoopxHostResult<loopx_contract::LoopxWorkspaceDisposeResult> {
+        validate_task_and_item(&request.operation_id, &request.task_id, &request.item)?;
+        let canonical_root = tokio::fs::canonicalize(&self.config.root_dir)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to resolve LoopX workspace root: {error}"),
+                    true,
+                )
+            })?;
+        let layout = plan_workspace_layout(
+            &git_compatible_path(&canonical_root),
+            &request.task_id,
+            &request.item,
+        )?;
+        let bare_exists = tokio::fs::try_exists(&layout.bare_repo_path)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to probe bare repository: {error}"),
+                    true,
+                )
+            })?;
+
+        if tokio::fs::try_exists(&layout.worktree_path)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    error.to_string(),
+                    true,
+                )
+            })?
+        {
+            ensure_path_boundary(
+                &canonical_root,
+                &layout.worktree_path,
+                &request.operation_id,
+            )
+            .await?;
+            // Only BitFun-owned workspaces may be removed. A missing or
+            // mismatched marker keeps the directory (and any user changes).
+            let marker = read_workspace_marker(&layout, &request.operation_id).await?;
+            validate_marker(&marker, &layout, &request.operation_id)?;
+
+            let dot_git = layout.worktree_path.join(".git");
+            let linked_worktree = tokio::fs::metadata(&dot_git)
+                .await
+                .map(|metadata| metadata.is_file())
+                .unwrap_or(false);
+
+            if linked_worktree && bare_exists {
+                self.run_git(
+                    &request.operation_id,
+                    plan_git_worktree_remove_command(&self.config.git_executable, &layout),
+                    self.config.command_deadline,
+                    cancellation.clone(),
+                )
+                .await?;
+            } else {
+                tokio::fs::remove_dir_all(&layout.worktree_path)
+                    .await
+                    .map_err(|error| {
+                        host_error(
+                            loopx_contract::LoopxHostPortErrorKind::Io,
+                            &request.operation_id,
+                            format!("failed to remove task worktree: {error}"),
+                            false,
+                        )
+                    })?;
+            }
+        }
+
+        // Remove the shared bare repository once no linked worktree remains.
+        if bare_exists {
+            let listing = self
+                .run_git(
+                    &request.operation_id,
+                    plan_git_worktree_list_command(&self.config.git_executable, &layout),
+                    self.config.command_deadline,
+                    cancellation,
+                )
+                .await?;
+            let worktree_entries = listing
+                .stdout
+                .lines()
+                .filter(|line| line.starts_with("worktree "))
+                .count();
+            if worktree_entries <= 1 {
+                tokio::fs::remove_dir_all(&layout.bare_repo_path)
+                    .await
+                    .map_err(|error| {
+                        host_error(
+                            loopx_contract::LoopxHostPortErrorKind::Io,
+                            &request.operation_id,
+                            format!("failed to remove shared bare repository: {error}"),
+                            false,
+                        )
+                    })?;
+            }
+        }
+        Ok(loopx_contract::LoopxWorkspaceDisposeResult { removed: true })
+    }
+
+    async fn reset_inner(
+        &self,
+        request: &loopx_contract::LoopxWorkspaceResetRequest,
+    ) -> loopx_contract::LoopxHostResult<loopx_contract::LoopxWorkspaceResetResult> {
+        if request.operation_id.trim().is_empty() {
+            return Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+                &request.operation_id,
+                "operation_id is required",
+                false,
+            ));
+        }
+        let root_metadata = match tokio::fs::symlink_metadata(&self.config.root_dir).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(loopx_contract::LoopxWorkspaceResetResult { removed: false });
+            }
+            Err(error) => {
+                return Err(host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to inspect LoopX workspace root: {error}"),
+                    true,
+                ));
+            }
+        };
+        if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+            return Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::Conflict,
+                &request.operation_id,
+                "LoopX workspace reset refused to remove a non-directory or symlink root",
+                false,
+            ));
+        }
+        let canonical_root = tokio::fs::canonicalize(&self.config.root_dir)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to resolve LoopX workspace root: {error}"),
+                    true,
+                )
+            })?;
+        if !canonical_root.is_absolute() || canonical_root.parent().is_none() {
+            return Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::Conflict,
+                &request.operation_id,
+                "LoopX workspace reset refused an unsafe root path",
+                false,
+            ));
+        }
+        let root_name = canonical_root
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        if !root_name.eq_ignore_ascii_case("workspaces")
+            && !root_name.eq_ignore_ascii_case("loopx-workspaces")
+        {
+            return Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::Conflict,
+                &request.operation_id,
+                "LoopX workspace reset refused an unexpected root directory name",
+                false,
+            ));
+        }
+        tokio::fs::remove_dir_all(&canonical_root)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to remove LoopX workspace root: {error}"),
+                    false,
+                )
+            })?;
+        Ok(loopx_contract::LoopxWorkspaceResetResult { removed: true })
+    }
 }
 
 impl loopx_contract::LoopxWorkspacePort for LoopxWorkspaceService {
+    fn probe(
+        &self,
+        request: loopx_contract::LoopxWorkspaceProbeRequest,
+    ) -> loopx_contract::LoopxHostFuture<'_, loopx_contract::LoopxWorkspaceProbeResult> {
+        Box::pin(async move {
+            let (cancellation, _registration) = self.register_operation(&request.operation_id)?;
+            self.probe_inner(&request, cancellation).await
+        })
+    }
+
     fn prepare(
         &self,
         request: loopx_contract::LoopxWorkspacePrepareRequest,
@@ -452,6 +861,27 @@ impl loopx_contract::LoopxWorkspacePort for LoopxWorkspaceService {
             })
         })
     }
+
+    fn dispose(
+        &self,
+        request: loopx_contract::LoopxWorkspaceDisposeRequest,
+    ) -> loopx_contract::LoopxHostFuture<'_, loopx_contract::LoopxWorkspaceDisposeResult> {
+        Box::pin(async move {
+            let (cancellation, _registration) = self.register_operation(&request.operation_id)?;
+            let _mutation = self.mutation_lock.lock().await;
+            self.dispose_inner(&request, cancellation).await
+        })
+    }
+
+    fn reset(
+        &self,
+        request: loopx_contract::LoopxWorkspaceResetRequest,
+    ) -> loopx_contract::LoopxHostFuture<'_, loopx_contract::LoopxWorkspaceResetResult> {
+        Box::pin(async move {
+            let _mutation = self.mutation_lock.lock().await;
+            self.reset_inner(&request).await
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -484,6 +914,36 @@ fn git_noninteractive_environment() -> BTreeMap<OsString, OsString> {
     ])
 }
 
+fn git_version_plan(git: &Path) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git.to_path_buf(),
+        args: vec![OsString::from("--version")],
+        environment: BTreeMap::new(),
+        current_dir: None,
+    }
+}
+
+fn git_repository_probe_plan(
+    git: &Path,
+    repository: &loopx_contract::LoopxRepositoryKey,
+) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git.to_path_buf(),
+        args: vec![
+            OsString::from("ls-remote"),
+            OsString::from("--exit-code"),
+            OsString::from("--"),
+            OsString::from(format!(
+                "https://github.com/{}/{}.git",
+                repository.owner, repository.repository
+            )),
+            OsString::from("HEAD"),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: None,
+    }
+}
+
 fn git_remote_plan(git: &Path, layout: &LoopxWorkspaceLayout) -> LoopxGitCommandPlan {
     LoopxGitCommandPlan {
         executable: git.to_path_buf(),
@@ -499,29 +959,60 @@ fn git_remote_plan(git: &Path, layout: &LoopxWorkspaceLayout) -> LoopxGitCommand
     }
 }
 
-fn git_checkout_plan(git: &Path, layout: &LoopxWorkspaceLayout) -> LoopxGitCommandPlan {
-    LoopxGitCommandPlan {
-        executable: git.to_path_buf(),
-        args: vec![
-            OsString::from("-C"),
-            layout.worktree_path.as_os_str().to_owned(),
-            OsString::from("checkout"),
-            OsString::from("-b"),
-            OsString::from(&layout.branch_name),
-        ],
-        environment: git_noninteractive_environment(),
-        current_dir: None,
+/// Resolves the real Git metadata directory for a worktree path.
+///
+/// A standalone clone keeps `.git` as a directory; a linked worktree from a
+/// shared bare repository keeps `.git` as a file containing
+/// `gitdir: <absolute path>`. The ownership marker must live inside the real
+/// gitdir so both layouts stay covered.
+async fn resolve_git_dir(
+    worktree_path: &Path,
+    operation_id: &str,
+) -> loopx_contract::LoopxHostResult<PathBuf> {
+    let dot_git = worktree_path.join(".git");
+    let metadata = tokio::fs::metadata(&dot_git).await.map_err(|error| {
+        host_error(
+            loopx_contract::LoopxHostPortErrorKind::Conflict,
+            operation_id,
+            format!(
+                "existing workspace has no usable .git entry: {error}; existing data was preserved"
+            ),
+            false,
+        )
+    })?;
+    if metadata.is_dir() {
+        return Ok(dot_git);
     }
+    // Linked worktree: .git is a gitdir pointer file.
+    let pointer = tokio::fs::read_to_string(&dot_git).await.map_err(|error| {
+        host_error(
+            loopx_contract::LoopxHostPortErrorKind::Conflict,
+            operation_id,
+            format!("failed to read worktree gitdir pointer: {error}"),
+            false,
+        )
+    })?;
+    let gitdir = pointer
+        .lines()
+        .find_map(|line| line.strip_prefix("gitdir:").map(str::trim))
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            host_error(
+                loopx_contract::LoopxHostPortErrorKind::Conflict,
+                operation_id,
+                "worktree .git pointer has no gitdir entry",
+                false,
+            )
+        })?;
+    Ok(gitdir)
 }
 
 async fn read_workspace_marker(
     layout: &LoopxWorkspaceLayout,
     operation_id: &str,
 ) -> loopx_contract::LoopxHostResult<LoopxWorkspaceMarker> {
-    let marker_path = layout
-        .worktree_path
-        .join(".git")
-        .join(WORKSPACE_MARKER_NAME);
+    let git_dir = resolve_git_dir(&layout.worktree_path, operation_id).await?;
+    let marker_path = git_dir.join(WORKSPACE_MARKER_NAME);
     let raw = tokio::fs::read(&marker_path).await.map_err(|error| {
         host_error(
             loopx_contract::LoopxHostPortErrorKind::Conflict,
@@ -556,7 +1047,7 @@ async fn write_workspace_marker(
         task_id_hash: sha256_prefix(task_id.as_bytes(), 20),
         branch_name: layout.branch_name.clone(),
     };
-    let git_dir = layout.worktree_path.join(".git");
+    let git_dir = resolve_git_dir(&layout.worktree_path, operation_id).await?;
     let marker_path = git_dir.join(WORKSPACE_MARKER_NAME);
     let temporary_path = git_dir.join(format!("{WORKSPACE_MARKER_NAME}.tmp"));
     let encoded = serde_json::to_vec_pretty(&marker).map_err(|error| {
@@ -648,11 +1139,8 @@ fn validate_task_and_item(
             false,
         ));
     }
-    if !item.repository.host.eq_ignore_ascii_case("github.com")
-        || !is_github_slug(&item.repository.owner)
-        || !is_github_slug(&item.repository.repository)
-        || item.number == 0
-    {
+    validate_repository(operation_id, &item.repository)?;
+    if item.number == 0 {
         return Err(host_error(
             loopx_contract::LoopxHostPortErrorKind::InvalidInput,
             operation_id,
@@ -661,6 +1149,57 @@ fn validate_task_and_item(
         ));
     }
     Ok(())
+}
+
+fn validate_repository(
+    operation_id: &str,
+    repository: &loopx_contract::LoopxRepositoryKey,
+) -> loopx_contract::LoopxHostResult<()> {
+    if !repository.host.eq_ignore_ascii_case("github.com")
+        || !is_github_slug(&repository.owner)
+        || !is_github_slug(&repository.repository)
+    {
+        return Err(host_error(
+            loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+            operation_id,
+            "workspace preparation requires a canonical GitHub repository",
+            false,
+        ));
+    }
+    Ok(())
+}
+
+async fn verify_workspace_root_writable(
+    canonical_root: &Path,
+    operation_id: &str,
+) -> loopx_contract::LoopxHostResult<()> {
+    let probe_path = canonical_root.join(format!(
+        ".loopx-write-probe-{}-{}",
+        std::process::id(),
+        WORKSPACE_PROBE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe_path)
+        .await
+        .map_err(|error| {
+            host_error(
+                loopx_contract::LoopxHostPortErrorKind::Io,
+                operation_id,
+                format!("LoopX workspace root is not writable: {error}"),
+                false,
+            )
+        })?;
+    drop(file);
+    tokio::fs::remove_file(&probe_path).await.map_err(|error| {
+        host_error(
+            loopx_contract::LoopxHostPortErrorKind::Io,
+            operation_id,
+            format!("failed to clean up workspace write probe: {error}"),
+            true,
+        )
+    })
 }
 
 fn is_github_slug(value: &str) -> bool {
@@ -724,9 +1263,47 @@ fn map_process_error(
     host_error(
         kind,
         operation_id,
-        format!("workspace git command failed: {error}"),
+        format_workspace_process_error(&error),
         retryable,
     )
+}
+
+fn format_workspace_process_error(error: &LoopxProcessError) -> String {
+    let stderr_tail: &[String] = match error {
+        LoopxProcessError::Exited { stderr_tail, .. }
+        | LoopxProcessError::Timeout { stderr_tail, .. }
+        | LoopxProcessError::Cancelled { stderr_tail } => stderr_tail,
+        _ => &[],
+    };
+    let detail = stderr_tail
+        .iter()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .map(|line| line.trim())
+        .unwrap_or_default();
+    let summary = match error {
+        LoopxProcessError::Exited { code, .. } => {
+            format!("workspace Git command exited with status {code:?}")
+        }
+        LoopxProcessError::Start { message } => {
+            format!("workspace Git command could not start: {message}")
+        }
+        LoopxProcessError::Io { message } => {
+            format!("workspace Git command IO failed: {message}")
+        }
+        LoopxProcessError::Timeout { deadline_ms, .. } => {
+            format!("workspace Git command timed out after {deadline_ms} ms")
+        }
+        LoopxProcessError::Cancelled { .. } => "workspace Git command was cancelled".to_string(),
+        LoopxProcessError::OutputLimit { limit_bytes } => {
+            format!("workspace Git output exceeded {limit_bytes} bytes")
+        }
+    };
+    if detail.is_empty() {
+        summary
+    } else {
+        format!("{summary}: {detail}")
+    }
 }
 
 fn host_error(

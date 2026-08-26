@@ -21,6 +21,7 @@ import MiniAppCustomizePanel from './customization/MiniAppCustomizePanel';
 import MiniAppDraftPreview from './customization/MiniAppDraftPreview';
 import { useMiniAppCustomizeHotspot } from './customization/useMiniAppCustomizeHotspot';
 import MiniAppRunner from './components/MiniAppRunner';
+import { resolveMiniAppAppearanceMode } from './utils/buildMiniAppAppearancePayload';
 import './MiniAppScene.scss';
 
 const log = createLogger('MiniAppScene');
@@ -41,7 +42,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const markCustomizationActive = useMiniAppStore((state) => state.markCustomizationActive);
   const markCustomizationIdle = useMiniAppStore((state) => state.markCustomizationIdle);
   const { current: appearance } = useAppearance();
-  const appearanceMode = appearance?.mode ?? 'dark';
+  const appearanceMode = resolveMiniAppAppearanceMode(appearance);
   const { workspace, workspacePath } = useCurrentWorkspace();
   const { closeScene } = useSceneManager();
   const { t, currentLanguage } = useI18n('scenes/miniapp');

@@ -9,20 +9,146 @@ LoopX 引擎持续修复，心跳调度、人工审批、中途插话。
 以 `include_str!` 嵌入二进制，注册 id 为 `builtin-bitfun-loopx`（同文件契约测试
 含 id 顺序断言）；`meta.json` 的权限与注册条目保持一致。
 
-## 修改流程
+## 高效修改流程
 
-直接编辑本目录文件（`index.html` / `style.css` / `ui.js` / `worker.js` /
-`meta.json`）：
+### 先判断改动属于哪一层
 
-1. **开发期无需 bump version**：种子机制按内容哈希判定，重启应用即自动 reseed
-   （跳过条件 = 内容哈希一致 且 已装 version ≥ 内置 version；内容一变哈希必变）。
-2. **发布期（每个发布版）**：把 `builtin.rs` 的 `BUILTIN_APPS` version 与
-   `meta.json` 的 `version` **同步 +1**。version 只是单调计数，唯一作用是给
-   "本地定制"用户发更新通知，不代表内容新旧。
-3. 本地验证 reseed：重启应用（或删除
-   `~/.bitfun/miniapps/builtin-bitfun-loopx/.builtin-manifest.json` 后重启），
-   确认新资源落盘；
-4. `cargo test -p bitfun-product-domains --features product-full builtin_miniapp` 全绿后提交。
+| 修改文件 | 改动类型 | 开发期最小动作 | 何时需要 Desktop 编译 |
+|---|---|---|---|
+| `index.html` / `style.css` | MiniApp 结构、布局、样式 | 集中完成一批修改，不跑 Rust 检查 | 真机验证前编译一次 |
+| `ui.js` | MiniApp 交互和宿主桥调用 | `node --check <本目录>/ui.js` | 真机验证前编译一次 |
+| `worker.js` | MiniApp Worker、LoopX CLI 调用 | `node --check <本目录>/worker.js` | 真机验证前编译一次并重启 Worker |
+| `meta.json` | 权限、版本、运行方式 | 检查 JSON 和权限差异 | 必须编译并 reseed |
+| `esm_dependencies.json` | 浏览器 ESM 依赖 | 检查 JSON；确认 import map | 必须编译并 reseed |
+| `src/crates/contracts/product-domains/src/miniapp/loopx/**` | LoopX DTO、状态、端口、纯策略 | `cargo check -p bitfun-product-domains --no-default-features --features miniapp` | 联调前编译一次 |
+| `src/crates/services/services-integrations/src/miniapp/loopx_*.rs` | GitHub、Git workspace、CLI 等宿主服务 | `cargo check -p bitfun-services-integrations --no-default-features --features miniapp-loopx` | 联调前编译一次 |
+| `src/crates/assembly/core/src/miniapp/loopx/**` | controller、Agent 编排、持久状态 | `cargo check -p bitfun-core --no-default-features --features tools-miniapp` | 联调前编译一次 |
+| `scripts/build-loopx.mjs` 或 LoopX pin | 随包 sidecar | `pnpm run build:loopx` | 只在 sidecar/pin 变化时 |
+
+这里的 `<本目录>` 是：
+
+```text
+src/crates/contracts/product-domains/src/miniapp/builtin/assets/bitfun-loopx
+```
+
+### 纯 UI 快速循环
+
+内置 MiniApp 资源由 `include_str!` 嵌入 Desktop 二进制。当前没有一个既能热替换
+source、又能继续通过受信任 built-in 校验的免编译入口。因此正确的快速循环是
+“多次编辑，一次编译”，而不是每保存一次就启动 Desktop 构建。
+
+1. 保持 Web UI Vite 常驻；没有运行时才启动：
+
+   ```bash
+   pnpm --dir src/web-ui dev
+   ```
+
+2. 连续修改 `index.html`、`style.css`、`ui.js`，先把一轮视觉交互做完整。
+3. JS 变化只做秒级语法检查：
+
+   ```bash
+   node --check src/crates/contracts/product-domains/src/miniapp/builtin/assets/bitfun-loopx/ui.js
+   ```
+
+4. 需要在真实 MiniApp bridge 中验收时，停止正在运行的 `bitfun-desktop`，只构建
+   一次 Desktop executable（配方见下方「统一构建配方」，不要换用别的环境变量）：
+
+   ```bash
+   cargo build -p bitfun-desktop
+   ```
+
+5. 保持 Vite 不退出，直接启动刚生成的 executable：
+
+   ```text
+   target/debug/bitfun-desktop.exe
+   ```
+
+6. 新二进制启动后会根据 built-in 内容哈希自动 reseed，并重新生成
+   `compiled.html`。此时再进入 LoopX MiniApp 验收。
+
+快速循环中不要使用 `pnpm run desktop:dev` 反复启停。该入口会执行资源准备、
+Cargo watch 和 target GC；在 Windows 上可能导致本来可增量的 UI 修改退化为大范围
+冷编译。它适合需要持续修改 Desktop Rust 的完整开发会话，不适合只调 MiniApp CSS。
+
+### 为什么不能直接改 AppData
+
+不要把下面的运行目录当成源码：
+
+```text
+%APPDATA%/bitfun/data/miniapps/builtin-bitfun-loopx/source/**
+%APPDATA%/bitfun/data/miniapps/builtin-bitfun-loopx/compiled.html
+```
+
+- `compiled.html` 是生成物，刷新、recompile 或重启后会被覆盖；
+- `source/**` 必须与二进制内嵌的 built-in source 一致；直接修改会使
+  `builtin_source_matches` 失败，受信任的 LoopX controller bridge 将被禁用；
+- `miniapp_sync_from_fs` 适用于普通 MiniApp 或明确的本地定制流程，不能作为受信任
+  built-in LoopX 的临时热补丁；
+- 只改运行目录会造成“代码已经改了，但界面仍旧”或“界面变了，但 bridge 不可用”。
+
+唯一权威源码始终是本 README 所在目录。
+
+### 宿主行为修改
+
+GitHub 认证/限流、Git workspace、环境预检、Agent 会话、任务恢复和持久状态不是
+纯 MiniApp UI。这些改动需要修改对应 Rust owner，并先运行上表中的一个最窄
+`cargo check`。不要同时运行多个 Cargo 命令，也不要在 `desktop:dev` 正在自动编译时
+再手动启动 Cargo；它们会争用同一个 target 锁。
+
+完成所有宿主改动后再执行一次：
+
+```bash
+cargo build -p bitfun-desktop
+```
+
+### 统一构建配方（重要）
+
+`bitfun-desktop` 的默认 features 为空，`--no-default-features` 没有实际差异；真正
+影响全量/增量的是 **profile 环境变量**。Cargo 指纹包含 `CARGO_PROFILE_DEV_*` 设置，
+一旦与上一次构建不同，整棵依赖树都会重编。请始终使用与
+`scripts/dev.cjs`（`desktop-preview` 快速重建）**完全相同**的配方：
+
+```powershell
+$env:CARGO_PROFILE_DEV_DEBUG = "0"
+$env:CARGO_PROFILE_DEV_INCREMENTAL = "true"
+$env:CARGO_PROFILE_DEV_CODEGEN_UNITS = "256"
+cargo build -p bitfun-desktop
+```
+
+或单行（cmd）：
+
+```bat
+set CARGO_PROFILE_DEV_DEBUG=0&& set CARGO_PROFILE_DEV_INCREMENTAL=true&& set CARGO_PROFILE_DEV_CODEGEN_UNITS=256&& cargo build -p bitfun-desktop
+```
+
+- **不要**混用不同的 `CARGO_PROFILE_DEV_*` / `CODEGEN_UNITS` 配置，也不要与
+  `--no-default-features` 的裸命令交替使用——那会把本可增量的重编退化成全量冷编译；
+- 需要断点调试信息时（`CARGO_PROFILE_DEV_DEBUG=2`）、或需要同时持续改 Desktop
+  Rust 时，改用 `pnpm run desktop:dev` 完整会话，不要在同一 target 上混跑；
+- 装 sccache 可进一步让配方/feature 切换也不触发全量重编（可选优化）。
+
+### 提交或发布前
+
+开发期不需要 bump version，内容哈希变化会触发 reseed。发布时才做以下动作：
+
+1. 同步增加 `builtin.rs` 中 `BUILTIN_APPS` 的 version 和 `meta.json` 的 version；
+2. 运行聚焦 built-in 契约测试：
+
+   ```bash
+   cargo test -p bitfun-product-domains --features product-full builtin_miniapp
+   ```
+
+3. sidecar pin 或构建脚本有变化时运行：
+
+   ```bash
+   pnpm run build:loopx
+   ```
+
+4. 需要完整 Desktop 构建产物时使用仓库入口：
+
+   ```bash
+   pnpm run desktop:build:fast
+   ```
 
 规范依据：`MiniApp/Skills/miniapp-dev/SKILL.md` 的「内置小应用（builtin/assets/*）
 维护规范」。
@@ -64,6 +190,27 @@ Node 的 `child_process` / `fs` / `https`：因此它实际会 spawn 的 `gh` / 
   审批弹窗触达亦未验证。v1 明确接受该假设。
 - 每轮 turn 由宿主 Agent 执行（`app.agent.run`），loopx 只负责心跳/配额/计划
   与 todo 状态；本应用不在本地托管任何外部 CLI 宿主（codex 等）。
+- **目标模型：一个 goal 只对应一个 issue/PR**（`goal_id_for` 生成
+  `bfx-owner-repo-issue-N`，重试追加 `-attempt` 后缀），每个 item 有独立
+  worktree 与 `.loopx/registry.json`；todo 是 **goal 内部** 的推进项/审批门禁
+  （`todo add --goal-id` 强绑定单一 goal），不用一串 todo 把多个 issue 串在
+  一个 goal 下。依据：loopx v0.5.x 的 goal 是「单一 objective 的持续 turn 载体」，
+  quota/心跳/审批/结算都以 goal 为域，registry 本身支持多 goal 列表——
+  多 issue 的"批量管理"由本应用 task/batch 层聚合，不压平到 loopx goal。
+- **心跳调度**：本应用维护一个统一的 task 调度循环（非每 issue 一个独立
+  定时器）；每轮 inspect_goal 由 loopx 返回 `scheduler_hint_ms`（含指数退避），
+  宿主据此把该 goal 重新排队；同一仓库的多个 goal 串行推进（
+  `active_repositories` + `schedule_next_for_repository`）。
+- **worktree 成本**：同仓库所有 task 共享一份裸仓库对象库
+  （`<root>/<repo-hash>/bare.git/`，首个 task `git clone --bare` 建立），每个
+  task 用 `git worktree add -b bitfun-loopx/<task-hash>` 挂出独立工作区
+  （`<root>/<repo-hash>/<task-hash>/`）。磁盘 ≈ 1 份对象库 + 各 task 的检出
+  文件；历史版本升级前创建的旧式独立克隆（每 task 一份完整 `.git`）仍可
+  正常复用，不强制迁移。空间不足时**归档（Archive）是唯一释放磁盘的入口**：
+  dispose 先 `git worktree remove --force` 删除该 task 工作区，再按
+  `git worktree list` 剩余条目数判断是否删除共享裸仓库（最后一个 worktree
+  离开时整仓回收）。loopx 上游只 `connect` 已存在项目、不 clone，克隆策略
+  是宿主侧职责，改动需同步 `loopx_workspace.rs` 与克隆契约测试。
 - v1 不设 turn 预算/成本上限：心跳节奏由 loopx 配额控制，宿主 Agent 消耗的
   模型额度由用户在 BitFun 侧自行管理。
 
@@ -71,7 +218,7 @@ Node 的 `child_process` / `fs` / `https`：因此它实际会 spawn 的 `gh` / 
 
 - **内置编译二进制（随安装包分发）**：打包流程（`scripts/desktop-tauri-build.mjs`，
   即 `pnpm run desktop:build*` 的 bundle 路径）会先执行 `scripts/build-loopx.mjs`：
-  构建期拉取 pin `v0.2.13` 的 loopx 源码并用 PyInstaller 编译单文件二进制，随
+  构建期拉取 pin `v0.5.1` 的 loopx 源码并用 PyInstaller 编译单文件二进制，随
   tauri `bundle.resources` 作为 sidecar 分发（`resources/loopx/`）。桌面宿主把
   资源目录经 `BITFUN_RESOURCE_DIR` 传给 MiniApp worker，探测时内置二进制优先，
   用户机器零依赖。`--no-bundle` 的 dev 构建不触发该步骤，走 vendor/pip 兜底。
@@ -83,7 +230,7 @@ Node 的 `child_process` / `fs` / `https`：因此它实际会 spawn 的 `gh` / 
   条目。名称按 loopx [TRADEMARKS.md](https://github.com/huangruiteng/loopx/blob/main/TRADEMARKS.md)
   描述性使用，本应用是第三方集成，非 LoopX 官方出品。
 - **运行期兜底**：内置二进制缺失/损坏时回退 vendor 源码（`~/.bitfun/bitfun-loopx/vendor/loopx`）
-  或 pip 安装；pin 保持一致（`LOOPX_VENDOR_REF` = `v0.2.13`），升级必须伴随
+  或 pip 安装；pin 保持一致（`LOOPX_VENDOR_REF` = `v0.5.1`），升级必须伴随
   loopx CLI JSON 契约的显式适配。
 - 本应用自身的 GitHub 凭据只存于本机应用存储（gh CLI 或粘贴的 PAT），不写入 git config。
 

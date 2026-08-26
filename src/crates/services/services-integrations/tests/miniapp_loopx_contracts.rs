@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use bitfun_product_domains::miniapp::loopx::{
     LoopxCliCallContext, LoopxCliCreateGoalRequest, LoopxCliErrorKind, LoopxCliGoalContext,
-    LoopxCliHandshakeRequest, LoopxCliIntakePlan, LoopxCliPlanItemRequest, LoopxCliPort,
-    LoopxCliProgress, LoopxCliProgressSink, LoopxCliSource, LoopxCliTodoPlan, LoopxIssueKey,
-    LoopxItemKind, LoopxPermissionScope, LoopxRepositoryKey, LoopxWorkspacePort,
-    LoopxWorkspacePrepareRequest,
+    LoopxCliHandshakeRequest, LoopxCliInspectGoalRequest, LoopxCliIntakePlan,
+    LoopxCliPlanItemRequest, LoopxCliPort, LoopxCliProgress, LoopxCliProgressSink,
+    LoopxCliRunDecision, LoopxCliSource, LoopxCliTodoPlan, LoopxIssueKey, LoopxItemKind,
+    LoopxPermissionScope, LoopxRepositoryKey, LoopxWorkspaceDisposeRequest, LoopxWorkspacePort,
+    LoopxWorkspacePrepareRequest, LoopxWorkspaceProbeRequest,
 };
 use bitfun_services_integrations::miniapp::loopx_cli::{
     LoopxCliAdapterConfig, LoopxCliProcessAdapter, LoopxCommandPlan, LoopxCommandSource,
@@ -86,6 +87,8 @@ impl LoopxProcessRunner for FakeRunner {
 struct WorkspaceFakeRunner {
     plans: Mutex<Vec<LoopxCommandPlan>>,
     remote: Mutex<String>,
+    /// Directory paths of registered linked worktrees, used by `worktree list`.
+    worktrees: Mutex<Vec<PathBuf>>,
 }
 
 impl WorkspaceFakeRunner {
@@ -93,6 +96,7 @@ impl WorkspaceFakeRunner {
         Self {
             plans: Mutex::new(Vec::new()),
             remote: Mutex::new(remote.to_string()),
+            worktrees: Mutex::new(Vec::new()),
         }
     }
 }
@@ -106,10 +110,76 @@ impl LoopxProcessRunner for WorkspaceFakeRunner {
         _observer: &dyn LoopxProcessObserver,
     ) -> Result<LoopxProcessOutput, LoopxProcessError> {
         if plan.args.first() == Some(&OsString::from("clone")) {
+            // Shared layout: `git clone --bare <url> <bare_path>`.
             let target = PathBuf::from(plan.args.last().expect("clone target"));
-            std::fs::create_dir_all(target.join(".git")).unwrap();
+            std::fs::create_dir_all(target.join("objects")).unwrap();
+            std::fs::create_dir_all(target.join("refs")).unwrap();
+        } else if plan.args.windows(3).any(|w| {
+            w == [
+                OsString::from("worktree"),
+                OsString::from("add"),
+                OsString::from("-b"),
+            ]
+        }) {
+            // `git -C <bare> worktree add -b <branch> <worktree>`.
+            let worktree = PathBuf::from(plan.args.last().expect("worktree add path"));
+            let bare = PathBuf::from(&plan.args[1]);
+            std::fs::create_dir_all(&worktree).unwrap();
+            // Real git puts a `gitdir: <path>` pointer file in the linked
+            // worktree; simulate that so the ownership marker lands in the
+            // bare repo's per-worktree gitdir.
+            let name = worktree
+                .file_name()
+                .expect("worktree name")
+                .to_string_lossy();
+            let gitdir = bare.join("worktrees").join(name.as_ref());
+            std::fs::create_dir_all(&gitdir).unwrap();
+            std::fs::write(
+                worktree.join(".git"),
+                format!("gitdir: {}\n", gitdir.to_string_lossy()),
+            )
+            .unwrap();
+            std::fs::write(gitdir.join("bfx-linked"), b"ok").unwrap();
+            self.worktrees.lock().unwrap().push(worktree.clone());
+        } else if plan.args.windows(3).any(|w| {
+            w == [
+                OsString::from("worktree"),
+                OsString::from("remove"),
+                OsString::from("--force"),
+            ]
+        }) {
+            let worktree = PathBuf::from(plan.args.last().expect("worktree remove path"));
+            let _ = std::fs::remove_dir_all(&worktree);
+            self.worktrees
+                .lock()
+                .unwrap()
+                .retain(|path| path != &worktree);
+        } else if plan
+            .args
+            .windows(2)
+            .any(|w| w == [OsString::from("worktree"), OsString::from("list")])
+        {
+            // Porcelain output: first entry is the bare repository itself.
+            let mut stdout = format!(
+                "worktree {}\nHEAD 0000000000000000000000000000000000000000\n\n",
+                plan.args[1].to_string_lossy()
+            );
+            for worktree in self.worktrees.lock().unwrap().iter() {
+                stdout.push_str(&format!(
+                    "worktree {}\nHEAD 1111111111111111111111111111111111111111\n\n",
+                    worktree.to_string_lossy()
+                ));
+            }
+            self.plans.lock().unwrap().push(plan);
+            return Ok(LoopxProcessOutput {
+                stdout,
+                stderr_tail: Vec::new(),
+                elapsed: Duration::from_millis(1),
+            });
         }
-        let stdout = if plan
+        let stdout = if plan.args == [OsString::from("--version")] {
+            "git version 2.53.0\n".to_string()
+        } else if plan
             .args
             .windows(3)
             .any(|args| args == ["config", "--get", "remote.origin.url"])
@@ -224,9 +294,9 @@ fn packaged_startup_budget_covers_measured_windows_onefile_cold_start() {
 #[tokio::test]
 async fn packaged_bundle_is_preferred_and_exactly_handshaken() {
     let temporary = tempfile::tempdir().unwrap();
-    let bundled = stage_bundle(temporary.path(), "v0.2.13", 1);
+    let bundled = stage_bundle(temporary.path(), "v0.5.1", 1);
     let runner = Arc::new(FakeRunner::with_results(handshake_results(
-        "loopx 0.2.13",
+        "loopx 0.5.1",
         LOOPX_COMMAND_REFERENCE_SCHEMA,
     )));
     let locator = Arc::new(FakeLocator::new(Some(PathBuf::from("system-loopx"))));
@@ -241,7 +311,7 @@ async fn packaged_bundle_is_preferred_and_exactly_handshaken() {
         .unwrap();
 
     assert_eq!(manifest.executable.source, LoopxCliSource::Bundled);
-    assert_eq!(manifest.loopx_version, "0.2.13");
+    assert_eq!(manifest.loopx_version, "0.5.1");
     assert_eq!(manifest.schema_version, 1);
     assert_eq!(
         manifest.executable.path.as_deref(),
@@ -270,7 +340,7 @@ async fn packaged_bundle_is_preferred_and_exactly_handshaken() {
 #[tokio::test]
 async fn runtime_version_mismatch_is_a_non_retryable_typed_error() {
     let temporary = tempfile::tempdir().unwrap();
-    stage_bundle(temporary.path(), "v0.2.13", 1);
+    stage_bundle(temporary.path(), "v0.5.1", 1);
     let runner = Arc::new(FakeRunner::with_results([output("loopx 0.2.12\n")]));
     let adapter = adapter_with_runner(temporary.path(), runner, Arc::new(FakeLocator::new(None)));
 
@@ -289,9 +359,9 @@ async fn runtime_version_mismatch_is_a_non_retryable_typed_error() {
 #[tokio::test]
 async fn command_reference_schema_mismatch_is_rejected() {
     let temporary = tempfile::tempdir().unwrap();
-    stage_bundle(temporary.path(), "v0.2.13", 1);
+    stage_bundle(temporary.path(), "v0.5.1", 1);
     let runner = Arc::new(FakeRunner::with_results(handshake_results(
-        "loopx 0.2.13",
+        "loopx 0.5.1",
         "future_schema_v99",
     )));
     let adapter = adapter_with_runner(temporary.path(), runner, Arc::new(FakeLocator::new(None)));
@@ -310,7 +380,7 @@ async fn command_reference_schema_mismatch_is_rejected() {
 #[tokio::test]
 async fn item_plan_uses_structured_registry_and_worktree_arguments() {
     let temporary = tempfile::tempdir().unwrap();
-    stage_bundle(temporary.path(), "v0.2.13", 1);
+    stage_bundle(temporary.path(), "v0.5.1", 1);
     let worktree = temporary.path().join("worktree");
     std::fs::create_dir_all(&worktree).unwrap();
     let registry = worktree.join(".loopx").join("registry.json");
@@ -326,7 +396,7 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
         }]
     });
     let runner = Arc::new(FakeRunner::with_results(
-        handshake_results("loopx 0.2.13", LOOPX_COMMAND_REFERENCE_SCHEMA)
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
             .into_iter()
             .chain([output(workflow.to_string())]),
     ));
@@ -356,6 +426,7 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
             registry_path: registry.to_string_lossy().into_owned(),
         },
         item,
+        title: "Issue with “UTF-8” title".to_string(),
     };
 
     let plan = adapter
@@ -382,17 +453,224 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
             OsString::from("https://github.com/owner/repo/issues/42"),
             OsString::from("--repo-path"),
             worktree.as_os_str().to_owned(),
-            OsString::from("--fetch-metadata"),
-            OsString::from("--fetch-timeout-seconds"),
-            OsString::from("20"),
+            OsString::from("--metadata-json"),
+            OsString::from(
+                json!({
+                    "number": 42,
+                    "state": "open",
+                    "title": "Issue with “UTF-8” title",
+                    "labels": [],
+                    "kind": "issue",
+                })
+                .to_string(),
+            ),
         ]
     );
 }
 
 #[tokio::test]
+async fn item_plan_process_failure_preserves_the_stderr_cause() {
+    let temporary = tempfile::tempdir().unwrap();
+    stage_bundle(temporary.path(), "v0.5.1", 1);
+    let worktree = temporary.path().join("worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let registry = worktree.join(".loopx").join("registry.json");
+    let runner = Arc::new(FakeRunner::with_results(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
+            .into_iter()
+            .chain([Err(LoopxProcessError::Exited {
+                code: Some(1),
+                stdout_tail: vec![
+                    "irrelevant output before the error".repeat(30),
+                    r#"{"ok":false,"error":"metadata projection failed"}"#.to_string(),
+                ],
+                stderr_tail: Vec::new(),
+            })]),
+    ));
+    let adapter = adapter_with_runner(temporary.path(), runner, Arc::new(FakeLocator::new(None)));
+    let error = adapter
+        .plan_item(
+            LoopxCliPlanItemRequest {
+                context: LoopxCliGoalContext {
+                    call: LoopxCliCallContext {
+                        operation_id: "plan-item-failure".to_string(),
+                        deadline_at: None,
+                    },
+                    task_id: "task-42".to_string(),
+                    generation: 1,
+                    worktree_path: worktree.to_string_lossy().into_owned(),
+                    registry_path: registry.to_string_lossy().into_owned(),
+                },
+                item: LoopxIssueKey {
+                    repository: LoopxRepositoryKey {
+                        host: "github.com".to_string(),
+                        owner: "owner".to_string(),
+                        repository: "repo".to_string(),
+                    },
+                    kind: LoopxItemKind::Issue,
+                    number: 42,
+                },
+                title: "Issue with UTF-8 title".to_string(),
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.kind, LoopxCliErrorKind::Process);
+    assert!(error.message.contains("metadata projection failed"));
+    assert!(error.message.contains("status Some(1)"));
+}
+
+#[tokio::test]
+async fn waiting_goal_projects_the_concrete_open_user_gate() {
+    let temporary = tempfile::tempdir().unwrap();
+    stage_bundle(temporary.path(), "v0.5.1", 1);
+    let worktree = temporary.path().join("worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let registry = worktree.join(".loopx").join("registry.json");
+    let turn_plan = json!({
+        "ok": true,
+        "schema_version": "loopx_turn_plan_v0",
+        "turn_envelope": {
+            "should_run": false,
+            "state": "operator_gate",
+            "open_count": 1,
+            "user": {
+                "action_required": true,
+                "open_count": 1
+            },
+            "action_signature": {
+                "source_decision_hash": "sha256:user-gate-revision"
+            }
+        }
+    });
+    let todos = json!({
+        "ok": true,
+        "todos": [{
+            "todo_id": "todo_release_approval",
+            "role": "user",
+            "task_class": "user_gate",
+            "status": "open",
+            "done": false,
+            "text": "Approve creating the draft pull request",
+            "action_kind": "gate"
+        }]
+    });
+    let runner = Arc::new(FakeRunner::with_results(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
+            .into_iter()
+            .chain([output(turn_plan.to_string()), output(todos.to_string())]),
+    ));
+    let adapter = adapter_with_runner(
+        temporary.path(),
+        runner.clone(),
+        Arc::new(FakeLocator::new(None)),
+    );
+
+    let snapshot = adapter
+        .inspect_goal(
+            LoopxCliInspectGoalRequest {
+                context: LoopxCliGoalContext {
+                    call: LoopxCliCallContext {
+                        operation_id: "inspect-user-gate".to_string(),
+                        deadline_at: None,
+                    },
+                    task_id: "task-42".to_string(),
+                    generation: 3,
+                    worktree_path: worktree.to_string_lossy().into_owned(),
+                    registry_path: registry.to_string_lossy().into_owned(),
+                },
+                goal_id: "goal-42".to_string(),
+                agent_id: "bitfun-agent".to_string(),
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.run_decision, LoopxCliRunDecision::WaitingForUser);
+    assert_eq!(snapshot.waiting_user_todo_count, 1);
+    let gate = snapshot.pending_user_gate.expect("projected user gate");
+    assert_eq!(gate.gate_id, "todo_release_approval");
+    assert_eq!(gate.message, "Approve creating the draft pull request");
+    assert_eq!(gate.action_kind.as_deref(), Some("gate"));
+    let commands = runner
+        .plans()
+        .into_iter()
+        .skip(2)
+        .map(|plan| plan.args)
+        .collect::<Vec<_>>();
+    assert_eq!(commands.len(), 2);
+    assert!(commands[1]
+        .windows(2)
+        .any(|args| { args == [OsString::from("todo"), OsString::from("list")] }));
+}
+
+#[tokio::test]
+async fn ordinary_monitor_wait_does_not_require_a_user_gate() {
+    let temporary = tempfile::tempdir().unwrap();
+    stage_bundle(temporary.path(), "v0.5.1", 1);
+    let worktree = temporary.path().join("worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let registry = worktree.join(".loopx").join("registry.json");
+    let turn_plan = json!({
+        "ok": true,
+        "schema_version": "loopx_turn_plan_v0",
+        "turn_envelope": {
+            "should_run": false,
+            "state": "waiting",
+            "action_required": false,
+            "user": {
+                "action_required": false,
+                "open_count": 0
+            },
+            "action_signature": {
+                "source_decision_hash": "sha256:monitor-wait-revision"
+            }
+        }
+    });
+    let runner = Arc::new(FakeRunner::with_results(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
+            .into_iter()
+            .chain([output(turn_plan.to_string())]),
+    ));
+    let adapter = adapter_with_runner(
+        temporary.path(),
+        runner.clone(),
+        Arc::new(FakeLocator::new(None)),
+    );
+
+    let snapshot = adapter
+        .inspect_goal(
+            LoopxCliInspectGoalRequest {
+                context: LoopxCliGoalContext {
+                    call: LoopxCliCallContext {
+                        operation_id: "inspect-monitor-wait".to_string(),
+                        deadline_at: None,
+                    },
+                    task_id: "task-monitor".to_string(),
+                    generation: 1,
+                    worktree_path: worktree.to_string_lossy().into_owned(),
+                    registry_path: registry.to_string_lossy().into_owned(),
+                },
+                goal_id: "goal-monitor".to_string(),
+                agent_id: "bitfun-agent".to_string(),
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.run_decision, LoopxCliRunDecision::Wait);
+    assert_eq!(snapshot.pending_user_gate, None);
+    assert_eq!(runner.plans().len(), 3);
+}
+
+#[tokio::test]
 async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
     let temporary = tempfile::tempdir().unwrap();
-    stage_bundle(temporary.path(), "v0.2.13", 1);
+    stage_bundle(temporary.path(), "v0.5.1", 1);
     let worktree = temporary.path().join("worktree");
     std::fs::create_dir_all(&worktree).unwrap();
     let registry = worktree.join(".loopx").join("registry.json");
@@ -402,7 +680,7 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
         action_kind: Some("fix_issue".to_string()),
         text: "[P1] Fix issue #42".to_string(),
     };
-    let results = handshake_results("loopx 0.2.13", LOOPX_COMMAND_REFERENCE_SCHEMA)
+    let results = handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
         .into_iter()
         .chain([
             output(json!({"ok": true, "state_action": "kept"}).to_string()),
@@ -573,11 +851,236 @@ async fn workspace_prepare_clones_once_then_reuses_verified_marker_and_origin() 
     assert_eq!(created.worktree_path, reused.worktree_path);
     assert!(Path::new(&created.registry_path).ends_with(Path::new(".loopx/registry.json")));
     let plans = runner.plans.lock().unwrap();
+    // Shared layout: bare clone + worktree add + origin verify, then the
+    // reuse path verifies the origin again.
     assert_eq!(plans.len(), 4);
     assert_eq!(plans[0].deadline, Duration::from_secs(7));
-    assert_eq!(plans[1].deadline, Duration::from_secs(3));
+    assert_eq!(plans[1].deadline, Duration::from_secs(7));
     assert_eq!(plans[2].deadline, Duration::from_secs(3));
     assert_eq!(plans[3].deadline, Duration::from_secs(3));
+    assert_eq!(plans[0].args[0], OsString::from("clone"));
+    assert!(plans[0].args.contains(&OsString::from("--bare")));
+    assert!(plans[1].args.windows(3).any(|w| w
+        == [
+            OsString::from("worktree"),
+            OsString::from("add"),
+            OsString::from("-b")
+        ]));
+}
+
+#[tokio::test]
+async fn workspace_dispose_removes_linked_worktree_and_last_shared_bare_repository() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("loopx-workspaces");
+    let runner = Arc::new(WorkspaceFakeRunner::new(
+        "https://github.com/owner/repo.git",
+    ));
+    let service = LoopxWorkspaceService::with_runner(
+        LoopxWorkspaceServiceConfig::new(&root, "git"),
+        runner.clone(),
+        Arc::new(NoopLoopxProcessObserver),
+    );
+    let item = LoopxIssueKey {
+        repository: LoopxRepositoryKey {
+            host: "github.com".to_string(),
+            owner: "owner".to_string(),
+            repository: "repo".to_string(),
+        },
+        kind: LoopxItemKind::Issue,
+        number: 42,
+    };
+
+    let prepared = service
+        .prepare(LoopxWorkspacePrepareRequest {
+            operation_id: "workspace-dispose-prepare".to_string(),
+            task_id: "task-42".to_string(),
+            item: item.clone(),
+        })
+        .await
+        .unwrap();
+
+    // A marker outside the worktree keeps dispose from touching it.
+    let worktree = PathBuf::from(&prepared.worktree_path);
+    assert!(worktree.exists());
+    let bare = worktree.parent().expect("worktree parent").join("bare.git");
+    assert!(bare.exists());
+
+    let disposed = service
+        .dispose(LoopxWorkspaceDisposeRequest {
+            operation_id: "workspace-dispose".to_string(),
+            task_id: "task-42".to_string(),
+            item,
+        })
+        .await
+        .unwrap();
+    assert!(disposed.removed);
+    assert!(!worktree.exists());
+    // Last linked worktree was removed, so the bare repository is gone too.
+    assert!(!bare.exists());
+
+    let plans = runner.plans.lock().unwrap();
+    assert!(plans.iter().any(|plan| {
+        plan.args.windows(3).any(|w| {
+            w == [
+                OsString::from("worktree"),
+                OsString::from("remove"),
+                OsString::from("--force"),
+            ]
+        })
+    }));
+    assert!(plans.iter().any(|plan| {
+        plan.args
+            .windows(2)
+            .any(|w| w == [OsString::from("worktree"), OsString::from("list")])
+    }));
+}
+
+#[tokio::test]
+async fn workspace_dispose_keeps_shared_bare_repository_while_other_worktrees_exist() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("loopx-workspaces");
+    let runner = Arc::new(WorkspaceFakeRunner::new(
+        "https://github.com/owner/repo.git",
+    ));
+    let service = LoopxWorkspaceService::with_runner(
+        LoopxWorkspaceServiceConfig::new(&root, "git"),
+        runner.clone(),
+        Arc::new(NoopLoopxProcessObserver),
+    );
+    let repo = LoopxRepositoryKey {
+        host: "github.com".to_string(),
+        owner: "owner".to_string(),
+        repository: "repo".to_string(),
+    };
+    let item_42 = LoopxIssueKey {
+        repository: repo.clone(),
+        kind: LoopxItemKind::Issue,
+        number: 42,
+    };
+    let item_43 = LoopxIssueKey {
+        repository: repo,
+        kind: LoopxItemKind::Issue,
+        number: 43,
+    };
+
+    let first = service
+        .prepare(LoopxWorkspacePrepareRequest {
+            operation_id: "workspace-shared-prepare-1".to_string(),
+            task_id: "task-42".to_string(),
+            item: item_42.clone(),
+        })
+        .await
+        .unwrap();
+    let second = service
+        .prepare(LoopxWorkspacePrepareRequest {
+            operation_id: "workspace-shared-prepare-2".to_string(),
+            task_id: "task-43".to_string(),
+            item: item_43.clone(),
+        })
+        .await
+        .unwrap();
+    let bare = PathBuf::from(&first.worktree_path)
+        .parent()
+        .expect("worktree parent")
+        .join("bare.git");
+    assert!(bare.exists());
+    // Same repository shares one bare object database.
+    assert_eq!(
+        Path::new(&first.worktree_path)
+            .parent()
+            .expect("first parent"),
+        Path::new(&second.worktree_path)
+            .parent()
+            .expect("second parent")
+    );
+
+    // Removing only one worktree keeps the shared bare repository.
+    let disposed = service
+        .dispose(LoopxWorkspaceDisposeRequest {
+            operation_id: "workspace-shared-dispose-1".to_string(),
+            task_id: "task-42".to_string(),
+            item: item_42,
+        })
+        .await
+        .unwrap();
+    assert!(disposed.removed);
+    assert!(!Path::new(&first.worktree_path).exists());
+    assert!(bare.exists());
+
+    // Removing the last worktree removes the bare repository as well.
+    let final_dispose = service
+        .dispose(LoopxWorkspaceDisposeRequest {
+            operation_id: "workspace-shared-dispose-2".to_string(),
+            task_id: "task-43".to_string(),
+            item: item_43,
+        })
+        .await
+        .unwrap();
+    assert!(final_dispose.removed);
+    assert!(!bare.exists());
+}
+
+#[tokio::test]
+async fn workspace_probe_checks_git_root_writability_and_repository_access() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("loopx-workspaces");
+    let runner = Arc::new(WorkspaceFakeRunner::new(
+        "https://github.com/owner/repo.git",
+    ));
+    let service = LoopxWorkspaceService::with_runner(
+        LoopxWorkspaceServiceConfig::new(&root, "git"),
+        runner.clone(),
+        Arc::new(NoopLoopxProcessObserver),
+    );
+
+    let result = service
+        .probe(LoopxWorkspaceProbeRequest {
+            operation_id: "workspace-probe".to_string(),
+            repository: Some(LoopxRepositoryKey {
+                host: "github.com".to_string(),
+                owner: "owner".to_string(),
+                repository: "repo".to_string(),
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.git_version.as_deref(), Some("git version 2.53.0"));
+    assert!(result.repository_verified);
+    assert!(Path::new(&result.workspace_root).is_absolute());
+    let plans = runner.plans.lock().unwrap();
+    assert_eq!(plans.len(), 2);
+    assert_eq!(plans[0].args, [OsString::from("--version")]);
+    assert_eq!(plans[1].args[0], OsString::from("ls-remote"));
+    assert!(plans[1]
+        .args
+        .contains(&OsString::from("https://github.com/owner/repo.git")));
+}
+
+#[tokio::test]
+async fn workspace_probe_surfaces_the_actionable_git_stderr() {
+    let temporary = tempfile::tempdir().unwrap();
+    let runner = Arc::new(FakeRunner::with_results([Err(LoopxProcessError::Exited {
+        code: Some(128),
+        stdout_tail: Vec::new(),
+        stderr_tail: vec!["fatal: unable to access repository".to_string()],
+    })]));
+    let service = LoopxWorkspaceService::with_runner(
+        LoopxWorkspaceServiceConfig::new(temporary.path().join("workspaces"), "git"),
+        runner,
+        Arc::new(NoopLoopxProcessObserver),
+    );
+
+    let error = service
+        .probe(LoopxWorkspaceProbeRequest {
+            operation_id: "workspace-probe-error".to_string(),
+            repository: None,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.message.contains("status Some(128)"));
+    assert!(error.message.contains("fatal: unable to access repository"));
 }
 
 #[test]

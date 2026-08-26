@@ -275,7 +275,11 @@ export function useMiniAppBridge(
             reply(await miniAppAPI.loopxAction(appId, call.request));
             return;
           }
-          reply(await miniAppAPI.loopxEventsSince(appId, call.request));
+          if (call.kind === 'eventsSince') {
+            reply(await miniAppAPI.loopxEventsSince(appId, call.request));
+            return;
+          }
+          reply(await miniAppAPI.loopxTurnOutputSince(appId, call.request));
           return;
         }
 

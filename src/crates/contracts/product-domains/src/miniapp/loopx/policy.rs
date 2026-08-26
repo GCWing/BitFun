@@ -254,11 +254,15 @@ pub fn decide_task_transition(
         ),
         LoopxTaskState::Cancelling => matches!(
             next,
-            LoopxTaskState::Stopped | LoopxTaskState::RecoveryRequired | LoopxTaskState::Failed
+            LoopxTaskState::Stopped
+                | LoopxTaskState::Aborted
+                | LoopxTaskState::RecoveryRequired
+                | LoopxTaskState::Failed
         ),
         LoopxTaskState::Stopped | LoopxTaskState::Failed => {
             matches!(next, LoopxTaskState::Queued | LoopxTaskState::Archived)
         }
+        LoopxTaskState::Aborted => matches!(next, LoopxTaskState::Archived),
         LoopxTaskState::RecoveryRequired => matches!(
             next,
             LoopxTaskState::Queued | LoopxTaskState::Stopped | LoopxTaskState::Failed
@@ -282,10 +286,12 @@ pub enum LoopxRestartDecision {
 }
 
 pub fn decide_task_restart(state: LoopxTaskState) -> LoopxRestartDecision {
-    if state.was_executing_at_shutdown() {
-        LoopxRestartDecision::RequireRecovery
-    } else {
-        LoopxRestartDecision::Preserve { state }
+    match state {
+        LoopxTaskState::Preparing | LoopxTaskState::RetryWait => LoopxRestartDecision::Preserve {
+            state: LoopxTaskState::Queued,
+        },
+        state if state.was_executing_at_shutdown() => LoopxRestartDecision::RequireRecovery,
+        state => LoopxRestartDecision::Preserve { state },
     }
 }
 

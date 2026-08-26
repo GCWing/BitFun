@@ -9,7 +9,8 @@ use bitfun_product_domains::miniapp::loopx::{
     LoopxActionRequest, LoopxActionResponse, LoopxAttachRequest, LoopxAttachResponse,
     LoopxCreateTaskRequest, LoopxCreateTaskResponse, LoopxEventsSinceRequest,
     LoopxEventsSinceResponse, LoopxExecutionDomain, LoopxExecutionSupport,
-    LoopxResolveIntakeRequest, LoopxResolveIntakeResponse, LOOPX_BUILTIN_APP_ID,
+    LoopxResolveIntakeRequest, LoopxResolveIntakeResponse, LoopxTurnOutputSinceRequest,
+    LoopxTurnOutputSinceResponse, LOOPX_BUILTIN_APP_ID,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -59,6 +60,14 @@ pub struct MiniAppLoopxEventsSinceRequest {
     pub app_id: String,
     #[serde(flatten)]
     pub input: LoopxEventsSinceRequest,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppLoopxTurnOutputSinceRequest {
+    pub app_id: String,
+    #[serde(flatten)]
+    pub input: LoopxTurnOutputSinceRequest,
 }
 
 #[derive(Debug, Deserialize)]
@@ -234,6 +243,19 @@ pub async fn miniapp_loopx_events_since(
         return Err(unsupported_error());
     }
     Ok(controller.controller.events_since(request.input).await)
+}
+
+#[tauri::command]
+pub async fn miniapp_loopx_turn_output_since(
+    app_state: State<'_, AppState>,
+    controller: State<'_, LoopxControllerState>,
+    request: MiniAppLoopxTurnOutputSinceRequest,
+) -> Result<LoopxTurnOutputSinceResponse, String> {
+    authorize_builtin(&app_state, &request.app_id).await?;
+    if is_remote_workspace(&app_state).await {
+        return Err(unsupported_error());
+    }
+    Ok(controller.controller.turn_output_since(request.input).await)
 }
 
 #[cfg(test)]

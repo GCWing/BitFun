@@ -57,6 +57,13 @@ describe('MiniAppAPI LoopX controller bridge', () => {
       afterCursor: 7,
       limit: 100,
     });
+    await miniAppAPI.loopxTurnOutputSince('builtin-bitfun-loopx', {
+      taskId: 'task-1',
+      turnId: 'turn-1',
+      streamId: 'stream-1',
+      afterCursor: 12,
+      limit: 50,
+    });
 
     expect(invoke).toHaveBeenNthCalledWith(1, 'miniapp_loopx_attach', {
       request: {
@@ -71,6 +78,16 @@ describe('MiniAppAPI LoopX controller bridge', () => {
         streamId: 'stream-1',
         afterCursor: 7,
         limit: 100,
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, 'miniapp_loopx_turn_output_since', {
+      request: {
+        appId: 'builtin-bitfun-loopx',
+        taskId: 'task-1',
+        turnId: 'turn-1',
+        streamId: 'stream-1',
+        afterCursor: 12,
+        limit: 50,
       },
     });
   });
