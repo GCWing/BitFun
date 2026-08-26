@@ -11,7 +11,7 @@
  * broadcast on the shared change event so those views stay in step.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -27,7 +27,7 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react';
-import { IconButton, Modal, PresenceBoundary, confirmDanger } from '@/component-library';
+import { Modal, PresenceBoundary, Tooltip, confirmDanger } from '@/component-library';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -425,30 +425,30 @@ const TodosScene: React.FC = () => {
             data-bf-scene="todos"
             data-bf-part="monthNavigation"
           >
-            <IconButton
-              type="button"
-              size="xs"
-              aria-label={t('calendar.previousMonth')}
-              tooltip={t('calendar.previousMonth')}
-              onClick={() => shiftMonth(-1)}
-              data-testid="todos-calendar-prev"
-            >
-              <ChevronLeft size={16} />
-            </IconButton>
+            <Tooltip content={t('calendar.previousMonth')}>
+              <IconButton
+                type="button"
+                size="sm"
+                aria-label={t('calendar.previousMonth')}
+                icon={<ChevronLeft />}
+                onClick={() => shiftMonth(-1)}
+                data-testid="todos-calendar-prev"
+              />
+            </Tooltip>
             <span className="bf-todos__month-label" data-testid="todos-calendar-month">
               <CalendarDays size={14} aria-hidden="true" />
               <span>{monthLabel}</span>
             </span>
-            <IconButton
-              type="button"
-              size="xs"
-              aria-label={t('calendar.nextMonth')}
-              tooltip={t('calendar.nextMonth')}
-              onClick={() => shiftMonth(1)}
-              data-testid="todos-calendar-next"
-            >
-              <ChevronRight size={16} />
-            </IconButton>
+            <Tooltip content={t('calendar.nextMonth')}>
+              <IconButton
+                type="button"
+                size="sm"
+                aria-label={t('calendar.nextMonth')}
+                icon={<ChevronRight />}
+                onClick={() => shiftMonth(1)}
+                data-testid="todos-calendar-next"
+              />
+            </Tooltip>
           </div>
           <Button
             size="sm"
