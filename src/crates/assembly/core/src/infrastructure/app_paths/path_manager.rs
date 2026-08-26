@@ -382,9 +382,9 @@ impl PathManager {
         self.user_data_dir().join("plugins")
     }
 
-    /// Get logs directory: ~/.config/bitfun/config/logs/
+    /// Get logs directory: ~/.config/bitfun/logs/
     pub fn logs_dir(&self) -> PathBuf {
-        self.user_config_dir().join("logs")
+        self.user_root.join("logs")
     }
 
     /// Get temp directory: ~/.config/bitfun/temp/
@@ -919,7 +919,7 @@ mod tests {
         let pm = PathManager::new().expect("path manager should use env overrides");
         assert_eq!(pm.user_config_dir(), user_root.join("config"));
         assert_eq!(pm.user_data_dir(), user_root.join("data"));
-        assert_eq!(pm.logs_dir(), user_root.join("config").join("logs"));
+        assert_eq!(pm.logs_dir(), user_root.join("logs"));
         assert_eq!(pm.bitfun_home_dir(), home_root);
     }
 
