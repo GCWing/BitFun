@@ -229,6 +229,10 @@ Everything not listed here behaves as the Codex documentation describes.
 - **A hook can narrow the permission policy, never widen it.** A `PreToolUse`
   `permissionDecision: "allow"` waives the interactive prompt, but a tool call
   denied by a permission rule stays denied.
+- `PreToolUse updatedInput` is final-validated before execution. It may repair
+  ordinary malformed input, but it cannot relax a non-relaxable internal
+  constraint (for example, a user-requested edit restriction) that rejected
+  the original input.
 - `suppressOutput` is parsed and currently ignored.
 - `continue: false` is honored for `PreToolUse` and `UserPromptSubmit`; for
   other events use `decision: "block"`.
@@ -245,6 +249,9 @@ every time its event fires. Treat `hooks.json` like a shell profile:
 - Review any hook you did not write before enabling it.
 - Keep project hooks off unless you trust everyone who can commit to the
   repository.
+- A hook command that writes files directly bypasses the tool pipeline and its
+  `validate_input` checks. Use `updatedInput` for tool rewrites; sandbox or
+  disable untrusted command hooks when direct process side effects are unsafe.
 - Payload values (prompts, tool arguments, file paths) are model- and
   user-supplied text. Parse them as JSON and never interpolate them into a
   shell command — that is why the examples above read fields with

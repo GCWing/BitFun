@@ -862,6 +862,7 @@ fn decision_result(
         error_code,
         meta: Some(json!({
             "failure_kind": "edit_constraint_guard",
+            "blocks_input_rewrite": true,
             "guard_decision_id": decision_id,
             "guard_decision": decision,
             "constraint_id": violation.map(|constraint| constraint.id.as_str()),
