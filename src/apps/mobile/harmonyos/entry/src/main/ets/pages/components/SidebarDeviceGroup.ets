@@ -4,9 +4,9 @@ import { DeviceDirectoryEntry } from '../state/DeviceDirectoryState';
 import {
   SessionListInputs,
   SessionListProjection,
-  SessionListProjectionCache,
-  SessionListProjector
+  SessionListProjectionCache
 } from '../policy/SessionListProjection';
+import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFilterPolicy';
 import {
   SidebarDirectoryPreviewPolicy,
   SidebarPreviewCursor
@@ -198,6 +198,15 @@ export struct SidebarDeviceGroup {
   @Builder
   private WorkspaceRow(entry: RecentWorkspaceEntry) {
     Row({ space: 10 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        SymbolGlyph(this.isWorkspaceExpanded(entry.path) ?
+          $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
+          .fontSize(13)
+          .fontColor([MUTED])
+          .hitTestBehavior(HitTestMode.None)
+      }
+      .width(16)
+      .height(18)
       SymbolGlyph($r('sys.symbol.folder'))
         .fontSize(19)
         .fontColor([this.isCurrentWorkspace(entry.path) ? INK : MUTED])
@@ -211,23 +220,16 @@ export struct SidebarDeviceGroup {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.square_and_pencil'))
-          .fontSize(16)
-          .fontColor([MUTED])
+        SymbolGlyph($r('sys.symbol.plus'))
+          .fontSize(17)
+          .fontColor([INK])
       }
       .width(30)
       .height(40)
-      .opacity(0.6)
       .accessibilityText(RemoteI18n.t('sidebar.newInWorkspace'))
       .onClick(() => {
         this.onCreateInWorkspace(entry.path);
       })
-      SymbolGlyph(this.isWorkspaceExpanded(entry.path) ?
-        $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
-        .fontSize(13)
-        .fontColor([MUTED])
-        .width(16)
-        .height(16)
     }
     .width('100%')
     .height(46)
@@ -236,6 +238,7 @@ export struct SidebarDeviceGroup {
     .borderRadius(10)
     .onClick(() => {
       this.toggleWorkspace(entry.path);
+      this.onOpenWorkspace(entry.path);
     })
     .gesture(LongPressGesture({ repeat: false }).onAction(() => {
       this.onOpenWorkspace(entry.path);
@@ -271,7 +274,7 @@ export struct SidebarDeviceGroup {
     }
     .width('100%')
     .height(44)
-    .padding({ left: this.bodyIndent() + 16, right: 10 })
+    .padding({ left: this.bodyIndent() + 34, right: 10 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(item.id === this.selectedSessionId ? SOFT : '#00000000')
     .borderRadius(10)
@@ -317,7 +320,7 @@ export struct SidebarDeviceGroup {
     }
     .width('100%')
     .height(40)
-    .padding({ left: this.bodyIndent() + 16 })
+    .padding({ left: this.bodyIndent() + 34 })
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
       this.revealMoreSessions(path);
@@ -359,7 +362,37 @@ export struct SidebarDeviceGroup {
   }
 
   private workspaceEntries(): RecentWorkspaceEntry[] {
-    return this.projection().projects.filter((entry: RecentWorkspaceEntry) => entry.path.length > 0);
+    // The shared projection intentionally removes assistant workspaces because
+    // the desktop conversation sidebar presents those sessions as top-level
+    // chats. The device directory has a different information architecture:
+    // every session belongs below its workspace, including Claw/assistant
+    // workspaces. Reintroduce the complete device catalog here without changing
+    // the shared desktop projection contract.
+    const entries = this.projection().projects.slice();
+    if (this.workspacePath.length > 0 &&
+      !entries.some((item: RecentWorkspaceEntry): boolean => item.path === this.workspacePath)) {
+      entries.unshift({
+        path: this.workspacePath,
+        name: this.workspaceName,
+        lastOpened: '',
+        workspaceKind: this.workspaceKind
+      });
+    }
+    this.recentWorkspaces.forEach((item: RecentWorkspaceEntry) => {
+      if (item.path.length > 0 &&
+        !entries.some((entry: RecentWorkspaceEntry): boolean => entry.path === item.path)) {
+        entries.push(item);
+      }
+    });
+    const query = this.query.trim().toLowerCase();
+    if (query.length === 0) {
+      return entries;
+    }
+    return entries.filter((entry: RecentWorkspaceEntry): boolean => {
+      const label = (entry.name || this.basename(entry.path)).toLowerCase();
+      return label.indexOf(query) >= 0 || entry.path.toLowerCase().indexOf(query) >= 0 ||
+        this.sessionsFor(entry.path).length > 0;
+    });
   }
 
   private visibleWorkspaceEntries(): RecentWorkspaceEntry[] {
@@ -377,7 +410,11 @@ export struct SidebarDeviceGroup {
   }
 
   private sessionsFor(path: string): RemoteSession[] {
-    return SessionListProjector.sessionsForProject(this.projection(), path);
+    const target = ConversationSessionFilterPolicy.normalizeWorkspacePath(path);
+    return this.projection().filtered.filter((item: RemoteSession): boolean => {
+      const itemPath = item.workspacePath ? item.workspacePath : this.workspacePath;
+      return ConversationSessionFilterPolicy.normalizeWorkspacePath(itemPath) === target;
+    });
   }
 
   private sessionVisibleCount(path: string): number {

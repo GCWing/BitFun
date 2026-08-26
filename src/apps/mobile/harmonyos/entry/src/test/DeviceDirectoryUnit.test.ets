@@ -187,13 +187,13 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-offline', deviceName: 'Offline', online: false }
       ]);
-      await viewModel.toggleDevice('desk-offline');
+      await viewModel.selectDevice('desk-offline');
       expect(credentialCalls).assertEqual(0);
-      expect(state.find('desk-offline')?.expanded).assertTrue();
+      expect(state.selectedDeviceId).assertEqual('desk-offline');
       expect(state.find('desk-offline')?.status).assertEqual('idle');
     });
 
-    it('does not expand an offline device even when it is the control target', 0, () => {
+    it('selects an offline control target without fetching it', 0, async () => {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
@@ -203,11 +203,13 @@ export default function deviceDirectoryUnitTest() {
       viewModel.syncDevices([
         { deviceId: 'desk-offline', deviceName: 'Studio', online: false }
       ]);
+      await viewModel.selectDevice('desk-offline');
       expect(state.find('desk-offline')?.deviceName).assertEqual('Studio');
-      expect(state.find('desk-offline')?.expanded).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-offline');
+      expect(state.find('desk-offline')?.status).assertEqual('idle');
     });
 
-    it('collapses a device when it goes offline and keeps the last known name', 0, () => {
+    it('keeps the selected device and its last known name when it goes offline', 0, () => {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
@@ -217,12 +219,12 @@ export default function deviceDirectoryUnitTest() {
       viewModel.syncDevices([
         { deviceId: 'desk-studio', deviceName: 'Studio', online: true }
       ]);
-      expect(state.find('desk-studio')?.expanded).assertTrue();
+      expect(state.selectedDeviceId).assertEqual('desk-studio');
       viewModel.syncDevices([
         { deviceId: 'desk-studio', deviceName: '', online: false }
       ]);
       expect(state.find('desk-studio')?.deviceName).assertEqual('Studio');
-      expect(state.find('desk-studio')?.expanded).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-studio');
     });
 
     it('keeps the live conversation device online when the relay says otherwise', 0, () => {
@@ -240,7 +242,7 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-other', deviceName: 'Other', online: false }
       ]);
       expect(state.find('desk-live')?.online).assertTrue();
-      expect(state.find('desk-live')?.expanded).assertTrue();
+      expect(state.selectedDeviceId).assertEqual('desk-live');
       // The override must not outlive the link it is based on, or a device that
       // really did go away keeps a lit row forever.
       expect(state.find('desk-other')?.online).assertFalse();
@@ -249,10 +251,10 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-live', deviceName: 'Studio', online: false }
       ]);
       expect(state.find('desk-live')?.online).assertFalse();
-      expect(state.find('desk-live')?.expanded).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-live');
     });
 
-    it('keeps a collapsed active device collapsed across syncDevices', 0, async () => {
+    it('keeps an explicit device selection across syncDevices', 0, async () => {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
@@ -263,19 +265,19 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
-      expect(state.find('desk-active')?.expanded).assertTrue();
-      await viewModel.toggleDevice('desk-active');
-      expect(state.find('desk-active')?.expanded).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-active');
+      await viewModel.selectDevice('desk-other');
+      expect(state.selectedDeviceId).assertEqual('desk-other');
       viewModel.syncDevices([
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
-      expect(state.find('desk-active')?.expanded).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-other');
       viewModel.refreshActive();
-      expect(state.find('desk-active')?.expanded).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-other');
     });
 
-    it('toggles expand on the same directory entry instance', 0, async () => {
+    it('selects a directory row without replacing its entry instance', 0, async () => {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
@@ -287,12 +289,9 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-other', deviceName: 'Other', online: false }
       ]);
       const before = state.find('desk-other');
-      await viewModel.toggleDevice('desk-other');
+      await viewModel.selectDevice('desk-other');
       expect(state.find('desk-other') === before).assertTrue();
-      expect(state.find('desk-other')?.expanded).assertTrue();
-      await viewModel.toggleDevice('desk-other');
-      expect(state.find('desk-other') === before).assertTrue();
-      expect(state.find('desk-other')?.expanded).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-other');
     });
 
     it('marks an online device loading before its catalog returns', 0, async () => {
@@ -309,8 +308,8 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
-      const pending = viewModel.toggleDevice('desk-other');
-      expect(state.find('desk-other')?.expanded).assertTrue();
+      const pending = viewModel.selectDevice('desk-other');
+      expect(state.selectedDeviceId).assertEqual('desk-other');
       expect(state.find('desk-other')?.status).assertEqual('loading');
       expect(state.find('desk-other')?.workspaces.length).assertEqual(0);
       source.releaseWorkspaces();
@@ -335,7 +334,7 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
-      const pending = viewModel.toggleDevice('desk-other');
+      const pending = viewModel.selectDevice('desk-other');
       source.releaseWorkspaces();
       await source.workspacesListed;
       expect(state.find('desk-other')?.status).assertEqual('loading');
@@ -363,13 +362,13 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
-      await viewModel.toggleDevice('desk-other');
+      await viewModel.selectDevice('desk-other');
       expect(state.find('desk-other')?.status).assertEqual('ready');
       expect(store.lists.get('desk-other')?.sessions.length).assertEqual(1);
       expect(store.lastDeviceKey).assertEqual('desk-active');
     });
 
-    it('treats a hydrated catalog as cached and still fetches on expand', 0, async () => {
+    it('treats a hydrated catalog as cached and still fetches on selection', 0, async () => {
       const store = new FakeRemoteSessionListStore();
       await store.saveWorkspaces('desk-other', [workspace('/cached', 'Cached')]);
       await store.saveObservedList('desk-other', [sessionOn('desk-other', 'cached', 'Cached')], false);
@@ -390,7 +389,7 @@ export default function deviceDirectoryUnitTest() {
       expect(state.find('desk-other')?.status).assertEqual('cached');
       expect(state.find('desk-other')?.workspaces[0].path).assertEqual('/cached');
       expect(source.listedDeviceIds.length).assertEqual(0);
-      await viewModel.toggleDevice('desk-other');
+      await viewModel.selectDevice('desk-other');
       expect(source.listedDeviceIds.length).assertEqual(1);
       expect(source.listedDeviceIds[0]).assertEqual('desk-other');
       expect(state.find('desk-other')?.status).assertEqual('ready');
@@ -423,8 +422,8 @@ export default function deviceDirectoryUnitTest() {
       expect(state.find('desk-a')?.status).assertEqual('ready');
       expect(state.find('desk-a')?.sessions[0].id).assertEqual('a-1');
       expect(state.find('desk-a')?.workspaces[0].path).assertEqual('/a');
-      await viewModel.toggleDevice('desk-a');
-      await viewModel.toggleDevice('desk-a');
+      await viewModel.selectDevice('desk-a');
+      expect(state.selectedDeviceId).assertEqual('desk-a');
       expect(source.listedDeviceIds.length).assertEqual(0);
       expect(state.find('desk-a')?.sessions[0].id).assertEqual('a-1');
     });

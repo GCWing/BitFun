@@ -22,7 +22,7 @@ export interface DeviceDirectoryViewModelHooks {
   readonly activeDeviceConnected: () => boolean;
 }
 
-/** Expand / collapse / retry for the sidebar's per-device directory. */
+/** Selection, loading, and retry for the sidebar's device directory. */
 export class DeviceDirectoryViewModel {
   private readonly state: DeviceDirectoryState;
   private readonly store?: RemoteSessionListStore;
@@ -129,6 +129,14 @@ export class DeviceDirectoryViewModel {
       return created;
     });
     this.state.replace(next);
+    if (this.state.find(this.state.selectedDeviceId)) {
+      return;
+    }
+    if (this.state.find(activeId)) {
+      this.state.select(activeId);
+      return;
+    }
+    this.state.select(activeId.length === 0 && next.length > 0 ? next[0].deviceId : '');
   }
 
   async hydrateKnownDevices(): Promise<void> {
@@ -138,16 +146,13 @@ export class DeviceDirectoryViewModel {
     }
   }
 
-  async toggleDevice(deviceId: string): Promise<void> {
+  async selectDevice(deviceId: string): Promise<void> {
     const entry = this.state.find(deviceId);
     if (!entry) {
       return;
     }
-    entry.expanded = !entry.expanded;
-    RemoteLogger.info(`device directory toggle device=${deviceId} expanded=${entry.expanded}`);
-    if (!entry.expanded) {
-      return;
-    }
+    this.state.select(deviceId);
+    RemoteLogger.info(`device directory select device=${deviceId}`);
     if (this.shouldFetch(entry)) {
       entry.status = 'loading';
       entry.errorText = '';
@@ -160,13 +165,13 @@ export class DeviceDirectoryViewModel {
     if (!entry) {
       return;
     }
-    entry.expanded = true;
+    this.state.select(deviceId);
     await this.loadDevice(deviceId);
   }
 
   async ensureLoaded(deviceId: string): Promise<void> {
     const entry = this.state.find(deviceId);
-    if (!entry || !entry.expanded) {
+    if (!entry) {
       return;
     }
     if (deviceId === this.hooks.activeDeviceId()) {

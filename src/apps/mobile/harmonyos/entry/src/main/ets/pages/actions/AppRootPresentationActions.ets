@@ -61,7 +61,8 @@ export interface RemoteHomePresentationActions {
   readonly createAssistant: () => void;
   readonly createInWorkspace: (path: string, agentType: string, deviceId?: string) => void;
   readonly createInWorkspaceInPlace: (path: string, agentType: string, deviceId?: string) => void;
-  readonly toggleDirectoryDevice: (deviceId: string) => void;
+  readonly selectDirectoryDevice: (deviceId: string) => void;
+  readonly addDirectoryWorkspace: (deviceId: string) => void;
   readonly retryDirectoryDevice: (deviceId: string) => void;
   readonly openSession: (session: RemoteSession) => void;
   readonly openSessionInPlace: (session: RemoteSession) => void;
@@ -130,7 +131,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       selectAssistant: () => {}, cancelWorkspace: () => {}, cancelAssistant: () => {}, queryChanged: () => {},
       search: () => {}, loadMore: () => {}, reconnect: () => {}, disconnect: () => {}, clearPairing: () => {},
       create: () => {}, createInPlace: () => {}, createAssistant: () => {}, createInWorkspace: () => {},
-      createInWorkspaceInPlace: () => {}, toggleDirectoryDevice: () => {}, retryDirectoryDevice: () => {},
+      createInWorkspaceInPlace: () => {}, selectDirectoryDevice: () => {}, addDirectoryWorkspace: () => {},
+      retryDirectoryDevice: () => {},
       openSession: () => {}, openSessionInPlace: () => {}, deleteSession: () => {}
     },
     onRemoteCreate: {

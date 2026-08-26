@@ -158,6 +158,7 @@ export struct WideConversationHost {
           showCollapseButton: true,
           showViewSettingsButton: false,
           showWorkspaceSection: true,
+          showConversationSection: false,
           contentSlot: () => {
             this.WorkspaceMasterContent()
           },
@@ -206,6 +207,7 @@ export struct WideConversationHost {
       selectedSessionId: this.wideSelectedSessionId(),
       runningSessionId: this.remotePageState.hasRunningActiveTurn() ?
         this.remotePageState.activeSession.sessionId : '',
+      workspacePickerPlacement: this.sessionDetailsPlacement,
       onOpenSession: this.actions.onRemoteHome.openSessionInPlace,
       onCreateInWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.createInWorkspaceInPlace(path, 'code', deviceId);
@@ -213,9 +215,9 @@ export struct WideConversationHost {
       onOpenWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.selectWorkspace(path, deviceId);
       },
-      onToggleDevice: this.actions.onRemoteHome.toggleDirectoryDevice,
+      onSelectDevice: this.actions.onRemoteHome.selectDirectoryDevice,
       onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
-      onAdd: this.actions.onSidebar.addDesktop
+      onAddWorkspace: this.actions.onRemoteHome.addDirectoryWorkspace
     })
   }
 

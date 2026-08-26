@@ -35,6 +35,7 @@ export struct AppSidebar {
   @Param showCollapseButton: boolean = false;
   @Param showViewSettingsButton: boolean = false;
   @Param showWorkspaceSection: boolean = false;
+  @Param showConversationSection: boolean = true;
   @Event onClose: () => void = () => {};
   @Event onNewChat: () => void = () => {};
   @Event onEnterCode: () => void = () => {};
@@ -85,7 +86,9 @@ export struct AppSidebar {
         // saying whether it runs here or on a desktop.
         Scroll() {
           Column() {
-            this.ConversationSection()
+            if (this.showConversationSection) {
+              this.ConversationSection()
+            }
             if (this.showWorkspaceSection) {
               this.contentSlot()
             }

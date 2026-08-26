@@ -384,11 +384,11 @@ export default function conversationPresentationUnitTest() {
       expect(RemoteI18n.t('sidebar.recent')).assertEqual('sidebar.recent');
     });
 
-    it('labels the workspace-header plus by the connection it adds, not a workspace it cannot create', 0, () => {
-      // Workspaces come from the desktop; the phone has no create-workspace
-      // call. The button opens the connect sheet, so that is what it says.
-      expect(RemoteI18n.t('sidebar.addConnection')).assertEqual('添加连接');
-      expect(RemoteI18n.t('sidebar.addWorkspace')).assertEqual('sidebar.addWorkspace');
+    it('labels the workspace-header plus as adding an existing desktop workspace', 0, () => {
+      // The phone still does not create a remote directory. The selected
+      // device owns the picker, and choosing one of its directories adds that
+      // existing workspace to the visible tree.
+      expect(RemoteI18n.t('sidebar.addWorkspace')).assertEqual('添加工作区');
     });
 
     it('hides the redundant scan action after a QR connection succeeds', 0, () => {
