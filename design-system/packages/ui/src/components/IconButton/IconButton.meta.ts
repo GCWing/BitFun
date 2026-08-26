@@ -1,0 +1,37 @@
+import type { ComponentMeta } from "../../registry.types";
+
+export const iconButtonMeta = {
+  category: "action",
+  description: "A labeled icon-only action with quiet, filled, and primary presentation variants.",
+  maturity: "stable",
+  name: "IconButton",
+  props: [
+    { name: "aria-label", type: "string" },
+    { name: "icon", type: "ReactNode" },
+    { defaultValue: "quiet", name: "variant", type: "quiet | fill | primary" },
+    { defaultValue: "square", name: "shape", type: "square | circle" },
+    { defaultValue: "sm", name: "size", type: "sm | md | lg" },
+    { defaultValue: "neutral", name: "tone", type: "neutral | danger" },
+    { defaultValue: "false", name: "loading", type: "boolean" },
+  ],
+  states: ["default", "hover", "active", "focus-visible", "disabled", "loading"],
+  tokens: [
+    "color.action.neutral.content",
+    "color.action.neutral.contentDisabled",
+    "color.action.neutral.surface",
+    "color.action.neutral.surfaceHover",
+    "color.action.neutral.surfacePressed",
+    "color.action.primary.background",
+    "color.action.primary.content",
+    "color.action.primary.hover",
+    "color.action.primary.pressed",
+    "color.focus.ring",
+    "color.status.danger.content",
+    "color.status.danger.surface",
+    "control.height.sm",
+    "control.height.md",
+    "control.height.lg",
+    "radius.sm",
+    "radius.pill",
+  ],
+} as const satisfies ComponentMeta;

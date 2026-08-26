@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Check,
+  List,
   MessageCircle,
   MousePointerClick,
   PanelTop,
@@ -8,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   Button,
+  IconButton,
   Stack,
   Switch,
   TabGroup,
@@ -35,6 +37,7 @@ interface ComponentsPageProps {
 
 const componentIcons = {
   Button: MousePointerClick,
+  IconButton: List,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
 } as const;
@@ -48,6 +51,22 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <Stack align="center" direction="horizontal" gap="2" wrap>
           <Button variant="fill">{t("components.preview.primary")}</Button>
           <Button>{t("components.preview.button")}</Button>
+        </Stack>
+      );
+    case "IconButton":
+      return (
+        <Stack align="center" direction="horizontal" gap="2">
+          <IconButton
+            aria-label={t("components.preview.listView")}
+            icon={<List aria-hidden="true" />}
+            tabIndex={-1}
+          />
+          <IconButton
+            aria-label={t("components.preview.listView")}
+            icon={<List aria-hidden="true" />}
+            tabIndex={-1}
+            variant="fill"
+          />
         </Stack>
       );
     case "Switch":

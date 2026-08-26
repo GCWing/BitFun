@@ -1,6 +1,7 @@
 import "./styles/layers.css";
 
 export { Button, type ButtonProps } from "./components/Button";
+export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Switch, type SwitchProps } from "./components/Switch";
 export {
   TabGroup,

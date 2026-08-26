@@ -3,10 +3,12 @@ import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  List,
   MessageCircle,
 } from "lucide-react";
 import {
   Button,
+  IconButton,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -39,6 +41,7 @@ type PreviewIconPosition = "left" | "right";
 type PreviewSize = "sm" | "md" | "lg";
 
 const buttonVariants = ["outline", "fill", "primary", "text"] as const;
+const iconButtonVariants = ["quiet", "fill", "primary"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
@@ -58,6 +61,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   on: "detail.option.on",
   outline: "detail.option.outline",
   primary: "detail.option.primary",
+  quiet: "detail.option.quiet",
   right: "detail.option.right",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
@@ -124,6 +128,7 @@ export function ComponentDetailPage({
 }: ComponentDetailPageProps) {
   const { t } = useI18n();
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
+  const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [size, setSize] = useState<PreviewSize>("md");
   const [previewState, setPreviewState] = useState(
     component.name === "Switch"
@@ -142,6 +147,7 @@ export function ComponentDetailPage({
   const states = useMemo(() => {
     switch (component.name) {
       case "Button":
+      case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
@@ -149,7 +155,9 @@ export function ComponentDetailPage({
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
   }, [component.name]);
-  const inspectorStates = component.name === "Button" ? buttonInspectorStates : states;
+  const inspectorStates = component.name === "Button" || component.name === "IconButton"
+    ? buttonInspectorStates
+    : states;
 
   const codeSample = useMemo(() => {
     if (component.name === "Button") {
@@ -161,6 +169,10 @@ export function ComponentDetailPage({
         ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
         : "";
       return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
+    }
+    if (component.name === "IconButton") {
+      const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
+      return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
@@ -174,6 +186,7 @@ export function ComponentDetailPage({
     return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
   }, [
     component.name,
+    iconButtonVariant,
     inspectorDisabled,
     inspectorLoading,
     previewIcon,
@@ -192,6 +205,25 @@ export function ComponentDetailPage({
     } catch {
       setCopyStatus("unavailable");
     }
+  }
+
+  function renderIconButtonPreview(
+    state = previewState,
+    previewVariant = iconButtonVariant,
+    applyInspectorControls = false,
+  ) {
+    return (
+      <IconButton
+        aria-label={t("components.preview.listView")}
+        className={state === "focus-visible" ? "lab-force-focus" : undefined}
+        data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+        disabled={state === "disabled" || applyInspectorControls && inspectorDisabled}
+        icon={<List aria-hidden="true" />}
+        loading={state === "loading" || applyInspectorControls && inspectorLoading}
+        size={size}
+        variant={previewVariant}
+      />
+    );
   }
 
   function renderPreview(
@@ -332,6 +364,35 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
+              ) : component.name === "IconButton" ? (
+                <div className="component-preview-matrix" data-component="icon-button">
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  {iconButtonVariants.map((matrixVariant) => (
+                    <Fragment key={matrixVariant}>
+                      <span className="component-preview-matrix__row-label">
+                        {t(optionLabelKeys[matrixVariant] ?? "detail.option.default")}
+                      </span>
+                      {states.map((state) => (
+                        <div
+                          className="component-preview-matrix__cell"
+                          data-active={matrixVariant === iconButtonVariant && state === previewState || undefined}
+                          key={`${matrixVariant}-${state}`}
+                        >
+                          {renderIconButtonPreview(state, matrixVariant)}
+                        </div>
+                      ))}
+                    </Fragment>
+                  ))}
+                </div>
               ) : component.name === "TabGroup" ? (
                 <div className="component-preview-matrix" data-component="tab-group">
                   <span className="component-preview-matrix__corner" />
@@ -425,7 +486,15 @@ export function ComponentDetailPage({
                       value={variant}
                     />
                   )}
-                  {component.name === "Button" && (
+                  {component.name === "IconButton" && (
+                    <InspectorSelect
+                      label={t("detail.variant")}
+                      onChange={(value) => setIconButtonVariant(value as (typeof iconButtonVariants)[number])}
+                      options={iconButtonVariants}
+                      value={iconButtonVariant}
+                    />
+                  )}
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorSelect
                       label={t("detail.size")}
                       onChange={(value) => setSize(value as PreviewSize)}
@@ -439,14 +508,14 @@ export function ComponentDetailPage({
                     options={inspectorStates}
                     value={previewState}
                   />
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorToggle
                       checked={inspectorDisabled}
                       label={t("detail.disabled")}
                       onCheckedChange={setInspectorDisabled}
                     />
                   )}
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorToggle
                       checked={inspectorLoading}
                       label={t("detail.loading")}
@@ -481,7 +550,9 @@ export function ComponentDetailPage({
                   density={density}
                   tokenOverrides={tokenOverrides}
                 >
-                  {renderPreview(previewState, variant, true)}
+                  {component.name === "IconButton"
+                    ? renderIconButtonPreview(previewState, iconButtonVariant, true)
+                    : renderPreview(previewState, variant, true)}
                 </ThemeRoot>
               </section>
 
