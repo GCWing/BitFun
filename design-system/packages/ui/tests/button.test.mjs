@@ -69,6 +69,23 @@ test("fill styles bind to the public variant attribute", async () => {
   assert.doesNotMatch(styles, /\[data-variant=fill\]/);
 });
 
+test("primary and text variants expose semantic emphasis without changing button anatomy", async () => {
+  const primaryMarkup = renderToStaticMarkup(
+    createElement(Button, { variant: "primary" }, "Save"),
+  );
+  const textMarkup = renderToStaticMarkup(
+    createElement(Button, { variant: "text" }, "Learn more"),
+  );
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(primaryMarkup, /data-bf-variant="primary"/);
+  assert.match(textMarkup, /data-bf-variant="text"/);
+  assert.match(styles, /--bf-color-action-primary-background/);
+  assert.match(styles, /--bf-color-action-primary-content/);
+  assert.match(styles, /--bf-color-accent-default/);
+  assert.match(styles, /text-decoration:underline/);
+});
+
 test("Button owns the reference pill geometry and typography", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
@@ -140,5 +157,4 @@ test("fill uses neutral semantic state colors and icons inherit content color", 
   assert.match(styles, /--_button-background-hover:\s*var\(--bf-color-action-neutral-surface-hover\)/);
   assert.match(styles, /--_button-background-active:\s*var\(--bf-color-action-neutral-surface-pressed\)/);
   assert.match(styles, /color:currentColor/);
-  assert.doesNotMatch(styles, /--bf-color-action-primary/);
 });

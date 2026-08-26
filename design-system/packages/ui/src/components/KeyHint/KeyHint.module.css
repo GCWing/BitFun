@@ -1,0 +1,42 @@
+@layer bf.components {
+  .root {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+    gap: calc(var(--bf-space-1) / 2);
+    padding-block: calc(var(--bf-space-1) / 2);
+    padding-inline: var(--bf-space-1);
+    border: 0;
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-muted);
+    background: var(--bf-color-surface-subtle);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-caption);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-tight);
+    white-space: nowrap;
+  }
+
+  .icon,
+  .label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+  }
+
+  .icon > :where(svg, img) {
+    display: block;
+    inline-size: 1em;
+    block-size: 1em;
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: var(--bf-border-width-default) solid ButtonText;
+      color: ButtonText;
+      background: Canvas;
+    }
+  }
+}
