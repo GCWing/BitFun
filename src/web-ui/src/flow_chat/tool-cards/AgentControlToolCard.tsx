@@ -127,7 +127,6 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
     || linkedSession?.config?.agentType?.trim()
     || inputAgentType;
   const stableSubagentType = linkedSession?.subagentType?.trim() || inputAgentType;
-  const secondaryAgentType = stableSubagentType || stableAgentType;
   const isParameterStreaming = Boolean(toolItem.isParamsStreaming)
     || PARAMETER_STREAMING_STATUSES.has(status);
   const canExpand = Boolean(prompt) && !isParameterStreaming;
@@ -242,15 +241,6 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
           {agentPillContent}
         </span>
       )}
-      {secondaryAgentType && secondaryAgentType !== agentName ? (
-        <span
-          className="agent-control-tool-card__type"
-          data-bf-component="agent-control-tool-card"
-          data-bf-part="type"
-        >
-          {secondaryAgentType}
-        </span>
-      ) : null}
       <span
         className={`agent-control-tool-card__status agent-control-tool-card__status--${lifecycle}`}
         data-bf-component="agent-control-tool-card"

@@ -177,6 +177,8 @@ describeWithJsdom('AgentControlToolCard', () => {
       expect(pill?.textContent?.trim()).toBeTruthy();
       expect(pill?.textContent).toContain(toolName === 'AgentSpawn' ? 'parser-review' : 'agent-1');
       expect(pill?.querySelector('[data-bf-component="subagent-avatar"]')).not.toBeNull();
+      expect(container.querySelector('[data-bf-part="type"]')).toBeNull();
+      expect(container.textContent).not.toContain('SwarmWorker');
       expect(container.textContent).toContain('Running');
       expect(container.querySelector('[data-bf-part="expandIndicator"]')).not.toBeNull();
       expect(container.textContent).not.toContain(
